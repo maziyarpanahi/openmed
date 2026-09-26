@@ -274,6 +274,7 @@ classification:
     - clinical/multilingual-relations.md
     - clinical/sig-parser.md
     - clinical/summarization.md
+    - structured/schema-guided-extraction.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
