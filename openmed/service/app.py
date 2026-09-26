@@ -389,7 +389,7 @@ def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
         local_only=payload.offline,
     )
     spans: Any = payload.entities if payload.entities is not None else payload.text
-    return ground_payload(
+    response = ground_payload(
         spans,
         systems=payload.systems,
         loader=loader,
@@ -397,6 +397,12 @@ def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
         source_language=payload.lang,
         offline=payload.offline,
     )
+    # Calibration remains a library-only extension until the versioned REST
+    # response contract explicitly includes these fields.
+    for result in response["results"]:
+        result.pop("calibrated_confidence", None)
+        result.pop("confidence_band", None)
+    return response
 
 
 def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:

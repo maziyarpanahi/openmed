@@ -192,7 +192,7 @@ from .snapshot_cache import (
     store_snapshot,
 )
 from .systems import RESTRICTED_SYSTEMS, SYSTEM_URIS, canonical_system, system_uri
-from .types import Candidate, GroundedSpan
+from .types import GROUNDING_CONFIDENCE_BANDS, Candidate, GroundedSpan
 from .valueset import (
     EXPANSION_ARTIFACT_FILENAME,
     EXPANSION_MANIFEST_FILENAME,
@@ -279,6 +279,7 @@ __all__ = [
     "FREE_VOCAB_SYSTEMS",
     "GROUNDING_ASSERTION_STATUSES",
     "GROUNDING_ASSIST_ONLY_ADVISORY",
+    "GROUNDING_CONFIDENCE_BANDS",
     "GROUNDING_METHODS",
     "GROUNDING_POLICIES",
     "GroundingAlternative",
