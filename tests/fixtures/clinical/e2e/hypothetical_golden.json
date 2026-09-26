@@ -1,0 +1,49 @@
+{
+  "synthetic": true,
+  "source_rights": "generated synthetic fixture",
+  "disclaimer": "Synthetic data only. Advisory pipeline output for engineering regression testing; not a medical device and not for clinical decision-making.",
+  "redacted_pii_labels": [],
+  "phi_surface_strings": [],
+  "note_id": "synthetic-hypothetical-001",
+  "language": "en",
+  "source_note": "Synthetic follow-up note. Possible pneumonia.",
+  "expected_entities": [
+    {
+      "text": "pneumonia",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "uncertain",
+      "grounding_system": "icd10cm",
+      "expected_code": "J18.9",
+      "expected_display": "Pneumonia, unspecified organism",
+      "fhir_resource_type": "Condition"
+    }
+  ],
+  "expected_pipeline": {
+    "entities": [
+      {
+        "text": "pneumonia",
+        "start": 35,
+        "end": 44,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "uncertain",
+        "code": "J18.9",
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "vocab_version": "sha256:778c8a675b9d73b96930a07cec6285009a490c9de5a1db5bb74feacf7309c709",
+        "resource_type": "Condition",
+        "status": "unconfirmed"
+      }
+    ],
+    "fhir_bundle": {
+      "resource_type": "Bundle",
+      "type": "transaction",
+      "entry_types": [
+        "Patient",
+        "Condition"
+      ]
+    }
+  }
+}
