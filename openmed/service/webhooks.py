@@ -92,6 +92,9 @@ def deliver_webhook(
 
     Each HTTP delivery attempt receives its own timestamp and nonce so a
     receiver can apply replay protection without rejecting a legitimate retry.
+    ``timeout_seconds`` bounds each attempt's connect/read/write/pool I/O and is
+    applied to every request, including when the caller supplies ``client``; a
+    supplied client's own configuration and ownership are left unchanged.
     """
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
@@ -121,7 +124,12 @@ def deliver_webhook(
             )
             headers = {**base_headers, **signed_headers}
             try:
-                response = active_client.post(url, content=body, headers=headers)
+                response = active_client.post(
+                    url,
+                    content=body,
+                    headers=headers,
+                    timeout=timeout_seconds,
+                )
                 last_status_code = response.status_code
                 if 200 <= response.status_code < 300:
                     return WebhookDeliveryResult(
