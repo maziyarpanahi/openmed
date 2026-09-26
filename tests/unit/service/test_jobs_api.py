@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -195,6 +196,51 @@ def test_invalid_result_span_fails_only_its_document(
     assert final["spans"][0]["document_id"] == "synthetic-1"
     assert final["error"]["type"] == "ValueError"
     assert "synthetic first" not in path.read_text(encoding="utf-8")
+
+
+def test_submit_snapshots_the_request_before_queueing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, max_workers=1)
+    payload = DeidentifyJobRequest(
+        documents=[
+            DeidentifyJobDocument(id="synthetic-0", text="original synthetic text")
+        ]
+    )
+    released = threading.Event()
+    seen: list[tuple[str, list[str]]] = []
+
+    def capture(request: DeidentifyJobRequest, _document: DeidentifyJobDocument):
+        released.wait(timeout=10)
+        seen.append((request.method, [document.text for document in request.documents]))
+        return SimpleNamespace(pii_entities=[])
+
+    monkeypatch.setattr(queue, "_deidentify_document", capture)
+    try:
+        metadata = queue.submit(payload)
+        payload.documents[0].text = "changed synthetic text"
+        payload.documents.append(DeidentifyJobDocument(text="extra synthetic text"))
+        payload.method = "remove"
+    finally:
+        released.set()
+
+    for _ in range(500):
+        if seen:
+            break
+        time.sleep(0.01)
+    queue.shutdown()
+
+    assert metadata["document_count"] == 1
+    assert metadata["documents"][0]["text_hash"] == jobs.hash_text(
+        "original synthetic text"
+    )
+    assert seen == [("mask", ["original synthetic text"])]
 
 
 def _wait_for_job(
