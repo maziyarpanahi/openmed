@@ -289,6 +289,7 @@ nav:
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
+      - Language Route Health Matrix: clinical/language-matrix.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
