@@ -565,27 +565,6 @@ jobs:
             docs/leaderboard/
             docs/status/index.md
 
-      - name: Run nightly full suite and status monitor
-        if: github.event_name == 'schedule'
-        id: nightly-monitor
-        continue-on-error: true
-        run: |
-          python -m pytest tests/ -q
-          python scripts/status/generate_status.py \
-            --manifest models.jsonl \
-            --baseline gates/baseline.json \
-            --benchmarks-dir "$RUNNER_TEMP/nightly/benchmarks" \
-            --leaderboard-dir "$RUNNER_TEMP/nightly/leaderboard" \
-            --output "$RUNNER_TEMP/nightly/status.md" \
-            --smoke-status green
-
-      - name: Upload nightly status monitor
-        if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: nightly-release-status
-          path: ${{ runner.temp }}/nightly/
-
       - name: Quarantine incomplete or failing candidate
         if: >-
           always() &&
@@ -660,7 +639,6 @@ jobs:
             steps.i18n_benchmark.outcome != 'success' ||
             steps.i18n_throughput.outcome != 'success' ||
             steps.grounding.outcome != 'success' ||
-            steps.nightly-monitor.outcome == 'failure' ||
             (
               github.event_name == 'workflow_dispatch' &&
               steps.check-candidate.outputs.exists != 'true'

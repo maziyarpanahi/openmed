@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -16,6 +18,9 @@ from openmed.eval.report import (
     write_leaderboard,
 )
 
+CONTROL_MODEL = "synthetic-empty-detector-v1"
+CONTROL_SUITE = "nightly-synthetic-control"
+
 
 def render_status_page(
     *,
@@ -24,6 +29,7 @@ def render_status_page(
     reports: Iterable[BenchmarkReport] = (),
     smoke_status: str = "green",
     smoke_failure_reason: str | None = None,
+    nightly_report: BenchmarkReport | None = None,
 ) -> str:
     """Render the release status page from manifest, baseline, and reports."""
 
@@ -68,6 +74,21 @@ def render_status_page(
     if smoke_status == "red" and smoke_failure_reason:
         lines.extend(["", "## Smoke Test Failure", "", smoke_failure_reason])
 
+    if nightly_report is not None:
+        lines.extend(
+            [
+                "",
+                "## Latest Synthetic Harness Validation",
+                "",
+                f"- Successful run: `{nightly_report.generated_at}`",
+                f"- Source revision: `{nightly_report.metadata['source_revision']}`",
+                f"- Synthetic fixtures: {nightly_report.fixture_count}",
+                "- Evidence: [nightly control report](evidence/nightly-control.json)",
+                "- Scope: deterministic empty-detector control. It checks the harness and "
+                "renderer; it does not measure OpenMed model performance.",
+            ]
+        )
+
     return "\n".join(lines) + "\n"
 
 
@@ -79,6 +100,7 @@ def write_status_page(
     reports: Iterable[BenchmarkReport] = (),
     smoke_status: str = "green",
     smoke_failure_reason: str | None = None,
+    nightly_report: BenchmarkReport | None = None,
 ) -> Path:
     """Write a release status page."""
 
@@ -91,6 +113,7 @@ def write_status_page(
             reports=reports,
             smoke_status=smoke_status,
             smoke_failure_reason=smoke_failure_reason,
+            nightly_report=nightly_report,
         ),
         encoding="utf-8",
     )
@@ -106,6 +129,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
     parser.add_argument("--baseline", type=Path, default=BASELINE_PATH)
     parser.add_argument("--report", action="append", type=Path, default=[])
+    parser.add_argument("--nightly-report", type=Path)
+    parser.add_argument("--nightly-max-age-hours", type=float, default=36.0)
     parser.add_argument("--output", type=Path, default=Path("docs/status/index.md"))
     parser.add_argument("--benchmarks-dir", type=Path, default=Path("docs/benchmarks"))
     parser.add_argument(
@@ -127,6 +152,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     manifest_rows = load_manifest_rows(args.manifest)
     baseline_store = load_baseline_store(args.baseline)
     reports = read_reports(args.report)
+    nightly_report = None
+    if args.nightly_report is not None:
+        nightly_report = BenchmarkReport.read_json(args.nightly_report)
+        validate_nightly_report(
+            nightly_report,
+            max_age=timedelta(hours=args.nightly_max_age_hours),
+        )
 
     write_benchmark_cards(
         reports,
@@ -146,8 +178,57 @@ def main(argv: Sequence[str] | None = None) -> int:
         reports=reports,
         smoke_status=args.smoke_status,
         smoke_failure_reason=args.smoke_failure_reason,
+        nightly_report=nightly_report,
     )
     return 0
+
+
+def validate_nightly_report(
+    report: BenchmarkReport,
+    *,
+    max_age: timedelta,
+    now: datetime | None = None,
+) -> None:
+    """Fail on missing, stale, malformed, or misidentified control evidence."""
+    if max_age <= timedelta(0):
+        raise ValueError("nightly maximum age must be positive")
+    if report.suite != CONTROL_SUITE or report.model_name != CONTROL_MODEL:
+        raise ValueError("nightly report must be the synthetic harness control")
+    if report.fixture_count <= 0 or report.metadata.get("synthetic") is not True:
+        raise ValueError("nightly report requires synthetic fixtures")
+    if report.metadata.get("source_rights") != "OpenMed generated synthetic fixtures":
+        raise ValueError("nightly report has no approved source rights")
+    if report.metadata.get("license_id") != "Apache-2.0":
+        raise ValueError("nightly report has no approved license")
+    if report.metadata.get("fixture_source") != "openmed/eval/golden/fixtures":
+        raise ValueError("nightly report has no approved fixture provenance")
+    if not re.fullmatch(
+        r"[0-9a-f]{64}", str(report.metadata.get("fixture_set_hash", ""))
+    ):
+        raise ValueError("nightly report has no fixture set hash")
+    if report.metadata.get("model_revision") != "v1":
+        raise ValueError("nightly report has no control model revision")
+    if report.metadata.get("config_revision") != "v1":
+        raise ValueError("nightly report has no control config revision")
+    if "not a clinical" not in str(report.metadata.get("limitations", "")):
+        raise ValueError("nightly report has no control limitations")
+    if not re.fullmatch(
+        r"sha256:[0-9a-f]{64}", str(report.metadata.get("reproducibility_hash", ""))
+    ):
+        raise ValueError("nightly report has no reproducibility hash")
+    if not re.fullmatch(
+        r"[0-9a-f]{40}", str(report.metadata.get("source_revision", ""))
+    ):
+        raise ValueError("nightly report has no source revision")
+    try:
+        stamp = datetime.fromisoformat(str(report.generated_at).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("nightly report has malformed generated_at") from exc
+    if stamp.tzinfo is None:
+        raise ValueError("nightly report generated_at must be timezone-aware")
+    current = now or datetime.now(timezone.utc)
+    if stamp > current + timedelta(minutes=5) or current - stamp > max_age:
+        raise ValueError("nightly report is stale or dated in the future")
 
 
 def _manifest_aggregates(

@@ -17,6 +17,7 @@ on:
       - "scripts/brand/**"
       - "scripts/docs/**"
       - "scripts/i18n/**"
+      - "scripts/status/**"
       - "js/openmedkit-web/**"
       - "tests/browser/brand/**"
       - "tests/browser/privacy-playground.spec.ts"
@@ -28,9 +29,12 @@ on:
       - "tests/unit/test_readme_sw_drift.py"
       - "tests/unit/test_web_demo_layout.py"
       - "tests/unit/eval/test_leaderboard.py"
+      - "tests/unit/eval/test_nightly_status_refresh.py"
       - "uv.lock"
       - "web/runtime/**"
   workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
 
 permissions:
   contents: read
@@ -78,6 +82,23 @@ jobs:
             tests/unit/test_web_demo_layout.py \
             tests/unit/eval/test_leaderboard.py \
             -q
+      - name: Run nightly offline suite
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: uv run --frozen python -m pytest tests/ -q
+      - name: Refresh public trust status
+        if: github.event_name != 'pull_request'
+        run: |
+          uv run --frozen python scripts/status/generate_nightly_control.py \
+            --source-revision "$GITHUB_SHA" \
+            --output docs/status/evidence/nightly-control.json
+          uv run --frozen python scripts/status/generate_status.py \
+            --manifest models.jsonl \
+            --baseline gates/baseline.json \
+            --report docs/benchmarks/golden.report.json \
+            --nightly-report docs/status/evidence/nightly-control.json \
+            --benchmarks-dir docs/benchmarks \
+            --leaderboard-dir docs/leaderboard \
+            --output docs/status/index.md
       - name: Stage and verify the exact Pages artifact
         shell: bash
         run: |
@@ -88,6 +109,7 @@ jobs:
             uv run --frozen python scripts/docs/stage_pages.py
           fi
       - name: Setup Node for browser validation
+        if: github.event_name != 'schedule'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "24"
@@ -96,12 +118,15 @@ jobs:
             js/openmedkit-web/package-lock.json
             tests/browser/brand/package-lock.json
       - name: Build and validate the browser runtime
+        if: github.event_name != 'schedule'
         run: |
           npm ci --prefix js/openmedkit-web
           npm --prefix js/openmedkit-web test
       - name: Install pinned browser test dependencies
+        if: github.event_name != 'schedule'
         run: npm ci --prefix tests/browser/brand
       - name: Validate browser behavior, accessibility, and representative visuals
+        if: github.event_name != 'schedule'
         run: |
           docker run --rm --ipc=host \
             --user "$(id -u):$(id -g)" \
@@ -111,7 +136,7 @@ jobs:
             mcr.microsoft.com/playwright:v1.62.0-noble@sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471 \
             /bin/bash -lc "npm --prefix tests/browser/brand test"
       - name: Upload browser validation evidence
-        if: always()
+        if: always() && github.event_name != 'schedule'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pages-browser-evidence
