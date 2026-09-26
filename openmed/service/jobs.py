@@ -279,12 +279,16 @@ class DeidentifyJobQueue:
             self._shutdown = True
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        now = self.clock()
+    def _expiry_timestamp(self, moment: datetime) -> str:
+        """Return the metadata expiry for a record that reached *moment*."""
         expires_at = datetime.fromtimestamp(
-            now.timestamp() + self.store.ttl_seconds,
+            moment.timestamp() + self.store.ttl_seconds,
             tz=timezone.utc,
         )
+        return _isoformat(expires_at)
+
+    def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
+        now = self.clock()
         documents = [
             _document_metadata(index, document)
             for index, document in enumerate(payload.documents)
@@ -306,7 +310,7 @@ class DeidentifyJobQueue:
             "updated_at": _isoformat(now),
             "started_at": None,
             "completed_at": None,
-            "expires_at": _isoformat(expires_at),
+            "expires_at": self._expiry_timestamp(now),
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
@@ -339,6 +343,7 @@ class DeidentifyJobQueue:
             progress_percent=100.0,
             error=error,
             completed_at=_isoformat(completed_at),
+            expires_at=self._expiry_timestamp(completed_at),
         )
         self._send_terminal_webhook(item.payload.webhook, final_record)
 
