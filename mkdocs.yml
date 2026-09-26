@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Agent Action Execution Phases: agent/action-phases.md
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
       - Non-amplifying Agent Delegation: agent/non-amplifying-delegation.md
@@ -52,6 +53,7 @@ nav:
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
       - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Deterministic Agent Run Commitments: agent/run-commitments.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
@@ -234,6 +236,7 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
@@ -255,11 +258,13 @@ nav:
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
+      - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Multimodal Preflight Report: multimodal/preflight.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
+      - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
