@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a deterministic, local unsupported-claim rate for clinical summaries,
+  with four-state scoring, per-claim-class bootstrap intervals, aggregate-only
+  reports, and synthetic offline regression coverage (#2749).
 - Added deterministic, aggregate-only review-yield metrics for guarded clinical
   relation candidates, with accepted, corrected, rejected, duplicate, and
   deferred outcomes by relation class (#2753).
