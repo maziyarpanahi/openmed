@@ -239,11 +239,48 @@ class OpenMedAPIError(RuntimeError):
         super().__init__(f"{status_code} {code}: {message}{suffix}")
 
 
+def _load_json_object(
+    payload: bytes | str,
+    *,
+    status_code: int,
+    request_id: Optional[str],
+    context: str,
+) -> JsonDict:
+    """Decode a successful payload and require a JSON object.
+
+    Both malformed JSON and a well-formed non-object payload raise
+    :class:`OpenMedAPIError` with ``code="invalid_response"``, so ordinary and
+    streaming requests report invalid successful responses the same way instead
+    of leaking a decoder exception or yielding an event with the wrong shape.
+    """
+    try:
+        decoded = json.loads(payload)
+    except ValueError as exc:
+        raise OpenMedAPIError(
+            status_code=status_code,
+            code="invalid_response",
+            message=f"Malformed JSON in {context} from OpenMed REST service",
+            details=None,
+            request_id=request_id,
+        ) from exc
+    if not isinstance(decoded, dict):
+        raise OpenMedAPIError(
+            status_code=status_code,
+            code="invalid_response",
+            message=f"Expected a JSON object in {context} from OpenMed REST service",
+            details=decoded,
+            request_id=request_id,
+        )
+    return decoded
+
+
 class OpenMedClient(JourneyWorkflowClientMixin):
     """Small typed sync client for the OpenMed REST service.
 
     Non-2xx responses, including unfollowed redirects, raise
-    :class:`OpenMedAPIError` for both JSON and streaming requests.
+    :class:`OpenMedAPIError` for both JSON and streaming requests. Successful
+    responses whose payload is malformed JSON or is not a JSON object raise the
+    same error with ``code="invalid_response"``.
     """
 
     def __init__(
@@ -564,9 +601,18 @@ class OpenMedClient(JourneyWorkflowClientMixin):
             if not response.is_success:
                 response.read()
                 self._raise_api_error(response, request_id=active_request_id)
+            event_request_id = (
+                response.headers.get(_REQUEST_ID_HEADER) or active_request_id
+            )
             for line in response.iter_lines():
-                if line:
-                    yield json.loads(line)
+                if not line:
+                    continue
+                yield _load_json_object(
+                    line,
+                    status_code=response.status_code,
+                    request_id=event_request_id,
+                    context="stream event",
+                )
 
     def _request(
         self,
@@ -589,17 +635,12 @@ class OpenMedClient(JourneyWorkflowClientMixin):
         if not response.is_success:
             self._raise_api_error(response, request_id=active_request_id)
 
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise OpenMedAPIError(
-                status_code=response.status_code,
-                code="invalid_response",
-                message="Expected JSON object response from OpenMed REST service",
-                details=payload,
-                request_id=response.headers.get(_REQUEST_ID_HEADER)
-                or active_request_id,
-            )
-        return payload
+        return _load_json_object(
+            response.content,
+            status_code=response.status_code,
+            request_id=response.headers.get(_REQUEST_ID_HEADER) or active_request_id,
+            context="response body",
+        )
 
     def _raise_api_error(
         self,
