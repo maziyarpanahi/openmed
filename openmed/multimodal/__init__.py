@@ -248,6 +248,17 @@ from .preflight import (
     PreflightStatus,
     preflight_asset,
 )
+from .processing_diff import (
+    PROCESSING_DIFF_SCHEMA_VERSION,
+    AbstentionDelta,
+    DigestChange,
+    MediaTypeDelta,
+    OutcomeDelta,
+    ProcessingDiff,
+    ProcessingDiffError,
+    diff_processing_summaries,
+    render_processing_diff_markdown,
+)
 from .processing_summary import (
     PROCESSING_SUMMARY_SCHEMA_VERSION,
     AbstentionCount,
@@ -542,6 +553,15 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "PROCESSING_DIFF_SCHEMA_VERSION",
+    "AbstentionDelta",
+    "DigestChange",
+    "MediaTypeDelta",
+    "OutcomeDelta",
+    "ProcessingDiff",
+    "ProcessingDiffError",
+    "diff_processing_summaries",
+    "render_processing_diff_markdown",
     "PROCESSING_SUMMARY_SCHEMA_VERSION",
     "AbstentionCount",
     "AssetDigestEntry",
