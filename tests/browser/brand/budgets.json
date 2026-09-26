@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 79244252,
-    "maximum_unique_payload_bytes": 78906673,
+    "maximum_total_bytes": 79455365,
+    "maximum_unique_payload_bytes": 79117786,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,7 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
+    "The citation-boundary source staging measured 79339879 total bytes and 79002300 unique payload bytes. The aggregate ceilings retain the observed 4736-byte platform delta and 110750 bytes of bounded headroom; per-file, search, transfer, duplication, and source-map gates remain unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and citation-boundary guides with bounded documentation headroom.",
     "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail staging aggregate contains 79128766 total bytes, 78791187 unique payload bytes, and 337579 duplicate payload bytes locally.",
     "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
     "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measured 4166281 bytes; its 4191889-byte JSON ceiling retains 20872 bytes of bounded headroom after the observed platform delta.",
