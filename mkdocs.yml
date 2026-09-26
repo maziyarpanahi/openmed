@@ -52,6 +52,7 @@ nav:
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
       - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
+      - Deterministic Agent Run Commitments: agent/run-commitments.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Schema Compatibility: agent/schema-compatibility.md

@@ -127,6 +127,7 @@ classification:
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
+    - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
     - agent/schema-compatibility.md

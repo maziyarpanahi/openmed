@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, domain-separated SHA-256 commitments for validated
+  agent run summaries, with constant-time categorical verification, stable
+  golden vectors, and value-free malformed-input handling (#3039).
 - Added domain-separated, metadata-only fingerprints for validated federated
   update schemas, with constant-time schema comparison (#3055).
 - Added deterministic, metadata-only multimodal processing summary differences
