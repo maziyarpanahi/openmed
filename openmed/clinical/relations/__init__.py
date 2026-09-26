@@ -78,6 +78,13 @@ from .document_level import (
     aggregate_document_relations,
     extract_document_relations,
 )
+from .family_history import (
+    FAMILY_HISTORY_RELATION_ADVISORY,
+    FAMILY_HISTORY_RELATION_TYPE,
+    RELATION_TO_PATIENT,
+    FamilyHistoryRelation,
+    extract_family_history_relations,
+)
 from .guarded_lab_result_candidates import (
     LAB_RESULT_CANDIDATE_ADVISORY,
     LabConflictState,
@@ -189,6 +196,9 @@ __all__ = [
     "PROBLEM_ATTRIBUTE_RELATION_TYPES",
     "DOCUMENT_RELATION_ADVISORY",
     "DOCUMENT_RELATION_SCHEMA_VERSION",
+    "FAMILY_HISTORY_RELATION_ADVISORY",
+    "FAMILY_HISTORY_RELATION_TYPE",
+    "FamilyHistoryRelation",
     "DIAGNOSIS_TREATMENT_ADVISORY",
     "DiagnosisTreatmentCandidate",
     "RelationUncertainty",
@@ -227,6 +237,7 @@ __all__ = [
     "PROCEDURE_INDICATION_ADVISORY",
     "ProcedureIndicationCandidate",
     "Relation",
+    "RELATION_TO_PATIENT",
     "RelationAttributeType",
     "RELATION_ATTRIBUTE_TYPES",
     "RELATION_ORDER",
@@ -265,6 +276,7 @@ __all__ = [
     "generate_diagnosis_treatment_candidates",
     "extract_medication_relations",
     "extract_document_relations",
+    "extract_family_history_relations",
     "extract_problem_relations",
     "enumerate_joint_span_candidates",
     "enumerate_span_pair_candidates",
