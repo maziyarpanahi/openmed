@@ -157,9 +157,14 @@ class ProfileReport:
         return [t for t in self.timings if t.name.startswith(prefix)]
 
     def summary(self) -> Dict[str, Any]:
-        """Generate summary statistics."""
+        """Generate summary statistics, retaining metadata when timings are empty."""
         if not self.timings:
-            return {"total_ms": 0, "count": 0, "timings": []}
+            return {
+                "total_ms": 0,
+                "count": 0,
+                "timings": [],
+                "metadata": self.metadata,
+            }
 
         durations = [t.duration * 1000 for t in self.timings]
 
