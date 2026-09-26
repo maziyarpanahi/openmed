@@ -31,7 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The combined multilingual unit-display staging measured 79338998 total bytes and 79001419 unique payload bytes. The aggregate ceilings retain 115486 bytes of bounded headroom; duplicate, source-map, per-file, and search gates remain unchanged.",
+    "With the current master and multilingual unit-display guide, the staged artifact measures 80398784 total bytes and 80061205 unique payload bytes on macOS. The aggregate ceilings retain 113848 bytes of bounded headroom; duplicate, source-map, per-file, and search gates remain unchanged.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
     "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
     "The combined schema fingerprint and processing summary diff guides stage 79540641 total bytes, 79203062 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
