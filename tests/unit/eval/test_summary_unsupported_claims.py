@@ -89,6 +89,19 @@ def test_scores_four_states_and_rates_by_claim_class() -> None:
     assert report.unsupported_rate <= report.overall.bootstrap_ci.upper
 
 
+def test_custom_claim_class_is_not_emitted_as_patient_text() -> None:
+    patient_value = "Synthetic_Patient_Name"
+    report = score_summary_claims(
+        [{"claim_id": "claim-safe", "claim_class": patient_value}],
+        [],
+        n_resamples=10,
+    )
+
+    assert patient_value.casefold() not in report.to_json().casefold()
+    assert patient_value.casefold() not in report.to_markdown().casefold()
+    assert next(iter(report.by_claim_class)).startswith("class_")
+
+
 def test_scoring_and_serialization_are_order_independent_and_value_free() -> None:
     claims = [
         {

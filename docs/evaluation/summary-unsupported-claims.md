@@ -86,6 +86,8 @@ model loading, telemetry, or mandatory network call.
 Reports expose counts, normalized claim classes, states, rates, and interval
 metadata, plus a digest and counts for the evidence set used. They do not
 include claim IDs, evidence IDs, claim keys, source text, or evidence values.
+Standard clinical claim classes remain readable; custom class labels become
+stable digest tokens so a caller-supplied patient value cannot enter the report.
 The relation labels must come from an already-approved local evidence or
 adjudication process; this evaluator does not select or validate a clinical
 source.

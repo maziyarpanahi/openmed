@@ -60,6 +60,21 @@ DEFAULT_BOOTSTRAP_ALPHA = 0.05
 DEFAULT_BOOTSTRAP_SEED = 0
 
 _CLAIM_CLASS_RE = re.compile(r"[a-z0-9][a-z0-9_]{0,63}\Z")
+_PUBLIC_CLAIM_CLASSES = frozenset(
+    {
+        "allergy",
+        "diagnosis",
+        "finding",
+        "history",
+        "lab",
+        "medication",
+        "other",
+        "procedure",
+        "symptom",
+        "treatment",
+        "vital",
+    }
+)
 _MAX_IDENTIFIER_LENGTH = 256
 _MAX_CLAIMS = 100_000
 _MAX_EVIDENCE = 200_000
@@ -976,7 +991,9 @@ def _claim_class(value: Any) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().casefold()).strip("_")
     if not _CLAIM_CLASS_RE.fullmatch(normalized):
         raise ValueError("claim_class must be a bounded identifier")
-    return normalized
+    if normalized in _PUBLIC_CLAIM_CLASSES:
+        return normalized
+    return "class_" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
 
 def _identifier(value: Any, field_name: str) -> str:
