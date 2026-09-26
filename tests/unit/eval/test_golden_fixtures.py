@@ -1956,3 +1956,96 @@ def _interval_days(values: list[str]) -> list[int]:
     return [
         (parsed[index + 1] - parsed[index]).days for index in range(len(parsed) - 1)
     ]
+
+
+def test_bengali_nid_and_birth_registration_variants_keep_exact_offsets():
+    variants = (
+        "1234567890",
+        "1234567890123",
+        "12345678901234567",
+        "১২৩৪৫৬৭৮৯০",
+        "১২৩৪৫৬৭৮৯০১২৩",
+        "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭",
+    )
+    for digits in variants:
+        cue = "জন্ম নিবন্ধন" if len(digits) == 17 else "জাতীয় পরিচয়পত্র"
+        text = f"রোগীর {cue} {digits}।"
+        start = text.index(digits)
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["bn"])
+        assert any(
+            (span_start, span_end, entity_type)
+            == (start, start + len(digits), "national_id")
+            for span_start, span_end, entity_type, *_rest in units
+        )
+        assert is_grapheme_boundary(start, text)
+        assert is_grapheme_boundary(start + len(digits), text)
+
+
+def test_bengali_golden_fixtures_pass_offline_zero_leakage_gate():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/bn.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    assert len(fixtures) == 3
+    predictions = {}
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-09-25T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="bn",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "bn"))
+            for entity in swept_result.entities
+        }
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="bn",
+            consistent=False,
+            seed=None,
+            locale=fixture.metadata["locale"],
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-bengali",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-09-25T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["by_language"]["bn"] == 0.0
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
