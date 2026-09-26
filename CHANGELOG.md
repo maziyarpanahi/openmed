@@ -240,6 +240,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions are pinned to immutable commits, enforced by CI, and container
   publishing permissions are limited to the publish job.
 
+### Fixed
+
+- Require strict decoder validation before auto-detecting ISCII, preserving
+  malformed Latin-1 strings through privacy preprocessing instead of raising
+  or partially rewriting the input (#3242).
+
 ## [2.5.0] - 2026-09-14
 
 OpenMed 2.5 adds clinical privacy and extraction previews, local privacy
