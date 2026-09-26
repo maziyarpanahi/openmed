@@ -305,6 +305,20 @@
 | Distribution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
+## Wound Assessment
+
+**Alignment:** This map is intentionally distinct from the dermatology lesion map: it captures wound-care descriptors as written for nursing and surgical review. It does not infer wound staging, predict healing, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| WoundType | WOUND_TYPE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundLocation | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundStage | WOUND_STAGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundDimension | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| ExudateDescriptor | EXUDATE_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| TissueType | TISSUE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| DressingType | DRESSING_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+
 ## Ophthalmology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -464,6 +478,19 @@
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 
+## Medical Device
+
+**Alignment:** The display labels are descriptive extraction metadata for a planned FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, ModelNumber, ImplantSite, and DeviceStatus describe device mentions without UDI lookup or decoding or contacting GUDID or any other network service. DeviceIdentifier remains a HIPAA device identifier and requires human review; this catalog is not clinical guidance and does not make device, treatment, or safety decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| DeviceType | DEVICE_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceIdentifier | DEVICE_IDENTIFIER | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/medical_device.jsonl |
+| Manufacturer | ORGANIZATION | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/medical_device.jsonl |
+| ModelNumber | DEVICE_MODEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| ImplantSite | IMPLANT_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/medical_device.jsonl |
+
 ## Functional Status
 
 **Alignment:** This map captures documented activities of daily living, assistance, mobility, assistive-device mentions, functional-scale references, and cognitive status for offline extraction review. It does not score Barthel or Katz scales, infer care needs, recommend a disposition, or make clinical decisions.
@@ -490,6 +517,20 @@
 | ObstetricEvent | OBSTETRIC_EVENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 | GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
 | DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+
+## Substance Use History
+
+**Alignment:** This map captures explicit substance, use-status, quantity, frequency, duration, quit-date, and pack-year spans for offline extraction and human review. It is complementary to, not a replacement for, the existing SDOH determinant extractor and does not classify risk, compute pack-years, recommend care, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Substance | SUBSTANCE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseStatus | USE_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseQuantity | USE_QUANTITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseFrequency | FREQUENCY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseDuration | DURATION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| QuitDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/substance_use_history.jsonl |
+| PackYears | PACK_YEARS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
 
 ## Immunology
 
