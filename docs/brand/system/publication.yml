@@ -346,6 +346,7 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
