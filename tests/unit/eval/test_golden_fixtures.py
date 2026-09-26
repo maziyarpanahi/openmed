@@ -1928,6 +1928,85 @@ def test_per_language_traps_recover_through_language_patterns():
             )
 
 
+def test_polish_fixtures_preserve_spans_and_pass_zero_leakage_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.core.pii_i18n import validate_polish_pesel
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/pl.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    assert len(fixtures) == 2
+    predictions = {}
+    direct_ids = 0
+
+    for fixture in fixtures:
+        assert fixture.metadata["synthetic"] is True
+        for span in fixture.gold_spans:
+            assert fixture.text[span.start : span.end] == span.text
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            if span.label == "ID_NUM":
+                direct_ids += 1
+                assert validate_polish_pesel(span.text)
+
+        empty = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-09-25T00:00:00Z",
+            metadata={},
+        )
+        swept, added = _apply_safety_sweep_to_result(fixture.text, empty, lang="pl")
+        predictions[fixture.fixture_id] = swept.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "pl"))
+            for entity in swept.entities
+        }
+        assert added == len(fixture.gold_spans)
+        assert observed == {
+            (span.start, span.end, span.label) for span in fixture.gold_spans
+        }
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="pl",
+            consistent=False,
+            seed=None,
+            locale="pl_PL",
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    assert direct_ids == len(fixtures)
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-polish",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-09-25T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["by_language"]["pl"] == 0.0
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"pl": 0.0}
+
+
 def _one(category: str) -> GoldenFixture:
     matches = [
         fixture for fixture in load_golden_fixtures() if fixture.category == category
