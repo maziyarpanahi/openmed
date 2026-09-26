@@ -307,6 +307,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
