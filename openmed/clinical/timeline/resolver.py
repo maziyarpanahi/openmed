@@ -8,7 +8,7 @@ import json
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from itertools import combinations
 from pathlib import Path
@@ -29,6 +29,7 @@ from openmed.clinical.relations.temporal import (
 from openmed.clinical.temporal_normalizer import NormalizedTimex, normalize_temporal
 from openmed.clinical.timeline.timex import (
     TemporalExpression,
+    TimeExpr,
     detect_timexes,
 )
 from openmed.core.audit import hash_text
@@ -52,6 +53,7 @@ EVENT_ANCHORING_ADVISORY = (
 )
 
 TimelineRelationKind = Literal["before", "after", "overlap", "unknown"]
+DocTimeRel = TimelineRelationKind
 EventAnchorSource = Literal["timex", "dct_fallback"]
 TimelineEdgeStatus = Literal["kept", "pruned"]
 
@@ -146,6 +148,7 @@ class TimelineEvent:
     relation_anchor: str | None = None
     relative_offset_days: int | None = None
     provenance: Mapping[str, Any] = field(default_factory=dict)
+    doc_time_rel: DocTimeRel = "unknown"
 
     @property
     def normalized_value(self) -> str | None:
@@ -170,6 +173,7 @@ class TimelineEvent:
             "relation_anchor": self.relation_anchor,
             "relative_offset_days": self.relative_offset_days,
             "provenance": dict(self.provenance),
+            "doc_time_rel": self.doc_time_rel,
         }
 
 
@@ -303,6 +307,8 @@ class OrderedTimelineEvent:
     position: int
     confidence: float
     anchor: EventTemporalAnchor | None = None
+    doc_time_rel: DocTimeRel = "unknown"
+    text: str | None = None
 
     def __post_init__(self) -> None:
         if not self.event_id or not self.label:
@@ -315,6 +321,8 @@ class OrderedTimelineEvent:
             raise ValueError("event position must be non-negative")
         if not 0.0 <= float(self.confidence) <= 1.0:
             raise ValueError("event confidence must be between 0 and 1")
+        if self.doc_time_rel not in {"before", "overlap", "after", "unknown"}:
+            raise ValueError("unsupported DocTimeRel value")
         if self.anchor is not None and (
             self.anchor.event_start != self.start
             or self.anchor.event_end != self.end
@@ -332,7 +340,9 @@ class OrderedTimelineEvent:
     def dct_position(self) -> TimelineRelationKind | None:
         """Return this event's temporal position relative to DCT, when known."""
 
-        return self.anchor.dct_position if self.anchor is not None else None
+        if self.anchor is not None:
+            return self.anchor.dct_position
+        return None if self.doc_time_rel == "unknown" else self.doc_time_rel
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready event containing no raw note text."""
@@ -345,6 +355,7 @@ class OrderedTimelineEvent:
             "text_hash": self.text_hash,
             "position": self.position,
             "confidence": self.confidence,
+            "doc_time_rel": self.doc_time_rel,
             "anchor": self.anchor.to_dict() if self.anchor is not None else None,
         }
 
@@ -418,6 +429,21 @@ class Timeline:
         object.__setattr__(self, "document_creation_time", normalized_dct)
         if any(event.anchor is None for event in self.events):
             raise ValueError("every timeline event must be anchored when DCT is set")
+
+    def __iter__(self):
+        """Iterate over ordered events for lightweight timeline consumers."""
+
+        return iter(self.events)
+
+    def __len__(self) -> int:
+        """Return the number of ordered EVENT spans."""
+
+        return len(self.events)
+
+    def __getitem__(self, index: int) -> OrderedTimelineEvent:
+        """Return one ordered EVENT span by deterministic position."""
+
+        return self.events[index]
 
     @property
     def edge_provenance(self) -> tuple[TimelineEdgeProvenance, ...]:
@@ -583,6 +609,11 @@ def resolve_timeline(
                 "timex_end": timex.end,
                 "timex_text": timex.text,
             },
+            doc_time_rel=_timeline_doc_time_relation(
+                interval,
+                timex=timex,
+                document_reference=document_reference,
+            ),
         )
         events.append(event)
 
@@ -720,13 +751,17 @@ def anchor_events(
 
 
 def order_events(
-    text: str,
-    spans: Iterable[EntitySpan | Mapping[str, Any]],
+    text: str | Iterable[EntitySpan | Mapping[str, Any]],
+    spans: Iterable[EntitySpan | Mapping[str, Any]]
+    | Iterable[TimeExpr | TemporalExpression | NormalizedTimex | Mapping[str, Any]]
+    | None = None,
     *,
     tlink_candidates: Iterable[TemporalRelationCandidate] | None = None,
     document_creation_time: str | date | datetime | None = None,
+    timex: Iterable[TimeExpr | TemporalExpression | NormalizedTimex | Mapping[str, Any]]
+    | None = None,
 ) -> Timeline:
-    """Order supplied EVENT spans using privacy-safe typed TLINK candidates.
+    """Order supplied EVENT spans using privacy-safe temporal evidence.
 
     Typed candidates are converted to a single chronological edge direction
     before the shared span-graph decoder applies acyclicity and transitive
@@ -734,6 +769,12 @@ def order_events(
     the public provenance retains the original relation type and source/target
     roles. When a DCT is supplied explicitly or by an ``is_dct``/``DCT`` span,
     every EVENT also carries its normalized TIMEX or DCT-fallback anchor.
+
+    For the compact timeline API described by OM-211, callers may instead use
+    ``order_events(event_spans, timexes)`` or
+    ``order_events(event_spans, timex=timexes)``. That form returns the same
+    :class:`Timeline` container, with ``doc_time_rel`` on each event and
+    deterministic value-based ordering.
 
     Args:
         text: Source clinical note used only during in-memory extraction.
@@ -751,6 +792,16 @@ def order_events(
         anchors. Edge provenance records every kept or pruned candidate
         without retaining raw clinical text.
     """
+
+    if not isinstance(text, str):
+        timexes = timex if timex is not None else spans
+        if timexes is None:
+            raise TypeError("compact order_events requires TIMEX expressions")
+        return _order_events_from_timex(tuple(text), tuple(timexes))
+    if spans is None:
+        raise TypeError("order_events requires EVENT spans")
+    if timex is not None:
+        raise TypeError("timex is only supported by compact order_events")
 
     span_items = tuple(spans)
     candidates = _order_events_candidates(
@@ -807,14 +858,10 @@ def order_events(
         else {}
     )
     events = tuple(
-        OrderedTimelineEvent(
-            event_id=reference.span_id,
-            label=reference.label,
-            start=reference.start,
-            end=reference.end,
-            text_hash=reference.text_hash,
+        _build_ordered_timeline_event(
+            text,
+            reference,
             position=position,
-            confidence=reference.score,
             anchor=anchors_by_span.get((reference.start, reference.end)),
         )
         for position, reference in enumerate(event_references)
@@ -830,6 +877,399 @@ def order_events(
     if not timeline.is_cycle_free:  # Defensive invariant around decoder changes.
         raise RuntimeError("decoded temporal timeline contains a cycle")
     return timeline
+
+
+def _order_events_from_timex(
+    event_spans: Sequence[EntitySpan | Mapping[str, Any]],
+    timexes: Sequence[
+        TimeExpr | TemporalExpression | NormalizedTimex | Mapping[str, Any]
+    ],
+) -> Timeline:
+    """Build a compact timeline from event spans and extracted TIMEX values."""
+
+    event_records = [
+        _compact_event_record(item, index=index)
+        for index, item in enumerate(event_spans)
+    ]
+    normalized_timexes = tuple(_compact_timex(item) for item in timexes)
+    reference_values = tuple(
+        value for value in (item.reference_time for item in normalized_timexes) if value
+    )
+    reference_value = reference_values[0] if reference_values else None
+    if any(value != reference_value for value in reference_values):
+        raise ValueError("compact order_events received conflicting document times")
+    reference_date = (
+        _coerce_document_creation_time(reference_value)[1]
+        if reference_value is not None
+        else None
+    )
+
+    entries: list[dict[str, Any]] = []
+    for reference, event_text, context, source in event_records:
+        nearby = _compact_nearest_timex(reference, normalized_timexes)
+        relation = _compact_timex_relation(nearby, reference_date)
+        if relation == "unknown":
+            relation = _compact_context_relation(context or event_text)
+        anchor = _compact_event_anchor(
+            reference,
+            nearby,
+            relation=relation,
+            reference_value=reference_value,
+        )
+        value_bounds = (
+            _normalized_value_date_bounds(nearby.value)
+            if nearby is not None and nearby.value is not None
+            else None
+        )
+        relative_offset = nearby.offset_days if nearby is not None else None
+        if value_bounds is not None:
+            sort_key: tuple[Any, ...] = (
+                0,
+                value_bounds[0].toordinal(),
+                value_bounds[1].toordinal(),
+                reference.start,
+                reference.end,
+            )
+        elif relative_offset is not None:
+            sort_key = (1, relative_offset, reference.start, reference.end)
+        else:
+            relation_rank = {"before": 0, "overlap": 1, "after": 2}.get(
+                relation,
+                1,
+            )
+            sort_key = (2, relation_rank, reference.start, reference.end)
+        entries.append(
+            {
+                "reference": reference,
+                "text": event_text,
+                "source": source,
+                "anchor": anchor,
+                "relation": relation,
+                "sort_key": sort_key,
+                "has_temporal_evidence": nearby is not None or relation != "unknown",
+            }
+        )
+
+    entries.sort(key=lambda entry: entry["sort_key"])
+    events = tuple(
+        OrderedTimelineEvent(
+            event_id=entry["reference"].span_id,
+            label=entry["reference"].label,
+            start=entry["reference"].start,
+            end=entry["reference"].end,
+            text_hash=entry["reference"].text_hash,
+            position=position,
+            confidence=entry["reference"].score,
+            anchor=entry["anchor"],
+            doc_time_rel=entry["relation"],
+            text=entry["text"],
+        )
+        for position, entry in enumerate(entries)
+    )
+    edges = _compact_order_edges(entries)
+    return Timeline(
+        events=events,
+        edges=edges,
+        document_creation_time=reference_value,
+    )
+
+
+def _compact_event_record(
+    item: EntitySpan | Mapping[str, Any],
+    *,
+    index: int,
+) -> tuple[TemporalSpanReference, str, str, Mapping[str, Any]]:
+    if isinstance(item, EntitySpan):
+        start, end = item.start, item.end
+        label = item.label
+        score = float(item.score)
+        event_text = item.text
+        source: Mapping[str, Any] = {}
+    else:
+        source = item
+        raw_start = source.get("start", source.get("start_char"))
+        raw_end = source.get("end", source.get("end_char"))
+        if raw_start is None or raw_end is None:
+            raise ValueError("event spans require integer start and end offsets")
+        start, end = int(raw_start), int(raw_end)
+        label = str(source.get("label", source.get("entity", "EVENT")))
+        score = float(source.get("score", 1.0))
+        event_text = str(source.get("text", source.get("value", label)))
+    if start < 0 or end <= start:
+        raise ValueError("event offsets must satisfy 0 <= start < end")
+    if not math.isfinite(score):
+        raise ValueError("event span score must be finite")
+    normalized_label = _timeline_span_label(label) or "EVENT"
+    raw_id = source.get("id", source.get("span_id"))
+    span_id = str(raw_id).strip() if raw_id is not None else ""
+    if not span_id:
+        span_id = f"event:{normalized_label.casefold()}:{start}:{end}:{index}"
+    metadata = source.get("metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    context = str(
+        source.get(
+            "context",
+            source.get("document_text", metadata.get("context", "")),
+        )
+    )
+    reference = TemporalSpanReference(
+        span_id=span_id,
+        label=normalized_label,
+        role="EVENT",
+        start=start,
+        end=end,
+        score=round(max(0.0, min(score, 1.0)), 6),
+        text_hash=hash_text(event_text),
+    )
+    return reference, event_text, context, source
+
+
+def _compact_timex(
+    item: TimeExpr | TemporalExpression | NormalizedTimex | Mapping[str, Any],
+) -> TimeExpr:
+    if isinstance(item, TimeExpr):
+        return item
+    if isinstance(item, TemporalExpression):
+        is_relative = item.direction != "none" or bool(item.metadata.get("relative"))
+        return TimeExpr(
+            text=item.text,
+            start=item.start,
+            end=item.end,
+            kind=item.timex_type,
+            value=None if is_relative else item.value,
+            relative_value=item.value if is_relative else None,
+            offset_days=_relative_offset_days(item),
+            direction=item.direction,
+            anchor=item.anchor,
+            metadata=dict(item.metadata),
+        )
+    if isinstance(item, NormalizedTimex):
+        return TimeExpr(
+            text=item.text,
+            start=item.start,
+            end=item.end,
+            kind=item.timex_type,
+            value=item.value,
+            anchor=item.anchor,
+            reference_time=item.anchor,
+            metadata={"granularity_flags": item.granularity_flags},
+        )
+    metadata = item.get("metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    kind = str(item.get("kind", item.get("type", item.get("timex_type", "DATE"))))
+    return TimeExpr(
+        text=str(item.get("text", "")),
+        start=int(item.get("start", item.get("start_char", 0))),
+        end=int(item.get("end", item.get("end_char", 0))),
+        kind=kind,  # type: ignore[arg-type]
+        value=item.get("value"),
+        relative_value=item.get("relative_value"),
+        offset_days=item.get("offset_days", item.get("relative_offset_days")),
+        direction=str(item.get("direction", "none")),  # type: ignore[arg-type]
+        anchor=item.get("anchor"),
+        reference_time=item.get(
+            "reference_time",
+            item.get("document_time", metadata.get("reference_time")),
+        ),
+        metadata=dict(metadata),
+    )
+
+
+def _compact_nearest_timex(
+    reference: TemporalSpanReference,
+    timexes: Sequence[TimeExpr],
+) -> TimeExpr | None:
+    candidates: list[tuple[tuple[int, int, int], TimeExpr]] = []
+    for timex in timexes:
+        if timex.kind not in {"DATE", "TIME"}:
+            continue
+        if reference.end <= timex.start:
+            distance = timex.start - reference.end
+            follows_event = 1
+        elif timex.end <= reference.start:
+            distance = reference.start - timex.end
+            follows_event = 0
+        else:
+            distance = 0
+            follows_event = 0
+        candidates.append(((distance, follows_event, timex.start), timex))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: item[0])[1]
+
+
+def _compact_timex_relation(
+    timex: TimeExpr | None,
+    reference_date: date | None,
+) -> DocTimeRel:
+    if timex is None:
+        return "unknown"
+    if timex.direction == "since":
+        return "overlap"
+    if timex.offset_days is not None:
+        if timex.offset_days < 0:
+            return "before"
+        if timex.offset_days > 0:
+            return "after"
+        return "overlap"
+    if reference_date is None or timex.value is None:
+        return "unknown"
+    bounds = _normalized_value_date_bounds(timex.value)
+    if bounds is None:
+        return "unknown"
+    return _interval_relation(bounds[0], bounds[1], reference_date, reference_date)
+
+
+def _compact_context_relation(context: str) -> DocTimeRel:
+    if not context:
+        return "unknown"
+    if resolve_temporality({"text": context, "context": context}) == "historical":
+        return "before"
+    if re.search(
+        r"\b(?:tomorrow|next|will|planned|scheduled|in\s+\d+\s+"
+        r"(?:day|days|week|weeks|month|months|year|years))\b",
+        context,
+        re.IGNORECASE,
+    ):
+        return "after"
+    return "unknown"
+
+
+def _compact_event_anchor(
+    reference: TemporalSpanReference,
+    timex: TimeExpr | None,
+    *,
+    relation: DocTimeRel,
+    reference_value: str | None,
+) -> EventTemporalAnchor | None:
+    if timex is not None:
+        anchor_value = timex.value or timex.relative_value
+        if anchor_value is not None:
+            normalized_value = timex.value or timex.relative_value or "relative"
+            return EventTemporalAnchor(
+                event_start=reference.start,
+                event_end=reference.end,
+                event_text_hash=reference.text_hash,
+                anchor_source="timex",
+                anchor_value=anchor_value,
+                dct_position=relation,
+                timex=TimexAnchorReference(
+                    start=timex.start,
+                    end=timex.end,
+                    text_hash=hash_text(timex.text),
+                    timex_type=timex.kind,
+                    normalized_value=normalized_value,
+                    granularity_flags=tuple(
+                        timex.metadata.get("granularity_flags", ("relative",))
+                    ),
+                ),
+            )
+    if reference_value is None:
+        return None
+    return EventTemporalAnchor(
+        event_start=reference.start,
+        event_end=reference.end,
+        event_text_hash=reference.text_hash,
+        anchor_source="dct_fallback",
+        anchor_value=reference_value,
+        dct_position=relation if relation != "unknown" else "overlap",
+    )
+
+
+def _compact_order_edges(
+    entries: Sequence[Mapping[str, Any]],
+) -> tuple[TimelineEdgeProvenance, ...]:
+    edges: list[TimelineEdgeProvenance] = []
+    for left, right in zip(entries, entries[1:]):
+        if not left["has_temporal_evidence"] or not right["has_temporal_evidence"]:
+            continue
+        source = left["reference"]
+        target = right["reference"]
+        cue_start = source.end
+        cue_end = max(cue_start + 1, min(target.start, cue_start + 1))
+        edges.append(
+            TimelineEdgeProvenance(
+                relation_type="BEFORE",
+                source=source,
+                target=target,
+                confidence=1.0,
+                cue=TemporalCueReference(
+                    category="BEFORE",
+                    start=cue_start,
+                    end=cue_end,
+                    text_hash=hash_text(""),
+                ),
+                status="kept",
+                reason="normalized_timex_order",
+                provenance={"source": "compact_timex_order"},
+            )
+        )
+    return tuple(edges)
+
+
+def _build_ordered_timeline_event(
+    text: str,
+    reference: TemporalSpanReference,
+    *,
+    position: int,
+    anchor: EventTemporalAnchor | None,
+) -> OrderedTimelineEvent:
+    relation = _event_doc_time_relation(text, reference, anchor)
+    if anchor is not None and relation != "unknown":
+        anchor = replace(anchor, dct_position=relation)
+    return OrderedTimelineEvent(
+        event_id=reference.span_id,
+        label=reference.label,
+        start=reference.start,
+        end=reference.end,
+        text_hash=reference.text_hash,
+        position=position,
+        confidence=reference.score,
+        anchor=anchor,
+        doc_time_rel=relation,
+        text=text[reference.start : reference.end],
+    )
+
+
+def _event_doc_time_relation(
+    text: str,
+    reference: TemporalSpanReference,
+    anchor: EventTemporalAnchor | None,
+) -> DocTimeRel:
+    if anchor is not None and anchor.dct_position != "overlap":
+        return anchor.dct_position
+
+    windows = _sentence_windows(text)
+    sentence_start, sentence_end = _sentence_for_offsets(
+        windows,
+        reference.start,
+        reference.end,
+    )
+    sentence = text[sentence_start:sentence_end]
+    if (
+        resolve_temporality(
+            {
+                "text": sentence,
+                "context": text,
+                "start": sentence_start,
+                "end": sentence_end,
+            }
+        )
+        == "historical"
+    ):
+        return "before"
+    if re.search(
+        r"\b(?:tomorrow|next|will|planned|scheduled|in\s+\d+\s+"
+        r"(?:day|days|week|weeks|month|months|year|years))\b",
+        sentence,
+        re.IGNORECASE,
+    ):
+        return "after"
+    if anchor is not None:
+        return anchor.dct_position
+    return "unknown"
 
 
 def evaluate_timeline_gold(
@@ -1373,6 +1813,15 @@ def _resolve_interval(
             amount = -amount
         target = _add_duration(document_reference, amount=amount, unit=timex.unit)
         return _interval(target, target, uncertainty_days=timex.uncertainty_days)
+    if timex.direction in {"calendar_past", "calendar_future"}:
+        if document_reference is None:
+            return None
+        return _calendar_relative_interval(
+            document_reference,
+            target=str(timex.metadata.get("calendar_target", timex.unit or "day")),
+            direction=timex.direction,
+            uncertainty_days=timex.uncertainty_days,
+        )
     if timex.direction in {"after_previous", "before_previous"}:
         if previous_interval_start is None:
             return None
@@ -1387,8 +1836,31 @@ def _resolve_interval(
             return None
         target = _add_duration(anchor, amount=timex.amount or 0, unit="day")
         return _interval(target, target, uncertainty_days=timex.uncertainty_days)
+    if timex.direction in {"before_anchor", "after_anchor"}:
+        anchor = _lookup_anchor(anchor_dates, timex.anchor)
+        if anchor is None:
+            return None
+        amount = timex.amount or 0
+        if timex.direction == "before_anchor":
+            amount = -amount
+        target = _add_duration(anchor, amount=amount, unit=timex.unit)
+        return _interval(target, target, uncertainty_days=timex.uncertainty_days)
     if timex.direction == "since":
         anchor = _lookup_anchor(anchor_dates, timex.anchor)
+        if anchor is None and timex.metadata.get("calendar_anchor"):
+            calendar_value = (
+                _calendar_relative_interval(
+                    document_reference,
+                    target=timex.anchor or "month",
+                    direction="calendar_past"
+                    if (timex.anchor or "").startswith("last")
+                    else "calendar_future",
+                    uncertainty_days=timex.uncertainty_days,
+                )
+                if document_reference is not None
+                else None
+            )
+            anchor = calendar_value.start if calendar_value is not None else None
         if anchor is None or document_reference is None:
             return None
         return _interval(
@@ -1462,6 +1934,100 @@ def _add_months(value: date, amount: int) -> date:
     return date(year, month, day)
 
 
+_CALENDAR_MONTHS = {
+    "january": 1,
+    "jan": 1,
+    "february": 2,
+    "feb": 2,
+    "march": 3,
+    "mar": 3,
+    "april": 4,
+    "apr": 4,
+    "may": 5,
+    "june": 6,
+    "jun": 6,
+    "july": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sept": 9,
+    "sep": 9,
+    "october": 10,
+    "oct": 10,
+    "november": 11,
+    "nov": 11,
+    "december": 12,
+    "dec": 12,
+}
+
+
+def _calendar_relative_interval(
+    reference: date,
+    *,
+    target: str,
+    direction: Literal["calendar_past", "calendar_future"],
+    uncertainty_days: int,
+) -> NormalizedInterval:
+    """Resolve a last/next calendar expression without wall-clock state."""
+
+    normalized = " ".join(target.casefold().split())
+    sign = -1 if direction == "calendar_past" else 1
+    if normalized.startswith("last "):
+        normalized = normalized[5:]
+        sign = -1
+    elif normalized.startswith("next "):
+        normalized = normalized[5:]
+        sign = 1
+    if normalized in _CALENDAR_MONTHS:
+        month = _CALENDAR_MONTHS[normalized]
+        year = reference.year
+        if sign < 0 and month >= reference.month:
+            year -= 1
+        elif sign > 0 and month <= reference.month:
+            year += 1
+        start = date(year, month, 1)
+        end = date(year, month, calendar.monthrange(year, month)[1])
+        return _interval(
+            start,
+            end,
+            precision="month",
+            uncertainty_days=uncertainty_days,
+        )
+    if normalized == "day":
+        shifted = reference + timedelta(days=sign)
+        return _interval(shifted, shifted, uncertainty_days=uncertainty_days)
+    if normalized == "week":
+        shifted = reference + timedelta(weeks=sign)
+        iso_year, iso_week, _ = shifted.isocalendar()
+        start = date.fromisocalendar(iso_year, iso_week, 1)
+        return _interval(
+            start,
+            start + timedelta(days=6),
+            precision="week",
+            uncertainty_days=uncertainty_days,
+        )
+    if normalized == "year":
+        year = reference.year + sign
+        return _interval(
+            date(year, 1, 1),
+            date(year, 12, 31),
+            precision="year",
+            uncertainty_days=uncertainty_days,
+        )
+    shifted = _add_months(reference, sign)
+    start = date(shifted.year, shifted.month, 1)
+    end = date(
+        shifted.year, shifted.month, calendar.monthrange(shifted.year, shifted.month)[1]
+    )
+    return _interval(
+        start,
+        end,
+        precision="month",
+        uncertainty_days=uncertainty_days,
+    )
+
+
 def _relative_offset_days(timex: TemporalExpression) -> int | None:
     if timex.amount is None or timex.unit is None:
         return None
@@ -1483,8 +2049,59 @@ def _relative_offset_days(timex: TemporalExpression) -> int | None:
     return None
 
 
+def _timeline_doc_time_relation(
+    interval: NormalizedInterval | None,
+    *,
+    timex: TemporalExpression,
+    document_reference: date | None,
+) -> DocTimeRel:
+    """Return the TIMEX position relative to the document reference date."""
+
+    if document_reference is None:
+        if timex.direction in {"past", "before_previous", "before_anchor"}:
+            return "before"
+        if timex.direction in {
+            "future",
+            "after_previous",
+            "after_anchor",
+            "postop_day",
+            "calendar_future",
+        }:
+            return "after"
+        if timex.direction == "same":
+            return "overlap"
+        if timex.direction == "calendar_past":
+            return "before"
+        return "unknown"
+    if interval is not None:
+        return _interval_relation(
+            interval.start,
+            interval.end,
+            document_reference,
+            document_reference,
+        )
+    if timex.direction in {"past", "before_previous", "before_anchor"}:
+        return "before"
+    if timex.direction in {
+        "future",
+        "after_previous",
+        "after_anchor",
+        "postop_day",
+        "calendar_future",
+    }:
+        return "after"
+    if timex.direction == "same":
+        return "overlap"
+    if timex.direction == "calendar_past":
+        return "before"
+    return "unknown"
+
+
 def _reference_date_required(timex: TemporalExpression) -> bool:
-    if timex.direction in _REFERENCE_DEPENDENT_DIRECTIONS:
+    if timex.direction in _REFERENCE_DEPENDENT_DIRECTIONS or timex.direction in {
+        "calendar_past",
+        "calendar_future",
+    }:
         return True
     return bool(timex.metadata.get("history_duration"))
 
@@ -1618,7 +2235,7 @@ def _update_anchor_dates(
 ) -> None:
     normalized = sentence_text.casefold()
     for anchor, terms in _ANCHOR_TERMS.items():
-        if any(term in normalized for term in terms):
+        if any(term in normalized for term in terms) and anchor not in anchor_dates:
             anchor_dates[anchor] = anchor_date
             if anchor == "surgery":
                 anchor_dates["operation"] = anchor_date
@@ -1889,6 +2506,7 @@ def _rate(numerator: int, denominator: int) -> float:
 
 
 __all__ = [
+    "DocTimeRel",
     "EVENT_ANCHORING_ADVISORY",
     "EventAnchorSource",
     "EventAnchoringResult",
