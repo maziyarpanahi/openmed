@@ -327,6 +327,7 @@ classification:
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
+    - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md

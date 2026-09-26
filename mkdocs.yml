@@ -252,6 +252,7 @@ nav:
       - Privacy-safe Asset Manifests: multimodal/asset-manifests.md
       - Multimodal Manifest Profiles: multimodal/manifest-profiles.md
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
+      - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Multimodal Preflight Report: multimodal/preflight.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
