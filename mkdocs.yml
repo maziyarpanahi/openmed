@@ -142,6 +142,7 @@ nav:
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
       - Clinical NLI Label Contract: clinical/nli-label-contract.md
       - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
