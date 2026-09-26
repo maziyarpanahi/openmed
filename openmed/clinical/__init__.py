@@ -1035,6 +1035,24 @@ from .summary_input import (
     validate_summary_input,
     validate_summary_inputs,
 )
+from .temporal_intervals import (
+    NormalizationStatus,
+    TemporalEndpoint,
+    TemporalIntervalNormalizer,
+    TemporalKind,
+    TemporalPrecision,
+    TimezoneState,
+    normalize_interval,
+    normalize_temporal_intervals,
+    parse_temporal_interval,
+    parse_temporal_value,
+)
+from .temporal_intervals import (
+    TemporalInterval as ConservativeTemporalInterval,
+)
+from .temporal_intervals import (
+    normalize_temporal_interval as normalize_conservative_temporal_interval,
+)
 from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
     CLINICAL_EVENT_TIMELINE_ADVISORY,
@@ -1490,6 +1508,18 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "NormalizationStatus",
+    "TemporalEndpoint",
+    "ConservativeTemporalInterval",
+    "TemporalIntervalNormalizer",
+    "TemporalKind",
+    "TemporalPrecision",
+    "TimezoneState",
+    "normalize_interval",
+    "normalize_conservative_temporal_interval",
+    "normalize_temporal_intervals",
+    "parse_temporal_interval",
+    "parse_temporal_value",
     "NLI_TEMPORAL_PAIR_SCHEMA_VERSION",
     "NLI_TEMPORAL_PAIR_ADVISORY",
     "CLINICAL_NLI_TEMPORAL_PAIR_ADVISORY",

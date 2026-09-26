@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 79244252,
-    "maximum_unique_payload_bytes": 78906673,
+    "maximum_total_bytes": 79453183,
+    "maximum_unique_payload_bytes": 79115604,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The combined temporal-interval staging measured 79337697 total bytes and 79000118 unique payload bytes. The aggregate ceilings retain 115486 bytes of bounded headroom; duplicate, source-map, per-file, and search gates remain unchanged.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
     "The combined clinical, schema-compatibility, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail staging aggregate contains 79128766 total bytes, 78791187 unique payload bytes, and 337579 duplicate payload bytes locally.",
     "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
