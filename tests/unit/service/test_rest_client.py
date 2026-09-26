@@ -232,6 +232,139 @@ def test_client_propagates_request_id_on_error() -> None:
     assert exc_info.value.request_id == "req-response"
 
 
+def test_client_maps_malformed_success_payload_to_typed_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"{broken",
+            headers={"X-Request-ID": "req-malformed"},
+        )
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(OpenMedAPIError) as exc_info:
+            client.loaded_models()
+
+    exc = exc_info.value
+    assert exc.status_code == 200
+    assert exc.code == "invalid_response"
+    assert exc.request_id == "req-malformed"
+
+
+def test_client_maps_non_object_success_payload_to_typed_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"[]",
+            headers={"X-Request-ID": "req-array"},
+        )
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(OpenMedAPIError) as exc_info:
+            client.loaded_models()
+
+    exc = exc_info.value
+    assert exc.status_code == 200
+    assert exc.code == "invalid_response"
+    assert exc.details == []
+    assert exc.request_id == "req-array"
+
+
+def test_client_returns_object_success_payload_unchanged() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"models": {"pii": 1}})
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        assert client.loaded_models() == {"models": {"pii": 1}}
+
+
+def test_client_yields_object_stream_events_unchanged() -> None:
+    body = b'{"event": "pii", "text": "synthetic"}\n\n{"event": "done"}\n'
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=body)
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        events = list(client.extract_pii_stream("synthetic sample"))
+
+    assert events == [
+        {"event": "pii", "text": "synthetic"},
+        {"event": "done"},
+    ]
+
+
+def test_client_maps_non_object_stream_event_to_typed_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"[]\n",
+            headers={"X-Request-ID": "req-stream-array"},
+        )
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(OpenMedAPIError) as exc_info:
+            list(client.extract_pii_stream("synthetic sample"))
+
+    exc = exc_info.value
+    assert exc.status_code == 200
+    assert exc.code == "invalid_response"
+    assert exc.request_id == "req-stream-array"
+
+
+def test_client_maps_malformed_stream_event_to_typed_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=b"{broken\n",
+            headers={"X-Request-ID": "req-stream-malformed"},
+        )
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(OpenMedAPIError) as exc_info:
+            list(client.extract_pii_stream("synthetic sample"))
+
+    exc = exc_info.value
+    assert exc.status_code == 200
+    assert exc.code == "invalid_response"
+    assert exc.request_id == "req-stream-malformed"
+
+
+def test_client_closes_stream_when_event_is_not_an_object() -> None:
+    responses: list[httpx.Response] = []
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        response = httpx.Response(200, content=b"[]\n")
+        responses.append(response)
+        return response
+
+    with OpenMedClient(
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(OpenMedAPIError):
+            list(client.extract_pii_stream("synthetic sample"))
+
+    assert responses
+    assert all(response.is_closed for response in responses)
+
+
 def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     spec = json.loads(open("docs/api/openapi.json", encoding="utf-8").read())
     request_types = {
