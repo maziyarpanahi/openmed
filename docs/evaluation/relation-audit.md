@@ -62,9 +62,11 @@ before `_to_`. If a record does not carry a filtering reason, it is counted as
 refuted, conditional, or uncertain. Missing sections are counted under
 `unsectioned`.
 
-Category labels are normalized to bounded lowercase tokens. Callers should
-pass controlled labels for the three dimensions, never source text or
-identifiers.
+Category labels are normalized to bounded lowercase tokens and checked against
+controlled vocabularies. Unrecognized family, section, and filtering-reason
+values are counted as `unknown`, `unsectioned`, and `other`, respectively. This
+also applies when reading an aggregate report. Callers should still pass
+controlled labels, never source text or identifiers.
 
 ## Serialization
 

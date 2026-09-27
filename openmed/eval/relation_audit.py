@@ -30,6 +30,71 @@ UNKNOWN_RELATION_FAMILY = "unknown"
 ACCEPTED_FILTERING_REASON = "accepted"
 OTHER_FILTERING_REASON = "other"
 
+# Category values are still untrusted input. A syntactically valid token can be
+# a patient name or record ID, so only controlled vocabulary reaches reports.
+_SAFE_RELATION_FAMILIES = frozenset(
+    {
+        "unknown",
+        "other",
+        "drug",
+        "medication",
+        "problem",
+        "condition",
+        "laboratory",
+        "lab",
+        "temporal",
+        "procedure",
+        "diagnosis",
+        "treatment",
+        "family",
+        "family_history",
+        "adverse_event",
+    }
+)
+_SAFE_SECTIONS = frozenset(
+    {
+        "unsectioned",
+        "mixed",
+        "assessment",
+        "assessment_and_plan",
+        "plan",
+        "history",
+        "history_of_present_illness",
+        "past_medical_history",
+        "family_history",
+        "social_history",
+        "medications",
+        "allergies",
+        "problem_list",
+        "results",
+        "physical_exam",
+        "chief_complaint",
+        "review_of_systems",
+        "vitals",
+        "discharge_summary",
+    }
+)
+_SAFE_FILTERING_REASONS = frozenset(
+    {
+        "accepted",
+        "other",
+        "filtered",
+        "rejected",
+        "duplicate",
+        "assertion_refuted",
+        "assertion_conditional",
+        "assertion_possible",
+        "assertion_uncertain",
+        "missing_evidence",
+        "invalid_direction",
+        "incompatible_unit",
+        "unknown_unit",
+        "section_mismatch",
+        "low_confidence",
+        "no_candidate",
+    }
+)
+
 _CATEGORY_MAX_LENGTH = 64
 _CATEGORY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _SEPARATOR_RE = re.compile(r"[\s\-]+")
@@ -52,7 +117,7 @@ _ENDPOINT_KEYS = ("head", "tail", "attribute", "source", "target")
 
 
 def _normalise_category(value: Any, fallback: str) -> str:
-    """Return a bounded category token without exposing arbitrary input text."""
+    """Return a bounded token for further vocabulary validation."""
 
     if not isinstance(value, str):
         return fallback
@@ -70,9 +135,17 @@ def _normalise_category(value: Any, fallback: str) -> str:
     return normalized
 
 
+def _safe_category(value: Any, allowed: frozenset[str], fallback: str) -> str:
+    """Collapse an unrecognized category so source text cannot enter a report."""
+
+    normalized = _normalise_category(value, fallback)
+    return normalized if normalized in allowed else fallback
+
+
 def _normalise_count_mapping(
     value: Mapping[Any, Any] | None,
     *,
+    allowed: frozenset[str],
     fallback: str,
 ) -> MappingProxyType:
     """Normalize and sort one aggregate count mapping."""
@@ -103,7 +176,7 @@ def _normalise_count_mapping(
             raise ValueError("audit counts must be non-negative integers")
         if raw_count < 0:
             raise ValueError("audit counts must be non-negative integers")
-        counts[_normalise_category(key, fallback)] += raw_count
+        counts[_safe_category(key, allowed, fallback)] += raw_count
     return MappingProxyType(dict(sorted(counts.items())))
 
 
@@ -283,17 +356,21 @@ class RelationCandidateAuditRecord:
         object.__setattr__(
             self,
             "relation_family",
-            _normalise_category(self.relation_family, UNKNOWN_RELATION_FAMILY),
+            _safe_category(
+                self.relation_family, _SAFE_RELATION_FAMILIES, UNKNOWN_RELATION_FAMILY
+            ),
         )
         object.__setattr__(
             self,
             "section",
-            _normalise_category(self.section, UNSECTIONED_SECTION),
+            _safe_category(self.section, _SAFE_SECTIONS, UNSECTIONED_SECTION),
         )
         object.__setattr__(
             self,
             "filtering_reason",
-            _normalise_category(self.filtering_reason, ACCEPTED_FILTERING_REASON),
+            _safe_category(
+                self.filtering_reason, _SAFE_FILTERING_REASONS, OTHER_FILTERING_REASON
+            ),
         )
 
     @classmethod
@@ -369,6 +446,7 @@ class RelationCandidateAuditReport:
             "by_relation_family",
             _normalise_count_mapping(
                 self.by_relation_family,
+                allowed=_SAFE_RELATION_FAMILIES,
                 fallback=UNKNOWN_RELATION_FAMILY,
             ),
         )
@@ -377,6 +455,7 @@ class RelationCandidateAuditReport:
             "by_section",
             _normalise_count_mapping(
                 self.by_section,
+                allowed=_SAFE_SECTIONS,
                 fallback=UNSECTIONED_SECTION,
             ),
         )
@@ -385,6 +464,7 @@ class RelationCandidateAuditReport:
             "by_filtering_reason",
             _normalise_count_mapping(
                 self.by_filtering_reason,
+                allowed=_SAFE_FILTERING_REASONS,
                 fallback=OTHER_FILTERING_REASON,
             ),
         )

@@ -135,6 +135,36 @@ def test_report_omits_source_text_and_identifiers(tmp_path) -> None:
     assert RelationCandidateAuditReport.read_json(output_path) == report
 
 
+def test_category_fields_cannot_turn_identifiers_into_report_keys() -> None:
+    identifier = "synthetic_patient_name_123"
+    report = audit_relation_candidates(
+        [
+            {
+                "relation_family": identifier,
+                "section": identifier,
+                "filtering_reason": identifier,
+            },
+            RelationCandidateAuditRecord(identifier, identifier, identifier),
+        ]
+    )
+
+    assert report.by_relation_family == {"unknown": 2}
+    assert report.by_section == {"unsectioned": 2}
+    assert report.by_filtering_reason == {"other": 2}
+    assert identifier not in report.to_json()
+    assert identifier not in report.to_markdown()
+
+    restored = RelationCandidateAuditReport.from_dict(
+        {
+            "candidate_count": 1,
+            "by_relation_family": {identifier: 1},
+            "by_section": {identifier: 1},
+            "by_filtering_reason": {identifier: 1},
+        }
+    )
+    assert identifier not in restored.to_json()
+
+
 def test_from_dict_round_trips_aggregate_only_payload() -> None:
     payload = {
         "artifact": "relation_candidate_audit",
