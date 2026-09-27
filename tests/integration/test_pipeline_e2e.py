@@ -36,8 +36,11 @@ fixture, not a medical device, and must not drive clinical decisions.
 
 from __future__ import annotations
 
+import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -53,6 +56,7 @@ from openmed.clinical import (
     clinical_status_from_assertion,
     resolve_span_context,
 )
+from openmed.clinical.exporters import check_codeable_concept
 from openmed.clinical.exporters.codeable_concept import (
     GroundedSpan,
     build_reverse_index,
@@ -66,6 +70,7 @@ from openmed.clinical.grounding import (
     available_linkers,
     get_linker,
 )
+from openmed.core.quality_gates import validate_entity_spans_strict
 
 # --------------------------------------------------------------------------- #
 # Fixtures and synthetic data (synthetic-only; no real PHI, no DUA vocab).
@@ -74,6 +79,11 @@ from openmed.clinical.grounding import (
 _FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "clinical"
 _GROUNDING_FIXTURES = _FIXTURE_ROOT / "grounding"
 _GOLDEN = _FIXTURE_ROOT / "e2e" / "discharge_summary_golden.json"
+_GOLDEN_CASES = (
+    _GOLDEN,
+    _FIXTURE_ROOT / "e2e" / "code_mixed_golden.json",
+    _FIXTURE_ROOT / "e2e" / "hypothetical_golden.json",
+)
 
 # A single embedded synthetic clinical note. It carries structured PHI that the
 # deterministic safety sweep redacts offline (date / phone / email / MRN / SSN)
@@ -224,7 +234,7 @@ def _run_pipeline(golden: dict[str, Any], linkers: dict[str, Any]) -> dict[str, 
 
     # Stage 1 - de-identification (real deidentify, offline safety sweep).
     deid = deidentify(
-        SYNTHETIC_NOTE,
+        golden["source_note"],
         method="mask",
         confidence_threshold=0.5,
         loader=_NoDownloadLoader(),
@@ -274,6 +284,12 @@ def _run_pipeline(golden: dict[str, Any], linkers: dict[str, Any]) -> dict[str, 
         system = expected["grounding_system"]
         linker = linkers[system]
         candidates = linker.link(entity.text, canonical_label=entity.label, fuzzy=False)
+        # The synthetic local vocabulary is caller-pinned so the shared exporter
+        # exercises Coding.version provenance without a terminology download.
+        candidates = [
+            replace(candidate, vocab_version=linker._vocab.content_hash)
+            for candidate in candidates
+        ]
 
         grounded = GroundedSpan(
             text=entity.text,
@@ -703,3 +719,113 @@ def test_grounding_candidates_are_typed(pipeline):
     for row in pipeline["per_entity"]:
         for candidate in row["candidates"]:
             assert isinstance(candidate, Candidate)
+
+
+def _pipeline_snapshot(result: dict[str, Any]) -> dict[str, Any]:
+    """Capture stage outputs that reviewers approve as synthetic golden data."""
+    return {
+        "entities": [
+            {
+                "text": row["entity"].text,
+                "start": row["entity"].start,
+                "end": row["entity"].end,
+                "label": row["entity"].label,
+                "negation": row["context"].negation,
+                "temporality": row["context"].temporality,
+                "certainty": row["context"].certainty,
+                "code": row["candidates"][0].code,
+                "system": row["concept"]["coding"][0]["system"],
+                "vocab_version": row["concept"]["coding"][0]["version"],
+                "resource_type": row["resource"]["resourceType"],
+                "status": row["status"],
+            }
+            for row in result["per_entity"]
+        ],
+        "fhir_bundle": {
+            "resource_type": result["bundle"]["resourceType"],
+            "type": result["bundle"]["type"],
+            "entry_types": [
+                entry["resource"]["resourceType"] for entry in result["bundle"]["entry"]
+            ],
+        },
+    }
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("case_path", _GOLDEN_CASES, ids=lambda path: path.stem)
+def test_pipeline_cases_match_committed_golden(case_path, grounding_linkers):
+    """Pin English, code-mixed, and hypothetical full-pipeline handoffs."""
+    case = json.loads(case_path.read_text(encoding="utf-8"))
+    assert case["synthetic"] is True
+    assert case["source_rights"] == "generated synthetic fixture"
+    assert case["language"] in {"en", "es-en"}
+    result = _run_pipeline(case, grounding_linkers)
+
+    ner_check = validate_entity_spans_strict(
+        result["analysis"].entities, result["deidentified_text"]
+    )
+    grounding_check = validate_entity_spans_strict(
+        [
+            SimpleNamespace(
+                text=span.text,
+                start=span.start,
+                end=span.end,
+                label=row["entity"].label,
+                metadata={},
+            )
+            for span, row in zip(
+                result["grounded_spans"], result["per_entity"], strict=True
+            )
+        ],
+        result["deidentified_text"],
+    )
+    assert ner_check.passed and ner_check.offsetless_spans == 0, ner_check.to_dict()
+    assert grounding_check.passed and grounding_check.offsetless_spans == 0, (
+        grounding_check.to_dict()
+    )
+
+    for row in result["per_entity"]:
+        findings = check_codeable_concept(
+            row["concept"], expected_system=row["expected"]["grounding_system"]
+        )
+        assert not [item for item in findings if item["severity"] == "error"]
+        coding = row["concept"]["coding"][0]
+        assert coding["code"] == row["expected"]["expected_code"]
+        assert coding["version"] == row["candidates"][0].vocab_version
+
+    for entry in result["bundle"]["entry"]:
+        resource = entry["resource"]
+        concept = resource.get("code") or resource.get("medicationCodeableConcept")
+        if concept is not None:
+            assert not [
+                item
+                for item in check_codeable_concept(concept)
+                if item["severity"] == "error"
+            ]
+            assert concept["coding"][0]["version"]
+
+    actual = _pipeline_snapshot(result)
+    assert actual == case["expected_pipeline"], (
+        f"Golden drift in {case_path.name}; regenerate only after review.\n"
+        f"Expected: {json.dumps(case['expected_pipeline'], indent=2, sort_keys=True)}\n"
+        f"Actual: {json.dumps(actual, indent=2, sort_keys=True)}"
+    )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Regenerate synthetic pipeline goldens"
+    )
+    parser.add_argument("--regenerate-golden", action="store_true", required=True)
+    args = parser.parse_args()
+    if args.regenerate_golden:
+        linkers = grounding_linkers.__wrapped__()
+        for path in _GOLDEN_CASES:
+            case = json.loads(path.read_text(encoding="utf-8"))
+            if case.get("synthetic") is not True:
+                raise SystemExit("golden regeneration requires synthetic fixtures")
+            case["expected_pipeline"] = _pipeline_snapshot(_run_pipeline(case, linkers))
+            path.write_text(
+                json.dumps(case, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
