@@ -109,8 +109,12 @@ def fingerprint_source(source: object) -> str:
     else:
         try:
             encoded = _canonical_json(source).encode("utf-8")
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise EvidenceCoverageError("source cannot be fingerprinted") from exc
+        except (TypeError, ValueError, OverflowError):
+            invalid = True
+        else:
+            invalid = False
+        if invalid:
+            raise EvidenceCoverageError("source cannot be fingerprinted")
     return _sha256(encoded)
 
 
@@ -867,9 +871,14 @@ def _sha256(value: bytes) -> str:
 
 def _digest(value: object) -> str:
     try:
-        return _sha256(_canonical_json(value).encode("utf-8"))
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise EvidenceCoverageError("value-free hash material is invalid") from exc
+        encoded = _canonical_json(value).encode("utf-8")
+    except (TypeError, ValueError, OverflowError):
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise EvidenceCoverageError("value-free hash material is invalid")
+    return _sha256(encoded)
 
 
 # Descriptive aliases keep the public surface easy to discover for callers

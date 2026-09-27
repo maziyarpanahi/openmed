@@ -90,6 +90,21 @@ def test_claim_ids_and_custom_class_labels_cannot_expose_patient_values() -> Non
         assert marker not in surface
 
 
+def test_unserializable_source_does_not_chain_input_exception() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class PrivateSource:
+        def __repr__(self) -> str:
+            return patient_value
+
+    with pytest.raises(EvidenceCoverageError) as caught:
+        fingerprint_source(PrivateSource())
+
+    assert patient_value not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
 def test_input_order_does_not_change_rows_counts_or_hashes():
     claims = [
         {
