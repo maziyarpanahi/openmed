@@ -23,7 +23,7 @@
   "route_transfer_bytes": {
     "/": 3145728,
     "/docs/": 5560423,
-    "/docs/model-tokenizer-script-coverage/": 7660085
+    "/docs/model-tokenizer-script-coverage/": 7680577
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -49,7 +49,8 @@
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded.",
-    "With output-use policy and refusal taxonomy added to the guarded evidence-packet and review-state stack, the staged artifact measures 81040068 total bytes, 80702489 unique payload bytes, 337579 duplicate payload bytes, and a 4201594-byte search index on macOS.",
-    "The combined output-use ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
+    "With output-use policy and refusal taxonomy added to the guarded evidence-packet and review-state stack at master db464996, the staged artifact measures 81046395 total bytes, 80708816 unique payload bytes, 337579 duplicate payload bytes, and a 4204058-byte search index on macOS.",
+    "The combined output-use ceilings retain the largest observed 4736-byte platform delta plus bounded headroom; the search index retains 5654 bytes of measured headroom.",
+    "Chromium measured 7667723 first-party transfer bytes for the tokenizer coverage route; the 7680577-byte ceiling allows the observed 4736-byte platform delta and 8118 bytes of bounded headroom while keeping the guarded guides searchable."
   ]
 }
