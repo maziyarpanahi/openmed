@@ -174,10 +174,56 @@ def test_ac01_zero_width_chars_are_all_stripped_offset_preserving():
     assert 0 <= start <= end <= len(text)
 
 
-# AC-02 is a known, unmitigated separator-mutation class. The current public
-# regression suite intentionally omits its actionable reproduction and routes
-# future findings through SECURITY.md. A public regression should land with the
-# coordinated fix and disclosure.
+# --- AC-02: punctuation-split structured identifiers -------------------------
+
+
+@pytest.mark.parametrize(
+    "split",
+    ["1.2.3-4.5-6.7.8.9", "1,2,3-4,5-6,7,8,9", "·".join("123456789")],
+)
+def test_ac02_split_ssn_has_exact_offsets_and_no_critical_leakage(split):
+    """The deterministic sweep recovers a synthetic split SSN without ML help."""
+    text = f"SSN {split} is synthetic."
+    normalized = normalize_for_pii_detection(text)
+    entities = safety_sweep(normalized.text, [])
+    matches = [entity for entity in entities if entity.label == "ssn"]
+    assert len(matches) == 1
+    start, end = normalized.remap_span(matches[0].start, matches[0].end)
+    assert (start, end) == (4, 4 + len(split))
+    assert text[start:end] == split
+    output = _deidentify_with_blind_model(text)
+    assert split not in output
+    assert "ssn" in output.lower()
+
+
+@pytest.mark.parametrize(
+    ("text", "label"),
+    [
+        ("Card 4.111.111.111.111.111", "credit_debit_card"),
+        ("MRN 1,2,3,4,5,6", "medical_record_number"),
+        ("IBAN GB82.WE.ST.1234.5698.7654.32", "iban"),
+    ],
+)
+def test_ac02_other_split_identifiers_are_recovered(text, label):
+    """Checksum or explicit context gates the remaining structured shapes."""
+    assert label in _swept_labels(safety_sweep(text, []))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "BP 1.2.3.4.5.6.7.8.9 mmHg",
+        "dose 1,2,3,4,5,6,7,8,9 mg",
+        "HbA1c 6.7, glucose 8.9 mmol/L",
+        "Card 4.111.111.111.111.112",
+    ],
+)
+def test_ac02_clinical_numbers_and_invalid_card_are_not_identifiers(text):
+    """Clinical punctuation and failed checksums do not become identifiers."""
+    labels = _swept_labels(safety_sweep(text, []))
+    assert not labels.intersection(
+        {"ssn", "credit_debit_card", "medical_record_number", "iban"}
+    )
 
 
 # --- AC-03: unicode confusable / mixed-script obfuscation ---------------------
