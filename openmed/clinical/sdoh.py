@@ -82,6 +82,15 @@ FOOD_INSECURITY_EXTENSION_NOTE = (
 
 _SOCIAL_CUES_PACKAGE = "openmed.clinical"
 _CLAUSE_RE = re.compile(r"[^.;!?\n]+")
+_NON_ASSERTIVE_CLAUSE_RE = re.compile(
+    r"^\s*(?:ask\s+(?:about|whether)|screen(?:ing)?\s+(?:for|question\s*:)|"
+    r"(?:patient\s+)?education\s*:|counsel(?:ing|ling)\s*:)",
+    re.IGNORECASE,
+)
+_UNANSWERED_TEMPLATE_RE = re.compile(r"\[\s*\]|_{3,}")
+_DOUBLE_NEGATED_UNEMPLOYMENT_RE = re.compile(
+    r"(?<!\w)not\s+unemployed(?!\w)", re.IGNORECASE
+)
 
 SpanOffset = tuple[int, int]
 
@@ -295,12 +304,27 @@ def extract_sdoh(
         for finding in extractor(text, candidate_spans):
             if not isinstance(finding, SDOHFinding):
                 raise TypeError("determinant extractors must emit SDOHFinding values")
+            if _non_assertive_clause(text, finding.span):
+                continue
             if allowed_ranges is None or _offset_within_ranges(
                 finding.span,
                 allowed_ranges,
             ):
                 findings.append(finding)
     return findings
+
+
+def _non_assertive_clause(text: str, span: SpanOffset) -> bool:
+    """Exclude questions, educational instructions, and empty templates."""
+
+    for clause in _CLAUSE_RE.finditer(text):
+        if clause.start() <= span[0] < clause.end():
+            value = clause.group(0)
+            return bool(
+                _NON_ASSERTIVE_CLAUSE_RE.match(value)
+                or _UNANSWERED_TEMPLATE_RE.search(value)
+            )
+    return False
 
 
 def load_sdoh_social_cues(path: str | Path | None = None) -> dict[str, Any]:
@@ -366,6 +390,8 @@ def extract_employment_findings(
         )
         if status == "unknown":
             status = status_match.value
+        if _DOUBLE_NEGATED_UNEMPLOYMENT_RE.search(clause):
+            status = "unknown"
         findings.append(
             SDOHFinding(
                 category=config["category"],
