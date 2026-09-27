@@ -22,8 +22,8 @@
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 5560423,
-    "/docs/model-tokenizer-script-coverage/": 7660085
+    "/docs/": 5576203,
+    "/docs/model-tokenizer-script-coverage/": 7688480
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -50,7 +50,9 @@
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded.",
-    "With claim-packet integrity added to the exact human-review, refusal, uncertainty, evidence-packet, and review-state stack, the staged artifact measures 81472146 total bytes, 81134567 unique payload bytes, 337579 duplicate payload bytes, and a 4207195-byte search index on macOS.",
-    "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
+    "With claim-packet integrity added to the exact human-review, refusal, uncertainty, evidence-packet, and review-state stack at master 8a59e8fb, the staged artifact measures 81486733 total bytes, 81149154 unique payload bytes, 337579 duplicate payload bytes, and a 4211638-byte search index on macOS.",
+    "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus bounded headroom; the search index retains 3675 bytes of measured headroom.",
+    "Chromium measured 5563349 first-party transfer bytes for /docs/; the 5576203-byte ceiling allows the observed 4736-byte platform delta and 8118 bytes of bounded headroom while keeping the integrity guide searchable.",
+    "The tokenizer coverage route measured 7675626 first-party transfer bytes; its 7688480-byte ceiling applies the same bounded platform allowance and headroom."
   ]
 }
