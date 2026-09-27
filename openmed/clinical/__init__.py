@@ -1049,6 +1049,24 @@ from .summary_input import (
     validate_summary_input,
     validate_summary_inputs,
 )
+from .temporal_intervals import (
+    NormalizationStatus,
+    TemporalEndpoint,
+    TemporalIntervalNormalizer,
+    TemporalKind,
+    TemporalPrecision,
+    TimezoneState,
+    normalize_interval,
+    normalize_temporal_intervals,
+    parse_temporal_interval,
+    parse_temporal_value,
+)
+from .temporal_intervals import (
+    TemporalInterval as ConservativeTemporalInterval,
+)
+from .temporal_intervals import (
+    normalize_temporal_interval as normalize_conservative_temporal_interval,
+)
 from .temporal_normalizer import NormalizedTimex, normalize_temporal
 from .timeline import (
     CLINICAL_EVENT_TIMELINE_ADVISORY,
@@ -1060,6 +1078,7 @@ from .timeline import (
     ClinicalEvent,
     ClinicalEventTimeline,
     ClinicalTimeline,
+    DocTimeRel,
     EventAnchoringResult,
     EventAnchorSource,
     EventTemporalAnchor,
@@ -1070,6 +1089,7 @@ from .timeline import (
     OrderedTimelineEvent,
     ResolvedTimeline,
     TemporalExpression,
+    TimeExpr,
     Timeline,
     TimelineEdgeProvenance,
     TimelineEdgeStatus,
@@ -1082,6 +1102,7 @@ from .timeline import (
     build_linked_document_timeline,
     detect_timexes,
     evaluate_timeline_gold,
+    extract_timex,
     order_events,
     resolve_timeline,
 )
@@ -1515,6 +1536,18 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "NormalizationStatus",
+    "TemporalEndpoint",
+    "ConservativeTemporalInterval",
+    "TemporalIntervalNormalizer",
+    "TemporalKind",
+    "TemporalPrecision",
+    "TimezoneState",
+    "normalize_interval",
+    "normalize_conservative_temporal_interval",
+    "normalize_temporal_intervals",
+    "parse_temporal_interval",
+    "parse_temporal_value",
     "NLI_TEMPORAL_PAIR_SCHEMA_VERSION",
     "NLI_TEMPORAL_PAIR_ADVISORY",
     "CLINICAL_NLI_TEMPORAL_PAIR_ADVISORY",
@@ -1644,6 +1677,7 @@ __all__ = [
     "NormalizedTimex",
     "normalize_temporal",
     "EVENT_ANCHORING_ADVISORY",
+    "DocTimeRel",
     "CLINICAL_EVENT_TIMELINE_ADVISORY",
     "CLINICAL_EVENT_TIMELINE_SCHEMA_VERSION",
     "AssembledTimeline",
@@ -1657,7 +1691,9 @@ __all__ = [
     "LinkedDocumentTimeline",
     "LinkedTimelineDocument",
     "TemporalExpression",
+    "TimeExpr",
     "detect_timexes",
+    "extract_timex",
     "NormalizedInterval",
     "ORDER_EVENTS_SCHEMA_VERSION",
     "OrderedTimelineEvent",
