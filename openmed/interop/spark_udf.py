@@ -38,13 +38,13 @@ def _deidentify_series(
 
     import pandas as pd
 
-    if deidentifier is None:
-        deidentifier = _default_deidentifier()
-        kwargs = {**kwargs, "loader": _cached_model_loader()}
-
     def _redact_one(text: str | None) -> str | None:
+        nonlocal deidentifier, kwargs
         if text is None or pd.isna(text):
             return None
+        if deidentifier is None:
+            deidentifier = _default_deidentifier()
+            kwargs = {**kwargs, "loader": _cached_model_loader()}
         result = deidentifier(text, policy=policy, **kwargs)
         return _result_text(result)
 
