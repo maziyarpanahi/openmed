@@ -10,18 +10,43 @@ import pytest
 
 from openmed.clinical import (
     GUARDED_PROVENANCE_SCHEMA_VERSION,
+    EvidenceReference,
     GuardedProvenanceError,
-    ReviewState,
+    ProvenanceEvidenceReference,
     build_guarded_provenance_manifest,
     check_guarded_provenance,
     fingerprint_input,
+    fingerprint_policy,
+    fingerprint_provenance_policy,
     load_guarded_provenance_manifest,
     write_guarded_provenance_manifest,
+)
+from openmed.clinical import (
+    ProvenanceReviewState as ReviewState,
+)
+from openmed.clinical.evidence_packet import (
+    EvidenceReference as PacketEvidenceReference,
+)
+from openmed.clinical.evidence_packet import (
+    fingerprint_policy as packet_fingerprint_policy,
+)
+from openmed.clinical.guarded_provenance import (
+    EvidenceReference as GuardedEvidenceReference,
+)
+from openmed.clinical.guarded_provenance import (
+    fingerprint_policy as guarded_fingerprint_policy,
 )
 
 SYNTHETIC_INPUT = "SYNTHETIC_CLINICAL_INPUT"
 SYNTHETIC_OUTPUT = "SYNTHETIC_GENERATED_CLINICAL_OUTPUT"
 SYNTHETIC_EVIDENCE = "SYNTHETIC_EVIDENCE_FRAGMENT"
+
+
+def test_public_exports_preserve_packet_and_provenance_types() -> None:
+    assert EvidenceReference is PacketEvidenceReference
+    assert ProvenanceEvidenceReference is GuardedEvidenceReference
+    assert fingerprint_policy is packet_fingerprint_policy
+    assert fingerprint_provenance_policy is guarded_fingerprint_policy
 
 
 def _evidence(text: str = SYNTHETIC_EVIDENCE) -> dict[str, object]:
