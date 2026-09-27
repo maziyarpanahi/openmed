@@ -9,9 +9,11 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /livez`
 - `GET /readyz`
 - `GET /models/loaded`
+- `GET /v1/journey/resources`
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /ground`
+- `POST /profile`
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
 - `POST /pii/deidentify`
@@ -22,6 +24,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /jobs`
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
+- `POST /v1/decisions`
 - `POST /omop/load`
 - `POST /cohort/resolve`
 
@@ -35,6 +38,8 @@ error envelope.
 
 For ready-to-run `curl` and Python `requests` snippets covering the common
 calls, see the task-oriented [REST API Recipes](rest-recipes.md) page.
+For versioned, policy-scoped Journey resource pagination, see the
+[Journey Resources API](api/journey-resources.md) guide.
 
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
@@ -214,7 +219,7 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 12
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
-`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
+`/ground`, `/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`,
 `/pii/deidentify/stream`, `/jobs`, and `/privacy-gateway/complete`. The default
 is `1,000,000` characters. Oversized requests return the standard `422`
 validation envelope; split larger documents client-side or route them through
@@ -388,6 +393,16 @@ names, counts, labels, lengths, and durations. See
 
 ## Endpoints
 
+### `POST /v1/decisions`
+
+Evaluates a bounded caller-supplied choice, ordering, multi-label, boolean, or
+scalar request and returns calibrated confidence, backend identity, typed
+abstention and failure states, and mandatory review metadata. The default
+backend is local and deterministic; operators can inject a permissively
+licensed encoder, cross-encoder, or small specialist backend. See the
+[fixed-option decision API](./api/fixed-option-decisions.md) for the canonical
+schemas, limits, and client examples.
+
 ### `GET /health`
 
 Health response:
@@ -496,11 +511,25 @@ local terminology snapshots:
 {
   "text": "Aspirin 81 mg daily",
   "systems": ["rxnorm"],
-  "source_language": "en",
+  "lang": "en",
   "top_k": 5,
   "offline": true
 }
 ```
+
+For example:
+
+```bash
+curl --fail-with-body --max-time 30 \
+  -X POST "http://127.0.0.1:8080/ground" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Aspirin 81 mg daily","systems":["rxnorm"],"lang":"en","top_k":5,"offline":true}'
+```
+
+`source_language` remains accepted as a compatibility alias for `lang`.
+Unsupported terminology systems return the standard `422` validation envelope.
+The route is covered by the service request-body and throttle middleware, so an
+oversized body returns `413` and a rate-limited request returns `429`.
 
 The route is offline by default. Restricted terminologies such as UMLS and
 SNOMED CT require an explicitly configured, user-licensed terminology source;

@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>2,266 మానిఫెస్ట్ నమోదులు</b> &nbsp;·&nbsp; <b>మోడల్ మద్దతు గల 33 PII భాషలు</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 మానిఫెస్ట్ నమోదులు</b> &nbsp;·&nbsp; <b>మోడల్ మద్దతు గల 35 PII భాషలు</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -102,7 +102,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.3.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Apple Silicon కాని హోస్ట్‌లపై, MLX మోడల్ �
 
 ---
 
-## బహుభాషా PII (36 మద్దతు ఉన్న మార్గాలు; 33 మోడల్ మద్దతుతో)
+## బహుభాషా PII (38 మద్దతు ఉన్న మార్గాలు; 35 మోడల్ మద్దతుతో)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` మరియు `tr` భాషల్లో వెలికితీత మరియు డీ-ఐడెంటిఫికేషన్, మొత్తం **నమోదిత PII మోడల్ కేటలాగ్**.
 

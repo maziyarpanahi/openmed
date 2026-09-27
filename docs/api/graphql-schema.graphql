@@ -71,6 +71,70 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](https:/
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
 
+type JourneyPageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+  pageSize: Int!
+  snapshotDigest: String!
+}
+
+type JourneyPolicyMetadata {
+  state: String!
+  namespace: String!
+  purpose: String!
+  role: String!
+  attributes: [String!]!
+  consentState: String!
+  exportPolicy: String!
+  decisionId: String!
+  requestDigest: String!
+  allowedFields: [String!]!
+  code: String
+  policyVersion: String!
+}
+
+type JourneyResource {
+  resourceType: String!
+  resourceId: String!
+  namespace: String!
+  data: JSON!
+  state: String!
+  version: Int!
+  revision: Int!
+  schemaVersion: String!
+  compatibilityPolicy: String!
+  extensions: JSON!
+}
+
+type JourneyResourceConnection {
+  state: String!
+  code: String
+  resources: [JourneyResource!]!
+  pageInfo: JourneyPageInfo!
+  policy: JourneyPolicyMetadata!
+  schemaVersion: String!
+  compatibilityPolicy: String!
+}
+
+enum JourneyResourceKind {
+  ARTIFACT
+  JOB
+  FACT
+  CONFLICT
+  JOURNEY
+  COHORT
+  DATASET
+  REGISTRY
+  MEASURE
+  TRIAL_REVIEW
+  EVIDENCE
+  CURRENT_FACT
+  JOURNEY_EVENT
+  MAPPING
+  COHORT_RUN
+  DATASET_MANIFEST
+}
+
 type OpenMedSpan {
   label: String!
   start: Int
@@ -120,6 +184,7 @@ type Query {
   analyze(input: AnalyzeInput!): AnalyzePayload!
   deidentify(input: DeidentifyInput!): DeidentifyPayload!
   entityTypes: [EntityType!]!
+  journeyResources(resourceType: JourneyResourceKind!, namespace: String! = "default", purpose: String! = "care_review", role: String! = "clinician", attributes: [String!] = null, consentState: String! = "active", exportPolicy: String! = "metadata_only", first: Int! = 20, after: String = null, fields: [String!] = null): JourneyResourceConnection!
 }
 
 type RiskFacets {

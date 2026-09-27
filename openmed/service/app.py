@@ -11,12 +11,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import openmed
 from openmed.core.errors import (
@@ -30,6 +32,16 @@ from openmed.core.errors import (
     PolicyError,
 )
 from openmed.processing import format_predictions
+from openmed.structured.decision import (
+    DETERMINISTIC_DECISION_BACKEND,
+    DecisionAccessPolicy,
+    DecisionError,
+    decide,
+    decision_result_schema,
+)
+from openmed.structured.decision import (
+    DecisionRequest as CoreDecisionRequest,
+)
 from openmed.utils.validation import validate_model_name
 
 from .auth import ServiceAuth, parse_service_auth_config
@@ -43,10 +55,20 @@ from .batcher import (
 from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
+from .journey_resources import (
+    JourneyAccessPolicy,
+    JourneyResourceCatalog,
+    JourneyResourceKind,
+    JourneyResourceQuery,
+    parse_access_attributes,
+    parse_resource_fields,
+)
+from .limits import get_max_text_length
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
     service_log_config_from_env,
+    set_access_log_grounding,
     set_access_log_model_name,
 )
 from .metrics import (
@@ -66,6 +88,7 @@ from .openhim_mediator import (
     mediator_response_headers,
     transform_mediator_payload,
 )
+from .operational import OperationalCategory, OperationalEvent, OperationalState
 from .privacy_gateway import (
     HttpExternalLLMTransport,
     InMemoryReidentificationStore,
@@ -76,6 +99,7 @@ from .privacy_gateway import (
     PrivacyGatewayPolicy,
     PrivacyTransportError,
 )
+from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -84,13 +108,17 @@ from .schemas import (
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
     FHIRBulkImportRequest,
+    FixedOptionDecisionRequest,
     GroundRequest,
+    GroundResponse,
+    JourneyResourcePageResponse,
     ModelUnloadRequest,
     OmopLoadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
     PIIExtractStreamRequest,
     PrivacyGatewayRequest,
+    ProfileRequest,
     SMARTBackendIngestionRequest,
 )
 from .security_headers import (
@@ -104,6 +132,7 @@ from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
 from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
+    operational_trace_attributes,
     result_summary_attributes,
     service_tracing_from_env,
     set_current_span_attributes,
@@ -117,10 +146,12 @@ _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
+_DECISION_PATH = "/v1/decisions"
 _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
         "/analyze",
+        "/ground",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
@@ -130,6 +161,7 @@ _MODEL_BACKED_PATHS = frozenset(
         _SMART_BACKEND_START_PATH,
         _FHIR_BULK_EXPORT_PATH,
         _FHIR_BULK_IMPORT_PATH,
+        _DECISION_PATH,
         OPENHIM_MEDIATOR_PATH,
     }
 )
@@ -138,6 +170,8 @@ _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
 _GROUNDING_CACHE_ENV_VAR = "OPENMED_GROUNDING_CACHE_DIR"
+_REQUEST_BODY_ENCODING_MULTIPLIER = 12
+_REQUEST_BODY_OVERHEAD_BYTES = 65_536
 
 
 @dataclass(frozen=True)
@@ -158,6 +192,85 @@ class ServiceTimeoutError(RuntimeError):
         super().__init__(
             f"Request exceeded configured timeout of {self.timeout_seconds:g} seconds"
         )
+
+
+class _BoundedRequestBodyMiddleware:
+    """Reject oversized model-backed request bodies before JSON parsing."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        limited_paths: Sequence[str],
+    ) -> None:
+        if max_bytes < 1:
+            raise ValueError("max request body bytes must be positive")
+        self.app = app
+        self.max_bytes = int(max_bytes)
+        self.limited_paths = frozenset(limited_paths)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] != "http"
+            or scope.get("method") not in {"POST", "PUT", "PATCH"}
+            or scope.get("path") not in self.limited_paths
+        ):
+            await self.app(scope, receive, send)
+            return
+
+        content_length = Headers(scope=scope).get("content-length")
+        if content_length is not None:
+            try:
+                declared_length = int(content_length)
+            except ValueError:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length < 0:
+                await _error_response(
+                    400,
+                    "bad_request",
+                    "Request metadata is invalid",
+                )(scope, receive, send)
+                return
+            if declared_length > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+
+        messages: list[Message] = []
+        received_bytes = 0
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] != "http.request":
+                continue
+            received_bytes += len(message.get("body", b""))
+            if received_bytes > self.max_bytes:
+                await _error_response(
+                    413,
+                    "payload_too_large",
+                    "Request body exceeds the configured limit",
+                )(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        async def replay() -> Message:
+            if messages:
+                return messages.pop(0)
+            return await receive()
+
+        await self.app(scope, replay, send)
 
 
 def _result_to_dict(result: Any) -> Dict[str, Any]:
@@ -226,6 +339,8 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
     tables = load_grounded_notes(
         records,
         vocabulary_version=payload.vocabulary_version,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
     )
     summary = tables.summary
     response: Dict[str, Any] = {
@@ -244,6 +359,20 @@ def _omop_load_summary(payload: OmopLoadRequest) -> Dict[str, Any]:
             "by_reason": by_reason,
         }
     return response
+
+
+def _profile_summary(payload: ProfileRequest) -> Dict[str, Any]:
+    """Build the deterministic PHI-free quality profile for inline JSONL."""
+
+    from ..structured.quality import profile_results
+
+    records = _parse_grounded_jsonl_text(payload.records_jsonl)
+    return profile_results(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+        athena_index=payload.athena_index,
+    ).to_dict()
 
 
 def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
@@ -265,7 +394,7 @@ def _ground_summary(payload: GroundRequest) -> Dict[str, Any]:
         systems=payload.systems,
         loader=loader,
         config=RankingConfig(k=payload.top_k),
-        source_language=payload.source_language,
+        source_language=payload.lang,
         offline=payload.offline,
     )
 
@@ -282,7 +411,11 @@ def _cohort_resolve_summary(payload: CohortResolveRequest) -> Dict[str, Any]:
 
     definition = PhenotypeDefinition.from_dict(payload.phenotype)
     records = _parse_grounded_jsonl_text(payload.records_jsonl)
-    tables = load_grounded_notes(records)
+    tables = load_grounded_notes(
+        records,
+        completeness_floor=payload.completeness_floor,
+        required_fields=payload.required_fields,
+    )
     hierarchy_rows = [
         {
             "ancestor_concept_id": edge.ancestor_concept_id,
@@ -532,6 +665,14 @@ def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     return queue
 
 
+def _get_journey_resource_catalog(request: Request) -> JourneyResourceCatalog:
+    catalog = getattr(request.app.state, "journey_resources", None)
+    if catalog is None:
+        catalog = JourneyResourceCatalog()
+        request.app.state.journey_resources = catalog
+    return catalog
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -597,7 +738,7 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app() -> FastAPI:
+def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
@@ -694,6 +835,12 @@ def create_app() -> FastAPI:
     app.state.tracing = service_tracing_from_env()
     app.state.openhim_settings = openhim_settings
     app.state.openhim_deidentifier = None
+    app.state.journey_resources = JourneyResourceCatalog()
+    app.state.journey_access_policy = JourneyAccessPolicy()
+    app.state.operational_limits = request_limits_from_env()
+    app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
+    app.state.decision_access_policy = DecisionAccessPolicy()
+    app.state.decision_calibration_profiles = None
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -928,6 +1075,102 @@ def create_app() -> FastAPI:
             "Service preload has not completed",
             details=None,
         )
+
+    @app.get(
+        "/v1/journey/resources",
+        response_model=JourneyResourcePageResponse,
+        tags=["journey"],
+    )
+    async def list_journey_resources(
+        request: Request,
+        resource_type: JourneyResourceKind,
+        namespace: str = "default",
+        purpose: str = "care_review",
+        role: str = "clinician",
+        attributes: Optional[str] = Query(default=None, max_length=1024),
+        consent_state: str = "active",
+        export_policy: str = "metadata_only",
+        first: int = Query(default=20, ge=1, le=100),
+        after: Optional[str] = Query(default=None, max_length=2048),
+        fields: Optional[str] = Query(default=None, max_length=1024),
+    ) -> Dict[str, Any]:
+        """List a bounded, policy-filtered page of versioned Journey resources."""
+
+        catalog = _get_journey_resource_catalog(request)
+        policy = getattr(request.app.state, "journey_access_policy", None)
+        query = JourneyResourceQuery(
+            resource_type=resource_type,
+            namespace=namespace,
+            purpose=purpose,
+            role=role,
+            attributes=parse_access_attributes(attributes),
+            consent_state=consent_state,
+            export_policy=export_policy,
+            first=first,
+            after=after,
+            fields=parse_resource_fields(fields),
+        )
+        started_at = time.perf_counter()
+        page = catalog.list_resources(query, policy=policy)
+        event = OperationalEvent(
+            category=OperationalCategory.QUERY,
+            operation="list",
+            state=OperationalState(page.state.value),
+            duration_seconds=time.perf_counter() - started_at,
+        )
+        metrics = getattr(request.app.state, "metrics", None)
+        if metrics is not None:
+            metrics.record_operational_event(event)
+        set_current_span_attributes(operational_trace_attributes(event))
+        return page.to_dict()
+
+    @app.post(
+        _DECISION_PATH,
+        response_model=None,
+        tags=["decision"],
+        responses={
+            200: {
+                "description": "A calibrated fixed-option decision result.",
+                "content": {"application/json": {"schema": decision_result_schema()}},
+            }
+        },
+    )
+    async def fixed_option_decision(
+        payload: FixedOptionDecisionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Evaluate a bounded local decision and return a typed review result."""
+
+        body = (
+            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        )
+        try:
+            decision_request = CoreDecisionRequest.from_dict(body)
+        except (DecisionError, TypeError, ValueError) as exc:
+            raise InputError(
+                "Invalid fixed-option decision request.",
+                details={"reason": str(exc)},
+            ) from exc
+        result = await run_in_threadpool(
+            decide,
+            decision_request,
+            backend=getattr(
+                request.app.state,
+                "decision_backend",
+                DETERMINISTIC_DECISION_BACKEND,
+            ),
+            policy=getattr(
+                request.app.state,
+                "decision_access_policy",
+                DecisionAccessPolicy(),
+            ),
+            calibration_profiles=getattr(
+                request.app.state,
+                "decision_calibration_profiles",
+                None,
+            ),
+        )
+        return result.to_dict()
 
     if openhim_settings.enabled:
 
@@ -1208,6 +1451,8 @@ def create_app() -> FastAPI:
 
     @app.post("/omop/load")
     async def omop_load(payload: OmopLoadRequest, request: Request) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "omop_load",
             {
@@ -1215,14 +1460,54 @@ def create_app() -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_omop_load_summary, payload)
+            try:
+                return await run_in_threadpool(_omop_load_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
 
-    @app.post("/ground")
+    @app.post("/profile")
+    async def profile_route(
+        payload: ProfileRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """Profile extracted output without returning note text or values."""
+
+        with trace_service_stage(
+            "profile",
+            {
+                "openmed.endpoint": "/profile",
+                "openmed.input.length": len(payload.records_jsonl),
+            },
+        ):
+            return await run_in_threadpool(_profile_summary, payload)
+
+    @app.post("/ground", response_model=GroundResponse)
     async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
         """Ground text or pre-extracted entities against local snapshots."""
 
+        input_count = len(payload.entities) if payload.entities is not None else 1
+        set_access_log_grounding(
+            request,
+            input_count=input_count,
+            systems=payload.systems,
+            lang=payload.lang,
+        )
         try:
-            return await run_in_threadpool(_ground_summary, payload)
+            response = await run_in_threadpool(_ground_summary, payload)
+            set_access_log_grounding(
+                request,
+                input_count=input_count,
+                result_count=len(response["results"]),
+                systems=payload.systems,
+                lang=payload.lang,
+            )
+            return response
         except Exception as exc:
             from openmed.clinical.grounding import (
                 RestrictedVocabularyError,
@@ -1369,6 +1654,8 @@ def create_app() -> FastAPI:
         payload: CohortResolveRequest,
         request: Request,
     ) -> Dict[str, Any]:
+        from ..structured.quality import QualityGateError
+
         with trace_service_stage(
             "cohort_resolve",
             {
@@ -1376,7 +1663,16 @@ def create_app() -> FastAPI:
                 "openmed.input.length": len(payload.records_jsonl),
             },
         ):
-            return await run_in_threadpool(_cohort_resolve_summary, payload)
+            try:
+                return await run_in_threadpool(_cohort_resolve_summary, payload)
+            except QualityGateError as exc:
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "rejected",
+                        "quality_gate": exc.report.to_dict(),
+                    },
+                )
 
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(
@@ -1457,16 +1753,37 @@ def create_app() -> FastAPI:
 
     from .graphql_app import mount_graphql
 
-    mount_graphql(app, runtime_getter=_get_service_runtime)
+    mount_graphql(
+        app,
+        runtime_getter=_get_service_runtime,
+        resource_getter=_get_journey_resource_catalog,
+    )
 
     if app.state.tracing.enabled:
         app.add_middleware(
             OpenTelemetryMiddleware,
             tracing=app.state.tracing,
         )
+    body_limit = (
+        int(max_request_body_bytes)
+        if max_request_body_bytes is not None
+        else (
+            get_max_text_length() * _REQUEST_BODY_ENCODING_MULTIPLIER
+            + _REQUEST_BODY_OVERHEAD_BYTES
+        )
+    )
+    app.add_middleware(
+        _BoundedRequestBodyMiddleware,
+        max_bytes=body_limit,
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
+    )
+    app.add_middleware(
+        BoundedRequestBodyMiddleware,
+        limits=app.state.operational_limits,
     )
     return app
 

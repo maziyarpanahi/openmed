@@ -213,3 +213,198 @@ def test_starter_inventory_is_explicitly_synthetic_and_permissive() -> None:
 
 def test_public_advisory_requires_review() -> None:
     assert "review" in ABBREVIATION_DISAMBIGUATION_ADVISORY.casefold()
+
+
+# --- Duplicate and conflicting senses (#3105) ---
+
+
+def _candidate(long_form: str, semantic_type: str, source: str = "synthetic") -> dict:
+    return {"long_form": long_form, "semantic_type": semantic_type, "source": source}
+
+
+def _write_inventory(tmp_path: Path, senses: dict | str) -> Path:
+    path = tmp_path / "senses.json"
+    if isinstance(senses, str):
+        # Raw JSON text, for payloads json.dumps cannot produce (repeated keys).
+        body = senses
+    else:
+        body = json.dumps(
+            {
+                "schema_version": 1,
+                "provenance": {"source": "synthetic test inventory"},
+                "senses": senses,
+            }
+        )
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(
+            _candidate("multiple sclerosis", "disorder"),
+            _candidate("multiple sclerosis", "disorder"),
+            id="exact",
+        ),
+        pytest.param(
+            _candidate("multiple sclerosis", "disorder"),
+            _candidate("Multiple Sclerosis", "DISORDER"),
+            id="case",
+        ),
+        pytest.param(
+            _candidate("multiple sclerosis", "disorder"),
+            _candidate("multiple   sclerosis", " disorder "),
+            id="whitespace",
+        ),
+        pytest.param(
+            _candidate("non-small cell", "disorder"),
+            _candidate("non‐small cell", "disorder"),
+            id="unicode-hyphen",
+        ),
+        pytest.param(
+            _candidate("multiple sclerosis", "disorder", "local"),
+            _candidate("ｍｕｌｔｉｐｌｅ sclerosis", "disorder", "LOCAL"),
+            id="unicode-nfkc-and-source-case",
+        ),
+    ],
+)
+def test_equivalent_duplicate_senses_are_rejected(
+    tmp_path: Path, first: dict, second: dict
+) -> None:
+    path = _write_inventory(tmp_path, {"MS": [first, second]})
+
+    with pytest.raises(ValueError, match=r"repeats candidate 1 as candidate 2"):
+        load_sense_inventory(path, include_starter=False)
+
+
+def test_same_long_form_and_type_with_different_source_conflicts(
+    tmp_path: Path,
+) -> None:
+    path = _write_inventory(
+        tmp_path,
+        {
+            "MS": [
+                _candidate("mitral stenosis", "disorder", "cardiology-pack"),
+                _candidate("multiple sclerosis", "disorder", "neuro-pack"),
+                _candidate("Mitral Stenosis", "disorder", "local-notes"),
+            ]
+        },
+    )
+
+    with pytest.raises(ValueError, match="conflicting candidates 1 and 3"):
+        load_sense_inventory(path, include_starter=False)
+
+
+def test_distinct_semantic_types_remain_valid_alternatives(tmp_path: Path) -> None:
+    path = _write_inventory(
+        tmp_path,
+        {
+            "CP": [
+                _candidate("chest pain", "sign_or_symptom"),
+                _candidate("chest pain", "finding"),
+                _candidate("cerebral palsy", "disorder"),
+            ]
+        },
+    )
+
+    inventory = load_sense_inventory(path, include_starter=False)
+
+    # Before #3105 the merge keyed candidates on long form alone, so the second
+    # "chest pain" overwrote the first and only two candidates survived.
+    assert [(c.long_form, c.semantic_type) for c in inventory["CP"]] == [
+        ("chest pain", "sign_or_symptom"),
+        ("chest pain", "finding"),
+        ("cerebral palsy", "disorder"),
+    ]
+
+
+def test_same_long_form_with_two_types_extends_a_starter_override(
+    tmp_path: Path,
+) -> None:
+    # The first one still replaces the starter definition, as documented.
+    path = _write_inventory(
+        tmp_path,
+        {
+            "MS": [
+                _candidate("multiple sclerosis", "custom_condition", "local"),
+                _candidate("multiple sclerosis", "research_cohort", "local"),
+            ]
+        },
+    )
+    starter_count = len(load_sense_inventory()["MS"])
+
+    candidates = load_sense_inventory(path)["MS"]
+
+    assert len(candidates) == starter_count + 1
+    assert candidates[0].semantic_type == "custom_condition"
+    assert candidates[-1].semantic_type == "research_cohort"
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        pytest.param("bp", id="case"),
+        pytest.param(" BP ", id="whitespace"),
+        pytest.param("ＢＰ", id="unicode-nfkc"),
+    ],
+)
+def test_short_forms_that_normalize_together_are_rejected(
+    tmp_path: Path, variant: str
+) -> None:
+    path = _write_inventory(
+        tmp_path,
+        {
+            "BP": [_candidate("blood pressure", "measurement")],
+            variant: [_candidate("bipolar disorder", "disorder")],
+        },
+    )
+
+    with pytest.raises(ValueError, match="collide after normalization"):
+        load_sense_inventory(path, include_starter=False)
+
+
+def test_repeated_json_key_is_rejected_instead_of_silently_dropped(
+    tmp_path: Path,
+) -> None:
+    first = json.dumps([_candidate("blood pressure", "measurement")])
+    second = json.dumps([_candidate("bipolar disorder", "disorder")])
+    path = _write_inventory(
+        tmp_path,
+        '{"schema_version": 1, "provenance": {"source": "synthetic"}, '
+        f'"senses": {{"BP": {first}, "BP": {second}}}}}',
+    )
+
+    with pytest.raises(ValueError, match="repeats a key"):
+        load_sense_inventory(path, include_starter=False)
+
+
+def test_starter_inventory_has_no_duplicate_or_conflicting_senses() -> None:
+    inventory = load_sense_inventory()
+
+    assert set(inventory) >= {"MS", "PT", "RA", "CA"}
+
+
+def test_collision_errors_do_not_echo_inventory_keys(tmp_path: Path) -> None:
+    marker = "synthetic-private-5550199"
+    path = _write_inventory(
+        tmp_path,
+        {
+            marker: [_candidate("alpha", "finding")],
+            marker.upper(): [_candidate("beta", "finding")],
+        },
+    )
+    with pytest.raises(ValueError) as caught:
+        load_sense_inventory(path, include_starter=False)
+    assert marker.casefold() not in str(caught.value).casefold()
+
+
+def test_repeated_json_key_error_does_not_echo_key(tmp_path: Path) -> None:
+    marker = "synthetic-private-5550199"
+    path = _write_inventory(
+        tmp_path,
+        '{"schema_version": 1, "' + marker + '": 1, "' + marker + '": 2}',
+    )
+    with pytest.raises(ValueError) as caught:
+        load_sense_inventory(path, include_starter=False)
+    assert marker not in str(caught.value)

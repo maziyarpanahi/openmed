@@ -1,0 +1,21 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/quarantine-result.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "candidate_count": {"minimum": 0, "type": "integer"},
+    "classification": {"enum": ["ambiguous", "malformed", "partial", "policy_denied", "unsafe", "unsupported"]},
+    "created_at": {"format": "date-time", "type": "string"},
+    "failure_count": {"minimum": 1, "type": "integer"},
+    "job_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "manifest_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "output_digest": {"anyOf": [{"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, {"type": "null"}]},
+    "quarantine_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "reason_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"}
+  },
+  "required": ["candidate_count", "classification", "created_at", "failure_count", "job_id", "manifest_digest", "output_digest", "quarantine_id", "reason_code", "schema_version"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionQuarantineResult",
+  "type": "object"
+}
