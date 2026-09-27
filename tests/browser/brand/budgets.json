@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 81155554,
-    "maximum_unique_payload_bytes": 80817975,
+    "maximum_total_bytes": 81164180,
+    "maximum_unique_payload_bytes": 80826601,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -61,6 +61,8 @@
     "With evidence coverage added to the guarded evidence-packet and review-state stack, the staged artifact measures 80823890 total bytes, 80486311 unique payload bytes, 337579 duplicate payload bytes, and a 4196239-byte search index on macOS.",
     "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4196239 bytes below its 4204357-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
     "With the evidence-span overlap audit added to the guarded packet and review-state guides, the staged artifact measures 80829218 total bytes, 80491639 unique payload bytes, 337579 duplicate payload bytes, and a 4197027-byte search index on macOS.",
-    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4197027 bytes below its 4205145-byte JSON ceiling, preserving 8118 bytes of measured headroom."
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4197027 bytes below its 4205145-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
+    "With uncertainty disclosure audit and typed uncertainty sources added to the guarded evidence-packet and review-state stack, the staged artifact measures 81048694 total bytes, 80711115 unique payload bytes, 337579 duplicate payload bytes, and a 4198721-byte search index on macOS.",
+    "The combined uncertainty-disclosure ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
   ]
 }

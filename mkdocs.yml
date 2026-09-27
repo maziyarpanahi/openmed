@@ -177,6 +177,7 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
       - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
@@ -319,6 +320,7 @@ nav:
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
       - Value-free Evidence Coverage: clinical/evidence-coverage.md
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
+      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md

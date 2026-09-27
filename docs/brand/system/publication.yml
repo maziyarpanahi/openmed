@@ -252,6 +252,7 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
     - clinical/summary-claim-segmentation.md
@@ -394,6 +395,7 @@ classification:
     - clinical/refusal-taxonomy.md
     - clinical/evidence-coverage.md
     - clinical/evidence-span-audit.md
+    - clinical/uncertainty-disclosure.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md

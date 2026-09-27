@@ -11,6 +11,7 @@ guarded suggestion carries:
   derives from, so the clinician can independently review the basis rather than
   relying on the software's conclusion,
 - a confidence value in ``[0, 1]``,
+- an optional typed disclosure of every active uncertainty source,
 - an autonomous-decision flag that is structurally always ``False`` -- the
   software never makes an autonomous clinical decision.
 
@@ -32,6 +33,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Literal
+
+from .uncertainty_sources import UncertaintySources, coerce_uncertainty_sources
 
 CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION = 1
 
@@ -156,6 +159,10 @@ class GuardedSuggestion:
         disclaimer: Mandatory medical-device disclaimer.
         requires_clinician_review: Always ``True`` -- a clinician must review.
         autonomous_decision: Always ``False`` -- never an autonomous decision.
+        uncertainty_sources: Optional typed sources for evidence, model, policy,
+            temporal, and conflict uncertainty. When supplied, every active
+            source is serialized independently; no aggregate source score is
+            calculated.
         provenance: Optional PHI-free provenance metadata (producer name,
             model id, rule id, ...).
         schema_version: Envelope schema version.
@@ -169,6 +176,7 @@ class GuardedSuggestion:
     autonomous_decision: Literal[False] = False
     provenance: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION
+    uncertainty_sources: UncertaintySources | None = None
 
     def __post_init__(self) -> None:
         normalized_spans = _normalize_source_spans(self.source_spans)
@@ -193,12 +201,18 @@ class GuardedSuggestion:
         object.__setattr__(self, "source_spans", normalized_spans)
         object.__setattr__(self, "confidence", confidence)
         object.__setattr__(self, "disclaimer", disclaimer)
+        if self.uncertainty_sources is not None:
+            object.__setattr__(
+                self,
+                "uncertainty_sources",
+                coerce_uncertainty_sources(self.uncertainty_sources),
+            )
         object.__setattr__(self, "provenance", _plain_mapping(self.provenance))
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, JSON-compatible envelope representation."""
 
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "suggestion": copy.deepcopy(self.suggestion),
             "confidence": self.confidence,
@@ -208,6 +222,9 @@ class GuardedSuggestion:
             "source_spans": [span.to_dict() for span in self.source_spans],
             "provenance": copy.deepcopy(dict(self.provenance)),
         }
+        if self.uncertainty_sources is not None:
+            payload["uncertainty_sources"] = self.uncertainty_sources.to_dict()
+        return payload
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "GuardedSuggestion":
@@ -229,6 +246,12 @@ class GuardedSuggestion:
             disclaimer=data.get("disclaimer", ""),
             requires_clinician_review=data.get("requires_clinician_review", True),
             autonomous_decision=data.get("autonomous_decision", False),
+            uncertainty_sources=(
+                coerce_uncertainty_sources(data["uncertainty_sources"])
+                if "uncertainty_sources" in data
+                and data["uncertainty_sources"] is not None
+                else None
+            ),
             provenance=dict(data.get("provenance") or {}),
             schema_version=int(
                 data.get("schema_version", CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION)
@@ -243,6 +266,10 @@ def build_guarded_suggestion(
     *,
     disclaimer: str = CLINICAL_DECISION_SUPPORT_DISCLAIMER,
     provenance: Mapping[str, Any] | None = None,
+    uncertainty_sources: UncertaintySources
+    | Iterable[Any]
+    | Mapping[str, Any]
+    | None = None,
 ) -> GuardedSuggestion:
     """Build and validate a :class:`GuardedSuggestion`.
 
@@ -258,6 +285,8 @@ def build_guarded_suggestion(
         disclaimer: Mandatory disclaimer text. If supplied, it must match
             :data:`CLINICAL_DECISION_SUPPORT_DISCLAIMER`.
         provenance: Optional PHI-free provenance metadata.
+        uncertainty_sources: Optional typed uncertainty sources. The serialized
+            envelope discloses every active source independently.
 
     Returns:
         A validated :class:`GuardedSuggestion`.
@@ -273,6 +302,11 @@ def build_guarded_suggestion(
         confidence=confidence,
         disclaimer=disclaimer,
         provenance=dict(provenance or {}),
+        uncertainty_sources=(
+            None
+            if uncertainty_sources is None
+            else coerce_uncertainty_sources(uncertainty_sources)
+        ),
     )
 
 
@@ -335,9 +369,10 @@ def guarded_suggestion(
     The wrapped callable may return either a fully built
     :class:`GuardedSuggestion` (or its serialized mapping) or a
     ``(suggestion, source_spans, confidence)`` tuple, optionally with a fourth
-    provenance mapping. The wrapper coerces the return value into a validated
-    :class:`GuardedSuggestion`, guaranteeing every emitted output carries a
-    disclaimer and source traceability.
+    provenance mapping and a fifth uncertainty-source collection. The wrapper
+    coerces the return value into a validated :class:`GuardedSuggestion`,
+    guaranteeing every emitted output carries a disclaimer and source
+    traceability.
 
     Usage::
 
@@ -380,25 +415,27 @@ def _coerce_result(
         return validate_guarded_suggestion(result)
     if isinstance(result, Sequence) and not isinstance(result, (str, bytes)):
         parts = tuple(result)
-        if len(parts) not in (3, 4):
+        if len(parts) not in (3, 4, 5):
             raise GuardrailValidationError(
                 "a guarded suggestion producer must return a GuardedSuggestion, a "
                 "serialized mapping, or a (suggestion, source_spans, confidence"
-                "[, provenance]) tuple"
+                "[, provenance[, uncertainty_sources]]) tuple"
             )
         suggestion, source_spans, confidence = parts[0], parts[1], parts[2]
         provenance = parts[3] if len(parts) == 4 else None
+        uncertainty_sources = parts[4] if len(parts) == 5 else None
         return build_guarded_suggestion(
             suggestion,
             _as_span_iterable(source_spans),
             _coerce_float(confidence),
             disclaimer=disclaimer,
             provenance=provenance,
+            uncertainty_sources=uncertainty_sources,
         )
     raise GuardrailValidationError(
         "a guarded suggestion producer must return a GuardedSuggestion, a "
         "serialized mapping, or a (suggestion, source_spans, confidence"
-        "[, provenance]) tuple"
+        "[, provenance[, uncertainty_sources]]) tuple"
     )
 
 

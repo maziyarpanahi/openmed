@@ -188,6 +188,34 @@ def test_invalid_claim_shape_does_not_echo_input():
     assert sensitive_marker not in str(exc_info.value)
 
 
+def test_untrusted_claim_hooks_do_not_chain_patient_values():
+    patient_value = "SyntheticPatientValue"
+
+    class BadClaims:
+        def __iter__(self):
+            raise TypeError(patient_value)
+
+    class BadClaim:
+        @property
+        def to_dict(self):
+            raise ValueError(patient_value)
+
+    class BadHints:
+        def __iter__(self):
+            raise TypeError(patient_value)
+
+    for args, kwargs in (
+        ((BadClaims(),), {}),
+        (([BadClaim()],), {}),
+        (([],), {"required_display_hints": BadHints()}),
+    ):
+        with pytest.raises(TypeError) as caught:
+            audit_uncertainty_disclosures(*args, **kwargs)
+        assert patient_value not in str(caught.value)
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+
+
 def test_empty_input_is_deterministically_complete():
     report = audit_uncertainty_disclosures([])
 
