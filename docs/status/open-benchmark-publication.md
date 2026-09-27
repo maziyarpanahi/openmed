@@ -91,6 +91,49 @@ different order.
 6. Publish only the committed JSON and generated pages. Do not publish manually
    edited result rows.
 
+## Scheduled Trust Refresh
+
+GitHub Pages is the public hosting surface. `.github/workflows/pages.yml` runs
+at 02:17 UTC each day, and can also be rerun through its manual dispatch. The
+scheduled job runs the full offline test suite, builds a fresh synthetic harness
+control report, then calls the same `scripts/status/generate_status.py` renderer
+used locally. The generated report JSON, status page, and leaderboard are staged
+in the Pages artifact and deployed together. Push deployments refresh the
+control report as well, after the documentation checks pass.
+Browser validation and its 14-day evidence upload remain on PR and push runs;
+the nightly status refresh skips those steps so it creates no new browser
+evidence storage.
+
+The control is a deterministic detector that emits no spans over committed
+Apache-2.0 synthetic golden fixtures. It verifies harness execution and
+publication freshness. Its 100% leakage is the expected negative-control result and is not
+a model-performance number. The report records fixture hash, source rights,
+model and configuration revision, source commit, reproducibility hash, and
+limitations. Model benchmark rows keep their own original timestamps.
+
+The renderer rejects a missing, malformed, future-dated, or older-than-36-hour
+control report. Those errors fail the scheduled job before deployment; the
+previous successful Pages deployment remains public. The workflow log names the
+failed command and the input error.
+
+To rerun, dispatch **Deploy Docs to GitHub Pages** against `master`, or inspect
+the output locally with the current commit SHA:
+
+```bash
+.venv/bin/python -m pytest tests/ -q
+.venv/bin/python scripts/status/generate_nightly_control.py \
+  --source-revision "$(git rev-parse HEAD)" \
+  --output docs/status/evidence/nightly-control.json
+.venv/bin/python scripts/status/generate_status.py \
+  --report docs/benchmarks/golden.report.json \
+  --nightly-report docs/status/evidence/nightly-control.json
+```
+
+For rollback, revert the offending source or input commit through a normal PR
+to `master`; the Pages push workflow redeploys the corrected tree. A release
+pointer regression uses the separate `release-gates.yml` rollback job. Do not
+edit the generated page by hand or publish a failed nightly report.
+
 ## Child Issue Handoff
 
 The epic has been decomposed into independently mergeable slices:
