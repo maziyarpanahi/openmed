@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80302400,
-    "maximum_unique_payload_bytes": 79964821,
+    "maximum_total_bytes": 80423703,
+    "maximum_unique_payload_bytes": 80086124,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -42,6 +42,7 @@
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
+    "With the clinical NLI checkpoint preparation guide on the refreshed master, the staged artifact measures 80308217 total bytes, 79970638 unique payload bytes, and 337579 duplicate payload bytes on macOS; aggregate ceilings retain 115486 bytes of bounded headroom.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
     "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",

@@ -619,6 +619,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - models/clinical-nli.md
     - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
