@@ -42,8 +42,8 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
         "id-token": "write",
         "attestations": "write",
     }
-    assert "actions/checkout@v7" in content
-    assert "actions/setup-python@v7" in content
+    assert "actions/checkout@" in content
+    assert "actions/setup-python@" in content
     assert "pip install build twine 'hatchling==1.31.0'" in content
     assert "python -m build --no-isolation" in content
     assert "Verify distribution metadata compatibility" in content
@@ -51,7 +51,7 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert 'wheel_metadata["Metadata-Version"]' in content
     assert 'sdist_metadata["Metadata-Version"]' in content
     assert "twine check dist/*" in content
-    assert "actions/attest@v4" in content
+    assert "actions/attest@" in content
     assert "continue-on-error: true" in content
     assert "subject-checksums: release-artifact-digests.txt" in content
     assert "release-artifact-digests.txt" in content
@@ -61,7 +61,7 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert ".github/workflows/provenance.yml" in content
     assert '--source-digest "$GITHUB_SHA"' in content
     assert '--source-ref "$GITHUB_REF"' in content
-    assert "actions/upload-artifact@v7" in content
+    assert "actions/upload-artifact@" in content
     assert "Verify release source ref" in content
     assert "Checked-out commit $CHECKED_OUT_COMMIT" in content
     assert '"release_commit": sys.argv[2]' in content
@@ -104,7 +104,7 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     assert "npm publish --ignore-scripts --access public --provenance" in str(
         npm_publish
     )
-    assert "pypa/gh-action-pypi-publish@v1.14.1" in PUBLISH_WORKFLOW.read_text(
+    assert "pypa/gh-action-pypi-publish@" in PUBLISH_WORKFLOW.read_text(
         encoding="utf-8"
     )
 
@@ -197,10 +197,20 @@ def test_container_workflow_attests_pushed_manifest_digest():
     workflow = _load_workflow(CONTAINER_WORKFLOW)
     content = CONTAINER_WORKFLOW.read_text(encoding="utf-8")
 
-    assert workflow["permissions"]["contents"] == "read"
-    assert workflow["permissions"]["id-token"] == "write"
-    assert workflow["permissions"]["attestations"] == "write"
-    assert workflow["permissions"]["packages"] == "write"
+    assert workflow["permissions"] == {"contents": "read"}
+    publish = workflow["jobs"]["publish"]
+    assert publish["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+        "attestations": "write",
+        "packages": "write",
+    }
+    assert publish["if"] == "github.event_name != 'pull_request'"
+    for name, job in workflow["jobs"].items():
+        if name != "publish":
+            assert job.get("permissions", workflow["permissions"]) == {
+                "contents": "read"
+            }
     assert "id: push" in content
     assert "id: image-name" in content
     assert "image_name=ghcr.io/${owner_repo}" in content

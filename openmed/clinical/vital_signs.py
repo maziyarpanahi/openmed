@@ -55,6 +55,10 @@ _LOCALIZED_NUMERIC = (
     r"(?:\d{1,3}(?:[ \u00a0\u202f'’.,]\d{3})+|\d+)(?:[.,\u066b]\d+)?"
     r"|[.,\u066b]\d+)"
 )
+# Any Unicode whitespace character: str patterns make ``\s`` Unicode-aware, so
+# this covers non-breaking (U+00A0), narrow no-break (U+202F), thin (U+2009)
+# and the other spaces copied clinical text carries.
+_UNICODE_WHITESPACE_RE = re.compile(r"\s")
 _SEPARATOR = r"\s*(?:(?:is|was|=|:)\s*)?"
 _TRAILING_BOUNDARY = r"(?=$|\s|[.,;)])"
 _LOCALIZED_SEPARATOR = r"\s*(?:(?:is|was|=|:|：)\s*)?"
@@ -174,6 +178,13 @@ def structure_vital_sign(
     written and are never converted or normalized. Unknown or unparseable input
     returns an explicit ``"unknown"`` result instead of raising.
 
+    Each Unicode whitespace character is read as one ASCII space before the
+    English patterns run, so ``mm Hg`` written with U+00A0 or ``oxygen saturation``
+    written with U+202F parse exactly like their ASCII spellings. The replacement is one character
+    for one, so string length and positions are unchanged. Localized parsing
+    (``language``) sees the phrase unchanged, because it reads non-breaking and
+    narrow spaces as digit-group separators.
+
     Args:
         text: Short vital-sign phrase or already-located narrative span.
         language: Optional source-language code for localized vital
@@ -197,6 +208,11 @@ def structure_vital_sign(
             return localized
         if _starts_with_localized_abbreviation(phrase, language=language):
             return localized
+
+    # Several patterns spell multi-word labels and units with a literal ASCII
+    # space ("oxygen saturation", "breaths per min"), so a copied non-breaking
+    # space used to turn a readable vital sign into "unknown".
+    phrase = _UNICODE_WHITESPACE_RE.sub(" ", phrase)
 
     if match := _BLOOD_PRESSURE_RE.search(phrase):
         return _blood_pressure_result(match)

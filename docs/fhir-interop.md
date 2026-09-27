@@ -162,6 +162,40 @@ The helper assigns stable `urn:uuid` `fullUrl` values and rewrites internal
 references that point to resources present in the bundle. It does not synthesize
 missing resources and does not validate external FHIR profiles.
 
+## Ground, then export
+
+`examples/ground_then_export_fhir.py` is a runnable, fully offline composition
+of the privacy and interoperability stages. It de-identifies a synthetic note
+first, runs a deterministic local NER fixture over the de-identified text,
+grounds 30 mentions across RxNorm, LOINC, and ICD-10-CM, maps each selected
+candidate to a FHIR `CodeableConcept`, and assembles the resources with
+`to_bundle()`:
+
+```bash
+python3 -m examples.ground_then_export_fhir
+```
+
+The example uses in-memory synthetic vocabulary indexes and a no-download PII
+loader. Each emitted `Coding` carries its canonical vocabulary URI, snapshot
+version, linker, score, and source offsets through the grounding provenance
+extension. The adapter accepts the checked-in `GroundedSpan` result shape and
+the one-system grounded-concept attributes used by newer grounding callers.
+Grounding remains assist-only and requires human verification; it is not an
+autonomous clinical coding, diagnosis, treatment, or billing decision.
+
+When a caller knows the expected source vocabulary, the local conformance helper
+can assert its URI as well as the CodeableConcept shape:
+
+```python
+from openmed.clinical.exporters import check_codeable_concept
+
+findings = check_codeable_concept(
+    concept,
+    expected_system="http://loinc.org",
+)
+assert findings == []
+```
+
 For an opt-in, offline check of profiles declared in `meta.profile`, including
 post-de-identification comparison, see
 [WHO SMART Guidelines Profile Checks](./fhir-smart-guidelines.md).

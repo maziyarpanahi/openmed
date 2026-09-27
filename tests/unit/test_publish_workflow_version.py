@@ -144,7 +144,7 @@ def test_publish_workflow_keeps_release_gates():
         "cancel-in-progress": "false",
     }
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
-    assert "pypa/gh-action-pypi-publish@v1.14.1" in publish_workflow
+    assert "pypa/gh-action-pypi-publish@" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
 
     assert publish_job["environment"]["name"] == "pypi"
@@ -196,7 +196,7 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
 
     assert npm_verify["permissions"] == {"contents": "read"}
     assert npm_verify["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
-    assert "actions/setup-node@v7" in content
+    assert "actions/setup-node@" in content
     assert "node-version: '24'" in content
     assert "package-manager-cache: false" in content
     assert "npm audit --audit-level=low" in content

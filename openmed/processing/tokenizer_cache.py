@@ -6,6 +6,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from os import PathLike
 from threading import RLock
+from types import BuiltinMethodType, MethodType
 from typing import Any
 
 DEFAULT_TOKENIZER_CACHE_SIZE = 32
@@ -13,6 +14,35 @@ DEFAULT_TOKENIZER_CACHE_SIZE = 32
 AutoTokenizer: Any = None
 _TOKENIZER_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 _TOKENIZER_CACHE_LOCK = RLock()
+
+
+class _LoaderIdentity:
+    """Hash a loader by identity while retaining its owner until eviction.
+
+    Attribute access creates a fresh bound method, so compare its function and
+    owner rather than the temporary method object. Callable instances need not
+    be hashable, and their value-based equality must not merge cache entries.
+    """
+
+    __slots__ = ("_function", "_owner")
+
+    def __init__(self, loader: Callable[..., Any]) -> None:
+        if isinstance(loader, MethodType):
+            self._function = loader.__func__
+            self._owner = loader.__self__
+        else:
+            self._function = loader
+            self._owner = None
+
+    def __hash__(self) -> int:
+        return hash((id(self._function), id(self._owner)))
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, _LoaderIdentity)
+            and self._function is other._function
+            and self._owner is other._owner
+        )
 
 
 def get_tokenizer(
@@ -41,8 +71,17 @@ def get_tokenizer_with_loader(
     refresh_cache: bool = False,
     **kwargs: Any,
 ) -> Any:
-    """Return a cached tokenizer using an explicit ``from_pretrained`` loader."""
-    cache_key = _cache_key(name, revision, kwargs)
+    """Return a cached tokenizer using an explicit ``from_pretrained`` loader.
+
+    Entries are scoped to the loader as well as the name, revision, and kwargs.
+    Repeated bound-method access on the same owner shares an entry; a different
+    loader or owner does not. ``refresh_cache`` replaces only that loader's entry.
+    """
+    # Native bound methods already compare/hash by their function and owner.
+    loader_key = (
+        loader if isinstance(loader, BuiltinMethodType) else _LoaderIdentity(loader)
+    )
+    cache_key = (loader_key,) + _cache_key(name, revision, kwargs)
     with _TOKENIZER_CACHE_LOCK:
         cached = _TOKENIZER_CACHE.get(cache_key)
         if cached is not None and not refresh_cache:

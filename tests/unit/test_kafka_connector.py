@@ -7,8 +7,10 @@ import json
 import logging
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime
+from threading import Event, current_thread
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
@@ -533,6 +535,58 @@ def test_checkpoint_file_logs_and_dedupe_key_do_not_contain_phi(
         assert leak not in dedupe_key
     assert dedupe_key.startswith("sha256:")
     assert store.load("raw-notes", "0") is not None
+
+
+@pytest.mark.parametrize("second_partition", ["0", "1"])
+def test_local_checkpoint_store_serializes_concurrent_saves(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    second_partition: str,
+) -> None:
+    store = LocalFileCheckpointStore(tmp_path / "checkpoints.json", fsync=False)
+    fingerprint = build_stream_fingerprint(policy_name="synthetic-policy")
+
+    def record(partition: str, offset: int):
+        return checkpoint_for_delivery(
+            source=SourcePosition("synthetic-input", partition, offset),
+            redacted_output=OutputPosition("synthetic-output", partition, offset),
+            fingerprint=fingerprint,
+            dedupe_key=f"synthetic-{partition}-{offset}",
+            created_at=1.0,
+        )
+
+    first_read = Event()
+    release_first = Event()
+    second_read = Event()
+    original_read = store._read_records
+
+    def delayed_read():
+        records = original_read()
+        if current_thread().name.endswith("_0"):
+            first_read.set()
+            assert release_first.wait(5)
+        elif current_thread().name.endswith("_1"):
+            second_read.set()
+        return records
+
+    monkeypatch.setattr(store, "_read_records", delayed_read)
+    try:
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="checkpoint") as pool:
+            first = pool.submit(store.save, record("0", 10))
+            assert first_read.wait(5)
+            second = pool.submit(store.save, record(second_partition, 20))
+            second_read.wait(0.25)
+            release_first.set()
+            first.result(timeout=5)
+            second.result(timeout=5)
+    finally:
+        release_first.set()
+
+    assert store.load("synthetic-input", "0").source.offset == (
+        20 if second_partition == "0" else 10
+    )
+    if second_partition == "1":
+        assert store.load("synthetic-input", "1").source.offset == 20
 
 
 @pytest.mark.parametrize(

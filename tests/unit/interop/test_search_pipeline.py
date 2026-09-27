@@ -25,6 +25,28 @@ SURFACES = (
 )
 
 
+def test_canonical_projection_resolves_private_keys_per_call():
+    from openmed.interop._pii import canonical_redaction
+
+    result = SimpleNamespace(
+        deidentified_text="[PERSON] met [PERSON]",
+        pii_entities=[
+            {"start": 0, "end": 9, "label": "PERSON"},
+            {"start": 14, "end": 23, "label": "PERSON"},
+        ],
+    )
+    options = {"source_text": "Synthetic met Synthetic", "doc_id": "fixture"}
+    first = canonical_redaction(result, **options)
+    second = canonical_redaction(result, **options)
+    assert first.spans[0].text_hash == first.spans[1].text_hash
+    assert first.spans[0].text_hash != second.spans[0].text_hash
+    assert canonical_redaction(result, **options, hash_secret="fixture-key") == (
+        canonical_redaction(result, **options, hash_secret=b"fixture-key")
+    )
+    supplied = SimpleNamespace(deidentified_text=first.redacted_text, spans=first.spans)
+    assert canonical_redaction(supplied, **options).spans == first.spans
+
+
 @dataclass
 class FixtureDocument:
     content: str

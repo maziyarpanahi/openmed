@@ -151,6 +151,14 @@ from .registry import (
     validate_vocabulary_loader,
 )
 from .restricted import RESTRICTED_SYSTEM_URIS, UserKeyVocabularyLoader
+from .results import (
+    ConceptSpan,
+    GroundedConcept,
+    GroundingCandidate,
+    GroundingConfigError,
+    GroundingResult,
+    GroundingSpan,
+)
 from .retrieval import TwoStageRetriever, retrieve_candidates
 from .section_context import (
     DEFAULT_SECTION_CONTEXT_CONFIG,
@@ -274,7 +282,13 @@ __all__ = [
     "GROUNDING_METHODS",
     "GROUNDING_POLICIES",
     "GroundingAlternative",
+    "GroundingCandidate",
+    "GroundingConfigError",
     "GroundingProvenance",
+    "GroundingResult",
+    "GroundingSpan",
+    "ConceptSpan",
+    "GroundedConcept",
     "GroundedSpan",
     "HashingAliasEncoder",
     "IndexBackendUnavailableError",

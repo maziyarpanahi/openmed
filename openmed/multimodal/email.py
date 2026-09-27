@@ -710,7 +710,11 @@ def _address_header_is_valid(header_name: str, value: str) -> bool:
     try:
         candidate[header_name] = value
         parsed = candidate[header_name]
-    except (HeaderParseError, IndexError, KeyError, TypeError, ValueError):
+    except Exception:  # noqa: BLE001 - untrusted stdlib header parse.
+        # The guarded body only runs standard-library header parsing on a
+        # throwaway message. Which exception a malformed value raises there is
+        # not part of the stdlib contract (nested groups raise AttributeError
+        # on Python 3.11), so every failure means "not a valid address".
         return False
     return not getattr(parsed, "defects", ())
 

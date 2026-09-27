@@ -1,0 +1,21 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/identity/review-decision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {"enum": ["confirm_match", "confirm_unmatched", "merge", "split"]},
+    "decided_at": {"format": "date-time", "type": "string"},
+    "decision_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "evidence_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "policy_id": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "policy_version": {"pattern": "^[1-9][0-9]*(\\.[0-9]+){0,2}$", "type": "string"},
+    "resolution_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "reviewer_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "selected_canonical_key": {"anyOf": [{"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, {"type": "null"}]}
+  },
+  "required": ["action", "decided_at", "decision_id", "evidence_digest", "policy_id", "policy_version", "resolution_id", "reviewer_digest", "schema_version", "selected_canonical_key"],
+  "schema_version": 1,
+  "title": "OpenMedIdentityReviewDecision",
+  "type": "object"
+}

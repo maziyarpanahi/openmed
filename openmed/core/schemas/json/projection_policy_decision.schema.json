@@ -1,0 +1,17 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/projections/policy-decision.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "decided_at": {"format": "date-time", "type": "string"},
+    "decision_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "outcome": {"enum": ["allow", "deny", "review"]},
+    "reason_code": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"},
+    "request_digest": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"}
+  },
+  "required": ["decided_at", "decision_id", "outcome", "reason_code", "request_digest", "schema_version"],
+  "schema_version": 1,
+  "title": "OpenMedProjectionPolicyDecision",
+  "type": "object"
+}

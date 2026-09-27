@@ -39,6 +39,8 @@ Required fields:
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
   `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
+  Specialized suites may register an additional category while keeping the
+  same row shape.
   The standalone `indic_name_variants` fixture uses its dedicated consistency
   suite schema because it groups multiple spellings under one synthetic
   identity rather than representing detector spans.
@@ -58,6 +60,27 @@ critical-finding disclaimers, and language coverage. The JSON and JSONL files
 are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
 expected output remains available through each fixture's metadata.
 
+## Multi-annotator annotation imports
+
+The golden loader also provides local-only adapters for multi-annotator
+extraction exports. Use load_brat_multi_annotator_document with a BRAT text file
+and a mapping of annotator ids to their standoff files. Use
+load_label_studio_multi_annotator_export for a Label Studio JSON export; both
+current annotations and legacy completions task keys are accepted.
+
+Each adapter returns a MultiAnnotatorGoldDocument. Its spans are normalized
+EvalSpan values carrying annotator_id, document_id, source_format, and
+source_annotation_id metadata. Its directed AnnotationRelation values preserve
+the source and target annotation ids, relation id, endpoint spans, and
+source-format metadata. Offsets must match the supplied source text, and
+relations with missing endpoints raise ValueError before a document is
+returned. The adapters do not compute agreement, adjudicate disagreements, or
+emit evidence reports.
+
+Committed examples for these tests live under
+tests/fixtures/eval/golden_annotations. They are explicitly synthetic-only and
+contain no real clinical notes or restricted corpora.
+
 ## Temporal TLINK Fixtures
 
 `fixtures/temporal_tlinks.jsonl` contains hand-authored, synthetic-only
@@ -73,6 +96,19 @@ requires `metadata.synthetic=true` and `metadata.contains_real_phi=false`,
 checks all offsets and references, and rejects inconsistent reduced gold. The
 suite reports aggregate relation counts and PHI-safe reason codes only; no note
 text or graph node ids appear in its gate artifacts.
+
+## Temporal Consistency Fixtures
+
+`fixtures/temporal_consistency.jsonl` uses the same `GoldenFixture` row shape as
+the de-identification gold while adding `metadata.consistency_group`,
+`metadata.variant`, and `metadata.expected_output.axes`. Its synthetic rows
+cover current, historical, hypothetical, and uncertain variants of one finding,
+including a negation variant and a trap that forbids scoring a hypothetical
+finding as recent. The dedicated
+`openmed.eval.suites.temporal_consistency.load_temporal_consistency_fixtures`
+loader validates the shared golden fields, target offsets, axis values, and
+group membership; the fixture is intentionally excluded from the generic
+de-identification fixture set.
 
 ## India Clinical De-Identification Corpus
 

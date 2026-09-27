@@ -1,0 +1,18 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/ingestion/lease.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "acquired_at": {"format": "date-time", "type": "string"},
+    "epoch": {"minimum": 1, "type": "integer"},
+    "expires_at": {"format": "date-time", "type": "string"},
+    "job_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "lease_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "schema_version": {"const": "1.0.0"},
+    "worker_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}
+  },
+  "required": ["acquired_at", "epoch", "expires_at", "job_id", "lease_id", "schema_version", "worker_id"],
+  "schema_version": 1,
+  "title": "OpenMedIngestionLease",
+  "type": "object"
+}

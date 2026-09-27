@@ -1,3 +1,23 @@
+import {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
+export {
+  JOURNEY_WORKFLOW_RESOURCE_TYPES,
+  type JourneyResourcePage,
+  type JourneyResourceQuery,
+  type JourneyResourceState,
+  type JourneyResourceType,
+  type JourneyWorkflowName,
+  type JourneyWorkflowQuery,
+} from "./journey-workflows.generated.js";
+
 export type JsonObject = Record<string, unknown>;
 
 export type FetchLike = (
@@ -139,6 +159,64 @@ export interface PrivacyGatewayRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export type DecisionMode =
+  | "fixed_choice"
+  | "boolean_choice"
+  | "ordered_preference"
+  | "scalar_score"
+  | "multi_label";
+
+export type DecisionState =
+  | "success"
+  | "abstained"
+  | "partial"
+  | "unknown"
+  | "conflict"
+  | "unsupported"
+  | "denied"
+  | "failure";
+
+export interface FixedOptionDecisionRequest {
+  mode: DecisionMode;
+  input_text: string;
+  options?: string[];
+  namespace?: string;
+  purpose?: string;
+  calibration_id?: string;
+  timeout_ms?: number;
+  schema_version?: "1.0.0";
+  compatibility_policy?: "same_major";
+}
+
+export interface DecisionOptionScore {
+  index: number;
+  option: string;
+  score: number;
+}
+
+export interface FixedOptionDecisionResult {
+  mode: DecisionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  calibration: JsonObject;
+  backend: JsonObject;
+  access: JsonObject;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
+  advisory: string;
+  autonomous_action: false;
+  schema_version: "1.0.0";
+  compatibility_policy: "same_major";
+  extensions: JsonObject;
+}
+
 export interface DeidentifyJobDocument {
   text: string;
   id?: string | null;
@@ -202,6 +280,8 @@ export interface OMOPLoadRequest {
   records_jsonl: string;
   vocabulary_version?: string | null;
   validate_constraints?: boolean;
+  completeness_floor?: number | null;
+  required_fields?: string[];
 }
 
 export interface OMOPRejectedSpan {
@@ -234,7 +314,18 @@ export interface CohortResolveRequest {
   phenotype: JsonObject;
   records_jsonl: string;
   concept_ancestors?: ConceptAncestorRequest[];
+  completeness_floor?: number | null;
+  required_fields?: string[];
 }
+
+export interface ProfileRequest {
+  records_jsonl: string;
+  completeness_floor?: number;
+  required_fields?: string[];
+  athena_index?: JsonObject | null;
+}
+
+export type ProfileResponse = JsonObject;
 
 export interface CohortEvidencePointer {
   criterion_id: string;
@@ -551,6 +642,12 @@ export class OpenMedClient {
     return this.post("/privacy-gateway/complete", request);
   }
 
+  async decision(
+    request: FixedOptionDecisionRequest,
+  ): Promise<FixedOptionDecisionResult> {
+    return this.post("/v1/decisions", request);
+  }
+
   async health(): Promise<HealthResponse> {
     return this.get("/health");
   }
@@ -567,6 +664,67 @@ export class OpenMedClient {
     return this.get("/models/loaded");
   }
 
+  async journeyResources(
+    query: JourneyResourceQuery,
+  ): Promise<JourneyResourcePage> {
+    const path = "/v1/journey/resources";
+    const parameters = new URLSearchParams({
+      resource_type: query.resource_type,
+      namespace: query.namespace ?? "default",
+      purpose: query.purpose ?? "care_review",
+      role: query.role ?? "clinician",
+      consent_state: query.consent_state ?? "active",
+      export_policy: query.export_policy ?? "metadata_only",
+      first: String(query.first ?? 20),
+    });
+    if (query.attributes?.length) {
+      parameters.set("attributes", query.attributes.join(","));
+    }
+    if (query.after) {
+      parameters.set("after", query.after);
+    }
+    if (query.fields?.length) {
+      parameters.set("fields", query.fields.join(","));
+    }
+    return this.get(`${path}?${parameters.toString()}`);
+  }
+
+  async journeyWorkflow(
+    workflow: JourneyWorkflowName,
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyResources({
+      ...query,
+      resource_type: JOURNEY_WORKFLOW_RESOURCE_TYPES[workflow],
+    });
+  }
+
+  async journey(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("journey", query);
+  }
+
+  async cohort(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("cohort", query);
+  }
+
+  async dataset(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("dataset", query);
+  }
+
+  async registry(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("registry", query);
+  }
+
+  async measure(query: JourneyWorkflowQuery = {}): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("measure", query);
+  }
+
+  async trialReview(
+    query: JourneyWorkflowQuery = {},
+  ): Promise<JourneyResourcePage> {
+    return this.journeyWorkflow("trial_review", query);
+  }
+
   async unloadModels(
     request: ModelUnloadRequest,
   ): Promise<ModelUnloadResponse> {
@@ -575,6 +733,10 @@ export class OpenMedClient {
 
   async loadOmop(request: OMOPLoadRequest): Promise<OMOPLoadResponse> {
     return this.post("/omop/load", request);
+  }
+
+  async profile(request: ProfileRequest): Promise<ProfileResponse> {
+    return this.post("/profile", request);
   }
 
   async resolveCohort(

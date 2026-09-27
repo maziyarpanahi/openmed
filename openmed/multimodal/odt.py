@@ -23,6 +23,7 @@ from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import UnsupportedDocumentError
 
 _CONTENT_PATH = "content.xml"
+_ALLOWED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 _ODT_MIMETYPE = "application/vnd.oasis.opendocument.text"
 _MAX_REPEAT = 10_000
 _UNSAFE_XML_DECLARATION = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
@@ -347,6 +348,10 @@ def _ensure_supported_archive(archive: zipfile.ZipFile) -> None:
     for info in archive.infolist():
         if info.flag_bits & 0x1:
             raise UnsupportedDocumentError("Encrypted ODT ZIP entries are unsupported")
+        if info.compress_type not in _ALLOWED_COMPRESSION:
+            raise UnsupportedDocumentError(
+                "ODT ZIP entries must be stored or deflate-compressed"
+            )
     try:
         mimetype = archive.read("mimetype").decode("ascii").strip()
     except KeyError:
