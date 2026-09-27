@@ -72,6 +72,7 @@
     "With all seven exact assurance source heads reconciled on master 44ef8f44, the staged artifact measures 82554736 total bytes, 82217157 unique payload bytes, 337579 duplicate payload bytes, and a 4225423-byte search index on macOS.",
     "The combined assurance ceilings retain the largest observed 4736-byte platform delta plus bounded headroom; the search index retains 5654 bytes of measured headroom.",
     "On the assurance integration tree at master 44ef8f44, Chromium measured 5577934 first-party transfer bytes for /docs/. The 5590788-byte ceiling allows the observed 4736-byte platform delta and 8118 bytes of bounded headroom while keeping every assurance guide searchable.",
-    "The tokenizer coverage route measured 7690226 first-party transfer bytes on the same tree; its 7703080-byte ceiling applies the same bounded platform allowance and headroom."
+    "The tokenizer coverage route measured 7690226 first-party transfer bytes on the same tree; its 7703080-byte ceiling applies the same bounded platform allowance and headroom.",
+    "After refreshing to master 5a2f8d74 and reconciling the exact updated output-use and evidence-span source heads, the staged assurance artifact measures 82563026 total bytes, 82225447 unique payload bytes, 337579 duplicate payload bytes, and a 4227402-byte search index on macOS. The recorded ceilings retain 100869 bytes of total and unique headroom and 3675 bytes for search."
   ]
 }
