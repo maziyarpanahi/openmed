@@ -390,6 +390,7 @@ classification:
     - clinical/output-use-policy.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
+    - clinical/refusal-taxonomy.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md

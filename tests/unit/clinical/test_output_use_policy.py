@@ -233,3 +233,25 @@ def test_enforce_raises_with_reason_codes_only() -> None:
 
     assert error.value.reason_codes == (OutputUseReasonCode.PURPOSE_UNSUPPORTED.value,)
     assert "unregistered-purpose" not in str(error.value)
+
+
+def test_untrusted_policy_inputs_cannot_chain_patient_values() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class BadRules:
+        def __iter__(self):
+            raise TypeError(patient_value)
+
+    class BadReasons:
+        @property
+        def reason_codes(self):
+            raise ValueError(patient_value)
+
+    with pytest.raises(OutputUsePolicyError) as caught_policy:
+        OutputUsePolicy(rules=BadRules())
+    error = OutputUsePolicyError(BadReasons())
+
+    for value in (caught_policy.value, error):
+        assert patient_value not in str(value)
+        assert value.__cause__ is None
+        assert value.__context__ is None
