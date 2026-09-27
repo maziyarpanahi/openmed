@@ -390,6 +390,7 @@ classification:
     - multimodal/box-normalization.md
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
+    - evaluation/clinical-fixtures.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md

@@ -315,6 +315,7 @@ nav:
       - OCR box-coordinate normalization: multimodal/box-normalization.md
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
+      - Synthetic Clinical Fixtures: evaluation/clinical-fixtures.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
