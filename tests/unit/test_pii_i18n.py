@@ -169,6 +169,7 @@ class TestConstants:
             "pl",
             "hi",
             "kn",
+            "ml",
             "mr",
             "or",
             "te",
