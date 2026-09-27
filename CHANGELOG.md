@@ -254,6 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
+- Strip BIO prefixes only at label beginnings, preserving interior labels such as
+  HLA-B-27 (#3503).
 
 - Hash dataset files with bounded memory (#3510).
 - Respect explicitly empty gold annotations (#3511).
