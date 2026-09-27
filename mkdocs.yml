@@ -280,7 +280,6 @@ nav:
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
-      - SDOH False-Positive Stress Gate: evaluation/sdoh-false-positive-stress.md
       - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md

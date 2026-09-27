@@ -355,7 +355,6 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
-    - evaluation/sdoh-false-positive-stress.md
     - evaluation/relation-review-yield.md
     - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
@@ -620,6 +619,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
