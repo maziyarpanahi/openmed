@@ -253,7 +253,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
 
-- Respect explicitly empty gold annotations.
+- Hash dataset files with bounded memory (#3510).
+- Respect explicitly empty gold annotations (#3511).
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
 - Require strict decoder validation before auto-detecting ISCII, preserving
