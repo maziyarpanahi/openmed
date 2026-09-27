@@ -42,6 +42,20 @@ class BackpressureError(RuntimeError):
         self.reason = str(reason)
         super().__init__(f"{self.priority} inference queue is saturated; retry later")
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Reconstruct the keyword-only exception with its structured state."""
+        kwargs = {
+            "priority": self.priority,
+            "queue_depth": self.queue_depth,
+            "queue_capacity": self.queue_capacity,
+            "retry_after_seconds": self.retry_after_seconds,
+            "queue_name": self.queue_name,
+            "low_watermark": self.low_watermark,
+            "max_wait_ms": self.max_wait_ms,
+            "reason": self.reason,
+        }
+        return (_restore_backpressure_error, (type(self), kwargs), self.__dict__)
+
     def to_details(self) -> dict[str, Any]:
         """Return the stable, PHI-free API details for this rejection."""
         details: dict[str, Any] = {
@@ -57,6 +71,12 @@ class BackpressureError(RuntimeError):
         if self.max_wait_ms is not None:
             details["max_wait_ms"] = self.max_wait_ms
         return details
+
+
+def _restore_backpressure_error(
+    error_type: type[BackpressureError], kwargs: dict[str, Any]
+) -> BackpressureError:
+    return error_type(**kwargs)
 
 
 class AdmissionQueue:
