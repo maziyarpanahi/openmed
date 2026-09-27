@@ -17,7 +17,9 @@ from typing import Any, Literal
 
 from openmed.core.audit import hash_text
 
-CONTRADICTION_REPORT_SCHEMA_VERSION = 1
+from ..temporal_intervals import TemporalInterval
+
+CONTRADICTION_REPORT_SCHEMA_VERSION = 2
 
 EVENT_CONTRADICTION_ADVISORY = (
     "Clinical event contradiction reports are deterministic review signals; "
@@ -431,6 +433,7 @@ class EventContradictionReport:
     contradictions: tuple[EventContradiction, ...]
     events_checked: int
     status_assertions_checked: int
+    unresolved_intervals: tuple[ContradictionEvidence, ...] = ()
     disclaimer: str = EVENT_CONTRADICTION_ADVISORY
     schema_version: int = CONTRADICTION_REPORT_SCHEMA_VERSION
 
@@ -438,6 +441,9 @@ class EventContradictionReport:
         if self.events_checked < 0 or self.status_assertions_checked < 0:
             raise ValueError("report counts must be non-negative")
         object.__setattr__(self, "contradictions", tuple(self.contradictions))
+        object.__setattr__(
+            self, "unresolved_intervals", tuple(self.unresolved_intervals)
+        )
 
     @property
     def findings(self) -> tuple[EventContradiction, ...]:
@@ -471,6 +477,10 @@ class EventContradictionReport:
             "schema_version": self.schema_version,
             "events_checked": self.events_checked,
             "status_assertions_checked": self.status_assertions_checked,
+            "unresolved_interval_count": len(self.unresolved_intervals),
+            "unresolved_intervals": [
+                item.to_dict() for item in self.unresolved_intervals
+            ],
             "counts": dict(self.counts),
             "contradictions": [
                 contradiction.to_dict() for contradiction in self.contradictions
@@ -512,10 +522,31 @@ def report_event_contradictions(
 
     raw_events = _iter_records(events)
     interval_records: list[EventInterval] = []
+    unresolved_intervals: list[ContradictionEvidence] = []
     embedded_statuses: list[EventStatusAssertion] = []
     for index, raw_event in enumerate(raw_events):
         event = _coerce_event(raw_event, index=index)
         if event is None:
+            interval = (
+                raw_event.get("interval")
+                if isinstance(raw_event, Mapping)
+                else getattr(raw_event, "interval", None)
+            )
+            if isinstance(interval, TemporalInterval):
+                unresolved_intervals.append(
+                    ContradictionEvidence(
+                        source_start=interval.source_start,
+                        source_end=interval.source_end,
+                        fingerprint=_coerce_fingerprint(
+                            "",
+                            {
+                                "source_start": interval.source_start,
+                                "source_end": interval.source_end,
+                                "status": interval.status,
+                            },
+                        ),
+                    )
+                )
             continue
         interval_records.append(event)
         if event.status is not None:
@@ -548,6 +579,12 @@ def report_event_contradictions(
         contradictions=tuple(findings),
         events_checked=len(interval_records),
         status_assertions_checked=len(statuses),
+        unresolved_intervals=tuple(
+            sorted(
+                unresolved_intervals,
+                key=lambda item: (item.source_start, item.source_end, item.fingerprint),
+            )
+        ),
     )
 
 
@@ -640,8 +677,7 @@ def _coerce_event(raw: Any, *, index: int) -> EventInterval | None:
         if interval is None:
             return None
         text = getattr(raw, "text", "")
-        start = getattr(interval, "start", None)
-        end = getattr(interval, "end", None)
+        start, end = _interval_values(interval, {})
         if start is None or end is None:
             return None
         source_start = getattr(raw, "start", 0)
@@ -798,6 +834,30 @@ def _interval_values(
     data: Mapping[str, Any],
 ) -> tuple[DateLike | None, DateLike | None]:
     if interval is not None:
+        if isinstance(interval, TemporalInterval):
+            if (
+                interval.status != "normalized"
+                or interval.open_start
+                or interval.open_end
+                or not interval.start_inclusive
+                or not interval.end_inclusive
+            ):
+                return None, None
+            if interval.kind == "date":
+                endpoint = interval.start
+                if endpoint is not None and endpoint.precision == "day":
+                    return endpoint.value, endpoint.value
+                return None, None
+            if interval.kind == "interval":
+                start, end = interval.start, interval.end
+                if (
+                    start is not None
+                    and end is not None
+                    and start.status == end.status == "normalized"
+                    and start.precision == end.precision == "day"
+                ):
+                    return start.value, end.value
+            return None, None
         if isinstance(interval, Mapping):
             start = _first_value(interval, "start", "interval_start", "from")
             end = _first_value(interval, "end", "interval_end", "to")
@@ -848,6 +908,9 @@ def _mapping_offsets(
         and isinstance(data.get("end"), int)
     ):
         return _validate_offsets(data["start"], data["end"])
+    interval = data.get("interval")
+    if isinstance(interval, TemporalInterval):
+        return interval.span
     return 0, 0
 
 
@@ -920,8 +983,10 @@ def _coerce_date(value: DateLike) -> date:
         return value
     if isinstance(value, str):
         candidate = value.strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", candidate) is None:
+            raise ValueError("interval values must be ISO dates")
         try:
-            return date.fromisoformat(candidate[:10])
+            return date.fromisoformat(candidate)
         except ValueError as exc:
             raise ValueError("interval values must be ISO dates") from exc
     raise TypeError("interval values must be dates or ISO date strings")

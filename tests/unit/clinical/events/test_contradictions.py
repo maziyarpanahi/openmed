@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from openmed.clinical import (
     EventInterval,
     EventStatusAssertion,
     report_event_contradictions,
 )
+from openmed.clinical.temporal_intervals import normalize_temporal_interval
 from openmed.core.audit import hash_text
 
 
@@ -242,3 +245,59 @@ def test_typed_record_serializers_omit_caller_identifiers() -> None:
     assert "jane" not in serialized
     assert event.fingerprint in serialized
     assert assertion.fingerprint in serialized
+
+
+def test_normalized_day_interval_retains_offsets_for_comparison() -> None:
+    first_text = "2026-06-01/2026-06-06"
+    second_text = "2026-06-05/2026-06-08"
+    first = normalize_temporal_interval(first_text, (0, len(first_text)))
+    second = normalize_temporal_interval(second_text, (0, len(second_text)))
+
+    report = report_event_contradictions(
+        [
+            {"interval": first, "entity_id": "synthetic-test", "event_type": "lab"},
+            {"interval": second, "entity_id": "synthetic-test", "event_type": "lab"},
+        ]
+    )
+
+    assert report.counts["overlap"] == 1
+    assert report.events_checked == 2
+    assert report.unresolved_intervals == ()
+    assert report.contradictions[0].evidence[0].source_offsets == (0, len(first_text))
+    assert first_text not in json.dumps(report.to_dict())
+
+
+def test_imprecise_and_conflicting_intervals_remain_unresolved() -> None:
+    month = normalize_temporal_interval("2026-06", (0, 7))
+    ambiguous = normalize_temporal_interval("03/04/2026", (0, 10))
+    open_end = normalize_temporal_interval("since 2026-01-01", (0, 16))
+
+    report = report_event_contradictions(
+        [
+            {"interval": month, "event_type": "lab"},
+            {"interval": ambiguous, "event_type": "lab"},
+            {"interval": open_end, "event_type": "lab"},
+        ]
+    )
+
+    assert report.events_checked == 0
+    assert report.counts == {
+        "conflicting_status": 0,
+        "impossible_order": 0,
+        "overlap": 0,
+    }
+    assert report.to_dict()["unresolved_interval_count"] == 3
+    assert report.to_dict()["schema_version"] == 2
+    assert all(
+        item.fingerprint.startswith("sha256:") for item in report.unresolved_intervals
+    )
+
+
+def test_event_dates_require_complete_iso_day_strings() -> None:
+    with pytest.raises(ValueError, match="ISO dates"):
+        EventInterval(
+            event_id="synthetic-event",
+            event_type="lab",
+            interval_start="2026-06-01 extra text",
+            interval_end="2026-06-02",
+        )

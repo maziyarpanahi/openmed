@@ -60,13 +60,22 @@ An active assertion followed by a resolved assertion in non-overlapping
 intervals is not reported as a contradiction. The comparator preserves all
 findings and does not resolve which assertion is correct.
 
+Mappings may supply a `TemporalInterval` from the conservative interval
+normalizer as their `interval`. Only normalized, closed, inclusive day bounds
+participate in overlap and ordering checks. Partial dates, conflicting dates,
+and open bounds appear in `unresolved_intervals` with source offsets and a
+metadata fingerprint, and contribute to `unresolved_interval_count`. They are
+never converted to a day or classified as contradictions. Direct
+`EventInterval` date strings must be complete ISO dates.
+
 ## Privacy and determinism
 
-`report.to_dict()` contains counts, controlled categories, source offsets, and
-fingerprints only. It does not contain source text, event values, or interval
-dates. Source text supplied in compatible input mappings is used only in
-memory to derive a fingerprint and is never copied into the report or an
-exception. Keep any caller-owned raw input under the repository's normal PHI
+Version 2 of `report.to_dict()` contains counts, controlled categories, source
+offsets, and fingerprints only, including for unresolved intervals. It does not
+contain source text, event values, or interval dates. Source text supplied in
+compatible input mappings is used only in memory to derive a fingerprint and
+is never copied into the report or an exception. Keep any caller-owned raw
+input under the repository's normal PHI
 handling policy.
 
 The implementation is rules-only, uses no network service or environment
