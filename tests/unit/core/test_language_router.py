@@ -416,8 +416,8 @@ def test_route_runs_is_deterministic():
     assert router.route_runs(text) == router.route_runs(text)
 
 
-# Synthetic note segments cover Latin, nine Brahmi scripts, and Urdu.  The
-# final three routes use explicit local packs because no weights are bundled.
+# Synthetic note segments cover Latin, nine Brahmi scripts, and Urdu.
+# Missing route packs are supplied locally without bundled weights.
 _ALL_SCRIPT_CLINICAL_SEGMENTS = (
     ("Latin", "en", "Patient stable"),
     ("Devanagari", "hi", "रोगी स्थिर"),
@@ -443,13 +443,15 @@ def test_all_indic_scripts_and_urdu_route_with_exact_metadata() -> None:
         segment_by_script,
     )
 
+    registered_packs = tuple(LANGUAGE_PACK_ADAPTERS.registry.iter_packs())
+    registered_codes = {pack.code for pack in registered_packs}
     extra_packs = tuple(
         _pack(code, (script,), "user-supplied")
         for script, code, _text in _ALL_SCRIPT_CLINICAL_SEGMENTS
-        if code in {"ml", "pa", "ur"}
+        if code in {"ml", "pa", "ur"} and code not in registered_codes
     )
     router = LanguageRouter(
-        packs=(*LANGUAGE_PACK_ADAPTERS.registry.iter_packs(), *extra_packs),
+        packs=(*registered_packs, *extra_packs),
         use_optional_lid=False,
     )
     text = " | ".join(
