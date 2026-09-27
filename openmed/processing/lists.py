@@ -354,13 +354,29 @@ def _is_continuation(line: _Line, previous: _Line | None) -> bool:
 
 
 def _materialize_items(text: str, seeds: Sequence[_ItemSeed]) -> list[ListItemSpan]:
+    """Materialize list spans with linear boundary planning.
+
+    Copying the returned text slices remains proportional to their total size.
+    """
+
+    # Find the nearest following item at the same or a shallower level.
+    # Each seed enters and leaves this stack at most once.
+    ends = [len(text)] * len(seeds)
+    following_indices: list[int] = []
+    for index in range(len(seeds) - 1, -1, -1):
+        seed = seeds[index]
+        while (
+            following_indices
+            and seeds[following_indices[-1]].nesting_level > seed.nesting_level
+        ):
+            following_indices.pop()
+        if following_indices:
+            ends[index] = seeds[following_indices[-1]].start
+        following_indices.append(index)
+
     items: list[ListItemSpan] = []
     for index, seed in enumerate(seeds):
-        end = len(text)
-        for following in seeds[index + 1 :]:
-            if following.nesting_level <= seed.nesting_level:
-                end = following.start
-                break
+        end = ends[index]
         items.append(
             ListItemSpan(
                 text=text[seed.start : end],
