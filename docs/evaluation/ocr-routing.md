@@ -6,6 +6,9 @@ classifier and the existing routing profiles with synthetic examples for
 radiology, pathology, progress, discharge, operative, consult, and unknown
 documents.
 
+Radiology, pathology, and discharge summaries expect their specialized local
+profiles. Other document families exercise the generic pass-through fallback.
+
 The harness is an evaluation of the routing pipeline, not a compliance
 certification or a clinical decision guarantee. It does not load a model, make
 a network request, or call an external OCR service.

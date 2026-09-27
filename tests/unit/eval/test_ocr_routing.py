@@ -22,6 +22,11 @@ def test_default_fixtures_cover_common_families_and_publish_no_source_text() -> 
         OCR_DOCUMENT_FAMILIES
     )
     assert len({fixture.fixture_id for fixture in fixtures}) == len(fixtures)
+    discharge = next(
+        fixture for fixture in fixtures if fixture.fixture_id == "discharge-basic"
+    )
+    assert discharge.expected_profile == "discharge_summary"
+    assert discharge.expect_fallback is False
     for fixture in fixtures:
         public = json.dumps(fixture.to_dict(), sort_keys=True)
         assert fixture.canonical_text not in public

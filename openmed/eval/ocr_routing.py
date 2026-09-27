@@ -66,6 +66,7 @@ _DOCUMENT_TYPE_ALIASES = {
 _SPECIALIZED_PROFILES = {
     "radiology_report": "radiology",
     "pathology_report": "pathology",
+    "discharge_summary": "discharge_summary",
 }
 
 
