@@ -15,12 +15,15 @@ import hashlib
 import hmac
 import json
 import os
+import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.audit import AuditSignature, stable_hash
+from openmed.core.registry_errors import RegistryError as _RegistryError
 from openmed.eval.release_gates import (
     _SIGNATURE_ALGORITHM,
     RELEASABLE,
@@ -32,7 +35,7 @@ READY = "READY"
 NOT_READY = "NOT_READY"
 
 _REQUIRED_DOCS: tuple[str, ...] = ("README.md", "CHANGELOG.md")
-_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/2.2-to-2.3.md")
+_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/2.3-to-2.5.md")
 _DEFAULT_API_COMPAT_REPORT = Path("gates/api_compat_report.json")
 _DEFAULT_E2E_REPORT = Path("gates/e2e_golden_pass.json")
 _DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
@@ -329,9 +332,114 @@ def _check_e2e_golden(repo_root: Path, report_path: Path) -> GateCheck:
         )
 
 
+def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck:
+    """Verify that an SDK release retains the model artifacts and evidence."""
+
+    gate = "sdk_model_continuity"
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", baseline_tag):
+        return GateCheck(
+            gate, False, reason="SDK baseline must be a stable version tag"
+        )
+
+    def git(*arguments: str) -> bytes:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=repo_root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=30,
+        ).stdout
+
+    try:
+        baseline_sha = (
+            git("rev-parse", "--verify", f"refs/tags/{baseline_tag}^{{commit}}")
+            .decode()
+            .strip()
+        )
+        git("merge-base", "--is-ancestor", baseline_sha, "HEAD")
+        hashes: dict[str, str] = {}
+        for name in ("models.jsonl", "gates/baseline.json"):
+            previous = git("show", f"{baseline_sha}:{name}")
+            current = (repo_root / name).read_bytes()
+            if current != previous:
+                return GateCheck(
+                    gate,
+                    False,
+                    reason=f"Model artifact or retained evidence changed: {name}",
+                )
+            hashes[name] = "sha256:" + hashlib.sha256(current).hexdigest()
+
+        from openmed.core.registry_slots import (
+            migrate_registry_state,
+            registry_state_errors,
+        )
+
+        rows = [
+            json.loads(line)
+            for line in (repo_root / "models.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        entries = _read_json_object(repo_root / "gates/baseline.json")["entries"]
+
+        def canonical_state(payload: Any) -> dict[str, Any]:
+            if not isinstance(payload, dict):
+                raise ValueError("registry state must be an object")
+            state = (
+                migrate_registry_state(payload, rows, entries)
+                if payload.get("schema_version") == 1
+                else payload
+            )
+            if registry_state_errors(rows, state):
+                raise ValueError("retained registry evidence is incoherent")
+            if not state["slots"]:
+                raise ValueError("retained registry evidence is empty")
+            return state
+
+        name = "gates/registry_state.json"
+        previous = git("show", f"{baseline_sha}:{name}")
+        current = (repo_root / name).read_bytes()
+        before = canonical_state(json.loads(previous))
+        after = canonical_state(json.loads(current))
+        if before != after:
+            return GateCheck(
+                gate,
+                False,
+                reason="Model registry evidence changed; signed model gates are required",
+            )
+        return GateCheck(
+            gate,
+            True,
+            details={
+                "baseline_tag": baseline_tag,
+                "baseline_sha": baseline_sha,
+                "retained_file_hashes": hashes,
+                "pointer_count": sum(
+                    len(entry["pointers"]) for entry in after["slots"].values()
+                ),
+                "baseline_registry_hash": "sha256:"
+                + hashlib.sha256(previous).hexdigest(),
+                "candidate_registry_hash": "sha256:"
+                + hashlib.sha256(current).hexdigest(),
+                "scope": "SDK only; no model promotion or new model qualification",
+            },
+        )
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        _RegistryError,
+        subprocess.SubprocessError,
+    ):
+        return GateCheck(
+            gate, False, reason="SDK model continuity evidence could not be verified"
+        )
+
+
 def evaluate_readiness(
     *,
-    version: str = "2.3.0",
+    version: str = "2.5.0",
     repo_root: Path | str | None = None,
     gate_report: GateReport | None = None,
     gate_report_key: bytes | str | None = None,
@@ -340,6 +448,7 @@ def evaluate_readiness(
     e2e_report: Path | str = _DEFAULT_E2E_REPORT,
     signing_key: bytes | str | None = None,
     key_id: str | None = None,
+    sdk_baseline: str | None = None,
 ) -> ReadinessReport:
     """Evaluate all release requirements and return a signed report.
 
@@ -353,6 +462,8 @@ def evaluate_readiness(
         e2e_report: Workflow-produced golden-suite result path.
         signing_key: Key used to sign the readiness report.
         key_id: Identifier recorded with the readiness signature.
+        sdk_baseline: Stable tag for an SDK-only release with unchanged model artifacts,
+            pointer targets, and retained evidence. Omit for model release gates.
 
     Returns:
         A signed, PHI-free readiness report.
@@ -370,9 +481,10 @@ def evaluate_readiness(
         or _DEFAULT_READINESS_SIGNING_KEY
     )
     checks = (
-        _check_extraction_gates(
-            gate_report,
-            verification_key=verification_key,
+        (
+            _check_sdk_model_continuity(root, sdk_baseline)
+            if sdk_baseline is not None and gate_report is None
+            else _check_extraction_gates(gate_report, verification_key=verification_key)
         ),
         _check_required_docs(root, Path(migration_guide)),
         _check_api_compat(root, Path(api_compat_report)),
@@ -397,6 +509,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gate-report", type=Path)
     parser.add_argument("--gate-report-key")
     parser.add_argument(
+        "--sdk-baseline",
+        help="Stable baseline tag for SDK-only model continuity checks.",
+    )
+    parser.add_argument(
         "--migration-guide",
         type=Path,
         default=_DEFAULT_MIGRATION_GUIDE,
@@ -407,7 +523,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_API_COMPAT_REPORT,
     )
     parser.add_argument("--e2e-report", type=Path, default=_DEFAULT_E2E_REPORT)
-    parser.add_argument("--version", default="2.3.0")
+    parser.add_argument("--version", default="2.5.0")
     parser.add_argument("--signing-key")
     parser.add_argument("--key-id", default="release-readiness")
     parser.add_argument("--output", type=Path)
@@ -420,6 +536,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = build_arg_parser()
     args = parser.parse_args(argv)
+    if args.sdk_baseline is not None and args.gate_report is not None:
+        parser.error(
+            "--sdk-baseline and --gate-report select different release streams"
+        )
     gate_report: GateReport | None = None
     try:
         if args.gate_report is not None:
@@ -438,6 +558,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         e2e_report=args.e2e_report,
         signing_key=args.signing_key,
         key_id=args.key_id,
+        sdk_baseline=args.sdk_baseline,
     )
     rendered = json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
     if args.output is not None:

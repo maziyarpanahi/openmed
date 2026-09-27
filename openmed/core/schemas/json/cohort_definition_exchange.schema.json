@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/structured/cohort-definition-exchange.schema.json",
+  "title": "OpenMed cohort definition exchange",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy",
+    "definition",
+    "definition_digest",
+    "evidence_mapping",
+    "losses",
+    "lossless",
+    "schema_version",
+    "source_snapshot"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "definition": {"$ref": "#/$defs/definition"},
+    "definition_digest": {"$ref": "#/$defs/digest"},
+    "evidence_mapping": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidence_binding"}
+    },
+    "losses": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/loss"}
+    },
+    "lossless": {"type": "boolean"},
+    "schema_version": {"const": "1.0.0"},
+    "source_snapshot": {"$ref": "#/$defs/source_snapshot"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "source_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundled_vocabulary",
+        "digest",
+        "license_tags",
+        "schema_version",
+        "snapshot_id"
+      ],
+      "properties": {
+        "bundled_vocabulary": {"const": false},
+        "digest": {"$ref": "#/$defs/digest"},
+        "license_tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/controlled"}
+        },
+        "schema_version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "snapshot_id": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "evidence_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_set_id", "criterion_id", "definition_digest"],
+      "properties": {
+        "concept_set_id": {"$ref": "#/$defs/controlled"},
+        "criterion_id": {"$ref": "#/$defs/controlled"},
+        "definition_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "loss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason_code"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 256},
+        "reason_code": {"$ref": "#/$defs/controlled"}
+      }
+    },
+    "definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concept_sets", "expression", "id", "name", "schema_version"],
+      "properties": {
+        "concept_sets": {"type": "array", "minItems": 1},
+        "description": {"type": "string", "minLength": 1},
+        "expression": {"type": "object"},
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "openmed.cohort.phenotype.v1"}
+      }
+    }
+  }
+}

@@ -681,7 +681,8 @@ def _prepare_pii_text(
             config.chinese_target_script if config is not None else None
         ),
     )
-    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() in {"ar", "fa"}:
+    language_code = lang.strip().replace("-", "_").split("_", 1)[0].casefold()
+    if language_code in {"ar", "fa"}:
         from .pii_i18n import normalize_arabic_indic_digits
 
         normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
@@ -698,6 +699,25 @@ def _prepare_pii_text(
                 text=normalized_arabic,
                 folded_native_digits=(
                     detection_normalization.folded_native_digits + folded_arabic_digits
+                ),
+            )
+    elif language_code == "kn":
+        from .pii_i18n import normalize_kannada_digits
+
+        normalized_kannada = normalize_kannada_digits(detection_normalization.text)
+        folded_kannada_digits = sum(
+            before != after
+            for before, after in zip(
+                detection_normalization.text,
+                normalized_kannada,
+            )
+        )
+        if folded_kannada_digits:
+            detection_normalization = replace(
+                detection_normalization,
+                text=normalized_kannada,
+                folded_native_digits=(
+                    detection_normalization.folded_native_digits + folded_kannada_digits
                 ),
             )
     inference_text = detection_normalization.text
@@ -2731,8 +2751,9 @@ def deidentify(
         transliterated_name_config: Optional configuration for the
             Latin-script Indian name allow/deny bridge. The default bridge is
             conservative and can be replaced or extended by configuration.
-        audit: Return a deterministic AuditReport instead of the
-            DeidentificationResult.
+        audit: Return an AuditReport instead of the DeidentificationResult.
+            Fresh calls use separate private HMAC keys. For stable hashes across
+            runs, use a Pipeline with an explicit private hmac_secret.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
         budget: Optional per-request wall-time and input-character budget.

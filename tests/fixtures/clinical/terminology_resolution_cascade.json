@@ -1,0 +1,96 @@
+{
+  "snapshot": {
+    "system": "loinc",
+    "version": "synthetic-2026.1",
+    "vocabulary": "synthetic-loinc"
+  },
+  "concepts": [
+    {
+      "code": "1000-1",
+      "preferred_term": "High blood pressure",
+      "synonyms": ["Hypertension"]
+    },
+    {
+      "code": "1000-2",
+      "preferred_term": "Low blood pressure",
+      "synonyms": ["Hypotension"]
+    },
+    {
+      "code": "1000-3",
+      "preferred_term": "Migraine headache",
+      "synonyms": ["Headache"]
+    },
+    {
+      "code": "1000-4",
+      "preferred_term": "Tension headache",
+      "synonyms": ["Headache"]
+    },
+    {
+      "code": "1000-5",
+      "preferred_term": "Juvenile inflammatory arthritis",
+      "synonyms": []
+    }
+  ],
+  "relationships": [
+    {
+      "source_term": "Juvenile arthritis",
+      "target_code": "1000-5",
+      "relationship": "narrower"
+    },
+    {
+      "source_system": "local-codes",
+      "source_code": "HBP",
+      "target_code": "1000-1",
+      "relationship": "equivalent",
+      "mapping_rule": "explicit_code"
+    }
+  ],
+  "cases": [
+    {
+      "name": "source-code",
+      "query": {"source_system": "loinc", "source_code": "1000-1"},
+      "state": "mapped",
+      "rule": "explicit_code",
+      "code": "1000-1"
+    },
+    {
+      "name": "crosswalk-code",
+      "query": {"source_system": "local-codes", "source_code": "HBP"},
+      "state": "mapped",
+      "rule": "explicit_code",
+      "code": "1000-1"
+    },
+    {
+      "name": "preferred-lexical",
+      "query": {"source_value": " high   blood pressure "},
+      "state": "mapped",
+      "rule": "normalized_lexical",
+      "code": "1000-1"
+    },
+    {
+      "name": "alias",
+      "query": {"source_value": "Hypertension"},
+      "state": "mapped",
+      "rule": "alias",
+      "code": "1000-1"
+    },
+    {
+      "name": "descendant",
+      "query": {"source_value": "Juvenile arthritis"},
+      "state": "mapped",
+      "rule": "hierarchy",
+      "code": "1000-5"
+    },
+    {
+      "name": "ambiguous",
+      "query": {"source_value": "Headache"},
+      "state": "ambiguous",
+      "rule": "alias"
+    },
+    {
+      "name": "unmapped",
+      "query": {"source_value": "No synthetic concept"},
+      "state": "unmapped"
+    }
+  ]
+}

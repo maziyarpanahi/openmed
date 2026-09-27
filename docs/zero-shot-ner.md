@@ -51,6 +51,31 @@ The defaults are packaged in
 `openmed/zero_shot/data/label_maps/defaults.json` and can be overridden in tests
 or deployments by supplying a custom path to the high-level APIs.
 
+## Registered GLiNER-BioMed backbone
+
+The default index includes the public `Ihor/gliner-biomed-large-v1.0`
+checkpoint as the stable `GLINER_BIOMED_MODEL_ID` entry. Its metadata declares
+the `gliner` family, English support, `biomedical` and `clinical` domains, and
+the Apache-2.0 license. The checkpoint weights are not bundled: install the
+optional GLiNER dependency and let the configured local cache provide the
+weights when inference runs.
+
+When the request does not provide labels, `domain="biomedical"` selects the
+packaged biomedical defaults (`Disease`, `Drug`, `Gene`, and `Organism`). The
+clinical domain remains available through `domain="clinical"` with its own
+default preset.
+
+For the common biomedical path, use the convenience wrapper:
+
+```python
+from openmed.ner import infer_biomedical
+
+response = infer_biomedical(
+    "Aspirin was used for synthetic fever documentation.",
+    threshold=0.55,
+)
+```
+
 ## Inference API
 
 Programmatic usage:
@@ -59,7 +84,7 @@ Programmatic usage:
 from openmed.ner import NerRequest, infer
 
 req = NerRequest(
-    model_id="gliner-biomed-tiny",
+    model_id="Ihor/gliner-biomed-large-v1.0",
     text="Imatinib inhibits BCR-ABL in chronic myeloid leukaemia.",
     threshold=0.55,
     domain="biomedical",

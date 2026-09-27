@@ -154,6 +154,12 @@ from openmed.eval.suites.cross_lingual_grounding import (
     run_cross_lingual_grounding,
     scan_restricted_corpus_markers,
 )
+from openmed.eval.suites.drug_safety import (
+    DRUG_SAFETY_SUITE_VERSION,
+    DrugSafetyBenchmarkCase,
+    DrugSafetyBenchmarkReport,
+    run_drug_safety_benchmark,
+)
 from openmed.eval.suites.grounding_index_recall import (
     evaluate_grounding_index_recall,
     grounding_index_recall_metadata,
@@ -238,6 +244,18 @@ from openmed.eval.suites.indic_name_consistency import (
     indic_name_consistency_metadata,
     load_indic_name_fixtures,
 )
+from openmed.eval.suites.journey_specialist import (
+    PROMOTION_DECISIONS,
+    JourneySpecialistEvaluationError,
+    SpecialistHoldoutReport,
+    SpecialistPrediction,
+    SpecialistPromotionPolicy,
+    SpecialistRunCompletion,
+    build_journey_specialist_model_pack_entry,
+    evaluate_journey_specialist_holdout,
+    finalize_journey_specialist_run,
+    render_journey_specialist_model_card,
+)
 from openmed.eval.suites.multimodal_dicom import (
     MULTIMODAL_DICOM,
     generate_synthetic_dicom_corpus,
@@ -250,6 +268,10 @@ from openmed.eval.suites.naamapadam import (
     load_naamapadam_fixtures,
     naamapadam_suite_metadata,
     run_naamapadam,
+)
+from openmed.eval.suites.omop_quality import (
+    FrozenOmopQualityFixture,
+    load_frozen_omop_quality_fixture,
 )
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
@@ -281,6 +303,22 @@ from openmed.eval.suites.shield import (
     run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
 )
+from openmed.eval.suites.temporal_consistency import (
+    SCORED_AXES as TEMPORAL_CONSISTENCY_AXES,
+)
+from openmed.eval.suites.temporal_consistency import (
+    TEMPORAL_CONSISTENCY,
+    TEMPORAL_CONSISTENCY_FIXTURE_PATH,
+    TEMPORAL_CONSISTENCY_SCHEMA_VERSION,
+    AxisAccuracy,
+    TemporalConsistencyFixture,
+    TemporalConsistencyResult,
+    evaluate_temporal_consistency,
+    load_temporal_consistency_fixtures,
+    run_temporal_consistency_suite,
+    score_temporal_consistency,
+    temporal_consistency_metadata,
+)
 from openmed.eval.suites.temporal_tlinks import (
     TEMPORAL_TLINK_FIXTURE_PATH,
     TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
@@ -292,6 +330,12 @@ from openmed.eval.suites.temporal_tlinks import (
     decode_temporal_tlink_fixture,
     evaluate_temporal_tlink_fixtures,
     load_temporal_tlink_fixtures,
+)
+from openmed.eval.suites.trial_eligibility import (
+    TRIAL_ELIGIBILITY_SUITE_VERSION,
+    TrialEligibilityBenchmarkCase,
+    TrialEligibilityBenchmarkReport,
+    run_trial_eligibility_benchmark,
 )
 
 GOLDEN = "golden"
@@ -323,6 +367,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIC_NAME_CONSISTENCY,
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_SURROGATE_CONSISTENCY,
+    TEMPORAL_CONSISTENCY,
 )
 SUPPORTED_SUITES: tuple[str, ...] = (
     DEFAULT_SUITES
@@ -420,6 +465,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             kwargs.get("manifest_path"),
             kwargs.get("fixture_path", kwargs.get("path")),
         )
+    if suite == TEMPORAL_CONSISTENCY:
+        return list(load_temporal_consistency_fixtures(kwargs.get("path")))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -482,6 +529,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return india_clinical_leakage_metadata(**kwargs)
     if suite == INDIA_SURROGATE_CONSISTENCY:
         return india_surrogate_consistency_metadata(**kwargs)
+    if suite == TEMPORAL_CONSISTENCY:
+        return temporal_consistency_metadata()
     return {"suite": suite}
 
 
@@ -579,6 +628,26 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "DRUG_SAFETY_SUITE_VERSION",
+    "DrugSafetyBenchmarkCase",
+    "DrugSafetyBenchmarkReport",
+    "run_drug_safety_benchmark",
+    "TRIAL_ELIGIBILITY_SUITE_VERSION",
+    "TrialEligibilityBenchmarkCase",
+    "TrialEligibilityBenchmarkReport",
+    "run_trial_eligibility_benchmark",
+    "PROMOTION_DECISIONS",
+    "JourneySpecialistEvaluationError",
+    "SpecialistHoldoutReport",
+    "SpecialistPrediction",
+    "SpecialistPromotionPolicy",
+    "SpecialistRunCompletion",
+    "build_journey_specialist_model_pack_entry",
+    "evaluate_journey_specialist_holdout",
+    "finalize_journey_specialist_run",
+    "render_journey_specialist_model_card",
+    "FrozenOmopQualityFixture",
+    "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
     "GROUNDING_CALIBRATION",
@@ -607,6 +676,13 @@ __all__ = [
     "INDIAN_MULTI_ID",
     "INDIC_NAME_CONSISTENCY",
     "INDIA_SURROGATE_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY_AXES",
+    "TEMPORAL_CONSISTENCY_FIXTURE_PATH",
+    "TEMPORAL_CONSISTENCY_SCHEMA_VERSION",
+    "AxisAccuracy",
+    "TemporalConsistencyFixture",
+    "TemporalConsistencyResult",
     "INDIA_CLINICAL_SUITE",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
@@ -787,5 +863,10 @@ __all__ = [
     "load_india_surrogate_consistency_fixtures",
     "run_india_clinical_suite_report",
     "run_india_surrogate_consistency_gate",
+    "evaluate_temporal_consistency",
+    "load_temporal_consistency_fixtures",
+    "run_temporal_consistency_suite",
+    "score_temporal_consistency",
+    "temporal_consistency_metadata",
     "validate_name_matching_mode",
 ]

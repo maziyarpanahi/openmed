@@ -27,7 +27,7 @@ jobs:
       attestations: write
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.release-tag || github.ref }}
@@ -64,7 +64,7 @@ jobs:
           PY
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.11"
 
@@ -249,7 +249,7 @@ jobs:
       - name: Generate SLSA provenance for distributions
         id: attest-distributions
         continue-on-error: true
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: release-artifact-digests.txt
 
@@ -300,7 +300,7 @@ jobs:
           done
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ inputs.distribution-artifact-name }}
           path: dist/
@@ -309,7 +309,7 @@ jobs:
 
       - name: Upload provenance evidence
         if: steps.attest-distributions.outcome == 'success'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-provenance
           path: |

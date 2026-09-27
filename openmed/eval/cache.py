@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 import tempfile
+from contextlib import suppress
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -119,21 +120,32 @@ def store(
     *,
     cache_dir: str | Path | None = None,
 ) -> Path:
-    """Store a report JSON payload under its content-addressed key."""
+    """Atomically store a report under its content-addressed key.
+
+    Temporary-file cleanup is best effort on failure and never replaces the
+    original write, close, or publication error. An existing report remains
+    untouched until the complete replacement is ready.
+    """
     path = cache_path(report_key, cache_dir=cache_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = report.to_json(indent=2) + "\n"
-    with tempfile.NamedTemporaryFile(
-        "w",
-        delete=False,
-        dir=path.parent,
-        encoding="utf-8",
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    ) as handle:
-        handle.write(payload)
-        tmp_path = Path(handle.name)
-    tmp_path.replace(path)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            dir=path.parent,
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        ) as handle:
+            tmp_path = Path(handle.name)
+            handle.write(payload)
+        tmp_path.replace(path)
+    finally:
+        if tmp_path is not None:
+            with suppress(OSError):
+                tmp_path.unlink()
     return path
 
 

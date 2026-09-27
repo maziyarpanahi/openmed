@@ -23,6 +23,9 @@ from .families import (
     load_indic_encoder,
 )
 from .indexing import (
+    BUILTIN_MODEL_RECORDS,
+    GLINER_BIOMED_MODEL_ID,
+    GLINER_BIOMED_RECORD,
     ModelIndex,
     ModelRecord,
     build_index,
@@ -30,7 +33,7 @@ from .indexing import (
     load_index,
     write_index,
 )
-from .infer import Entity, NerRequest, NerResponse, infer
+from .infer import Entity, NerRequest, NerResponse, infer, infer_biomedical
 from .labels import (
     available_domains,
     get_default_labels,
@@ -41,6 +44,9 @@ from .labels import (
 __all__ = [
     "ModelRecord",
     "ModelIndex",
+    "GLINER_BIOMED_MODEL_ID",
+    "GLINER_BIOMED_RECORD",
+    "BUILTIN_MODEL_RECORDS",
     "build_index",
     "discover_models",
     "write_index",
@@ -66,6 +72,7 @@ __all__ = [
     "NerResponse",
     "Entity",
     "infer",
+    "infer_biomedical",
     "TokenAnnotation",
     "TokenClassificationResult",
     "to_token_classification",
