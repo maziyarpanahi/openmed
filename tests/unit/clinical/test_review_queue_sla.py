@@ -177,3 +177,35 @@ def test_naive_clock_values_are_normalized_to_utc() -> None:
     )
 
     assert report.as_of == "2026-08-11T12:00:00+00:00"
+
+
+def test_bad_input_hooks_do_not_chain_patient_values() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class BadCases:
+        def __iter__(self):
+            raise TypeError(patient_value)
+
+    class BadCase:
+        @property
+        def case_key(self):
+            raise ValueError(patient_value)
+
+    def bad_clock():
+        raise ValueError(patient_value)
+
+    for cases, clock, expected in (
+        (BadCases(), None, TypeError),
+        ([BadCase()], None, TypeError),
+        ([], bad_clock, ValueError),
+        (
+            [{"case_key": "synthetic-safe", "queued_at": patient_value}],
+            None,
+            ValueError,
+        ),
+    ):
+        with pytest.raises(expected) as caught:
+            compute_review_sla(cases, now=AS_OF if clock is None else None, clock=clock)
+        assert patient_value not in str(caught.value)
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None

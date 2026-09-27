@@ -377,8 +377,12 @@ def _as_case_iterable(
         raise TypeError("cases must be an iterable of queue entries")
     try:
         iter(cases)
-    except TypeError as exc:
-        raise TypeError("cases must be an iterable of queue entries") from exc
+    except TypeError:
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise TypeError("cases must be an iterable of queue entries")
     return cases
 
 
@@ -408,11 +412,18 @@ def _coerce_case(
 
 
 def _field_value(source: object, names: tuple[str, ...]) -> object:
+    failed = False
     for name in names:
-        if isinstance(source, Mapping) and name in source:
-            return source[name]
-        if hasattr(source, name):
-            return getattr(source, name)
+        try:
+            if isinstance(source, Mapping) and name in source:
+                return source[name]
+            if hasattr(source, name):
+                return getattr(source, name)
+        except Exception:
+            failed = True
+            break
+    if failed:
+        raise TypeError("queue entry could not be read")
     return _MISSING
 
 
@@ -437,7 +448,11 @@ def _coerce_datetime(value: datetime | str, name: str) -> datetime:
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
-            raise ValueError(f"{name} must be a valid datetime") from None
+            invalid = True
+        else:
+            invalid = False
+        if invalid:
+            raise ValueError(f"{name} must be a valid datetime")
     else:
         raise TypeError(f"{name} must be a datetime or ISO datetime string")
     if parsed.tzinfo is None:
@@ -455,13 +470,23 @@ def _resolve_clock(
         return _coerce_datetime(now, "now")
     if clock is None:
         raise ValueError("an injected clock is required")
-    if callable(clock):
-        observed = clock()
-    else:
-        now_method = getattr(clock, "now", None)
-        if not callable(now_method):
-            raise TypeError("clock must be callable or expose now()")
-        observed = now_method()
+    failed = False
+    invalid = False
+    try:
+        if callable(clock):
+            observed = clock()
+        else:
+            now_method = getattr(clock, "now", None)
+            if not callable(now_method):
+                invalid = True
+            else:
+                observed = now_method()
+    except Exception:
+        failed = True
+    if failed:
+        raise ValueError("injected clock could not be read")
+    if invalid:
+        raise TypeError("clock must be callable or expose now()")
     return _coerce_datetime(observed, "clock")
 
 

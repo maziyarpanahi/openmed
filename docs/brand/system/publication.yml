@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/action-phases.md
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
     - agent/non-amplifying-delegation.md
@@ -127,6 +128,7 @@ classification:
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
+    - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
     - agent/schema-compatibility.md
@@ -305,6 +307,7 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
@@ -326,11 +329,13 @@ classification:
     - multimodal/asset-manifests.md
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
+    - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
+    - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
@@ -383,6 +388,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - clinical/review-sla.md
+    - clinical/review-transitions.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
