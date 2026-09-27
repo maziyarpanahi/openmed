@@ -97,7 +97,11 @@ def build_training_data_manifest(
     data_revision: str,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Build a content-addressed manifest without persisting raw text."""
+    """Build a content-addressed manifest without persisting raw text.
+
+    For mapping fixtures, the first non-None field among ``gold_spans``,
+    ``spans``, and ``entities`` is authoritative, including an empty list.
+    """
 
     entries = sorted(
         (_fixture_manifest_entry(fixture) for fixture in fixtures),
@@ -212,12 +216,11 @@ def _fixture_language(fixture: Any) -> str | None:
 
 def _fixture_spans(fixture: Any) -> Iterable[Any]:
     if isinstance(fixture, Mapping):
-        return (
-            fixture.get("gold_spans")
-            or fixture.get("spans")
-            or fixture.get("entities")
-            or []
-        )
+        for field in ("gold_spans", "spans", "entities"):
+            value = fixture.get(field)
+            if value is not None:
+                return value
+        return []
     return getattr(fixture, "gold_spans", ())
 
 
