@@ -404,19 +404,29 @@ def _claim_items(
         raise TypeError("claims must be a mapping or iterable of mappings")
     try:
         items = list(claims)
-    except TypeError as exc:
-        raise TypeError("claims must be a mapping or iterable of mappings") from exc
+    except Exception:
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise TypeError("claims must be a mapping or iterable of mappings")
     return [_coerce_claim(item) for item in items]
 
 
 def _coerce_claim(claim: Any) -> Mapping[str, Any]:
     if isinstance(claim, Mapping):
         return claim
-    to_dict = getattr(claim, "to_dict", None)
-    if callable(to_dict):
-        converted = to_dict()
-        if isinstance(converted, Mapping):
-            return converted
+    try:
+        to_dict = getattr(claim, "to_dict", None)
+        converted = to_dict() if callable(to_dict) else None
+    except Exception:
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise TypeError("each claim must be a mapping")
+    if isinstance(converted, Mapping):
+        return converted
     raise TypeError("each claim must be a mapping")
 
 
@@ -463,8 +473,12 @@ def _required_hint_keys(value: Iterable[str] | str) -> tuple[str, ...]:
             raise TypeError("required display hints must contain hint names")
         try:
             raw_keys = tuple(value)
-        except TypeError as exc:
-            raise TypeError("required display hints must contain hint names") from exc
+        except Exception:
+            invalid = True
+        else:
+            invalid = False
+        if invalid:
+            raise TypeError("required display hints must contain hint names")
     keys: list[str] = []
     for raw_key in raw_keys:
         if not isinstance(raw_key, str) or not raw_key.strip():
