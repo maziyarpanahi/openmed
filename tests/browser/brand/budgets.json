@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80519383,
-    "maximum_unique_payload_bytes": 80181804,
+    "maximum_total_bytes": 80742559,
+    "maximum_unique_payload_bytes": 80404980,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4197641
+    "json": 4203227
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4197641
+    "docs/search/search_index.json": 4203227
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -38,8 +38,11 @@
     "With the agent run commitment guide, the staged artifact measures 79975507 total bytes, 79637928 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
     "With the agent action-phase guide, the staged artifact measures 80186914 total bytes, 79849335 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
     "With the synthetic clinical document fixture guide and the current master documentation, the staged artifact measures 80403897 total bytes, 80066318 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the OCR box normalization guide and the current master documentation, the staged artifact measures 80407615 total bytes, 80070036 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the OCR rotation guide added to the normalization integration tree, the staged artifact measures 80613317 total bytes, 80275738 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the layout parsing guide and current master documentation, the staged artifact measures 80627073 total bytes, 80289494 unique payload bytes, and 337579 duplicate payload bytes on macOS; its search index measures 4197475 bytes.",
     "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
-    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measures 4185784 bytes against its 4197641-byte JSON ceiling; the 5752-byte increase preserves its previous measured headroom.",
+    "The prior clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides produced a 4185784-byte search index against a 4197641-byte JSON ceiling; the layout guide raises the current ceiling with 5752 bytes of measured headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
