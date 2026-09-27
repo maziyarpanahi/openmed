@@ -188,3 +188,22 @@ def test_fixture_source_paths_are_hashed_without_exposing_values(
         "external:sha256:"
     )
     assert report["sources"]["fixture_roots"][0].startswith("external:sha256:")
+
+
+def test_fixture_language_metadata_does_not_echo_arbitrary_values(
+    tmp_path: Path,
+) -> None:
+    marker = "SyntheticCaseSecret"
+    root = _fixture_root(
+        tmp_path,
+        {"language": marker, "metadata": {"synthetic": True}},
+    )
+
+    report = build_language_health_matrix(
+        registry=_registry(),
+        manifest_rows=_manifest(),
+        fixture_roots=(root,),
+        policy_names=("clinical_minimal_redaction",),
+    )
+
+    assert marker.casefold() not in json.dumps(report).casefold()

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -49,6 +50,7 @@ _UNSAFE_FIXTURE_KEYS = frozenset(
 )
 _SYNTHETIC_FIXTURE_KEYS = frozenset({"synthetic", "synthetic_only"})
 _PII_FAMILY = "pii"
+_LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}$")
 
 
 class LanguageHealthError(RuntimeError):
@@ -63,9 +65,8 @@ def _normalize_language(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip().replace("_", "-").casefold()
-    if not normalized:
-        return None
-    return normalized.split("-", 1)[0]
+    language = normalized.split("-", 1)[0]
+    return language if _LANGUAGE_CODE.fullmatch(language) else None
 
 
 def _languages_from_payload(payload: Mapping[str, Any]) -> set[str]:

@@ -30,7 +30,9 @@ can be `filled`, `missing`, `contradictory`, `fallback`, `limited`,
 Fixture evidence is metadata-only: the matrix records deterministic provenance
 hashes, record counts, language codes, and synthetic-safety status, but never
 fixture paths, file names, fixture text, predictions, spans, or expected
-outputs. A fixture is `filled` only when its metadata certifies every observed
+outputs. Only two- or three-letter primary language codes are retained from
+fixture metadata; arbitrary text in a language field is discarded. A fixture
+is `filled` only when its metadata certifies every observed
 record as synthetic. This is an evidence index, not a clinical validation or
 compliance certification.
 
