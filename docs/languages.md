@@ -93,7 +93,7 @@ routing is first requested, and do not download or bundle model weights.
 | `ja`   | Japanese   | `OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1`        | `ja_JP`      | Family-name-first `PERSON` spans.                            |
 | `kn`   | Kannada    | `OpenMed/privacy-filter-multilingual`                       | `kn_IN`      | Karnataka PIN/Aadhaar patterns; `en_IN` approximation warns once; initial-led names keep `ಅವರು` outside the span. |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
-| `ml`   | Malayalam  | `env:OPENMED_INDIC_NER_MODEL`                               | `ml_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `ml`   | Malayalam  | `OpenMed/privacy-filter-multilingual`                       | `ml_IN`      | Multilingual fallback; optional Indic NER weights; Indian Faker fallback. |
 | `mr`   | Marathi    | `OpenMed/privacy-filter-multilingual`                       | `mr_IN`      | Three-part names; `hi_IN` Faker approximation warns once.    |
 | `ne`   | Nepali     | `user-supplied`                                             | `ne_NP`      | Native Faker locale; no bundled weights — pass `model_name`.  |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
@@ -119,10 +119,10 @@ routing is first requested, and do not download or bundle model weights.
 Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
-`user-supplied` (`ml`, `ne`, and `ur`) ship no bundled
-weights and require a caller-supplied model. Russian and Tamil retain explicit
-public placeholder routes for compatibility, but neither placeholder is a
-claim of dedicated trained weights. Codes absent from the table entirely (for
+`user-supplied` ship no bundled weights and require a caller-supplied model.
+Malayalam, Russian, and Tamil retain explicit public placeholder routes for
+compatibility, but those routes are not claims of dedicated trained weights.
+Codes absent from the table entirely (for
 example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
 Several of them still have
 validator-backed national-ID coverage
@@ -136,25 +136,24 @@ Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional
 model and the Naamapadam-style suite reports a structured skip reason.
 
-`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the three codes that
+`openmed.core.pii_i18n.USER_SUPPLIED_MODEL_LANGUAGES` holds the two codes that
 are registered for script routing, surrogate locales, deterministic patterns,
-and the public REST/MCP enums while claiming no bundled default model. It splits
-into two groups with different model columns and different errors:
+and the public REST/MCP enums while claiming no bundled default model. The
+Malayalam route has a different fallback contract:
 
-- `ml` reads `env:OPENMED_INDIC_NER_MODEL`. It resolves
-  through the optional Indic NER adapter, so omitting `model_name` raises
-  `ValueError: Language '<code>' uses optional Indic NER weights; pass an
-  explicit model_name or set OPENMED_INDIC_NER_MODEL`.
+- `ml` now has a built-in multilingual fallback. The optional Indic NER adapter
+  remains available when the caller supplies its weights explicitly.
 - `ne` and `ur` read `user-supplied`. They have no adapter and no env-var path,
   so omitting `model_name` raises `ValueError: Language '<code>' has no bundled
   OpenMed PII model; pass an explicit model_name (user-supplied-model
   languages: ne, ur)`.
 
-Both column values are registry placeholders rather than loadable repositories.
-Passing one back as `model_name` raises the same error as omitting it, so a
-value copied from `openmed_list_pii_languages` never becomes a download attempt.
+The `user-supplied` column value is a registry placeholder rather than a
+loadable repository. Passing it back as `model_name` raises the same error as
+omitting it, so a value copied from `openmed_list_pii_languages` never becomes a
+download attempt.
 `SUPPORTED_LANGUAGES` includes registered fallback packs such as `pa` but excludes
-these three routes that require user-supplied weights.
+the two routes that require user-supplied weights.
 
 ## Indian-English and code-mixed clinical notes
 
@@ -362,7 +361,7 @@ After:  ಕೃತಕ ಟಿಪ್ಪಣಿ: ಶ್ರೀ [PERSON] ಅವರು, 
 
 ### Malayalam — `ml`
 
-- Model: `env:OPENMED_INDIC_NER_MODEL` · locale `ml_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ml_IN`
 
 ```text
 Before: അരുൺ കൊച്ചിയിൽ അമൃത ആശുപത്രിയിൽ പോയി.
