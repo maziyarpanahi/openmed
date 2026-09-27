@@ -355,6 +355,7 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
+    - evaluation/sdoh-counterfactuals.md
     - evaluation/relation-review-yield.md
     - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
