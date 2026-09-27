@@ -213,6 +213,16 @@ def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
                 )
             )
             continue
+        except Exception as exc:
+            checks.append(
+                _check(
+                    name,
+                    "WARN",
+                    f"{module_name} import failed ({type(exc).__name__})",
+                    "Check this optional dependency's platform and binary compatibility.",
+                )
+            )
+            continue
 
         details = "Pillow installed" if name == "multimodal" else "installed"
         checks.append(_check(name, "PASS", details))
