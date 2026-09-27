@@ -2285,6 +2285,7 @@ CMEEE_LABEL_TO_CANONICAL: Final[Mapping[str, str]] = {
     "drug": MEDICATION,
     "equ": DEVICE,
     "equipment": DEVICE,
+    "exam": LAB_TEST,
     "ite": LAB_TEST,
     "item": LAB_TEST,
     "lab_test": LAB_TEST,
