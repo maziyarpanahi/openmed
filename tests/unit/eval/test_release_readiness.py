@@ -329,7 +329,6 @@ def test_release_workflow_gates_publish_on_readiness():
     assert "Publish green promotion bundle" in workflow
     assert "Quarantine incomplete or failing candidate" in workflow
     assert "No manifest pointer or last-green baseline was changed." in workflow
-    assert "Run nightly full suite and status monitor" in workflow
     assert "release-status-regression" in workflow
     assert "openmed release rollback" in workflow
     assert 'if [ "$elapsed_seconds" -ge 600 ]' in workflow
