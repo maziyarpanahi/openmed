@@ -9,8 +9,10 @@ import pytest
 from openmed.clinical.sdoh import SDOHFinding, extract_sdoh
 from openmed.clinical.sections import detect_sections
 from openmed.eval.sdoh_false_positive_stress import (
+    SDOHCategoryStressResult,
     SDOHStressGateError,
     SDOHStressPrediction,
+    SDOHStressReport,
     assert_sdoh_stress_gate,
     default_sdoh_hard_negatives,
     run_sdoh_false_positive_stress,
@@ -130,6 +132,11 @@ def test_report_and_errors_never_echo_case_or_finding_values() -> None:
     with pytest.raises(RuntimeError, match="predictor failed") as error:
         run_sdoh_false_positive_stress([case], predictor=leaking_predictor)
     assert case.text not in str(error.value)
+
+    with pytest.raises(ValueError, match="unsupported category"):
+        SDOHCategoryStressResult("synthetic_patient_name", 1, 0, 0.0)
+    with pytest.raises(ValueError, match="non-negative"):
+        SDOHStressReport((), automated_eligibility_actions=-1)
 
 
 def test_noncurrent_findings_are_not_counted_as_positive() -> None:

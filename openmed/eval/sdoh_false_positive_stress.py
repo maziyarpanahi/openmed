@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any
 
 from openmed.clinical.sdoh import SDOHFinding, extract_sdoh
@@ -89,6 +90,23 @@ class SDOHCategoryStressResult:
     false_positive_count: int
     max_false_positive_rate: float
 
+    def __post_init__(self) -> None:
+        if self.category not in SOCIAL_HISTORY_CATEGORIES:
+            raise ValueError("stress result has unsupported category")
+        for count in (self.case_count, self.false_positive_count):
+            if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                raise ValueError("stress counts must be non-negative integers")
+        if self.false_positive_count > self.case_count:
+            raise ValueError("false-positive count exceeds case count")
+        rate = self.max_false_positive_rate
+        if (
+            isinstance(rate, bool)
+            or not isinstance(rate, int | float)
+            or not isfinite(rate)
+            or not 0.0 <= rate <= 1.0
+        ):
+            raise ValueError("false-positive ceiling must be between zero and one")
+
     @property
     def false_positive_rate(self) -> float:
         """Fraction of hard negatives yielding a positive patient finding."""
@@ -120,6 +138,17 @@ class SDOHStressReport:
 
     categories: tuple[SDOHCategoryStressResult, ...]
     automated_eligibility_actions: int
+
+    def __post_init__(self) -> None:
+        if any(
+            not isinstance(item, SDOHCategoryStressResult) for item in self.categories
+        ):
+            raise TypeError("categories must contain SDOHCategoryStressResult values")
+        if len({item.category for item in self.categories}) != len(self.categories):
+            raise ValueError("stress report categories must be unique")
+        actions = self.automated_eligibility_actions
+        if isinstance(actions, bool) or not isinstance(actions, int) or actions < 0:
+            raise ValueError("automated eligibility action count must be non-negative")
 
     @property
     def case_count(self) -> int:
