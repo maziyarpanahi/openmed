@@ -262,6 +262,9 @@ def _contains_suspicious_content(text: str) -> bool:
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe file operations.
 
+    Valid Unicode names are limited to 255 UTF-8 bytes without splitting a
+    character.
+
     Args:
         filename: Filename to sanitize.
 
@@ -277,9 +280,14 @@ def sanitize_filename(filename: str) -> str:
     # Remove control characters
     filename = re.sub(r"[\x00-\x1f\x7f]", "", filename)
 
-    # Limit length
-    if len(filename) > 255:
-        filename = filename[:255]
+    # Count UTF-8 bytes without splitting a character or rejecting short
+    # surrogate-escaped names that the sanitizer previously accepted.
+    byte_count = 0
+    for index, character in enumerate(filename):
+        byte_count += len(character.encode("utf-8", errors="surrogatepass"))
+        if byte_count > 255:
+            filename = filename[:index]
+            break
 
     # Ensure not empty
     if not filename.strip():
