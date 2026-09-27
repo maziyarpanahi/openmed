@@ -376,17 +376,6 @@ from .evidence_coverage import (
 from .evidence_coverage import (
     ReviewState as CoverageReviewState,
 )
-from .evidence_span_audit import (
-    EVIDENCE_SPAN_AUDIT_ADVISORY,
-    EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION,
-    OVERLAP_KINDS,
-    EvidenceSpan,
-    EvidenceSpanAudit,
-    EvidenceSpanOverlap,
-    OverlapKind,
-    audit_evidence_span_overlaps,
-    audit_evidence_spans,
-)
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,
@@ -415,6 +404,17 @@ from .evidence_packet import (
 )
 from .evidence_packet import (
     REJECTION_CATEGORIES as EVIDENCE_REJECTION_CATEGORIES,
+)
+from .evidence_span_audit import (
+    EVIDENCE_SPAN_AUDIT_ADVISORY,
+    EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION,
+    OVERLAP_KINDS,
+    EvidenceSpan,
+    EvidenceSpanAudit,
+    EvidenceSpanOverlap,
+    OverlapKind,
+    audit_evidence_span_overlaps,
+    audit_evidence_spans,
 )
 from .experiencer import (
     EXPERIENCER_REFINED_VALUES,
@@ -1987,23 +1987,6 @@ __all__ = [
     "summary_citation_metadata",
     "validate_summary_citation_consistency",
     "validate_summary_citations",
-    "COVERAGE_STATUSES",
-    "CoverageStatus",
-    "EVIDENCE_COVERAGE_NOTE",
-    "EVIDENCE_COVERAGE_SCHEMA_VERSION",
-    "REVIEW_STATES",
-    "ReviewState",
-    "EvidenceCoverage",
-    "EvidenceCoverageCell",
-    "EvidenceCoverageEntry",
-    "EvidenceCoverageError",
-    "EvidenceCoverageMatrix",
-    "EvidenceCoverageRecord",
-    "build_evidence_coverage",
-    "build_evidence_coverage_matrix",
-    "fingerprint_source",
-    "render_evidence_coverage",
-    "render_evidence_coverage_matrix",
     "NormalizedTimex",
     "normalize_temporal",
     "EVENT_ANCHORING_ADVISORY",

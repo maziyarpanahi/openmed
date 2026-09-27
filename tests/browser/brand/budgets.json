@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 81587632,
-    "maximum_unique_payload_bytes": 81250053,
+    "maximum_total_bytes": 82663895,
+    "maximum_unique_payload_bytes": 82326316,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4215313
+    "json": 4231077
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4215313
+    "docs/search/search_index.json": 4231077
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -68,6 +68,8 @@
     "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4203817 bytes below its 4211935-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
     "With claim-packet integrity added to the exact human-review, refusal, uncertainty, evidence-packet, and review-state stack, the staged artifact measures 81472146 total bytes, 81134567 unique payload bytes, 337579 duplicate payload bytes, and a 4207195-byte search index on macOS.",
     "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom.",
-    "With the section-boundary provenance guide, the staged artifact measures 80403893 total bytes, 80066314 unique payload bytes, and 337579 duplicate payload bytes on macOS."
+    "With the section-boundary provenance guide, the staged artifact measures 80403893 total bytes, 80066314 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With all seven exact assurance source heads reconciled on current master, the staged artifact measures 82548409 total bytes, 82210830 unique payload bytes, 337579 duplicate payload bytes, and a 4222959-byte search index on macOS.",
+    "The combined assurance ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
   ]
 }
