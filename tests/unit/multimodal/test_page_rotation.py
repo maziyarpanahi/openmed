@@ -14,8 +14,8 @@ from openmed.multimodal import (
     OcrResult,
     OcrWord,
     OutOfBoundsError,
+    PageDimensions,
     PageRotation,
-    PageSize,
     PageTransform,
     SourceSpan,
     transform_bbox,
@@ -58,7 +58,7 @@ def test_transform_bbox_preserves_axis_aligned_geometry(rotation, expected):
 
 @pytest.mark.parametrize("rotation", list(PageRotation))
 def test_each_transform_round_trips_points_and_boxes(rotation):
-    transform = PageTransform(PageSize(100, 200), rotation)
+    transform = PageTransform(PageDimensions(100, 200), rotation)
     point = (11.5, 22.25)
     box = (11.5, 22.25, 44.75, 88.5)
 
