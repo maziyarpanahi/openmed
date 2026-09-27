@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
@@ -337,6 +338,9 @@ def render_benchmark_card(
 ) -> str:
     """Render a benchmark card sourced from a BenchmarkReport and manifest."""
 
+    if report.metadata.get("publication_role") == "synthetic_shield_baseline":
+        return _render_shield_synthetic_card(report)
+
     manifest_row = _find_manifest_row(report.model_name, manifest_rows)
     lines = [
         f"# Benchmark Card: {report.suite}",
@@ -375,6 +379,92 @@ def render_benchmark_card(
             "",
             "- BenchmarkReport JSON",
             "- Canonical model manifest",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _render_shield_synthetic_card(report: BenchmarkReport) -> str:
+    """Render a compact synthetic control without implying SHIELD sample use."""
+    metadata = report.metadata
+    if report.suite != "shield-synthetic" or report.fixture_count <= 0:
+        raise ValueError("synthetic SHIELD publication has the wrong suite")
+    for key in ("reproducibility_hash", "fixture_sha256", "script_sha256"):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(metadata.get(key, ""))) is None:
+            raise ValueError(f"synthetic SHIELD publication requires {key}")
+    if metadata.get("source_rights") != (
+        "OpenMed-generated synthetic fixture; Apache-2.0"
+    ):
+        raise ValueError("synthetic SHIELD publication requires source rights")
+    if not metadata.get("limitations"):
+        raise ValueError("synthetic SHIELD publication requires limitations")
+
+    metrics = report.metrics
+    leakage = metrics["leakage"]
+    exact = metrics["exact_span_f1"]
+    recalls = metrics["recall_slices"]["by_label"]
+    leakage_by_label = leakage["by_label"]
+    labels = (
+        "AGE",
+        "DATE",
+        "ID_NUM",
+        "LOCATION",
+        "ORGANIZATION",
+        "PERSON",
+        "PHONE",
+        "URL",
+    )
+    lines = [
+        "# Synthetic SHIELD-Schema Baseline",
+        "",
+        "This is a local rules control on two OpenMed-generated synthetic notes",
+        "using SHIELD's nine label names. It does not use the SHIELD public sample",
+        "or restricted corpus and does not measure a clinical model.",
+        "",
+        "| Measure | Result |",
+        "|---|---:|",
+        f"| Exact span F1 | {float(exact['f1']):.2%} |",
+        f"| Exact span recall | {float(exact['recall']):.2%} |",
+        f"| Character leakage | {float(leakage['overall']):.2%} |",
+        f"| Synthetic notes | {report.fixture_count} |",
+        "",
+        "## By Canonical Label",
+        "",
+        "| Label | Recall | Leakage |",
+        "|---|---:|---:|",
+    ]
+    for label in labels:
+        lines.append(
+            f"| `{label}` | {float(recalls[label]):.2%} | "
+            f"{float(leakage_by_label[label]):.2%} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Evidence and Reproduction",
+            "",
+            "- [Committed result JSON](shield-synthetic.report.json)",
+            "- [Committed synthetic fixture]"
+            "(https://github.com/maziyarpanahi/openmed/blob/master/"
+            "openmed/eval/fixtures/shield_synthetic_baseline.json)",
+            f"- Fixture rights: {metadata['source_rights']}",
+            f"- Fixture SHA-256: `{metadata['fixture_sha256']}`",
+            f"- Rules model: `{report.model_name}`; revision "
+            f"`{metadata['model_revision']}` on `{report.device}`",
+            f"- Configuration revision: `{metadata['config_revision']}`",
+            f"- Rules script SHA-256: `{metadata['script_sha256']}`",
+            f"- Source base commit: `{metadata['source_revision']}`",
+            f"- Reproducibility hash: `{metadata['reproducibility_hash']}`",
+            f"- Report timestamp: `{report.generated_at}`",
+            "",
+            "Recompute the report with:",
+            "",
+            "```bash",
+            "python -m scripts.status.generate_shield_synthetic_baseline \\",
+            f"  --source-revision {metadata['source_revision']}",
+            "```",
+            "",
+            f"Limitations: {metadata['limitations']}",
         ]
     )
     return "\n".join(lines) + "\n"

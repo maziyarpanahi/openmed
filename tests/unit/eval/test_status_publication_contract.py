@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from openmed.eval.report import BenchmarkReport, render_benchmark_card
+from scripts.status.generate_shield_synthetic_baseline import generate_report
+
 ROOT = Path(__file__).resolve().parents[3]
 STATUS_CONTRACT = ROOT / "docs" / "status" / "trust-status-contract.md"
 PUBLICATION_PLAN = ROOT / "docs" / "status" / "open-benchmark-publication.md"
+SHIELD_REPORT = ROOT / "docs" / "benchmarks" / "shield-synthetic.report.json"
+SHIELD_CARD = ROOT / "docs" / "benchmarks" / "shield-synthetic.md"
 
 
 def _read(path: Path) -> str:
@@ -79,3 +84,29 @@ def test_reproducibility_hash_convention_is_pinned() -> None:
         "sha256:<64 lower hex>",
     ):
         assert token in combined
+
+
+def test_committed_synthetic_shield_evidence_is_reproducible() -> None:
+    committed = BenchmarkReport.read_json(SHIELD_REPORT)
+    source_revision = str(committed.metadata["source_revision"])
+    regenerated = generate_report(
+        source_revision=source_revision,
+        generated_at=committed.generated_at,
+    )
+
+    assert committed.suite == "shield-synthetic"
+    assert committed.fixture_count == 2
+    assert committed.metadata["source_rights"] == (
+        "OpenMed-generated synthetic fixture; Apache-2.0"
+    )
+    assert (
+        committed.metadata["reproducibility_hash"]
+        == (regenerated.metadata["reproducibility_hash"])
+    )
+    assert committed.metrics["exact_span_f1"] == regenerated.metrics["exact_span_f1"]
+    assert (
+        committed.metrics["leakage"]["overall"]
+        == (regenerated.metrics["leakage"]["overall"])
+    )
+    assert SHIELD_CARD.read_text(encoding="utf-8") == render_benchmark_card(committed)
+    assert "not clinical model performance" in SHIELD_CARD.read_text(encoding="utf-8")

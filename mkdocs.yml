@@ -217,6 +217,7 @@ nav:
       - Core Pipeline Observability: core-observability.md
       - No-PHI Telemetry: operations/no-phi-telemetry.md
       - Low-resource Benchmark: benchmarks/low-resource.md
+      - Synthetic SHIELD-Schema Baseline: benchmarks/shield-synthetic.md
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Cost vs Cloud: benchmarks/cost-vs-cloud.md
       - Zero-shot NER How-to: zero-shot-howto.md
