@@ -15,6 +15,7 @@ network resources, or use wall-clock time.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -23,6 +24,8 @@ from dataclasses import dataclass, field
 from numbers import Real
 from pathlib import Path
 from typing import Any
+
+from openmed.core.language_pack_catalog import SUPPORTED_LANGUAGES
 
 CROSS_LINGUAL_SCORECARD_SCHEMA_VERSION = 1
 CROSS_LINGUAL_SCORECARD_ARTIFACT_TYPE = "openmed.eval.crosslingual_scorecard"
@@ -44,6 +47,10 @@ METRIC_NAMES = SCORECARD_METRICS
 UNSPECIFIED_FAMILY = "unspecified"
 
 _LABEL_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/+\-]{0,63}$")
+_LOCALE_PATTERN = re.compile(r"^[a-z]{2,3}(?:[-_](?:[A-Z]{2}|[A-Z][a-z]{3}))?$")
+_KNOWN_FAMILY_LABELS = frozenset(
+    {"decoder", "encoder", "general", "ner", "pii", "unspecified", "vision", "zeroshot"}
+)
 _MISSING = object()
 
 _METRIC_ALIASES: dict[str, tuple[str, ...]] = {
@@ -1497,7 +1504,13 @@ def _safe_label(value: Any) -> str | None:
     normalized = value.strip()
     if _LABEL_PATTERN.fullmatch(normalized) is None:
         return None
-    return normalized
+    language = re.split(r"[-_]", normalized, maxsplit=1)[0].casefold()
+    if normalized.casefold() in _KNOWN_FAMILY_LABELS or (
+        language in SUPPORTED_LANGUAGES and _LOCALE_PATTERN.fullmatch(normalized)
+    ):
+        return normalized
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:32]
+    return f"label_sha256_{digest}"
 
 
 def _normalise_labels(values: Sequence[str]) -> tuple[str, ...]:

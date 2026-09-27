@@ -180,3 +180,22 @@ def test_renderers_are_deterministic_and_aggregate_only() -> None:
     assert "Family evidence" in markdown
     assert "Patient Alice" not in markdown
     assert "123-45-6789" not in markdown
+
+
+def test_untrusted_dimension_labels_are_not_copied_into_artifacts() -> None:
+    marker = "SyntheticCaseSecret"
+    scorecard = build_crosslingual_scorecard(
+        [
+            {
+                "language": marker,
+                "family": marker,
+                "fixture_count": 1,
+                "metrics": {"character_recall": {"rate": 1.0}},
+            }
+        ]
+    )
+
+    assert marker not in render_crosslingual_scorecard_json(scorecard)
+    assert marker not in scorecard.to_markdown()
+    assert scorecard.languages[0].startswith("label_sha256_")
+    assert scorecard.families[0].startswith("label_sha256_")

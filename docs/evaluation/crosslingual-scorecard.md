@@ -44,6 +44,10 @@ source text, spans, fixture identifiers, unsafe examples, model metadata, and
 all other arbitrary report fields. The scorecard performs no network call and
 does not load a model or a dataset.
 
+Registered language codes and known model-family labels remain readable.
+Unknown single-token labels are replaced with stable SHA-256 keys so untrusted
+report metadata cannot be copied into the artifacts.
+
 The scorecard is evaluation evidence, not a compliance certification or a
 clinical decision guarantee. Missing metrics are rendered as `n/a` and should
 be investigated before comparing language or family rows.
