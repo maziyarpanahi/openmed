@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import warnings
 from functools import wraps
 from typing import Any, Callable, TypeVar, cast
@@ -18,6 +19,9 @@ def deprecated(
     replacement: str | None = None,
 ) -> Callable[[F], F]:
     """Mark a callable as deprecated and warn when it is used.
+
+    For async functions, the warning is emitted when the returned coroutine is
+    awaited.
 
     The metadata is intentionally available on the decorated object for local
     documentation tools. The release API-surface differ recognizes the static
@@ -67,6 +71,16 @@ def deprecated(
             target.__init__ = warned_init  # type: ignore[method-assign]
             setattr(target, "__openmed_deprecated__", metadata)
             return target
+
+        if inspect.iscoroutinefunction(target):
+
+            @wraps(target)
+            async def warned_async(*args: Any, **kwargs: Any) -> Any:
+                warnings.warn(message, DeprecationWarning, stacklevel=2)
+                return await target(*args, **kwargs)
+
+            setattr(warned_async, "__openmed_deprecated__", metadata)
+            return cast(F, warned_async)
 
         @wraps(target)
         def warned(*args: Any, **kwargs: Any) -> Any:
