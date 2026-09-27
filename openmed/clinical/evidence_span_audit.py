@@ -362,7 +362,15 @@ def audit_evidence_spans(
         try:
             normalized.append(_coerce_span(item))
         except (TypeError, ValueError) as exc:
-            raise type(exc)(f"invalid evidence span at index {index}: {exc}") from exc
+            invalid_type = TypeError if isinstance(exc, TypeError) else ValueError
+            invalid_detail = (
+                "end must be greater than start"
+                if str(exc) == "evidence span end must be greater than start"
+                else "invalid record"
+            )
+        else:
+            continue
+        raise invalid_type(f"invalid evidence span at index {index}: {invalid_detail}")
 
     ordered_spans = tuple(sorted(normalized, key=_span_sort_key))
     overlaps: list[EvidenceSpanOverlap] = []

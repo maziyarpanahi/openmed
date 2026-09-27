@@ -156,6 +156,23 @@ def test_invalid_inputs_do_not_echo_identifier_or_text_values() -> None:
     assert "SENSITIVE_SYNTHETIC_SURFACE" not in message
     assert "opaque-evidence" not in message
     assert "end must be greater than start" in message
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_input_mapping_failure_does_not_chain_patient_value() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class BadSpan(dict):
+        def __contains__(self, key: object) -> bool:
+            raise ValueError(patient_value)
+
+    with pytest.raises(ValueError) as caught:
+        audit_evidence_spans([BadSpan()])
+
+    assert patient_value not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_report_is_json_serializable_with_stable_counts() -> None:

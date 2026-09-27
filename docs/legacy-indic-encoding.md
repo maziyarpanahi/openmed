@@ -31,6 +31,12 @@ nukta combinations, double danda, and the explicit and soft halant sequences.
 Output is placed in logical Unicode order, normalized to NFC, and aligned to
 the original byte stream. A Latin clinical note does not meet the conservative
 ISCII detection gate and is returned unchanged by `convert_legacy_encoding`.
+Auto-detection also requires the complete candidate to pass strict ISCII
+decoding, including candidates with a Devanagari attribute prefix. Malformed
+candidates fall back to Unicode: Python strings are preserved without partial
+conversion or replacement characters. Byte input still follows the normal
+UTF-8 decoding and error policy on that fallback. Explicit `encoding="iscii"`
+keeps strict error handling by default; `errors="replace"` remains opt-in.
 
 ## User-supplied legacy-font maps
 
