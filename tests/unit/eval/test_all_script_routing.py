@@ -48,7 +48,7 @@ _REQUIRED_SCRIPTS = (
 # Scripts whose language path is served by a bundled pack the router selects.
 # The remaining scripts carry their language on the top routing candidate until
 # a complete language pack lands.
-_SELECTED_LANGUAGES = frozenset({"en", "hi", "bn", "gu", "or", "ta", "te", "kn"})
+_SELECTED_LANGUAGES = frozenset({"en", "hi", "bn", "gu", "or", "ta", "te", "kn", "ml"})
 
 
 def _load_fixture() -> dict:
