@@ -10,6 +10,7 @@ from openmed.clinical import (
     COVERAGE_STATUSES,
     EvidenceCoverageError,
     EvidenceCoverageMatrix,
+    EvidenceCoverageRecord,
     build_evidence_coverage_matrix,
     fingerprint_source,
 )
@@ -59,10 +60,9 @@ def test_matrix_counts_statuses_and_excludes_raw_values():
         "conflicting": 1,
         "unreviewed": 1,
     }
-    assert [claim["claim_id"] for claim in report["claims"]] == [
-        "claim-a1",
-        "claim-z2",
-    ]
+    assert [claim["claim_id"] for claim in report["claims"]] == sorted(
+        (fingerprint_source("claim-a1"), fingerprint_source("claim-z2"))
+    )
     serialized = matrix.to_json()
     rendered = matrix.to_markdown()
     for unsafe_value in (raw_claim_text, raw_evidence_text):
@@ -75,6 +75,34 @@ def test_matrix_counts_statuses_and_excludes_raw_values():
         for record in matrix.records
         for fingerprint in record.source_fingerprints
     )
+
+
+def test_claim_ids_and_custom_class_labels_cannot_expose_patient_values() -> None:
+    marker = "synthetic.patient@example.com"
+    record = EvidenceCoverageRecord(
+        claim_id=marker, evidence_class=marker, status="missing"
+    )
+    matrix = EvidenceCoverageMatrix(records=(record,))
+
+    assert record.claim_id == fingerprint_source(marker)
+    assert record.evidence_class == fingerprint_source(marker)
+    for surface in (matrix.to_json(), matrix.to_markdown(), repr(matrix)):
+        assert marker not in surface
+
+
+def test_unserializable_source_does_not_chain_input_exception() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class PrivateSource:
+        def __repr__(self) -> str:
+            return patient_value
+
+    with pytest.raises(EvidenceCoverageError) as caught:
+        fingerprint_source(PrivateSource())
+
+    assert patient_value not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_input_order_does_not_change_rows_counts_or_hashes():
@@ -182,6 +210,24 @@ def test_round_trip_preserves_the_value_free_matrix():
     restored = EvidenceCoverageMatrix.from_mapping(json.loads(matrix.to_json()))
 
     assert restored.to_json() == matrix.to_json()
+
+
+def test_approved_packet_review_state_maps_to_present_coverage():
+    source_fingerprint = fingerprint_source("synthetic-source")
+    matrix = build_evidence_coverage_matrix(
+        {
+            "claim-a1": {
+                "local_record": {
+                    "review_state": "approved",
+                    "source_fingerprint": source_fingerprint,
+                }
+            }
+        }
+    )
+
+    assert matrix.records[0].status == "present"
+    assert matrix.records[0].source_fingerprints == (source_fingerprint,)
+    assert matrix.records[0].review_state == "reviewed"
 
 
 def test_invalid_input_errors_do_not_echo_raw_values():

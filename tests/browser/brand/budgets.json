@@ -57,6 +57,8 @@
     "With the guarded evidence-packet guide and review-state guide, the staged artifact measures 80615366 total bytes, 80277787 unique payload bytes, 337579 duplicate payload bytes, and a 4193748-byte search index on macOS.",
     "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4193748 bytes below its 4201866-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
     "With output-use policy and refusal taxonomy added to the guarded evidence-packet and review-state stack, the staged artifact measures 81040068 total bytes, 80702489 unique payload bytes, 337579 duplicate payload bytes, and a 4201594-byte search index on macOS.",
-    "The combined output-use ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
+    "The combined output-use ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom.",
+    "With evidence coverage added to the guarded evidence-packet and review-state stack, the staged artifact measures 80823890 total bytes, 80486311 unique payload bytes, 337579 duplicate payload bytes, and a 4196239-byte search index on macOS.",
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4196239 bytes below its 4204357-byte JSON ceiling, preserving 8118 bytes of measured headroom."
   ]
 }

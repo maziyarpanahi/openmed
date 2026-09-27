@@ -392,6 +392,7 @@ classification:
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
+    - clinical/evidence-coverage.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
