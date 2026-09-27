@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline clinical NLI sequence-classifier adapter for pinned PyTorch
+  and ONNX artifacts with explicit class mapping, calibrated abstention, and
+  structured contradiction prechecks (#3235).
+
 - Added deterministic, domain-separated SHA-256 commitments for validated
   agent run summaries, with constant-time categorical verification, stable
   golden vectors, and value-free malformed-input handling (#3039).
@@ -210,6 +214,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a duplicate-cue guard (#3108).
 
 ### Changed
+
+- Clinical NLI now fails closed when no released local checkpoint is registered;
+  lexical verification requires `backend="heuristic"`, and results expose
+  value-free four-state metadata instead of source or claim text (#3235).
 
 - Reject non-positive bootstrap sample counts and invalid alpha probabilities before
   producing a confidence interval.

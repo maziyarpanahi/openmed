@@ -10,26 +10,30 @@ from openmed.clinical.nli import nli, verify
 pair = nli(
     "Synthetic patient has pneumonia.",
     "The patient has pneumonia.",
+    backend="heuristic",  # explicit development-only option
 )
 
 checks = verify(
     ["The patient has no pneumonia.", "The patient has pneumonia."],
     "Synthetic patient has pneumonia.",
+    backend="heuristic",
 )
 ```
 
-`nli` always returns a mapping with `label` (`entailment`, `contradiction`, or
-`neutral`) and a finite `score` in `[0, 1]`. The default backend is a
-deterministic, dependency-free heuristic for offline development and synthetic
-fixtures. It is intentionally conservative and is not a trained clinical
-model.
+`nli` returns a value-free mapping with `label`, a finite `score` in `[0, 1]`,
+and `backend_id`. Labels are `entailment`, `contradiction`, `neutral`, or
+`abstention`. The default selects a released local NLI checkpoint. Until a
+checkpoint with an immutable revision, class map, and calibrated thresholds is
+registered, it fails closed. The heuristic is available only by explicitly
+selecting `backend="heuristic"`; it is not a trained clinical model.
 
-`verify` can be called from a future `verify=True` option on a summarization or
-grounding stage. It evaluates every claim and returns its original claim and
-source together with the NLI result and an explicit `contradicted` flag. A
-contradiction is surfaced for review; it is never silently dropped. A local
-trained MLX head can replace the backend through the `backend=` argument or
-`set_default_backend()` while preserving the `nli` and `verify` APIs.
+`verify` evaluates every claim and returns only its index, label, score,
+backend id, and contradiction or review flags. It never returns premise or
+hypothesis text. Structured numeric and medication-status prechecks run before
+the model when both records provide those fields. The local backend accepts
+only cached PyTorch or ONNX sequence-classification artifacts. Model class
+meanings and calibrated thresholds come from the pinned release metadata; the
+runtime never guesses them or falls back to a remote service.
 
 ## MedNLI data policy
 
