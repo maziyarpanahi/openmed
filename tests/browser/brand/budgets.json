@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80731199,
-    "maximum_unique_payload_bytes": 80393620,
+    "maximum_total_bytes": 81155554,
+    "maximum_unique_payload_bytes": 80817975,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -53,6 +53,10 @@
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and clinical review-state guides with bounded documentation headroom.",
     "With the clinical review-state guide on current master, the staged artifact measures 80403272 total bytes, 80065693 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
     "Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged. The review-state guide remains searchable.",
-    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4189523 bytes below its unchanged 4197641-byte JSON ceiling."
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4189523 bytes below its unchanged 4197641-byte JSON ceiling.",
+    "With the guarded evidence-packet guide and review-state guide, the staged artifact measures 80615366 total bytes, 80277787 unique payload bytes, 337579 duplicate payload bytes, and a 4193748-byte search index on macOS.",
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4193748 bytes below its 4201866-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
+    "With output-use policy and refusal taxonomy added to the guarded evidence-packet and review-state stack, the staged artifact measures 81040068 total bytes, 80702489 unique payload bytes, 337579 duplicate payload bytes, and a 4201594-byte search index on macOS.",
+    "The combined output-use ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
   ]
 }

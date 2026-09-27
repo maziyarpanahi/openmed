@@ -102,20 +102,25 @@ class OutputUseReasonCode(str, Enum):
 
 _REASON_ORDER: Final = tuple(item.value for item in OutputUseReasonCode)
 _REASON_ORDER_INDEX: Final = {code: index for index, code in enumerate(_REASON_ORDER)}
+_MISSING = object()
 
 
 class OutputUsePolicyError(ValueError):
     """Payload-free policy error carrying only stable reason codes."""
 
     def __init__(self, reason_codes: str | Sequence[str] | Any) -> None:
-        if hasattr(reason_codes, "reason_codes"):
-            reason_codes = getattr(reason_codes, "reason_codes")
+        try:
+            supplied_codes = getattr(reason_codes, "reason_codes", _MISSING)
+        except Exception:
+            supplied_codes = _MISSING
+        if supplied_codes is not _MISSING:
+            reason_codes = supplied_codes
         if isinstance(reason_codes, str):
             codes = (reason_codes,)
         else:
             try:
                 codes = tuple(reason_codes)
-            except TypeError:
+            except Exception:
                 codes = ()
 
         normalized = _ordered_reason_codes(codes)
@@ -315,8 +320,12 @@ class OutputUsePolicy:
             raise _invalid_policy()
         try:
             rules = tuple(self.rules)
-        except TypeError as exc:
-            raise _invalid_policy() from exc
+        except TypeError:
+            invalid_rules = True
+        else:
+            invalid_rules = False
+        if invalid_rules:
+            raise _invalid_policy()
         if not rules or not all(isinstance(rule, OutputUseRule) for rule in rules):
             raise _invalid_policy()
         unique_rules = {rule.key(): rule for rule in rules}
