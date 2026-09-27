@@ -5,9 +5,8 @@ language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
 Terminology maintainers and translators should also use the
 [localization glossary](i18n/glossary.md) for stable product and privacy terms.
-The optional Indic family adds two user-configured routes and can also serve
-the built-in Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
-Telugu codes.
+The optional Indic family can serve the built-in Assamese, Bengali, Gujarati,
+Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and Telugu codes.
 Every code documented here wires
 up:
 
