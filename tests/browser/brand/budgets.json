@@ -67,6 +67,7 @@
     "With human-review packet, refusal taxonomy, and typed uncertainty guides added to the guarded evidence and review-state stack, the staged artifact measures 81258279 total bytes, 80920700 unique payload bytes, 337579 duplicate payload bytes, and a 4203817-byte search index on macOS.",
     "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4203817 bytes below its 4211935-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
     "With claim-packet integrity added to the exact human-review, refusal, uncertainty, evidence-packet, and review-state stack, the staged artifact measures 81472146 total bytes, 81134567 unique payload bytes, 337579 duplicate payload bytes, and a 4207195-byte search index on macOS.",
-    "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom."
+    "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom.",
+    "With the section-boundary provenance guide, the staged artifact measures 80403893 total bytes, 80066314 unique payload bytes, and 337579 duplicate payload bytes on macOS."
   ]
 }
