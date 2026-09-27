@@ -16,6 +16,7 @@ from openmed.multimodal import (
     OutOfBoundsError,
     PageDimensions,
     PageRotation,
+    PageSize,
     PageTransform,
     SourceSpan,
     transform_bbox,
@@ -23,6 +24,12 @@ from openmed.multimodal import (
     transform_ocr_result,
     transform_point,
 )
+from openmed.multimodal.box_normalization import PageSize as NormalizationPageSize
+
+
+def test_public_page_size_keeps_normalization_contract():
+    assert PageSize is NormalizationPageSize
+    assert PageDimensions is not PageSize
 
 
 @pytest.mark.parametrize(
