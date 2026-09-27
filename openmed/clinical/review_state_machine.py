@@ -334,20 +334,22 @@ class ReviewPolicyRule:
 
         try:
             result = self.check(request)
-        except ReviewTransitionValidationError:
-            raise
-        except Exception as exc:
-            raise ReviewTransitionValidationError(
-                "policy_rule_error",
-                from_state=request.from_state,
-                to_state=request.to_state,
-            ) from exc
-        if result is False:
-            raise ReviewTransitionValidationError(
-                self.code,
-                from_state=request.from_state,
-                to_state=request.to_state,
-            )
+        except ReviewTransitionValidationError as exc:
+            failure_code = exc.code
+        except Exception:
+            # Raise outside the handler so an untrusted rule's exception (and
+            # any sensitive message it contains) is not retained as context.
+            failure_code = "policy_rule_error"
+        else:
+            if result is False:
+                failure_code = self.code
+            else:
+                return
+        raise ReviewTransitionValidationError(
+            failure_code,
+            from_state=request.from_state,
+            to_state=request.to_state,
+        )
 
 
 def _normalise_rules(value: object) -> tuple[ReviewPolicyRule, ...]:
