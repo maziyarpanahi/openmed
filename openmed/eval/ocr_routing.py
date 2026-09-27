@@ -46,7 +46,12 @@ OCR_DOCUMENT_FAMILIES: tuple[str, ...] = (
     "consult_note",
     "unknown",
 )
-OCR_ROUTING_PROFILES: tuple[str, ...] = ("generic", "pathology", "radiology")
+OCR_ROUTING_PROFILES: tuple[str, ...] = (
+    "generic",
+    "pathology",
+    "radiology",
+    "discharge_summary",
+)
 
 _DOCUMENT_TYPE_ALIASES = {
     "radiology": "radiology_report",
