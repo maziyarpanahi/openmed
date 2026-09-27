@@ -197,6 +197,48 @@ def test_invalid_result_span_fails_only_its_document(
     assert "synthetic first" not in path.read_text(encoding="utf-8")
 
 
+def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    store = jobs.LocalJobStore(
+        tmp_path / "jobs.json",
+        ttl_seconds=10,
+        clock=lambda: now[0],
+    )
+    queue = jobs.DeidentifyJobQueue(
+        SimpleNamespace(),
+        store=store,
+        clock=lambda: now[0],
+    )
+    payload = DeidentifyJobRequest(
+        documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
+    )
+    record = queue._new_record(payload)
+    store.create(record)
+
+    def process(_payload: DeidentifyJobRequest, _document: DeidentifyJobDocument):
+        now[0] += timedelta(seconds=11)
+        return SimpleNamespace(pii_entities=[])
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    try:
+        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+    finally:
+        queue.shutdown()
+
+    completed = store.get(record["id"])
+    assert completed is not None
+    assert completed["completed_at"] == "2026-01-01T00:00:11Z"
+    assert completed["expires_at"] == "2026-01-01T00:00:21Z"
+    assert completed["status"] == "done"
+
+
 def _wait_for_job(
     client: TestClient,
     job_id: str,
