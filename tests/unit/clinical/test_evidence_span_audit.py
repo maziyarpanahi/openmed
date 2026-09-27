@@ -12,6 +12,7 @@ from openmed.clinical import (
     audit_evidence_span_overlaps,
     audit_evidence_spans,
 )
+from openmed.core.audit import hash_text
 
 
 def _span(
@@ -91,8 +92,25 @@ def test_mapping_inputs_ignore_raw_text_and_preserve_opaque_references() -> None
     serialized = audit.to_json()
     assert "SENSITIVE_SYNTHETIC_SURFACE" not in serialized
     assert "SENSITIVE_SYNTHETIC_VALUE" not in serialized
-    assert {span.evidence_id for span in audit.spans} == {"opaque-a", "opaque-b"}
+    assert {span.evidence_id for span in audit.spans} == {
+        hash_text("opaque-a"),
+        hash_text("opaque-b"),
+    }
     assert audit.overlaps[0].kind is OverlapKind.PARTIAL
+
+
+def test_identifiers_cannot_copy_patient_values_into_audit_surfaces() -> None:
+    marker = "Synthetic Patient Value 8675309"
+    audit = audit_evidence_spans(
+        [
+            _span(marker, 0, 6, source_id=marker),
+            _span("synthetic-second", 3, 9, source_id=marker),
+        ]
+    )
+
+    assert marker not in audit.to_json()
+    assert marker not in repr(audit)
+    assert audit.spans[0].source_id == hash_text(marker)
 
 
 def test_input_order_does_not_change_report_or_fingerprint() -> None:
@@ -138,6 +156,23 @@ def test_invalid_inputs_do_not_echo_identifier_or_text_values() -> None:
     assert "SENSITIVE_SYNTHETIC_SURFACE" not in message
     assert "opaque-evidence" not in message
     assert "end must be greater than start" in message
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+
+
+def test_input_mapping_failure_does_not_chain_patient_value() -> None:
+    patient_value = "SyntheticPatientValue"
+
+    class BadSpan(dict):
+        def __contains__(self, key: object) -> bool:
+            raise ValueError(patient_value)
+
+    with pytest.raises(ValueError) as caught:
+        audit_evidence_spans([BadSpan()])
+
+    assert patient_value not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_report_is_json_serializable_with_stable_counts() -> None:
