@@ -23,15 +23,18 @@ from openmed.core.labels import (
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
     CONDITION,
+    DATE,
     DEVELOPMENTAL_MILESTONE,
     DEVICE_IDENTIFIER,
     DEVICE_MODEL,
     DEVICE_TYPE,
     DIALYSIS_MODALITY,
     DRESSING_TYPE,
+    DURATION,
     DYSPNEA_GRADE,
     EXUDATE_DESCRIPTOR,
     FETAL_FINDING,
+    FREQUENCY,
     FUNCTIONAL_SCALE,
     GENE,
     GENE_SYMBOL,
@@ -51,6 +54,7 @@ from openmed.core.labels import (
     OBSTETRIC_EVENT,
     OTHER,
     OXYGEN_SUPPORT,
+    PACK_YEARS,
     PROCEDURE,
     PROTEIN_CHANGE,
     REACTION_MANIFESTATION,
@@ -62,11 +66,14 @@ from openmed.core.labels import (
     SPECIMEN_TYPE,
     SPIROMETRY_MEASURE,
     STAGE_GROUP,
+    SUBSTANCE,
     TNM_M,
     TNM_N,
     TNM_T,
     TUMOR_GRADE,
     URINE_FINDING,
+    USE_QUANTITY,
+    USE_STATUS,
     VARIANT_DESCRIPTOR,
     WOUND_STAGE,
     WOUND_TYPE,
@@ -188,6 +195,14 @@ FUNCTIONAL_STATUS_FIXTURE = (
     / "fixtures"
     / "clinical"
     / "functional_status.jsonl"
+)
+
+
+SUBSTANCE_USE_HISTORY_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "substance_use_history.jsonl"
 )
 
 
@@ -696,6 +711,105 @@ class TestFunctionalStatusDomain:
                 assert document.offset_map.normalized_span_to_original_offsets(
                     ns, ne
                 ) == (entity["start"], entity["end"])
+
+
+class TestSubstanceUseHistoryDomain:
+    """Structured substance-use spans complement the SDOH extractor (#912)."""
+
+    EXPECTED_LABELS = [
+        "Substance",
+        "UseStatus",
+        "UseQuantity",
+        "UseFrequency",
+        "UseDuration",
+        "QuitDate",
+        "PackYears",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "Substance": SUBSTANCE,
+        "UseStatus": USE_STATUS,
+        "UseQuantity": USE_QUANTITY,
+        "UseFrequency": FREQUENCY,
+        "UseDuration": DURATION,
+        "QuitDate": DATE,
+        "PackYears": PACK_YEARS,
+    }
+    EXPECTED_ENTITIES = [
+        ("UseStatus", 0, 6, "Former"),
+        ("Substance", 7, 13, "smoker"),
+        ("PackYears", 15, 28, "20 pack-years"),
+        ("QuitDate", 35, 39, "2019"),
+        ("UseDuration", 46, 54, "15 years"),
+        ("UseStatus", 0, 6, "Social"),
+        ("Substance", 7, 14, "alcohol"),
+        ("UseQuantity", 20, 28, "2 drinks"),
+        ("UseFrequency", 29, 33, "week"),
+        ("UseDuration", 38, 45, "5 years"),
+    ]
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in SUBSTANCE_USE_HISTORY_FIXTURE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+
+    def test_domain_resolves_with_exact_labels(self):
+        assert "substance_use_history" in available_domains()
+        assert get_default_labels("substance_use_history") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_with_complete_metadata(self, label, expected):
+        assert normalize_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert risk_level_for(expected)
+        assert hipaa_class_for(expected)
+
+    def test_new_labels_have_complete_clinical_metadata(self):
+        for label in (SUBSTANCE, USE_STATUS, USE_QUANTITY, PACK_YEARS):
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert risk_level_for(label) == "low"
+            assert system_hints_for(label)
+
+    def test_fixture_covers_required_spans_and_disclaimer(self):
+        rows = self._fixtures()
+        assert len(rows) == 2
+
+        entities = [entity for row in rows for entity in row["entities"]]
+        assert {entity["label"] for entity in entities} == set(self.EXPECTED_LABELS)
+        assert {"UseStatus", "PackYears", "QuitDate"} <= {
+            entity["label"] for entity in entities
+        }
+        assert [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in entities
+        ] == self.EXPECTED_ENTITIES
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            disclaimer = row["metadata"]["disclaimer"]
+            assert "not clinical guidance" in disclaimer
+            assert "complement" in disclaimer
+            assert "do not replace" in disclaimer
+            assert "does not classify substance-use risk" in disclaimer
+            assert "compute pack-years" in disclaimer
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                start, end = entity["start"], entity["end"]
+                assert row["text"][start:end] == entity["text"], entity
+                ns, ne = document.offset_map.original_span_to_normalized(start, end)
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (start, end)
 
 
 OBSTETRICS_GYNECOLOGY_FIXTURE = (
