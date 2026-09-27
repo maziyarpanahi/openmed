@@ -190,6 +190,19 @@ def test_invalid_input_error_contains_only_a_reason_code() -> None:
     assert "object" not in str(error.value)
 
 
+def test_invalid_input_discards_sensitive_exception_context() -> None:
+    class SensitiveRecord:
+        def to_dict(self):
+            raise ValueError("synthetic patient value")
+
+    with pytest.raises(ClaimIntegrityError) as error:
+        compute_claim_packet_digest({"claims": [SensitiveRecord()]})
+
+    assert str(error.value) == "claim packet rejected: invalid_packet"
+    assert error.value.__cause__ is None
+    assert error.value.__context__ is None
+
+
 def test_digest_mutation_is_detected_without_a_baseline_packet() -> None:
     expected = compute_claim_packet_digest(_packet())
     candidate = _packet()

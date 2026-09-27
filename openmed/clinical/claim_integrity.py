@@ -957,10 +957,13 @@ def _normalise_packet(
             claims,
         )
         return _build_packet(packet_input)
-    except ClaimIntegrityError:
+    except ClaimIntegrityError as error:
+        error.__cause__ = None
+        error.__context__ = None
         raise
     except Exception:
-        raise _error(INVALID_PACKET_REASON) from None
+        pass
+    raise _error(INVALID_PACKET_REASON)
 
 
 def _safe_digest(value: Any) -> str | None:
