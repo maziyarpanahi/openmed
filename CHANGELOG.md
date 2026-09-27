@@ -252,6 +252,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Preserve hash characters inside quoted configuration values while stripping
+  trailing comments (#3502).
 
 - Hash dataset files with bounded memory (#3510).
 - Respect explicitly empty gold annotations (#3511).
