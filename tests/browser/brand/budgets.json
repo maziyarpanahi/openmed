@@ -69,9 +69,9 @@
     "With claim-packet integrity added to the exact human-review, refusal, uncertainty, evidence-packet, and review-state stack, the staged artifact measures 81472146 total bytes, 81134567 unique payload bytes, 337579 duplicate payload bytes, and a 4207195-byte search index on macOS.",
     "The combined claim-integrity ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom.",
     "With the section-boundary provenance guide, the staged artifact measures 80403893 total bytes, 80066314 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
-    "With all seven exact assurance source heads reconciled on current master, the staged artifact measures 82548409 total bytes, 82210830 unique payload bytes, 337579 duplicate payload bytes, and a 4222959-byte search index on macOS.",
-    "The combined assurance ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index retains 8118 bytes of measured headroom.",
-    "On the current-master assurance integration tree, Chromium measured 5577934 first-party transfer bytes for /docs/. The 5590788-byte ceiling allows the observed 4736-byte platform delta and 8118 bytes of bounded headroom while keeping every assurance guide searchable.",
+    "With all seven exact assurance source heads reconciled on master 44ef8f44, the staged artifact measures 82554736 total bytes, 82217157 unique payload bytes, 337579 duplicate payload bytes, and a 4225423-byte search index on macOS.",
+    "The combined assurance ceilings retain the largest observed 4736-byte platform delta plus bounded headroom; the search index retains 5654 bytes of measured headroom.",
+    "On the assurance integration tree at master 44ef8f44, Chromium measured 5577934 first-party transfer bytes for /docs/. The 5590788-byte ceiling allows the observed 4736-byte platform delta and 8118 bytes of bounded headroom while keeping every assurance guide searchable.",
     "The tokenizer coverage route measured 7690226 first-party transfer bytes on the same tree; its 7703080-byte ceiling applies the same bounded platform allowance and headroom."
   ]
 }
