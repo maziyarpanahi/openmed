@@ -205,6 +205,7 @@ class ModelLoader:
                 full_model_name,
                 local_only=bool(requested_local_loading.get("local_files_only")),
                 require_integrity=True,
+                revision=kwargs.get("revision"),
             )
 
         # A model loaded earlier under the permissive policy must not silently
@@ -233,6 +234,7 @@ class ModelLoader:
                 model_name,
                 full_model_name,
                 local_only=bool(requested_local_loading.get("local_files_only")),
+                revision=kwargs.get("revision"),
             )
 
         try:
@@ -446,6 +448,7 @@ class ModelLoader:
             model_name,
             full_model_name,
             local_only=bool(requested_local_loading.get("local_files_only")),
+            revision=kwargs.get("revision"),
         )
 
         model_kwargs: Dict[str, Any] = {}
@@ -464,28 +467,22 @@ class ModelLoader:
                 pipeline_model_reference,
                 kwargs,
             )
-            prepared_reference_is_local = (
-                self._as_existing_local_path(pipeline_model_reference) is not None
-            )
             prepared_reference_local_only = bool(
                 local_loading_kwargs.get("local_files_only")
             )
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
-            # Transformers forwards loader options through ``model_kwargs``;
-            # top-level extras are sent to the instantiated pipeline instead.
+            # The local snapshot and socket guard enforce offline loading.
+            # Transformers 5 supplies local_files_only to AutoConfig itself;
+            # forwarding it through model_kwargs passes the keyword twice.
             pipeline_load_kwargs.pop("local_files_only", None)
             model_kwargs.update(local_loading_kwargs)
+            model_kwargs.pop("local_files_only", None)
             cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
             if cache_dir is None and prepared_reference_local_only:
                 cache_dir = getattr(self.config, "cache_dir", None)
             if cache_dir is not None:
                 model_kwargs.setdefault("cache_dir", cache_dir)
-            if prepared_reference_is_local:
-                # Transformers 5 already marks filesystem model references as
-                # local. Repeating the option through ``model_kwargs`` makes
-                # AutoConfig receive ``local_files_only`` twice.
-                model_kwargs.pop("local_files_only", None)
             if "quantization_config" in pipeline_load_kwargs:
                 model_kwargs.setdefault(
                     "quantization_config",
@@ -772,12 +769,13 @@ class ModelLoader:
         *,
         local_only: bool,
         require_integrity: bool = False,
+        revision: Optional[str] = None,
     ) -> str:
         """Resolve and verify cached artifacts before model construction."""
         registry_info = get_model_info(requested_model_name) or get_model_info(
             resolved_model_name
         )
-        return prepare_model_reference(
+        prepared_reference = prepare_model_reference(
             resolved_model_name,
             registry_info=registry_info,
             cache_dir=str(self.config.cache_dir),
@@ -785,6 +783,43 @@ class ModelLoader:
             token=getattr(self.config, "hf_token", None),
             require_integrity=require_integrity,
         )
+        if (
+            require_integrity
+            or not local_only
+            or self._as_existing_local_path(prepared_reference) is not None
+        ):
+            return prepared_reference
+
+        cached_snapshot = self._find_cached_hf_snapshot(
+            prepared_reference,
+            revision=revision,
+        )
+        return cached_snapshot or prepared_reference
+
+    def _find_cached_hf_snapshot(
+        self,
+        model_name: str,
+        *,
+        revision: Optional[str] = None,
+    ) -> Optional[str]:
+        """Find a model snapshot in configured or standard Hub caches offline."""
+        from .hf_hub import _import_snapshot_download
+
+        snapshot_download, local_entry_not_found = _import_snapshot_download()
+        for cache_dir in (str(self.config.cache_dir), None):
+            download_kwargs: Dict[str, Any] = {
+                "repo_id": model_name,
+                "repo_type": "model",
+                "revision": revision,
+                "local_files_only": True,
+            }
+            if cache_dir is not None:
+                download_kwargs["cache_dir"] = cache_dir
+            try:
+                return str(snapshot_download(**download_kwargs))
+            except local_entry_not_found:
+                continue
+        return None
 
     def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
         """Return a filesystem path when ``model_name`` points to local files."""
@@ -811,6 +846,10 @@ class ModelLoader:
             return {"local_files_only": True}
         if kwargs and "local_files_only" in kwargs:
             return {"local_files_only": kwargs["local_files_only"]}
+        if kwargs and isinstance(kwargs.get("model_kwargs"), Mapping):
+            model_kwargs = kwargs["model_kwargs"]
+            if "local_files_only" in model_kwargs:
+                return {"local_files_only": model_kwargs["local_files_only"]}
         if self._as_existing_local_path(model_name) is not None:
             return {"local_files_only": True}
         return {}
