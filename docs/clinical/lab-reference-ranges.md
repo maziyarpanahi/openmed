@@ -80,3 +80,7 @@ ordering without filling in missing values. Source metadata is bounded to 4096
 nodes, 32 nesting levels and 4096 characters or bytes per string; candidate
 collections are bounded to 4096. Failures do not retain source-bearing exception
 causes or context. Fingerprints establish stable identity, not authenticity.
+
+The package-level helper is named `fingerprint_lab_reference_source` to avoid
+replacing the existing evidence-coverage `fingerprint_source` contract. The
+module-specific `lab_reference_ranges.fingerprint_source` remains available.

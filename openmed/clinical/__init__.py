@@ -614,8 +614,10 @@ from .lab_reference_ranges import (
     SyntheticReferenceRange,
     build_reference_range,
     compare_reference_ranges,
-    fingerprint_source,
     resolve_reference_range,
+)
+from .lab_reference_ranges import (
+    fingerprint_source as fingerprint_lab_reference_source,
 )
 from .lab_values import (
     LAB_FLAG_ADVISORY,
@@ -2072,7 +2074,7 @@ __all__ = [
     "SyntheticReferenceRange",
     "build_reference_range",
     "compare_reference_ranges",
-    "fingerprint_source",
+    "fingerprint_lab_reference_source",
     "resolve_reference_range",
     "COREFERENCE_ADVISORY",
     "COMPATIBILITY_SCORER_VERSION",

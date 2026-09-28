@@ -11,7 +11,7 @@ from openmed.clinical import (
     ReferenceRangeStatus,
     build_reference_range,
     compare_reference_ranges,
-    fingerprint_source,
+    fingerprint_lab_reference_source,
     resolve_reference_range,
 )
 
@@ -30,8 +30,12 @@ def _range(*, source: str = "instrument-a", locale: str | None = "en-US"):
 
 
 def test_source_fingerprint_is_stable_and_order_independent() -> None:
-    first = fingerprint_source({"instrument": "instrument-a", "version": 1})
-    second = fingerprint_source({"version": 1, "instrument": "instrument-a"})
+    first = fingerprint_lab_reference_source(
+        {"instrument": "instrument-a", "version": 1}
+    )
+    second = fingerprint_lab_reference_source(
+        {"version": 1, "instrument": "instrument-a"}
+    )
 
     assert first == second
     assert first.startswith("sha256:")
@@ -198,7 +202,9 @@ def test_mapping_source_can_be_fingerprinted_without_existing_digest():
             "source": "synthetic-device",
         }
     )
-    assert result.source_fingerprint == fingerprint_source("synthetic-device")
+    assert result.source_fingerprint == fingerprint_lab_reference_source(
+        "synthetic-device"
+    )
 
 
 @pytest.mark.parametrize(
@@ -244,7 +250,7 @@ def test_candidate_and_source_nesting_limits(monkeypatch):
     cyclic = {}
     cyclic["nested"] = cyclic
     with pytest.raises(ValueError) as caught:
-        fingerprint_source(cyclic)
+        fingerprint_lab_reference_source(cyclic)
     assert caught.value.__context__ is None
 
 
@@ -258,3 +264,16 @@ def test_direct_resolution_cannot_claim_known_without_a_range():
             reason="single explicit range",
             candidate_count=1,
         )
+
+
+def test_lab_fingerprint_export_preserves_evidence_coverage_contract():
+    from openmed.clinical import fingerprint_source
+    from openmed.clinical.evidence_coverage import (
+        fingerprint_source as evidence_fingerprint,
+    )
+    from openmed.clinical.lab_reference_ranges import (
+        fingerprint_source as range_fingerprint,
+    )
+
+    assert fingerprint_source is evidence_fingerprint
+    assert fingerprint_lab_reference_source is range_fingerprint
