@@ -253,6 +253,7 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
+    - clinical/citation-boundary-validation.md
     - clinical/summary-output-normalization.md
     - clinical/evidence-tables.md
     - clinical/summary-section-planning.md
@@ -397,6 +398,8 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/evidence-packets.md
+    - clinical/review-transitions.md
     - clinical/event-contradictions.md
     - clinical/temporal-intervals.md
     - clinical/timeline-buckets.md
@@ -409,8 +412,6 @@ classification:
     - clinical/human-review-packets.md
     - clinical/uncertainty-disclosure.md
     - clinical/claim-integrity.md
-    - clinical/evidence-packets.md
-    - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
