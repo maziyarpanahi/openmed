@@ -172,6 +172,7 @@ class TestConstants:
             "ml",
             "mr",
             "or",
+            "pa",
             "te",
             "ta",
             "pt",

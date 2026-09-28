@@ -66,6 +66,7 @@ _ID_VALIDATORS = {
     "ml": validate_malayalam_aadhaar,
     "mr": validate_marathi_aadhaar,
     "or": validate_aadhaar,
+    "pa": validate_aadhaar,
     "pl": validate_polish_pesel,
     "ta": validate_tamil_aadhaar,
     "te": validate_aadhaar,
