@@ -170,6 +170,7 @@ nav:
       - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
       - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Evidence-linked Clinical Timeline Graph: clinical/timeline-evidence.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
@@ -315,6 +316,10 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical event contradiction reports: clinical/event-contradictions.md
+      - Conservative Temporal Intervals: clinical/temporal-intervals.md
+      - Bucketed Clinical Timelines: clinical/timeline-buckets.md
+      - Evidence-claim contradiction review: clinical/claim-conflicts.md
       - Human-review queue SLA reports: clinical/review-sla.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md

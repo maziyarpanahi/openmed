@@ -245,6 +245,7 @@ classification:
     - clinical/diagnosis-treatment-relations.md
     - clinical/relation-review-priority.md
     - clinical/event-timeline.md
+    - clinical/timeline-evidence.md
     - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
     - clinical/status-vocabulary.md
@@ -390,6 +391,10 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/event-contradictions.md
+    - clinical/temporal-intervals.md
+    - clinical/timeline-buckets.md
+    - clinical/claim-conflicts.md
     - clinical/review-sla.md
     - evaluation/model-provenance-diff.md
     - clinical/evidence-span-audit.md
