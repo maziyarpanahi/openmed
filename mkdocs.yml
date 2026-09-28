@@ -175,6 +175,7 @@ nav:
       - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
+      - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
@@ -314,6 +315,8 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Human-review queue SLA reports: clinical/review-sla.md
+      - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
       - Clinical Output Use Policy: clinical/output-use-policy.md
       - Value-free Evidence Coverage: clinical/evidence-coverage.md
