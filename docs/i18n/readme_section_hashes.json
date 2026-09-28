@@ -77,10 +77,10 @@
           "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
         },
         {
-          "source_heading": "Multilingual PII (38 supported routes; 35 model-backed)",
-          "source_sha256": "38a285f6d5ce32d8f875928b63caa4ae1f775a5a291e7b607a6ecf2bbbc733f0",
-          "translation_heading": "बहुभाषी PII (38 समर्थित रूट; 35 मॉडल-समर्थित)",
-          "translation_sha256": "2f16404cdff42620ef788d4996991ea16e172eb882b0ac0d2b31043d6de40042"
+          "source_heading": "Multilingual PII (39 supported routes; 35 model-backed)",
+          "source_sha256": "4c94bb3c7d1378b433de89fdd060a69bc738cf5cb4e5338ddd9ef69cda28870f",
+          "translation_heading": "बहुभाषी PII (39 समर्थित रूट; 35 मॉडल-समर्थित)",
+          "translation_sha256": "56c1528c13fa66c9db7f06cda00bf7adb2cda4e21f9e6ad1ca115f7714ed52b3"
         },
         {
           "source_heading": "REST API",
@@ -213,10 +213,10 @@
           "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
         },
         {
-          "source_heading": "Multilingual PII (38 supported routes; 35 model-backed)",
-          "source_sha256": "38a285f6d5ce32d8f875928b63caa4ae1f775a5a291e7b607a6ecf2bbbc733f0",
-          "translation_heading": "PII ya lugha nyingi (njia 38 zinazotumika; 35 zikitumia modeli)",
-          "translation_sha256": "cdc7bd9aba12b767116b23428013ae57bd1dc887a01e8b4c96269fb651ad0765"
+          "source_heading": "Multilingual PII (39 supported routes; 35 model-backed)",
+          "source_sha256": "4c94bb3c7d1378b433de89fdd060a69bc738cf5cb4e5338ddd9ef69cda28870f",
+          "translation_heading": "PII ya lugha nyingi (njia 39 zinazotumika; 35 zikitumia modeli)",
+          "translation_sha256": "0313dae0f0ff94a6ae22b04ddc15cc1cdf446be6b098e11aca0358dffaeec448"
         },
         {
           "source_heading": "REST API",
@@ -349,10 +349,10 @@
           "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
         },
         {
-          "source_heading": "Multilingual PII (38 supported routes; 35 model-backed)",
-          "source_sha256": "38a285f6d5ce32d8f875928b63caa4ae1f775a5a291e7b607a6ecf2bbbc733f0",
-          "translation_heading": "多语言 PII（38 条支持的路由；35 条由模型支持）",
-          "translation_sha256": "820b6eb7bba27a32b3bb428ca50151cf3627a034b1caecf676c9c19c7c223864"
+          "source_heading": "Multilingual PII (39 supported routes; 35 model-backed)",
+          "source_sha256": "4c94bb3c7d1378b433de89fdd060a69bc738cf5cb4e5338ddd9ef69cda28870f",
+          "translation_heading": "多语言 PII（39 条支持的路由；35 条由模型支持）",
+          "translation_sha256": "21004605d111eb1a313d2a241d4f6960460526ade9235211a6c9d76c53790a5c"
         },
         {
           "source_heading": "REST API",

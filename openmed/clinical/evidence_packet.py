@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -514,16 +514,20 @@ class EvidencePacket:
         packet_id = _required_identifier(self.packet_id)
         if not _is_synthetic_marker(packet_id):
             raise _reject(REJECTION_NOT_SYNTHETIC)
-        references = tuple(self.references)
+        references = []
         seen: set[str] = set()
-        for reference in references:
+        for reference in self.references:
             if not isinstance(reference, EvidenceReference):
                 raise _reject(REJECTION_INVALID_REFERENCE)
+            # Frozen records can still be altered through object.__setattr__.
+            # Reapply nested invariants at every public packet boundary.
+            reference = replace(reference)
             if reference.reference_id in seen:
                 raise _reject(REJECTION_DUPLICATE_REFERENCE)
             if reference.policy_fingerprint != policy_fingerprint:
                 raise _reject(REJECTION_POLICY_MISMATCH)
             seen.add(reference.reference_id)
+            references.append(reference)
         references = tuple(
             sorted(
                 references, key=lambda item: (item.start, item.end, item.reference_id)
@@ -536,6 +540,10 @@ class EvidencePacket:
                 accepted_count=len(references),
                 rejected_count=0,
             )
+        elif isinstance(report, EvidenceRejectionReport):
+            report = replace(report)
+        else:
+            raise _reject(REJECTION_INVALID_REFERENCE)
         if report.accepted_count != len(references):
             raise ValueError("evidence packet report does not match references")
 
@@ -744,7 +752,7 @@ def build_evidence_packet(
             continue
         try:
             reference = (
-                candidate
+                replace(candidate)
                 if isinstance(candidate, EvidenceReference)
                 else EvidenceReference.from_dict(candidate)
             )
