@@ -180,6 +180,7 @@ nav:
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
+      - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
       - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
