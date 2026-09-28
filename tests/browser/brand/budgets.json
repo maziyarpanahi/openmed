@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 81416772,
-    "maximum_unique_payload_bytes": 81079193,
+    "maximum_total_bytes": 81422857,
+    "maximum_unique_payload_bytes": 81085278,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,7 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The repaired output-use guide on master e05eadb5c stages 81301286 total bytes and 80963707 unique bytes. Aggregate ceilings retain the existing 115486-byte allowance; search measures 4216353 bytes within its unchanged ceiling. Other limits are unchanged.",
+    "The repaired uncertainty guide on master e05eadb5c stages 81307371 total bytes and 80969792 unique bytes. Aggregate ceilings retain the existing 115486-byte allowance; search measures 4214744 bytes within its unchanged ceiling. Route and other limits are unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and typed uncertainty guides with bounded documentation headroom.",
     "The combined guard-contract Chromium build measures 5562683 bytes on /docs/; its ceiling retains the prior 119302-byte transfer allowance.",
     "The combined guard-contract rehearsal on master 02f6b5cb2 stages 81088485 total bytes, 80750906 unique bytes, and 4211426 search bytes. Aggregate and search ceilings retain their previous 115486-byte and 5792-byte allowances. All other limits are unchanged.",
     "With reviewed evidence-packet and state guides, the staged artifact measures 80875529 total bytes, 80537950 unique bytes, and 4208283 search bytes. Aggregate ceilings preserve 115486 bytes of platform/headroom allowance; search preserves 5792 bytes. Other limits are unchanged.",
