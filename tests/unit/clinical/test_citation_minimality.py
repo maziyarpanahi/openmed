@@ -35,6 +35,25 @@ def _claim(source: str, value: str = "beta") -> AtomicClaim:
     return AtomicClaim(_reference("claim-1"), _span(source, value))
 
 
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"minimal_span": [1, 3]},
+        {"required_start": 1, "required_end": 3},
+    ],
+)
+def test_required_span_aliases_must_agree(extra):
+    with pytest.raises(CitationMinimalityError):
+        AtomicClaim.from_obj(
+            {"claim_id": _reference("c"), "required_span": [0, 2], **extra}
+        )
+
+
+def test_nested_offsets_must_agree_with_explicit_offsets():
+    with pytest.raises(CitationMinimalityError):
+        CitationSpan.from_obj({"start": 0, "end": 2, "offset": [1, 3]})
+
+
 def test_mutated_typed_claim_and_span_fail_closed():
     claim = _claim("alpha beta")
     object.__setattr__(claim.required_span, "start", -1)

@@ -114,6 +114,10 @@ class CitationSpan:
 
         start = _read(value, ("start", "source_start"))
         end = _read(value, ("end", "source_end"))
+        nested = _read(value, ("source_offset", "source_offsets", "offset"))
+        if start is not _MISSING and end is not _MISSING and nested is not _MISSING:
+            if cls.from_obj(nested, _depth + 1) != cls(start, end):
+                raise CitationMinimalityError("citation span aliases conflict")
         if start is _MISSING or end is _MISSING:
             nested = _read(value, ("source_offset", "source_offsets", "offset"))
             if nested is not _MISSING and nested is not value:
@@ -759,11 +763,37 @@ def _collection(value: Any, label: str) -> tuple[Any, ...]:
 
 
 def _span_value(value: Any, names: tuple[str, ...]) -> Any:
+    spans = []
     for name in names:
         candidate = _read(value, (name,))
         if candidate is not _MISSING:
-            return candidate
-    return _MISSING
+            spans.append(CitationSpan.from_obj(candidate))
+    if "required_span" in names:
+        starts = (
+            "required_start",
+            "minimal_start",
+            "required_source_start",
+            "minimal_source_start",
+            "source_start",
+            "start",
+        )
+        ends = (
+            "required_end",
+            "minimal_end",
+            "required_source_end",
+            "minimal_source_end",
+            "source_end",
+            "end",
+        )
+    else:
+        starts = ("citation_start", "source_start", "start")
+        ends = ("citation_end", "source_end", "end")
+    explicit = _span_from_fields(value, starts, ends)
+    if explicit is not _MISSING:
+        spans.append(explicit)
+    if spans and any(span != spans[0] for span in spans[1:]):
+        raise CitationMinimalityError("citation span aliases conflict")
+    return spans[0] if spans else _MISSING
 
 
 def _span_from_fields(
