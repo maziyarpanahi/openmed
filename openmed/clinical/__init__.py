@@ -437,6 +437,47 @@ from .genomics import (
     HgvsMention,
     parse_hgvs,
 )
+from .guarded_provenance import (
+    GUARDED_PROVENANCE_DISCLAIMER,
+    GUARDED_PROVENANCE_RECORD_TYPE,
+    GUARDED_PROVENANCE_SCHEMA_VERSION,
+    GuardedProvenanceError,
+    GuardedProvenanceManifest,
+    GuardedProvenanceRecord,
+    IntegritySummary,
+    ModelProvenance,
+    ProvenanceIntegrityReport,
+    ProvenanceManifest,
+    ProvenanceRecord,
+    ReviewStatus,
+    build_guarded_provenance,
+    build_guarded_provenance_manifest,
+    build_guarded_provenance_record,
+    build_provenance_manifest,
+    build_provenance_record,
+    check_guarded_provenance,
+    export_guarded_provenance,
+    fingerprint_input,
+    load_guarded_provenance_manifest,
+    validate_guarded_provenance,
+    verify_guarded_provenance,
+    write_guarded_provenance_manifest,
+)
+from .guarded_provenance import (
+    REVIEW_STATES as GUARDED_PROVENANCE_REVIEW_STATES,
+)
+from .guarded_provenance import (
+    EvidenceReference as ProvenanceEvidenceReference,
+)
+from .guarded_provenance import (
+    ReviewState as ProvenanceReviewState,
+)
+from .guarded_provenance import (
+    ReviewTransition as ProvenanceReviewTransition,
+)
+from .guarded_provenance import (
+    fingerprint_policy as fingerprint_provenance_policy,
+)
 from .journey_contracts import (
     CONFLICT_STATUSES,
     EVIDENCE_LOCATION_TYPES,
@@ -1806,6 +1847,35 @@ __all__ = [
     "EdgeKind",
     "EntityOccurrence",
     "link_documents",
+    "GUARDED_PROVENANCE_DISCLAIMER",
+    "GUARDED_PROVENANCE_RECORD_TYPE",
+    "GUARDED_PROVENANCE_SCHEMA_VERSION",
+    "GUARDED_PROVENANCE_REVIEW_STATES",
+    "ProvenanceEvidenceReference",
+    "GuardedProvenanceError",
+    "GuardedProvenanceManifest",
+    "GuardedProvenanceRecord",
+    "IntegritySummary",
+    "ModelProvenance",
+    "ProvenanceIntegrityReport",
+    "ProvenanceManifest",
+    "ProvenanceRecord",
+    "ProvenanceReviewState",
+    "ReviewStatus",
+    "ProvenanceReviewTransition",
+    "build_guarded_provenance",
+    "build_guarded_provenance_manifest",
+    "build_guarded_provenance_record",
+    "build_provenance_manifest",
+    "build_provenance_record",
+    "check_guarded_provenance",
+    "export_guarded_provenance",
+    "fingerprint_input",
+    "fingerprint_provenance_policy",
+    "load_guarded_provenance_manifest",
+    "validate_guarded_provenance",
+    "verify_guarded_provenance",
+    "write_guarded_provenance_manifest",
     "EVIDENCE_SPAN_AUDIT_ADVISORY",
     "EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION",
     "OVERLAP_KINDS",
