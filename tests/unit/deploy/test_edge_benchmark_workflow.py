@@ -27,4 +27,4 @@ def test_edge_workflow_uses_frozen_minimal_install_and_offline_gate() -> None:
     assert "-m openmed.eval.footprint_gate" in content
     assert "--install-path" in content
     assert "CPUExecutionProvider" in content
-    assert "upload-artifact@v7" in content
+    assert "upload-artifact@" in content

@@ -1,0 +1,58 @@
+{{- if and .Values.journey.enabled .Values.journey.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openmed-service.fullname" . }}-default-deny
+  labels:
+    {{- include "openmed-service.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openmed-service.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+        - protocol: TCP
+          port: {{ .Values.journey.worker.port }}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "openmed-service.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: journey-worker
+      ports:
+        - protocol: TCP
+          port: {{ .Values.journey.worker.port }}
+    {{- if .Values.journey.networkPolicy.allowDns }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- if .Values.journey.networkPolicy.databasePodSelector }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- toYaml .Values.journey.networkPolicy.databasePodSelector | nindent 14 }}
+          {{- if .Values.journey.networkPolicy.databaseNamespaceSelector }}
+          namespaceSelector:
+            matchLabels:
+              {{- toYaml .Values.journey.networkPolicy.databaseNamespaceSelector | nindent 14 }}
+          {{- end }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    {{- with .Values.journey.networkPolicy.additionalEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

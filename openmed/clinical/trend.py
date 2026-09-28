@@ -17,6 +17,8 @@ descriptive summary only; see :data:`TREND_ADVISORY`.
 
 from __future__ import annotations
 
+import json
+import math
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -281,8 +283,19 @@ def _build_trend(members: list[_PreparedPoint]) -> MeasurementTrend:
         orderable = not _has_conflicting_timepoint_values(comparable)
 
     if orderable:
+        # Points sharing a timepoint are tied on order_value. Breaking the tie by
+        # input position made first_value/last_value/delta depend on how the
+        # caller ordered the input ("14 mm" and "1.4 cm" normalize to 0.014 and
+        # 0.013999999999999999), so ties fall back to the normalized value and
+        # then the point's own fields before input position.
         ordered = sorted(
-            comparable, key=lambda member: (member.order_value, member.input_index)
+            comparable,
+            key=lambda member: (
+                member.order_value,
+                member.canonical_magnitude,
+                _point_sort_key(_point_view(member, comparable=True)),
+                member.input_index,
+            ),
         )
     else:
         ordered = list(comparable)
@@ -360,6 +373,81 @@ def extract_measurement_trends(
     return [_build_trend(groups[key]) for key in order]
 
 
+#: Numeric fields derived by this module. Caller-supplied ``value`` is echoed
+#: as given and is left to the JSON encoder.
+_DERIVED_TREND_NUMBERS = ("delta", "first_value", "last_value")
+_DERIVED_POINT_NUMBERS = ("canonical_magnitude",)
+
+
+def _point_sort_key(point: Mapping[str, Any]) -> str:
+    """Order-independent key for one point, built from its public fields."""
+    return json.dumps(point, sort_keys=True, default=repr, ensure_ascii=True)
+
+
+def _require_finite(value: Any, path: str) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"measurement trend {path} must be finite")
+
+
+def serialize_measurement_trends(trends: Iterable[Mapping[str, Any]]) -> str:
+    """Serialize measurement trends to stable, compact JSON.
+
+    Equivalent inputs in any order produce byte-identical output: trends are
+    sorted by their case- and whitespace-insensitive entity key, a trend's
+    ``entity`` label is the lowest spelling found among its points, unordered
+    ``points`` and all ``incomparable_points`` are sorted by their public
+    fields, and ordered ``points`` keep their chronological order. Keys are
+    sorted and separators are compact. Trend classification and values are not
+    changed.
+
+    Args:
+        trends: Trends from :func:`extract_measurement_trends` or
+            :func:`build_measurement_trends`.
+
+    Returns:
+        A JSON array string.
+
+    Raises:
+        ValueError: If a derived numeric field (``delta``, ``first_value``,
+            ``last_value`` or a point's ``canonical_magnitude``) is NaN or
+            infinite. The error names the field, not its value.
+    """
+    serialized: list[dict[str, Any]] = []
+    for trend in trends:
+        points = [dict(point) for point in trend["points"]]
+        incomparable = [dict(point) for point in trend["incomparable_points"]]
+        spellings = [str(point["entity"]) for point in points + incomparable]
+        entity = min(spellings) if spellings else str(trend["entity"])
+
+        for field in _DERIVED_TREND_NUMBERS:
+            _require_finite(trend.get(field), f"{field} for {entity!r}")
+        for label, group in (("points", points), ("incomparable_points", incomparable)):
+            for position, point in enumerate(group):
+                for field in _DERIVED_POINT_NUMBERS:
+                    _require_finite(
+                        point.get(field), f"{label}[{position}].{field} for {entity!r}"
+                    )
+
+        if not trend["ordered"]:
+            points.sort(key=_point_sort_key)
+        incomparable.sort(key=_point_sort_key)
+
+        record = dict(trend)
+        record["entity"] = entity
+        record["points"] = points
+        record["incomparable_points"] = incomparable
+        serialized.append(record)
+
+    serialized.sort(key=lambda record: _normalize_entity(record["entity"]))
+    return json.dumps(
+        serialized,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
 def build_measurement_trends(
     points: Iterable[Mapping[str, Any]],
     *,
@@ -389,4 +477,5 @@ __all__ = [
     "MeasurementTrend",
     "build_measurement_trends",
     "extract_measurement_trends",
+    "serialize_measurement_trends",
 ]

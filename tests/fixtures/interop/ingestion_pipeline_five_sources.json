@@ -1,0 +1,22 @@
+[
+  {
+    "format": "text",
+    "payload": "Synthetic note: condition alpha is active."
+  },
+  {
+    "format": "fhir_r4",
+    "payload": "{\"resourceType\":\"Condition\",\"id\":\"synthetic-condition\",\"clinicalStatus\":{\"text\":\"active\"},\"code\":{\"text\":\"condition alpha\"}}"
+  },
+  {
+    "format": "hl7v2",
+    "payload": "MSH|^~\\&|SYNTH|LAB|OPENMED|LOCAL|20260102030405||ORU^R01|MSG00001|P|2.5.1\rPID|1||SYNTHETIC-001\rOBX|1|TX|SYNTH-COND||condition alpha active"
+  },
+  {
+    "format": "cda",
+    "payload": "<ClinicalDocument xmlns=\"urn:hl7-org:v3\"><title>Synthetic summary</title><component><structuredBody><component><section><title>Conditions</title><text>condition alpha active</text></section></component></structuredBody></component></ClinicalDocument>"
+  },
+  {
+    "format": "csv",
+    "payload": "code,status\ncondition-alpha,active\n"
+  }
+]

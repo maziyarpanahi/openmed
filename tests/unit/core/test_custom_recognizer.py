@@ -54,6 +54,26 @@ allow:
     assert len(CustomRecognizer.from_config(yaml_path).detect_entities(text)) == 2
 
 
+def test_standalone_recognizer_hashes_are_private_per_call():
+    recognizer = CustomRecognizer.from_config(
+        {"deny_terms": [{"term": "Synthetic", "label": "NAME"}]}
+    )
+
+    def hashes(**kwargs):
+        return [
+            entity.metadata["custom_recognizer"]["text_hash"]
+            for entity in recognizer.detect_entities(
+                "Synthetic met Synthetic", **kwargs
+            )
+        ]
+
+    first = hashes()
+    assert len(first) == 2
+    assert first[0] == first[1]
+    assert first != hashes()
+    assert hashes(hmac_secret="fixture-key") == hashes(hmac_secret=b"fixture-key")
+
+
 def test_deny_term_and_regex_emit_custom_provenance_without_raw_metadata():
     text = "Ward Phoenix enrolled STUDY-123."
     recognizer = CustomRecognizer.from_config(

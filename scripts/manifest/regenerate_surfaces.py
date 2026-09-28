@@ -23,7 +23,7 @@ from openmed.core.manifest_diff import (
 )
 from openmed.core.model_registry import build_registry, load_manifest_rows
 from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
-from openmed.core.registry_service import load_registry_state
+from openmed.core.registry_slots import load_registry_state
 
 ROOT = Path(__file__).resolve().parents[2]
 _BRAND_CLAIMS_SCRIPT = ROOT / "scripts" / "brand" / "update_claims.py"

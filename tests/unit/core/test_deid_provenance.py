@@ -9,6 +9,7 @@ from openmed.core.audit import AuditReport, verify_repro_hash
 from openmed.core.config import OpenMedConfig
 from openmed.core.offline import HF_OFFLINE_ENV_VARS, OFFLINE_ENV_VAR
 from openmed.core.pii import deidentify
+from openmed.core.pipeline import Pipeline
 from openmed.core.safety_sweep import SAFETY_SWEEP_SOURCE
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -121,15 +122,30 @@ def test_audit_records_ml_and_locale_rule_for_expanded_spans(mock_analyze):
 
 
 @patch("openmed.core.pii.extract_pii")
-def test_audit_repro_hash_is_stable_for_identical_inputs(mock_extract):
+def test_default_audit_repro_hash_reflects_per_call_private_metadata(mock_extract):
     text = "Patient John Doe emailed jane.patient@example.com."
     mock_extract.side_effect = lambda *args, **kwargs: _prediction(text)
 
     first = deidentify(text, method="mask", audit=True)
     second = deidentify(text, method="mask", audit=True)
 
-    assert first.repro_hash == second.repro_hash
-    assert first.to_json() == second.to_json()
+    assert first.repro_hash != second.repro_hash
+    assert verify_repro_hash(first)
+    assert verify_repro_hash(second)
+
+
+@patch("openmed.core.pii.extract_pii")
+def test_audit_repro_hash_is_stable_with_explicit_private_key(mock_extract):
+    text = "Patient John Doe emailed jane.patient@example.com."
+    mock_extract.side_effect = lambda *args, **kwargs: _prediction(text)
+    first = Pipeline(hmac_secret="synthetic-audit-parity-key").run(text, audit=True)
+    second = Pipeline(hmac_secret="synthetic-audit-parity-key").run(text, audit=True)
+    first_report = first.deidentification_result.audit_report
+    second_report = second.deidentification_result.audit_report
+
+    assert first_report.repro_hash == second_report.repro_hash
+    assert first_report.to_json() == second_report.to_json()
+    assert verify_repro_hash(first_report)
 
 
 @patch("openmed.core.pii.extract_pii")

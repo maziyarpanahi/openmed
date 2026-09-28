@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/journey_release_manifest.schema.json",
+  "title": "OpenMed v3 Journey release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "compatibility_policy",
+    "release",
+    "environment",
+    "policy",
+    "frozen_inputs",
+    "gate_reports",
+    "licenses",
+    "claims",
+    "limitations",
+    "exceptions"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "compatibility_policy": {"const": "same_major"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "git_commit", "git_tag", "evaluated_at", "source_date_epoch"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$"},
+        "git_commit": {"$ref": "#/$defs/commit"},
+        "git_tag": {"$ref": "#/$defs/code"},
+        "evaluated_at": {"$ref": "#/$defs/timestamp"},
+        "source_date_epoch": {"type": "integer", "minimum": 0}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture", "python_implementation", "python_version", "hardware_id"],
+      "properties": {
+        "os": {"$ref": "#/$defs/code"},
+        "architecture": {"$ref": "#/$defs/code"},
+        "python_implementation": {"$ref": "#/$defs/code"},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "hardware_id": {"$ref": "#/$defs/code"}
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_artifact_age_seconds"],
+      "properties": {
+        "max_artifact_age_seconds": {"type": "integer", "minimum": 1, "maximum": 31536000}
+      }
+    },
+    "frozen_inputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "origin", "path", "sha256"],
+        "properties": {
+          "id": {"$ref": "#/$defs/code"},
+          "origin": {"enum": ["aggregate", "configuration", "software", "synthetic"]},
+          "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+          "sha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    },
+    "gate_reports": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/gate_report"}
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "asset_type", "license_id", "use", "redistributable", "distribution"],
+        "properties": {
+          "asset_id": {"$ref": "#/$defs/code"},
+          "asset_type": {"enum": ["dataset", "model", "software", "vocabulary"]},
+          "license_id": {"$ref": "#/$defs/code"},
+          "use": {"enum": ["build", "eval", "runtime", "train"]},
+          "redistributable": {"type": "boolean"},
+          "distribution": {"enum": ["bundled", "metadata_only", "out_of_process", "user_supplied"]}
+        }
+      }
+    },
+    "claims": {"$ref": "#/$defs/code_array"},
+    "limitations": {"$ref": "#/$defs/code_array"},
+    "exceptions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "gate", "severity", "disposition", "expires_at"],
+        "properties": {
+          "code": {"$ref": "#/$defs/code"},
+          "gate": {"$ref": "#/$defs/gate"},
+          "severity": {"enum": ["low", "medium", "high", "critical"]},
+          "disposition": {"enum": ["accepted", "expired", "pending", "rejected"]},
+          "expires_at": {"$ref": "#/$defs/timestamp"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "code": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:+/@-]{0,127}$"},
+    "code_array": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/code"}},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "state": {"enum": ["success", "partial", "unknown", "conflict", "unsupported", "denied", "failure"]},
+    "gate": {"enum": ["schema", "provenance", "clinical_nlp", "privacy", "interoperability", "application", "performance", "recovery", "security", "licensing"]},
+    "count": {"type": "integer", "minimum": 0},
+    "nonnegative_number": {"type": "number", "minimum": 0},
+    "gate_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "compatibility_policy", "gate", "state", "generated_at", "metrics"],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "compatibility_policy": {"const": "same_major"},
+        "gate": {"$ref": "#/$defs/gate"},
+        "state": {"$ref": "#/$defs/state"},
+        "generated_at": {"$ref": "#/$defs/timestamp"},
+        "metrics": {"type": "object"}
+      },
+      "oneOf": [
+        {"properties": {"gate": {"const": "schema"}, "metrics": {"$ref": "#/$defs/schema_metrics"}}},
+        {"properties": {"gate": {"const": "provenance"}, "metrics": {"$ref": "#/$defs/provenance_metrics"}}},
+        {"properties": {"gate": {"const": "clinical_nlp"}, "metrics": {"$ref": "#/$defs/clinical_nlp_metrics"}}},
+        {"properties": {"gate": {"const": "privacy"}, "metrics": {"$ref": "#/$defs/privacy_metrics"}}},
+        {"properties": {"gate": {"const": "interoperability"}, "metrics": {"$ref": "#/$defs/interoperability_metrics"}}},
+        {"properties": {"gate": {"const": "application"}, "metrics": {"$ref": "#/$defs/application_metrics"}}},
+        {"properties": {"gate": {"const": "performance"}, "metrics": {"$ref": "#/$defs/performance_metrics"}}},
+        {"properties": {"gate": {"const": "recovery"}, "metrics": {"$ref": "#/$defs/recovery_metrics"}}},
+        {"properties": {"gate": {"const": "security"}, "metrics": {"$ref": "#/$defs/security_metrics"}}},
+        {"properties": {"gate": {"const": "licensing"}, "metrics": {"$ref": "#/$defs/licensing_metrics"}}}
+      ]
+    },
+    "schema_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["public_schema_count", "persisted_schema_count", "invalid_schema_count", "invalid_span_count", "invalid_evidence_count"],
+      "properties": {"public_schema_count": {"$ref": "#/$defs/count"}, "persisted_schema_count": {"$ref": "#/$defs/count"}, "invalid_schema_count": {"$ref": "#/$defs/count"}, "invalid_span_count": {"$ref": "#/$defs/count"}, "invalid_evidence_count": {"$ref": "#/$defs/count"}}
+    },
+    "provenance_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_count", "broken_link_count", "unhashed_artifact_count"],
+      "properties": {"artifact_count": {"$ref": "#/$defs/count"}, "broken_link_count": {"$ref": "#/$defs/count"}, "unhashed_artifact_count": {"$ref": "#/$defs/count"}}
+    },
+    "clinical_nlp_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evaluated_case_count", "unreviewed_high_risk_count", "abstention_required_count", "abstention_failure_count"],
+      "properties": {"evaluated_case_count": {"$ref": "#/$defs/count"}, "unreviewed_high_risk_count": {"$ref": "#/$defs/count"}, "abstention_required_count": {"$ref": "#/$defs/count"}, "abstention_failure_count": {"$ref": "#/$defs/count"}}
+    },
+    "privacy_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evaluated_case_count", "critical_leakage_count", "raw_value_finding_count"],
+      "properties": {"evaluated_case_count": {"$ref": "#/$defs/count"}, "critical_leakage_count": {"$ref": "#/$defs/count"}, "raw_value_finding_count": {"$ref": "#/$defs/count"}}
+    },
+    "interoperability_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evaluated_exchange_count", "conformance_failure_count", "roundtrip_loss_without_disclosure_count"],
+      "properties": {"evaluated_exchange_count": {"$ref": "#/$defs/count"}, "conformance_failure_count": {"$ref": "#/$defs/count"}, "roundtrip_loss_without_disclosure_count": {"$ref": "#/$defs/count"}}
+    },
+    "application_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["test_count", "failed_test_count", "untyped_terminal_state_count", "prohibited_public_claim_count"],
+      "properties": {"test_count": {"$ref": "#/$defs/count"}, "failed_test_count": {"$ref": "#/$defs/count"}, "untyped_terminal_state_count": {"$ref": "#/$defs/count"}, "prohibited_public_claim_count": {"$ref": "#/$defs/count"}}
+    },
+    "performance_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["dataset_digest", "quantization", "concurrency", "sample_count", "warmup_count", "latency_p50_ms", "latency_p95_ms", "latency_p99_ms", "throughput_per_second", "peak_memory_mib", "slo_breach_count"],
+      "properties": {
+        "dataset_digest": {"$ref": "#/$defs/digest"}, "quantization": {"$ref": "#/$defs/code"},
+        "concurrency": {"$ref": "#/$defs/count"}, "sample_count": {"$ref": "#/$defs/count"}, "warmup_count": {"$ref": "#/$defs/count"},
+        "latency_p50_ms": {"$ref": "#/$defs/nonnegative_number"}, "latency_p95_ms": {"$ref": "#/$defs/nonnegative_number"}, "latency_p99_ms": {"$ref": "#/$defs/nonnegative_number"},
+        "throughput_per_second": {"$ref": "#/$defs/nonnegative_number"}, "peak_memory_mib": {"$ref": "#/$defs/nonnegative_number"}, "slo_breach_count": {"$ref": "#/$defs/count"}
+      }
+    },
+    "recovery_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scenario_count", "non_idempotent_replay_count", "migration_failure_count", "recovery_failure_count"],
+      "properties": {"scenario_count": {"$ref": "#/$defs/count"}, "non_idempotent_replay_count": {"$ref": "#/$defs/count"}, "migration_failure_count": {"$ref": "#/$defs/count"}, "recovery_failure_count": {"$ref": "#/$defs/count"}}
+    },
+    "security_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["finding_count", "unresolved_critical_finding_count", "unresolved_high_finding_count", "threat_case_count", "unmitigated_threat_count"],
+      "properties": {"finding_count": {"$ref": "#/$defs/count"}, "unresolved_critical_finding_count": {"$ref": "#/$defs/count"}, "unresolved_high_finding_count": {"$ref": "#/$defs/count"}, "threat_case_count": {"$ref": "#/$defs/count"}, "unmitigated_threat_count": {"$ref": "#/$defs/count"}}
+    },
+    "licensing_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model_count", "data_asset_count", "unchecked_asset_count", "prohibited_distribution_count"],
+      "properties": {"model_count": {"$ref": "#/$defs/count"}, "data_asset_count": {"$ref": "#/$defs/count"}, "unchecked_asset_count": {"$ref": "#/$defs/count"}, "prohibited_distribution_count": {"$ref": "#/$defs/count"}}
+    }
+  }
+}

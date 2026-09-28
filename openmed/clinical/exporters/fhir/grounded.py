@@ -28,6 +28,7 @@ from ...grounding.assertion_grounding import (
     assertion_grounding_status,
 )
 from ...grounding.types import GroundedSpan
+from .allergy_intolerance import to_allergy_intolerance
 from .bundle import to_bundle
 from .codeable_concept import (
     GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
@@ -36,6 +37,8 @@ from .codeable_concept import (
     to_codeable_concept,
 )
 from .condition import to_condition
+from .encounter import to_encounter
+from .immunization import to_immunization
 from .observation import to_observation
 
 __all__ = [
@@ -51,19 +54,25 @@ COREFERENCE_EVIDENCE_EXTENSION_URL = (
 )
 
 FHIR_RESOURCE_TYPES = (
+    "AllergyIntolerance",
     "Condition",
+    "Encounter",
+    "Immunization",
     "MedicationStatement",
     "Observation",
     "Procedure",
 )
 
 _RESOURCE_BY_LABEL = {
+    "ALLERGEN": "AllergyIntolerance",
     "CONDITION": "Condition",
     "MEDICATION": "MedicationStatement",
     "LAB_TEST": "Observation",
     "PROCEDURE": "Procedure",
+    "VACCINE_NAME": "Immunization",
 }
 _RESOURCE_BY_SYSTEM = {
+    "CVX": "Immunization",
     "HPO": "Condition",
     "ICD10CM": "Condition",
     "ICD11": "Condition",
@@ -187,7 +196,8 @@ def to_fhir(
             resource types. It provides explicit routing for spans without a
             canonical label; an unrecognized non-empty canonical label remains
             unmapped and is never inferred from its coding system.
-        resource: Optional R4 resource type. Supported values are Condition,
+        resource: Optional R4 resource type. Supported values are
+            AllergyIntolerance, Condition, Encounter, Immunization,
             MedicationStatement, Observation, and Procedure.
         subject_reference: Patient reference used by emitted resources.
         document_id: Compatibility alias for ``doc_id``.
@@ -329,6 +339,36 @@ def _one_resource(
         if observation is None:
             return None
         return _attach_coreference_evidence(_strict_fhir(observation), coreference)
+
+    if resource_type == "AllergyIntolerance":
+        allergy = to_allergy_intolerance(
+            asserted,
+            patient_reference=subject_reference,
+            allergy_id=resource_id,
+        )
+        if allergy is None:
+            return None
+        return _attach_coreference_evidence(_strict_fhir(allergy), coreference)
+
+    if resource_type == "Immunization":
+        immunization = to_immunization(
+            asserted,
+            patient_reference=subject_reference,
+            immunization_id=resource_id,
+        )
+        if immunization is None:
+            return None
+        return _attach_coreference_evidence(_strict_fhir(immunization), coreference)
+
+    if resource_type == "Encounter":
+        encounter = to_encounter(
+            asserted,
+            subject_reference=subject_reference,
+            encounter_id=resource_id,
+        )
+        if encounter is None:
+            return None
+        return _attach_coreference_evidence(_strict_fhir(encounter), coreference)
 
     concept = _strict_codeable_concept(grounded)
     if resource_type == "MedicationStatement":

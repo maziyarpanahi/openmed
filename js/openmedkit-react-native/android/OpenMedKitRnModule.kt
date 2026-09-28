@@ -16,6 +16,7 @@ import com.openmed.openmedkit.EntityPrediction
 import com.openmed.openmedkit.OpenMedBackend
 import com.openmed.openmedkit.OpenMedKit
 import java.io.File
+import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CoroutineScope
@@ -279,9 +280,9 @@ class OpenMedKitRnModule(
         }
     }
 
-    private fun hmacTextHash(surface: String, secret: String): String {
+    private fun hmacTextHash(surface: String, secret: ByteArray): String {
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        mac.init(SecretKeySpec(secret, "HmacSHA256"))
         return "hmac-sha256:" + mac.doFinal(surface.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
@@ -401,11 +402,13 @@ private class BridgeOptions(options: ReadableMap?) {
         } else {
             "document"
         }
-    val hashSecret: String =
+    val hashSecret: ByteArray =
         if (options?.hasKey("hashSecret") == true && !options.isNull("hashSecret")) {
-            options.getString("hashSecret") ?: "openmedkit-react-native"
+            val secret = requireNotNull(options.getString("hashSecret"))
+            require(secret.isNotEmpty()) { "hashSecret must not be empty" }
+            secret.toByteArray(Charsets.UTF_8)
         } else {
-            "openmedkit-react-native"
+            ByteArray(32).also { SecureRandom().nextBytes(it) }
         }
     val detector: String? =
         if (options?.hasKey("detector") == true && !options.isNull("detector")) {

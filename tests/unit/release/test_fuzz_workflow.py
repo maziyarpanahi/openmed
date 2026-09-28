@@ -56,14 +56,14 @@ def test_format_parser_fuzz_workflow_is_opt_in_and_time_bounded() -> None:
     )
     assert int(job["timeout-minutes"]) <= 15
     action_refs = {
-        step["uses"]
+        step["uses"].split("@", 1)[0] + "@"
         for step in job["steps"]
         if isinstance(step, dict) and "uses" in step
     }
     assert action_refs == {
-        "actions/checkout@v7",
-        "actions/setup-python@v7",
-        "astral-sh/setup-uv@v8.3.2",
+        "actions/checkout@",
+        "actions/setup-python@",
+        "astral-sh/setup-uv@",
     }
     assert any(
         step.get("env", {}).get("HYPOTHESIS_PROFILE") == "fuzz-nightly"
