@@ -51,7 +51,14 @@ private interval values are also excluded from record representations.
 Missing records, unverified sources, hash
 mismatches, incompatible assertion states, and disjoint intervals all require
 review. A `clear` result means only that these local consistency checks found no
-contradiction; it is not a clinical conclusion.
+contradiction in the supplied, enabled evidence lanes; it is not a clinical
+conclusion or proof that unchecked lanes are valid. Claims with no enabled
+evidence checks, or unknown assertion records in an enabled lane, require
+review. Each reference is compared with its own expected interval (falling
+back to the claim expectation); inverted intervals are rejected, not reordered.
+Hypothetical and uncertain assertion axes cannot become affirmed solely because
+their negation axis is affirmative. Conflicting source-integrity status aliases
+are rejected rather than accepting whichever appears first.
 
 The function performs no mandatory network call, reads no environment state,
 and emits no logs. Callers remain responsible for supplying synthetic or

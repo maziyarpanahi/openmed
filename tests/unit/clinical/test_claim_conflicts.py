@@ -26,6 +26,125 @@ HASH_B = "sha256:" + "b" * 64
 HASH_C = "sha256:" + "c" * 64
 
 
+@pytest.mark.parametrize("where", ["claims", "references"])
+def test_failing_iterators_do_not_retain_source_errors(where: str) -> None:
+    def records():
+        raise RuntimeError("Synthetic Patient Value 8675309")
+        yield
+
+    with pytest.raises(TypeError) as error:
+        review_claim_conflicts(
+            records()
+            if where == "claims"
+            else [{"claim_id": "claim", "references": records()}]
+        )
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+def test_each_reference_uses_its_own_expected_interval() -> None:
+    report = review_claim_conflicts(
+        [
+            {
+                "claim_id": "claim",
+                "references": [
+                    {"evidence_id": "a", "expected_interval": "2026-01-01"},
+                    {"evidence_id": "b", "expected_interval": "2026-02-01"},
+                ],
+            }
+        ],
+        temporal_records=[
+            {"record_id": "a", "interval": "2026-01-01"},
+            {"record_id": "b", "interval": "2026-01-01"},
+        ],
+    )
+    assert report.review_state == CLAIM_REVIEW_REQUIRED
+    assert report.conflicts[0].evidence_ids == (hash_text("b"),)
+
+
+@pytest.mark.parametrize(
+    "interval",
+    [
+        "2026-02-01/2026-01-01",
+        {"start": "2026-02-01", "end": "2026-01-01"},
+        ["2026-02-01", "2026-01-01"],
+    ],
+)
+def test_inverted_intervals_are_rejected(interval: object) -> None:
+    with pytest.raises(ValueError, match="inverted"):
+        TemporalRecord("a", interval=interval)
+
+
+@pytest.mark.parametrize(
+    "records", [None, [{"record_id": "a", "assertion": "unknown"}]]
+)
+def test_unchecked_or_unknown_evidence_never_clears_claim(records: object) -> None:
+    report = review_claim_conflicts(
+        [
+            {
+                "claim_id": "claim",
+                "expected_assertion": "affirmed",
+                "evidence_ids": ["a"],
+            }
+        ],
+        assertion_records=records,
+    )
+    assert report.review_state == CLAIM_REVIEW_REQUIRED
+    assert "missing_evidence" in report.claims[0].review_routes
+
+
+@pytest.mark.parametrize(
+    "axes, expected",
+    [
+        ({"negation": "affirmed", "temporality": "hypothetical"}, "hypothetical"),
+        ({"negation": "affirmed", "certainty": "uncertain"}, "uncertain"),
+    ],
+)
+def test_assertion_axes_do_not_upgrade_uncertainty(axes: dict, expected: str) -> None:
+    assert AssertionRecord("a", assertion=axes).state == expected
+    report = review_claim_conflicts(
+        [
+            {
+                "claim_id": "claim",
+                "expected_assertion": "affirmed",
+                "evidence_ids": ["a"],
+            }
+        ],
+        assertion_records=[{"record_id": "a", **axes}],
+    )
+    assert report.review_state == CLAIM_REVIEW_REQUIRED
+
+
+@pytest.mark.parametrize("mapping", [False, True])
+def test_conflicting_integrity_aliases_rejected(mapping: bool) -> None:
+    with pytest.raises(ValueError, match="conflicting"):
+        if mapping:
+            review_claim_conflicts(
+                [{"claim_id": "claim", "evidence_ids": ["a"]}],
+                source_integrity_records=[
+                    {
+                        "record_id": "a",
+                        "status": "verified",
+                        "integrity_status": "mismatch",
+                    }
+                ],
+            )
+        else:
+            SourceIntegrityRecord("a", status="verified", integrity_status="mismatch")
+
+
+def test_cyclic_nested_inputs_are_bounded() -> None:
+    assertion = {}
+    nested = {"assertion": assertion}
+    assertion["assertion"] = nested
+    assert AssertionRecord("a", assertion=assertion).state == "unknown"
+    interval = {}
+    nested_interval = {"interval": interval}
+    interval["interval"] = nested_interval
+    with pytest.raises(ValueError, match="nesting"):
+        TemporalRecord("a", interval=interval)
+
+
 def test_claim_review_routes_assertion_temporal_and_integrity_conflicts() -> None:
     report = review_claim_conflicts(
         [

@@ -384,6 +384,12 @@ class SourceIntegrityRecord:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "record_id", _required_id(self.record_id))
+        if (
+            self.status is not None
+            and self.integrity_status is not None
+            and _normalize_token(self.status) != _normalize_token(self.integrity_status)
+        ):
+            raise ValueError("conflicting source integrity status aliases")
         status = self.status if self.status is not None else self.integrity_status
         if status is not None:
             if not isinstance(status, str):
@@ -860,7 +866,9 @@ def _review_claim(
     }
     missing_records: set[str] = set()
 
-    if not claim.references:
+    if not claim.references or not (
+        assertions_enabled or temporal_enabled or integrity_enabled
+    ):
         conflict = ClaimConflict(
             claim_id=claim.claim_id,
             conflict_type="missing_evidence",
@@ -869,7 +877,7 @@ def _review_claim(
             claim_id=claim.claim_id,
             review_state=CLAIM_REVIEW_REQUIRED,
             review_routes=(MISSING_EVIDENCE_ROUTE,),
-            evidence_ids=(),
+            evidence_ids=claim.evidence_ids,
             evidence_hashes=(),
             conflicts=(conflict,),
         )
@@ -890,7 +898,9 @@ def _review_claim(
             if integrity_enabled
             else None
         )
-        if assertions_enabled and assertion is None:
+        if assertions_enabled and (
+            assertion is None or assertion.state in _UNKNOWN_STATES
+        ):
             missing["assertion"].add(reference.evidence_id)
             missing_records.add(reference.assertion_record_id)
         if temporal_enabled and temporal is None:
@@ -1030,20 +1040,12 @@ def _temporal_conflict(
         if isinstance(record.interval, _IntervalBounds)
     ]
     conflict_rows: list[tuple[ClaimReference, TemporalRecord]] = []
-    expected_intervals = [
-        reference.expected_interval or claim.expected_interval
-        for reference, _record in rows
-        if reference.expected_interval is not None
-        or claim.expected_interval is not None
-    ]
-    if expected_intervals:
-        expected = expected_intervals[0]
-        if isinstance(expected, _IntervalBounds):
-            conflict_rows.extend(
-                (reference, record)
-                for reference, record in intervals
-                if not _intervals_overlap(record.interval, expected)
-            )
+    for reference, record in intervals:
+        expected = reference.expected_interval or claim.expected_interval
+        if isinstance(expected, _IntervalBounds) and not _intervals_overlap(
+            record.interval, expected
+        ):
+            conflict_rows.append((reference, record))
     for index, (left_reference, left_record) in enumerate(intervals):
         for right_reference, right_record in intervals[index + 1 :]:
             if not _intervals_overlap(left_record.interval, right_record.interval):
@@ -1282,7 +1284,11 @@ def _coerce_assertion_record(
             assertion = nested if nested is not None else "unknown"
         return AssertionRecord(
             record_id=record_id,
-            assertion=assertion,
+            assertion={
+                "assertion": assertion,
+                "temporality": _field(raw, "temporality"),
+                "certainty": _field(raw, "certainty"),
+            },
             text_hash=_optional_hash(
                 raw,
                 "text_hash",
@@ -1312,7 +1318,11 @@ def _coerce_assertion_record(
         assertion = "unknown"
     return AssertionRecord(
         record_id=record_id,
-        assertion=assertion,
+        assertion={
+            "assertion": assertion,
+            "temporality": _field(raw, "temporality"),
+            "certainty": _field(raw, "certainty"),
+        },
         text_hash=_optional_hash(
             raw, "text_hash", "source_hash", "content_hash", "text", "surface"
         ),
@@ -1393,6 +1403,18 @@ def _coerce_integrity_record(
 ) -> SourceIntegrityRecord:
     if isinstance(raw, SourceIntegrityRecord):
         return raw
+    statuses = [
+        _field(raw, name)
+        for name in (
+            "status",
+            "integrity_status",
+            "integrity_state",
+            "integrity",
+            "state",
+        )
+    ]
+    if len({_normalize_token(value) for value in statuses if value is not None}) > 1:
+        raise ValueError("conflicting source integrity status aliases")
     if isinstance(raw, str):
         if fallback_id is None:
             raise ValueError("source integrity record requires a stable identifier")
@@ -1517,7 +1539,7 @@ def _collection_items(
     if isinstance(value, (str, bytes)):
         raise TypeError(f"{kind} collection must not be text")
     if isinstance(value, Iterable):
-        return tuple((None, item) for item in value)
+        return tuple((None, item) for item in _safe_collection(value))
     return ((None, value),)
 
 
@@ -1594,8 +1616,19 @@ def _reference_items(
     if isinstance(value, (str, ClaimReference)):
         return (value,)
     if isinstance(value, Iterable):
-        return tuple(value)
+        return _safe_collection(value)
     return (value,)  # type: ignore[return-value]
+
+
+def _safe_collection(value: Iterable) -> tuple:
+    items = None
+    try:
+        items = tuple(value)
+    except Exception:
+        pass
+    if items is None:
+        raise TypeError("record collection could not be read")
+    return items
 
 
 def _looks_like_reference(value: Mapping[str, Any]) -> bool:
@@ -1696,16 +1729,19 @@ def _normalize_token(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_")
 
 
-def _normalize_assertion_state(value: object) -> str:
+def _normalize_assertion_state(value: object, *, _depth: int = 0) -> str:
+    if _depth >= 32:
+        return "unknown"
     if isinstance(value, bool):
         return "affirmed" if value else "negated"
     nested = _field(value, "negation", "polarity", "status", "state", "assertion")
+    state = "unknown"
     if nested is not None and nested is not value:
-        state = _normalize_assertion_state(nested)
-        if state not in _UNKNOWN_STATES:
+        state = _normalize_assertion_state(nested, _depth=_depth + 1)
+        if state == "negated":
             return state
     temporality = _field(value, "temporality")
-    if (
+    if state == "hypothetical" or (
         isinstance(temporality, str)
         and _normalize_token(temporality) in _HYPOTHETICAL_STATES
     ):
@@ -1713,10 +1749,12 @@ def _normalize_assertion_state(value: object) -> str:
     certainty = _field(value, "certainty")
     if isinstance(certainty, str):
         certainty_token = _normalize_token(certainty)
-        if certainty_token in _UNCERTAIN_STATES:
+        if certainty_token in _UNCERTAIN_STATES or state == "uncertain":
             return "uncertain"
         if certainty_token in {"certain", "affirmed"}:
             return "affirmed"
+    if state not in _UNKNOWN_STATES:
+        return state
     if value is None:
         return "unknown"
     if isinstance(value, Mapping) or not isinstance(value, str):
@@ -1735,7 +1773,9 @@ def _normalize_assertion_state(value: object) -> str:
     return "unknown"
 
 
-def _parse_interval(value: object) -> _IntervalBounds:
+def _parse_interval(value: object, *, _depth: int = 0) -> _IntervalBounds:
+    if _depth >= 32:
+        raise ValueError("temporal interval nesting is too deep")
     if isinstance(value, _IntervalBounds):
         return value
     if isinstance(value, Mapping):
@@ -1743,7 +1783,7 @@ def _parse_interval(value: object) -> _IntervalBounds:
             value, "interval", "temporal_interval", "normalized_interval"
         )
         if nested is not None and nested is not value:
-            return _parse_interval(nested)
+            return _parse_interval(nested, _depth=_depth + 1)
         lower = _date_value(_field(value, "lower_bound", "lower"))
         upper = _date_value(_field(value, "upper_bound", "upper"))
         start = _date_value(_field(value, "start_date", "start", "from"))
@@ -1751,12 +1791,12 @@ def _parse_interval(value: object) -> _IntervalBounds:
         if start is None and end is None:
             value_text = _field(value, "value", "normalized_value")
             if value_text is not None:
-                return _parse_interval(value_text)
+                return _parse_interval(value_text, _depth=_depth + 1)
         lower = lower or start
         upper = upper or end or start
         if lower is None or upper is None:
             raise ValueError("temporal interval requires parseable bounds")
-        return _IntervalBounds(lower=min(lower, upper), upper=max(lower, upper))
+        return _IntervalBounds(lower=lower, upper=upper)
     if isinstance(value, (date, datetime)):
         parsed = _date_value(value)
         if parsed is None:
@@ -1769,7 +1809,7 @@ def _parse_interval(value: object) -> _IntervalBounds:
             start = _date_value(match.group("start"))
             end = _date_value(match.group("end"))
             if start is not None and end is not None:
-                return _IntervalBounds(min(start, end), max(start, end))
+                return _IntervalBounds(start, end)
         parsed = _date_value(normalized)
         if parsed is not None:
             return _IntervalBounds(parsed, parsed)
@@ -1781,11 +1821,11 @@ def _parse_interval(value: object) -> _IntervalBounds:
         end = _date_value(value[1])
         if start is None or end is None:
             raise ValueError("temporal interval requires parseable bounds")
-        return _IntervalBounds(min(start, end), max(start, end))
+        return _IntervalBounds(start, end)
     start = _date_value(_field(value, "start", "start_date"))
     end = _date_value(_field(value, "end", "end_date"))
     if start is not None and end is not None:
-        return _IntervalBounds(min(start, end), max(start, end))
+        return _IntervalBounds(start, end)
     raise ValueError("temporal interval requires parseable bounds")
 
 
