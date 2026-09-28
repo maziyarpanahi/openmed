@@ -11,6 +11,11 @@ from openmed.clinical import (
     EventStatusAssertion,
     report_event_contradictions,
 )
+from openmed.clinical.events.contradictions import (
+    ContradictionEvidence,
+    EventContradiction,
+    EventContradictionReport,
+)
 from openmed.clinical.temporal_intervals import normalize_temporal_interval
 from openmed.core.audit import hash_text
 
@@ -301,3 +306,48 @@ def test_event_dates_require_complete_iso_day_strings() -> None:
             interval_start="2026-06-01 extra text",
             interval_end="2026-06-02",
         )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_explicit_precedes_reports_only_reversed_order(reverse):
+    first, second = (
+        ("2026-01-02", "2026-01-01") if reverse else ("2026-01-01", "2026-01-02")
+    )
+    events = [
+        EventInterval("a", "event", first, first, precedes=("b",)),
+        EventInterval("b", "event", second, second),
+    ]
+    report = report_event_contradictions(events)
+    assert report.counts["impossible_order"] == int(reverse)
+
+
+def test_implicit_sequences_do_not_compare_different_entities():
+    report = report_event_contradictions(
+        [
+            EventInterval(
+                "a", "start", "2026-01-02", "2026-01-02", entity_id="x", sequence=1
+            ),
+            EventInterval(
+                "b", "stop", "2026-01-01", "2026-01-01", entity_id="y", sequence=2
+            ),
+        ]
+    )
+    assert report.counts["impossible_order"] == 0
+
+
+@pytest.mark.parametrize("offset", [1.5, "synthetic_private_marker"])
+def test_offsets_are_exact_integers_without_sensitive_exception_context(offset):
+    with pytest.raises(TypeError) as caught:
+        EventInterval("a", "event", "2026-01-01", "2026-01-02", source_start=offset)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_report_metadata_is_fixed_and_value_free():
+    evidence = ContradictionEvidence(0, 1, "sha256:" + "a" * 64)
+    with pytest.raises(ValueError):
+        EventContradiction("overlap", (evidence,), "synthetic_private_marker")
+    with pytest.raises(ValueError):
+        EventContradictionReport((), 0, 0, disclaimer="synthetic_private_marker")
+    with pytest.raises(ValueError):
+        EventContradictionReport((), True, 0)

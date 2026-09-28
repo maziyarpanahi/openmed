@@ -378,8 +378,13 @@ class EventContradiction:
             raise ValueError("unsupported contradiction kind")
         if not self.evidence:
             raise ValueError("contradiction evidence must not be empty")
-        if not self.reason:
-            raise ValueError("contradiction reason must not be empty")
+        expected_reason = {
+            "overlap": "typed event intervals overlap",
+            "impossible_order": "typed event ordering is impossible",
+            "conflicting_status": "status assertions conflict",
+        }[self.kind]
+        if self.reason != expected_reason:
+            raise ValueError("contradiction reason must match its controlled kind")
         object.__setattr__(self, "evidence", tuple(self.evidence))
 
     @property
@@ -438,8 +443,19 @@ class EventContradictionReport:
     schema_version: int = CONTRADICTION_REPORT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        if self.events_checked < 0 or self.status_assertions_checked < 0:
+        if (
+            type(self.events_checked) is not int
+            or type(self.status_assertions_checked) is not int
+            or self.events_checked < 0
+            or self.status_assertions_checked < 0
+        ):
             raise ValueError("report counts must be non-negative")
+        if self.disclaimer != EVENT_CONTRADICTION_ADVISORY:
+            raise ValueError("report disclaimer is fixed")
+        if type(self.schema_version) is not int or self.schema_version != (
+            CONTRADICTION_REPORT_SCHEMA_VERSION
+        ):
+            raise ValueError("report schema version is fixed")
         object.__setattr__(self, "contradictions", tuple(self.contradictions))
         object.__setattr__(
             self, "unresolved_intervals", tuple(self.unresolved_intervals)
@@ -923,8 +939,9 @@ def _iter_records(records: Any) -> list[Any]:
         raise TypeError("records must be an iterable of event records")
     try:
         return list(records)
-    except TypeError as exc:
-        raise TypeError("records must be an iterable of event records") from exc
+    except Exception:
+        pass
+    raise TypeError("records must be an iterable of event records")
 
 
 def _looks_like_record(value: Mapping[str, Any]) -> bool:
@@ -987,8 +1004,9 @@ def _coerce_date(value: DateLike) -> date:
             raise ValueError("interval values must be ISO dates")
         try:
             return date.fromisoformat(candidate)
-        except ValueError as exc:
-            raise ValueError("interval values must be ISO dates") from exc
+        except ValueError:
+            pass
+        raise ValueError("interval values must be ISO dates")
     raise TypeError("interval values must be dates or ISO date strings")
 
 
@@ -1005,13 +1023,10 @@ def _looks_like_date(value: Any) -> bool:
 
 
 def _validate_offsets(start: Any, end: Any) -> tuple[int, int]:
-    if isinstance(start, bool) or isinstance(end, bool):
+    if type(start) is not int or type(end) is not int:
         raise TypeError("source offsets must be integers")
-    try:
-        normalized_start = int(start)
-        normalized_end = int(end)
-    except (TypeError, ValueError) as exc:
-        raise TypeError("source offsets must be integers") from exc
+    normalized_start = start
+    normalized_end = end
     if normalized_start < 0 or normalized_end < normalized_start:
         raise ValueError("source offsets must satisfy 0 <= start <= end")
     return normalized_start, normalized_end
@@ -1020,12 +1035,9 @@ def _validate_offsets(start: Any, end: Any) -> tuple[int, int]:
 def _coerce_sequence(value: Any) -> int | None:
     if value is None:
         return None
-    if isinstance(value, bool):
+    if type(value) is not int:
         raise TypeError("event sequence must be an integer")
-    try:
-        return int(value)
-    except (TypeError, ValueError) as exc:
-        raise TypeError("event sequence must be an integer") from exc
+    return value
 
 
 def _coerce_status(value: Any) -> str:
@@ -1169,9 +1181,16 @@ def _pair_has_impossible_order(
     right: EventInterval,
 ) -> bool:
     if left.event_id in right.precedes or right.event_id in left.precedes:
-        if left.event_id in right.precedes:
-            return left.interval_start >= right.interval_start
-        return right.interval_start >= left.interval_start
+        return (
+            left.event_id in right.precedes
+            and right.interval_start >= left.interval_start
+        ) or (
+            right.event_id in left.precedes
+            and left.interval_start >= right.interval_start
+        )
+
+    if left.entity_id != right.entity_id:
+        return False
 
     if left.sequence is not None and right.sequence is not None:
         if left.sequence < right.sequence:
