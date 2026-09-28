@@ -73,3 +73,48 @@ status, timestamps, hashes/codes supplied by upstream grounding, and source
 offsets. It does not emit source mention text or the source document. The
 module does not parse sigs, extract medication relations, reconcile across
 documents, or make treatment recommendations.
+
+## Cross-document match confidence
+
+Cross-document candidate scoring is a separate, more conservative API in
+`openmed.clinical.medication_reconciliation`. Use
+`reconcile_medication_candidates` for that task; the top-level
+`reconcile_medications` above retains its document-local contract.
+
+`score_medication_match(left, right)` compares caller-supplied normalized name
+or coded identity, dose, route, and temporal evidence. Its default weights are
+0.45, 0.25, 0.15, and 0.15 respectively, with a default merge threshold of
+0.80. Unknown fields contribute no score. Known identity, dose, route, or
+overlapping temporal-status conflicts cause abstention. A name-only match
+cannot silently merge. The scorer does not decide whether a dose is clinically
+appropriate.
+
+```python
+from openmed.clinical import reconcile_medication_candidates, score_medication_match
+
+left = {
+    "candidate_id": "synthetic-a",
+    "normalized_name": "Synthetic Medication Alpha",
+    "dose": "500 mg",
+    "route": "PO",
+    "event_date": "2026-01-15",
+}
+right = {
+    "candidate_id": "synthetic-b",
+    "normalized_name": "synthetic medication alpha",
+    "dose": "0.5 g",
+    "route": "oral",
+    "event_date": "2026-01-15",
+}
+
+decision = score_medication_match(left, right)
+assert decision.matched
+result = reconcile_medication_candidates([left, right])
+assert len(result.merged_groups) == 1
+```
+
+Candidate grouping checks every cross-pair before merging a group, so a
+transitive chain cannot hide a regimen conflict. Rejected pairs remain
+reviewable through stable abstention reasons. Serialized audit decisions hash
+candidate and source identifiers instead of emitting raw medication or
+document values. All processing is local and requires no terminology service.

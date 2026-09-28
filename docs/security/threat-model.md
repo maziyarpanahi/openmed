@@ -161,7 +161,7 @@ published examples are **synthetic**.
 | ID | Abuse case | Vector | Mitigation | Status |
 |---|---|---|---|---|
 | **AC-01** | Zero-width / whitespace split identifier | Zero-width joiners or stray spaces inside an SSN/card/email so the ML token and the regex both break. | `normalize_for_pii_detection` strips zero-width controls; whitespace variants are matched by sweep regexes; smart-merge reunites ML fragments. Then `safety_sweep` recovers. | **Mitigated** |
-| **AC-02** | Uncanonicalized separator mutation | Some visible separator mutations can disrupt structured-identifier matching. The current document intentionally omits actionable forms and reproduction details and routes future reports through `SECURITY.md`. | No complete deterministic mitigation is claimed. The ML detector may add defense in depth but is not treated as a guaranteed control. | **Known gap** |
+| **AC-02** | Punctuation-split structured identifiers | Visible punctuation inserted between characters can defeat ordinary identifier patterns. | The deterministic safety sweep recognizes bounded split SSN, card, MRN, and IBAN shapes at their original offsets. SSN and card matches require context or a checksum; MRN requires its explicit prefix, and IBAN requires a checksum. Synthetic regression tests cover leakage and clinical-number false positives. | **Mitigated for the bounded shapes** |
 | **AC-03** | Unicode confusable / mixed-script obfuscation | Greek/Cyrillic/full-width lookalikes substituted into an identifier (`janе.doe@…` with a Cyrillic `е`). | Confusable folding maps lookalikes to Latin before detection; mixed-script is flagged in metadata; spans remap to the original. | **Mitigated** |
 | **AC-04** | Full-width digit encoding | Identifier written with full-width digits (`４１１１ …`) to dodge ASCII-digit regexes. | Full-width forms (U+FF01–FF5E) are folded to ASCII in `normalize_for_pii_detection` before the sweep. | **Mitigated** |
 | **AC-05** | Combining-mark obfuscation | Standalone combining diacritics layered over identifier characters. | Category-`Mn` combining marks are stripped offset-preservingly before detection. | **Mitigated** |
@@ -191,13 +191,12 @@ OpenMed version instead of re-exporting the legacy artifact.
 | No-telemetry / no phone-home enforcement | **OM-099** | [`no-telemetry.md`](no-telemetry.md) |
 | Adversarial-Unicode normalization | this task / de-id path | [`script_detect.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/script_detect.py) |
 
-### 6.2 Open gaps (no complete mitigation today)
+### 6.2 Residual separator risk
 
-- **AC-02 — uncanonicalized separator mutation.** Some visible separator
-  transformations fall outside the normalization and deterministic-pattern
-  contracts. This remains a residual leakage class. The current document
-  intentionally omits exploit details; report new findings through the
-  vulnerability-reporting process in `SECURITY.md`.
+- **AC-02 — separator mutation outside bounded shapes.** The deterministic
+  control covers the named structured identifiers and separators above. Other
+  identifier types and separator mutations may still evade it. Report new
+  findings through the vulnerability-reporting process in `SECURITY.md`.
 
 ## 7. Residual-leakage risks
 
