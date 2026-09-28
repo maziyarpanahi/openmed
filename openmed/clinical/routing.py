@@ -520,11 +520,11 @@ def _safe_confidence(value: object) -> float:
         return 0.0
     try:
         confidence = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
-    if not isfinite(confidence):
+    if not isfinite(confidence) or not 0.0 <= confidence <= 1.0:
         return 0.0
-    return min(max(confidence, 0.0), 1.0)
+    return confidence
 
 
 def resolve_profile(classify_document_result: object) -> RoutingSelection:
@@ -648,7 +648,7 @@ def _entity_offsets(entity: object) -> tuple[int, int] | None:
         or not isinstance(end, int)
         or isinstance(end, bool)
         or start < 0
-        or end < start
+        or end <= start
     ):
         return None
     return start, end
