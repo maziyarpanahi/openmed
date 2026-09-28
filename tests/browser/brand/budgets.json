@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80991015,
-    "maximum_unique_payload_bytes": 80653436,
+    "maximum_total_bytes": 81203971,
+    "maximum_unique_payload_bytes": 80866392,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,17 +12,17 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4214075
+    "json": 4217218
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4214075
+    "docs/search/search_index.json": 4217218
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 5560423,
+    "/docs/": 5681985,
     "/docs/model-tokenizer-script-coverage/": 7774063
   },
   "page_metrics": {
@@ -31,6 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The combined guard-contract Chromium build measures 5562683 bytes on /docs/; its ceiling retains the prior 119302-byte transfer allowance.",
+    "The combined guard-contract rehearsal on master 02f6b5cb2 stages 81088485 total bytes, 80750906 unique bytes, and 4211426 search bytes. Aggregate and search ceilings retain their previous 115486-byte and 5792-byte allowances. All other limits are unchanged.",
     "With reviewed evidence-packet and state guides, the staged artifact measures 80875529 total bytes, 80537950 unique bytes, and 4208283 search bytes. Aggregate ceilings preserve 115486 bytes of platform/headroom allowance; search preserves 5792 bytes. Other limits are unchanged.",
     "The review-state guide increases tokenizer-route transfer to 7667259 bytes in the staged Chromium check; its ceiling retains the existing 106804-byte allowance. Other route limits remain unchanged.",
     "The review-state guide on current master stages 80663128 total bytes and 80325549 unique payload bytes. Aggregate ceilings retain the existing 4736-byte platform allowance plus 110750 bytes of bounded headroom; search and all other limits are unchanged.",
