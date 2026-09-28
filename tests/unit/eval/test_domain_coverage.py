@@ -230,7 +230,10 @@ def test_orphan_label_fails_and_report_never_contains_fixture_text(
 
 def test_suite_registry_and_metadata_are_discoverable() -> None:
     assert validate_suite_name(CLINICAL_DOMAIN_COVERAGE) == CLINICAL_DOMAIN_COVERAGE
-    assert suite_metadata(CLINICAL_DOMAIN_COVERAGE) == domain_coverage_metadata()
+    assert suite_metadata(CLINICAL_DOMAIN_COVERAGE) == {
+        **domain_coverage_metadata(),
+        "task": "clinical_domain_coverage",
+    }
     with pytest.raises(ValueError, match="aggregate gate"):
         load_suite_fixtures(CLINICAL_DOMAIN_COVERAGE)
 
