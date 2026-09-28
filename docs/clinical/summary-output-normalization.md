@@ -35,7 +35,13 @@ The normalizer applies only formatting transformations:
   `1.`, `2.`, and so on for each contiguous list at a given indentation.
 - Numeric citations such as `[1]`, `[1, 2]`, and `【3】`, plus explicit tokens
   such as `[citation:4]`, are canonicalized to ASCII brackets and placed at
-  the end of their logical line. Markdown link labels are not citation tokens.
+  their original claim position. Citations are not moved across clauses or
+  sentences. Markdown link labels are not citation tokens.
+
+Nested list indentation is retained. Fenced code, lines containing inline code,
+and Markdown reference definitions are preserved verbatim apart from canonical
+line endings. Mismatched brackets are not interpreted as citations. This is
+not a general Markdown renderer or a validator of citation support.
 
 The implementation never performs case folding, Unicode compatibility
 decomposition, sentence rewriting, claim sorting, or model inference. It

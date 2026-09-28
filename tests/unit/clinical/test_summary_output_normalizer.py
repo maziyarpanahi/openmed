@@ -31,7 +31,7 @@ def test_normalizes_formatting_without_rewriting_claim_words() -> None:
 
     assert result.normalized_text == (
         "## Assessment\n"
-        "- Patient improved. [2]\n"
+        "- Patient improved [2].\n"
         "- Follow-up is planned [3] [citation:4]\n"
         "1. Additional finding [1]"
     )
@@ -124,3 +124,38 @@ def test_operation_code_contract_is_fixed() -> None:
         "list_marker",
         "citation_placement",
     )
+
+
+def test_nested_list_hierarchy_is_preserved() -> None:
+    source = "- Parent\n  - Child\n    - Grandchild"
+    assert normalize_summary_text(source) == source
+
+
+def test_citations_keep_their_claim_attachment_and_word_boundaries() -> None:
+    source = "First claim[ 1 ]. Different claim[2]."
+    assert normalize_summary_text(source) == "First claim [1]. Different claim [2]."
+    assert normalize_summary_text("one[1]two") == "one [1] two"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "```text\n  + quoted   code [ 1 ]\n```",
+        "Use `x[1]` exactly.",
+        "[1]: synthetic-reference",
+        "See [1][note] for detail.",
+        "Measured [1】 units.",
+    ],
+)
+def test_code_and_markdown_reference_syntax_is_preserved(source) -> None:
+    assert normalize_summary_text(source) == source
+
+
+def test_broken_operation_iterator_drops_sensitive_exception_context() -> None:
+    def broken():
+        raise ValueError("SYNTHETIC_PRIVATE_VALUE")
+        yield
+
+    with pytest.raises(SummaryOutputNormalizationError) as caught:
+        SummaryOutputNormalization("summary", operations=broken())
+    assert caught.value.__context__ is None

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from itertools import islice
 from typing import Final
 
 SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION: Final[int] = 1
@@ -70,12 +71,15 @@ class SummaryOutputNormalization:
             raise SummaryOutputNormalizationError(
                 "summary normalization operations are invalid"
             )
+        operations = None
         try:
-            operations = tuple(self.operations)
+            operations = tuple(islice(iter(self.operations), 5))
         except Exception:
+            pass
+        if operations is None or len(operations) > 4:
             raise SummaryOutputNormalizationError(
                 "summary normalization operations are invalid"
-            ) from None
+            )
         if any(
             type(operation) is not str
             or operation not in SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES
@@ -151,7 +155,7 @@ def normalize_summary_output(summary_output: str) -> SummaryOutputNormalization:
     The canonical form uses LF line endings, at most one blank line between
     blocks, single horizontal spaces, ATX headings with one separating space,
     ``-`` unordered markers, sequential ``1.`` ordered markers, and citation
-    tokens at the end of each logical line. Citation tokens are limited to
+    tokens beside their original claims. Citation tokens are limited to
     numeric forms such as ``[1]``/``[1, 2]`` and explicit forms such as
     ``[citation:1]``; ordinary Markdown links are left untouched.
 
@@ -171,6 +175,50 @@ def normalize_summary_output(summary_output: str) -> SummaryOutputNormalization:
     if type(summary_output) is not str:
         raise SummaryOutputNormalizationError("summary output must be text")
 
+    canonical = _canonicalize_line_endings(summary_output)
+    blocks = _protected_blocks(canonical)
+    if blocks:
+        results = [
+            SummaryOutputNormalization(text) if keep else _normalize_plain(text)
+            for keep, text in blocks
+        ]
+        codes = {code for result in results for code in result.operations}
+        if canonical != summary_output:
+            codes.add("whitespace")
+        return SummaryOutputNormalization(
+            "\n".join(result.text for result in results),
+            tuple(
+                code
+                for code in SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES
+                if code in codes
+            ),
+        )
+    return _normalize_plain(summary_output)
+
+
+def _protected_blocks(text: str) -> list[tuple[bool, str]]:
+    blocks: list[tuple[bool, str]] = []
+    fence: str | None = None
+    protected_any = False
+    for line in text.split("\n"):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        keep = fence is not None or marker is not None or "`" in line
+        keep = keep or re.match(r"^ {0,3}\[[^\]]+\]:", line) is not None
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+        protected_any = protected_any or keep
+        if blocks and blocks[-1][0] == keep:
+            blocks[-1] = (keep, blocks[-1][1] + "\n" + line)
+        else:
+            blocks.append((keep, line))
+    return blocks if protected_any else []
+
+
+def _normalize_plain(summary_output: str) -> SummaryOutputNormalization:
     canonical_newlines = _canonicalize_line_endings(summary_output)
     raw_lines = canonical_newlines.split("\n")
     lines = [_canonicalize_line_surface(line) for line in raw_lines]
@@ -234,8 +282,11 @@ def _canonicalize_line_surface(value: str) -> str:
 
 
 def _canonicalize_horizontal_whitespace(value: str) -> str:
-    value = "".join(" " if char.isspace() else char for char in value)
-    return _HORIZONTAL_SPACES_RE.sub(" ", value)
+    value = value.expandtabs(4)
+    indent = value[: len(value) - len(value.lstrip(" "))]
+    body = value[len(indent) :]
+    body = "".join(" " if char.isspace() else char for char in body)
+    return indent + _HORIZONTAL_SPACES_RE.sub(" ", body)
 
 
 def _normalize_headings(lines: list[str]) -> tuple[list[str], bool]:
@@ -294,8 +345,8 @@ def _normalize_list_markers(lines: list[str]) -> tuple[list[str], bool]:
             continue
 
         indent_width = len(match.group("indent"))
-        level = (indent_width + 1) // 2
-        indent = "  " * level
+        level = indent_width
+        indent = match.group("indent")
         marker = match.group("marker")
         body = (match.group("body") or "").strip()
         is_ordered = marker[0].isdigit()
@@ -337,32 +388,38 @@ def _normalize_citation_placement(lines: list[str]) -> tuple[list[str], bool]:
 
 
 def _canonicalize_citations_in_line(line: str) -> tuple[str, bool]:
-    matches: list[str] = []
     pieces: list[str] = []
     cursor = 0
     for match in _CITATION_TOKEN_RE.finditer(line):
+        if (match.group("open"), match.group("close")) not in {
+            ("[", "]"),
+            ("【", "】"),
+        }:
+            continue
         if _is_markdown_link_label(line, match.end()):
+            continue
+        if match.start() and line[match.start() - 1] == "\\":
             continue
         token = _canonical_citation_token(match.group("body"))
         if token is None:
             continue
-        pieces.append(line[cursor : match.start()])
+        before = line[cursor : match.start()]
+        if before and not before[-1].isspace() and before[-1] not in "([":
+            before += " "
+        pieces.append(before + token)
         cursor = match.end()
-        matches.append(token)
-
-    if not matches:
+        if cursor < len(line) and line[cursor].isalnum():
+            pieces.append(" ")
+    if not pieces:
         return line, False
-
     pieces.append(line[cursor:])
-    content = _canonicalize_horizontal_whitespace("".join(pieces)).strip()
-    content = re.sub(r" +([,.;:!?])", r"\1", content)
-    citation_suffix = " ".join(matches)
-    candidate = f"{content} {citation_suffix}" if content else citation_suffix
+    candidate = "".join(pieces)
+    candidate = re.sub(r"(\]) +([,.;:!?])", r"\1\2", candidate)
     return candidate, candidate != line
 
 
 def _is_markdown_link_label(line: str, end: int) -> bool:
-    return re.match(r"\s*\(", line[end:]) is not None
+    return re.match(r"[\[(]", line[end:]) is not None
 
 
 def _canonical_citation_token(body: str) -> str | None:
