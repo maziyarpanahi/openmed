@@ -17,7 +17,7 @@ import calendar
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
@@ -325,10 +325,10 @@ class TemporalInterval:
         return self.value if self.kind == "duration" else None
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a privacy-safe JSON representation.
+        """Return structured JSON without surrounding source prose.
 
-        The output intentionally includes offsets and hashes-free structured
-        values, but never includes the raw source surface.
+        Normalized date and time values remain sensitive data and must not be
+        copied into public logs or audit records.
         """
 
         return {
@@ -434,10 +434,19 @@ def parse_temporal_value(
 
     if not isinstance(value, str):
         raise TypeError("value must be a string")
-    if isinstance(source_start, bool) or not isinstance(source_start, int):
+    if (
+        isinstance(source_start, bool)
+        or not isinstance(source_start, int)
+        or source_start < 0
+    ):
         raise ValueError("source_start must be an integer")
     stop = len(value) + source_start if source_end is None else source_end
-    if isinstance(stop, bool) or not isinstance(stop, int) or stop < source_start:
+    if (
+        isinstance(stop, bool)
+        or not isinstance(stop, int)
+        or stop < source_start
+        or (value and stop == source_start)
+    ):
         raise ValueError("source offsets are invalid")
     return _normalize_surface(value, source_start, stop)
 
@@ -491,6 +500,8 @@ class TemporalIntervalNormalizer:
 
 def _normalize_surface(surface: str, start: int, end: int) -> TemporalInterval:
     value = _clean(surface)
+    if len(value) > 4096:
+        value = ""
     parts = _interval_parts(value)
     if parts is not None:
         return _build_interval(
@@ -560,6 +571,8 @@ def _parse_date(value: str) -> TemporalEndpoint | None:
         if not 1 <= month <= 12:
             return _unknown_endpoint("date", "month")
         if day_text is None:
+            if year < 1:
+                return _unknown_endpoint("date", "year", precision="month")
             return _endpoint(
                 "date", f"{year:04d}-{month:02d}", "month", "not_applicable"
             )
@@ -804,6 +817,8 @@ def _interval_parts(
     from_marker = "from "
     if lowered.startswith(from_marker):
         remainder = value[len(from_marker) :].strip()
+        if remainder.casefold().startswith(from_marker):
+            return None
         nested = _interval_parts(remainder)
         if nested is not None:
             return nested
@@ -966,10 +981,10 @@ def _obvious_order_conflict(left: TemporalEndpoint, right: TemporalEndpoint) -> 
     if left.kind == "date":
         return _date_lower_bound(left) > _date_upper_bound(right)
     if left.kind == "time" and left.precision == right.precision:
-        if "T" not in left.value and "T" not in right.value:
-            return left.value > right.value
         if left.timezone_state != right.timezone_state:
             return False
+        if "T" not in left.value and "T" not in right.value:
+            return time.fromisoformat(left.value) > time.fromisoformat(right.value)
         try:
             return datetime.fromisoformat(left.value) > datetime.fromisoformat(
                 right.value
