@@ -220,6 +220,7 @@ nav:
       - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Post-de-identification Summarization: clinical/summarization.md
+      - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
       - Configuration & Validation: configuration.md
