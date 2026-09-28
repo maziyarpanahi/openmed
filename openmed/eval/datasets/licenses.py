@@ -55,6 +55,20 @@ class EncoderLicense:
 
 
 PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
+    "i2b2": DatasetLicense(
+        dataset="i2b2",
+        license_id="i2b2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="local-dua-required; never redistributed",
+        notes="User-supplied, credentialed de-identification evaluation only.",
+    ),
+    "n2c2": DatasetLicense(
+        dataset="n2c2",
+        license_id="n2c2-DBMI-DUA",
+        source_url="https://portal.dbmi.hms.harvard.edu/",
+        redistribution="local-dua-required; never redistributed",
+        notes="User-supplied, credentialed de-identification evaluation only.",
+    ),
     "golden": DatasetLicense(
         dataset="golden",
         license_id="Apache-2.0",
