@@ -317,6 +317,7 @@ nav:
       - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
       - Clinical Output Use Policy: clinical/output-use-policy.md
       - Value-free Evidence Coverage: clinical/evidence-coverage.md
+      - Human-review packets: clinical/human-review-packets.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md

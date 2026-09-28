@@ -392,6 +392,7 @@ classification:
     - clinical/evidence-span-audit.md
     - clinical/output-use-policy.md
     - clinical/evidence-coverage.md
+    - clinical/human-review-packets.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
