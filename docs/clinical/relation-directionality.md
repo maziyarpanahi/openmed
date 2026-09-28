@@ -94,3 +94,7 @@ direction result means only that the relation's declared roles satisfy the
 registered structural contract. It does not establish causality, treatment
 appropriateness, diagnosis, urgency, or clinical truth; downstream outputs
 remain assistive and require qualified human review.
+
+## Validation limits
+
+Typed validation results must agree with a registered rule. Conflicting mapping aliases and failed metadata accessors reject the input rather than selecting a default direction. Batch input is bounded to 4096 records. Error metadata is restricted to the canonical registry vocabulary. Direction validation does not establish that the source statement supports the relation.

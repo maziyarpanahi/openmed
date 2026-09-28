@@ -98,3 +98,7 @@ Reviewers must verify normalized identifiers, assertion state, source
 independence, and evidence offsets before using a collapsed relation in a
 downstream clinical workflow. Duplicate collapse reduces counting bias; it
 does not establish that a relation is true.
+
+## Validation limits
+
+The assertion_state and assertion_status aliases identify the same controlled context axis. Conflicting aliases and unsupported context values are rejected. Malformed evidence is rejected rather than silently dropped. Collections are bounded to 4096 records or evidence nodes and 32 nesting levels. Bound evidence records can be collapsed when they carry explicit endpoint span IDs; offsets alone do not establish semantic equivalence. Callers remain responsible for supplying non-sensitive terminology codes and genuinely independent source IDs. Hashes are pseudonyms, not anonymization, and noisy-OR scores are not calibrated clinical probabilities.

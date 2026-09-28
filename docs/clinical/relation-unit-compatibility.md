@@ -86,3 +86,7 @@ review routing artifact without copying clinical text or quantitative values.
 These checks are assistive validation only. They do not establish analyte
 equivalence, certify a laboratory interpretation, or replace qualified
 clinical judgment.
+
+## Validation limits
+
+Explicit unknown relation kinds and unit declarations never fall back to a successful laboratory check or parseable adjacent text. Result dimensions are immutable, and typed reports revalidate their entries. Collections are bounded to 4096 records, nested unit adapters to 32 levels, and parsed unit strings to 256 characters. This is dimension compatibility, not numeric conversion or clinical equivalence.

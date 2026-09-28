@@ -168,3 +168,53 @@ def test_batch_report_is_stable_and_value_free():
 def test_report_rejects_string_iterables():
     with pytest.raises(TypeError, match="iterable of relation candidates"):
         validate_quantitative_relations("not a candidate list")
+
+
+def test_unknown_declared_kind_cannot_fall_back_to_laboratory():
+    result = validate_quantitative_relation({"relation_kind": "madeup", "unit": "mg"})
+    assert result.status == UNIT_UNKNOWN
+
+
+def test_explicit_unknown_unit_cannot_be_replaced_with_parseable_text():
+    result = validate_quantitative_relation(
+        {
+            "relation_kind": "dose",
+            "attribute": {"unit": "madeup", "text": "5 mg"},
+        }
+    )
+    assert result.status == UNIT_UNKNOWN
+
+
+def test_unit_dimensions_are_immutable():
+    result = check_unit_compatibility("mg", "g", relation_kind="dose")
+    with pytest.raises(TypeError):
+        result.left_dimension["mass"] = -1
+
+
+def test_result_cannot_claim_compatible_missing_units():
+    from openmed.clinical.relations.unit_compatibility import UnitCompatibilityResult
+
+    with pytest.raises(ValueError):
+        UnitCompatibilityResult("dose", UNIT_COMPATIBLE, False, "compatible_dimensions")
+
+
+def test_unit_cycles_fail_without_input_error_context():
+    cycle = {}
+    cycle["unit"] = cycle
+    with pytest.raises(ValueError) as error:
+        validate_quantitative_relation({"relation_kind": "dose", "attribute": cycle})
+    assert error.value.__context__ is None
+
+
+def test_unit_batches_are_bounded():
+    from itertools import repeat
+
+    with pytest.raises(ValueError):
+        validate_quantitative_relations(repeat({"unit": "mg"}))
+
+
+def test_unit_report_revalidates_typed_results():
+    result = check_unit_compatibility("mg", "g")
+    object.__setattr__(result, "advisory", "synthetic-sensitive-marker")
+    with pytest.raises(ValueError):
+        UnitCompatibilityReport((result,))

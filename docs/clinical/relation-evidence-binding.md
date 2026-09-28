@@ -68,3 +68,7 @@ The module uses only the Python standard library plus OpenMed's existing label
 normalizer, performs no mandatory network call, and is an assistive provenance
 guard rather than a diagnosis, treatment decision, compliance certification, or
 clinical-device guarantee.
+
+## Validation limits
+
+Validation rebuilds typed spans and relation records before workflow entry. Unknown assertion-axis values and conflicting mapping aliases fail closed; they cannot become affirmed defaults. Collections are limited to 4096 entries, nested span/assertion structures to 32 levels, and individual strings to 1048576 characters. Identifiers are pseudonymous, not proof of anonymization. Relation codes are caller-declared schema metadata and must not contain patient data.

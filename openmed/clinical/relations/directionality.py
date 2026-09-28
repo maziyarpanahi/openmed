@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from functools import wraps
+from itertools import islice
 from types import MappingProxyType
 from typing import Any, ClassVar, Final, Literal
 
@@ -51,13 +53,30 @@ class DirectionalityError(ValueError):
         expected_direction: RelationDirection | None = None,
         observed_direction: RelationDirection | None = None,
     ) -> None:
-        self.relation_type = relation_type
-        self.relation_class = relation_class
-        self.endpoint = endpoint
-        self.expected_types = tuple(sorted(set(expected_types)))
-        self.observed_type = observed_type
-        self.expected_direction = expected_direction
-        self.observed_direction = observed_direction
+        # Public error construction accepts only canonical metadata.
+        def allowed(value, vocabulary):
+            return value if type(value) is str and value in vocabulary else None
+
+        types = frozenset(_ENDPOINT_TYPE_ALIASES.values())
+        self.relation_type = allowed(relation_type, RELATION_DIRECTION_RULES)
+        self.relation_class = allowed(relation_class, GUARDED_RELATION_CLASSES)
+        self.endpoint = allowed(endpoint, {"source", "target"})
+        try:
+            expected = tuple(islice(iter(expected_types), 4097))
+        except Exception:
+            expected = ()
+        self.expected_types = (
+            tuple(
+                sorted(
+                    {item for item in expected if type(item) is str and item in types}
+                )
+            )
+            if len(expected) <= 4096
+            else ()
+        )
+        self.observed_type = allowed(observed_type, types)
+        self.expected_direction = allowed(expected_direction, {"forward", "reverse"})
+        self.observed_direction = allowed(observed_direction, {"forward", "reverse"})
         super().__init__(self._message())
 
     def _message(self) -> str:
@@ -130,6 +149,31 @@ class RelationShapeError(DirectionalityError):
     """Raised when a relation or endpoint does not expose the required shape."""
 
     code = "invalid_relation_shape"
+
+
+def _safe_boundary(function):
+    """Reject unreadable input without retaining its exception chain."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except DirectionalityError as error:
+            kind = type(error)
+            metadata = error.to_dict()
+            metadata.pop("code", None)
+        except Exception:
+            kind, metadata = RelationShapeError, {}
+        raise kind(**metadata)
+
+    return wrapped
+
+
+def _bounded_items(values):
+    items = tuple(islice(iter(values), 4097))
+    if len(items) > 4096:
+        raise RelationShapeError()
+    return items
 
 
 # Compatibility aliases make the typed failure contract easy to discover while
@@ -216,8 +260,19 @@ class ValidatedRelationDirection:
             raise ValueError("validated relation direction metadata is incomplete")
         if self.direction not in {"forward", "reverse"}:
             raise ValueError("validated relation direction is unsupported")
-        if self.schema_version != DIRECTIONALITY_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != DIRECTIONALITY_SCHEMA_VERSION
+        ):
             raise ValueError("unsupported directionality schema version")
+        rule = RELATION_DIRECTION_RULES.get(self.relation_type)
+        if (
+            rule is None
+            or self.relation_class != rule.relation_class
+            or not rule.accepts(self.source_type, self.target_type)
+            or self.direction != rule.direction
+        ):
+            raise ValueError("validated direction does not match its registered rule")
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic direction metadata without source text."""
@@ -411,8 +466,9 @@ _ENDPOINT_KEYS: tuple[str, ...] = (
 
 
 def _normalized_key(value: Any) -> str | None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or len(value) > 256:
         return None
+    value = str.__str__(value)
     normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_")
     if normalized[:2] in {"b_", "e_", "i_", "s_"}:
         normalized = normalized[2:]
@@ -442,20 +498,25 @@ def _canonical_direction(value: Any) -> RelationDirection | None:
 
 
 def _value_from_mapping_or_object(value: Any, keys: Iterable[str]) -> Any:
-    if isinstance(value, Mapping):
-        for key in keys:
-            candidate = value.get(key)
-            if candidate is not None:
-                return candidate
-        return None
+    candidates = []
     for key in keys:
         try:
-            candidate = getattr(value, key, None)
+            candidate = (
+                value.get(key)
+                if isinstance(value, Mapping)
+                else getattr(value, key, None)
+            )
         except Exception:
-            candidate = None
+            raise RelationShapeError() from None
         if candidate is not None:
-            return candidate
-    return None
+            if not isinstance(value, Mapping):
+                return candidate
+            candidates.append(candidate)
+    if not candidates:
+        return None
+    if any(item != candidates[0] for item in candidates[1:]):
+        raise RelationShapeError()
+    return candidates[0]
 
 
 def _endpoint_type(value: Any) -> str | None:
@@ -465,6 +526,7 @@ def _endpoint_type(value: Any) -> str | None:
     return _canonical_endpoint_type(raw)
 
 
+@_safe_boundary
 def get_relation_direction_rule(relation_type: str) -> RelationDirectionRule:
     """Return the immutable rule for a guarded relation predicate.
 
@@ -488,6 +550,7 @@ def relation_direction_rules() -> tuple[RelationDirectionRule, ...]:
     return tuple(RELATION_DIRECTION_RULES[key] for key in GUARDED_RELATION_TYPES)
 
 
+@_safe_boundary
 def validate_relation_direction(
     relation_type: str,
     source: Any,
@@ -557,6 +620,7 @@ def validate_relation_direction(
     )
 
 
+@_safe_boundary
 def validate_guarded_relation(
     relation: Any,
     *,
@@ -655,6 +719,7 @@ def validate_guarded_relation(
     )
 
 
+@_safe_boundary
 def validate_guarded_relations(
     relations: Iterable[Any],
 ) -> tuple[ValidatedRelationDirection, ...]:
@@ -663,7 +728,10 @@ def validate_guarded_relations(
     if isinstance(relations, (str, bytes, bytearray, Mapping)):
         raise RelationShapeError()
     try:
-        validated = tuple(validate_guarded_relation(relation) for relation in relations)
+        validated = tuple(
+            validate_guarded_relation(relation)
+            for relation in _bounded_items(relations)
+        )
     except DirectionalityError:
         raise
     except Exception:

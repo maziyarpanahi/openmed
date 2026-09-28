@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -18,6 +19,24 @@ from .quality_gates import resolve_overlapping_entities
 
 SAFETY_SWEEP_SOURCE = "safety_sweep"
 SAFETY_SWEEP_PATTERNS_VERSION = "safety-sweep-v1"
+
+# Bound separator tolerance to structured shapes. A visible mutation must be
+# present, and the existing validator or explicit MRN context must still pass.
+_SPLIT_IDENTIFIER_PATTERNS = (
+    ("ssn", re.compile(r"(?<!\w)\d(?:[-.,· ]{0,2}\d){8}(?!\w)")),
+    (
+        "credit_debit_card",
+        re.compile(r"(?<!\w)\d(?:[-.,· ]{0,2}\d){15}(?!\w)"),
+    ),
+    (
+        "medical_record_number",
+        re.compile(r"(?<!\w)MRN[: #]*\d(?:[-.,· ]{0,2}\d){5,9}(?!\w)", re.I),
+    ),
+    (
+        "iban",
+        re.compile(r"(?<!\w)[A-Z]{2}\d{2}(?:[-.,· ]{0,2}[A-Z0-9]){11,30}(?!\w)"),
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -148,6 +167,46 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
                     end=end,
                     label=pattern.entity_type,
                     text=matched_text,
+                    confidence=_confidence(text, start, end, pattern),
+                    priority=pattern.priority,
+                    pattern=pattern,
+                )
+            )
+
+    by_label = {pattern.entity_type: pattern for pattern in patterns}
+    for label, split_pattern in _SPLIT_IDENTIFIER_PATTERNS:
+        pattern = by_label.get(label)
+        if pattern is None:
+            continue
+        for match in split_pattern.finditer(text):
+            start, end = match.span()
+            surface = match.group()
+            if not any(char in surface for char in ".,·"):
+                continue
+            if label != "iban" and (
+                re.search(r"\d[-.,· ]{0,2}$", text[max(0, start - 3) : start])
+                or re.match(r"[-.,· ]{0,2}\d", text[end : end + 3])
+            ):
+                # Never reinterpret a fragment of a longer separated digit run.
+                continue
+            canonical = re.sub(r"[-.,·\s]", "", surface)
+            if label == "medical_record_number":
+                if not re.fullmatch(r"MRN[:#]*\d{6,10}", canonical, re.I):
+                    continue
+            elif not _validated(pattern, canonical):
+                continue
+            if label == "ssn" and not _has_context(text, start, end, pattern):
+                continue
+            if label == "credit_debit_card" and not _has_context(
+                text, start, end, pattern
+            ):
+                continue
+            candidates.append(
+                _Candidate(
+                    start=start,
+                    end=end,
+                    label=label,
+                    text=surface,
                     confidence=_confidence(text, start, end, pattern),
                     priority=pattern.priority,
                     pattern=pattern,

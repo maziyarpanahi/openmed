@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic citation minimality checks for guarded atomic claims,
+  with opaque offset-only reports, token counts, explicit context budgets, and
+  human-review flags (#2742).
+- Added deterministic claim-level citation support metrics with optional
+  clinician adjudication, privacy-safe orphan and unused-evidence counts, and
+  synthetic offline regression coverage (#2754).
+- Added deterministic de-identification-aware citation boundary validation
+  with post-redaction digest binding, replacement-boundary rejection, and
+  value-free review reports (#2741).
+- Added a deterministic, local unsupported-claim rate for clinical summaries,
+  with four-state scoring, per-claim-class bootstrap intervals, aggregate-only
+  reports, and synthetic offline regression coverage (#2749).
+- Added deterministic, value-free guarded clinical-output provenance manifests
+  with input/evidence drift detection, model and policy fingerprints, and
+  contiguous human-review transitions (#2578).
+- Added an offline clinical NLI sequence-classifier adapter for pinned PyTorch
+  and ONNX artifacts with explicit class mapping, calibrated abstention, and
+  structured contradiction prechecks (#3235).
+
 - Added deterministic, domain-separated SHA-256 commitments for validated
   agent run summaries, with constant-time categorical verification, stable
   golden vectors, and value-free malformed-input handling (#3039).
@@ -211,6 +230,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Clinical NLI now fails closed when no released local checkpoint is registered;
+  lexical verification requires `backend="heuristic"`, and results expose
+  value-free four-state metadata instead of source or claim text (#3235).
+
 - Reject non-positive bootstrap sample counts and invalid alpha probabilities before
   producing a confidence interval.
 - Release an interrupted circuit-breaker recovery probe only when its ownership
@@ -250,9 +273,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing permissions are limited to the publish job.
 
 ### Fixed
+- Reject unsupported RequestBudget mapping keys instead of silently ignoring
+  misspelled limits (#3509).
+- Preserve hash characters inside quoted configuration values while stripping
+  trailing comments (#3502).
+- Strip BIO prefixes only at label beginnings, preserving interior labels such as
+  HLA-B-27 (#3503).
+- Key GLiNER model cache entries by requested device so a cached instance is not
+  moved under a later caller (#3501).
 
+- Hash dataset files with bounded memory (#3510).
+- Respect explicitly empty gold annotations (#3511).
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
+- Reject non-integer sharding counts before reading documents.
+- Reject overlapping sibling items at nested list levels.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).

@@ -15,7 +15,10 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
+from types import MappingProxyType
 from typing import Any, Literal
 
 from openmed.clinical.units import parse_measurement, parse_unit
@@ -83,6 +86,47 @@ _MISSING = object()
 _SAFE_UNIT_LABEL = re.compile(r"^[A-Za-z0-9%*/^()._\[\]-]{1,32}$")
 
 
+_REASONS = frozenset(
+    {
+        "unsupported_relation_kind",
+        "invalid_expected_dimension",
+        "missing_unit",
+        "unknown_left_unit",
+        "missing_comparison_unit",
+        "unknown_right_unit",
+        "expected_dimension_mismatch",
+        "dimension_mismatch",
+        "relation_dimension_mismatch",
+        "compatible_dimensions",
+    }
+)
+
+
+def _safe_boundary(function):
+    """Do not retain input-bearing exception chains."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except TypeError:
+            error = TypeError("candidates must be an iterable of relation candidates")
+        except Exception:
+            error = ValueError("invalid unit compatibility input")
+        raise error
+
+    return wrapped
+
+
+def _bounded_items(value):
+    if isinstance(value, (str, bytes, bytearray, Mapping)):
+        raise TypeError("candidates must be an iterable of relation candidates")
+    items = tuple(islice(iter(value), 4097))
+    if len(items) > 4096:
+        raise ValueError("unit collection exceeds the supported limit")
+    return items
+
+
 @dataclass(frozen=True)
 class UnitCompatibilityResult:
     """Value-free result for one quantitative unit-dimension decision.
@@ -110,6 +154,7 @@ class UnitCompatibilityResult:
     comparison_requested: bool = False
     advisory: str = UNIT_COMPATIBILITY_ADVISORY
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         """Normalize safe fields and enforce the review-status contract."""
 
@@ -121,6 +166,13 @@ class UnitCompatibilityResult:
             UNIT_UNKNOWN,
         }:
             raise ValueError("unsupported unit compatibility status")
+        if (
+            type(self.review_required) is not bool
+            or type(self.comparison_requested) is not bool
+        ):
+            raise ValueError("review fields must be booleans")
+        if self.reason not in _REASONS or self.advisory != UNIT_COMPATIBILITY_ADVISORY:
+            raise ValueError("invalid unit metadata")
         expected_review = self.status != UNIT_COMPATIBLE
         if self.review_required != expected_review:
             raise ValueError("review_required must match the compatibility status")
@@ -144,6 +196,30 @@ class UnitCompatibilityResult:
             "relation_type",
             _safe_relation_type(self.relation_type),
         )
+        for side in ("left", "right"):
+            unit = getattr(self, side + "_unit")
+            dimension = getattr(self, side + "_dimension")
+            if unit is not None:
+                parsed = _parse_safe_unit(unit, language=None)
+                if parsed is None or parsed["dimension"] != dimension:
+                    raise ValueError("unit and dimension must agree")
+            elif dimension is not None:
+                raise ValueError("dimension requires a unit")
+        if self.status == UNIT_COMPATIBLE:
+            if (
+                self.reason != "compatible_dimensions"
+                or self.left_unit is None
+                or self.relation_kind == "unknown"
+                or not _dimension_matches_kind(self.left_dimension, self.relation_kind)
+                or (self.comparison_requested and self.right_unit is None)
+                or (
+                    self.right_unit is not None
+                    and self.left_dimension != self.right_dimension
+                )
+            ):
+                raise ValueError("compatible status requires matching known dimensions")
+        elif self.reason == "compatible_dimensions":
+            raise ValueError("reason does not match status")
         object.__setattr__(self, "head_offset", _safe_offset(self.head_offset))
         object.__setattr__(self, "tail_offset", _safe_offset(self.tail_offset))
 
@@ -201,12 +277,21 @@ class UnitCompatibilityReport:
     advisory: str = UNIT_COMPATIBILITY_ADVISORY
     schema_version: int = UNIT_COMPATIBILITY_SCHEMA_VERSION
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         """Freeze the report result sequence and validate its schema version."""
 
-        if self.schema_version != UNIT_COMPATIBILITY_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != UNIT_COMPATIBILITY_SCHEMA_VERSION
+        ):
             raise ValueError("unsupported unit compatibility report schema version")
-        object.__setattr__(self, "results", tuple(self.results))
+        if self.advisory != UNIT_COMPATIBILITY_ADVISORY:
+            raise ValueError("invalid unit advisory")
+        values = _bounded_items(self.results)
+        if any(type(value) is not UnitCompatibilityResult for value in values):
+            raise ValueError("report requires typed unit results")
+        object.__setattr__(self, "results", tuple(replace(value) for value in values))
 
     def __iter__(self):
         """Iterate over result entries in candidate order."""
@@ -268,6 +353,7 @@ class _UnitInputs:
     comparison_requested: bool
 
 
+@_safe_boundary
 def check_unit_compatibility(
     left_unit: object | None,
     right_unit: object | None = None,
@@ -303,6 +389,8 @@ def check_unit_compatibility(
         ``review_required`` and never include a numeric value.
     """
 
+    if type(require_pair) is not bool:
+        raise ValueError("require_pair must be a boolean")
     kind = _normalize_relation_kind(relation_kind)
     if kind is None:
         return _result(
@@ -432,6 +520,7 @@ def check_unit_compatibility(
     )
 
 
+@_safe_boundary
 def validate_quantitative_relation(
     candidate: object,
     *,
@@ -497,6 +586,7 @@ def validate_quantitative_relation(
     )
 
 
+@_safe_boundary
 def validate_quantitative_relations(
     candidates: Iterable[object],
 ) -> UnitCompatibilityReport:
@@ -510,7 +600,7 @@ def validate_quantitative_relations(
     if isinstance(candidates, (str, bytes)):
         raise TypeError("candidates must be an iterable of relation candidates")
     try:
-        values = tuple(candidates)
+        values = _bounded_items(candidates)
     except TypeError as exc:
         raise TypeError(
             "candidates must be an iterable of relation candidates"
@@ -567,6 +657,9 @@ def _has_unit_field(data: Mapping[str, object]) -> bool:
 
 
 def _infer_relation_kind(data: Mapping[str, object]) -> str | None:
+    for key in ("relation_kind", "quantitative_kind", "kind"):
+        if key in data:
+            return _normalize_relation_kind(data[key]) or "unknown"
     for key in (
         "relation_kind",
         "quantitative_kind",
@@ -603,13 +696,11 @@ def _normalize_relation_kind(value: object) -> str | None:
         "observation",
     }:
         return "laboratory"
-    if "concentration" in normalized:
+    if normalized == "drug_to_concentration":
         return "concentration"
-    if "rate" in normalized or "frequency" in normalized:
+    if normalized == "drug_to_rate":
         return "rate"
-    if "dose" in normalized or "strength" in normalized:
-        return "dose"
-    if "lab" in normalized or "laboratory" in normalized:
+    if normalized == "laboratory_result":
         return "laboratory"
     return None
 
@@ -702,10 +793,16 @@ def _extract_unit_inputs(
     return _UnitInputs(left=None, right=None, comparison_requested=False)
 
 
-def _unit_from_value(value: object, *, language: object | None = None) -> object | None:
+def _unit_from_value(
+    value: object, *, language: object | None = None, depth: int = 0
+) -> object | None:
+    if depth > 32:
+        raise ValueError("unit nesting exceeds the supported limit")
     if value is None:
         return None
     if isinstance(value, str):
+        if len(value) > 4096:
+            return "__unknown_unit__"
         parsed = parse_unit(value, language=language)
         if parsed["status"] == "ok":
             return value
@@ -732,9 +829,8 @@ def _unit_from_value(value: object, *, language: object | None = None) -> object
             "expected_unit",
         ):
             if key in value and value[key] is not None:
-                unit = _unit_from_value(value[key], language=language)
-                if unit is not None:
-                    return unit
+                unit = _unit_from_value(value[key], language=language, depth=depth + 1)
+                return unit if unit is not None else "__unknown_unit__"
         for key in ("value", "amount", "dose", "magnitude", "text"):
             if key in value:
                 unit = _unit_from_value(value[key], language=language)
@@ -746,16 +842,15 @@ def _unit_from_value(value: object, *, language: object | None = None) -> object
     except Exception:
         unit = _MISSING
     if unit is not _MISSING and unit is not None:
-        parsed_unit = _unit_from_value(unit, language=language)
-        if parsed_unit is not None:
-            return parsed_unit
+        parsed_unit = _unit_from_value(unit, language=language, depth=depth + 1)
+        return parsed_unit if parsed_unit is not None else "__unknown_unit__"
     for key in ("normalized", "measurement", "value", "amount", "dose", "text"):
         try:
             nested = getattr(value, key, _MISSING)
         except Exception:
             nested = _MISSING
         if nested is not _MISSING:
-            parsed_nested = _unit_from_value(nested, language=language)
+            parsed_nested = _unit_from_value(nested, language=language, depth=depth + 1)
             if parsed_nested is not None:
                 return parsed_nested
     return None
@@ -766,7 +861,7 @@ def _parse_safe_unit(
     *,
     language: object | None,
 ) -> dict[str, Any] | None:
-    if unit is None:
+    if not isinstance(unit, str) or len(unit) > 256:
         return None
     parsed = parse_unit(unit, language=language)
     if parsed.get("status") != "ok":
@@ -873,7 +968,8 @@ def _result(
 
 
 def _safe_dimension(value: Mapping[str, int] | None) -> dict[str, int] | None:
-    return _normalize_dimension(value)
+    normalized = _normalize_dimension(value)
+    return None if normalized is None else MappingProxyType(normalized)
 
 
 def _normalize_dimension(value: object) -> dict[str, int] | None:
@@ -882,10 +978,12 @@ def _normalize_dimension(value: object) -> dict[str, int] | None:
     if not isinstance(value, Mapping):
         return None
     normalized: dict[str, int] = {}
+    if len(value) > len(_KNOWN_DIMENSION_NAMES):
+        return None
     for name, exponent in value.items():
         if not isinstance(name, str) or name not in _KNOWN_DIMENSION_NAMES:
             return None
-        if isinstance(exponent, bool) or not isinstance(exponent, int):
+        if type(exponent) is not int or abs(exponent) > 32:
             return None
         if exponent:
             normalized[name] = exponent
