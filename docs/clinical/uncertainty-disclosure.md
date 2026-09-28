@@ -30,6 +30,9 @@ assert report.is_complete
 The default display bounds are `max_chars` from 1 through 4096 and `max_items`
 from 1 through 100. `max_lines` is available from 1 through 100, and callers
 can choose which bounded hints are required with `required_display_hints`.
+Every supplied known hint is checked, including optional hints. Multiple aliases
+for the same bound are rejected as ambiguous. Direct report construction requires
+canonical hexadecimal digests and integer counts consistent with its findings.
 Callers may also provide `required_categories` and a minimum evidence-reference
 count. The fields can be top-level or nested under `uncertainty_disclosure`,
 `uncertainty`, or `metadata` containers.

@@ -15,6 +15,7 @@ from openmed.clinical import (
     MISSING_REASON_CODES,
     MISSING_REQUIRED_CATEGORY,
     MISSING_UNCERTAINTY_CATEGORIES,
+    UncertaintyDisclosureFinding,
     UncertaintyDisclosureReport,
     audit_uncertainty_disclosure,
     audit_uncertainty_disclosures,
@@ -235,3 +236,41 @@ def test_claims_without_ids_still_have_order_independent_opaque_keys():
         audit_uncertainty_disclosures(claims).to_dict()
         == audit_uncertainty_disclosures(list(reversed(claims))).to_dict()
     )
+
+
+@pytest.mark.parametrize("key", ["sha256:" + "z" * 64, "sha256:" + "A" * 64, None])
+def test_finding_requires_canonical_hex_digest(key):
+    with pytest.raises(ValueError, match="opaque SHA-256"):
+        UncertaintyDisclosureFinding(key, (MISSING_REASON_CODES,))
+
+
+@pytest.mark.parametrize(
+    "hints",
+    [
+        {"max_chars": 240, "max_items": 4, "max_lines": 101},
+        {"max_chars": 240, "max_items": 4, "max_lines": True},
+        {"max_chars": 0, "max_length": 240, "max_items": 4},
+    ],
+)
+def test_optional_and_ambiguous_display_hints_are_invalid(hints):
+    claim = _complete_claim()
+    claim["uncertainty_disclosure"]["display_hints"] = hints
+    report = audit_uncertainty_disclosures([claim])
+    assert not report.is_complete
+    assert INVALID_DISPLAY_HINTS in report.findings[0].issue_codes
+
+
+@pytest.mark.parametrize("count", [True, 0.5, "1"])
+def test_report_rejects_non_integer_counts(count):
+    with pytest.raises(ValueError, match="counts"):
+        UncertaintyDisclosureReport(count, count, (), {})
+
+
+def test_report_rejects_counts_that_contradict_findings():
+    finding = UncertaintyDisclosureFinding(
+        "sha256:" + "a" * 64, (MISSING_REASON_CODES,)
+    )
+    with pytest.raises(ValueError, match="findings"):
+        UncertaintyDisclosureReport(1, 1, (finding,), {MISSING_REASON_CODES: 1})
+    with pytest.raises(ValueError, match="counts"):
+        UncertaintyDisclosureReport(1, 0, (finding,), {})

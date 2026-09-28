@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -149,7 +150,9 @@ class UncertaintyDisclosureFinding:
     issue_codes: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if not self.claim_key.startswith("sha256:") or len(self.claim_key) != 71:
+        if not isinstance(self.claim_key, str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", self.claim_key
+        ):
             raise ValueError("claim_key must be an opaque SHA-256 identifier")
         if any(code not in _ISSUE_CODE_SET for code in self.issue_codes):
             raise ValueError("finding contains an unknown issue code")
@@ -181,17 +184,29 @@ class UncertaintyDisclosureReport:
     advisory: str = UNCERTAINTY_DISCLOSURE_ADVISORY
 
     def __post_init__(self) -> None:
-        if self.checked_claims < 0 or self.compliant_claims < 0:
-            raise ValueError("claim counts must be non-negative")
+        if any(
+            type(count) is not int or count < 0
+            for count in (self.checked_claims, self.compliant_claims)
+        ):
+            raise ValueError("claim counts must be non-negative integers")
         if self.compliant_claims > self.checked_claims:
             raise ValueError("compliant claim count cannot exceed checked claim count")
         findings = tuple(sorted(self.findings, key=_finding_sort_key))
+        if len(findings) != self.checked_claims - self.compliant_claims or any(
+            not finding.issue_codes for finding in findings
+        ):
+            raise ValueError("claim counts must agree with findings")
         counts = {
-            code: int(self.issue_counts.get(code, 0))
+            code: self.issue_counts.get(code, 0)
             for code in UNCERTAINTY_DISCLOSURE_ISSUE_CODES
         }
-        if any(count < 0 for count in counts.values()):
-            raise ValueError("issue counts must be non-negative")
+        if any(type(count) is not int or count < 0 for count in counts.values()):
+            raise ValueError("issue counts must be non-negative integers")
+        if any(
+            counts[code] != sum(code in finding.issue_codes for finding in findings)
+            for code in counts
+        ):
+            raise ValueError("issue counts must agree with findings")
         object.__setattr__(self, "findings", findings)
         object.__setattr__(self, "issue_counts", MappingProxyType(counts))
         object.__setattr__(self, "advisory", UNCERTAINTY_DISCLOSURE_ADVISORY)
@@ -572,17 +587,20 @@ def _display_hint_issues(value: Any, required_keys: tuple[str, ...]) -> list[str
         return [INVALID_DISPLAY_HINTS]
 
     normalized: dict[str, Any] = {}
+    ambiguous = False
     for raw_key, raw_value in value.items():
         if not isinstance(raw_key, str):
             continue
         key = _DISPLAY_HINT_ALIASES.get(raw_key.strip().casefold(), raw_key.strip())
+        if key in DISPLAY_HINT_LIMITS and key in normalized:
+            ambiguous = True
         normalized[key] = raw_value
 
     issues: list[str] = []
     missing = any(key not in normalized for key in required_keys)
-    invalid = any(
+    invalid = ambiguous or any(
         key in normalized and not _bounded_hint_value(key, normalized[key])
-        for key in required_keys
+        for key in DISPLAY_HINT_LIMITS
     )
     if missing:
         issues.append(MISSING_DISPLAY_HINTS)
