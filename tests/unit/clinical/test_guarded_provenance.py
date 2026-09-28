@@ -34,6 +34,12 @@ from openmed.clinical.guarded_provenance import (
     EvidenceReference as GuardedEvidenceReference,
 )
 from openmed.clinical.guarded_provenance import (
+    GuardedProvenanceRecord,
+    IntegritySummary,
+    ModelProvenance,
+    ReviewTransition,
+)
+from openmed.clinical.guarded_provenance import (
     fingerprint_policy as guarded_fingerprint_policy,
 )
 
@@ -131,8 +137,8 @@ def test_record_binds_model_policy_evidence_and_review_transitions() -> None:
     assert record.review_status == ReviewState.APPROVED
     assert len(record.review_transitions) == 2
     assert record.review_transitions[0].reviewer_fingerprint is not None
-    assert record.model.model_id == "OpenMed/synthetic-nli-model"
-    assert record.model.revision == "2026.09"
+    assert record.model.model_id.startswith("sha256:")
+    assert record.model.revision.startswith("sha256:")
     assert record.model.model_fingerprint is not None
     assert record.policy_fingerprint is not None
     assert record.integrity.ok
@@ -251,3 +257,75 @@ def test_records_and_reports_are_immutable_and_offline(monkeypatch) -> None:
 
     with pytest.raises(FrozenInstanceError):
         manifest.records = ()  # type: ignore[misc]
+
+
+def test_caller_metadata_cannot_leak_through_safe_looking_tokens():
+    marker = "synthetic_person_name"
+    manifest = build_guarded_provenance_manifest(
+        output={"input_text": SYNTHETIC_INPUT, "text": SYNTHETIC_OUTPUT},
+        output_kind=marker,
+        evidence=[dict(_evidence(), kind=marker)],
+        model={"model_id": marker, "revision": marker, "tokenizer_id": marker},
+        policy={"profile": "synthetic"},
+        review_transitions=[
+            {"from_state": "queued", "to_state": "in_review", "reason_code": marker}
+        ],
+    )
+    assert marker not in manifest.to_json() + manifest.to_markdown() + repr(manifest)
+
+
+def test_supplied_integrity_cannot_approve_missing_inputs_and_evidence():
+    record = GuardedProvenanceRecord(
+        review_status="approved",
+        review_transitions=(
+            ReviewTransition(0, "queued", "in_review"),
+            ReviewTransition(1, "in_review", "approved"),
+        ),
+        integrity=IntegritySummary(
+            model_present=True,
+            policy_present=True,
+            input_present=True,
+            output_present=True,
+        ),
+    )
+    manifest = build_guarded_provenance_manifest(records=[record])
+    assert record.requires_human_review
+    assert not manifest.release_ready
+    assert not check_guarded_provenance(manifest).release_ready
+
+
+def test_evidence_offset_drift_is_detected_even_when_content_hash_matches():
+    manifest = _manifest()
+    report = check_guarded_provenance(
+        manifest, current_evidence=[dict(_evidence(), start=5, end=19)]
+    )
+    assert not report.ok
+    assert report.changed_evidence_count == 1
+
+
+def test_ambiguous_duplicate_evidence_is_rejected():
+    with pytest.raises(GuardedProvenanceError, match="duplicate evidence"):
+        _manifest(evidence=[_evidence(), _evidence("synthetic changed evidence")])
+
+
+def test_nested_mutated_model_is_revalidated_before_serialization():
+    model = ModelProvenance(model_id="synthetic-model")
+    object.__setattr__(model, "model_id", "synthetic_person_name")
+    record = GuardedProvenanceRecord(model=model)
+    assert "synthetic_person_name" not in json.dumps(record.to_dict())
+
+
+def test_rejected_iterators_and_paths_retain_no_exception_context(tmp_path):
+    class InvalidEvidence:
+        def __iter__(self):
+            raise ValueError("synthetic_private_marker")
+
+    for operation in (
+        lambda: _manifest(evidence=InvalidEvidence()),
+        lambda: load_guarded_provenance_manifest(tmp_path / "synthetic_private_marker"),
+    ):
+        with pytest.raises(GuardedProvenanceError) as caught:
+            operation()
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
+        assert "synthetic_private_marker" not in str(caught.value)

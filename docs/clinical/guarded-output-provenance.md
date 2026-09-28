@@ -5,7 +5,7 @@ boundary for summary and clinical-NLI review packets. A record binds a guarded
 output to:
 
 - the SHA-256 fingerprints of its input and generated output;
-- safe model identifiers and a model descriptor fingerprint;
+- opaque model identifiers and a model descriptor fingerprint;
 - one policy fingerprint;
 - opaque evidence references with optional half-open source offsets; and
 - an explicit human-review state and its ordered transitions.
@@ -15,6 +15,11 @@ certification, diagnosis, or treatment recommendation. The builder never calls
 the network and never stores generated output, source text, prompts, reviewer
 notes, paths, or arbitrary output metadata. Evidence identifiers and reviewer
 identifiers are fingerprinted before the immutable records are created.
+Model identifiers, revisions and tokenizer identifiers are also fingerprinted;
+shape alone never makes caller metadata safe to log. Kind and reason fields use
+a fixed vocabulary. Supplied integrity summaries cannot override structural
+checks, conflicting duplicate evidence is rejected, and evidence checks bind
+offsets and kind as well as content hashes.
 
 ## Build a record
 

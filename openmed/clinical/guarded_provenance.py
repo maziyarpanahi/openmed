@@ -70,22 +70,7 @@ GUARDED_PROVENANCE_DISCLAIMER: Final[str] = (
 
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _HEX_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,255}$")
-_TOKEN_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 _MISSING = object()
-_SUSPICIOUS_IDENTIFIER_PARTS = frozenset(
-    {
-        "account",
-        "credential",
-        "mrn",
-        "patient",
-        "password",
-        "phone",
-        "secret",
-        "ssn",
-        "token",
-    }
-)
 
 
 class GuardedProvenanceError(ValueError):
@@ -338,16 +323,9 @@ def _read(value: Any, names: Sequence[str], *, default: Any = None) -> Any:
 
 
 def _safe_identifier(value: Any) -> str | None:
-    text = _safe_text(value)
-    if text is None:
+    if value is None:
         return None
-    candidate = text.strip()
-    if not _IDENTIFIER_RE.fullmatch(candidate):
-        return None
-    parts = frozenset(re.split(r"[._:/+@-]+", candidate.casefold()))
-    if parts & _SUSPICIOUS_IDENTIFIER_PARTS:
-        return None
-    return candidate
+    return _normalise_digest(value, "guarded-clinical-model-metadata")
 
 
 def _safe_token(value: Any, default: str) -> str:
@@ -355,7 +333,34 @@ def _safe_token(value: Any, default: str) -> str:
     if text is None:
         return default
     candidate = text.strip().casefold().replace("-", "_")
-    return candidate if _TOKEN_RE.fullmatch(candidate) else default
+    allowed = {
+        "clinical_output",
+        "summary",
+        "nli",
+        "source_span",
+        "claim",
+        "citation",
+        "evidence",
+        "unspecified",
+        "missing_evidence",
+        "changed_evidence",
+        "missing_input_hash",
+        "missing_output_hash",
+        "missing_model_identity",
+        "missing_policy_fingerprint",
+        "changed_input",
+        "changed_output",
+        "missing_review_transition",
+        "invalid_manifest_hash",
+        "invalid_record_hash",
+        "malformed_manifest",
+        "review_started",
+        "review_completed",
+        "approved",
+        "rejected",
+        "needs_revision",
+    }
+    return candidate if candidate in allowed else default
 
 
 def _opaque_identifier(value: Any, domain: str) -> str | None:
@@ -589,7 +594,7 @@ class EvidenceReference:
         """Convert a source/evidence object while dropping its protected value."""
 
         if isinstance(value, cls):
-            return value
+            return cls.from_dict(value.to_dict())
         raw_id: Any
         raw_offsets: Any
         raw_hash: Any
@@ -738,7 +743,7 @@ class ReviewTransition:
         """Build a transition from a mapping without retaining notes or identity."""
 
         if isinstance(value, cls):
-            return value
+            return cls(**value.to_dict())
         from_state = _read(
             value,
             ("from_state", "previous_state", "source_state"),
@@ -795,9 +800,9 @@ def _normalise_transitions(values: Any) -> tuple[ReviewTransition, ...]:
         try:
             candidates = tuple(values)
         except Exception:
-            raise GuardedProvenanceError(
-                "review transitions must be iterable"
-            ) from None
+            candidates = None
+        if candidates is None:
+            raise GuardedProvenanceError("review transitions must be iterable")
 
     transitions: list[ReviewTransition] = []
     for index, value in enumerate(candidates):
@@ -902,7 +907,19 @@ class IntegritySummary:
     def ok(self) -> bool:
         """Return whether the record is complete and internally consistent."""
 
-        return not self.reason_codes
+        return (
+            not self.reason_codes
+            and not self.missing_evidence_count
+            and not self.changed_evidence_count
+            and not self.input_changed
+            and not self.output_changed
+            and self.model_present
+            and self.policy_present
+            and self.input_present
+            and self.output_present
+            and self.manifest_hash_valid
+            and self.record_hash_valid
+        )
 
     @property
     def valid(self) -> bool:
@@ -1027,17 +1044,7 @@ class GuardedProvenanceRecord:
         output_kind = _safe_token(self.output_kind, "clinical_output")
         input_hash = _normalise_digest(self.input_hash, "guarded-clinical-input")
         output_hash = _normalise_digest(self.output_hash, "guarded-clinical-output")
-        evidence = tuple(
-            sorted(
-                (
-                    item
-                    if isinstance(item, EvidenceReference)
-                    else EvidenceReference.from_value(item, index=index)
-                    for index, item in enumerate(tuple(self.evidence))
-                ),
-                key=lambda item: item.evidence_id,
-            )
-        )
+        evidence = _normalise_evidence_collection(self.evidence)
         evidence_ids = tuple(
             sorted(
                 {
@@ -1053,7 +1060,7 @@ class GuardedProvenanceRecord:
         if not evidence_ids and evidence:
             evidence_ids = tuple(item.evidence_id for item in evidence)
         model = (
-            self.model
+            ModelProvenance.from_dict(self.model.to_dict())
             if isinstance(self.model, ModelProvenance)
             else ModelProvenance.from_value(self.model)
         )
@@ -1073,27 +1080,48 @@ class GuardedProvenanceRecord:
         missing_ids = tuple(sorted(set(evidence_ids) - available_ids))
         missing_count = len(missing_ids) if evidence_ids else 1
         integrity = self.integrity
-        if integrity is None:
-            integrity = IntegritySummary(
-                missing_evidence_count=missing_count,
-                missing_evidence_ids=missing_ids,
-                model_present=model.present,
-                policy_present=policy_fingerprint is not None,
-                input_present=input_hash is not None,
-                output_present=output_hash is not None,
-                reason_codes=_record_reason_codes(
-                    missing_evidence_count=missing_count,
-                    changed_evidence_count=0,
-                    input_present=input_hash is not None,
-                    output_present=output_hash is not None,
-                    model_present=model.present,
-                    policy_present=policy_fingerprint is not None,
-                    input_changed=False,
-                    output_changed=False,
-                    transitions=transitions,
-                    review_state=review_status,
-                ),
+        if integrity is not None:
+            integrity = IntegritySummary.from_dict(
+                integrity.to_dict()
+                if isinstance(integrity, IntegritySummary)
+                else integrity
             )
+        observed = integrity or IntegritySummary()
+        integrity = IntegritySummary(
+            missing_evidence_count=missing_count,
+            missing_evidence_ids=missing_ids,
+            changed_evidence_count=observed.changed_evidence_count,
+            changed_evidence_ids=observed.changed_evidence_ids,
+            input_checked=observed.input_checked,
+            input_changed=observed.input_changed,
+            output_checked=observed.output_checked,
+            output_changed=observed.output_changed,
+            manifest_hash_valid=observed.manifest_hash_valid,
+            record_hash_valid=observed.record_hash_valid,
+            model_present=model.present,
+            policy_present=policy_fingerprint is not None,
+            input_present=input_hash is not None,
+            output_present=output_hash is not None,
+            reason_codes=tuple(
+                sorted(
+                    set(observed.reason_codes)
+                    | set(
+                        _record_reason_codes(
+                            missing_evidence_count=missing_count,
+                            changed_evidence_count=observed.changed_evidence_count,
+                            input_present=input_hash is not None,
+                            output_present=output_hash is not None,
+                            model_present=model.present,
+                            policy_present=policy_fingerprint is not None,
+                            input_changed=observed.input_changed,
+                            output_changed=observed.output_changed,
+                            transitions=transitions,
+                            review_state=review_status,
+                        )
+                    )
+                )
+            ),
+        )
         record_id = self.record_id
         if record_id is None:
             record_id = _hash_payload(
@@ -1315,15 +1343,17 @@ def _normalise_evidence_collection(value: Any) -> tuple[EvidenceReference, ...]:
         try:
             candidates = tuple(value)
         except Exception:
-            raise GuardedProvenanceError("evidence must be iterable") from None
+            candidates = None
+        if candidates is None:
+            raise GuardedProvenanceError("evidence must be iterable")
     records = [
-        item
-        if isinstance(item, EvidenceReference)
-        else EvidenceReference.from_value(item, index=index)
+        EvidenceReference.from_value(item, index=index)
         for index, item in enumerate(candidates)
     ]
     unique: dict[str, EvidenceReference] = {}
     for record in records:
+        if record.evidence_id in unique and unique[record.evidence_id] != record:
+            raise GuardedProvenanceError("duplicate evidence identifiers disagree")
         unique.setdefault(record.evidence_id, record)
     return tuple(sorted(unique.values(), key=lambda item: item.evidence_id))
 
@@ -1822,10 +1852,10 @@ def build_guarded_provenance_manifest(
             else GuardedProvenanceRecord.from_dict(item)
             for item in records
         )
-    except Exception as exc:
-        if isinstance(exc, GuardedProvenanceError):
-            raise
-        raise GuardedProvenanceError("provenance records are invalid") from None
+    except Exception:
+        normalised = None
+    if normalised is None:
+        raise GuardedProvenanceError("provenance records are invalid")
     return GuardedProvenanceManifest(records=normalised)
 
 
@@ -1853,12 +1883,10 @@ def write_guarded_provenance_manifest(
             resolved.to_json() + "\n",
             encoding="utf-8",
         )
-    except GuardedProvenanceError:
-        raise
     except Exception:
-        raise GuardedProvenanceError(
-            "guarded provenance manifest could not be written"
-        ) from None
+        destination = None
+    if destination is None:
+        raise GuardedProvenanceError("guarded provenance manifest could not be written")
     return destination
 
 
@@ -1868,12 +1896,9 @@ def load_guarded_provenance_manifest(path: str | Path) -> GuardedProvenanceManif
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
         return GuardedProvenanceManifest.from_dict(value)
-    except GuardedProvenanceError:
-        raise
     except Exception:
-        raise GuardedProvenanceError(
-            "guarded provenance manifest could not be loaded"
-        ) from None
+        pass
+    raise GuardedProvenanceError("guarded provenance manifest could not be loaded")
 
 
 @dataclass(frozen=True, slots=True)
@@ -2160,10 +2185,10 @@ def check_guarded_provenance(
                     ),
                     None,
                 )
-                if (
-                    stored is not None
-                    and stored.evidence_hash is not None
-                    and current.evidence_hash != stored.evidence_hash
+                if stored is not None and (
+                    current.evidence_hash != stored.evidence_hash
+                    or current.source_offsets != stored.source_offsets
+                    or current.kind != stored.kind
                 ):
                     changed_ids.add(evidence_id)
             missing_count = len(missing_ids) if record.evidence_ids else 1
