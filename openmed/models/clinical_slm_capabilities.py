@@ -6,7 +6,7 @@ or provide a remote fallback.  This makes it suitable for a deployment gate
 that runs before a clinical request enters the local inference path.
 
 The public report contains only bounded metadata, fixed reason codes, counts,
-booleans, and a non-reversible fingerprint.  In particular, it never echoes a
+booleans, and a normalized-metadata fingerprint. In particular, it never echoes a
 model path, identifier, arbitrary manifest value, prompt, or patient data.
 """
 
@@ -17,7 +17,9 @@ import importlib.util
 import json
 import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final
@@ -37,6 +39,8 @@ MANIFEST_FILENAMES: Final = (
     "manifest.json",
 )
 
+_MAX_ITEMS: Final = 4096
+_MAX_MANIFEST_BYTES: Final = 8 * 1024 * 1024
 _MAX_IDENTIFIER_LENGTH: Final = 128
 _MAX_CONTEXT_TOKENS: Final = 2**31 - 1
 _KNOWN_QUANTIZATION_SCHEMES: Final = frozenset(
@@ -173,6 +177,28 @@ def _fail(reason_code: str) -> None:
     raise ClinicalSLMCapabilityError(reason_code) from None
 
 
+def _safe_boundary(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        code = "invalid_manifest"
+        try:
+            return function(*args, **kwargs)
+        except ClinicalSLMCapabilityError as error:
+            code = error.reason_code
+        except Exception:
+            pass
+        raise ClinicalSLMCapabilityError(code)
+
+    return checked
+
+
+def _bounded(value):
+    result = tuple(islice(iter(value), _MAX_ITEMS + 1))
+    if len(result) > _MAX_ITEMS:
+        _fail("invalid_manifest")
+    return result
+
+
 def _canonical_json(value: Any) -> str:
     try:
         return json.dumps(
@@ -200,7 +226,7 @@ def _copy_mapping(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or isinstance(value, (str, bytes, bytearray)):
         _fail("invalid_manifest")
     try:
-        copied = dict(value)
+        copied = {key: value[key] for key in _bounded(value)}
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception:
@@ -212,6 +238,8 @@ def _copy_mapping(value: Any) -> dict[str, Any]:
 
 def _parse_json(payload: str | bytes | bytearray) -> dict[str, Any]:
     try:
+        if len(payload) > _MAX_MANIFEST_BYTES:
+            _fail("manifest_invalid_json")
         decoded = json.loads(payload, object_pairs_hook=_strict_json_object)
     except ClinicalSLMCapabilityError:
         raise
@@ -233,7 +261,8 @@ def _read_manifest_file(source: str | Path) -> dict[str, Any]:
             )
         if path.is_symlink() or not path.is_file():
             _fail("manifest_missing")
-        payload = path.read_bytes()
+        with path.open("rb") as handle:
+            payload = handle.read(_MAX_MANIFEST_BYTES + 1)
     except ClinicalSLMCapabilityError:
         raise
     except (KeyboardInterrupt, SystemExit):
@@ -243,6 +272,7 @@ def _read_manifest_file(source: str | Path) -> dict[str, Any]:
     return _parse_json(payload)
 
 
+@_safe_boundary
 def load_clinical_slm_capability_manifest(
     source: Mapping[str, Any] | str | Path | bytes | bytearray,
 ) -> dict[str, Any]:
@@ -292,7 +322,7 @@ def _alias_value(
 
 
 def _normalise_token(value: Any) -> str | None:
-    if type(value) is not str:
+    if type(value) is not str or len(value) > _MAX_IDENTIFIER_LENGTH:
         return None
     token = value.strip().lower().replace("-", "_").replace(" ", "_")
     if (
@@ -322,14 +352,15 @@ def _normalise_runtime_feature(value: Any) -> str | None:
     token = _normalise_token(value)
     if token is None:
         return None
-    return _RUNTIME_FEATURE_ALIASES.get(token, token)
+    feature = _RUNTIME_FEATURE_ALIASES.get(token, token)
+    return feature if feature in _RUNTIME_FEATURE_MODULES else None
 
 
 def _sequence_values(value: Any) -> tuple[Any, ...] | None:
     if isinstance(value, Mapping):
         values: list[Any] = []
         try:
-            for key, enabled in value.items():
+            for key, enabled in _bounded(value.items()):
                 if type(enabled) is not bool:
                     return None
                 if enabled:
@@ -341,8 +372,8 @@ def _sequence_values(value: Any) -> tuple[Any, ...] | None:
         return tuple(values)
     if isinstance(value, str):
         return (value,)
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return tuple(value)
+    if isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray)):
+        return _bounded(value)
     return None
 
 
@@ -378,6 +409,18 @@ class ContextLimits:
     max_output_tokens: int | None = None
     declared: bool = False
 
+    @_safe_boundary
+    def __post_init__(self):
+        if type(self.declared) is not bool or any(
+            value is not None and _positive_int(value) is None
+            for value in (
+                self.max_context_tokens,
+                self.max_input_tokens,
+                self.max_output_tokens,
+            )
+        ):
+            _fail("invalid_manifest")
+
     def __repr__(self) -> str:
         """Return a bounded metadata-only representation."""
 
@@ -407,7 +450,7 @@ def _normalise_context_limits(
     if present:
         if isinstance(raw_context, Mapping):
             try:
-                context = dict(raw_context)
+                context = _copy_mapping(raw_context)
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception:
@@ -429,15 +472,14 @@ def _normalise_context_limits(
         "output_tokens",
         "max_new_tokens",
     ):
-        if key in payload and key not in context:
+        if key in payload:
+            if key in context:
+                _fail("ambiguous_manifest_field")
             context[key] = payload[key]
             present = True
 
     def first(keys: Sequence[str]) -> tuple[bool, Any]:
-        for key in keys:
-            if key in context:
-                return True, context[key]
-        return False, None
+        return _alias_value(context, keys)
 
     context_present, raw_total = first(
         (
@@ -465,8 +507,15 @@ def _normalise_context_limits(
     ):
         invalid = True
 
-    if context_present and total is not None and not input_present:
-        input_limit = total
+    if total is not None:
+        if not input_present:
+            input_limit = total - (output_limit or 0)
+        if (input_limit is not None and input_limit <= 0) or (input_limit or 0) + (
+            output_limit or 0
+        ) > total:
+            invalid = True
+            if input_limit is not None and input_limit <= 0:
+                input_limit = None
     limits = ContextLimits(
         max_context_tokens=total,
         max_input_tokens=input_limit,
@@ -483,6 +532,20 @@ class QuantizationMetadata:
     scheme: str | None = None
     bits: int | None = None
     declared: bool = False
+
+    @_safe_boundary
+    def __post_init__(self):
+        if type(self.declared) is not bool:
+            _fail("invalid_manifest")
+        if self.scheme is not None and (
+            type(self.scheme) is not str
+            or self.scheme not in _KNOWN_QUANTIZATION_SCHEMES
+        ):
+            _fail("invalid_manifest")
+        if self.bits is not None and (
+            type(self.bits) is not int or self.bits not in {2, 3, 4, 8, 16, 32}
+        ):
+            _fail("invalid_manifest")
 
     def __repr__(self) -> str:
         """Return a bounded metadata-only representation."""
@@ -513,7 +576,7 @@ def _normalise_quantization(
     quantization: dict[str, Any]
     if isinstance(raw_quantization, Mapping):
         try:
-            quantization = dict(raw_quantization)
+            quantization = _copy_mapping(raw_quantization)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -523,15 +586,13 @@ def _normalise_quantization(
     else:
         return QuantizationMetadata(declared=True), ("quantization_invalid",)
 
-    raw_scheme = None
-    for key in ("scheme", "method", "type", "format", "name"):
-        if key in quantization:
-            raw_scheme = quantization[key]
-            break
+    _, raw_scheme = _alias_value(
+        quantization, ("scheme", "method", "type", "format", "name")
+    )
     token = _normalise_token(raw_scheme)
     if token is not None:
         token = _QUANTIZATION_ALIASES.get(token, token)
-    raw_bits = quantization.get("bits", quantization.get("precision"))
+    _, raw_bits = _alias_value(quantization, ("bits", "precision"))
     bits = (
         raw_bits if type(raw_bits) is int and raw_bits in {2, 3, 4, 8, 16, 32} else None
     )
@@ -550,6 +611,11 @@ def _normalise_quantization(
             inferred_bits = None
         if inferred_bits in {2, 3, 4, 8}:
             bits = inferred_bits
+    expected_bits = {"fp16": 16, "bf16": 16, "fp32": 32, "q4_0": 4, "q8_0": 8}.get(
+        token
+    )
+    if expected_bits is not None and bits is not None and bits != expected_bits:
+        invalid = True
     metadata = QuantizationMetadata(
         scheme=token if token in _KNOWN_QUANTIZATION_SCHEMES else None,
         bits=bits,
@@ -566,6 +632,24 @@ class RuntimeFeatureMetadata:
     available: tuple[str, ...] = ()
     unknown_count: int = 0
     invalid_count: int = 0
+
+    @_safe_boundary
+    def __post_init__(self):
+        for name in ("required", "available"):
+            values = _bounded(getattr(self, name))
+            if any(
+                type(value) is not str or value not in _RUNTIME_FEATURE_MODULES
+                for value in values
+            ):
+                _fail("invalid_manifest")
+            object.__setattr__(self, name, tuple(sorted(set(values))))
+        if not set(self.available).issubset(self.required):
+            _fail("invalid_manifest")
+        if any(
+            type(value) is not int or not 0 <= value <= 2 * _MAX_ITEMS
+            for value in (self.unknown_count, self.invalid_count)
+        ):
+            _fail("invalid_manifest")
 
     def __repr__(self) -> str:
         """Return a bounded metadata-only representation."""
@@ -622,7 +706,7 @@ def _normalise_runtime_requirements(
     else:
         if isinstance(available_runtime_features, Mapping):
             try:
-                for key, value in available_runtime_features.items():
+                for key, value in _bounded(available_runtime_features.items()):
                     if type(value) is not bool:
                         invalid_count += 1
                         continue
@@ -753,13 +837,13 @@ def _normalise_manifest(
         ("human_review_required", "review_required"),
         default=False,
     )
-    fallback_value, fallback_present = _alias_value(
+    fallback_present, fallback_value = _alias_value(
         payload,
         ("cloud_fallback", "allow_cloud_fallback", "remote_fallback"),
         default=False,
     )
     cloud_fallback_forbidden = fallback_present and fallback_value is not False
-    network_value, network_present = _alias_value(
+    network_present, network_value = _alias_value(
         payload,
         ("network_required", "requires_network"),
         default=False,
@@ -793,7 +877,10 @@ def _normalise_manifest(
 
 
 def _ordered_reasons(reasons: Iterable[str]) -> tuple[str, ...]:
-    unique = {reason for reason in reasons if reason in _REASON_INDEX}
+    values = _bounded(reasons)
+    if any(type(reason) is not str or reason not in _REASON_INDEX for reason in values):
+        _fail("invalid_manifest")
+    unique = set(values)
     return tuple(sorted(unique, key=lambda reason: _REASON_INDEX[reason]))
 
 
@@ -804,6 +891,7 @@ class UnsupportedCapabilityReason:
     capability: str
     code: str
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if self.capability not in SUPPORTED_CAPABILITIES:
             object.__setattr__(self, "capability", "package")
@@ -832,13 +920,18 @@ class ClinicalSLMCapabilityCheck:
     supported: bool
     reason_codes: tuple[str, ...] = ()
 
+    @_safe_boundary
     def __post_init__(self) -> None:
-        if self.name not in SUPPORTED_CAPABILITIES:
-            object.__setattr__(self, "name", NLI)
+        if (
+            type(self.name) is not str
+            or self.name not in SUPPORTED_CAPABILITIES
+            or type(self.supported) is not bool
+        ):
+            _fail("invalid_manifest")
         object.__setattr__(self, "reason_codes", _ordered_reasons(self.reason_codes))
         derived = not self.reason_codes
         if self.supported is not derived:
-            object.__setattr__(self, "supported", derived)
+            _fail("invalid_manifest")
 
     @property
     def available(self) -> bool:
@@ -880,15 +973,49 @@ class ClinicalSLMCapabilityReport(Mapping[str, Any]):
     manifest_fingerprint: str
     schema_version: str = CAPABILITY_SCHEMA_VERSION
 
+    @_safe_boundary
     def __post_init__(self) -> None:
-        names = tuple(check.name for check in self._checks)
+        checks = tuple(replace(check) for check in _bounded(self._checks))
+        if not checks:
+            _fail("invalid_manifest")
+        names = tuple(check.name for check in checks)
         if names != tuple(sorted(names, key=SUPPORTED_CAPABILITIES.index)):
             raise ValueError("clinical SLM capability checks must be ordered")
         if len(set(names)) != len(names):
             raise ValueError("clinical SLM capability checks must be unique")
-        object.__setattr__(self, "_checks", tuple(self._checks))
-        object.__setattr__(self, "tasks", tuple(sorted(set(self.tasks))))
-        object.__setattr__(self, "runtime_features", self.runtime_features)
+        object.__setattr__(self, "_checks", checks)
+        tasks = _bounded(self.tasks)
+        if any(
+            type(task) is not str or task not in SUPPORTED_CAPABILITIES
+            for task in tasks
+        ):
+            _fail("invalid_manifest")
+        object.__setattr__(self, "tasks", tuple(sorted(set(tasks))))
+        for name, kind in (
+            ("runtime_features", RuntimeFeatureMetadata),
+            ("context_limits", ContextLimits),
+            ("quantization", QuantizationMetadata),
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, kind):
+                _fail("invalid_manifest")
+            object.__setattr__(self, name, replace(value))
+        if (
+            type(self.unknown_task_count) is not int
+            or not 0 <= self.unknown_task_count <= _MAX_ITEMS
+        ):
+            _fail("invalid_manifest")
+        if any(
+            type(value) is not bool
+            for value in (self.tasks_declared, self.offline, self.human_review_required)
+        ):
+            _fail("invalid_manifest")
+        if (
+            self.schema_version != CAPABILITY_SCHEMA_VERSION
+            or type(self.manifest_fingerprint) is not str
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", self.manifest_fingerprint) is None
+        ):
+            _fail("invalid_manifest")
 
     @property
     def capabilities(self) -> Mapping[str, ClinicalSLMCapabilityCheck]:
@@ -1097,7 +1224,7 @@ def _normalise_requested_capabilities(
         values: Iterable[Any] = (requested,)
     else:
         try:
-            values = tuple(requested)
+            values = _bounded(requested)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1142,7 +1269,7 @@ def _normalise_allowed_quantizations(
         values: Iterable[Any] = (allowed_quantizations,)
     else:
         try:
-            values = tuple(allowed_quantizations)
+            values = _bounded(allowed_quantizations)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -1161,6 +1288,7 @@ def _normalise_allowed_quantizations(
     return frozenset(result)
 
 
+@_safe_boundary
 def probe_clinical_slm_capabilities(
     manifest: Mapping[str, Any] | str | Path | bytes | bytearray,
     *,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,129 @@ def _manifest() -> dict[str, object]:
         "cloud_fallback": False,
         "prompt": "synthetic prompt that must not enter a report",
     }
+
+
+def test_unknown_runtime_is_not_reported_as_supported_or_echoed():
+    manifest = _manifest()
+    manifest["required_runtime_features"] = ["synthetic_private_runtime"]
+    report = probe_clinical_slm_capabilities(
+        manifest, available_runtime_features=["synthetic_private_runtime"]
+    )
+    assert not report.supported
+    assert "synthetic_private_runtime" not in report.to_json()
+
+
+@pytest.mark.parametrize("field", ["cloud_fallback", "network_required"])
+@pytest.mark.parametrize("value", [0, None, "", []])
+def test_falsey_non_boolean_policy_is_not_accepted(field, value):
+    manifest = _manifest()
+    manifest[field] = value
+    report = probe_clinical_slm_capabilities(
+        manifest, available_runtime_features=["tokenizers"]
+    )
+    assert not report.supported
+
+
+def test_conflicting_context_aliases_are_rejected():
+    manifest = _manifest()
+    manifest["context_limits"]["input_tokens"] = 1
+    with pytest.raises(ClinicalSLMCapabilityError):
+        probe_clinical_slm_capabilities(
+            manifest, available_runtime_features=["tokenizers"]
+        )
+
+
+def test_impossible_context_budget_is_unsupported():
+    manifest = _manifest()
+    manifest["context_limits"]["max_context_tokens"] = 4096
+    report = probe_clinical_slm_capabilities(
+        manifest, available_runtime_features=["tokenizers"]
+    )
+    assert not report.supported
+
+
+def test_conflicting_quantization_aliases_are_rejected():
+    manifest = _manifest()
+    manifest["quantization"]["method"] = "fp32"
+    with pytest.raises(ClinicalSLMCapabilityError):
+        probe_clinical_slm_capabilities(
+            manifest, available_runtime_features=["tokenizers"]
+        )
+
+
+def test_report_revalidates_typed_records_and_fixed_vocabulary():
+    report = probe_clinical_slm_capabilities(
+        _manifest(), available_runtime_features=["tokenizers"]
+    )
+    object.__setattr__(report.runtime_features, "required", ("synthetic_private",))
+    with pytest.raises(ClinicalSLMCapabilityError):
+        replace(report)
+
+
+def test_empty_checks_cannot_be_success():
+    report = probe_clinical_slm_capabilities(
+        _manifest(), available_runtime_features=["tokenizers"]
+    )
+    with pytest.raises(ClinicalSLMCapabilityError):
+        replace(report, _checks=())
+
+
+def test_invalid_json_does_not_retain_private_exception_context():
+    with pytest.raises(ClinicalSLMCapabilityError) as caught:
+        load_clinical_slm_capability_manifest('{"SYNTHETIC_PRIVATE":')
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"name": "synthetic_private", "supported": True},
+        {"name": NLI, "supported": True, "reason_codes": ("synthetic_private",)},
+        {"name": NLI, "supported": True, "reason_codes": ("task_not_declared",)},
+    ],
+)
+def test_capability_check_rejects_invalid_or_inconsistent_records(kwargs):
+    with pytest.raises(ClinicalSLMCapabilityError):
+        capabilities.ClinicalSLMCapabilityCheck(**kwargs)
+
+
+def test_unbounded_requirement_stops_at_limit():
+    read_count = 0
+
+    def requested():
+        nonlocal read_count
+        while True:
+            read_count += 1
+            assert read_count <= capabilities._MAX_ITEMS + 1
+            yield NLI
+
+    with pytest.raises(ClinicalSLMCapabilityError):
+        probe_clinical_slm_capabilities(_manifest(), required_capabilities=requested())
+    assert read_count == capabilities._MAX_ITEMS + 1
+
+
+def test_total_only_context_reserves_output_tokens():
+    manifest = _manifest()
+    manifest["context_limits"] = {"max_context_tokens": 4096, "max_output_tokens": 512}
+    report = probe_clinical_slm_capabilities(
+        manifest, available_runtime_features=["tokenizers"], min_context_tokens=4096
+    )
+    assert not report.supported
+    assert report.context_limits.max_input_tokens == 3584
+
+
+def test_nested_and_top_level_context_cannot_conflict():
+    manifest = _manifest()
+    manifest["max_input_tokens"] = 1
+    with pytest.raises(ClinicalSLMCapabilityError):
+        probe_clinical_slm_capabilities(manifest)
+
+
+def test_runtime_generator_is_bounded_and_supported():
+    report = probe_clinical_slm_capabilities(
+        _manifest(), available_runtime_features=iter(["tokenizers"])
+    )
+    assert report.supported
 
 
 def test_probe_is_deterministic_offline_and_value_free(monkeypatch) -> None:
@@ -131,7 +255,7 @@ def test_machine_readable_reasons_fail_closed_without_values() -> None:
         "task_not_declared",
         "context_limit_too_small",
         "quantization_invalid",
-        "runtime_feature_missing",
+        "runtime_feature_unknown",
     )
     assert report.unsupported_reasons[0].to_dict() == {
         "capability": NLI,

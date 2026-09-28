@@ -111,3 +111,20 @@ remote inference attempt.
 
 This guide and its tests use synthetic metadata only. No restricted dataset,
 credential, model weight, or clinical record is bundled.
+
+This probe checks **declared metadata**, not model quality, artifact integrity,
+runtime execution, or actual available device memory. A discoverable Python
+module is not proof that its backend can initialize on this device. Use the
+artifact verification and memory-preflight gates separately before loading.
+Keep capability metadata in `clinical-slm-capabilities.json`; the strict
+artifact manifest does not accept additional context/runtime fields.
+
+Inputs are bounded to 4,096 collection entries and 8 MiB serialized JSON.
+Conflicting aliases are rejected. When only a total context budget is given,
+the output reservation is subtracted from the usable input budget. Explicit
+input plus output must fit the declared total. Unknown runtime features produce
+fixed unsupported reasons and are never echoed or accepted through an explicit
+profile. The supported runtime vocabulary is `coreml`, `mlx`, `onnxruntime`,
+`sentencepiece`, `tokenizers`, `torch`, and `transformers` (plus documented code
+aliases). Fingerprints describe normalized metadata, not source-file identity,
+authenticity, or anonymization. Upstream exception context is discarded.
