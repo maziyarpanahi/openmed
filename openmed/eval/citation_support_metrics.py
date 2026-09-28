@@ -24,7 +24,10 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 CITATION_SUPPORT_METRICS = "citation_support_metrics"
@@ -59,6 +62,28 @@ _MAX_ADJUDICATIONS = 500_000
 
 class CitationSupportError(ValueError):
     """Raised when a citation-support input cannot be normalized safely."""
+
+
+def _safe_input(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        message = "citation-support input cannot be normalized"
+        try:
+            return function(*args, **kwargs)
+        except CitationSupportError as error:
+            trace = error.__traceback__
+            while trace is not None and trace.tb_next is not None:
+                trace = trace.tb_next
+            if (
+                trace is not None
+                and trace.tb_frame.f_globals.get("__name__") == __name__
+            ):
+                message = str(error)
+        except Exception:
+            pass
+        raise CitationSupportError(message)
+
+    return checked
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -255,8 +280,9 @@ class Citation:
             "evidence_id",
             "evidence",
             "citation_id",
-            "source_id",
         )
+        if evidence_id is None:
+            evidence_id = _first(data, "source_id")
         if claim_id is None or evidence_id is None:
             raise CitationSupportError(
                 "citation requires claim and evidence identifiers"
@@ -308,35 +334,10 @@ class ClinicianAdjudication:
             "evidence_id",
             "evidence",
             "citation_id",
-            "source_id",
         )
-        label = _first(
-            data,
-            "label",
-            "adjudication",
-            "judgment",
-            "clinician_label",
-            "support_label",
-            "verdict",
-        )
-        if label is None and "supports" in data and type(data["supports"]) is bool:
-            label = (
-                ADJUDICATION_SUPPORTS if data["supports"] else ADJUDICATION_IRRELEVANT
-            )
-        if label is None and "supported" in data and type(data["supported"]) is bool:
-            label = (
-                ADJUDICATION_SUPPORTS if data["supported"] else ADJUDICATION_IRRELEVANT
-            )
-        if (
-            label is None
-            and "contradicts" in data
-            and type(data["contradicts"]) is bool
-        ):
-            label = (
-                ADJUDICATION_CONTRADICTS
-                if data["contradicts"]
-                else ADJUDICATION_IRRELEVANT
-            )
+        if evidence_id is None:
+            evidence_id = _first(data, "source_id")
+        label = _review_label(data)
         if claim_id is None or evidence_id is None or label is None:
             raise CitationSupportError(
                 "adjudication requires claim, evidence, and label"
@@ -366,6 +367,36 @@ class DeterministicSpanChecks:
     invalid_citation_count: int
     duplicate_citation_count: int
     invalid_citation_reasons: Mapping[str, int]
+
+    @_safe_input
+    def __post_init__(self) -> None:
+        for name in self.__dataclass_fields__:
+            if name != "invalid_citation_reasons":
+                _count(getattr(self, name))
+        allowed = {
+            "missing_claim",
+            "missing_evidence",
+            "invalid_evidence_span",
+            "source_mismatch",
+            "invalid_citation_span",
+            "citation_outside_evidence",
+        }
+        reasons = dict(self.invalid_citation_reasons)
+        if not set(reasons) <= allowed:
+            raise CitationSupportError("invalid citation reason")
+        for count in reasons.values():
+            _count(count)
+        if (
+            self.claim_span_count
+            != self.valid_claim_span_count + self.invalid_claim_span_count
+            or self.evidence_span_count
+            != self.valid_evidence_span_count + self.invalid_evidence_span_count
+            or self.citation_count
+            != self.valid_citation_count + self.invalid_citation_count
+            or sum(reasons.values()) != self.invalid_citation_count
+        ):
+            raise CitationSupportError("inconsistent span counts")
+        object.__setattr__(self, "invalid_citation_reasons", MappingProxyType(reasons))
 
     @property
     def citation_span_validity(self) -> float:
@@ -450,6 +481,57 @@ class ClinicianAdjudicationMetrics:
     conflicting_adjudication_count: int
     label_counts: Mapping[str, int]
 
+    @_safe_input
+    def __post_init__(self) -> None:
+        for name in self.__dataclass_fields__:
+            if name.endswith("_count"):
+                _count(getattr(self, name))
+        expected = dict(
+            zip(
+                ADJUDICATION_LABELS,
+                (
+                    self.supporting_citation_count,
+                    self.contradicting_citation_count,
+                    self.irrelevant_citation_count,
+                    self.unclear_citation_count,
+                ),
+                strict=True,
+            )
+        )
+        labels = dict(self.label_counts)
+        reviewed = self.adjudicated_citation_count
+        claims = self.adjudicated_claim_count + self.unadjudicated_claim_count
+        if (
+            type(self.available) is not bool
+            or labels != expected
+            or any(type(v) is not int for v in labels.values())
+            or sum(expected.values()) != reviewed
+            or self.supported_claim_count > self.adjudicated_claim_count
+            or self.adjudicated_claim_count > reviewed
+            or self.conflicting_adjudication_count > reviewed
+            or (not self.available and (reviewed or self.unmatched_adjudication_count))
+        ):
+            raise CitationSupportError("inconsistent adjudication counts")
+        rates = (
+            (
+                self.citation_precision,
+                _rate(self.supporting_citation_count, reviewed) if reviewed else None,
+            ),
+            (
+                self.support_recall,
+                _rate(self.supported_claim_count, claims) if reviewed else None,
+            ),
+            (
+                self.adjudication_coverage,
+                _rate(reviewed, reviewed + self.unadjudicated_citation_count),
+            ),
+        )
+        if any(
+            actual != expected or isinstance(actual, bool) for actual, expected in rates
+        ):
+            raise CitationSupportError("inconsistent adjudication rates")
+        object.__setattr__(self, "label_counts", MappingProxyType(labels))
+
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, value-free adjudication mapping."""
 
@@ -497,6 +579,55 @@ class CitationSupportReport:
     adjudication_digest: str
     input_digest: str
     schema_version: int = CITATION_SUPPORT_METRICS_SCHEMA_VERSION
+
+    @_safe_input
+    def __post_init__(self) -> None:
+        for name in (
+            "claim_count",
+            "evidence_count",
+            "citation_count",
+            "orphan_claim_count",
+            "unused_evidence_count",
+        ):
+            _count(getattr(self, name))
+        for name in (
+            "claim_digest",
+            "evidence_digest",
+            "adjudication_digest",
+            "input_digest",
+        ):
+            value = getattr(self, name)
+            if (
+                not isinstance(value, str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+            ):
+                raise CitationSupportError("invalid provenance digest")
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != CITATION_SUPPORT_METRICS_SCHEMA_VERSION
+        ):
+            raise CitationSupportError("unsupported report schema")
+        if not isinstance(
+            self.deterministic, DeterministicSpanChecks
+        ) or not isinstance(self.adjudication, ClinicianAdjudicationMetrics):
+            raise CitationSupportError("invalid report sections")
+        span = replace(self.deterministic)
+        review = replace(self.adjudication)
+        if (
+            self.orphan_claim_count > self.claim_count
+            or self.unused_evidence_count > self.evidence_count
+            or span.claim_span_count + span.missing_claim_span_count != self.claim_count
+            or span.evidence_span_count + span.missing_evidence_span_count
+            != self.evidence_count
+            or span.citation_count != self.citation_count
+            or review.adjudicated_claim_count + review.unadjudicated_claim_count
+            != self.claim_count
+            or review.adjudicated_citation_count + review.unadjudicated_citation_count
+            != span.valid_citation_count
+        ):
+            raise CitationSupportError("inconsistent report counts")
+        object.__setattr__(self, "deterministic", span)
+        object.__setattr__(self, "adjudication", review)
 
     @property
     def orphan_claim_rate(self) -> float:
@@ -639,6 +770,7 @@ class CitationSupportReport:
         ]
         return "\n".join(lines)
 
+    @_safe_input
     def write_json(self, path: str | Path) -> Path:
         """Write the stable JSON artifact to a caller-selected local path."""
 
@@ -647,6 +779,7 @@ class CitationSupportReport:
         output.write_text(self.to_json(), encoding="utf-8")
         return output
 
+    @_safe_input
     def write_markdown(self, path: str | Path) -> Path:
         """Write the stable Markdown artifact to a caller-selected path."""
 
@@ -680,6 +813,7 @@ ClinicianMetrics = ClinicianAdjudicationMetrics
 SpanChecks = DeterministicSpanChecks
 
 
+@_safe_input
 def compute_citation_support_metrics(
     claims: Iterable[Mapping[str, Any] | AtomicClaim | Any],
     evidence: Iterable[Mapping[str, Any] | EvidenceSpan | Any] = (),
@@ -742,6 +876,8 @@ def compute_citation_support_metrics(
         _normalize_citations(citations) if citations is not None else []
     )
     all_citations = [*claim_citations, *explicit_citations]
+    if len(all_citations) > _MAX_CITATIONS:
+        raise CitationSupportError("citation collection exceeds the record limit")
     unique_citations, duplicate_citation_count = _deduplicate_citations(all_citations)
 
     used_evidence: set[str] = set()
@@ -785,6 +921,8 @@ def compute_citation_support_metrics(
         _normalize_adjudications(adjudications) if adjudications is not None else []
     )
     all_adjudications = [*embedded_adjudications, *explicit_adjudications]
+    if len(all_adjudications) > _MAX_ADJUDICATIONS:
+        raise CitationSupportError("adjudication collection exceeds the record limit")
     adjudication_metrics = _build_adjudication_metrics(
         all_adjudications,
         valid_edges=valid_edges,
@@ -800,6 +938,16 @@ def compute_citation_support_metrics(
             "claims": claim_digest,
             "evidence": evidence_digest,
             "adjudications": adjudication_digest,
+            "citations": [
+                [
+                    _opaque(c.claim_id),
+                    _opaque(c.evidence_id),
+                    c.start,
+                    c.end,
+                    _opaque(c.source_id),
+                ]
+                for c in sorted(unique_citations, key=_citation_sort_key)
+            ],
         }
     )
 
@@ -857,7 +1005,7 @@ def _normalize_claims(
     citations: list[Citation] = []
     for row, default_id in rows:
         claim = (
-            row
+            replace(row)
             if isinstance(row, AtomicClaim)
             else AtomicClaim.from_mapping(row, default_id=default_id)
         )
@@ -871,6 +1019,8 @@ def _normalize_claims(
             )
         else:
             citations.extend(_claim_citations(row, claim.claim_id))
+        if len(citations) > _MAX_CITATIONS:
+            raise CitationSupportError("citation collection exceeds the record limit")
     if len(normalized) > _MAX_CLAIMS:
         raise CitationSupportError("claim collection exceeds the record limit")
     return normalized, citations
@@ -885,7 +1035,7 @@ def _normalize_evidence(
     embedded: list[ClinicianAdjudication] = []
     for row, default_id in rows:
         evidence = (
-            row
+            replace(row)
             if isinstance(row, EvidenceSpan)
             else EvidenceSpan.from_mapping(row, default_id=default_id)
         )
@@ -897,6 +1047,10 @@ def _normalize_evidence(
         normalized.append(evidence)
         if not isinstance(row, EvidenceSpan):
             embedded.extend(_embedded_adjudications(row, evidence.evidence_id))
+        if len(embedded) > _MAX_ADJUDICATIONS:
+            raise CitationSupportError(
+                "adjudication collection exceeds the record limit"
+            )
     if len(normalized) > _MAX_EVIDENCE:
         raise CitationSupportError("evidence collection exceeds the record limit")
     return normalized, embedded
@@ -907,7 +1061,9 @@ def _normalize_citations(
 ) -> list[Citation]:
     if isinstance(values, Mapping) and not _is_citation_mapping(values):
         records: list[Citation] = []
-        for claim_id, evidence_values in values.items():
+        for claim_id, evidence_values in _bounded_sequence(
+            values.items(), "citation collection", _MAX_CITATIONS
+        ):
             for item in _citation_values(evidence_values):
                 if isinstance(item, Citation):
                     records.append(replace(item, claim_id=_identifier(claim_id)))
@@ -922,13 +1078,19 @@ def _normalize_citations(
                             evidence_id=item,
                         )
                     )
+                if len(records) > _MAX_CITATIONS:
+                    raise CitationSupportError(
+                        "citation collection exceeds the record limit"
+                    )
         return records
 
+    if isinstance(values, Mapping):
+        return [Citation.from_mapping(values)]
     records = _bounded_sequence(values, "citation collection", _MAX_CITATIONS)
     normalized: list[Citation] = []
     for item in records:
         if isinstance(item, Citation):
-            normalized.append(item)
+            normalized.append(replace(item))
         elif isinstance(item, Mapping):
             normalized.append(Citation.from_mapping(item))
         elif isinstance(item, Sequence) and not isinstance(
@@ -952,7 +1114,7 @@ def _normalize_adjudications(
     normalized: list[ClinicianAdjudication] = []
     for row, default_claim_id in rows:
         if isinstance(row, ClinicianAdjudication):
-            normalized.append(row)
+            normalized.append(replace(row))
             continue
         data = _record_mapping(row, "adjudication")
         if (
@@ -1031,10 +1193,12 @@ def _build_adjudication_metrics(
         for key, labels in labels_by_edge.items()
     }
     label_counts = {label: 0 for label in ADJUDICATION_LABELS}
-    for label in effective_labels.values():
-        label_counts[label] += 1
+    for citation, _ in valid_edges:
+        label = effective_labels.get((citation.claim_id, citation.evidence_id))
+        if label is not None:
+            label_counts[label] += 1
 
-    reviewed_count = len(effective_labels)
+    reviewed_count = sum(label_counts.values())
     supported_claim_ids = {
         claim_id
         for (claim_id, _), label in effective_labels.items()
@@ -1139,7 +1303,9 @@ def _claim_rows(value: Any) -> list[tuple[Any, str | None]]:
         if _is_claim_mapping(value):
             return [(value, None)]
         rows: list[tuple[Any, str | None]] = []
-        for key, item in value.items():
+        for key, item in _bounded_sequence(
+            value.items(), "record collection", _MAX_CLAIMS
+        ):
             default_id = _identifier(key)
             if isinstance(item, Mapping) or isinstance(item, AtomicClaim):
                 rows.append((item, default_id))
@@ -1161,7 +1327,9 @@ def _evidence_rows(value: Any) -> list[tuple[Any, str | None]]:
         if _is_evidence_mapping(value):
             return [(value, None)]
         rows: list[tuple[Any, str | None]] = []
-        for key, item in value.items():
+        for key, item in _bounded_sequence(
+            value.items(), "record collection", _MAX_EVIDENCE
+        ):
             default_id = _identifier(key)
             if isinstance(item, Mapping) or isinstance(item, EvidenceSpan):
                 rows.append((item, default_id))
@@ -1184,9 +1352,13 @@ def _evidence_rows(value: Any) -> list[tuple[Any, str | None]]:
 
 
 def _adjudication_rows(value: Any) -> list[tuple[Any, str | None]]:
+    if isinstance(value, Mapping) and _is_adjudication_mapping(value):
+        return [(value, None)]
     if isinstance(value, Mapping) and not _is_adjudication_mapping(value):
         rows: list[tuple[Any, str | None]] = []
-        for key, item in value.items():
+        for key, item in _bounded_sequence(
+            value.items(), "record collection", _MAX_ADJUDICATIONS
+        ):
             rows.append((item, _identifier(key)))
         return rows
     return [
@@ -1207,7 +1379,7 @@ def _citation_values(value: Any) -> list[Any]:
     if isinstance(value, (str, int)) and not isinstance(value, bool):
         return [value]
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        return list(value)
+        return _bounded_sequence(value, "citation collection", _MAX_CITATIONS)
     raise CitationSupportError("citation values must be identifiers or records")
 
 
@@ -1240,11 +1412,11 @@ def _bounded_sequence(value: Any, field_name: str, limit: int) -> list[Any]:
     if isinstance(value, (str, bytes, bytearray)):
         raise CitationSupportError(f"{field_name} must be an iterable of records")
     try:
-        rows = list(value)
-    except (TypeError, ValueError):
-        raise CitationSupportError(
-            f"{field_name} must be an iterable of records"
-        ) from None
+        rows = list(islice(iter(value), limit + 1))
+    except Exception:
+        rows = None
+    if rows is None:
+        raise CitationSupportError(f"{field_name} must be an iterable of records")
     if len(rows) > limit:
         raise CitationSupportError(f"{field_name} exceeds the record limit")
     return rows
@@ -1287,6 +1459,10 @@ def _span_values(data: Mapping[str, Any]) -> tuple[int | None, int | None]:
         nested_start, nested_end = nested
     start = _first(data, "start", "source_start", "span_start")
     end = _first(data, "end", "source_end", "span_end")
+    if nested_start is not None and start is not None and start != nested_start:
+        raise CitationSupportError("conflicting span offsets")
+    if nested_end is not None and end is not None and end != nested_end:
+        raise CitationSupportError("conflicting span offsets")
     if start is None:
         start = nested_start
     if end is None:
@@ -1313,7 +1489,9 @@ def _normalize_source_lengths(value: Mapping[str, int] | None) -> dict[str, int]
     if not isinstance(value, Mapping):
         raise CitationSupportError("source_lengths must be a mapping")
     result: dict[str, int] = {}
-    for key, length in value.items():
+    for key, length in _bounded_sequence(
+        value.items(), "source collection", _MAX_EVIDENCE
+    ):
         result[_identifier(key)] = _length(length)
     return result
 
@@ -1326,48 +1504,7 @@ def _embedded_adjudications(
     claim_id = _first(data, "claim_id", "claim", "fact_id")
     if claim_id is None:
         return []
-    label: Any = None
-    for key in (
-        "adjudication",
-        "adjudication_label",
-        "judgment",
-        "clinician_label",
-        "support_label",
-        "relation",
-    ):
-        if key in data:
-            label = data[key]
-            break
-    if label is None and "supports_claim" in data:
-        label = (
-            ADJUDICATION_SUPPORTS
-            if data["supports_claim"] is True
-            else ADJUDICATION_IRRELEVANT
-        )
-    if label is None and "supports" in data and type(data["supports"]) is bool:
-        label = (
-            ADJUDICATION_SUPPORTS
-            if data["supports"] is True
-            else ADJUDICATION_IRRELEVANT
-        )
-    if label is None and "supported" in data and type(data["supported"]) is bool:
-        label = (
-            ADJUDICATION_SUPPORTS
-            if data["supported"] is True
-            else ADJUDICATION_IRRELEVANT
-        )
-    if label is None and "contradicts_claim" in data:
-        label = (
-            ADJUDICATION_CONTRADICTS
-            if data["contradicts_claim"] is True
-            else ADJUDICATION_IRRELEVANT
-        )
-    if label is None and "contradicts" in data and type(data["contradicts"]) is bool:
-        label = (
-            ADJUDICATION_CONTRADICTS
-            if data["contradicts"] is True
-            else ADJUDICATION_IRRELEVANT
-        )
+    label = _review_label(data)
     if label is None:
         return []
     return [
@@ -1448,7 +1585,7 @@ def _identifier_sequence(value: Any, *, allow_none: bool = False) -> tuple[str, 
     if isinstance(value, (str, int)) and not isinstance(value, bool):
         values = [value]
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        values = list(value)
+        values = _bounded_sequence(value, "citation collection", _MAX_CITATIONS)
     else:
         raise CitationSupportError("citation identifiers must be a sequence")
     normalized = [_identifier(item) for item in values]
@@ -1477,10 +1614,51 @@ def _citation_id_values(value: Any) -> tuple[str, ...]:
     return _identifier_sequence(identifiers, allow_none=True)
 
 
+def _review_label(data: Mapping[str, Any]) -> str | None:
+    labels = [
+        _adjudication_label(data[key])
+        for key in (
+            "label",
+            "adjudication",
+            "adjudication_label",
+            "judgment",
+            "clinician_label",
+            "support_label",
+            "verdict",
+            "relation",
+        )
+        if key in data and data[key] is not None
+    ]
+    flags = []
+    for key, target in (
+        ("supports", ADJUDICATION_SUPPORTS),
+        ("supported", ADJUDICATION_SUPPORTS),
+        ("supports_claim", ADJUDICATION_SUPPORTS),
+        ("contradicts", ADJUDICATION_CONTRADICTS),
+        ("contradicts_claim", ADJUDICATION_CONTRADICTS),
+    ):
+        if key in data:
+            if type(data[key]) is not bool:
+                raise CitationSupportError("adjudication flags must be boolean")
+            flags.append((target, data[key]))
+            if data[key]:
+                labels.append(target)
+    if labels:
+        label = labels[0]
+        if any(item != label for item in labels) or any(
+            target == label and not value for target, value in flags
+        ):
+            raise CitationSupportError("conflicting adjudication labels")
+        return label
+    return ADJUDICATION_IRRELEVANT if flags else None
+
+
 def _adjudication_label(value: Any) -> str:
     if isinstance(value, bool):
         return ADJUDICATION_SUPPORTS if value else ADJUDICATION_IRRELEVANT
-    normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().casefold()).strip("_")
+    if not isinstance(value, str):
+        raise CitationSupportError("adjudication label must be a string")
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().casefold()).strip("_")
     if normalized in {
         "supports",
         "support",
@@ -1521,15 +1699,20 @@ def _adjudication_label(value: Any) -> str:
     raise CitationSupportError("adjudication label is unsupported")
 
 
+def _count(value: Any) -> None:
+    if type(value) is not int or value < 0:
+        raise CitationSupportError("report counts must be nonnegative integers")
+
+
 def _rate(numerator: int, denominator: int) -> float:
     return numerator / denominator if denominator else 0.0
 
 
 def _first(data: Mapping[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in data and data[key] is not None:
-            return data[key]
-    return None
+    values = [data[key] for key in keys if key in data and data[key] is not None]
+    if values and any(value != values[0] for value in values[1:]):
+        raise CitationSupportError("conflicting field aliases")
+    return values[0] if values else None
 
 
 def _offset_pair(value: Any) -> bool:

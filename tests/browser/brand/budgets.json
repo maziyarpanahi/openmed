@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 85083040,
-    "maximum_unique_payload_bytes": 84718527,
+    "maximum_total_bytes": 85540409,
+    "maximum_unique_payload_bytes": 85175896,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4281390
+    "json": 4291854
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4281390
+    "docs/search/search_index.json": 4291854
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed citation support and boundary build measures 85424923 total bytes, 85060410 unique bytes, and 4286062 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed synthetic SHIELD and temporal guide build measures 84967554 total bytes, 84603041 unique bytes, and 4275598 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The combined temporal review guide build measures 84691444 total bytes, 84353865 unique bytes, and 4271760 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed temporal normalization on provenance master build measures 83809074 total bytes, 83471495 unique bytes, and 4257393 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",

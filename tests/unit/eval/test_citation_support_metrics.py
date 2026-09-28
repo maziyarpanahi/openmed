@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+from dataclasses import replace
 
 import pytest
 
@@ -12,9 +13,167 @@ from openmed.eval.citation_support_metrics import (
     ADJUDICATION_SUPPORTS,
     ADJUDICATION_UNCLEAR,
     AtomicClaim,
+    Citation,
     CitationSupportError,
     compute_citation_support_metrics,
 )
+
+
+def _review_fixture():
+    return (
+        [{"claim_id": "c", "start": 0, "end": 2}],
+        [{"evidence_id": "e", "start": 0, "end": 10}],
+    )
+
+
+def test_single_mapping_citation_and_adjudication_are_supported():
+    claims, evidence = _review_fixture()
+    report = compute_citation_support_metrics(
+        claims,
+        evidence,
+        citations={"claim_id": "c", "evidence_id": "e"},
+        adjudications={"claim_id": "c", "evidence_id": "e", "label": "supports"},
+    )
+    assert report.citation_precision == 1
+
+
+def test_pair_adjudication_covers_each_distinct_cited_subspan():
+    claims, evidence = _review_fixture()
+    report = compute_citation_support_metrics(
+        claims,
+        evidence,
+        citations=[Citation("c", "e", 0, 2), Citation("c", "e", 2, 4)],
+        adjudications=[{"claim_id": "c", "evidence_id": "e", "label": "supports"}],
+    )
+    assert report.adjudication.adjudicated_citation_count == 2
+    assert report.adjudication.unadjudicated_citation_count == 0
+    assert report.adjudication.adjudication_coverage == 1
+
+
+def test_provenance_binds_unknown_claim_citations():
+    claims, evidence = _review_fixture()
+    first = compute_citation_support_metrics(
+        claims, evidence, citations=[Citation("unknown-a", "e")]
+    )
+    second = compute_citation_support_metrics(
+        claims, evidence, citations=[Citation("unknown-b", "e")]
+    )
+    assert first.input_digest != second.input_digest
+
+
+def test_report_rejects_private_digest_and_freezes_reason_counts():
+    report = compute_citation_support_metrics(
+        [AtomicClaim("c")], citations=[Citation("c", "missing")]
+    )
+    with pytest.raises(CitationSupportError):
+        replace(report, claim_digest="SYNTHETIC_PRIVATE")
+    with pytest.raises(TypeError):
+        report.deterministic.invalid_citation_reasons["SYNTHETIC_PRIVATE"] = 2
+
+
+def test_runtime_iterator_failure_is_value_free():
+    def broken():
+        raise RuntimeError("SYNTHETIC_PRIVATE")
+        yield
+
+    with pytest.raises(CitationSupportError) as caught:
+        compute_citation_support_metrics(broken())
+    assert caught.value.__context__ is None
+
+
+def test_typed_claim_is_revalidated_before_evaluation():
+    claim = AtomicClaim("c")
+    object.__setattr__(claim, "start", "SYNTHETIC_PRIVATE")
+    with pytest.raises(CitationSupportError):
+        compute_citation_support_metrics([claim])
+
+
+@pytest.mark.parametrize(
+    "review",
+    [
+        {"label": "supports", "supported": False},
+        {"supports": True, "contradicts": True},
+        {"label": "supports", "verdict": "contradicts"},
+        {"supports_claim": "SYNTHETIC_PRIVATE"},
+    ],
+)
+def test_conflicting_review_aliases_fail_closed(review):
+    claims, evidence = _review_fixture()
+    with pytest.raises(CitationSupportError):
+        compute_citation_support_metrics(
+            claims,
+            evidence,
+            citations=[Citation("c", "e")],
+            adjudications=[{"claim_id": "c", "evidence_id": "e", **review}],
+        )
+
+
+def test_explicit_source_id_is_not_an_evidence_alias():
+    claims, evidence = _review_fixture()
+    evidence[0]["source_id"] = "source"
+    report = compute_citation_support_metrics(
+        claims,
+        evidence,
+        citations={"claim_id": "c", "evidence_id": "e", "source_id": "source"},
+    )
+    assert report.deterministic.valid_citation_count == 1
+
+
+def test_conflicting_span_aliases_fail_closed():
+    claims, evidence = _review_fixture()
+    claims[0]["span"] = [3, 5]
+    with pytest.raises(CitationSupportError):
+        compute_citation_support_metrics(claims, evidence)
+
+
+def test_streams_stop_at_limit_plus_one_and_mapping_limits_apply(monkeypatch):
+    import importlib
+
+    module = importlib.import_module("openmed.eval.citation_support_metrics")
+    monkeypatch.setattr(module, "_MAX_CLAIMS", 2)
+    consumed = []
+
+    def records():
+        for index in range(20):
+            consumed.append(index)
+            yield AtomicClaim(str(index))
+
+    with pytest.raises(CitationSupportError):
+        compute_citation_support_metrics(records())
+    assert len(consumed) == 3
+    with pytest.raises(CitationSupportError):
+        compute_citation_support_metrics({str(i): (0, 1) for i in range(3)})
+
+
+def test_domain_iterator_error_does_not_echo_external_message():
+    def broken():
+        raise CitationSupportError("SYNTHETIC_PRIVATE")
+        yield
+
+    with pytest.raises(CitationSupportError) as caught:
+        compute_citation_support_metrics(broken())
+    assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_report_nested_counts_and_rates_are_revalidated():
+    report = compute_citation_support_metrics([AtomicClaim("c")])
+    with pytest.raises(CitationSupportError):
+        replace(report, claim_count=True)
+    with pytest.raises(CitationSupportError):
+        replace(report.adjudication, citation_precision=1)
+    with pytest.raises(CitationSupportError):
+        replace(report.deterministic, invalid_citation_reasons={"private": 0})
+
+
+def test_report_write_error_hides_path(tmp_path):
+    report = compute_citation_support_metrics([AtomicClaim("c")])
+    parent = tmp_path / "SYNTHETIC_PRIVATE"
+    parent.write_text("not a directory")
+    with pytest.raises(CitationSupportError) as caught:
+        report.write_json(parent / "report.json")
+    assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+    assert caught.value.__context__ is None
 
 
 def test_reports_atomic_precision_recall_orphans_and_unused_evidence() -> None:

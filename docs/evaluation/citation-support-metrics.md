@@ -102,6 +102,17 @@ they are not silently treated as supporting. A claim with both supporting and
 non-supporting evidence counts as supported for recall, while each reviewed
 citation remains visible in the precision denominator.
 
+An adjudication applies to a claim/evidence pair and therefore labels every
+distinct valid cited subspan for that pair. Exact duplicate citation edges count
+once. Conflicting labels for a pair become `unclear`; contradictory aliases
+inside one review record are rejected rather than resolved by field order.
+
+Single citation and adjudication mappings are accepted as individual records.
+Typed records are revalidated before evaluation. Collection consumption is
+bounded: at most 100,000 claims, 200,000 evidence records, 500,000 citation edges,
+and 500,000 adjudications, with one extra item consumed to detect overflow.
+These limits also apply to compact mapping inputs and combined embedded inputs.
+
 ## Deterministic span checks
 
 `report.deterministic` is independent from semantic adjudication. It checks
@@ -128,6 +139,12 @@ IDs, evidence IDs, source identifiers, source text, reviewer comments, or
 exception values. Validation errors use fixed categories and do not echo
 submitted values. Reports set `human_review_required` to `true` and carry the
 evaluation-only disclaimer.
+
+Report constructors validate count/rate consistency, fixed reason labels, and
+digest syntax; nested count mappings are immutable. The input digest binds all
+citation edges, including references to missing claims. Digests are provenance
+pseudonyms, not a guarantee of anonymization. Caller-selected artifact write
+failures use value-free errors without retaining the underlying path exception.
 
 The implementation uses only the Python standard library. It performs no
 model loading, telemetry, or mandatory network request, so the same local
