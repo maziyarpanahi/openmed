@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80778614,
-    "maximum_unique_payload_bytes": 80441035,
+    "maximum_total_bytes": 80991015,
+    "maximum_unique_payload_bytes": 80653436,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4206111
+    "json": 4214075
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4206111
+    "docs/search/search_index.json": 4214075
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "With reviewed evidence-packet and state guides, the staged artifact measures 80875529 total bytes, 80537950 unique bytes, and 4208283 search bytes. Aggregate ceilings preserve 115486 bytes of platform/headroom allowance; search preserves 5792 bytes. Other limits are unchanged.",
     "The review-state guide increases tokenizer-route transfer to 7667259 bytes in the staged Chromium check; its ceiling retains the existing 106804-byte allowance. Other route limits remain unchanged.",
     "The review-state guide on current master stages 80663128 total bytes and 80325549 unique payload bytes. Aggregate ceilings retain the existing 4736-byte platform allowance plus 110750 bytes of bounded headroom; search and all other limits are unchanged.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and clinical review-state guides with bounded documentation headroom.",
