@@ -30,6 +30,40 @@ from openmed.clinical.review_state_machine import (
 POLICY_FINGERPRINT = fingerprint_policy({"policy": "synthetic-review", "version": 1})
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "category"),
+    [
+        ("verified", False, REJECTION_UNVERIFIED),
+        ("synthetic", False, REJECTION_NOT_SYNTHETIC),
+        ("review_state", "queued", REJECTION_INVALID_REVIEW_STATE),
+        ("start", -1, REJECTION_INVALID_SOURCE_OFFSET),
+        ("end", 18, REJECTION_INVALID_REVIEW_STATE),
+        ("review_transitions", (), REJECTION_INVALID_REVIEW_STATE),
+    ],
+)
+def test_nested_reference_invariants_are_rechecked(field, value, category):
+    packet = build_evidence_packet(
+        [_reference()], policy_fingerprint=POLICY_FINGERPRINT
+    )
+    reference = packet.references[0]
+    object.__setattr__(reference, field, value)
+    with pytest.raises(EvidencePacketValidationError) as caught:
+        validate_evidence_packet(packet)
+    assert caught.value.category == category
+    filtered = build_evidence_packet([reference], policy_fingerprint=POLICY_FINGERPRINT)
+    assert filtered.references == ()
+    assert filtered.rejection_counts == {category: 1}
+
+
+def test_nested_rejection_report_invariants_are_rechecked():
+    packet = build_evidence_packet(
+        [_reference()], policy_fingerprint=POLICY_FINGERPRINT
+    )
+    object.__setattr__(packet.rejection_report, "rejected_count", -1)
+    with pytest.raises(ValueError, match="non-negative"):
+        validate_evidence_packet(packet)
+
+
 def _reference(reference_id: str = "synthetic:ref-001", **overrides):
     payload = {
         "reference_id": reference_id,

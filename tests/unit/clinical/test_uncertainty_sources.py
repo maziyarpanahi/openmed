@@ -25,6 +25,42 @@ from openmed.clinical import (
     policy_uncertainty,
     temporal_uncertainty,
 )
+from openmed.clinical.uncertainty_sources import (
+    ConflictUncertaintySource,
+    EvidenceUncertaintySource,
+    ModelUncertaintySource,
+    PolicyUncertaintySource,
+    TemporalUncertaintySource,
+)
+
+
+@pytest.mark.parametrize(
+    "constructor,default",
+    [
+        (EvidenceUncertaintySource, "insufficient"),
+        (ModelUncertaintySource, "ambiguous"),
+        (PolicyUncertaintySource, "insufficient"),
+        (TemporalUncertaintySource, "unresolved"),
+        (ConflictUncertaintySource, "unresolved"),
+        (evidence_uncertainty, "insufficient"),
+        (model_uncertainty, "ambiguous"),
+        (policy_uncertainty, "insufficient"),
+        (temporal_uncertainty, "unresolved"),
+        (conflict_uncertainty, "unresolved"),
+    ],
+)
+def test_typed_reason_aliases_do_not_conflict_with_implicit_defaults(
+    constructor, default
+) -> None:
+    assert constructor().code == default
+    assert constructor(code=None).code == "unspecified"
+    for alias in ("reason_code", "reason"):
+        assert constructor(**{alias: "unspecified"}).code == "unspecified"
+        with pytest.raises(UncertaintySourceError, match="more than once"):
+            constructor(default, **{alias: "unspecified"})
+    with pytest.raises(UncertaintySourceError, match="more than once"):
+        constructor(reason="unspecified", reason_code="unspecified")
+
 
 RAW_REFERENCE = "synthetic-sensitive-reference-marker"
 RAW_REASON = "synthetic-sensitive-reason-marker"
@@ -173,6 +209,7 @@ def test_guarded_decorator_accepts_a_fifth_uncertainty_sources_tuple_item() -> N
     result = produce()
 
     assert result.uncertainty_sources == sources
+    assert result.provenance == {"producer": "synthetic"}
     assert result.to_dict()["uncertainty_sources"]["active_source_types"] == [
         "temporal"
     ]

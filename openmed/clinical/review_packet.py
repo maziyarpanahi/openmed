@@ -70,7 +70,26 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SAFE_REASON_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,79}$")
 _SAFE_STATUS_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,63}$")
-_SAFE_METADATA_VALUE_RE = re.compile(r"^[a-z0-9][a-z0-9_.:/-]{0,127}$")
+_SAFE_LABEL_CODES = frozenset(
+    {
+        "finding",
+        "source",
+        "condition",
+        "medication",
+        "procedure",
+        "lab_result",
+        "measurement",
+        "entity",
+        "relation",
+        "claim",
+        "medication_review",
+        "renal_function_measure",
+        "synthetic_finding",
+    }
+)
+_NUMERIC_METADATA_FIELDS = frozenset(
+    {"confidence", "count", "level", "metric", "priority", "score"}
+)
 _STRUCTURED_METADATA_FIELDS = frozenset(
     {
         "category",
@@ -165,13 +184,9 @@ def _safe_identifier(value: object, *, field_name: str) -> str:
     normalized = _normalize_text(value)
     if not normalized:
         raise ValueError(f"{field_name} must be a non-empty string")
-    if (
-        len(normalized) > 128
-        or normalized != normalized.casefold()
-        or not _IDENTIFIER_RE.fullmatch(normalized)
-    ):
-        return f"identifier:{hash_text(normalized)}"
-    return normalized
+    if re.fullmatch(r"(?:identifier:)?sha256:[0-9a-f]{64}", normalized):
+        return normalized
+    return f"identifier:{hash_text(normalized)}"
 
 
 def _safe_digest(value: object, *, field_name: str) -> str:
@@ -185,12 +200,7 @@ def _safe_reference_detail(value: object, *, field_name: str) -> str | None:
     normalized = _optional_text(value, field_name=field_name)
     if normalized is None:
         return None
-    if (
-        field_name == "locator"
-        and normalized == normalized.casefold()
-        and _IDENTIFIER_RE.fullmatch(normalized)
-        and normalized.startswith(("section-", "page-", "span-", "offset-"))
-    ):
+    if re.fullmatch(r"hash:sha256:[0-9a-f]{64}", normalized):
         return normalized
     return f"hash:{hash_text(normalized)}"
 
@@ -243,6 +253,21 @@ def _contains_protected(value: str, protected_values: Iterable[str]) -> bool:
     )
 
 
+def _require_render_flag(value: object) -> None:
+    if type(value) is not bool:
+        raise ValueError("protected rendering flag must be a boolean")
+
+
+def _freeze_metadata(value: object) -> object:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _freeze_metadata(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_metadata(item) for item in value)
+    return value
+
+
 def _sanitize_metadata(
     value: object,
     *,
@@ -252,10 +277,22 @@ def _sanitize_metadata(
     """Keep structured metadata while dropping free-form source content."""
 
     protected = tuple(item for item in protected_values if item)
-    if value is None or isinstance(value, (bool, int)):
+    if value is None or isinstance(value, bool):
         return value
+    if isinstance(value, int):
+        return (
+            value
+            if field_name in _NUMERIC_METADATA_FIELDS
+            else f"hash:{hash_text(str(value))}"
+        )
     if isinstance(value, float):
-        return value if math.isfinite(value) else None
+        if not math.isfinite(value):
+            return None
+        return (
+            value
+            if field_name in _NUMERIC_METADATA_FIELDS
+            else f"hash:{hash_text(str(value))}"
+        )
     if isinstance(value, str):
         if _contains_protected(value, protected):
             return PROTECTED_TEXT_OMITTED
@@ -264,13 +301,11 @@ def _sanitize_metadata(
         normalized = _normalize_text(value)
         if len(normalized) > 256:
             return f"hash:{hash_text(normalized)}"
-        if (
-            field_name not in _STRUCTURED_METADATA_FIELDS
-            or not _SAFE_METADATA_VALUE_RE.fullmatch(normalized.casefold())
-            or normalized != normalized.casefold()
-        ):
-            return f"hash:{hash_text(normalized)}"
-        return normalized
+        if re.fullmatch(r"(?:hash:)?sha256:[0-9a-f]{64}", normalized):
+            return normalized
+        if normalized in _SAFE_STATUS_CODES | _SAFE_REASON_CODES | _SAFE_LABEL_CODES:
+            return normalized
+        return f"hash:{hash_text(normalized)}"
     if isinstance(value, Mapping):
         result: dict[str, object] = {}
         for raw_key, raw_item in value.items():
@@ -448,13 +483,11 @@ def _safe_label(
     normalized = _normalize_text(value)
     if _contains_protected(normalized, protected_values):
         return f"label:{hash_text(normalized)}"
-    if (
-        len(normalized) > 128
-        or normalized != normalized.casefold()
-        or not _SAFE_METADATA_VALUE_RE.fullmatch(normalized)
+    if normalized in _SAFE_LABEL_CODES or re.fullmatch(
+        r"label:sha256:[0-9a-f]{64}", normalized
     ):
-        return f"label:{hash_text(normalized)}"
-    return normalized
+        return normalized
+    return f"label:{hash_text(normalized)}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -566,7 +599,7 @@ class ReviewFinding:
         object.__setattr__(
             self,
             "attributes",
-            MappingProxyType(
+            _freeze_metadata(
                 safe_attributes if isinstance(safe_attributes, dict) else {}
             ),
         )
@@ -580,6 +613,7 @@ class ReviewFinding:
     def to_dict(self, *, include_protected_text: bool = False) -> dict[str, Any]:
         """Return the finding in its default PHI-safe representation."""
 
+        _require_render_flag(include_protected_text)
         payload: dict[str, Any] = {
             "finding_id": self.finding_id,
             "label": self.label,
@@ -599,7 +633,7 @@ class ReviewFinding:
         if self.source_hash is not None:
             payload["source_hash"] = self.source_hash
         if self.attributes:
-            payload["attributes"] = dict(self.attributes)
+            payload["attributes"] = _plain_json_value(self.attributes)
         if self.protected_text is not None:
             payload["protected_text_available"] = True
             if include_protected_text:
@@ -679,7 +713,7 @@ class ReviewCitation:
         object.__setattr__(
             self,
             "metadata",
-            MappingProxyType(safe_metadata if isinstance(safe_metadata, dict) else {}),
+            _freeze_metadata(safe_metadata if isinstance(safe_metadata, dict) else {}),
         )
 
     @property
@@ -691,6 +725,7 @@ class ReviewCitation:
     def to_dict(self, *, include_protected_text: bool = False) -> dict[str, Any]:
         """Return the citation without its excerpt or quoted source text."""
 
+        _require_render_flag(include_protected_text)
         payload: dict[str, Any] = {
             "citation_id": self.citation_id,
             "source": self.source,
@@ -704,7 +739,7 @@ class ReviewCitation:
         if self.source_hash is not None:
             payload["source_hash"] = self.source_hash
         if self.metadata:
-            payload["metadata"] = dict(self.metadata)
+            payload["metadata"] = _plain_json_value(self.metadata)
         if self.protected_text is not None:
             payload["protected_text_available"] = True
             if include_protected_text:
@@ -758,7 +793,7 @@ class ReviewGateResult:
         object.__setattr__(
             self,
             "details",
-            MappingProxyType(safe_details if isinstance(safe_details, dict) else {}),
+            _freeze_metadata(safe_details if isinstance(safe_details, dict) else {}),
         )
 
     @property
@@ -782,7 +817,7 @@ class ReviewGateResult:
         if self.citation_ids:
             payload["citation_ids"] = list(self.citation_ids)
         if self.details:
-            payload["details"] = dict(self.details)
+            payload["details"] = _plain_json_value(self.details)
         return payload
 
 
@@ -851,7 +886,15 @@ class ReviewPacket:
             raise ValueError("unsupported review packet schema version")
         if self.advisory != REVIEW_PACKET_ADVISORY:
             raise ValueError("unsupported review packet advisory")
-        review_status = self.review_status or _derive_review_status(gates)
+        derived_status = _derive_review_status(gates)
+        review_status = self.review_status or derived_status
+        if derived_status == "blocked" and review_status != "blocked":
+            raise ValueError("review status conflicts with a blocking gate")
+        if derived_status == "review_required" and review_status not in {
+            "review_required",
+            "blocked",
+        }:
+            raise ValueError("review status conflicts with a failed gate")
         object.__setattr__(
             self, "review_status", _safe_status(review_status, default="not_evaluated")
         )
@@ -876,6 +919,7 @@ class ReviewPacket:
     def to_dict(self, *, include_protected_text: bool = False) -> dict[str, Any]:
         """Return the packet, omitting protected source values by default."""
 
+        _require_render_flag(include_protected_text)
         failed_gates = sum(not gate.passed for gate in self.gate_results)
         payload: dict[str, Any] = {
             "schema_version": self.schema_version,
@@ -919,6 +963,7 @@ class ReviewPacket:
     def to_markdown(self, *, include_protected_text: bool = False) -> str:
         """Render a compact Markdown review packet."""
 
+        _require_render_flag(include_protected_text)
         lines = [
             "# Human review packet",
             "",
@@ -1364,6 +1409,8 @@ def render_review_packet(
     wording; either flag must be deliberately set by the caller.
     """
 
+    _require_render_flag(include_protected_text)
+    _require_render_flag(allow_protected_text)
     if allow_protected_text:
         include_protected_text = True
     if packet is not None:
