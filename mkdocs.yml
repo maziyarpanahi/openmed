@@ -331,7 +331,6 @@ nav:
       - Human-review packets: clinical/human-review-packets.md
       - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
       - Clinical claim-packet integrity: clinical/claim-integrity.md
-      - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md

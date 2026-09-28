@@ -51,6 +51,14 @@ rejection raises `CitationBoundaryError`. Use `raise_on_error=False` to retain
 all safe rejection records for a review packet. Neither path makes a network
 call or logs source values.
 
+Collections are bounded to 4,096 citations, maps, replacements or version keys.
+Conflicting aliases and duplicate map versions fail closed. Typed maps,
+replacement boundaries and citations are revalidated at the public boundary;
+malformed iterators and invalid Unicode produce fixed errors without retaining
+upstream exception context. Adjacent removals are projected together, and a
+fully removed source span has no citeable projection. Hashes are opaque
+references, not a guarantee of anonymization.
+
 The map and report are assistive provenance artifacts. They do not establish
 clinical correctness, compliance certification, or an autonomous clinical
 decision; qualified human review remains required.

@@ -406,7 +406,6 @@ classification:
     - clinical/human-review-packets.md
     - clinical/uncertainty-disclosure.md
     - clinical/claim-integrity.md
-    - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md

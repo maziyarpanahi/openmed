@@ -12,12 +12,124 @@ from openmed.clinical.citation_boundaries import (
     CITATION_CROSSES_REPLACEMENT,
     DOCUMENT_DIGEST_MISMATCH,
     SOURCE_VERSION_UNAVAILABLE,
+    CitationBoundary,
     CitationBoundaryError,
+    CitationBoundaryReport,
+    DeidentificationOffsetMap,
+    ReplacementBoundary,
     build_deidentification_offset_map,
     validate_citation_boundaries,
 )
 
 SYNTHETIC_PROTECTED_VALUE = "SYNTHETIC_PROTECTED_VALUE"
+
+
+def test_multiple_removals_project_past_every_removed_interval():
+    offset_map = build_deidentification_offset_map(
+        "abcde",
+        "ae",
+        [
+            {"start": 1, "end": 2, "replacement": ""},
+            {"start": 2, "end": 4, "replacement": ""},
+        ],
+    )
+    assert offset_map.map_post_span(1, 2) == (4, 5)
+
+
+def test_source_projection_does_not_apply_prior_shift_twice():
+    offset_map = build_deidentification_offset_map(
+        "abcdefghi",
+        "axdeyhi",
+        [
+            {"start": 1, "end": 3, "replacement": "x"},
+            {"start": 5, "end": 7, "replacement": "y"},
+        ],
+    )
+    assert offset_map.map_source_span(3, 5) == (2, 4)
+
+
+def test_mutated_nested_boundaries_are_revalidated():
+    boundary = ReplacementBoundary(1, 3, 1, 2)
+    object.__setattr__(boundary, "source_start", True)
+    with pytest.raises(CitationBoundaryError):
+        DeidentificationOffsetMap(5, 4, (boundary,), _digest("axde"))
+
+
+def test_typed_citation_cannot_bypass_offset_validation():
+    offset_map = _map()
+    citation = CitationBoundary(0, 6, offset_map.document_digest)
+    object.__setattr__(citation, "post_start", True)
+    report = validate_citation_boundaries([citation], offset_map, raise_on_error=False)
+    assert not report.valid
+
+
+def test_report_rejects_arbitrary_disclaimer():
+    with pytest.raises(CitationBoundaryError):
+        CitationBoundaryReport((), (), (), (), 0, disclaimer=SYNTHETIC_PROTECTED_VALUE)
+
+
+def test_broken_citation_collection_drops_exception_context():
+    def broken():
+        raise ValueError(SYNTHETIC_PROTECTED_VALUE)
+        yield
+
+    with pytest.raises(CitationBoundaryError) as caught:
+        validate_citation_boundaries(broken(), _map())
+    assert caught.value.__context__ is None
+
+
+def test_conflicting_citation_aliases_fail_closed():
+    with pytest.raises(CitationBoundaryError):
+        CitationBoundary(0, 2, _digest("ab"), document_id=_digest("cd"))
+
+
+def test_duplicate_version_maps_are_ambiguous():
+    first = build_deidentification_offset_map("abc", "abc", [], source_version="v1")
+    second = build_deidentification_offset_map("def", "def", [], source_version="v1")
+    with pytest.raises(CitationBoundaryError):
+        validate_citation_boundaries([], [first, second])
+
+
+def test_removed_source_span_has_no_citeable_projection():
+    offset_map = build_deidentification_offset_map(
+        "abc",
+        "ac",
+        [{"start": 1, "end": 2, "replacement": ""}],
+    )
+    assert offset_map.map_source_span(1, 2) is None
+
+
+def test_conflicting_mapping_offsets_are_rejected():
+    report = validate_citation_boundaries(
+        [
+            {
+                "source_offset": [0, 6],
+                "start": 1,
+                "end": 6,
+                "document_digest": _map().document_digest,
+            }
+        ],
+        _map(),
+        raise_on_error=False,
+    )
+    assert not report.valid
+
+
+def test_invalid_unicode_and_bounded_collections_are_value_free():
+    with pytest.raises(CitationBoundaryError) as caught:
+        CitationBoundary(0, 1, "SYNTHETIC_PRIVATE\ud800")
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+    consumed = []
+
+    def endless():
+        while True:
+            consumed.append(1)
+            yield _citation(0, 6)
+
+    with pytest.raises(CitationBoundaryError):
+        validate_citation_boundaries(endless(), _map())
+    assert len(consumed) == 4097
 
 
 def _digest(value: str) -> str:

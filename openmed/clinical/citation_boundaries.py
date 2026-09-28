@@ -17,6 +17,8 @@ import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
 from typing import Any, Final, NoReturn
 
 CITATION_BOUNDARY_SCHEMA_VERSION: Final[int] = 1
@@ -79,6 +81,46 @@ def _raise(reason_code: str) -> NoReturn:
     raise CitationBoundaryError(reason_code)
 
 
+def _safe_boundary(function):
+    """Drop upstream error values and contexts at a public input boundary."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        reason = INVALID_OFFSET_MAP
+        try:
+            return function(*args, **kwargs)
+        except CitationBoundaryError as error:
+            reason = error.reason_code
+        except Exception:
+            pass
+        _raise(reason)
+
+    return wrapped
+
+
+def _text_bytes(value: str) -> bytes:
+    encoded = None
+    try:
+        encoded = value.encode("utf-8")
+    except Exception:
+        pass
+    if encoded is None:
+        _raise(INVALID_CITATION)
+    return encoded
+
+
+def _bounded(value: Any, reason: str = INVALID_OFFSET_MAP) -> tuple[Any, ...]:
+    rows = None
+    if not isinstance(value, (str, bytes, bytearray)):
+        try:
+            rows = tuple(islice(iter(value), 4097))
+        except Exception:
+            pass
+    if rows is None or len(rows) > 4096:
+        _raise(reason)
+    return rows
+
+
 def _sha256(value: bytes) -> str:
     return f"sha256:{hashlib.sha256(value).hexdigest()}"
 
@@ -99,7 +141,7 @@ def _normalise_digest(value: Any, *, allow_none: bool = True) -> str | None:
         return f"sha256:{candidate}"
     # Hash accidental non-opaque input rather than retaining it in an
     # artifact.  Callers should still provide a high-entropy opaque digest.
-    return _sha256(value.encode("utf-8"))
+    return _sha256(_text_bytes(value))
 
 
 def _normalise_version(value: Any) -> str | None:
@@ -119,19 +161,23 @@ def _normalise_identifier(value: Any) -> str | None:
 
 
 def _field(value: Any, names: tuple[str, ...], default: Any = _MISSING) -> Any:
-    if isinstance(value, Mapping):
+    found = []
+    failed = False
+    try:
         for name in names:
-            if name in value:
-                return value[name]
-        return default
-    for name in names:
-        try:
-            return getattr(value, name)
-        except (AttributeError, TypeError):
-            continue
-        except Exception:
-            return default
-    return default
+            if isinstance(value, Mapping):
+                if name in value:
+                    found.append(value[name])
+            else:
+                item = getattr(value, name, _MISSING)
+                if item is not _MISSING:
+                    found.append(item)
+        failed = bool(found) and any(item != found[0] for item in found)
+    except Exception:
+        failed = True
+    if failed:
+        _raise(INVALID_CITATION)
+    return found[0] if found else default
 
 
 def _offset_pair(value: Any) -> tuple[Any, Any] | None:
@@ -274,12 +320,10 @@ class DeidentificationOffsetMap:
 
         if isinstance(self.replacements, (str, bytes, bytearray)):
             _raise(INVALID_OFFSET_MAP)
-        try:
-            replacements = tuple(self.replacements)
-        except Exception:
-            _raise(INVALID_OFFSET_MAP)
+        replacements = _bounded(self.replacements)
         if any(not isinstance(item, ReplacementBoundary) for item in replacements):
             _raise(INVALID_OFFSET_MAP)
+        replacements = tuple(replace(item) for item in replacements)
         replacements = tuple(
             sorted(
                 replacements,
@@ -325,7 +369,7 @@ class DeidentificationOffsetMap:
         return cls(
             source_length=source_length,
             post_length=post_length,
-            replacements=tuple(replacements),
+            replacements=replacements,
             document_digest=document_digest,
             source_version=source_version,
         )
@@ -391,7 +435,11 @@ class DeidentificationOffsetMap:
             if start < item.source_start or end > item.source_end:
                 continue
             if start == item.source_start and end == item.source_end:
-                return item.post_start, item.post_end
+                return (
+                    (item.post_start, item.post_end)
+                    if item.post_start < item.post_end
+                    else None
+                )
         for item in self.replacements:
             if start < item.source_end and end > item.source_start:
                 return None
@@ -417,6 +465,7 @@ class DeidentificationOffsetMap:
             if item.post_start == item.post_end == point:
                 if right:
                     shift += item.source_end - item.source_start
+                    continue
                 return point + shift
             if item.post_start < point < item.post_end:
                 return None
@@ -440,9 +489,7 @@ class DeidentificationOffsetMap:
             if item.source_start < point < item.source_end:
                 return None
             if point == item.source_start:
-                if right:
-                    return item.post_start + shift
-                return item.post_start + shift
+                return item.post_start
             if point <= item.source_start:
                 break
         return point + shift
@@ -479,7 +526,16 @@ class CitationBoundary:
         citation_id: Any = None,
         id: Any = None,
     ) -> None:
-        post_pair = _offset_pair(post_offset) or _offset_pair(source_offset)
+        pairs = [
+            _offset_pair(value)
+            for value in (post_offset, source_offset)
+            if value is not None
+        ]
+        if any(pair is None for pair in pairs) or (
+            pairs and any(pair != pairs[0] for pair in pairs)
+        ):
+            _raise(INVALID_CITATION_OFFSET)
+        post_pair = pairs[0] if pairs else None
         starts = [
             value for value in (post_start, start, source_start) if value is not None
         ]
@@ -493,6 +549,14 @@ class CitationBoundary:
             _raise(INVALID_CITATION_OFFSET)
         if not _valid_span(starts[0], ends[0]):
             _raise(INVALID_CITATION_OFFSET)
+        for values, normalize in (
+            ((document_digest, document_id), _normalise_digest),
+            ((source_version, version), _normalise_version),
+            ((citation_id, id), _normalise_identifier),
+        ):
+            normalized = [normalize(value) for value in values if value is not None]
+            if normalized and any(value != normalized[0] for value in normalized):
+                _raise(INVALID_CITATION)
         digest_value = document_digest if document_digest is not None else document_id
         version_value = source_version if source_version is not None else version
         citation_identifier = citation_id if citation_id is not None else id
@@ -565,6 +629,13 @@ class ValidatedCitation:
     source_start: int
     source_end: int
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.citation, CitationBoundary):
+            _raise(INVALID_CITATION)
+        object.__setattr__(self, "citation", _coerce_citation(self.citation))
+        if not _valid_span(self.source_start, self.source_end):
+            _raise(INVALID_CITATION_OFFSET)
+
     def to_dict(self) -> dict[str, Any]:
         """Return safe post- and original-source offsets."""
 
@@ -619,6 +690,30 @@ class CitationBoundaryReport:
     replacement_boundary_count: int
     schema_version: int = CITATION_BOUNDARY_SCHEMA_VERSION
     disclaimer: str = CITATION_BOUNDARY_DISCLAIMER
+
+    def __post_init__(self) -> None:
+        if type(self.schema_version) is not int or self.schema_version != 1:
+            _raise(INVALID_CITATION)
+        if self.disclaimer != CITATION_BOUNDARY_DISCLAIMER:
+            _raise(INVALID_CITATION)
+        if not _valid_length(self.replacement_boundary_count):
+            _raise(INVALID_OFFSET_MAP)
+        for name, cls in (
+            ("validated_citations", ValidatedCitation),
+            ("issues", CitationBoundaryIssue),
+        ):
+            rows = _bounded(getattr(self, name), INVALID_CITATION)
+            if any(not isinstance(row, cls) for row in rows):
+                _raise(INVALID_CITATION)
+            object.__setattr__(self, name, tuple(replace(row) for row in rows))
+        for name in ("document_digests", "source_versions"):
+            rows = _bounded(getattr(self, name), INVALID_CITATION)
+            if any(
+                not isinstance(row, str) or not _DIGEST_RE.fullmatch(row)
+                for row in rows
+            ):
+                _raise(INVALID_CITATION)
+            object.__setattr__(self, name, tuple(sorted(set(rows))))
 
     @property
     def valid(self) -> bool:
@@ -788,7 +883,9 @@ def _build_map_from_texts(
     if isinstance(raw_replacements, (str, bytes, bytearray)):
         _raise(INVALID_OFFSET_MAP)
     try:
-        specs = tuple(_coerce_replacement_spec(item) for item in raw_replacements)
+        specs = tuple(
+            _coerce_replacement_spec(item) for item in _bounded(raw_replacements)
+        )
     except CitationBoundaryError:
         raise
     except Exception:
@@ -833,7 +930,7 @@ def _build_map_from_texts(
                 post_start=post_start,
                 post_end=post_end,
                 replacement_digest=(
-                    _sha256(replacement.encode("utf-8"))
+                    _sha256(_text_bytes(replacement))
                     if replacement is not None
                     else None
                 ),
@@ -844,7 +941,7 @@ def _build_map_from_texts(
     rendered.append(source_text[source_cursor:])
     if "".join(rendered) != post_text:
         _raise(OFFSET_MAP_CONTENT_MISMATCH)
-    actual_digest = _sha256(post_text.encode("utf-8"))
+    actual_digest = _sha256(_text_bytes(post_text))
     supplied_digest = _normalise_digest(document_digest)
     if supplied_digest is not None and supplied_digest != actual_digest:
         _raise(DOCUMENT_DIGEST_MISMATCH)
@@ -857,6 +954,7 @@ def _build_map_from_texts(
     )
 
 
+@_safe_boundary
 def build_deidentification_offset_map(
     source_or_result: Any,
     post_deidentified_text: str | None = None,
@@ -942,7 +1040,13 @@ offset_map_from_result = build_deidentification_offset_map
 
 def _coerce_citation(value: Any) -> CitationBoundary:
     if isinstance(value, CitationBoundary):
-        return value
+        return CitationBoundary(
+            value.post_start,
+            value.post_end,
+            value.document_digest,
+            source_version=value.source_version,
+            citation_id=value.citation_id,
+        )
     if isinstance(value, (str, bytes, bytearray)):
         _raise(INVALID_CITATION)
     try:
@@ -980,6 +1084,8 @@ def _coerce_citation(value: Any) -> CitationBoundary:
         if post_pair is not _MISSING:
             return CitationBoundary(
                 post_offset=post_pair,
+                start=_field(value, ("post_start", "start", "source_start"), None),
+                end=_field(value, ("post_end", "end", "source_end"), None),
                 document_digest=document_digest,
                 source_version=source_version,
                 citation_id=citation_id,
@@ -1021,7 +1127,7 @@ def _coerce_maps(value: Any) -> tuple[DeidentificationOffsetMap, ...]:
                         post_end=item["post_deidentification_offset"]["end"],
                         replacement_digest=item.get("replacement_digest"),
                     )
-                    for item in raw_boundaries
+                    for item in _bounded(raw_boundaries)
                 )
                 return (
                     DeidentificationOffsetMap(
@@ -1038,7 +1144,7 @@ def _coerce_maps(value: Any) -> tuple[DeidentificationOffsetMap, ...]:
             except Exception:
                 _raise(INVALID_OFFSET_MAP)
         maps: list[DeidentificationOffsetMap] = []
-        for version, raw_map in value.items():
+        for version, raw_map in _bounded(value.items()):
             if not isinstance(raw_map, DeidentificationOffsetMap):
                 _raise(INVALID_OFFSET_MAP)
             normalized_version = _normalise_version(version)
@@ -1050,10 +1156,7 @@ def _coerce_maps(value: Any) -> tuple[DeidentificationOffsetMap, ...]:
         return tuple(sorted(maps, key=lambda item: item.source_version or ""))
     if isinstance(value, (str, bytes, bytearray)):
         _raise(INVALID_OFFSET_MAP)
-    try:
-        raw_maps = tuple(value)
-    except Exception:
-        _raise(INVALID_OFFSET_MAP)
+    raw_maps = _bounded(value)
     if any(not isinstance(item, DeidentificationOffsetMap) for item in raw_maps):
         _raise(INVALID_OFFSET_MAP)
     return tuple(sorted(raw_maps, key=lambda item: item.source_version or ""))
@@ -1064,14 +1167,11 @@ def _available_versions(value: Any) -> set[str] | None:
         return None
     values: Iterable[Any]
     if isinstance(value, Mapping):
-        values = value.keys()
+        values = _bounded(value.keys())
     elif isinstance(value, (str, bytes, bytearray)):
         values = (value,)
     else:
-        try:
-            values = tuple(value)
-        except Exception:
-            _raise(INVALID_OFFSET_MAP)
+        values = _bounded(value)
     return {
         normalized
         for item in values
@@ -1127,6 +1227,7 @@ def _issue_sort_key(issue: CitationBoundaryIssue) -> tuple[int, int, str]:
     )
 
 
+@_safe_boundary
 def validate_citation_boundaries(
     citations: Iterable[Any],
     offset_map: Any,
@@ -1166,16 +1267,16 @@ def validate_citation_boundaries(
         _raise(INVALID_CITATION_COLLECTION)
     if type(raise_on_error) is not bool:
         _raise(INVALID_CITATION)
-    maps = _coerce_maps(offset_map)
+    maps = tuple(replace(item) for item in _coerce_maps(offset_map))
+    versions = [item.source_version for item in maps]
+    if len(set(versions)) != len(versions):
+        _raise(INVALID_OFFSET_MAP)
     expected_digest = _normalise_digest(document_digest)
     available_versions = _available_versions(available_source_versions)
     if isinstance(citations, (CitationBoundary, Mapping)):
         raw_citations = (citations,)
     else:
-        try:
-            raw_citations = tuple(citations)
-        except Exception:
-            _raise(INVALID_CITATION_COLLECTION)
+        raw_citations = _bounded(citations, INVALID_CITATION_COLLECTION)
 
     safe_citations: list[CitationBoundary] = []
     coercion_issues: list[CitationBoundaryIssue] = []
