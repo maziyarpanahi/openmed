@@ -334,3 +334,29 @@ def test_mutated_record_is_revalidated_before_rendering():
 def test_item_path_depth_is_bounded():
     with pytest.raises(DicomSrProvenanceError):
         build_dicom_sr_provenance({"f": ".".join(["1"] * 65)})
+
+
+def test_nested_template_declaration_cannot_disagree():
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance(
+            [
+                {
+                    "finding_id": "f",
+                    "item_path": "1.3.1.3",
+                    "template_id": "1502",
+                    "provenance": {"template_id": "9999"},
+                }
+            ],
+            document=_document(),
+        )
+
+
+def test_explicit_offsets_fit_document_even_without_item_span():
+    document = ExtractedDocument(
+        text="x", metadata={"content_items": [{"node_path": "1"}]}
+    )
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance(
+            [{"finding_id": "f", "item_path": "1", "start": 0, "end": 5}],
+            document=document,
+        )

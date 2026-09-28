@@ -230,6 +230,11 @@ def build_dicom_sr_provenance(
     values such as ``value``, ``concept_name``, and arbitrary finding metadata
     are deliberately ignored.
     """
+    source_document = (
+        document
+        if document is not None
+        else (content_items if isinstance(content_items, ExtractedDocument) else None)
+    )
     resolved_items, resolved_spans = _resolve_sources(
         content_items,
         spans,
@@ -253,6 +258,12 @@ def build_dicom_sr_provenance(
 
         item_path = _finding_item_path(finding, index=index)
         explicit_start, explicit_end = _finding_offsets(finding, index=index)
+        if (
+            source_document is not None
+            and explicit_end is not None
+            and explicit_end > len(source_document.text)
+        ):
+            raise DicomSrProvenanceError("finding offsets exceed document")
         if item_path is None:
             item_path = _path_from_offsets(
                 explicit_start,
@@ -558,10 +569,16 @@ def _finding_template_id(
     index: int,
 ) -> str | None:
     value = _first_present(finding, _TEMPLATE_FIELDS)
-    if value is None:
-        provenance = finding.get("provenance")
-        if isinstance(provenance, Mapping):
-            value = _first_present(provenance, _TEMPLATE_FIELDS)
+    provenance = finding.get("provenance")
+    if isinstance(provenance, Mapping):
+        nested = _first_present(provenance, _TEMPLATE_FIELDS)
+        if (
+            value is not None
+            and nested is not None
+            and _coerce_optional_string(value) != _coerce_optional_string(nested)
+        ):
+            raise AmbiguousDicomSrItemPathError("conflicting template identifiers")
+        value = value if value is not None else nested
     if value is None:
         return None
     template_id = _coerce_optional_string(value)
