@@ -50,7 +50,7 @@ class _FakeLoader:
     ) -> dict[str, object]:
         self.calls.append((model_ref, revision, runtime))
         return {
-            "tokenizer": lambda *_args, **_kwargs: {"input_ids": [1]},
+            "tokenizer": lambda *_args, **_kwargs: {"input_ids": [[1]]},
             "model": _FakeModel(self.values),
         }
 
@@ -131,7 +131,7 @@ def test_fake_onnx_checkpoint_uses_the_same_label_and_abstention_contract() -> N
         ) -> dict[str, object]:
             self.calls.append((model_ref, revision, runtime))
             return {
-                "tokenizer": lambda *_args, **_kwargs: {"input_ids": [1]},
+                "tokenizer": lambda *_args, **_kwargs: {"input_ids": [[1]]},
                 "model": _FakeOnnxSession(),
             }
 
@@ -216,6 +216,58 @@ def test_loader_failure_does_not_echo_sensitive_exception() -> None:
     with pytest.raises(LocalNLIError) as error:
         backend.predict("synthetic source", "synthetic claim")
     assert "555-0199" not in str(error.value)
+
+
+@pytest.mark.parametrize("runtime", ["torch", "onnx"])
+@pytest.mark.parametrize("limit", [256, 512])
+def test_overlength_pair_abstains_without_truncation_or_inference(runtime, limit):
+    backend, _ = _backend((5.0, 0.0, 0.0))
+    backend.runtime = runtime
+
+    def tokenize(*_args, **kwargs):
+        assert kwargs["truncation"] is False
+        return {"input_ids": [[1] * (limit + 1)]}
+
+    class NeverRun:
+        def __call__(self, **_kwargs):
+            pytest.fail("overlength pair reached classifier")
+
+        def get_inputs(self):
+            pytest.fail("overlength pair reached ONNX classifier")
+
+    backend._artifact = {
+        "tokenizer": tokenize,
+        "model": NeverRun(),
+        "config": SimpleNamespace(max_position_embeddings=limit),
+    }
+    assert backend.predict("synthetic source", "synthetic claim") == {
+        "label": "abstention",
+        "score": 0.0,
+        "backend_id": "local-encoder",
+    }
+
+
+def test_class_mapping_requires_logit_indices():
+    with pytest.raises(LocalNLIError, match="three model states"):
+        EncoderNLIBackend(
+            "synthetic-local-checkpoint",
+            label_mapping={"A": "entailment", "B": "neutral", "C": "contradiction"},
+            thresholds=NLIThresholds(),
+        )
+
+
+def test_public_boundary_sanitizes_custom_backend_errors():
+    def failing_backend(premise, hypothesis):
+        raise RuntimeError(f"{premise}: {hypothesis}")
+
+    with pytest.raises(LocalNLIError) as caught:
+        nli(
+            "synthetic protected source",
+            "synthetic protected claim",
+            backend=failing_backend,
+        )
+    assert str(caught.value) == "local NLI inference failed"
+    assert caught.value.__suppress_context__ is True
 
 
 def test_loader_encloses_local_resolution_in_offline_guard(

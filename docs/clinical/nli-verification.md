@@ -35,6 +35,10 @@ only cached PyTorch or ONNX sequence-classification artifacts. Model class
 meanings and calibrated thresholds come from the pinned release metadata; the
 runtime never guesses them or falls back to a remote service.
 
+The encoder evaluates complete tokenized pairs only. It abstains without model
+inference if the pair exceeds 512 tokens or a smaller tokenizer/model limit;
+it never silently truncates the source or claim before issuing a decision.
+
 ## MedNLI data policy
 
 MedNLI is DUA-gated and eval-only. The BigBio mirror is represented by a gated

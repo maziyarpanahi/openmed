@@ -228,12 +228,17 @@ def _call_backend(
     hypothesis: str,
 ) -> Mapping[str, Any]:
     predictor = getattr(backend, "predict", None)
-    if callable(predictor):
-        result = predictor(premise, hypothesis)
-    elif callable(backend):
-        result = backend(premise, hypothesis)
-    else:  # pragma: no cover - guarded by _validate_backend
-        raise TypeError("NLI backend must implement predict or be callable")
+    try:
+        if callable(predictor):
+            result = predictor(premise, hypothesis)
+        elif callable(backend):
+            result = backend(premise, hypothesis)
+        else:  # pragma: no cover - guarded by _validate_backend
+            raise TypeError("NLI backend must implement predict or be callable")
+    except Exception:
+        from .nli_backends import LocalNLIError
+
+        raise LocalNLIError("local NLI inference failed") from None
     if not isinstance(result, Mapping):
         raise TypeError("NLI backend must return a mapping")
     return result

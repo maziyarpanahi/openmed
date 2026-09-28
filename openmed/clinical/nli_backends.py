@@ -65,7 +65,7 @@ class EncoderNLIBackend:
             }
         except (TypeError, ValueError):
             raise LocalNLIError("NLI class mapping is invalid") from None
-        if set(mapped.values()) != _CANONICAL_SCORES or len(mapped) != 3:
+        if set(mapped.values()) != _CANONICAL_SCORES or set(mapped) != {"0", "1", "2"}:
             raise LocalNLIError("NLI class mapping must cover three model states")
 
         self.model_ref = reference
@@ -105,15 +105,30 @@ class EncoderNLIBackend:
         try:
             tokenizer = artifact["tokenizer"]
             model = artifact["model"]
+            # A decision must cover the entire pair, not a silently clipped
+            # premise that may have lost a contradictory clause.
+            encoded = tokenizer(
+                premise,
+                hypothesis,
+                return_tensors="pt" if self.runtime == "torch" else "np",
+                truncation=False,
+            )
+            limits = [512]
+            for limit in (
+                getattr(tokenizer, "model_max_length", None),
+                getattr(artifact.get("config"), "max_position_embeddings", None),
+            ):
+                if type(limit) is int and limit > 0:
+                    limits.append(limit)
+            if len(encoded["input_ids"][0]) > min(limits):
+                return {
+                    "label": "abstention",
+                    "score": 0.0,
+                    "backend_id": self.backend_id,
+                }
             if self.runtime == "torch":
-                encoded = tokenizer(
-                    premise, hypothesis, return_tensors="pt", truncation=True
-                )
                 logits = model(**encoded).logits[0].tolist()
             else:
-                encoded = tokenizer(
-                    premise, hypothesis, return_tensors="np", truncation=True
-                )
                 feeds = {item.name: encoded[item.name] for item in model.get_inputs()}
                 logits = model.run(None, feeds)[0][0].tolist()
             if len(logits) != 3 or not all(math.isfinite(float(x)) for x in logits):
