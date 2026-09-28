@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 84136200,
-    "maximum_unique_payload_bytes": 83798621,
+    "maximum_total_bytes": 83924560,
+    "maximum_unique_payload_bytes": 83586981,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4265653
+    "json": 4263185
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4265653
+    "docs/search/search_index.json": 4263185
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,7 +31,6 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The reviewed bucketed timelines on provenance master build measures 84020714 total bytes, 83683135 unique bytes, and 4259861 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed temporal normalization on provenance master build measures 83809074 total bytes, 83471495 unique bytes, and 4257393 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The combined provenance review guide build measures 83593126 total bytes, 83255547 unique bytes, and 4253608 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed provenance and assurance guide build measures 83162940 total bytes, 82825361 unique bytes, and 4247574 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
