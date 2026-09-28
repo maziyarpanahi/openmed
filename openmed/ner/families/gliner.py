@@ -91,13 +91,7 @@ def load_gliner_handle(
     """Load a GLiNER model and wrap it in ``GLiNERHandle``."""
 
     ensure_gliner_available()
-    model = _load_model(model_id, cache_dir or None, token or None)
-
-    if device and hasattr(model, "to"):
-        try:
-            model = model.to(device)
-        except Exception:  # pragma: no cover - defensive path
-            pass
+    model = _load_model(model_id, cache_dir or None, token or None, device or None)
 
     return GLiNERHandle(model_id=model_id, model=model)
 
@@ -109,7 +103,12 @@ def clear_gliner_cache() -> None:
 
 
 @lru_cache(maxsize=4)
-def _load_model(model_id: str, cache_dir: Optional[str], token: Optional[str]) -> Any:
+def _load_model(
+    model_id: str,
+    cache_dir: Optional[str],
+    token: Optional[str],
+    device: Optional[str] = None,
+) -> Any:
     ensure_gliner_available()
     module = importlib.import_module(_PRIMARY_IMPORT)
     loader = getattr(module, "GLiNER")
@@ -118,7 +117,14 @@ def _load_model(model_id: str, cache_dir: Optional[str], token: Optional[str]) -
         kwargs["cache_dir"] = cache_dir
     if token:
         kwargs["token"] = token
-    return loader.from_pretrained(model_id, **kwargs)
+    model = loader.from_pretrained(model_id, **kwargs)
+    # Place each cached instance once; another device must not move live handles.
+    if device and hasattr(model, "to"):
+        try:
+            model = model.to(device)
+        except Exception:  # pragma: no cover - defensive path
+            pass
+    return model
 
 
 __all__ = [

@@ -98,6 +98,18 @@ from .dicom_sr import (
     extract_dicom_sr,
     walk_sr_content_tree,
 )
+from .dicom_sr_provenance import (
+    DICOM_SR_PROVENANCE_ADVISORY,
+    DICOM_SR_PROVENANCE_SCHEMA_VERSION,
+    AmbiguousDicomSrItemPathError,
+    AmbiguousItemPathError,
+    DicomSrProvenanceError,
+    DicomSrProvenanceRecord,
+    build_dicom_sr_provenance,
+    map_dicom_sr_provenance,
+    render_dicom_sr_provenance,
+    serialize_dicom_sr_provenance,
+)
 from .document_graph import (
     BBox,
     BoundingBox,
@@ -235,6 +247,17 @@ from .preflight import (
     PreflightReport,
     PreflightStatus,
     preflight_asset,
+)
+from .processing_diff import (
+    PROCESSING_DIFF_SCHEMA_VERSION,
+    AbstentionDelta,
+    DigestChange,
+    MediaTypeDelta,
+    OutcomeDelta,
+    ProcessingDiff,
+    ProcessingDiffError,
+    diff_processing_summaries,
+    render_processing_diff_markdown,
 )
 from .processing_summary import (
     PROCESSING_SUMMARY_SCHEMA_VERSION,
@@ -530,6 +553,15 @@ __all__ = [
     "assert_redacted_text_removed",
     "verify_redacted_pdf",
     "verify_redacted_text_removed",
+    "PROCESSING_DIFF_SCHEMA_VERSION",
+    "AbstentionDelta",
+    "DigestChange",
+    "MediaTypeDelta",
+    "OutcomeDelta",
+    "ProcessingDiff",
+    "ProcessingDiffError",
+    "diff_processing_summaries",
+    "render_processing_diff_markdown",
     "PROCESSING_SUMMARY_SCHEMA_VERSION",
     "AbstentionCount",
     "AssetDigestEntry",
@@ -557,4 +589,14 @@ __all__ = [
     "XlsxCellRedaction",
     "XlsxRedactionResult",
     "redact_xlsx",
+    "DICOM_SR_PROVENANCE_ADVISORY",
+    "DICOM_SR_PROVENANCE_SCHEMA_VERSION",
+    "AmbiguousDicomSrItemPathError",
+    "AmbiguousItemPathError",
+    "DicomSrProvenanceError",
+    "DicomSrProvenanceRecord",
+    "build_dicom_sr_provenance",
+    "map_dicom_sr_provenance",
+    "render_dicom_sr_provenance",
+    "serialize_dicom_sr_provenance",
 ]
