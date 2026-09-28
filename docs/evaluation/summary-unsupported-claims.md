@@ -91,3 +91,17 @@ stable digest tokens so a caller-supplied patient value cannot enter the report.
 The relation labels must come from an already-approved local evidence or
 adjudication process; this evaluator does not select or validate a clinical
 source.
+
+Conflicting approval or relation aliases are rejected. Typed inputs and nested
+report records are revalidated; report class mappings are immutable, and all
+interval bounds, counts and configuration metadata must agree. Valid SHA-256
+fingerprints and generated custom-class tokens are stable under revalidation;
+they are provenance pseudonyms, not anonymization guarantees.
+
+Inputs are bounded to 100,000 claims, 200,000 evidence rows and 512 citations
+per claim. Iterators consume at most the relevant limit plus one. Matching keys
+allow at most 32 nested levels and 10,000 nodes; object keys must be strings.
+Bootstrap configuration is limited to 100,000 resamples and 20 million total
+claim draws across overall and per-class intervals. Oversized evaluations fail
+explicitly; they are never silently sampled or truncated. Artifact-write errors
+do not retain private paths or underlying exceptions.

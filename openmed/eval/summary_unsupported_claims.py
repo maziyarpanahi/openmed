@@ -20,9 +20,12 @@ import math
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from functools import wraps
+from itertools import islice
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from openmed.eval.metrics import BootstrapCI, bootstrap_ci
@@ -81,6 +84,30 @@ _MAX_EVIDENCE = 200_000
 _MAX_CITATIONS_PER_CLAIM = 512
 
 
+def _safe_input(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        message = "summary evaluation input cannot be normalized"
+        kind = ValueError
+        try:
+            return function(*args, **kwargs)
+        except (ValueError, TypeError) as error:
+            trace = error.__traceback__
+            while trace is not None and trace.tb_next is not None:
+                trace = trace.tb_next
+            if (
+                trace is not None
+                and trace.tb_frame.f_globals.get("__name__") == __name__
+            ):
+                message = str(error)
+                kind = TypeError if isinstance(error, TypeError) else ValueError
+        except Exception:
+            pass
+        raise kind(message)
+
+    return checked
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class SummaryClaim:
     """One atomic summary claim with value-free matching metadata.
@@ -105,6 +132,7 @@ class SummaryClaim:
     evidence_ids: tuple[str, ...] = ()
     summary_id: str = ""
 
+    @_safe_input
     def __post_init__(self) -> None:
         object.__setattr__(self, "claim_id", _identifier(self.claim_id, "claim_id"))
         object.__setattr__(
@@ -130,6 +158,7 @@ class SummaryClaim:
             )
 
     @classmethod
+    @_safe_input
     def from_mapping(
         cls,
         value: Mapping[str, Any] | Any,
@@ -184,11 +213,11 @@ class SummaryClaim:
             "case_id",
         )
         return cls(
-            claim_id=str(claim_id),
-            claim_class=str(claim_class),
+            claim_id=claim_id,
+            claim_class=claim_class,
             claim_key=claim_key,
             evidence_ids=_citation_ids(evidence),
-            summary_id=str(summary_id) if summary_id is not None else "",
+            summary_id=summary_id if summary_id is not None else "",
         )
 
     def __repr__(self) -> str:
@@ -218,6 +247,7 @@ class ApprovedEvidence:
     claim_key: Any = None
     claim_class: str = ""
 
+    @_safe_input
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -243,6 +273,7 @@ class ApprovedEvidence:
             )
 
     @classmethod
+    @_safe_input
     def from_mapping(
         cls,
         value: Mapping[str, Any] | Any,
@@ -291,12 +322,12 @@ class ApprovedEvidence:
             "label",
         )
         return cls(
-            evidence_id=str(evidence_id),
+            evidence_id=evidence_id,
             relation=relation,
             approved=approved,
-            claim_id=str(claim_id) if claim_id is not None else "",
+            claim_id=claim_id if claim_id is not None else "",
             claim_key=claim_key,
-            claim_class=str(claim_class) if claim_class is not None else "",
+            claim_class=claim_class if claim_class is not None else "",
         )
 
     def __repr__(self) -> str:
@@ -317,6 +348,31 @@ class ClaimAssessment:
     cited_evidence_count: int
     approved_evidence_count: int
     matching_evidence_count: int
+
+    @_safe_input
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "claim_class", _claim_class(self.claim_class))
+        if self.state not in CLAIM_STATES:
+            raise ValueError("unsupported claim state")
+        for value in (
+            self.cited_evidence_count,
+            self.approved_evidence_count,
+            self.matching_evidence_count,
+        ):
+            _count(value)
+        if (
+            not self.matching_evidence_count
+            <= self.approved_evidence_count
+            <= self.cited_evidence_count
+        ):
+            raise ValueError("inconsistent claim evidence counts")
+        if (self.state == UNCITED) != (self.cited_evidence_count == 0):
+            raise ValueError("inconsistent uncited claim state")
+        if (
+            self.state in (SUPPORTED, CONTRADICTED)
+            and self.matching_evidence_count != self.cited_evidence_count
+        ):
+            raise ValueError("claim state requires matching approved evidence")
 
     @property
     def unsupported(self) -> bool:
@@ -354,6 +410,7 @@ class ClaimClassMetrics:
     uncited: int
     bootstrap_ci: BootstrapCI
 
+    @_safe_input
     def __post_init__(self) -> None:
         counts = (
             self.supported,
@@ -367,8 +424,35 @@ class ClaimClassMetrics:
             raise TypeError("claim-state counts must be integers")
         if any(value < 0 for value in counts):
             raise ValueError("claim-state counts must be non-negative")
-        if self.bootstrap_ci.point < 0.0 or self.bootstrap_ci.point > 1.0:
-            raise ValueError("unsupported rate must be between zero and one")
+        name = (
+            "overall"
+            if self.claim_class == "overall"
+            else _claim_class(self.claim_class)
+        )
+        object.__setattr__(self, "claim_class", name)
+        if not isinstance(self.bootstrap_ci, BootstrapCI):
+            raise TypeError("invalid bootstrap interval")
+        interval = replace(self.bootstrap_ci)
+        _validate_bootstrap(interval.n_resamples, interval.alpha, 0)
+        for value in (interval.point, interval.lower, interval.upper):
+            if (
+                type(value) not in (int, float)
+                or not math.isfinite(value)
+                or not 0 <= value <= 1
+            ):
+                raise ValueError("invalid bootstrap interval bounds")
+        if (
+            interval.point != self.unsupported_rate
+            or not interval.lower <= interval.point <= interval.upper
+            or type(interval.degenerate) is not bool
+            or interval.degenerate != (self.claim_count < 2)
+            or (
+                interval.degenerate
+                and not interval.lower == interval.point == interval.upper
+            )
+        ):
+            raise ValueError("bootstrap interval does not match claim counts")
+        object.__setattr__(self, "bootstrap_ci", interval)
 
     @property
     def claim_count(self) -> int:
@@ -453,6 +537,67 @@ class SummaryUnsupportedClaimsReport:
     alpha: float = DEFAULT_BOOTSTRAP_ALPHA
     seed: int = DEFAULT_BOOTSTRAP_SEED
     schema_version: int = SUMMARY_UNSUPPORTED_CLAIMS_SCHEMA_VERSION
+
+    @_safe_input
+    def __post_init__(self) -> None:
+        _validate_bootstrap(self.n_resamples, self.alpha, self.seed)
+        _count(self.evidence_count)
+        _count(self.approved_evidence_count)
+        if self.approved_evidence_count > self.evidence_count:
+            raise ValueError("inconsistent approved evidence count")
+        if (
+            not isinstance(self.evidence_digest, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", self.evidence_digest) is None
+        ):
+            raise ValueError("invalid evidence digest")
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != SCHEMA_VERSION
+        ):
+            raise ValueError("unsupported report schema")
+        if not isinstance(self.overall, ClaimClassMetrics):
+            raise TypeError("invalid overall claim metrics")
+        overall = replace(self.overall)
+        if overall.claim_class != "overall":
+            raise ValueError("invalid overall claim class")
+        classes = {}
+        for key, metric in _bounded_items(self.by_claim_class.items(), _MAX_CLAIMS):
+            if not isinstance(metric, ClaimClassMetrics):
+                raise TypeError("invalid per-class metrics")
+            normalized = replace(metric)
+            if key != normalized.claim_class or key == "overall":
+                raise ValueError("invalid report class key")
+            classes[key] = normalized
+        assessments = []
+        for item in _bounded_items(self.assessments, _MAX_CLAIMS):
+            if not isinstance(item, ClaimAssessment):
+                raise TypeError("invalid claim assessment")
+            assessments.append(replace(item))
+        by_class = {}
+        for item in assessments:
+            by_class.setdefault(item.claim_class, Counter())[item.state] += 1
+        if set(by_class) != set(classes) or len(assessments) != overall.claim_count:
+            raise ValueError("report assessments do not match class metrics")
+        for name, metric in classes.items():
+            if any(
+                by_class[name][state] != metric.counts[state] for state in CLAIM_STATES
+            ):
+                raise ValueError("inconsistent per-class counts")
+        if any(
+            sum(metric.counts[state] for metric in classes.values())
+            != overall.counts[state]
+            for state in CLAIM_STATES
+        ):
+            raise ValueError("inconsistent overall counts")
+        for metric in (overall, *classes.values()):
+            if (
+                metric.bootstrap_ci.n_resamples != self.n_resamples
+                or metric.bootstrap_ci.alpha != self.alpha
+            ):
+                raise ValueError("inconsistent bootstrap metadata")
+        object.__setattr__(self, "overall", overall)
+        object.__setattr__(self, "by_claim_class", MappingProxyType(classes))
+        object.__setattr__(self, "assessments", tuple(assessments))
 
     @property
     def claim_count(self) -> int:
@@ -594,6 +739,7 @@ class SummaryUnsupportedClaimsReport:
         )
         return "\n".join(lines)
 
+    @_safe_input
     def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
         """Write deterministic JSON to *path*."""
 
@@ -602,6 +748,7 @@ class SummaryUnsupportedClaimsReport:
         output.write_text(self.to_json(indent=indent), encoding="utf-8")
         return output
 
+    @_safe_input
     def write_markdown(self, path: str | Path) -> Path:
         """Write deterministic Markdown to *path*."""
 
@@ -642,6 +789,7 @@ ClaimStatus = ClaimState
 EvidenceRecord = ApprovedEvidence
 
 
+@_safe_input
 def score_summary_claims(
     claims: Iterable[SummaryClaim | Mapping[str, Any] | Any],
     evidence: Iterable[ApprovedEvidence | Mapping[str, Any] | Any] = (),
@@ -681,25 +829,20 @@ def score_summary_claims(
 
     normalized_claims = _normalize_claims(claims)
     normalized_evidence = _normalize_evidence(evidence)
+    if 2 * len(normalized_claims) * n_resamples > 20_000_000:
+        raise ValueError("bootstrap work exceeds the evaluation limit")
     evidence_by_id = {item.evidence_id: item for item in normalized_evidence}
     assessments = tuple(
         _assess_claim(claim, evidence_by_id) for claim in normalized_claims
     )
+    groups: dict[str, list[ClaimAssessment]] = {}
+    for assessment in assessments:
+        groups.setdefault(assessment.claim_class, []).append(assessment)
     by_claim_class = {
-        claim_class: _class_metrics(
-            claim_class,
-            [
-                assessment
-                for assessment in assessments
-                if assessment.claim_class == claim_class
-            ],
-            n_resamples=n_resamples,
-            alpha=alpha,
-            seed=seed,
+        name: _class_metrics(
+            name, rows, n_resamples=n_resamples, alpha=alpha, seed=seed
         )
-        for claim_class in sorted(
-            {assessment.claim_class for assessment in assessments}
-        )
+        for name, rows in sorted(groups.items())
     }
     overall = _class_metrics(
         "overall",
@@ -763,6 +906,7 @@ def build_summary_unsupported_claims_report(
     return score_summary_claims(claims, evidence, **kwargs)
 
 
+@_safe_input
 def score_summary_claim(
     claim: SummaryClaim | Mapping[str, Any] | Any,
     evidence: Iterable[ApprovedEvidence | Mapping[str, Any] | Any] = (),
@@ -803,7 +947,7 @@ def _normalize_claims(
     seen_ids: set[str] = set()
     for index, value in enumerate(records, start=1):
         claim = (
-            value
+            replace(value)
             if isinstance(value, SummaryClaim)
             else SummaryClaim.from_mapping(value, default_id=f"claim-{index}")
         )
@@ -827,7 +971,7 @@ def _normalize_evidence(
     seen_ids: set[str] = set()
     for index, value in enumerate(records, start=1):
         item = (
-            value
+            replace(value)
             if isinstance(value, ApprovedEvidence)
             else ApprovedEvidence.from_mapping(value, default_id=f"evidence-{index}")
         )
@@ -928,27 +1072,48 @@ def _evidence_digest(evidence: Sequence[ApprovedEvidence]) -> str:
         }
         for item in evidence
     ]
-    return _fingerprint(payload)
+    canonical = json.dumps(
+        payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _relation_from_mapping(data: Mapping[str, Any]) -> str:
-    for key in (
-        "relation",
-        "stance",
-        "verdict",
-        "claim_state",
-        "state",
-        "status",
-        "assessment",
-        "support",
+    labels = [
+        _relation(data[key])
+        for key in (
+            "relation",
+            "stance",
+            "verdict",
+            "claim_state",
+            "state",
+            "status",
+            "assessment",
+            "support",
+        )
+        if key in data
+    ]
+    flags = []
+    for key, target in (
+        ("supports", SUPPORTED),
+        ("supported", SUPPORTED),
+        ("contradicts", CONTRADICTED),
+        ("contradicted", CONTRADICTED),
     ):
         if key in data:
-            return _relation(data[key])
-    if data.get("supports") is True or data.get("supported") is True:
-        return SUPPORTED
-    if data.get("contradicts") is True or data.get("contradicted") is True:
-        return CONTRADICTED
-    return UNRESOLVED
+            if type(data[key]) is not bool:
+                raise TypeError("evidence relation flags must be boolean")
+            flags.append((target, data[key]))
+            if data[key]:
+                labels.append(target)
+    if not labels:
+        return UNRESOLVED
+    label = labels[0]
+    if any(item != label for item in labels) or any(
+        target == label and not flag for target, flag in flags
+    ):
+        raise ValueError("conflicting evidence relation aliases")
+    return label
 
 
 def _relation(value: Any) -> str:
@@ -988,6 +1153,10 @@ def _relation(value: Any) -> str:
 
 
 def _claim_class(value: Any) -> str:
+    if not isinstance(value, str):
+        raise TypeError("claim_class must be a string")
+    if re.fullmatch(r"class_[0-9a-f]{16}", value):
+        return value
     normalized = re.sub(r"[^a-z0-9]+", "_", str(value).strip().casefold()).strip("_")
     if not _CLAIM_CLASS_RE.fullmatch(normalized):
         raise ValueError("claim_class must be a bounded identifier")
@@ -1018,7 +1187,10 @@ def _identifier_sequence(value: Any, field_name: str) -> tuple[str, ...]:
         raise TypeError(f"{field_name} must be a sequence of identifiers")
     if len(values) > _MAX_CITATIONS_PER_CLAIM:
         raise ValueError(f"{field_name} exceeds the citation limit")
-    normalized = tuple(_identifier(item, field_name) for item in values)
+    normalized = tuple(
+        _identifier(item, field_name)
+        for item in _bounded_items(values, _MAX_CITATIONS_PER_CLAIM)
+    )
     return tuple(sorted(set(normalized)))
 
 
@@ -1030,7 +1202,7 @@ def _citation_ids(value: Any) -> tuple[str, ...]:
         return _identifier_sequence(item, "evidence_ids")
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         extracted: list[Any] = []
-        for item in value:
+        for item in _bounded_items(value, _MAX_CITATIONS_PER_CLAIM):
             if isinstance(item, Mapping):
                 extracted.append(
                     _first(item, "evidence_id", "id", "citation_id", "source_id")
@@ -1042,6 +1214,8 @@ def _citation_ids(value: Any) -> tuple[str, ...]:
 
 
 def _fingerprint(value: Any) -> str:
+    if isinstance(value, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+        return value
     try:
         canonical = json.dumps(
             _json_value(value),
@@ -1055,17 +1229,34 @@ def _fingerprint(value: Any) -> str:
     return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 
-def _json_value(value: Any) -> Any:
+def _json_value(value: Any, depth: int = 0, budget: list[int] | None = None) -> Any:
+    if budget is None:
+        budget = [10000]
+    budget[0] -= 1
+    if depth > 32 or budget[0] < 0:
+        raise ValueError("claim matching key exceeds the structure limit")
     if isinstance(value, (str, int, float, bool)) or value is None:
+        if isinstance(value, str) and len(value) > 1_000_000:
+            raise ValueError("claim matching key exceeds the value limit")
         if isinstance(value, float) and not math.isfinite(value):
             raise ValueError("claim matching keys must contain finite numbers")
         return value
     if isinstance(value, bytes):
+        if len(value) > 1_000_000:
+            raise ValueError("claim matching key exceeds the value limit")
         return {"bytes_sha256": hashlib.sha256(value).hexdigest()}
     if isinstance(value, Mapping):
-        return {str(key): _json_value(item) for key, item in value.items()}
+        result = {}
+        for key, item in _bounded_items(value.items(), budget[0]):
+            if not isinstance(key, str) or len(key) > 1024:
+                raise TypeError("claim matching object keys must be bounded strings")
+            result[key] = _json_value(item, depth + 1, budget)
+        return result
     if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
+        return [
+            _json_value(item, depth + 1, budget)
+            for item in _bounded_items(value, budget[0])
+        ]
     raise TypeError("claim matching keys must be JSON-compatible")
 
 
@@ -1083,6 +1274,13 @@ def _record_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     return data
 
 
+def _bounded_items(value: Any, limit: int) -> tuple[Any, ...]:
+    rows = tuple(islice(iter(value), limit + 1))
+    if len(rows) > limit:
+        raise ValueError("input collection exceeds the record limit")
+    return rows
+
+
 def _record_sequence(value: Any, field_name: str, limit: int) -> tuple[Any, ...]:
     if isinstance(value, Mapping):
         # A single record is accepted; a mapping of ids to records is also
@@ -1098,7 +1296,7 @@ def _record_sequence(value: Any, field_name: str, limit: int) -> tuple[Any, ...]
         if marker_keys.intersection(value):
             return (value,)
         rows: list[dict[str, Any]] = []
-        for key, item in value.items():
+        for key, item in _bounded_items(value.items(), limit):
             if not isinstance(item, Mapping):
                 raise TypeError(f"{field_name} mapping values must be records")
             row = dict(item)
@@ -1113,7 +1311,7 @@ def _record_sequence(value: Any, field_name: str, limit: int) -> tuple[Any, ...]
     if isinstance(value, (str, bytes, bytearray)):
         raise TypeError(f"{field_name} must be an iterable of records")
     try:
-        record_rows = tuple(value)
+        record_rows = _bounded_items(value, limit)
     except TypeError:
         raise TypeError(f"{field_name} must be an iterable of records") from None
     if len(record_rows) > limit:
@@ -1122,10 +1320,15 @@ def _record_sequence(value: Any, field_name: str, limit: int) -> tuple[Any, ...]
 
 
 def _first(data: Mapping[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in data and data[key] is not None:
-            return data[key]
-    return None
+    values = [data[key] for key in keys if key in data and data[key] is not None]
+    if values and any(value != values[0] for value in values[1:]):
+        raise ValueError("conflicting input aliases")
+    return values[0] if values else None
+
+
+def _count(value: Any) -> None:
+    if type(value) is not int or value < 0:
+        raise ValueError("counts must be nonnegative integers")
 
 
 def _rate(numerator: int, denominator: int) -> float:
@@ -1135,8 +1338,8 @@ def _rate(numerator: int, denominator: int) -> float:
 def _validate_bootstrap(n_resamples: Any, alpha: Any, seed: Any) -> None:
     if isinstance(n_resamples, bool) or not isinstance(n_resamples, int):
         raise TypeError("n_resamples must be an integer")
-    if n_resamples < 1:
-        raise ValueError("n_resamples must be positive")
+    if not 1 <= n_resamples <= 100_000:
+        raise ValueError("n_resamples must be between one and 100000")
     if isinstance(alpha, bool) or not isinstance(alpha, (int, float)):
         raise TypeError("alpha must be numeric")
     if not math.isfinite(float(alpha)) or not 0.0 < float(alpha) < 1.0:

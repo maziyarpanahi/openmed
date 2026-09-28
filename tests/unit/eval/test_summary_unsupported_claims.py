@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+from dataclasses import replace
 
 import pytest
 
@@ -12,10 +13,133 @@ from openmed.eval.summary_unsupported_claims import (
     SUPPORTED,
     UNCITED,
     UNRESOLVED,
+    ApprovedEvidence,
     ClaimState,
+    SummaryClaim,
     score_summary_claim,
     score_summary_claims,
 )
+
+
+def test_conflicting_approval_alias_cannot_support_claim():
+    with pytest.raises(ValueError):
+        score_summary_claim(
+            {"claim_id": "c", "claim_class": "finding", "evidence_ids": ["e"]},
+            [
+                {
+                    "evidence_id": "e",
+                    "relation": "supports",
+                    "approved": True,
+                    "is_approved": False,
+                }
+            ],
+        )
+
+
+def test_conflicting_relation_aliases_cannot_support_claim():
+    with pytest.raises(ValueError):
+        score_summary_claim(
+            {"claim_id": "c", "claim_class": "finding", "evidence_ids": ["e"]},
+            [{"evidence_id": "e", "supports": True, "contradicts": True}],
+        )
+
+
+def test_typed_evidence_is_revalidated():
+    evidence = ApprovedEvidence("e", "supported")
+    object.__setattr__(evidence, "approved", "SYNTHETIC_PRIVATE")
+    with pytest.raises((ValueError, TypeError)):
+        score_summary_claim(
+            SummaryClaim("c", "finding", evidence_ids=("e",)), [evidence]
+        )
+
+
+def test_public_report_rejects_private_metadata():
+    report = score_summary_claims([], [], n_resamples=10)
+    with pytest.raises(ValueError):
+        replace(report, evidence_digest="SYNTHETIC_PRIVATE")
+
+
+def test_runtime_iterator_error_is_value_free():
+    def broken():
+        raise RuntimeError("SYNTHETIC_PRIVATE")
+        yield
+
+    with pytest.raises((TypeError, ValueError)) as caught:
+        score_summary_claims(broken())
+    assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_report_interval_matches_counts():
+    report = score_summary_claims([SummaryClaim("c", "finding")], n_resamples=10)
+    with pytest.raises(ValueError):
+        replace(report.overall, supported=1, uncited=0)
+
+
+def test_typed_and_mapping_claim_keys_match_without_rehashing():
+    claim = SummaryClaim(
+        "c", "finding", claim_key={"fact": "synthetic"}, evidence_ids=("e",)
+    )
+    assert (
+        score_summary_claim(
+            claim,
+            [
+                {
+                    "evidence_id": "e",
+                    "claim_key": {"fact": "synthetic"},
+                    "relation": "supports",
+                }
+            ],
+        ).state
+        == SUPPORTED
+    )
+    evidence = ApprovedEvidence("e", "supported", claim_key=claim.claim_key)
+    assert score_summary_claim(claim, [evidence]).state == SUPPORTED
+
+
+def test_custom_class_is_stable_after_typed_revalidation():
+    claim = SummaryClaim("c", "synthetic_custom_class")
+    assert score_summary_claim(claim).claim_class == claim.claim_class
+
+
+def test_matching_key_cycles_are_rejected_without_private_context():
+    key = []
+    key.append(key)
+    with pytest.raises((TypeError, ValueError)) as caught:
+        SummaryClaim("c", "finding", claim_key=key)
+    assert caught.value.__context__ is None
+
+
+def test_bounded_record_consumption_and_bootstrap_work(monkeypatch):
+    import importlib
+
+    module = importlib.import_module("openmed.eval.summary_unsupported_claims")
+    monkeypatch.setattr(module, "_MAX_CLAIMS", 2)
+    consumed = []
+
+    def rows():
+        for i in range(10):
+            consumed.append(i)
+            yield SummaryClaim(str(i), "finding")
+
+    with pytest.raises(ValueError):
+        score_summary_claims(rows(), n_resamples=10)
+    assert len(consumed) == 3
+    with pytest.raises(ValueError, match="n_resamples"):
+        score_summary_claims([], n_resamples=100001)
+
+
+def test_report_classes_are_immutable_and_cannot_hide_assessment_drift():
+    report = score_summary_claims([SummaryClaim("c", "finding")], n_resamples=10)
+    with pytest.raises(TypeError):
+        report.by_claim_class["private"] = report.overall
+    with pytest.raises(ValueError):
+        replace(report, assessments=())
+    with pytest.raises(ValueError):
+        replace(
+            report.overall,
+            bootstrap_ci=replace(report.overall.bootstrap_ci, lower=float("nan")),
+        )
 
 
 def test_scores_four_states_and_rates_by_claim_class() -> None:
