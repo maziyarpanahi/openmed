@@ -2280,3 +2280,19 @@ def test_urdu_fixtures_pass_zero_leakage_release_gate_offline():
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
     assert gate.details["evaluated"] == {"ur": 0.0}
+
+
+@pytest.mark.parametrize("separator", ["\u00a0", " \u00a0 "])
+def test_urdu_name_nonbreaking_spacing_preserves_source_offsets(separator):
+    name = f"جناب{separator}عارف خان"
+    text = f"مریض {name}،"
+    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["ur"])
+    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
+        name
+    ]
+
+
+def test_urdu_pack_does_not_claim_trained_model_coverage():
+    from openmed.core.language_pack_catalog import DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+
+    assert "ur" in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES

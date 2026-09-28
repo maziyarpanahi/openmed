@@ -29,7 +29,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "ru", "ta", "ur"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:

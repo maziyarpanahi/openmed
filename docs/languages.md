@@ -121,7 +121,7 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` (`pa` and `ne`) ship no bundled
-weights and require a caller-supplied model. Malayalam, Russian, and Tamil
+weights and require a caller-supplied model. Malayalam, Russian, Tamil, and Urdu
 retain explicit public placeholder routes for compatibility, but those routes
 are not claims of dedicated trained weights. Codes absent from the table entirely (for
 example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
@@ -422,11 +422,16 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] சென்றார்.
 
 ### Urdu — `ur`
 
+This rules-and-surrogates pack uses a named default-model placeholder, not
+verified trained Urdu coverage. Synthetic fixtures test source offsets and
+bidi-safe masking, not clinical accuracy. Horizontal non-breaking spaces in
+honorific names remain part of the original source span.
+
 - Model: `OpenMed/privacy-filter-multilingual` · locale `ur_IN`
 
 ```text
-Before: محترمہ فاطمہ خان دہلی میں حیات ہسپتال گئیں۔
-After:  محترمہ [PERSON] [LOCATION] میں [ORGANIZATION] گئیں۔
+Before: مریض محترمہ فاطمہ خان، آدھار ۲۴۶۷ ۷۸۳۲ ۵۴۸۴۔
+After:  مریض [PERSON]، آدھار [ID_NUM]۔
 ```
 
 ### Hebrew — `he`

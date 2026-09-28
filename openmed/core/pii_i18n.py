@@ -8224,9 +8224,9 @@ _URDU_PIN_CONTEXT = ["پن", "پن کوڈ", "پِن کوڈ", "ڈاک", "پتہ",
 
 _URDU_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        rf"(?<!\w)(?:جناب|محترمہ|سید|بیگم|خان)[ \t]+"
-        rf"{_URDU_WORD}(?:[ \t]+{_URDU_WORD}){{0,3}}"
-        rf"(?:[ \t]+(?:صاحب|صاحبہ))?"
+        rf"(?<!\w)(?:جناب|محترمہ|سید|بیگم|خان)[ \t\u00a0]+"
+        rf"{_URDU_WORD}(?:[ \t\u00a0]+{_URDU_WORD}){{0,3}}"
+        rf"(?:[ \t\u00a0]+(?:صاحب|صاحبہ))?"
         rf"(?=[،,؛;۔.\n]|$)",
         "name",
         priority=14,
@@ -8237,8 +8237,8 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         flags=0,
     ),
     PIIPattern(
-        rf"(?<!\w){_URDU_WORD}(?:[ \t]+{_URDU_WORD}){{0,2}}"
-        rf"[ \t]+(?:صاحب|صاحبہ)(?=[،,؛;۔.\n]|$)",
+        rf"(?<!\w){_URDU_WORD}(?:[ \t\u00a0]+{_URDU_WORD}){{0,2}}"
+        rf"[ \t\u00a0]+(?:صاحب|صاحبہ)(?=[،,؛;۔.\n]|$)",
         "name",
         priority=13,
         base_score=0.8,
@@ -8309,7 +8309,7 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         flags=0,
     ),
     PIIPattern(
-        rf"(?<!\w)(?:مکان|گلی|سڑک|روڈ)[ \t]+"
+        rf"(?<!\w)(?:مکان|گلی|سڑک|روڈ)[ \t\u00a0]+"
         rf"[{_URDU_DIGIT_CLASS}\u0600-\u06FF\u0750-\u077F"
         rf"\u08A0-\u08FF A-Za-z.\-/]{{3,60}}"
         rf"(?=[،,؛;۔.\n]|$)",
