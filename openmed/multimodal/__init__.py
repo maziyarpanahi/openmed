@@ -116,6 +116,18 @@ from .dicom_sr import (
     extract_dicom_sr,
     walk_sr_content_tree,
 )
+from .dicom_sr_provenance import (
+    DICOM_SR_PROVENANCE_ADVISORY,
+    DICOM_SR_PROVENANCE_SCHEMA_VERSION,
+    AmbiguousDicomSrItemPathError,
+    AmbiguousItemPathError,
+    DicomSrProvenanceError,
+    DicomSrProvenanceRecord,
+    build_dicom_sr_provenance,
+    map_dicom_sr_provenance,
+    render_dicom_sr_provenance,
+    serialize_dicom_sr_provenance,
+)
 from .document_graph import (
     BBox,
     BoundingBox,
@@ -611,4 +623,14 @@ __all__ = [
     "normalize_boxes",
     "normalize_coordinates",
     "normalize_ocr_box",
+    "DICOM_SR_PROVENANCE_ADVISORY",
+    "DICOM_SR_PROVENANCE_SCHEMA_VERSION",
+    "AmbiguousDicomSrItemPathError",
+    "AmbiguousItemPathError",
+    "DicomSrProvenanceError",
+    "DicomSrProvenanceRecord",
+    "build_dicom_sr_provenance",
+    "map_dicom_sr_provenance",
+    "render_dicom_sr_provenance",
+    "serialize_dicom_sr_provenance",
 ]
