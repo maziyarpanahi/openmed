@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 91755164,
-    "maximum_unique_payload_bytes": 91390651,
+    "maximum_total_bytes": 91978583,
+    "maximum_unique_payload_bytes": 91614070,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4420801
+    "json": 4424046
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4420801
+    "docs/search/search_index.json": 4424046
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed synthetic corpus with language evaluation build measures 91863097 total bytes, 91498584 unique bytes, and 4418254 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed language-evaluation build measures 7886033 tokenizer-route transfer bytes; its ceiling preserves the existing 106804-byte allowance. Other route and runtime limits are unchanged.",
     "The reviewed language evaluation with schema integration build measures 91639678 total bytes, 91275165 unique bytes, and 4415009 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed schema-guided extraction build measures 91186224 total bytes, 90821711 unique bytes, and 4407481 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
