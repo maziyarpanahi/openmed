@@ -603,6 +603,17 @@ from .journey_contracts import (
     sha256_digest,
     validate_contract_graph,
 )
+from .lab_measurements import (
+    LAB_MEASUREMENT_ADVISORY,
+    LabMeasurement,
+    LabMeasurementStatus,
+    LabRangeStatus,
+    LabUnitStatus,
+    ParsedLabReferenceRange,
+    SourceOffsets,
+    normalize_lab_measurement,
+    normalize_lab_measurements,
+)
 from .lab_reference_ranges import (
     LAB_REFERENCE_RANGE_ADVISORY,
     REFERENCE_RANGE_SCHEMA_VERSION,
@@ -2047,6 +2058,15 @@ __all__ = [
     "ReferenceRange",
     "ClinicalNormLexicon",
     "LAB_FLAG_ADVISORY",
+    "LAB_MEASUREMENT_ADVISORY",
+    "LabMeasurement",
+    "LabMeasurementStatus",
+    "LabRangeStatus",
+    "ParsedLabReferenceRange",
+    "LabUnitStatus",
+    "SourceOffsets",
+    "normalize_lab_measurement",
+    "normalize_lab_measurements",
     "abbreviation_expansion",
     "abbreviation_surfaces",
     "abnormal_flag_alias",
