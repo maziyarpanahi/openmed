@@ -413,6 +413,7 @@ classification:
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
     - evaluation/clinical-fixtures.md
+    - multimodal/dicom-sr-provenance.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md
     - clinical/unit-display-audit.md
