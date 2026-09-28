@@ -314,6 +314,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
