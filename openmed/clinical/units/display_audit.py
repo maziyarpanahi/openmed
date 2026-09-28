@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import wraps
 from pathlib import Path
 from typing import Any, Literal
 
@@ -25,6 +27,50 @@ from openmed.clinical.lexicons.clinical_norm import (
 
 UNIT_DISPLAY_AUDIT_SCHEMA_VERSION = "openmed.clinical.unit-display-audit.v1"
 UnitDisplayAuditIssueKind = Literal["missing", "duplicate", "conflict"]
+
+
+_MAX_ITEMS = 4096
+_MAX_TEXT = 4096
+_HASH_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_LOCALE_RE = re.compile(r"[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*\Z")
+_REASONS = {
+    "missing": {"missing_display_label"},
+    "duplicate": {"display_label_used_for_multiple_codes"},
+    "conflict": {
+        "alias_table_conflict",
+        "alias_targets_unknown_code",
+        "display_references_unknown_code",
+        "alias_resolves_to_different_code",
+        "label_not_canonical_or_explicit_alias",
+    },
+}
+
+
+def _safe_boundary(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid unit-display audit input")
+
+    return wrapped
+
+
+def _bounded_items(values):
+    if isinstance(values, (str, bytes)):
+        raise ValueError("audit collection must not be scalar text")
+    for index, value in enumerate(values):
+        if index >= _MAX_ITEMS:
+            raise ValueError("audit collection limit exceeded")
+        yield value
+
+
+def _bounded_text(value):
+    if isinstance(value, str) and len(value) > _MAX_TEXT:
+        raise ValueError("audit text limit exceeded")
+    return value
 
 
 def _sha256_text(value: str) -> str:
@@ -48,14 +94,14 @@ def _stable_hash(value: Any) -> str:
 def _canonical_code(value: object) -> str:
     if not isinstance(value, str):
         raise TypeError("unit codes must be strings")
-    code = unicodedata.normalize("NFKC", value).strip()
+    code = unicodedata.normalize("NFKC", _bounded_text(value)).strip()
     if not code:
         raise ValueError("unit codes must be non-empty strings")
     return code
 
 
 def _locale_code(value: object) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or _LOCALE_RE.fullmatch(_bounded_text(value)) is None:
         raise ValueError("locale identifiers must be non-empty strings")
     return normalize_language(value)
 
@@ -77,24 +123,36 @@ class UnitDisplayAuditIssue:
     canonical_code_hashes: tuple[str, ...] = ()
     resolved_code_hashes: tuple[str, ...] = ()
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if self.kind not in {"missing", "duplicate", "conflict"}:
             raise ValueError("unsupported unit-display issue kind")
         if isinstance(self.count, bool) or not isinstance(self.count, int):
             raise TypeError("unit-display issue count must be an integer")
-        if self.count < 1:
+        if not 1 <= self.count <= _MAX_ITEMS:
             raise ValueError("unit-display issue count must be positive")
+        if self.reason not in _REASONS[self.kind]:
+            raise ValueError("invalid audit reason")
+        object.__setattr__(self, "locale", _locale_code(self.locale))
         for field_name in (
             "label_hashes",
             "canonical_code_hashes",
             "resolved_code_hashes",
         ):
-            values = tuple(sorted(set(getattr(self, field_name))))
+            values = tuple(_bounded_items(getattr(self, field_name)))
+            if any(
+                not isinstance(value, str) or _HASH_RE.fullmatch(value) is None
+                for value in values
+            ):
+                raise ValueError("invalid audit digest")
+            values = tuple(sorted(set(values)))
             object.__setattr__(self, field_name, values)
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready finding without source strings."""
 
+        replace(self)
         return {
             "canonical_code_hashes": list(self.canonical_code_hashes),
             "count": self.count,
@@ -117,17 +175,38 @@ class UnitDisplayAuditReport:
     schema_version: str = UNIT_DISPLAY_AUDIT_SCHEMA_VERSION
     repro_hash: str = ""
 
+    @_safe_boundary
     def __post_init__(self) -> None:
-        object.__setattr__(self, "locales", tuple(sorted(set(self.locales))))
-        object.__setattr__(self, "issues", tuple(self.issues))
+        if self.schema_version != UNIT_DISPLAY_AUDIT_SCHEMA_VERSION:
+            raise ValueError("invalid audit schema")
+        object.__setattr__(
+            self,
+            "locales",
+            tuple(
+                sorted({_locale_code(value) for value in _bounded_items(self.locales)})
+            ),
+        )
+        issues = tuple(_bounded_items(self.issues))
+        if any(not isinstance(issue, UnitDisplayAuditIssue) for issue in issues):
+            raise ValueError("invalid audit issue")
+        issues = tuple(
+            sorted((replace(issue) for issue in issues), key=_issue_sort_key)
+        )
+        if any(issue.locale not in self.locales for issue in issues):
+            raise ValueError("issue locale missing from audit")
+        object.__setattr__(self, "issues", issues)
         for field_name in ("canonical_unit_count", "display_label_count"):
             value = getattr(self, field_name)
             if isinstance(value, bool) or not isinstance(value, int):
                 raise TypeError(f"{field_name} must be an integer count")
-            if value < 0:
+            if not 0 <= value <= _MAX_ITEMS**2:
                 raise ValueError(f"{field_name} must be non-negative")
-        if not self.repro_hash:
-            object.__setattr__(self, "repro_hash", self.recompute_repro_hash())
+        if self.canonical_unit_count and not self.locales:
+            raise ValueError("audit requires at least one locale")
+        expected = self.recompute_repro_hash()
+        if self.repro_hash and self.repro_hash != expected:
+            raise ValueError("audit hash mismatch")
+        object.__setattr__(self, "repro_hash", expected)
 
     @property
     def passed(self) -> bool:
@@ -172,14 +251,19 @@ class UnitDisplayAuditReport:
 
         return _stable_hash(self._payload(include_repro_hash=False))
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return the complete JSON-compatible report."""
 
+        replace(self)
         return self._payload(include_repro_hash=True)
 
+    @_safe_boundary
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the report to deterministic JSON."""
 
+        if type(indent) is not int or not 0 <= indent <= 8:
+            raise ValueError("invalid audit indentation")
         return json.dumps(
             self.to_dict(),
             ensure_ascii=False,
@@ -187,6 +271,7 @@ class UnitDisplayAuditReport:
             sort_keys=True,
         )
 
+    @_safe_boundary
     def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
         """Write the source-free report to *path*."""
 
@@ -195,9 +280,11 @@ class UnitDisplayAuditReport:
         output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
         return output_path
 
+    @_safe_boundary
     def to_markdown(self) -> str:
         """Render a deterministic Markdown summary containing only hashes."""
 
+        replace(self)
         lines = [
             "# Unit-display normalization audit",
             "",
@@ -233,6 +320,7 @@ class UnitDisplayAuditReport:
             )
         return "\n".join(lines) + "\n"
 
+    @_safe_boundary
     def __getitem__(self, key: str) -> Any:
         """Provide mapping-style access for report consumers."""
 
@@ -255,7 +343,7 @@ def _canonical_codes(
     else:
         values = canonical_unit_codes
 
-    codes = {_canonical_code(value) for value in values}
+    codes = {_canonical_code(value) for value in _bounded_items(values)}
     return tuple(sorted(codes))
 
 
@@ -266,7 +354,7 @@ def _display_entries(
         raise TypeError("locale display labels must be a mapping")
 
     entries: dict[str, dict[str, str | None]] = {}
-    for raw_locale, raw_labels in locale_display_labels.items():
+    for raw_locale, raw_labels in _bounded_items(locale_display_labels.items()):
         locale = _locale_code(raw_locale)
         if locale in entries:
             raise ValueError("locale identifiers must be unique after normalization")
@@ -274,11 +362,13 @@ def _display_entries(
             raise TypeError("each locale display-label set must be a mapping")
 
         locale_entries: dict[str, str | None] = {}
-        for raw_code, raw_label in raw_labels.items():
+        for raw_code, raw_label in _bounded_items(raw_labels.items()):
             code = _canonical_code(raw_code)
             if code in locale_entries:
                 raise ValueError("unit codes must be unique after normalization")
-            if not isinstance(raw_label, str) or not normalize_unit_surface(raw_label):
+            if not isinstance(raw_label, str) or not normalize_unit_surface(
+                _bounded_text(raw_label)
+            ):
                 locale_entries[code] = None
             else:
                 locale_entries[code] = raw_label
@@ -301,18 +391,20 @@ def _alias_entries(
         raise TypeError("alias tables must be a mapping")
 
     tables: dict[str, dict[str, list[tuple[str, str]]]] = {}
-    for raw_locale, raw_aliases in raw_tables.items():
+    for raw_locale, raw_aliases in _bounded_items(raw_tables.items()):
         locale = _locale_code(raw_locale)
         if locale in tables:
             raise ValueError("alias locales must be unique after normalization")
         if not isinstance(raw_aliases, Mapping):
             raise TypeError("each alias table must be a mapping")
         normalized_aliases: dict[str, list[tuple[str, str]]] = defaultdict(list)
-        for raw_alias, raw_target in raw_aliases.items():
-            if not isinstance(raw_alias, str) or not normalize_unit_surface(raw_alias):
+        for raw_alias, raw_target in _bounded_items(raw_aliases.items()):
+            if not isinstance(raw_alias, str) or not normalize_unit_surface(
+                _bounded_text(raw_alias)
+            ):
                 raise ValueError("alias labels must be non-empty strings")
             target = _canonical_code(raw_target)
-            normalized_aliases[normalize_unit_surface(raw_alias)].append(
+            normalized_aliases[normalize_unit_surface(_bounded_text(raw_alias))].append(
                 (target, _sha256_text(raw_alias))
             )
         tables[locale] = normalized_aliases
@@ -359,6 +451,7 @@ def _issue_sort_key(issue: UnitDisplayAuditIssue) -> tuple[Any, ...]:
     )
 
 
+@_safe_boundary
 def audit_unit_display_labels(
     locale_display_labels: Mapping[str, Mapping[str, object]],
     canonical_unit_codes: Iterable[str] | Mapping[str, object],
@@ -387,6 +480,8 @@ def audit_unit_display_labels(
     canonical_codes = _canonical_codes(canonical_unit_codes)
     canonical_code_set = set(canonical_codes)
     display_entries = _display_entries(locale_display_labels)
+    if canonical_codes and not display_entries:
+        raise ValueError("audit requires a locale")
     aliases = _alias_entries(display_entries, alias_tables)
     issues: list[UnitDisplayAuditIssue] = []
     display_label_count = 0

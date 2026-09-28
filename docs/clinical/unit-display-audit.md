@@ -69,3 +69,14 @@ The implementation performs no network calls, emits no logs, reads no wall
 clock, and does not alter the registered lexicons. Keep source tables synthetic
 or apply the caller's data-access and PHI handling policy before invoking the
 audit.
+
+## Validation limits
+
+Public issue/report constructors validate controlled reasons, locale syntax,
+SHA-256 fields, schema and the computed report hash. Nonempty catalogs require
+a locale; an empty locale table cannot claim successful coverage.
+Collections are bounded to 4096 entries each and text fields to 4096 characters.
+JSON indentation must be an integer from 0 through 8. Invalid inputs produce
+fixed errors without retaining source-bearing exception context. Hashes are
+consistency identifiers, not proof of authenticity or protection against
+guessing a small label vocabulary.

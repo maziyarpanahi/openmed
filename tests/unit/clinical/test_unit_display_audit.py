@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from openmed.clinical.units.display_audit import (
     UNIT_DISPLAY_AUDIT_SCHEMA_VERSION,
     audit_unit_display_labels,
@@ -176,3 +178,72 @@ def test_input_order_does_not_change_report_or_repro_hash(caplog) -> None:
     assert first.to_json() == second.to_json()
     assert first.repro_hash == second.repro_hash
     assert caplog.records == []
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"reason": "SYNTHETIC-PRIVATE-LABEL"},
+        {"locale": "SYNTHETIC-PRIVATE-LABEL"},
+        {"label_hashes": ("SYNTHETIC-PRIVATE-LABEL",)},
+    ],
+)
+def test_direct_issue_rejects_uncontrolled_output_fields(update):
+    from openmed.clinical.units.display_audit import UnitDisplayAuditIssue
+
+    values = dict(kind="missing", reason="missing_display_label", locale="en", count=1)
+    values.update(update)
+    with pytest.raises(ValueError):
+        UnitDisplayAuditIssue(**values)
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"schema_version": "SYNTHETIC-PRIVATE-LABEL"},
+        {"repro_hash": "sha256:" + "0" * 64},
+        {"locales": ("SYNTHETIC-PRIVATE-LABEL",)},
+    ],
+)
+def test_report_rejects_forged_metadata(update):
+    from openmed.clinical.units.display_audit import UnitDisplayAuditReport
+
+    values = dict(locales=("en",), canonical_unit_count=1, display_label_count=1)
+    values.update(update)
+    with pytest.raises(ValueError):
+        UnitDisplayAuditReport(**values)
+
+
+def test_json_indent_cannot_emit_private_content():
+    report = audit_unit_display_labels({"en": {"mg/dL": "mg/dL"}}, ("mg/dL",), {})
+    with pytest.raises(ValueError):
+        report.to_json(indent="SYNTHETIC-PRIVATE-LABEL")
+
+
+def test_bad_locale_cannot_escape_into_report():
+    with pytest.raises(ValueError):
+        audit_unit_display_labels({"private patient text": {}}, ("mg/dL",), {})
+
+
+def test_iterator_error_does_not_retain_source_context():
+    def codes():
+        raise RuntimeError("SYNTHETIC-PRIVATE-LABEL")
+        yield
+
+    with pytest.raises(ValueError) as caught:
+        audit_unit_display_labels({"en": {}}, codes(), {})
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC" not in str(caught.value)
+
+
+def test_audit_collections_are_bounded(monkeypatch):
+    from openmed.clinical.units import display_audit as module
+
+    monkeypatch.setattr(module, "_MAX_ITEMS", 2)
+    with pytest.raises(ValueError):
+        audit_unit_display_labels({"en": {}}, (str(i) for i in range(3)), {})
+
+
+def test_nonempty_canonical_catalog_requires_at_least_one_locale():
+    with pytest.raises(ValueError):
+        audit_unit_display_labels({}, ("mg/dL",), {})
