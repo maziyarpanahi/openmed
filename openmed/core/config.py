@@ -749,11 +749,33 @@ def _format_value(value: Any) -> str:
     return f'"{value}"'
 
 
+def _strip_toml_comment(line: str) -> str:
+    """Remove an inline comment outside a single-line quoted value."""
+    quote = None
+    escaped = False
+    for index, character in enumerate(line):
+        if quote == '"':
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+        elif quote == "'":
+            if character == quote:
+                quote = None
+        elif character in ("'", '"'):
+            quote = character
+        elif character == "#":
+            return line[:index]
+    return line
+
+
 def _load_toml(path: Path) -> Dict[str, Any]:
     data: Dict[str, Any] = {}
     with path.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
-            line = raw_line.split("#", 1)[0].strip()
+            line = _strip_toml_comment(raw_line).strip()
             if not line or "=" not in line:
                 continue
             key, value = line.split("=", 1)

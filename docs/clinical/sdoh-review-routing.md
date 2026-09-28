@@ -39,3 +39,7 @@ underwriting decision.
 
 The router uses controlled, value-free records, is deterministic, and performs
 no network calls.
+
+The [synthetic SDOH false-positive stress gate](../evaluation/sdoh-false-positive-stress.md)
+checks screening, education, boilerplate, third-party, section, negated, and
+historical language against patient-level extraction and the zero-action rule.

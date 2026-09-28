@@ -182,7 +182,7 @@ def _normalise_fingerprint(
             from_state=from_state,
             to_state=to_state,
         )
-    digest = value.removeprefix("sha256:").lower()
+    digest = value.lower().removeprefix("sha256:")
     return f"sha256:{digest}"
 
 

@@ -184,7 +184,9 @@ class OutputFormatter:
             entity_text = normalized_text
 
             raw_label = pred.get("entity_group") or pred.get("entity") or ""
-            clean_label = raw_label.replace("B-", "").replace("I-", "")
+            clean_label = (
+                raw_label[2:] if raw_label.startswith(("B-", "I-")) else raw_label
+            )
             label = clean_label or raw_label or "UNKNOWN"
 
             span_metadata = None
