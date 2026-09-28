@@ -250,6 +250,7 @@ classification:
     - clinical/status-vocabulary.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
+    - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
     - clinical/uncertainty-source-types.md
@@ -390,6 +391,8 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - clinical/claim-conflicts.md
+    - clinical/review-sla.md
+    - evaluation/model-provenance-diff.md
     - clinical/evidence-span-audit.md
     - clinical/output-use-policy.md
     - clinical/evidence-coverage.md
