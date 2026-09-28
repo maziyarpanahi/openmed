@@ -28,8 +28,10 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
+    normalize_arabic_indic_digits,
     normalize_bengali_assamese_digits,
     normalize_gujarati_digits,
+    normalize_gurmukhi_digits,
     normalize_kannada_digits,
     normalize_malayalam_digits,
     normalize_malayalam_for_matching,
@@ -68,13 +70,18 @@ from openmed.core.pii_i18n import (
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cpf,
+    validate_punjab_chandigarh_pin,
+    validate_punjabi_indian_phone,
     validate_romanian_cnp,
     validate_spanish_dni,
     validate_tamil_aadhaar,
     validate_tamil_nadu_puducherry_pin,
     validate_turkish_tckn,
+    validate_urdu_belt_pin,
+    validate_urdu_indian_phone,
     validate_vietnamese_cccd,
 )
+from openmed.core.rtl_render import LRI, PDI, render_redacted, strip_bidi_controls
 from openmed.eval import harness
 from openmed.eval.golden import (
     CRITICAL_FINDINGS_CATEGORY,
@@ -400,56 +407,46 @@ def _i18n_fixtures(code: str) -> list[GoldenFixture]:
 
 
 def test_urdu_cues_disambiguate_the_shared_arabic_script():
-    # The catalog ships no ``ur`` pack yet (issue #1520 owns that), so the
-    # Urdu pack is injected here exactly as the Bengali pack is above. This
-    # proves the routing contract the built-in catalog will satisfy the moment
-    # a ``ur`` pack is registered, with no further change to the router.
-    arabic_pack = get_language_pack("ar")
-    assert arabic_pack is not None
-    urdu_pack = LanguagePack(
-        code="ur",
-        scripts=("Arabic",),
-        default_model="env:OPENMED_URDU_NER_MODEL",
-        segmenter_id="unicode-sentence",
-        recognizers=("builtin-patterns", "model"),
-        surrogate_locale="ur_PK",
-    )
-    router = LanguageRouter(packs=(arabic_pack, urdu_pack), use_optional_lid=False)
-
-    for fixture in _i18n_fixtures("ur"):
-        decision = router.route(fixture.text)
-        assert decision.language == "ur"
-        assert any(run.source == "stdlib:urdu-cues" for run in decision.runs)
-        for run in decision.runs:
-            if run.script == "Arabic":
-                assert run.candidates == ("ur", "ar", "fa", "ha")
-
-    for fixture in _i18n_fixtures("ar"):
-        decision = router.route(fixture.text)
-        assert decision.language == "ar"
-        assert all(run.language != "ur" for run in decision.runs)
-        assert all(run.source != "stdlib:urdu-cues" for run in decision.runs)
-        for run in decision.runs:
-            if run.script == "Arabic":
-                assert run.candidates == ("ar", "fa", "ha", "ur")
-
-
-def test_urdu_fixtures_fall_back_to_arabic_until_an_urdu_pack_ships():
     router = LanguageRouter(use_optional_lid=False)
 
     for fixture in _i18n_fixtures("ur"):
         decision = router.route(fixture.text)
-        assert decision.language == "ar"
-        assert any(run.source == "stdlib:arabic-fallback" for run in decision.runs)
-        # The unroutable Urdu evidence still reaches callers through the run
-        # metadata, so a consumer can see why the fallback fired.
-        assert any(run.candidates[:1] == ("ur",) for run in decision.runs)
+        arabic_runs = [run for run in decision.runs if run.script == "Arabic"]
+        assert arabic_runs
+        assert all(run.language == "ur" for run in arabic_runs)
+        assert any(run.source == "stdlib:urdu-cues" for run in arabic_runs)
+        for run in arabic_runs:
+            if run.source == "stdlib:urdu-cues":
+                assert run.candidates == ("ur", "ar", "fa", "ha")
 
     for fixture in _i18n_fixtures("ar"):
         decision = router.route(fixture.text)
-        assert decision.language == "ar"
-        assert all(run.source != "stdlib:arabic-fallback" for run in decision.runs)
-        assert all(run.candidates[:1] != ("ur",) for run in decision.runs)
+        arabic_runs = [run for run in decision.runs if run.script == "Arabic"]
+        assert arabic_runs
+        assert all(run.language == "ar" for run in arabic_runs)
+        assert all(run.source != "stdlib:urdu-cues" for run in arabic_runs)
+
+
+def test_urdu_fixtures_fall_back_when_an_urdu_pack_is_not_registered():
+    packs = tuple(pack for code in ("ar", "en") if (pack := get_language_pack(code)))
+    router = LanguageRouter(packs=packs, use_optional_lid=False)
+
+    for fixture in _i18n_fixtures("ur"):
+        decision = router.route(fixture.text)
+        arabic_runs = [run for run in decision.runs if run.script == "Arabic"]
+        assert arabic_runs
+        assert all(run.language == "ar" for run in arabic_runs)
+        assert any(run.source == "stdlib:arabic-fallback" for run in arabic_runs)
+        # The unroutable Urdu evidence still reaches callers through the run
+        # metadata, so a consumer can see why the fallback fired.
+        assert any(run.candidates[:1] == ("ur",) for run in arabic_runs)
+
+    for fixture in _i18n_fixtures("ar"):
+        decision = router.route(fixture.text)
+        arabic_runs = [run for run in decision.runs if run.script == "Arabic"]
+        assert all(run.language == "ar" for run in arabic_runs)
+        assert all(run.source != "stdlib:arabic-fallback" for run in arabic_runs)
+        assert all(run.candidates[:1] != ("ur",) for run in arabic_runs)
 
 
 def test_urdu_disambiguation_preserves_fixture_offsets_and_graphemes():
@@ -2179,3 +2176,500 @@ def test_malayalam_fixtures_pass_zero_leakage_release_gate_offline():
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
     assert gate.details["evaluated"] == {"ml": 0.0}
+
+
+def test_bengali_nid_and_birth_registration_variants_keep_exact_offsets():
+    variants = (
+        "1234567890",
+        "1234567890123",
+        "12345678901234567",
+        "১২৩৪৫৬৭৮৯০",
+        "১২৩৪৫৬৭৮৯০১২৩",
+        "১২৩৪৫৬৭৮৯০১২৩৪৫৬৭",
+    )
+    for digits in variants:
+        cue = "জন্ম নিবন্ধন" if len(digits) == 17 else "জাতীয় পরিচয়পত্র"
+        text = f"রোগীর {cue} {digits}।"
+        start = text.index(digits)
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["bn"])
+        assert any(
+            (span_start, span_end, entity_type)
+            == (start, start + len(digits), "national_id")
+            for span_start, span_end, entity_type, *_rest in units
+        )
+        assert is_grapheme_boundary(start, text)
+        assert is_grapheme_boundary(start + len(digits), text)
+
+
+def test_bengali_golden_fixtures_pass_offline_zero_leakage_gate():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/bn.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    assert len(fixtures) == 3
+    predictions = {}
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-09-25T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="bn",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "bn"))
+            for entity in swept_result.entities
+        }
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="bn",
+            consistent=False,
+            seed=None,
+            locale=fixture.metadata["locale"],
+            use_safety_sweep=True,
+        )
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-bengali",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-09-25T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["by_language"]["bn"] == 0.0
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+
+
+@pytest.mark.parametrize("digits", ["1207", "১২৩৪", "700001", "৭০০০০১"])
+def test_bengali_standalone_postcodes_remain_detectable(digits):
+    from openmed.core.pii import _apply_safety_sweep_to_result
+    from openmed.processing.outputs import PredictionResult
+
+    text = f"পোস্টকোড {digits}।"
+    empty = PredictionResult(
+        text=text,
+        entities=[],
+        model_name="offline",
+        timestamp="2026-09-28T00:00:00Z",
+        metadata={},
+    )
+    result, _ = _apply_safety_sweep_to_result(text, empty, lang="bn")
+    assert any(
+        text[entity.start : entity.end] == digits
+        and normalize_label(entity.label, "bn") == "ZIPCODE"
+        for entity in result.entities
+    )
+
+
+def test_punjabi_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/pa.jsonl")
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(fixtures) == 2
+    assert {fixture.metadata["digit_set"] for fixture in fixtures} == {
+        "ascii",
+        "gurmukhi",
+    }
+
+    names = []
+    aadhaar_values = []
+    phone_values = []
+    pin_values = []
+    for fixture in fixtures:
+        person_spans = [span for span in fixture.gold_spans if span.label == "PERSON"]
+        assert len(person_spans) == 1
+        names.append(person_spans[0].text)
+
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "ID_NUM":
+                aadhaar_values.append(span.text)
+            elif span.label == "PHONE":
+                phone_values.append(span.text)
+            elif span.label == "ZIPCODE":
+                pin_values.append(span.text)
+
+    fixture_marks = set("".join(names))
+    assert {"਼", "ੱ", "ੰ", "ਂ"}.issubset(fixture_marks)
+    assert all(validate_aadhaar(value) for value in aadhaar_values)
+    assert all(validate_punjabi_indian_phone(value) for value in phone_values)
+    assert all(validate_punjab_chandigarh_pin(value) for value in pin_values)
+    assert len({normalize_gurmukhi_digits(value) for value in aadhaar_values}) == 1
+    assert {normalize_gurmukhi_digits(value) for value in pin_values} == {
+        "141001",
+        "160017",
+    }
+
+
+def test_punjabi_name_patterns_require_given_name_and_honorific():
+    examples = (
+        ("ਸ.", "ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ"),
+        ("ਸਰਦਾਰਨੀ", "ਫ਼ਤਿਹ ਸਾਂਝ ਕੌਰ"),
+        ("ਬੀਬੀ", "ਗੁਰਲੀਨ ਕੌਰ"),
+        ("ਡਾ.", "ਹਰਜੀਤ ਸਿੰਘ"),
+    )
+
+    for honorific, name in examples:
+        text = f"ਮਰੀਜ਼ {honorific} {name}."
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["pa"])
+        detected_names = [
+            text[start:end]
+            for start, end, entity_type, *_rest in units
+            if entity_type == "name"
+        ]
+        assert detected_names == [name]
+
+    bare_text = "ਸਿੰਘ ਅਤੇ ਕੌਰ ਆਮ ਧਾਰਮਿਕ ਨਾਮ ਹਨ।"
+    bare_units = find_semantic_units(bare_text, LANGUAGE_PII_PATTERNS["pa"])
+    assert all(entity_type != "name" for _, _, entity_type, *_rest in bare_units)
+
+
+def test_punjabi_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/pa.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    predictions = {}
+    deidentified = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-24T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="pa",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "pa"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="pa",
+            consistent=False,
+            seed=None,
+            locale="pa_IN",
+            use_safety_sweep=True,
+        )
+        deidentified[fixture.fixture_id] = result.deidentified_text
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    assert "ਸਿੰਘ ਅਤੇ ਕੌਰ" in deidentified["golden-i18n-pa-code-mixed-ascii-digits"]
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-punjabi",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-07-24T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["pa"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"pa": 0.0}
+
+
+def test_punjabi_pack_export_resolves():
+    from openmed.core.anonymizer import providers
+
+    assert providers.PUNJABI_LANGUAGE_PACK.code == "pa"
+
+
+@pytest.mark.parametrize("separator", ["  ", "\t", "\u00a0", " \t "])
+def test_punjabi_name_offsets_survive_horizontal_spacing(separator):
+    name = "ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ"
+    text = f"ਮਰੀਜ਼ ਸ.{separator}{name}."
+    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["pa"])
+    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
+        name
+    ]
+
+
+@pytest.mark.parametrize(
+    "source,suffix",
+    [
+        ("ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ", "ਸਿੰਘ"),
+        ("ਗੁਰਲੀਨ ਕੌਰ", "ਕੌਰ"),
+    ],
+)
+def test_punjabi_name_surrogates_are_distinct_consistent_and_keep_suffix(
+    source, suffix
+):
+    from openmed.core.anonymizer import Anonymizer
+
+    anonymizer = Anonymizer(lang="pa", consistent=True, seed=1517)
+    result = anonymizer.surrogate(source, "name")
+    assert result != source
+    assert result.endswith(" " + suffix)
+    assert result == anonymizer.surrogate(source, "name")
+    assert source.split()[0] not in result
+
+
+def test_urdu_i18n_fixtures_are_grapheme_safe_and_digit_equivalent():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ur.jsonl")
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(fixtures) == 3
+    assert {fixture.metadata["digit_set"] for fixture in fixtures} == {
+        "ascii",
+        "arabic_indic",
+        "extended_arabic_indic",
+    }
+
+    names = []
+    aadhaar_values = []
+    phone_values = []
+    pin_values = []
+    for fixture in fixtures:
+        assert fixture.text.count(LRI) == fixture.text.count(PDI)
+        assert fixture.text.count(LRI) >= 3
+        for span in fixture.gold_spans:
+            assert is_grapheme_boundary(span.start, fixture.text)
+            assert is_grapheme_boundary(span.end, fixture.text)
+            assert fixture.text[span.start : span.end] == span.text
+            if span.label == "PERSON":
+                names.append(span.text)
+            elif span.label == "ID_NUM":
+                aadhaar_values.append(span.text)
+            elif span.label == "PHONE":
+                phone_values.append(span.text)
+            elif span.label == "ZIPCODE":
+                pin_values.append(span.text)
+
+    assert any("\u0651" in name for name in names)
+    assert any("\ufdf2" in name for name in names)
+    assert all(validate_aadhaar(value) for value in aadhaar_values)
+    assert all(validate_urdu_indian_phone(value) for value in phone_values)
+    assert all(validate_urdu_belt_pin(value) for value in pin_values)
+    assert len({normalize_arabic_indic_digits(value) for value in aadhaar_values}) == 1
+    assert len({normalize_arabic_indic_digits(value) for value in phone_values}) == 1
+    assert {normalize_arabic_indic_digits(value) for value in pin_values} == {
+        "190001",
+        "226001",
+        "500001",
+    }
+    assert "Aadhaar" in fixtures[0].text
+    assert "mobile" in fixtures[0].text
+
+
+def test_urdu_fixture_masks_render_safely_with_preexisting_bidi_controls():
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/ur.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+
+    for fixture in fixtures:
+        expected = fixture.expected_output["text"]
+        tokens = [f"[{span.label}]" for span in fixture.gold_spans]
+        token_spans = []
+        cursor = 0
+        for token in tokens:
+            start = expected.index(token, cursor)
+            token_spans.append((start, start + len(token)))
+            cursor = start + len(token)
+
+        rendered = render_redacted(expected, token_spans, direction="rtl")
+
+        assert rendered.base_direction == "rtl"
+        assert rendered.isolated is True
+        assert strip_bidi_controls(rendered.text) == strip_bidi_controls(expected)
+        assert rendered.text.count(LRI) == expected.count(LRI)
+        assert rendered.text.count(PDI) == expected.count(PDI) + len(token_spans)
+
+
+def test_urdu_specific_name_patterns_do_not_redact_bare_honorifics():
+    examples = (
+        "جناب سیّد علی خان صاحب",
+        "محترمہ زہرہ بیگم صاحبہ",
+        "جناب عبدﷲ رضوی صاحب",
+    )
+    for name in examples:
+        text = f"مریض {name}، تاریخ درج ہے۔"
+        units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["ur"])
+        detected_names = [
+            text[start:end]
+            for start, end, entity_type, *_rest in units
+            if entity_type == "name"
+        ]
+        assert detected_names == [name]
+
+    bare_text = "جناب، محترمہ، خان اور بیگم خطاب اور خاندانی الفاظ ہیں۔"
+    bare_units = find_semantic_units(bare_text, LANGUAGE_PII_PATTERNS["ur"])
+    assert all(entity_type != "name" for _, _, entity_type, *_rest in bare_units)
+
+
+def test_urdu_fixtures_pass_zero_leakage_release_gate_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.eval.release_gates import _per_language_residual_leakage_check
+    from openmed.processing.outputs import PredictionResult
+
+    fixtures = [
+        GoldenFixture.from_mapping(json.loads(line))
+        for line in Path("openmed/eval/golden/fixtures/i18n/ur.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    predictions = {}
+
+    for fixture in fixtures:
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-24T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="ur",
+        )
+        predictions[fixture.fixture_id] = swept_result.entities
+        observed = {
+            (entity.start, entity.end, normalize_label(entity.label, "ur"))
+            for entity in swept_result.entities
+        }
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert (span.start, span.end, span.label) in observed
+
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="ur",
+            consistent=False,
+            seed=None,
+            locale="ur_IN",
+            use_safety_sweep=True,
+        )
+        canonicalized_text = result.deidentified_text
+        for canonical_label, internal_label in {
+            "PERSON": "name",
+            "DATE": "date",
+            "ID_NUM": "national_id",
+            "PHONE": "phone_number",
+            "STREET_ADDRESS": "street_address",
+            "ZIPCODE": "postcode",
+        }.items():
+            canonicalized_text = canonicalized_text.replace(
+                f"[{internal_label}]",
+                f"[{canonical_label}]",
+            )
+        assert canonicalized_text == fixture.expected_output["text"]
+        assert all(
+            span.text not in result.deidentified_text for span in fixture.gold_spans
+        )
+
+    report = harness.run_benchmark(
+        [fixture.to_benchmark_fixture() for fixture in fixtures],
+        suite="golden-urdu",
+        model_name="offline-safety-sweep",
+        runner=lambda fixture, _model_name, _device: predictions[fixture.fixture_id],
+        generated_at="2026-07-24T00:00:00Z",
+    )
+    assert report.metrics["leakage"]["overall"] == 0.0
+    assert report.metrics["leakage"]["by_language"]["ur"] == 0.0
+
+    gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
+    assert gate.passed is True
+    assert gate.details["evaluated"] == {"ur": 0.0}
+
+
+@pytest.mark.parametrize("separator", ["\u00a0", " \u00a0 "])
+def test_urdu_name_nonbreaking_spacing_preserves_source_offsets(separator):
+    name = f"جناب{separator}عارف خان"
+    text = f"مریض {name}،"
+    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["ur"])
+    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
+        name
+    ]
+
+
+def test_urdu_pack_does_not_claim_trained_model_coverage():
+    from openmed.core.language_pack_catalog import DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+
+    assert "ur" in DEFAULT_MODEL_PLACEHOLDER_LANGUAGES

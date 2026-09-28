@@ -1035,6 +1035,7 @@ def _validate_claims(errors: list[str]) -> None:
     from openmed.core.language_pack_catalog import (  # noqa: PLC0415
         DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
         DEFAULT_PII_MODELS,
+        NATIONAL_ID_ONLY_LANGUAGES,
         USER_SUPPLIED_MODEL_LANGUAGES,
     )
 
@@ -1118,8 +1119,12 @@ def _validate_claims(errors: list[str]) -> None:
                 f"claim {claim_name} is {claims[claim_name]['value']!r}, "
                 f"expected {value!r}"
             )
-    if len(claims["national_id_only_languages"]["value"]) != 16:
-        errors.append("national-ID-only language claim must contain 16 codes")
+    if claims["national_id_only_languages"]["value"] != sorted(
+        NATIONAL_ID_ONLY_LANGUAGES
+    ):
+        errors.append(
+            "national-ID-only language claim must match the registered catalog"
+        )
 
     try:
         generated_at = dt.date.fromisoformat(registry["generated_at"])

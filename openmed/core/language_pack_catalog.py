@@ -29,7 +29,9 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "pl", "ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset(
+    {"fa", "ml", "pa", "pl", "ru", "ta", "ur"}
+)
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -191,6 +193,13 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Malayalam",),
         national_id_provider=("ml_IN", "aadhaar"),
     ),
+    _pack(
+        "pa",
+        "OpenMed/privacy-filter-multilingual",
+        "pa_IN",
+        ("Gurmukhi",),
+        national_id_provider=("pa_IN", "aadhaar"),
+    ),
     TELUGU_LANGUAGE_PACK,
     _pack(
         "ta",
@@ -234,6 +243,14 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
             "فروردین",
             "اسفند",
         ),
+    ),
+    _pack(
+        "ur",
+        "OpenMed/privacy-filter-multilingual",
+        "ur_IN",
+        ("Arabic",),
+        national_id_provider=("ur_IN", "aadhaar"),
+        routing_markers=("مریض", "آدھار", "پتہ", "جناب", "محترمہ"),
     ),
     _pack(
         "he",
@@ -389,7 +406,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "hr": NationalIdOnlyCapability("hr_HR", ("hr_HR", "ssn")),
     "bg": NationalIdOnlyCapability("bg_BG", ("bg_BG", "egn")),
     "fi": NationalIdOnlyCapability("fi_FI", ("fi_FI", "ssn")),
-    "ur": NationalIdOnlyCapability("ur_PK", ("ur_PK", "cnic")),
     "rw": NationalIdOnlyCapability("rw_RW", ("rw_RW", "rwanda_id")),
 }
 
@@ -399,7 +415,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
     # Nepali resolves to Faker's native ``ne_NP`` locale, so it needs no
     # approximation entry and no conceptual backend mapping.
     "ne": "ne_NP",
-    "pa": "pa_IN",
 }
 
 # Languages surfaced by script routing before a bundled default PII model or
@@ -408,8 +423,6 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "ne",
-    "pa",
-    "ur",
 }
 
 _SCRIPT_ORDER = (
@@ -491,6 +504,7 @@ _LOCALE_ORDER = (
     "pt",
     "ar",
     "fa",
+    "ur",
     "he",
     "ja",
     "zh",
@@ -522,7 +536,6 @@ _LOCALE_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 _NATIONAL_ID_PROVIDER_ORDER = (
@@ -543,6 +556,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "pt",
     "fa",
     "tr",
+    "ur",
     "he",
     "id",
     "th",
@@ -571,7 +585,6 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "et",
     "el",
     "vi",
-    "ur",
 )
 
 

@@ -76,13 +76,13 @@
     },
     "supported_pii_languages": {
       "status": "verified",
-      "value": 40,
-      "display": "40 supported PII routes",
+      "value": 42,
+      "display": "42 supported PII routes",
       "definition": "Exact keys in DEFAULT_PII_MODELS, including named placeholder routes; no locale aliases.",
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "40 supported PII language routes",
+      "public_wording": "42 supported PII language routes",
       "qualification": "Supported routes include the separately identified placeholder route; do not call every route model-backed.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -115,6 +115,7 @@
         "nl",
         "no",
         "or",
+        "pa",
         "pl",
         "pt",
         "ro",
@@ -126,6 +127,7 @@
         "th",
         "tr",
         "uk",
+        "ur",
         "vi",
         "xh",
         "zh",
@@ -136,7 +138,7 @@
       "source": "openmed/core/language_pack_catalog.py",
       "as_of": "2026-07-29",
       "owner": "repository-owner",
-      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, zu",
+      "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, zu",
       "qualification": "Use codes only where the definition is visible.",
       "review_by": "2026-10-29",
       "follow_up_by": null
@@ -208,9 +210,11 @@
       "value": [
         "fa",
         "ml",
+        "pa",
         "pl",
         "ru",
-        "ta"
+        "ta",
+        "ur"
       ],
       "display": null,
       "definition": "Named built-in routes using a placeholder model.",
@@ -225,9 +229,7 @@
     "user_supplied_model_languages": {
       "status": "verified",
       "value": [
-        "ne",
-        "pa",
-        "ur"
+        "ne"
       ],
       "display": null,
       "definition": "Script-routable language codes requiring a user-configured model; not built-in model support.",
@@ -256,7 +258,6 @@
         "sk",
         "sr",
         "tl",
-        "ur",
         "yo"
       ],
       "display": null,

@@ -432,18 +432,18 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 40 zinazotumika; 35 zikitumia modeli)
+## PII ya lugha nyingi (njia 42 zinazotumika; 35 zikitumia modeli)
 
 Utoaji na uondoaji utambulisho huunga mkono **misimbo 40 ya lugha za PII**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`,
-`ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
-`th`, `tr`, `uk`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
+`ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+`th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
 katalogi iliyosajiliwa ya modeli za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
 chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
 na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia ya ziada ya Kipunjabi (`pa`) na inaweza
-pia kuhudumia Kiassam, Kibengali, Kigujarati, Kihindi, Kikannada, Kimalayalam,
-Kimarathi, Kiodia, Kitamil na Kitelugu.
+iliyosanidiwa na mtumiaji inaweza kuhudumia Kiassam, Kibengali, Kigujarati,
+Kihindi, Kikannada, Kimalayalam, Kimarathi, Kiodia, Kipunjabi, Kitamil na
+Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,
