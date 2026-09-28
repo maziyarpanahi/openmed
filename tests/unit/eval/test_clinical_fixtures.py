@@ -157,3 +157,90 @@ def test_validation_errors_do_not_include_source_text() -> None:
 
     assert fixture.text not in str(raised.value)
     assert all(span.text not in str(raised.value) for span in fixture.gold_spans)
+
+
+@pytest.mark.parametrize("value", [True, 1.5, "synthetic-sensitive-value"])
+def test_serialized_offsets_are_strict_and_errors_value_free(value):
+    payload = generate_fixture("lab", seed=1).to_dict(include_text=True)
+    payload["sections"][0]["start"] = value
+    with pytest.raises((TypeError, ValueError)) as caught:
+        ClinicalFixture.from_mapping(payload)
+    assert "synthetic-sensitive-value" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("schema_version", "unsupported"),
+        ("text_sha256", "sha256:" + "0" * 64),
+        ("synthetic", False),
+        ("phi", True),
+    ],
+)
+def test_serialized_fixture_evidence_is_validated(key, value):
+    payload = generate_fixture("lab", seed=1).to_dict(include_text=True)
+    payload[key] = value
+    with pytest.raises(ValueError):
+        ClinicalFixture.from_mapping(payload)
+
+
+def test_default_fixture_artifact_omits_code_display_text():
+    fixture = generate_fixture("lab", seed=1)
+    span = next(item for item in fixture.gold_spans if item.code is not None)
+    sensitive_code = replace(span.code, display="synthetic-sensitive-value")
+    changed = replace(
+        fixture,
+        gold_spans=tuple(
+            replace(item, code=sensitive_code) if item is span else item
+            for item in fixture.gold_spans
+        ),
+    )
+    assert "synthetic-sensitive-value" not in changed.to_json()
+    assert "synthetic-sensitive-value" in changed.to_json(include_text=True)
+
+
+@pytest.mark.parametrize("value", [[], float("inf")])
+def test_typed_expected_field_rejects_non_scalar_or_nonfinite_values(value):
+    from openmed.eval.clinical_fixtures import ExpectedField
+
+    with pytest.raises((TypeError, ValueError)):
+        ExpectedField("synthetic-id", "quantity", "quantity", value=value)
+
+
+def test_fixture_collections_are_bounded():
+    fixture = generate_fixture("lab", seed=1)
+    with pytest.raises(ValueError):
+        replace(fixture, sections=fixture.sections * 4097)
+
+
+def test_mutated_typed_offsets_are_revalidated_before_serialization():
+    fixture = generate_fixture("lab", seed=1)
+    object.__setattr__(fixture.gold_spans[0], "start", -1)
+    with pytest.raises(ValueError):
+        fixture.to_dict()
+
+
+def test_generator_rejects_oversized_seed_without_raw_error():
+    with pytest.raises(ValueError) as caught:
+        generate_fixture("lab", seed=10**5000)
+    assert caught.value.__context__ is None
+
+
+def test_fixture_json_indent_cannot_inject_values():
+    with pytest.raises((TypeError, ValueError)):
+        generate_fixture("lab").to_json(indent="synthetic-sensitive-value")
+
+
+def test_missing_custom_provenance_is_not_claimed_synthetic_or_phi_free():
+    fixture = replace(generate_fixture("lab"), metadata={})
+    assert fixture.synthetic is False
+    assert fixture.phi is True
+
+
+@pytest.mark.parametrize(
+    "metadata", [{"synthetic": False}, {"phi": True}, {"profile": "pathology_report"}]
+)
+def test_contradictory_fixture_metadata_is_rejected(metadata):
+    with pytest.raises(ValueError):
+        replace(generate_fixture("lab"), metadata=metadata)

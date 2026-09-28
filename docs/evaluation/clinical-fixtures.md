@@ -58,7 +58,7 @@ consistent when it is created.
 ## Privacy-safe artifacts
 
 `fixture.to_dict()` and `fixture.to_json()` omit the document and span text by
-default. They retain only offsets, labels, assertion axes, coded values, field
+default. They retain only offsets, labels, assertion axes, code identities (without display text), field
 references, synthetic metadata, and a `sha256:` document fingerprint; scalar
 field values are also omitted. This is the safe form for reports, logs, and
 audit artifacts:
@@ -75,3 +75,7 @@ committed tests and generated metadata are synthetic-only and mark
 
 The generator is an evaluation aid only. It does not certify privacy, coding
 accuracy, clinical safety, or production model behavior.
+
+Imported offsets must be integers, and supplied schema versions, document hashes, and synthetic/no-PHI markers must agree. Collections are limited to 4096 entries, documents to 1 MiB of characters, string metadata to 4096 characters, and seeds to signed 64-bit integers. Validation exceptions omit caller values. Typed values are revalidated before fixture serialization.
+
+Custom fixture IDs, labels, code identities, and field names must be non-sensitive controlled identifiers. Synthetic/no-PHI markers describe caller-provided provenance; they do not anonymize arbitrary input or certify privacy. Code display text is included only with the explicit text-inclusive fixture serialization.
