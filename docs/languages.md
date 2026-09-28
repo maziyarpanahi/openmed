@@ -5,9 +5,9 @@ language packs live in
 [`openmed.core.pii_i18n.SUPPORTED_LANGUAGES`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py).
 Terminology maintainers and translators should also use the
 [localization glossary](i18n/glossary.md) for stable product and privacy terms.
-The optional Indic family adds two user-configured routes and can also serve
-the built-in Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
-Telugu codes.
+The optional Indic family adds the user-configured Punjabi route and can also
+serve the built-in Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam,
+Marathi, Odia, Tamil, and Telugu codes.
 Every code documented here wires
 up:
 
@@ -101,6 +101,7 @@ routing is first requested, and do not download or bundle model weights.
 | `no`   | Norwegian  | `OpenMed/privacy-filter-multilingual`                       | `no_NO`      | Fødselsnummer double modulus-11 validation.                  |
 | `or`   | Odia       | `OpenMed/privacy-filter-multilingual`                       | `or_IN`      | Native Odia surrogates; Aadhaar and Odisha PIN patterns.     |
 | `pa`   | Punjabi    | `env:OPENMED_INDIC_NER_MODEL`                               | `pa_IN`      | Optional Indic NER weights; Indian Faker fallback.           |
+| `pl`   | Polish     | `OpenMed/privacy-filter-multilingual`                      | `pl_PL`      | Native Faker locale, PESEL surrogates, and Polish dates, phones, postcodes, and addresses. |
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
@@ -121,10 +122,10 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` (`pa`, `ne`, and `ur`) ship no bundled
-weights and require a caller-supplied model. Russian and Tamil retain explicit
-public placeholder routes for compatibility, but neither placeholder is a
+weights and require a caller-supplied model. Polish, Russian, and Tamil retain explicit
+public placeholder routes for compatibility, but none of these placeholders is a
 claim of dedicated trained weights. Codes absent from the table entirely (for
-example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
+example `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
 Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
@@ -498,6 +499,19 @@ After:  Patiënt [NAME], BSN [ID]
 ```text
 Before: Pasient Ingrid Hansen, fødselsnummer 12035101460
 After:  Pasient [NAME], fødselsnummer [ID]
+```
+
+### Polish — `pl`
+
+This is a rules-and-surrogates pack with a named default-model placeholder,
+not a claim of trained Polish model coverage. Its synthetic leakage tests do
+not establish clinical accuracy.
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `pl_PL`
+
+```text
+Before: Pacjent, PESEL 85031512344, adres ul. Przykładowa 12.
+After:  Pacjent, PESEL [ID_NUM], adres [STREET_ADDRESS].
 ```
 
 ### Portuguese — `pt`

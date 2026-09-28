@@ -295,6 +295,7 @@ classification:
     - clinical/relation-unit-compatibility.md
     - clinical/sig-parser.md
     - clinical/summarization.md
+    - structured/schema-guided-extraction.md
     - medical-tokenizer.md
     - indic-normalization.md
     - configuration.md
@@ -410,6 +411,10 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - evaluation/clinical-fixtures.md
+    - multimodal/box-normalization.md
+    - multimodal/page-rotation.md
+    - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md

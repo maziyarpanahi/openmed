@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 90365253,
-    "maximum_unique_payload_bytes": 90000740,
+    "maximum_total_bytes": 91301710,
+    "maximum_unique_payload_bytes": 90937197,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4389879
+    "json": 4413273
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4389879
+    "docs/search/search_index.json": 4413273
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,8 +31,12 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The truthfully labeled synthetic corpus build measures 90249767 total bytes, 89885254 unique bytes, and 4384087 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
-    "The DICOM provenance on current master build measures 90028592 total bytes, 89664079 unique bytes, and 4380842 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed schema-guided extraction build measures 91186224 total bytes, 90821711 unique bytes, and 4407481 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed document-routing evaluation stack build measures 90942294 total bytes, 90577781 unique bytes, and 4400350 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The combined OCR geometry and layout build measures 90485620 total bytes, 90121107 unique bytes, and 4389641 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The validated OCR clinical layout build measures 90263261 total bytes, 89898748 unique bytes, and 4387239 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed OCR rotation and normalization build measures 90256845 total bytes, 89892332 unique bytes, and 4385059 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The OCR box normalization over laboratory contracts build measures 90036426 total bytes, 89671913 unique bytes, and 4382421 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The corrected laboratory contracts build measures 89806784 total bytes, 89442271 unique bytes, and 4378440 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed laboratory reference-range build measures 89355028 total bytes, 88990515 unique bytes, and 4369819 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed relation contracts build measures 89120159 total bytes, 88755646 unique bytes, and 4366301 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
