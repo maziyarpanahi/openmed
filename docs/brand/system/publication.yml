@@ -411,6 +411,7 @@ classification:
     - export-gguf.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md
+    - clinical/unit-display-audit.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/event-contradictions.md
