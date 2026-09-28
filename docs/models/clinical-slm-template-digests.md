@@ -74,3 +74,19 @@ the declared substitutions. A stale or altered record raises
 metadata, not a compliance certification or an autonomous clinical decision
 guarantee; human review requirements for the surrounding clinical workflow
 still apply.
+
+Collections and placeholder declarations are bounded to 4,096 entries. Each
+template or runtime value is limited to 1 MiB UTF-8; each rendered prompt is
+limited to 4 MiB, checked before concatenation. Invalid Unicode, conflicting
+factory aliases, and conflicting provenance wrappers fail closed. Typed records
+are rebuilt at render/replay boundaries, so changed text cannot retain an old
+cached digest. The aggregate digest is checked against its individual digests
+and declarations even when provenance is parsed without template text.
+
+Flat declaration lists name the union of all placeholders; per-template maps
+must match each template separately. Placeholder names are public schema
+metadata: use generic names, never patient names or identifiers. Hashes are not
+anonymization or signatures, and template digests do not bind runtime values.
+Rendered prompts remain sensitive in-memory data; the template set retains its
+canonical strings for its lifetime, and this API does not promise secure memory
+erasure. Upstream exception context is discarded.

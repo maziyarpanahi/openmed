@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import socket
+from dataclasses import replace
 
 import pytest
 
+import openmed.models.clinical_slm_templates as template_module
 from openmed.models.clinical_slm_templates import (
     ClinicalSLMTemplateDigestMismatchError,
     ClinicalSLMTemplateError,
@@ -15,6 +17,7 @@ from openmed.models.clinical_slm_templates import (
     ClinicalSLMTemplateSubstitutionError,
     UndeclaredTemplateSubstitutionError,
     build_template_provenance,
+    build_template_set,
     canonicalize_template,
     compute_template_digest,
     render_clinical_slm_templates,
@@ -32,6 +35,114 @@ def _template_set() -> ClinicalSLMTemplateSet:
         task=TASK_TEMPLATE,
         output_format=OUTPUT_FORMAT_TEMPLATE,
     )
+
+
+def test_builder_rejects_conflicting_task_alias():
+    with pytest.raises(ClinicalSLMTemplateError):
+        build_template_set(
+            system="s", task="t", task_template="different", output_format="o"
+        )
+
+
+def test_builder_rejects_conflicting_system_alias():
+    with pytest.raises(ClinicalSLMTemplateError):
+        build_template_set(
+            system="s", system_template="different", task="t", output_format="o"
+        )
+
+
+def test_mutated_template_text_cannot_reuse_old_provenance():
+    templates = _template_set()
+    provenance = templates.provenance
+    object.__setattr__(templates, "system", "Changed instruction")
+    with pytest.raises(ClinicalSLMTemplateError):
+        verify_template_provenance(templates, provenance)
+
+
+def test_provenance_aggregate_must_bind_its_fields():
+    with pytest.raises(ClinicalSLMTemplateError):
+        replace(_template_set().provenance, template_set_digest="sha256:" + "0" * 64)
+
+
+def test_unicode_error_discards_raw_input_context():
+    with pytest.raises(ClinicalSLMTemplateError) as caught:
+        canonicalize_template("SYNTHETIC_PRIVATE\ud800")
+    assert caught.value.__context__ is None
+
+
+def test_provenance_aliases_cannot_disagree():
+    provenance = _template_set().provenance.to_dict()
+    provenance["system_template_digest"] = "sha256:" + "0" * 64
+    with pytest.raises(ClinicalSLMTemplateError):
+        ClinicalSLMTemplateProvenance.from_mapping(provenance)
+
+
+def test_runtime_unicode_is_validated_before_render():
+    with pytest.raises(ClinicalSLMTemplateError):
+        _template_set().render({"clinical_note": "SYNTHETIC_PRIVATE\ud800"})
+
+
+def test_expanding_render_is_bounded_before_concatenation(monkeypatch):
+    templates = ClinicalSLMTemplateSet("s", "{value}" * 50, "o")
+    monkeypatch.setattr(template_module, "MAX_RENDERED_BYTES", 100)
+    with pytest.raises(ClinicalSLMTemplateSubstitutionError):
+        templates.render({"value": "test"})
+
+
+def test_declaration_iterator_stops_at_limit():
+    read_count = 0
+
+    def names():
+        nonlocal read_count
+        while True:
+            read_count += 1
+            assert read_count <= template_module.MAX_COLLECTION_ITEMS + 1
+            yield "clinical_note"
+
+    with pytest.raises(ClinicalSLMTemplateError):
+        ClinicalSLMTemplateSet(
+            SYSTEM_TEMPLATE,
+            TASK_TEMPLATE,
+            OUTPUT_FORMAT_TEMPLATE,
+            declared_substitutions=names(),
+        )
+    assert read_count == template_module.MAX_COLLECTION_ITEMS + 1
+
+
+def test_global_declarations_match_union_of_template_placeholders():
+    templates = ClinicalSLMTemplateSet(
+        SYSTEM_TEMPLATE,
+        TASK_TEMPLATE,
+        OUTPUT_FORMAT_TEMPLATE,
+        declared_substitutions=["clinical_note"],
+    )
+    assert templates.provenance == _template_set().provenance
+
+
+def test_direct_provenance_uses_current_template_text():
+    templates = _template_set()
+    old_digest = templates.provenance.system_digest
+    object.__setattr__(templates, "system", "Changed instruction")
+    assert templates.provenance.system_digest != old_digest
+
+
+def test_conflicting_run_provenance_wrappers_are_rejected():
+    templates = _template_set()
+    with pytest.raises(ClinicalSLMTemplateError):
+        verify_template_provenance(
+            templates,
+            {
+                "prompt_templates": templates.provenance.to_dict(),
+                "template_provenance": {},
+            },
+        )
+
+
+def test_rendered_record_revalidates_provenance():
+    rendered = _template_set().render(clinical_note="synthetic")
+    object.__setattr__(rendered.provenance, "schema_version", "synthetic_private")
+    with pytest.raises(ClinicalSLMTemplateError):
+        replace(rendered)
 
 
 def test_digest_is_deterministic_and_canonicalizes_nonsemantic_line_endings() -> None:

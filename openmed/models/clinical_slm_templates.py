@@ -20,7 +20,9 @@ import re
 import string
 import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import wraps
+from itertools import islice
 from types import MappingProxyType
 from typing import Any, Final, NoReturn
 
@@ -72,6 +74,8 @@ SCHEMA_VERSION: Final = TEMPLATE_DIGEST_SCHEMA_VERSION
 
 TEMPLATE_NAMES: Final[tuple[str, ...]] = ("system", "task", "output_format")
 MAX_TEMPLATE_BYTES: Final = 1 << 20
+MAX_RENDERED_BYTES: Final = 4 << 20
+MAX_COLLECTION_ITEMS: Final = 4096
 MAX_PLACEHOLDER_LENGTH: Final = 64
 
 _TEMPLATE_NAME_ALIASES: Final[dict[str, str]] = {
@@ -176,6 +180,40 @@ def _fail(
     raise error_type(reason_code, field_name) from None
 
 
+def _safe_boundary(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        kind = ClinicalSLMTemplateValidationError
+        code, field_name = "invalid_input", None
+        try:
+            return function(*args, **kwargs)
+        except ClinicalSLMTemplateError as error:
+            code, field_name = error.reason_code, error.field_name
+            if type(error) in (
+                ClinicalSLMTemplateValidationError,
+                ClinicalSLMTemplateSubstitutionError,
+                UndeclaredTemplateSubstitutionError,
+                ClinicalSLMTemplateDigestMismatchError,
+            ):
+                kind = type(error)
+        except Exception:
+            pass
+        if kind is ClinicalSLMTemplateDigestMismatchError:
+            raise kind()
+        if kind is UndeclaredTemplateSubstitutionError:
+            raise kind(field_name)
+        raise kind(code, field_name)
+
+    return checked
+
+
+def _bounded(value):
+    result = tuple(islice(iter(value), MAX_COLLECTION_ITEMS + 1))
+    if len(result) > MAX_COLLECTION_ITEMS:
+        _fail("invalid_input")
+    return result
+
+
 def _canonical_json(value: Any) -> str:
     """Serialize internal metadata using one deterministic JSON contract."""
 
@@ -225,7 +263,7 @@ def _normalize_placeholder(value: Any, field_name: str) -> str:
 def _normalize_template(value: Any, field_name: str) -> str:
     """Normalize one template while keeping its content out of errors."""
 
-    if type(value) is not str:
+    if type(value) is not str or len(value) > MAX_TEMPLATE_BYTES:
         _fail("invalid_template", field_name)
     try:
         normalized = unicodedata.normalize("NFC", value)
@@ -242,6 +280,7 @@ def _normalize_template(value: Any, field_name: str) -> str:
     return normalized
 
 
+@_safe_boundary
 def canonicalize_template(template: str) -> str:
     """Return the canonical form used for a template digest.
 
@@ -269,6 +308,8 @@ def _placeholders(template: str, field_name: str) -> tuple[str, ...]:
         ):
             _fail("invalid_placeholder", field_name)
         names.add(_normalize_placeholder(field, field_name))
+        if len(names) > MAX_COLLECTION_ITEMS:
+            _fail("invalid_placeholder", field_name)
     return tuple(sorted(names))
 
 
@@ -281,7 +322,7 @@ def _mapping_copy(
     if not isinstance(value, Mapping) or isinstance(value, (str, bytes, bytearray)):
         _fail(reason_code, error_type=error_type)
     try:
-        copied = dict(value)
+        copied = {key: value[key] for key in _bounded(value)}
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception:
@@ -315,7 +356,7 @@ def _iter_placeholder_names(value: Any, field_name: str) -> tuple[str, ...]:
         _fail("invalid_input", field_name)
     else:
         try:
-            values = tuple(value)
+            values = _bounded(value)
         except (KeyboardInterrupt, SystemExit):
             raise
         except Exception:
@@ -343,7 +384,9 @@ def _normalize_declarations(
             normalized[name] = _iter_placeholder_names(raw_values, name)
     else:
         names = _iter_placeholder_names(declarations, "provenance")
-        normalized = {name: names for name in TEMPLATE_NAMES}
+        if set(names) != {item for values in placeholders.values() for item in values}:
+            _fail("declaration_mismatch")
+        normalized = dict(placeholders)
 
     for name in TEMPLATE_NAMES:
         if normalized[name] != placeholders[name]:
@@ -368,6 +411,14 @@ def _normalize_substitution_mapping(
                 "invalid_substitution",
                 error_type=ClinicalSLMTemplateSubstitutionError,
             )
+        if (
+            len(value) > MAX_TEMPLATE_BYTES
+            or len(value.encode("utf-8")) > MAX_TEMPLATE_BYTES
+            or _CONTROL_RE.search(value)
+        ):
+            _fail(
+                "invalid_substitution", error_type=ClinicalSLMTemplateSubstitutionError
+            )
         normalized[key] = value
     return normalized
 
@@ -380,12 +431,18 @@ class TemplateDigest:
     digest: str
     placeholders: tuple[str, ...] = ()
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         name = _normalize_template_name(self.name)
         if type(self.digest) is not str or _DIGEST_RE.fullmatch(self.digest) is None:
             _fail("invalid_provenance", "provenance")
         placeholders = tuple(
-            sorted({_normalize_placeholder(value, name) for value in self.placeholders})
+            sorted(
+                {
+                    _normalize_placeholder(value, name)
+                    for value in _bounded(self.placeholders)
+                }
+            )
         )
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "digest", _normalize_digest(self.digest))
@@ -407,10 +464,7 @@ class TemplateDigest:
         return self.digest
 
     def __repr__(self) -> str:
-        return (
-            f"TemplateDigest(name={self.name!r}, digest={self.digest!r}, "
-            f"placeholders={self.placeholders!r})"
-        )
+        return "TemplateDigest(<metadata>)"
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -422,6 +476,7 @@ class ClinicalSLMTemplateProvenance(Mapping[str, Any]):
     declared_substitutions: Mapping[str, tuple[str, ...]]
     schema_version: str = TEMPLATE_DIGEST_SCHEMA_VERSION
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if self.schema_version != TEMPLATE_DIGEST_SCHEMA_VERSION:
             _fail("invalid_provenance", "provenance")
@@ -455,6 +510,26 @@ class ClinicalSLMTemplateProvenance(Mapping[str, Any]):
             "template_set_digest",
             _normalize_digest(self.template_set_digest),
         )
+
+        expected = _sha256(
+            _canonical_json(
+                {
+                    "declared_substitutions": {
+                        name: list(declarations[name]) for name in TEMPLATE_NAMES
+                    },
+                    "schema_version": self.schema_version,
+                    "templates": {
+                        name: {
+                            "digest": digests[name],
+                            "placeholders": list(declarations[name]),
+                        }
+                        for name in TEMPLATE_NAMES
+                    },
+                }
+            ).encode("utf-8")
+        )
+        if self.template_set_digest != expected:
+            raise ClinicalSLMTemplateDigestMismatchError()
 
     @property
     def system_digest(self) -> str:
@@ -534,12 +609,22 @@ class ClinicalSLMTemplateProvenance(Mapping[str, Any]):
         )
 
     @classmethod
+    @_safe_boundary
     def from_mapping(
         cls, payload: Mapping[str, Any]
     ) -> "ClinicalSLMTemplateProvenance":
         """Parse a previously emitted value-free provenance mapping."""
 
         copied = _mapping_copy(payload, reason_code="invalid_provenance")
+        if "template_digests" in copied and any(
+            key in copied
+            for key in (
+                "system_template_digest",
+                "task_template_digest",
+                "output_format_template_digest",
+            )
+        ):
+            _fail("invalid_provenance", "provenance")
         nested = copied.get("template_digests", _MISSING)
         if nested is _MISSING:
             nested = {
@@ -579,6 +664,7 @@ class ClinicalSLMTemplateSet:
     _digests: Mapping[str, str] = field(init=False, repr=False, compare=False)
     _template_set_digest: str = field(init=False, repr=False, compare=False)
 
+    @_safe_boundary
     def __init__(
         self,
         system: str | None = None,
@@ -651,6 +737,7 @@ class ClinicalSLMTemplateSet:
         object.__setattr__(self, "_template_set_digest", template_set_digest)
 
     @classmethod
+    @_safe_boundary
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ClinicalSLMTemplateSet":
         """Build a template set from JSON-like template metadata."""
 
@@ -768,10 +855,11 @@ class ClinicalSLMTemplateSet:
     def provenance(self) -> ClinicalSLMTemplateProvenance:
         """Return value-free provenance suitable for a run record."""
 
+        current = replace(self)
         return ClinicalSLMTemplateProvenance(
-            template_digests=self._digests,
-            template_set_digest=self._template_set_digest,
-            declared_substitutions=self.declared_substitutions,
+            template_digests=current._digests,
+            template_set_digest=current._template_set_digest,
+            declared_substitutions=current.declared_substitutions,
         )
 
     @property
@@ -839,6 +927,23 @@ class RenderedClinicalSLMTemplates(Mapping[str, str]):
     task: str = field(repr=False)
     output_format: str = field(repr=False)
     provenance: ClinicalSLMTemplateProvenance
+
+    @_safe_boundary
+    def __post_init__(self):
+        for name in TEMPLATE_NAMES:
+            value = getattr(self, name)
+            if (
+                type(value) is not str
+                or len(value) > MAX_RENDERED_BYTES
+                or len(value.encode("utf-8")) > MAX_RENDERED_BYTES
+            ):
+                _fail(
+                    "invalid_substitution",
+                    error_type=ClinicalSLMTemplateSubstitutionError,
+                )
+        if not isinstance(self.provenance, ClinicalSLMTemplateProvenance):
+            _fail("invalid_provenance")
+        object.__setattr__(self, "provenance", replace(self.provenance))
 
     @property
     def system_prompt(self) -> str:
@@ -948,12 +1053,18 @@ def _template_set_from_arguments(
     if isinstance(templates, ClinicalSLMTemplateSet):
         if task is not None or output_format is not None:
             _fail("ambiguous_template")
-        return templates
+        return replace(templates)
     if isinstance(templates, Mapping):
         if task is not None or output_format is not None:
             _fail("ambiguous_template")
         return ClinicalSLMTemplateSet.from_mapping(templates)
 
+    if templates is not None and not isinstance(templates, str):
+        _fail("invalid_input")
+    if system is not None and system_template is not None:
+        _fail("ambiguous_template", "system")
+    if task is not None and task_template is not None:
+        _fail("ambiguous_template", "task")
     primary_system = templates if isinstance(templates, str) else system
     if isinstance(templates, str) and system is not None:
         _fail("ambiguous_template", "system")
@@ -973,6 +1084,7 @@ def _template_set_from_arguments(
     )
 
 
+@_safe_boundary
 def build_template_set(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any] | str | None = None,
     task: str | None = None,
@@ -1009,6 +1121,7 @@ def build_template_set(
 build_clinical_slm_template_set = build_template_set
 
 
+@_safe_boundary
 def build_template_provenance(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any] | str | None = None,
     task: str | None = None,
@@ -1042,6 +1155,7 @@ def build_template_provenance(
     ).provenance
 
 
+@_safe_boundary
 def compute_template_digest(template: str) -> str:
     """Return ``sha256:<hex>`` for a canonicalized template."""
 
@@ -1052,6 +1166,7 @@ def compute_template_digest(template: str) -> str:
 digest_template = compute_template_digest
 
 
+@_safe_boundary
 def digest_templates(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any] | str | None = None,
     task: str | None = None,
@@ -1070,6 +1185,7 @@ def digest_templates(
     )
 
 
+@_safe_boundary
 def verify_runtime_substitutions(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any],
     substitutions: Mapping[str, str] | None = None,
@@ -1082,11 +1198,7 @@ def verify_runtime_substitutions(
     only for the immediate local render and is not retained in provenance.
     """
 
-    template_set = (
-        templates
-        if isinstance(templates, ClinicalSLMTemplateSet)
-        else ClinicalSLMTemplateSet.from_mapping(templates)
-    )
+    template_set = build_template_set(templates)
     if substitutions is not None and runtime_substitutions is not None:
         raise ClinicalSLMTemplateSubstitutionError("invalid_substitution") from None
     normalized = _normalize_substitution_mapping(
@@ -1104,6 +1216,22 @@ def verify_runtime_substitutions(
 validate_runtime_substitutions = verify_runtime_substitutions
 
 
+def _bounded_render(template, values):
+    pieces = []
+    size = 0
+    for literal, name, _, _ in string.Formatter().parse(template):
+        for piece in (literal, values[name] if name is not None else ""):
+            size += len(piece.encode("utf-8"))
+            if size > MAX_RENDERED_BYTES:
+                _fail(
+                    "invalid_substitution",
+                    error_type=ClinicalSLMTemplateSubstitutionError,
+                )
+            pieces.append(piece)
+    return "".join(pieces)
+
+
+@_safe_boundary
 def render_clinical_slm_templates(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any],
     substitutions: Mapping[str, str] | None = None,
@@ -1113,11 +1241,7 @@ def render_clinical_slm_templates(
 ) -> RenderedClinicalSLMTemplates:
     """Render a template set only after rejecting undeclared substitutions."""
 
-    template_set = (
-        templates
-        if isinstance(templates, ClinicalSLMTemplateSet)
-        else ClinicalSLMTemplateSet.from_mapping(templates)
-    )
+    template_set = build_template_set(templates)
     if runtime_substitutions is not None:
         if substitutions is not None or named_substitutions:
             _fail(
@@ -1135,7 +1259,7 @@ def render_clinical_slm_templates(
     values = verify_runtime_substitutions(template_set, substitutions)
     try:
         rendered = {
-            name: getattr(template_set, name).format_map(values)
+            name: _bounded_render(getattr(template_set, name), values)
             for name in TEMPLATE_NAMES
         }
     except (KeyError, IndexError, ValueError, RecursionError):
@@ -1151,22 +1275,21 @@ def render_clinical_slm_templates(
 render_templates = render_clinical_slm_templates
 
 
+@_safe_boundary
 def verify_template_provenance(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any],
     provenance: ClinicalSLMTemplateProvenance | Mapping[str, Any],
 ) -> ClinicalSLMTemplateProvenance:
     """Verify that recorded digests and declarations match current templates."""
 
-    template_set = (
-        templates
-        if isinstance(templates, ClinicalSLMTemplateSet)
-        else ClinicalSLMTemplateSet.from_mapping(templates)
-    )
+    template_set = build_template_set(templates)
     if isinstance(provenance, ClinicalSLMTemplateProvenance):
-        recorded = provenance
+        recorded = replace(provenance)
     else:
         source = provenance
         if isinstance(source, Mapping):
+            if "prompt_templates" in source and "template_provenance" in source:
+                _fail("invalid_provenance", "provenance")
             nested = source.get("prompt_templates", source.get("template_provenance"))
             if isinstance(nested, Mapping):
                 source = nested
@@ -1184,6 +1307,7 @@ def verify_template_provenance(
 verify_template_digests = verify_template_provenance
 
 
+@_safe_boundary
 def render_template_provenance(
     templates: ClinicalSLMTemplateSet | Mapping[str, Any],
     *,
@@ -1191,11 +1315,7 @@ def render_template_provenance(
 ) -> str:
     """Render value-free template provenance as JSON or Markdown."""
 
-    template_set = (
-        templates
-        if isinstance(templates, ClinicalSLMTemplateSet)
-        else ClinicalSLMTemplateSet.from_mapping(templates)
-    )
+    template_set = build_template_set(templates)
     if type(format) is not str:
         _fail("invalid_format")
     normalized = format.strip().lower()
