@@ -193,3 +193,103 @@ def test_result_serialization_is_coordinate_only_and_deterministic():
         "source_ref": "page-0-word-8",
         "source_unit": "pixel",
     }
+
+
+@pytest.mark.parametrize("serialized", [False, True])
+def test_normalized_provenance_roundtrip_does_not_transform_twice(serialized):
+    result = normalize_box(
+        (10, 20, 40, 50),
+        unit="pixel",
+        origin="bottom-left",
+        page_size=(100, 200),
+        page=2,
+    )
+    source = result.to_dict() if serialized else result
+    assert normalize_box(source, page=2) == result
+
+
+def test_nested_metadata_is_not_silently_ignored():
+    with pytest.raises(AmbiguousBoxError):
+        normalize_box(
+            {
+                "bbox": {"x0": 0.1, "y0": 0.2, "x1": 0.3, "y1": 0.4, "unit": "pixel"},
+                "unit": "normalized",
+            }
+        )
+
+
+def test_page_size_alias_conflict_is_rejected():
+    with pytest.raises(AmbiguousBoxError):
+        normalize_box(
+            (10, 20, 30, 40),
+            unit="pixel",
+            page_size={"width": 100, "page_width": 200, "height": 100},
+        )
+
+
+def test_direct_coordinate_format_conflict_is_rejected():
+    with pytest.raises(AmbiguousBoxError):
+        normalize_box(
+            {
+                "x0": 0.1,
+                "y0": 0.2,
+                "x1": 0.3,
+                "y1": 0.4,
+                "unit": "normalized",
+                "format": "xywh",
+            }
+        )
+
+
+def test_cyclic_coordinate_mapping_is_bounded():
+    value = {"unit": "normalized"}
+    value["bbox"] = value
+    with pytest.raises((BoxValidationError, AmbiguousBoxError)) as caught:
+        normalize_box(value)
+    assert caught.value.__context__ is None
+
+
+def test_coordinate_conversion_error_has_no_raw_context():
+    with pytest.raises(BoxValidationError) as caught:
+        normalize_box(("synthetic-sensitive-value", 0, 1, 1), unit="normalized")
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_batch_iterator_failure_is_sanitized():
+    def broken():
+        yield (0, 0, 0.1, 0.1)
+        raise RuntimeError("synthetic-sensitive-value")
+
+    with pytest.raises(BoxValidationError) as caught:
+        normalize_boxes(broken(), unit="normalized")
+    assert "synthetic-sensitive-value" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_batch_bound_is_enforced():
+    with pytest.raises(BoxValidationError):
+        normalize_boxes([(0, 0, 0.1, 0.1)] * 4097, unit="normalized")
+
+
+def test_opaque_reference_bound_is_enforced():
+    with pytest.raises(BoxValidationError):
+        normalize_box((0, 0, 0.1, 0.1), unit="normalized", source_ref="x" * 4097)
+
+
+def test_mutated_typed_box_is_revalidated():
+    value = normalize_box((0, 0, 0.1, 0.1), unit="normalized")
+    object.__setattr__(value, "bbox", (0, 0, 2, 2))
+    with pytest.raises(BoxValidationError):
+        normalize_box(value)
+    with pytest.raises(BoxValidationError):
+        value.to_dict()
+
+
+def test_serialized_box_rejects_conflicting_coordinate_declaration():
+    value = normalize_box(
+        (10, 20, 30, 40), unit="pixel", page_size=(100, 100)
+    ).to_dict()
+    value["unit"] = "pixel"
+    with pytest.raises(AmbiguousBoxError):
+        normalize_box(value)
