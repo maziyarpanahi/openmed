@@ -318,12 +318,8 @@ from .evidence_coverage import (
     render_evidence_coverage,
     render_evidence_coverage_matrix,
 )
-from .evidence_coverage import (
     REVIEW_STATES as COVERAGE_REVIEW_STATES,
-)
-from .evidence_coverage import (
     ReviewState as CoverageReviewState,
-)
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,
@@ -475,6 +471,25 @@ from .med_reconciliation import (
     reconcile_medication_mentions,
     reconcile_medications,
 )
+from .medication_reconciliation import (
+    MEDICATION_RECONCILIATION_ADVISORY as MEDICATION_MATCH_ADVISORY,
+)
+from .medication_reconciliation import (
+    MEDICATION_RECONCILIATION_SCHEMA_VERSION,
+    DecisionStatus,
+    FeatureStatus,
+    GroupStatus,
+    MedicationMatchDecision,
+    MedicationReconciliationCandidate,
+    MedicationReconciliationPolicy,
+    MedicationReconciliationResult,
+    NormalizedMedicationCandidate,
+    ReconciledMedicationGroup,
+    coerce_medication_candidate,
+    reconcile_medication_candidates,
+    score_medication_candidates,
+    score_medication_match,
+)
 from .medication_sig import (
     DOSE_NORMALIZATION_ADVISORY,
     MEDICATION_CANDIDATES,
@@ -544,6 +559,12 @@ from .nli_assertion_pairs import (
     construct_assertion_aware_pairs,
     validate_assertion_metadata,
     validate_nli_pair,
+)
+from .nli_backends import (
+    EncoderNLIBackend,
+    LocalNLIError,
+    RemoteNLIBackendError,
+    resolve_nli_backend,
 )
 from .nli_experiencer_pairs import (
     CAREGIVER_EXPERIENCER,
@@ -779,6 +800,25 @@ from .record_filter import (
     PATIENT_RECORD_FILTER_ADVISORY,
     PatientRecordSpan,
     filter_patient_record,
+)
+from .refusal_taxonomy import (
+    REFUSAL_CATEGORY_VALUES,
+    REFUSAL_REMEDIATION_HINTS,
+    REFUSAL_TAXONOMY_SCHEMA_VERSION,
+    ClinicalRefusal,
+    ClinicalRefusalCategory,
+    ClinicalRefusalReport,
+    RefusalCategory,
+    RefusalReason,
+    RefusalReport,
+    RefusalTaxonomy,
+    aggregate_refusals,
+    build_refusal,
+    classify_refusal,
+    remediation_hint_for,
+    serialize_refusal,
+    serialize_refusal_report,
+    serialize_refusals,
 )
 from .relations import (
     ADE_RELATION_DISCLAIMER,
@@ -1963,6 +2003,21 @@ __all__ = [
     "normalize_duration",
     "normalize_medication_attribute",
     "resolve_medication_candidate_preset",
+    "MEDICATION_MATCH_ADVISORY",
+    "MEDICATION_RECONCILIATION_SCHEMA_VERSION",
+    "DecisionStatus",
+    "FeatureStatus",
+    "GroupStatus",
+    "MedicationMatchDecision",
+    "MedicationReconciliationCandidate",
+    "MedicationReconciliationPolicy",
+    "MedicationReconciliationResult",
+    "NormalizedMedicationCandidate",
+    "ReconciledMedicationGroup",
+    "coerce_medication_candidate",
+    "reconcile_medication_candidates",
+    "score_medication_candidates",
+    "score_medication_match",
     "DEFAULT_NLI_BACKEND",
     "HEURISTIC_NLI_BACKEND",
     "MEDNLI_DATA_POLICY",
@@ -1970,6 +2025,10 @@ __all__ = [
     "NLI_LABELS",
     "NLIBackend",
     "NLIResult",
+    "EncoderNLIBackend",
+    "LocalNLIError",
+    "RemoteNLIBackendError",
+    "resolve_nli_backend",
     "HeuristicNLIBackend",
     "VerificationResult",
     "get_default_backend",
@@ -2282,6 +2341,23 @@ __all__ = [
     "discharge_summary_field_metrics",
     "export_discharge_summary_fhir",
     "extract_discharge_summary",
+    "REFUSAL_CATEGORY_VALUES",
+    "REFUSAL_REMEDIATION_HINTS",
+    "REFUSAL_TAXONOMY_SCHEMA_VERSION",
+    "ClinicalRefusal",
+    "ClinicalRefusalCategory",
+    "ClinicalRefusalReport",
+    "RefusalCategory",
+    "RefusalReason",
+    "RefusalReport",
+    "RefusalTaxonomy",
+    "aggregate_refusals",
+    "build_refusal",
+    "classify_refusal",
+    "remediation_hint_for",
+    "serialize_refusal",
+    "serialize_refusal_report",
+    "serialize_refusals",
     "DISCHARGE_PROFILE_ADVISORY",
     "DISCHARGE_PROFILE_FIELDS",
     "DISCHARGE_PROFILE_NAME",

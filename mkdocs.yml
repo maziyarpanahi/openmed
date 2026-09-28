@@ -315,6 +315,7 @@ nav:
       - Value-free Evidence Coverage: clinical/evidence-coverage.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
+      - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
