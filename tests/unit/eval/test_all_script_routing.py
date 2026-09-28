@@ -52,7 +52,9 @@ _REQUIRED_SCRIPTS = (
 # Scripts whose language path is served by a bundled pack the router selects.
 # The remaining scripts carry their language on the top routing candidate until
 # a complete language pack lands.
-_SELECTED_LANGUAGES = frozenset({"en", "hi", "bn", "gu", "or", "ta", "te", "kn", "ml"})
+_SELECTED_LANGUAGES = frozenset(
+    {"en", "hi", "bn", "gu", "or", "ta", "te", "kn", "ml", "pa", "ur"}
+)
 
 
 def _load_fixture() -> dict:
@@ -199,3 +201,19 @@ def test_all_runs_select_their_language_with_explicit_local_packs():
         assert decision.language == expected["language"]
     assert decisions[-1].language == "ur"
     assert decisions[-1].source == "stdlib:urdu-cues"
+
+
+def test_absent_punjabi_and_urdu_packs_keep_explicit_fallbacks():
+    fixture = _load_fixture()
+    packs = tuple(
+        pack
+        for pack in LANGUAGE_PACK_ADAPTERS.registry.iter_packs()
+        if pack.code not in {"pa", "ur"}
+    )
+    router = LanguageRouter(packs=packs, use_optional_lid=False)
+    decisions = router.route_runs(fixture["text"])
+    punjabi = next(item for item in decisions if item.script == "Gurmukhi")
+    assert punjabi.language == "en"
+    assert punjabi.source == "stdlib:unknown-script"
+    assert decisions[-1].language == "ar"
+    assert decisions[-1].source == "stdlib:arabic-fallback"
