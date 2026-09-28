@@ -100,3 +100,20 @@ gaps recorded in `missing_required` and `errors`.
 `data`, `bindings`, and `errors` contain extracted values in memory. Keep the
 result inside the caller's protected workflow; do not write those values to
 logs or audit artifacts.
+
+## Bounded extraction
+
+Notes are limited to 1 MiB, input collections and table cells to 4,096 entries,
+and candidate values to 4,096 characters. Invalid or oversized source iterables
+are reported as value-free entries in `errors` (empty field/raw and zero offsets);
+other valid sources can still fill slots. Duplicate table coordinates are
+rejected instead of being resolved by input order. Numeric ranges, fractions,
+scientific notation and multiple numeric tokens are not guessed or truncated.
+
+Schemas allow at most 256 properties/aliases/enum values. Regex patterns are
+limited to 256 characters and a non-branching subset: literals, anchors, character
+classes, exact repetitions up to 256, and at most one flexible repetition.
+Groups, alternatives, backreferences and nested repetitions are rejected.
+Schema errors use a fixed message without retaining source exception context.
+A partial result with missing required fields is not a valid complete instance
+of the target schema; check both `missing_required` and `errors` before use.

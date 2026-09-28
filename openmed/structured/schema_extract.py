@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from functools import wraps
+from itertools import islice
 from math import isfinite
 from typing import Any, Literal, TypedDict
 
@@ -137,6 +139,80 @@ class _FieldSpec(TypedDict):
     pattern: re.Pattern[str] | None
 
 
+def _schema_boundary(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise SchemaDefinitionError("invalid or unsupported extraction schema")
+
+    return checked
+
+
+def _bounded(values, limit=4096):
+    result = tuple(islice(iter(values), limit + 1))
+    if len(result) > limit:
+        raise ValueError("input limit exceeded")
+    return result
+
+
+def _safe_pattern(source):
+    """Accept linear, non-branching scalar patterns, not arbitrary regex programs."""
+    if not isinstance(source, str) or len(source) > 256:
+        raise SchemaDefinitionError("invalid pattern")
+    index, flexible, atom = 0, 0, False
+    while index < len(source):
+        char = source[index]
+        if char == "\\":
+            index += 1
+            if (
+                index >= len(source)
+                or source[index].isdigit()
+                or source[index] in {"g", "k"}
+            ):
+                raise SchemaDefinitionError("unsupported regex reference")
+            atom = True
+        elif char == "[":
+            index += 1
+            if index < len(source) and source[index] == "^":
+                index += 1
+            while index < len(source) and source[index] != "]":
+                if source[index] == "\\":
+                    index += 1
+                index += 1
+            if index >= len(source):
+                raise SchemaDefinitionError("invalid character class")
+            atom = True
+        elif char in "()|":
+            raise SchemaDefinitionError("branching regex is unsupported")
+        elif char in "*+?":
+            flexible += 1
+            if not atom or flexible > 1:
+                raise SchemaDefinitionError("ambiguous regex repetition")
+            atom = False
+        elif char == "{":
+            end = source.find("}", index)
+            count = source[index + 1 : end] if end >= 0 else ""
+            if (
+                not atom
+                or not count.isascii()
+                or not count.isdigit()
+                or not 1 <= int(count) <= 256
+            ):
+                raise SchemaDefinitionError("unsupported regex repetition")
+            index, atom = end, False
+        elif char in "^$":
+            atom = False
+        elif char == "}":
+            raise SchemaDefinitionError("unsupported regex repetition")
+        else:
+            atom = True
+        index += 1
+    return re.compile(source)
+
+
 def normalize_field_key(label: str) -> str:
     """Normalize a slot name or source label to a comparable key.
 
@@ -188,15 +264,37 @@ def extract_to_schema(
 
     specs, required = _compile_schema(schema)
 
-    candidates: dict[FieldSource, dict[str, list[_Candidate]]] = {
-        "entity": _entity_candidates(text, entities),
-        "table": _table_candidates(text, tables),
-        "key_value": _key_value_candidates(text),
-    }
+    input_errors: list[SchemaValidationIssue] = []
+
+    def invalid_source(source):
+        input_errors.append(
+            SchemaValidationIssue(
+                field="",
+                reason="invalid or oversized source input",
+                raw="",
+                start=0,
+                end=0,
+                source=source,
+            )
+        )
+
+    if not isinstance(text, str) or len(text) > 1048576:
+        invalid_source("key_value")
+        text = ""
+    candidates = {"entity": {}, "table": {}, "key_value": {}}
+    for source, builder, values in (
+        ("entity", _entity_candidates, entities),
+        ("table", _table_candidates, tables),
+    ):
+        try:
+            candidates[source] = builder(text, _bounded(values))
+        except Exception:
+            invalid_source(source)
+    candidates["key_value"] = _key_value_candidates(text)
 
     data: dict[str, Any] = {}
     bindings: dict[str, FieldBinding] = {}
-    errors: list[SchemaValidationIssue] = []
+    errors: list[SchemaValidationIssue] = input_errors
     missing_required: list[str] = []
     missing_required_details: list[MissingRequiredField] = []
 
@@ -248,6 +346,7 @@ def extract_to_schema(
     )
 
 
+@_schema_boundary
 def _compile_schema(
     schema: Mapping[str, Any],
 ) -> tuple[list[_FieldSpec], frozenset[str]]:
@@ -268,9 +367,11 @@ def _compile_schema(
     if not isinstance(schema.get("additionalProperties", False), bool):
         raise SchemaDefinitionError("additionalProperties must be a boolean")
 
+    if len(properties) > 256:
+        raise SchemaDefinitionError("too many schema properties")
     specs: list[_FieldSpec] = []
     for name, definition in properties.items():
-        if not isinstance(name, str) or not name:
+        if not isinstance(name, str) or not name or len(name) > 4096:
             raise SchemaDefinitionError(
                 "schema property names must be non-empty strings"
             )
@@ -284,7 +385,7 @@ def _compile_schema(
             )
 
         field_type = definition.get("type")
-        if field_type not in _SCALAR_TYPES:
+        if not isinstance(field_type, str) or field_type not in _SCALAR_TYPES:
             raise SchemaDefinitionError(
                 f"property {name!r} must declare a scalar type "
                 f"({', '.join(sorted(_SCALAR_TYPES))})"
@@ -310,9 +411,11 @@ def _compile_schema(
 def _compile_field(name: str, definition: Mapping[str, Any]) -> _FieldSpec:
     keys = {normalize_field_key(name)}
     aliases = definition.get("aliases", [])
+    if not isinstance(aliases, list) or len(aliases) > 256:
+        raise SchemaDefinitionError("invalid aliases")
     if aliases:
         if not isinstance(aliases, list) or any(
-            not isinstance(alias, str) for alias in aliases
+            not isinstance(alias, str) or len(alias) > 4096 for alias in aliases
         ):
             raise SchemaDefinitionError(
                 f"property {name!r} 'aliases' must be a list of strings"
@@ -337,7 +440,7 @@ def _compile_field(name: str, definition: Mapping[str, Any]) -> _FieldSpec:
     enum = definition.get("enum")
     enum_values: tuple[Any, ...] | None = None
     if enum is not None:
-        if not isinstance(enum, list) or not enum:
+        if not isinstance(enum, list) or not enum or len(enum) > 256:
             raise SchemaDefinitionError(
                 f"property {name!r} 'enum' must be a non-empty list"
             )
@@ -358,15 +461,21 @@ def _compile_field(name: str, definition: Mapping[str, Any]) -> _FieldSpec:
             raise SchemaDefinitionError(
                 f"property {name!r} 'enum' values must match its scalar type"
             )
+        if field_type == "string":
+            normalized = [normalize_field_key(value) for value in enum]
+            if len(set(normalized)) != len(normalized):
+                raise SchemaDefinitionError("ambiguous enum normalization")
         enum_values = tuple(enum)
 
     pattern_src = definition.get("pattern")
     pattern: re.Pattern[str] | None = None
+    if pattern_src is not None and definition["type"] != "string":
+        raise SchemaDefinitionError("pattern requires a string slot")
     if pattern_src is not None:
         if not isinstance(pattern_src, str):
             raise SchemaDefinitionError(f"property {name!r} 'pattern' must be a string")
         try:
-            pattern = re.compile(pattern_src)
+            pattern = _safe_pattern(pattern_src)
         except re.error as exc:  # pragma: no cover - defensive
             raise SchemaDefinitionError(
                 f"property {name!r} 'pattern' is not a valid regex: {exc}"
@@ -409,6 +518,8 @@ def _select_candidate(
 def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
     """Coerce ``raw`` to the slot type and apply enum/pattern constraints."""
 
+    if len(raw) > 4096:
+        return None, "source value exceeds extraction limit"
     if spec["pattern"] is not None and spec["pattern"].fullmatch(raw) is None:
         return None, "value does not match required pattern"
 
@@ -416,12 +527,14 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
     if field_type == "string":
         value: Any = raw
     elif field_type == "integer":
-        match = _NUMBER_TOKEN_RE.search(raw)
+        matches = list(_NUMBER_TOKEN_RE.finditer(raw))
+        match = matches[0] if len(matches) == 1 else None
         if match is None or "." in match.group():
             return None, "expected an integer value"
         value = int(match.group())
     elif field_type == "number":
-        match = _NUMBER_TOKEN_RE.search(raw)
+        matches = list(_NUMBER_TOKEN_RE.finditer(raw))
+        match = matches[0] if len(matches) == 1 else None
         if match is None:
             return None, "expected a numeric value"
         value = float(match.group())
@@ -446,6 +559,8 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
         elif value not in spec["enum"]:
             return None, "value is not one of the permitted enum options"
 
+    if spec["pattern"] is not None and spec["pattern"].fullmatch(value) is None:
+        return None, "canonical value does not match required pattern"
     return value, None
 
 
@@ -485,7 +600,7 @@ def _table_candidates(
         if not isinstance(cells, (list, tuple)) or not cells:
             continue
         rows: dict[int, dict[int, Mapping[str, Any]]] = {}
-        for cell in cells:
+        for cell in _bounded(cells):
             if isinstance(cell, Mapping):
                 row, column = cell.get("row"), cell.get("column")
                 start, end = cell.get("start"), cell.get("end")
@@ -498,12 +613,14 @@ def _table_candidates(
                     and cell.get("text") == text[start:end]
                 ):
                     continue
-                rows.setdefault(row, {})[column] = cell
+                row_cells = rows.setdefault(row, {})
+                if column in row_cells:
+                    raise ValueError("duplicate table cell")
+                row_cells[column] = cell
         for _, columns in sorted(rows.items()):
-            ordered = [columns[col] for col in sorted(columns)]
-            if len(ordered) < 2:
+            if 0 not in columns or 1 not in columns:
                 continue
-            key_cell, value_cell = ordered[0], ordered[1]
+            key_cell, value_cell = columns[0], columns[1]
             key = normalize_field_key(str(key_cell.get("text", "")))
             start = value_cell.get("start")
             end = value_cell.get("end")

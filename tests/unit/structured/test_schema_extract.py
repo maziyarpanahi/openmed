@@ -351,3 +351,90 @@ def test_deterministic():
 
 def test_advisory_exposed():
     assert isinstance(SCHEMA_EXTRACT_ADVISORY, str) and SCHEMA_EXTRACT_ADVISORY
+
+
+@pytest.mark.parametrize("raw", ["1e3", "10-20", "2 and 3", "1/2"])
+def test_ambiguous_numeric_value_is_not_silently_truncated(raw):
+    result = extract_to_schema(
+        "Dose: " + raw, {"properties": {"dose": {"type": "number"}}}
+    )
+    assert result["data"] == {}
+    assert result["errors"]
+
+
+@pytest.mark.parametrize(
+    "definition",
+    [
+        {"type": []},
+        {"type": "string", "aliases": 0},
+        {"type": "string", "pattern": "(a+)+$"},
+    ],
+)
+def test_malformed_or_unsafe_schema_is_a_definition_error(definition):
+    with pytest.raises(SchemaDefinitionError) as caught:
+        extract_to_schema("", {"properties": {"synthetic-sensitive-value": definition}})
+    assert "synthetic-sensitive-value" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_bad_source_iterator_returns_partial_extraction():
+    def broken():
+        raise RuntimeError("synthetic-sensitive-value")
+        yield
+
+    result = extract_to_schema(NOTE, SCHEMA, entities=broken())
+    assert result["data"]["patient_age"] == 54
+    assert result["errors"]
+    assert "synthetic-sensitive-value" not in repr(result["errors"])
+
+
+def test_oversized_integer_is_reported_without_raising():
+    result = extract_to_schema(
+        "Age: " + "9" * 5000, {"properties": {"age": {"type": "integer"}}}
+    )
+    assert result["data"] == {}
+    assert result["errors"]
+
+
+def test_ambiguous_enum_canonicalization_is_rejected():
+    with pytest.raises(SchemaDefinitionError):
+        extract_to_schema(
+            "Kind: a", {"properties": {"kind": {"type": "string", "enum": ["A", "a"]}}}
+        )
+
+
+def test_duplicate_table_cell_is_not_resolved_by_input_order():
+    text = "Age 10 20"
+    key = {"row": 0, "column": 0, "text": "Age", "start": 0, "end": 3}
+    a = {"row": 0, "column": 1, "text": "10", "start": 4, "end": 6}
+    b = {"row": 0, "column": 1, "text": "20", "start": 7, "end": 9}
+    schema = {"properties": {"age": {"type": "integer"}}}
+    first = extract_to_schema(text, schema, tables=[{"cells": [key, a, b]}])
+    second = extract_to_schema(text, schema, tables=[{"cells": [key, b, a]}])
+    assert first == second
+    assert first["data"] == {}
+    assert first["errors"]
+
+
+def test_source_collections_are_bounded():
+    result = extract_to_schema(NOTE, SCHEMA, entities=[{}] * 4097)
+    assert result["errors"]
+    assert result["data"]["patient_age"] == 54
+
+
+def test_canonical_enum_value_must_still_satisfy_pattern():
+    schema = {
+        "properties": {
+            "sex": {"type": "string", "enum": ["Female"], "pattern": "female"}
+        }
+    }
+    result = extract_to_schema("Sex: female", schema)
+    assert result["data"] == {}
+    assert result["errors"]
+
+
+def test_pattern_on_numeric_slot_is_rejected():
+    with pytest.raises(SchemaDefinitionError):
+        extract_to_schema(
+            "Age: 10", {"properties": {"age": {"type": "integer", "pattern": "[0-9]+"}}}
+        )
