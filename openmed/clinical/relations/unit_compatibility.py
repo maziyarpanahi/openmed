@@ -676,8 +676,9 @@ def _infer_relation_kind(data: Mapping[str, object]) -> str | None:
 
 
 def _normalize_relation_kind(value: object) -> str | None:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or len(value) > 256:
         return None
+    value = str.__str__(value)
     normalized = re.sub(r"[^a-z0-9]+", "_", value.casefold()).strip("_")
     if normalized in {"dose", "dosage", "strength", "drug_to_dose", "drug_to_strength"}:
         return "dose"
@@ -708,6 +709,30 @@ def _normalize_relation_kind(value: object) -> str | None:
 def _extract_unit_inputs(
     data: Mapping[str, object], *, language: object | None = None
 ) -> _UnitInputs:
+    primary_keys = (
+        "unit",
+        "units",
+        "canonical_unit",
+        "measurement_unit",
+        "dose_unit",
+        "rate_unit",
+        "concentration_unit",
+        "result_unit",
+    )
+    declarations = [
+        data[key] for key in primary_keys if key in data and data[key] is not None
+    ]
+    if any(value != declarations[0] for value in declarations[1:]):
+        raise ValueError("conflicting unit aliases")
+    if declarations and any(
+        left in data or right in data
+        for left, right in (
+            ("left", "right"),
+            ("source", "target"),
+            ("observed", "expected"),
+        )
+    ):
+        raise ValueError("conflicting top-level and endpoint units")
     pair_keys = (
         ("left_unit", "right_unit"),
         ("source_unit", "target_unit"),

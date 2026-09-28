@@ -37,3 +37,12 @@ def test_colliding_contract_names_have_explicit_public_exports() -> None:
     assert validate_guarded_relation_evidence is validate_evidence
     assert AssertionState is RadiologyAssertionState
     assert RelationAssertionState is EvidenceAssertionState
+
+
+def test_existing_span_audit_export_is_not_shadowed():
+    from openmed.clinical import EvidenceSpan as PublicSpan
+    from openmed.clinical import RelationEvidenceSpan
+    from openmed.clinical.evidence_span_audit import EvidenceSpan as AuditSpan
+
+    assert PublicSpan is AuditSpan
+    assert RelationEvidenceSpan is EvidenceSpan

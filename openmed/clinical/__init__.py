@@ -1085,7 +1085,6 @@ from .relations import (
     EvidenceBinding,
     EvidenceBindingError,
     EvidenceCompleteness,
-    EvidenceSpan,
     GuardedRelation,
     InvalidDirectionError,
     InvalidEndpointTypeError,
@@ -1205,6 +1204,9 @@ from .relations import (
 )
 from .relations import (
     AssertionState as RelationAssertionState,
+)
+from .relations import (
+    EvidenceSpan as RelationEvidenceSpan,
 )
 from .review_packet import (
     PROTECTED_TEXT_OMITTED,
@@ -2898,7 +2900,7 @@ __all__ = [
     "EVIDENCE_BINDING_SCHEMA_VERSION",
     "EvidenceBinding",
     "EvidenceBindingError",
-    "EvidenceSpan",
+    "RelationEvidenceSpan",
     "GUARDED_RELATION_CLASSES",
     "GUARDED_RELATION_TYPES",
     "GuardedRelation",
