@@ -5,7 +5,8 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import wraps
 from typing import Any
 
 from openmed.clinical.context import (
@@ -41,6 +42,10 @@ _RELATIVE_LABELS = frozenset(
         "RELATIVE",
     }
 )
+_MAX_ITEMS = 4096
+_MAX_TEXT_LENGTH = 1_048_576
+_MAX_CONTEXT_NODES = 128
+_PATIENT_RE = re.compile(r"(?<!\w)(?:patient|self|subject|pt)(?!\w)", re.IGNORECASE)
 _MAX_CHARACTER_DISTANCE = 96
 _MAX_TOKEN_DISTANCE = 12
 _CLAUSE_BOUNDARY_RE = re.compile(
@@ -96,6 +101,27 @@ _RELATIVE_RE = re.compile(
 )
 
 
+def _safe_boundary(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid family-history relation input")
+
+    return wrapped
+
+
+def _bounded_items(values):
+    result = []
+    for item in values:
+        if len(result) >= _MAX_ITEMS:
+            raise ValueError("family-history collection limit exceeded")
+        result.append(item)
+    return tuple(result)
+
+
 @dataclass(frozen=True)
 class FamilyHistoryRelation:
     """One condition-to-relative relation grounded in source spans.
@@ -112,12 +138,34 @@ class FamilyHistoryRelation:
     score: float
     advisory: str = FAMILY_HISTORY_RELATION_ADVISORY
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if self.certainty not in CERTAINTY_VALUES:
             raise ValueError(
                 "family-history relation certainty must be one of "
                 f"{', '.join(CERTAINTY_VALUES)}"
             )
+        for endpoint in (self.relative, self.condition):
+            if not isinstance(endpoint, SpanReference):
+                raise ValueError("invalid family-history endpoint")
+            if (
+                type(endpoint.start) is not int
+                or type(endpoint.end) is not int
+                or endpoint.start < 0
+                or endpoint.end <= endpoint.start
+                or not isinstance(endpoint.text, str)
+                or len(endpoint.text) != endpoint.end - endpoint.start
+            ):
+                raise ValueError("invalid family-history endpoint")
+        if (
+            self.relative.label != RELATION_TO_PATIENT
+            or normalize_label(self.condition.label) not in _CONDITION_LABELS
+        ):
+            raise ValueError("invalid family-history endpoint roles")
+        if self.advisory != FAMILY_HISTORY_RELATION_ADVISORY or isinstance(
+            self.score, bool
+        ):
+            raise ValueError("invalid family-history metadata")
         score = float(self.score)
         if not math.isfinite(score) or not 0.0 <= score <= 1.0:
             raise ValueError("family-history relation score must be between 0 and 1")
@@ -147,9 +195,11 @@ class FamilyHistoryRelation:
 
         return FAMILY_HISTORY_RELATION_TYPE
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-compatible relation mapping."""
 
+        replace(self)
         return {
             "relative": self.relative.to_dict(),
             "condition": self.condition.to_dict(),
@@ -185,6 +235,7 @@ class _RelativeCandidate:
     explicit: bool = False
 
 
+@_safe_boundary
 def extract_family_history_relations(
     text: str,
     spans: Iterable[EntitySpan | SpanReference | Mapping[str, Any] | Any],
@@ -199,6 +250,10 @@ def extract_family_history_relations(
     current OM-112 ``family`` value and its non-patient ``other`` value are
     accepted when a family surface cue supplies the relative endpoint; absent
     metadata, the surface cue is sufficient for graceful degradation.
+    Conflicting patient context suppresses a relation; unknown or conflicting
+    certainty is retained as uncertain. Inputs are limited to 1 MiB of text,
+    4096 spans or sections and 128 context nodes per span. Invalid input raises
+    a fixed error without retaining source-bearing exception details.
 
     Args:
         text: Source clinical text indexed by every supplied span.
@@ -214,7 +269,7 @@ def extract_family_history_relations(
         assistive and is never added to the patient's own problem list.
     """
 
-    if not isinstance(text, str):
+    if not isinstance(text, str) or len(text) > _MAX_TEXT_LENGTH:
         raise TypeError("text must be a string")
 
     section_items = _coerce_sections(text, sections)
@@ -289,11 +344,10 @@ def _coerce_spans(
         data = _span_mapping(item)
         if data is None:
             continue
-        try:
-            start = int(data.get("start", data.get("start_char", -1)))
-            end = int(data.get("end", data.get("end_char", -1)))
-        except (TypeError, ValueError):
-            continue
+        start = _integer_field(data, "start", "start_char")
+        end = _integer_field(data, "end", "end_char")
+        if start is None or end is None:
+            raise ValueError("span requires integer offsets")
         if start < 0 or end <= start or end > len(text):
             continue
 
@@ -320,10 +374,28 @@ def _coerce_spans(
         )
         key = (start, end, normalize_label(label))
         previous = normalized.get(key)
-        if previous is None or _context_richness(input_span) > _context_richness(
-            previous
-        ):
+        if previous is None:
             normalized[key] = input_span
+        else:
+            experiencers = {
+                previous.explicit_experiencer,
+                input_span.explicit_experiencer,
+            } - {None}
+            if PATIENT_EXPERIENCER in experiencers:
+                experiencer = PATIENT_EXPERIENCER
+            elif experiencers <= {FAMILY_EXPERIENCER, OTHER_EXPERIENCER}:
+                experiencer = FAMILY_EXPERIENCER if experiencers else None
+            else:
+                experiencer = "unknown"
+            certainty = _merge_certainties(
+                (previous.explicit_certainty, input_span.explicit_certainty)
+            )
+            if previous.section != input_span.section:
+                raise ValueError("conflicting section context")
+            chosen = min((previous, input_span), key=lambda item: item.reference.score)
+            normalized[key] = replace(
+                chosen, explicit_experiencer=experiencer, explicit_certainty=certainty
+            )
 
     return tuple(
         sorted(
@@ -343,7 +415,7 @@ def _iter_items(value: Any) -> tuple[Any, ...]:
     if isinstance(value, (str, bytes, Mapping)) or _looks_like_span(value):
         return (value,)
     try:
-        return tuple(value)
+        return _bounded_items(value)
     except TypeError:
         return (value,)
 
@@ -423,6 +495,8 @@ def _context_containers(data: Mapping[str, Any]) -> tuple[Any, ...]:
     containers: list[Any] = [data]
     index = 0
     while index < len(containers):
+        if len(containers) > _MAX_CONTEXT_NODES:
+            raise ValueError("context limit exceeded")
         container = containers[index]
         index += 1
         for key in (
@@ -450,44 +524,68 @@ def _context_value(data: Mapping[str, Any], *keys: str) -> Any:
 
 
 def _context_experiencer(data: Mapping[str, Any]) -> str | None:
-    raw = _context_value(data, "experiencer")
-    if raw is None:
-        return None
-    nested = _field(raw, "experiencer")
-    if nested is not None and nested is not raw:
-        raw = nested
-    compact = _compact(str(raw))
-    if compact in {"patient", "self", "subject", "currentpatient", "pt"}:
+    values = []
+    for container in _context_containers(data):
+        raw = _field(container, "experiencer")
+        if raw is None:
+            continue
+        nested = _field(raw, "experiencer")
+        raw = nested if nested is not None and nested is not raw else raw
+        compact = _compact(str(raw))
+        if compact in {"patient", "self", "subject", "currentpatient", "pt"}:
+            values.append(PATIENT_EXPERIENCER)
+        elif compact in {
+            "family",
+            "familymember",
+            "familyhistory",
+            "familial",
+            "relative",
+            "mother",
+            "father",
+            "sibling",
+            "grandparent",
+        }:
+            values.append(FAMILY_EXPERIENCER)
+        elif compact in {"other", "nonpatient"}:
+            values.append(OTHER_EXPERIENCER)
+        else:
+            values.append("unknown")
+    if PATIENT_EXPERIENCER in values:
         return PATIENT_EXPERIENCER
-    if compact in {
-        "family",
-        "familymember",
-        "familyhistory",
-        "familial",
-        "relative",
-        "mother",
-        "father",
-        "sibling",
-        "grandparent",
-    }:
-        return FAMILY_EXPERIENCER
-    if compact in {"other", "nonpatient"}:
-        return OTHER_EXPERIENCER
-    return compact or None
+    if "unknown" in values:
+        return "unknown"
+    return (
+        FAMILY_EXPERIENCER
+        if FAMILY_EXPERIENCER in values
+        else (OTHER_EXPERIENCER if values else None)
+    )
+
+
+def _merge_certainties(values):
+    supplied = [value for value in values if value is not None]
+    return (
+        (UNCERTAIN if any(value != CERTAIN for value in supplied) else CERTAIN)
+        if supplied
+        else None
+    )
 
 
 def _context_certainty(data: Mapping[str, Any]) -> str | None:
-    raw = _context_value(data, "certainty", "uncertainty")
-    if raw is None:
-        return None
-    if isinstance(raw, bool):
-        return UNCERTAIN if raw else CERTAIN
-    compact = _compact(str(raw))
-    if compact in {"uncertain", "uncertainty", "possible", "probable", "hedged"}:
-        return UNCERTAIN
-    if compact in {"certain", "confirmed", "affirmed"}:
-        return CERTAIN
-    return None
+    values = []
+    for container in _context_containers(data):
+        for key in ("certainty", "uncertainty"):
+            raw = _field(container, key)
+            if raw is None:
+                continue
+            if isinstance(raw, bool):
+                values.append(UNCERTAIN if raw else CERTAIN)
+            else:
+                values.append(
+                    CERTAIN
+                    if _compact(str(raw)) in {"certain", "confirmed", "affirmed"}
+                    else UNCERTAIN
+                )
+    return _merge_certainties(values)
 
 
 def _context_richness(item: _InputSpan) -> int:
@@ -516,13 +614,13 @@ def _coerce_sections(
     sections: Iterable[Mapping[str, Any]] | Mapping[str, Any] | str | None,
 ) -> tuple[_Section, ...]:
     if sections is None:
-        raw_sections: tuple[Any, ...] = tuple(detect_sections(text))
+        raw_sections: tuple[Any, ...] = _bounded_items(detect_sections(text))
     elif isinstance(sections, str):
         return (_Section(0, len(text), _canonical_section(sections)),)
     elif isinstance(sections, Mapping):
         raw_sections = (sections,)
     else:
-        raw_sections = tuple(sections)
+        raw_sections = _bounded_items(sections)
 
     result: list[_Section] = []
     for item in raw_sections:
@@ -552,12 +650,13 @@ def _coerce_sections(
 
 def _integer_field(value: Any, *names: str) -> int | None:
     raw = _field(value, *names)
-    if isinstance(raw, bool):
-        return None
-    try:
-        return int(raw) if raw is not None else None
-    except (TypeError, ValueError):
-        return None
+    if raw is not None and type(raw) is not int:
+        raise ValueError("offset requires integer")
+    if isinstance(value, Mapping):
+        aliases = [value[name] for name in names if value.get(name) is not None]
+        if any(type(item) is not int or item != raw for item in aliases):
+            raise ValueError("conflicting offsets")
+    return raw
 
 
 def _canonical_section(value: Any) -> str | None:
@@ -664,6 +763,8 @@ def _candidate_is_in_scope(
     if _token_distance(condition.reference, relative, text) > _MAX_TOKEN_DISTANCE:
         return False
     between = _text_between(condition.reference, relative, text)
+    if _PATIENT_RE.search(between):
+        return False
     if _CLAUSE_BOUNDARY_RE.search(
         between
     ) is not None and not _is_family_header_candidate(
@@ -757,9 +858,9 @@ def _candidate_sort_key(
 ) -> tuple[int, int, int, int, int]:
     relative = candidate.reference
     return (
+        0 if relative.end <= condition.reference.start else 1,
         _character_distance(condition.reference, relative),
         _token_distance(condition.reference, relative, text),
-        0 if relative.end <= condition.reference.start else 1,
         relative.start,
         relative.end,
     )
