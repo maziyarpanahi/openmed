@@ -253,7 +253,12 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
+    - clinical/summary-output-normalization.md
     - clinical/evidence-tables.md
+    - clinical/summary-section-planning.md
+    - clinical/summary-template-profiles.md
+    - clinical/summary-length-budgets.md
+    - clinical/summary-empty-evidence.md
     - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
