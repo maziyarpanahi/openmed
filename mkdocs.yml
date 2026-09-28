@@ -115,6 +115,7 @@ nav:
       - Clinical SLM Artifact Manifest: models/clinical-slm-manifest.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
       - Clinical SLM Capability Probes: models/clinical-slm-capabilities.md
+      - Clinical SLM Memory Preflight: models/clinical-slm-memory-preflight.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
