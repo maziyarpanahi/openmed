@@ -211,7 +211,7 @@ deidentify(
 
 ### Locale resolution
 
-`lang` (an ISO 639-1 code OpenMed uses everywhere) maps to a Faker
+`lang` (an ISO 640-1 code OpenMed uses everywhere) maps to a Faker
 locale via `LANG_TO_LOCALE`:
 
 | OpenMed `lang` | Faker locale | Notes                                                    |
@@ -455,19 +455,20 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **39 supported PII language codes**:
+as its source of truth and supports **40 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
-`it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
-The optional Indic NER adapter adds one user-configured route (`pa`) and can also serve Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia,
-Tamil, and Telugu. It loads only an explicit path or repository from
+The optional Indic NER adapter adds the user-configured Punjabi route (`pa`)
+and can also serve Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam,
+Marathi, Odia, Tamil, and Telugu. It loads only an explicit path or repository from
 `OPENMED_INDIC_NER_MODEL` and has no bundled default checkpoint. See the
 [Indic NER checkpoint compatibility matrix](indic-ner-checkpoints.md) for
 supported label maps, offset contracts, and opt-in real-checkpoint tests.
 Additional validator-backed national-ID providers cover ID-only locales such as
-Polish, Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
+Latvian, Slovak, Malay, Filipino, Finnish, and Urdu without adding
 default PII models for those language codes. Urdu's conceptual `ur_PK` locale
 uses Faker's installed `en_PK` backend for general surrogate data while CNIC
 generation remains provider-backed and format-valid.
