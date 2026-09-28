@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 83264441,
-    "maximum_unique_payload_bytes": 82926862,
+    "maximum_total_bytes": 83485893,
+    "maximum_unique_payload_bytes": 83148314,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4252334
+    "json": 4256058
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4252334
+    "docs/search/search_index.json": 4256058
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed event contradiction guide build measures 83370407 total bytes, 83032828 unique bytes, and 4250266 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed temporal normalizer guide build measures 83148955 total bytes, 82811376 unique bytes, and 4246542 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed assurance guide build measures 82933941 total bytes, 82596362 unique bytes, and 4242757 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The repaired uncertainty guide on master e05eadb5c stages 81307371 total bytes and 80969792 unique bytes. Aggregate ceilings retain the existing 115486-byte allowance; search measures 4214744 bytes within its unchanged ceiling. Route and other limits are unchanged.",
