@@ -18,7 +18,11 @@ import json
 from pathlib import Path
 
 from openmed.core.decoding.spans import is_grapheme_boundary
-from openmed.core.language_pack_catalog import SCRIPT_LANGUAGE_HINTS
+from openmed.core.language_pack import LanguagePack
+from openmed.core.language_pack_catalog import (
+    LANGUAGE_PACK_ADAPTERS,
+    SCRIPT_LANGUAGE_HINTS,
+)
 from openmed.core.language_router import LanguageRouter
 from openmed.core.script_detect import (
     candidate_languages_for_script,
@@ -135,7 +139,7 @@ def test_each_run_resolves_to_the_expected_language_path():
             }
 
 
-def test_urdu_run_resolves_to_ur_not_ar():
+def test_urdu_run_ranks_ur_before_ar():
     fixture = _load_fixture()
     text = fixture["text"]
     urdu_run = next(run for run in fixture["runs"] if run["language"] == "ur")
@@ -168,3 +172,30 @@ def test_existing_hindi_telugu_and_latin_routing_is_unchanged():
     ):
         assert detect_script(text) == script
         assert candidate_languages_for_text(text)[0] == language
+
+
+def test_all_runs_select_their_language_with_explicit_local_packs():
+    """Pack selection is stronger than candidate ranking; no model is downloaded."""
+    fixture = _load_fixture()
+    packs = tuple(LANGUAGE_PACK_ADAPTERS.registry.iter_packs())
+    codes = {pack.code for pack in packs}
+    supplied = tuple(
+        LanguagePack(
+            code=run["language"],
+            scripts=(run["script"],),
+            default_model="user-supplied",
+            segmenter_id="unicode-sentence",
+            recognizers=("builtin-patterns", "model"),
+            surrogate_locale="en_US",
+        )
+        for run in fixture["runs"]
+        if run["language"] not in codes
+    )
+    router = LanguageRouter(packs=(*packs, *supplied), use_optional_lid=False)
+    decisions = router.route_runs(fixture["text"])
+    assert len(decisions) == len(fixture["runs"])
+    for decision, expected in zip(decisions, fixture["runs"]):
+        assert (decision.start, decision.end) == (expected["start"], expected["end"])
+        assert decision.language == expected["language"]
+    assert decisions[-1].language == "ur"
+    assert decisions[-1].source == "stdlib:urdu-cues"
