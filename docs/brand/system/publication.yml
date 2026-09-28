@@ -187,7 +187,11 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - models/clinical-slm-manifest.md
     - models/bootstrap-diagnostics.md
+    - models/clinical-slm-capabilities.md
+    - models/clinical-slm-memory-preflight.md
+    - models/clinical-slm-template-digests.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
     - models/journey-specialist-pack.md
