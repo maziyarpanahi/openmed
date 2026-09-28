@@ -67,7 +67,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
         queue.async {
             do {
                 let runtime = try self.requireRuntime()
-                let bridgeOptions = BridgeOptions(options)
+                let bridgeOptions = try BridgeOptions(options)
                 let entities = try runtime.analyzeText(
                     text,
                     confidenceThreshold: bridgeOptions.confidenceThreshold
@@ -97,7 +97,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
         queue.async {
             do {
                 let runtime = try self.requireRuntime()
-                let bridgeOptions = BridgeOptions(options)
+                let bridgeOptions = try BridgeOptions(options)
                 let entities = try runtime.extractPII(
                     text,
                     confidenceThreshold: bridgeOptions.confidenceThreshold,
@@ -128,7 +128,7 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
         queue.async {
             do {
                 let runtime = try self.requireRuntime()
-                let bridgeOptions = BridgeOptions(options)
+                let bridgeOptions = try BridgeOptions(options)
                 let result = try runtime.deidentify(
                     text,
                     policy: bridgeOptions.policy,
@@ -267,11 +267,10 @@ final class OpenMedKitRN: NSObject, RCTBridgeModule {
         return String(text[lowerBound..<upperBound])
     }
 
-    private static func hmacTextHash(_ surface: String, secret: String) -> String {
-        let key = SymmetricKey(data: Data(secret.utf8))
+    private static func hmacTextHash(_ surface: String, secret: SymmetricKey) -> String {
         let signature = HMAC<SHA256>.authenticationCode(
             for: Data(surface.utf8),
-            using: key
+            using: secret
         )
         return "hmac-sha256:" + signature.map { String(format: "%02x", $0) }.joined()
     }
@@ -342,18 +341,25 @@ private struct BridgeOptions {
     let confidenceThreshold: Float
     let useSmartMerging: Bool
     let docID: String
-    let hashSecret: String
+    let hashSecret: SymmetricKey
     let detector: String?
     let metadata: [String: Any]
     let policy: String
 
-    init(_ options: NSDictionary?) {
+    init(_ options: NSDictionary?) throws {
         self.confidenceThreshold = options?["confidenceThreshold"] as? Float
             ?? (options?["confidenceThreshold"] as? NSNumber)?.floatValue
             ?? 0.5
         self.useSmartMerging = options?["useSmartMerging"] as? Bool ?? true
         self.docID = options?["docId"] as? String ?? "document"
-        self.hashSecret = options?["hashSecret"] as? String ?? "openmedkit-react-native"
+        if let secret = options?["hashSecret"] as? String {
+            guard !secret.isEmpty else {
+                throw BridgeError.emptyHashSecret
+            }
+            self.hashSecret = SymmetricKey(data: Data(secret.utf8))
+        } else {
+            self.hashSecret = SymmetricKey(size: .bits256)
+        }
         self.detector = options?["detector"] as? String
         self.metadata = options?["metadata"] as? [String: Any] ?? [:]
         self.policy = options?["policy"] as? String ?? Policy.defaultName
@@ -361,12 +367,15 @@ private struct BridgeOptions {
 }
 
 private enum BridgeError: LocalizedError {
+    case emptyHashSecret
     case missingOption(String)
     case unsupportedBackend(String)
     case modelNotLoaded
 
     var errorDescription: String? {
         switch self {
+        case .emptyHashSecret:
+            return "hashSecret must not be empty"
         case .missingOption(let key):
             return "missing required OpenMedKit bridge option: \(key)"
         case .unsupportedBackend(let backend):

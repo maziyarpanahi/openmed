@@ -1031,6 +1031,13 @@ def _validate_fonts_and_consumers(errors: list[str]) -> None:
 
 
 def _validate_claims(errors: list[str]) -> None:
+    sys.path.insert(0, str(REPO_ROOT))
+    from openmed.core.language_pack_catalog import (  # noqa: PLC0415
+        DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
+        DEFAULT_PII_MODELS,
+        USER_SUPPLIED_MODEL_LANGUAGES,
+    )
+
     registry = _load_json("docs/brand/system/claims.yml")
     if registry["schema_version"] != 2:
         errors.append("claims registry must use schema version 2")
@@ -1058,13 +1065,15 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.3.0",
+        "package_version": "2.5.0",
         "repository_model_snapshot": 2266,
         "hugging_face_openmed_owned_snapshot": 2266,
-        "supported_pii_languages": 36,
-        "model_backed_pii_languages": 33,
-        "placeholder_pii_languages": ["fa", "ru", "ta"],
-        "user_supplied_model_languages": ["gu", "kn", "ml", "ne", "pa", "ur"],
+        "supported_pii_languages": len(DEFAULT_PII_MODELS),
+        "model_backed_pii_languages": len(
+            set(DEFAULT_PII_MODELS) - DEFAULT_MODEL_PLACEHOLDER_LANGUAGES
+        ),
+        "placeholder_pii_languages": sorted(DEFAULT_MODEL_PLACEHOLDER_LANGUAGES),
+        "user_supplied_model_languages": sorted(USER_SUPPLIED_MODEL_LANGUAGES),
         "pii_family_manifest_entries": 1018,
         "mlx_manifest_entries": 661,
         "pii_entity_types": 50,

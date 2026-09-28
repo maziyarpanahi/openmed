@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -36,6 +37,9 @@ def create_pulsar_clients(
 
     ``pulsar`` is imported only inside this helper so importing
     ``openmed`` or ``openmed.processing`` does not require a Pulsar client.
+    Failed setup closes the newly created client on a best-effort basis, while
+    preserving the setup error. On success the caller owns ``pair.client`` and
+    must close it after use.
     """
 
     _validate_non_empty(service_url, "service_url")
@@ -50,21 +54,26 @@ def create_pulsar_clients(
         ) from exc
 
     client = pulsar.Client(service_url, **dict(client_config or {}))
-    consumer = client.subscribe(
-        in_topic,
-        subscription_name,
-        **dict(consumer_config or {}),
-    )
-    return PulsarClientPair(
-        consumer=_PulsarJsonConsumer(
-            consumer,
-            timeout_error=getattr(pulsar, "Timeout", TimeoutError),
-        ),
-        producer=_PulsarJsonProducer(
-            client, producer_config=dict(producer_config or {})
-        ),
-        client=client,
-    )
+    try:
+        consumer = client.subscribe(
+            in_topic,
+            subscription_name,
+            **dict(consumer_config or {}),
+        )
+        return PulsarClientPair(
+            consumer=_PulsarJsonConsumer(
+                consumer,
+                timeout_error=getattr(pulsar, "Timeout", TimeoutError),
+            ),
+            producer=_PulsarJsonProducer(
+                client, producer_config=dict(producer_config or {})
+            ),
+            client=client,
+        )
+    except BaseException:
+        with suppress(Exception):
+            client.close()
+        raise
 
 
 class _PulsarJsonConsumer:

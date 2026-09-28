@@ -17,7 +17,14 @@ def _load_compose() -> dict:
 
 def _service(compose: dict) -> dict:
     services = compose["services"]
-    assert set(services) == {"openmed"}
+    assert set(services) == {
+        "postgres",
+        "journey-migrate",
+        "journey-worker",
+        "openmed",
+        "journey-golden",
+        "mcp",
+    }
     service = services["openmed"]
     assert isinstance(service, dict)
     return service
@@ -33,6 +40,26 @@ def test_bundle_builds_the_hardened_service_image() -> None:
         "dockerfile": "deploy/docker/Dockerfile.distroless",
     }
     assert service["user"] == "65532:65532"
+
+
+def test_bundle_orders_migrations_worker_api_and_golden_journey() -> None:
+    compose = _load_compose()
+    services = compose["services"]
+
+    assert services["journey-migrate"]["depends_on"]["postgres"]["condition"] == (
+        "service_healthy"
+    )
+    assert (
+        services["journey-worker"]["depends_on"]["journey-migrate"]["condition"]
+        == "service_completed_successfully"
+    )
+    assert services["openmed"]["depends_on"] == {
+        "journey-migrate": {"condition": "service_completed_successfully"},
+        "journey-worker": {"condition": "service_healthy"},
+    }
+    assert services["journey-golden"]["profiles"] == ["smoke"]
+    assert services["mcp"]["profiles"] == ["mcp"]
+    assert services["journey-golden"]["command"] == ["golden"]
 
 
 def test_bundle_is_local_only_and_keeps_model_inputs_read_only() -> None:
@@ -60,6 +87,10 @@ def test_bundle_is_local_only_and_keeps_model_inputs_read_only() -> None:
     assert compose["volumes"]["openmed-models"]["name"] == (
         "${OPENMED_MODEL_VOLUME_NAME:-openmed-models}"
     )
+    assert compose["volumes"]["openmed-postgres"]["name"] == (
+        "${OPENMED_POSTGRES_VOLUME_NAME:-openmed-postgres}"
+    )
+    assert "openmed-cache:/cache" in compose["services"]["journey-worker"]["volumes"]
 
 
 def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() -> None:
@@ -81,7 +112,7 @@ def test_bundle_disables_optional_egress_and_uses_hardened_runtime_defaults() ->
     assert service["security_opt"] == ["no-new-privileges:true"]
     assert "/tmp:rw,noexec,nosuid,nodev,size=128m" in service["tmpfs"]
     assert service["pids_limit"] == 512
-    assert service["stop_grace_period"] == "30s"
+    assert service["stop_grace_period"] == "45s"
     assert service["logging"] == {
         "driver": "local",
         "options": {"max-size": "10m", "max-file": "3"},
@@ -98,11 +129,12 @@ def test_bundle_healthcheck_probes_readiness_with_bounded_timeout() -> None:
     healthcheck = _service(_load_compose())["healthcheck"]
     command = " ".join(healthcheck["test"])
 
-    assert "/readyz" in command
-    assert "timeout=3" in command
+    assert "openmed.deploy.journey" in command
+    assert "--worker-url" in command
+    assert "--model-url" in command
     assert healthcheck["interval"] == "30s"
-    assert healthcheck["timeout"] == "5s"
-    assert healthcheck["start_period"] == "30s"
+    assert healthcheck["timeout"] == "10s"
+    assert healthcheck["start_period"] == "45s"
     assert healthcheck["retries"] == 3
 
 
@@ -125,5 +157,10 @@ def test_bundle_docs_cover_offline_startup_permissions_and_integrations() -> Non
         "egress-capable network",
         "three 10 MiB files",
         "synthetic",
+        "OPENMED_POSTGRES_PASSWORD",
+        "journey-golden",
+        "backup",
+        "restore",
+        "secret rotation",
     ):
         assert required_text in docs

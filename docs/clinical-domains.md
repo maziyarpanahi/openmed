@@ -170,6 +170,22 @@
 | Tissue | TISSUE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 | PathologicalFormation | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
+## Oncology Staging
+
+**Alignment:** TNM and tumor-descriptor labels capture descriptors explicitly written in an oncology note for descriptive extraction and human review only. OpenMed does not compute a stage group, apply AJCC/UICC staging rules, infer prognosis, recommend treatment, or make a medical decision, and does not bundle staging manuals or proprietary tables.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| TumorCategory | TNM_T | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| NodeCategory | TNM_N | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| MetastasisCategory | TNM_M | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| StageGroup | STAGE_GROUP | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorGrade | TUMOR_GRADE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| TumorSize | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+| ReceptorStatus | RECEPTOR_STATUS | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| ResponseAssessment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/oncology_staging.jsonl |
+| PrimarySite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/oncology_staging.jsonl |
+
 ## Anatomy
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -225,6 +241,21 @@
 | Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
 | Pathology | PATHOLOGY | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 
+## Pathology Histology
+
+**Alignment:** The display labels describe pathology-report content for offline extraction and human review only. They do not grade or stage a tumor, apply diagnostic rules, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| SpecimenType | SPECIMEN_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| GrossDescription | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicFinding | HISTOLOGIC_FINDING | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| HistologicGrade | HISTOLOGIC_GRADE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MarginStatus | MARGIN_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| ImmunohistochemistryStain | IHC_STAIN | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| MitoticCount | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+| TissueSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/pathology_histology.jsonl |
+
 ## Hematology
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
@@ -232,6 +263,17 @@
 | Cancer | CANCER | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | Disease | DISEASE | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED, HPO | Not shipped |
 | CellLine | CELL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Lab
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| LabTest | LAB_TEST | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| LabValue | LAB_VALUE | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Unit | UNIT | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| ReferenceRange | REFERENCE_RANGE | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| AbnormalFlag | ABNORMAL_FLAG | CLINICAL_CONCEPT | medium | LOINC, SNOMED | Not shipped |
+| Specimen | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 
 ## Cardiology
 
@@ -251,7 +293,7 @@
 | Microorganism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
 | Antibiotic | ANTIBIOTIC | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
 | Susceptibility | SUSCEPTIBILITY | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
-| SpecimenSource | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| SpecimenSource | SPECIMEN | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 | CultureResult | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
 ## Dermatology
@@ -262,6 +304,20 @@
 | Morphology | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Distribution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Anatomy | ANATOMY | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Wound Assessment
+
+**Alignment:** This map is intentionally distinct from the dermatology lesion map: it captures wound-care descriptors as written for nursing and surgical review. It does not infer wound staging, predict healing, recommend treatment, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| WoundType | WOUND_TYPE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundLocation | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundStage | WOUND_STAGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| WoundDimension | MEASUREMENT | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| ExudateDescriptor | EXUDATE_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/wound_assessment.jsonl |
+| TissueType | TISSUE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
+| DressingType | DRESSING_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/wound_assessment.jsonl |
 
 ## Ophthalmology
 
@@ -421,6 +477,89 @@
 | CareIntervention | CARE_INTERVENTION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
 | PainScore | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nursing_observation.jsonl |
 | SkinAssessment | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nursing_observation.jsonl |
+
+## Medical Device
+
+**Alignment:** The display labels are descriptive extraction metadata for a planned FHIR Device projection: DeviceType, DeviceIdentifier, Manufacturer, ModelNumber, ImplantSite, and DeviceStatus describe device mentions without UDI lookup or decoding or contacting GUDID or any other network service. DeviceIdentifier remains a HIPAA device identifier and requires human review; this catalog is not clinical guidance and does not make device, treatment, or safety decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| DeviceType | DEVICE_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceIdentifier | DEVICE_IDENTIFIER | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/medical_device.jsonl |
+| Manufacturer | ORGANIZATION | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/medical_device.jsonl |
+| ModelNumber | DEVICE_MODEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| ImplantSite | IMPLANT_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/medical_device.jsonl |
+| DeviceStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/medical_device.jsonl |
+
+## Functional Status
+
+**Alignment:** This map captures documented activities of daily living, assistance, mobility, assistive-device mentions, functional-scale references, and cognitive status for offline extraction review. It does not score Barthel or Katz scales, infer care needs, recommend a disposition, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| ADLActivity | ADL_ACTIVITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistanceLevel | ASSISTANCE_LEVEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| MobilityAbility | MOBILITY_ABILITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| AssistiveDevice | DEVICE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/functional_status.jsonl |
+| FunctionalScale | FUNCTIONAL_SCALE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+| CognitiveStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/functional_status.jsonl |
+
+## Obstetrics Gynecology
+
+**Alignment:** The display labels cover pregnancy and reproductive-health concepts for structured extraction only. This metadata does not compute gestational age, score risk, infer diagnosis, recommend care, or bundle restricted terminology; human review remains required.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GravidityParity | GRAVIDITY_PARITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GestationalAge | GESTATIONAL_AGE | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| FetalFinding | FETAL_FINDING | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| MenstrualHistory | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| ObstetricEvent | OBSTETRIC_EVENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| GynecologicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+| DeliveryMode | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/obstetrics_gynecology.jsonl |
+
+## Substance Use History
+
+**Alignment:** This map captures explicit substance, use-status, quantity, frequency, duration, quit-date, and pack-year spans for offline extraction and human review. It is complementary to, not a replacement for, the existing SDOH determinant extractor and does not classify risk, compute pack-years, recommend care, or make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Substance | SUBSTANCE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseStatus | USE_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseQuantity | USE_QUANTITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseFrequency | FREQUENCY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| UseDuration | DURATION | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+| QuitDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/substance_use_history.jsonl |
+| PackYears | PACK_YEARS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/substance_use_history.jsonl |
+
+## Immunology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Allergen | ALLERGEN | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
+| AllergicReaction | FINDING | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Immunization | IMMUNIZATION | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Antibody | PROTEIN | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Mental Health
+
+**Alignment:** Substance-use and SDOH (social-determinants-of-health) entities are out of scope for this domain and remain owned by OM-056. Mental-health spans are high-sensitivity content for redaction review; this catalog is extraction metadata only and does not make clinical decisions.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| PsychiatricSymptom | PSYCH_SYMPTOM | CLINICAL_CONCEPT | high | SNOMED, HPO | Not shipped |
+| Diagnosis | PROBLEM | CLINICAL_CONCEPT | medium | ICD-10-CM, SNOMED, HPO | Not shipped |
+| Medication | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, CN-DRUG, SNOMED | Not shipped |
+| Therapy | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Dentistry
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Tooth | TOOTH | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| DentalCondition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, ICD-10-CN, SNOMED | Not shipped |
+| DentalProcedure | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Restoration | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
 ## Offline Coverage Evaluation
 

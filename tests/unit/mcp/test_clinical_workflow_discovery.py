@@ -74,7 +74,7 @@ def test_clinical_workflow_is_discoverable_without_hardcoded_tool_schemas() -> N
         item for item in registry["workflows"] if item["name"] == CLINICAL_WORKFLOW_NAME
     )
 
-    assert registry["schema_version"] == "1.1.0"
+    assert registry["schema_version"] == "1.2.0"
     assert workflow["prompt_name"] == CLINICAL_WORKFLOW_SPEC.prompt_name
     assert workflow["resource_uri"] == CLINICAL_WORKFLOW_SPEC.resource_uri
     assert workflow["fixture_uri"] == CLINICAL_WORKFLOW_SPEC.fixture_uri
@@ -262,6 +262,8 @@ def test_golden_note_pipeline_matches_chained_handlers_without_egress_or_phi(
         composed = mcp_server.openmed_clinical_pipeline(
             stages=list(CLINICAL_STAGE_ORDER),
             text=deidentified_text,
+            # Reuse one detection's private hashes when comparing downstream stages.
+            spans=early["artifacts"]["detect"]["spans"],
             options={
                 "detect": {"doc_id": "synthetic-agent-run-1251"},
                 "ground": {

@@ -25,8 +25,8 @@ def test_image_signing_workflow_signs_and_verifies_digest():
     assert "workflows:\n      - Container Multi-Arch" in content
     assert "id-token: write" in content
     assert "packages: write" in content
-    assert "sigstore/cosign-installer@v4.1.2" in content
-    assert "anchore/sbom-action/download-syft@v0.24.0" in content
+    assert "sigstore/cosign-installer@" in content
+    assert "anchore/sbom-action/download-syft@" in content
     assert "docker buildx imagetools inspect" in content
     assert 'cosign sign --yes "$IMAGE_DIGEST_REF"' in content
     assert 'cosign verify "$IMAGE_DIGEST_REF"' in content
