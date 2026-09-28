@@ -68,6 +68,7 @@ _INDIA_LOCALES = frozenset(
         "ml_IN",
         "mr_IN",
         "or_IN",
+        "pa_IN",
         "ta_IN",
         "ur_IN",
     }
@@ -714,6 +715,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "bn_BD",
         "hi_IN",
         "ml_IN",
+        "pa_IN",
         "mr_IN",
         "ur_IN",
         "en_IN",
@@ -802,6 +804,7 @@ _LOCALE_ID_METHODS = {
     "en_IN": "aadhaar",
     "gu_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "pa_IN": "aadhaar",
     "kn_IN": "aadhaar",
     "ml_IN": "aadhaar",
     "mr_IN": "aadhaar",

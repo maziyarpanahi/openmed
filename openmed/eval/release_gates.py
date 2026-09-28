@@ -116,11 +116,13 @@ G10_UNGROUNDED_FACT_CEILING = 0.0
 DEFAULT_CROSS_DOCUMENT_LINKAGE_CEILING = 0.0
 PER_LANGUAGE_RESIDUAL_LEAKAGE_CEILINGS: Mapping[str, float] = {
     "as": 0.0,
+    "bn": 0.0,
     "gu": 0.0,
     "kn": 0.0,
     "ml": 0.0,
     "mr": 0.0,
     "or": 0.0,
+    "pa": 0.0,
     "pl": 0.0,
     "ta": 0.0,
     "ur": 0.0,
