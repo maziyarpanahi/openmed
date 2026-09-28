@@ -18,7 +18,10 @@ import hashlib
 import json
 import random
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import wraps
+from itertools import islice
+from math import isfinite
 from types import MappingProxyType
 from typing import Any
 
@@ -102,8 +105,36 @@ _SAFE_METADATA_KEYS = frozenset(
 )
 
 
+def _fixture_boundary(function):
+    @wraps(function)
+    def guarded(*args, **kwargs):
+        failed = None
+        message = "invalid synthetic fixture structure or limits"
+        try:
+            return function(*args, **kwargs)
+        except Exception as exc:
+            failed = TypeError if isinstance(exc, TypeError) else ValueError
+            allowed = {
+                "profiles must not contain duplicates",
+                "unknown clinical fixture profile; expected one of: "
+                + ", ".join(available_profiles()),
+            }
+            if type(exc) in (TypeError, ValueError) and str(exc) in allowed:
+                message = str(exc)
+        raise failed(message)
+
+    return guarded
+
+
+def _bounded(values):
+    result = tuple(islice(iter(values), 4097))
+    if len(result) > 4096:
+        raise ValueError("fixture collection exceeds limit")
+    return result
+
+
 def _non_empty(value: object, field_name: str) -> str:
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value.strip() or len(value) > 4096:
         raise ValueError(f"{field_name} must be a non-empty string")
     return value.strip()
 
@@ -111,6 +142,8 @@ def _non_empty(value: object, field_name: str) -> str:
 def _seed_value(seed: object) -> int:
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise TypeError("seed must be an integer")
+    if abs(seed) > 2**63 - 1:
+        raise ValueError("seed exceeds signed 64-bit range")
     return seed
 
 
@@ -147,6 +180,7 @@ class CodedValue:
     code: str
     display: str
 
+    @_fixture_boundary
     def __post_init__(self) -> None:
         object.__setattr__(self, "system", _non_empty(self.system, "code system"))
         object.__setattr__(self, "code", _non_empty(self.code, "code"))
@@ -156,6 +190,7 @@ class CodedValue:
         return f"CodedValue(system={self.system!r}, code={self.code!r})"
 
     @classmethod
+    @_fixture_boundary
     def from_mapping(cls, data: Mapping[str, Any]) -> "CodedValue":
         """Build a code from a JSON-ready mapping."""
 
@@ -167,12 +202,13 @@ class CodedValue:
             display=str(data.get("display") or ""),
         )
 
-    def to_dict(self) -> dict[str, str]:
+    @_fixture_boundary
+    def to_dict(self, *, include_display: bool = True) -> dict[str, str]:
         """Return the code without any source-document text."""
 
         return {
             "code": self.code,
-            "display": self.display,
+            **({"display": self.display} if include_display else {}),
             "system": self.system,
         }
 
@@ -185,6 +221,7 @@ class ClinicalSection:
     start: int
     end: int
 
+    @_fixture_boundary
     def __post_init__(self) -> None:
         object.__setattr__(self, "name", _non_empty(self.name, "section name"))
         if isinstance(self.start, bool) or isinstance(self.end, bool):
@@ -206,6 +243,7 @@ class ClinicalSection:
         return self.end - self.start
 
     @classmethod
+    @_fixture_boundary
     def from_mapping(cls, data: Mapping[str, Any]) -> "ClinicalSection":
         """Build a section from a JSON-ready mapping."""
 
@@ -213,10 +251,11 @@ class ClinicalSection:
             raise TypeError("clinical sections must be mappings")
         return cls(
             name=str(data.get("name") or data.get("label") or ""),
-            start=int(data.get("start", 0)),
-            end=int(data.get("end", 0)),
+            start=data.get("start"),
+            end=data.get("end"),
         )
 
+    @_fixture_boundary
     def to_dict(self) -> dict[str, int | str]:
         """Return section identity and offsets only."""
 
@@ -244,6 +283,7 @@ class GoldSpan:
     code: CodedValue | None = None
     text: str = ""
 
+    @_fixture_boundary
     def __post_init__(self) -> None:
         for value, field_name in (
             (self.span_id, "span id"),
@@ -294,6 +334,7 @@ class GoldSpan:
         return self.assertion == "absent"
 
     @classmethod
+    @_fixture_boundary
     def from_mapping(
         cls,
         data: Mapping[str, Any],
@@ -304,10 +345,10 @@ class GoldSpan:
 
         if not isinstance(data, Mapping):
             raise TypeError("gold spans must be mappings")
-        start = int(data.get("start", 0))
-        end = int(data.get("end", start))
+        start = data.get("start")
+        end = data.get("end")
         raw_text = data.get("text")
-        text = str(raw_text) if raw_text is not None else source_text[start:end]
+        text = raw_text if raw_text is not None else source_text[start:end]
         raw_code = data.get("code")
         code = (
             CodedValue.from_mapping(raw_code) if isinstance(raw_code, Mapping) else None
@@ -326,6 +367,7 @@ class GoldSpan:
             text=text,
         )
 
+    @_fixture_boundary
     def to_dict(self, *, include_text: bool = False) -> dict[str, Any]:
         """Return a raw-text-free annotation unless text is explicitly requested."""
 
@@ -341,7 +383,7 @@ class GoldSpan:
             "temporality": self.temporality,
         }
         if self.code is not None:
-            payload["code"] = self.code.to_dict()
+            payload["code"] = self.code.to_dict(include_display=include_text)
         if include_text:
             payload["text"] = self.text
         return payload
@@ -358,6 +400,7 @@ class ExpectedField:
     value: str | int | float | bool | None = None
     code: CodedValue | None = None
 
+    @_fixture_boundary
     def __post_init__(self) -> None:
         for value, field_name in (
             (self.field_id, "field id"),
@@ -365,6 +408,14 @@ class ExpectedField:
             (self.value_type, "field value type"),
         ):
             _non_empty(value, field_name)
+        if self.value is not None and not isinstance(
+            self.value, (str, int, float, bool)
+        ):
+            raise TypeError("expected field values must be scalar")
+        if isinstance(self.value, float) and not isfinite(self.value):
+            raise ValueError("expected field values must be finite")
+        if isinstance(self.value, str) and len(self.value) > 4096:
+            raise ValueError("expected field value exceeds limit")
         if self.span_id is not None:
             _non_empty(self.span_id, "field span id")
         if self.code is not None and not isinstance(self.code, CodedValue):
@@ -379,6 +430,7 @@ class ExpectedField:
         return f"ExpectedField(id={self.field_id!r}, name={self.name!r})"
 
     @classmethod
+    @_fixture_boundary
     def from_mapping(cls, data: Mapping[str, Any]) -> "ExpectedField":
         """Build an expected field from a JSON-ready mapping."""
 
@@ -400,6 +452,7 @@ class ExpectedField:
             code=code,
         )
 
+    @_fixture_boundary
     def to_dict(self, *, include_value: bool = True) -> dict[str, Any]:
         """Return a structured-field record without values when requested."""
 
@@ -412,7 +465,7 @@ class ExpectedField:
         if include_value and self.value is not None:
             payload["value"] = self.value
         if self.code is not None:
-            payload["code"] = self.code.to_dict()
+            payload["code"] = self.code.to_dict(include_display=include_value)
         return payload
 
 
@@ -430,18 +483,19 @@ class ClinicalFixture:
     language: str = "en"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    @_fixture_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self, "fixture_id", _non_empty(self.fixture_id, "fixture id")
         )
         object.__setattr__(self, "profile", normalize_profile(self.profile))
         object.__setattr__(self, "seed", _seed_value(self.seed))
-        if not isinstance(self.text, str) or not self.text:
+        if not isinstance(self.text, str) or not self.text or len(self.text) > 1048576:
             raise ValueError("fixture text must be non-empty")
         object.__setattr__(self, "language", _non_empty(self.language, "language"))
-        sections = tuple(self.sections)
-        spans = tuple(self.gold_spans)
-        fields = tuple(self.expected_fields)
+        sections = _bounded(self.sections)
+        spans = _bounded(self.gold_spans)
+        fields = _bounded(self.expected_fields)
         if not all(isinstance(section, ClinicalSection) for section in sections):
             raise TypeError("fixture sections must be ClinicalSection instances")
         if not all(isinstance(span, GoldSpan) for span in spans):
@@ -451,7 +505,16 @@ class ClinicalFixture:
         object.__setattr__(self, "sections", sections)
         object.__setattr__(self, "gold_spans", spans)
         object.__setattr__(self, "expected_fields", fields)
+        if not isinstance(self.metadata, Mapping) or len(self.metadata) > 4096:
+            raise ValueError("invalid fixture metadata")
         metadata = dict(self.metadata)
+        if (
+            metadata.get("synthetic", True) is not True
+            or metadata.get("phi", False) is not False
+        ):
+            raise ValueError("contradictory fixture provenance")
+        if metadata.get("profile", self.profile) != self.profile:
+            raise ValueError("contradictory fixture profile")
         object.__setattr__(self, "metadata", MappingProxyType(metadata))
         self.validate()
 
@@ -472,13 +535,13 @@ class ClinicalFixture:
     def synthetic(self) -> bool:
         """Return the explicit synthetic-data marker."""
 
-        return True
+        return self.metadata.get("synthetic") is True
 
     @property
     def phi(self) -> bool:
         """Return the explicit no-PHI marker."""
 
-        return False
+        return self.metadata.get("phi") is not False
 
     @property
     def text_hash(self) -> str:
@@ -513,9 +576,16 @@ class ClinicalFixture:
             raise TypeError("span must be a GoldSpan or span id")
         return self.text[target.start : target.end]
 
+    @_fixture_boundary
     def validate(self) -> None:
         """Validate offsets and cross-references without exposing source text."""
 
+        for item in (
+            *_bounded(self.sections),
+            *_bounded(self.gold_spans),
+            *_bounded(self.expected_fields),
+        ):
+            replace(item)
         section_ids = [section.name for section in self.sections]
         if len(section_ids) != len(set(section_ids)):
             raise ValueError("fixture section names must be unique")
@@ -551,9 +621,13 @@ class ClinicalFixture:
             if item.span_id is not None and item.span_id not in known_spans:
                 raise ValueError("fixture field references an unknown span")
 
+    @_fixture_boundary
     def to_dict(self, *, include_text: bool = False) -> dict[str, Any]:
         """Serialize the fixture, omitting document text by default."""
 
+        if not isinstance(include_text, bool):
+            raise TypeError("include_text must be boolean")
+        self.validate()
         payload: dict[str, Any] = {
             "expected_fields": [
                 item.to_dict(include_value=include_text)
@@ -577,9 +651,12 @@ class ClinicalFixture:
             payload["text"] = self.text
         return payload
 
+    @_fixture_boundary
     def to_json(self, *, include_text: bool = False, indent: int = 2) -> str:
         """Return deterministic JSON with raw document text excluded by default."""
 
+        if type(indent) is not int or not 0 <= indent <= 8:
+            raise ValueError("indent must be an integer from zero to eight")
         return (
             json.dumps(
                 self.to_dict(include_text=include_text),
@@ -591,23 +668,40 @@ class ClinicalFixture:
         )
 
     @classmethod
+    @_fixture_boundary
     def from_mapping(cls, data: Mapping[str, Any]) -> "ClinicalFixture":
         """Build a fixture from a text-inclusive JSON-ready mapping."""
 
         if not isinstance(data, Mapping):
             raise TypeError("clinical fixtures must be mappings")
+        if (
+            data.get("schema_version", CLINICAL_FIXTURE_SCHEMA_VERSION)
+            != CLINICAL_FIXTURE_SCHEMA_VERSION
+        ):
+            raise ValueError("unsupported fixture schema")
+        if (
+            data.get("synthetic", True) is not True
+            or data.get("phi", False) is not False
+        ):
+            raise ValueError("fixture requires synthetic-only provenance")
         text = data.get("text")
         if not isinstance(text, str) or not text:
             raise ValueError("clinical fixture mapping requires text")
+        if len(text) > 1048576 or data.get("text_sha256", _sha256(text)) != _sha256(
+            text
+        ):
+            raise ValueError("fixture document fingerprint or size mismatch")
         sections = tuple(
-            ClinicalSection.from_mapping(item) for item in data.get("sections", ())
+            ClinicalSection.from_mapping(item)
+            for item in _bounded(data.get("sections", ()))
         )
         spans = tuple(
             GoldSpan.from_mapping(item, source_text=text)
-            for item in data.get("gold_spans", ())
+            for item in _bounded(data.get("gold_spans", ()))
         )
         fields = tuple(
-            ExpectedField.from_mapping(item) for item in data.get("expected_fields", ())
+            ExpectedField.from_mapping(item)
+            for item in _bounded(data.get("expected_fields", ()))
         )
         return cls(
             fixture_id=str(data.get("fixture_id") or ""),
@@ -622,6 +716,7 @@ class ClinicalFixture:
         )
 
 
+@_fixture_boundary
 def validate_fixture(fixture: ClinicalFixture) -> None:
     """Validate one generated fixture and return ``None`` on success."""
 
@@ -1333,6 +1428,7 @@ def _safe_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
     return safe
 
 
+@_fixture_boundary
 def generate_fixture(
     profile: str = DEFAULT_PROFILES[0], seed: int = DEFAULT_SEED
 ) -> ClinicalFixture:
@@ -1371,6 +1467,7 @@ def generate_fixture(
     return fixture
 
 
+@_fixture_boundary
 def generate_fixtures(
     profiles: str | Sequence[str] | None = None,
     *,
@@ -1389,7 +1486,9 @@ def generate_fixtures(
         requested = (profiles,)
     else:
         requested = profiles
-    canonical_profiles = tuple(normalize_profile(profile) for profile in requested)
+    canonical_profiles = tuple(
+        normalize_profile(profile) for profile in _bounded(requested)
+    )
     if len(canonical_profiles) != len(set(canonical_profiles)):
         raise ValueError("profiles must not contain duplicates")
     return tuple(
