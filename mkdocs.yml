@@ -179,6 +179,8 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
+      - Citation Minimality Checks: clinical/citation-minimality.md
+      - Citation Boundary Validation: clinical/citation-boundary-validation.md
       - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
@@ -287,6 +289,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Claim-level Citation Support: evaluation/citation-support-metrics.md
+      - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
@@ -323,6 +327,8 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Guarded evidence packets: clinical/evidence-packets.md
+      - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical event contradiction reports: clinical/event-contradictions.md
       - Conservative Temporal Intervals: clinical/temporal-intervals.md
       - Bucketed Clinical Timelines: clinical/timeline-buckets.md
@@ -335,8 +341,6 @@ nav:
       - Human-review packets: clinical/human-review-packets.md
       - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
       - Clinical claim-packet integrity: clinical/claim-integrity.md
-      - Guarded evidence packets: clinical/evidence-packets.md
-      - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
