@@ -281,3 +281,99 @@ def test_layout_rejects_fractional_page_and_negative_box_without_text() -> None:
         with pytest.raises(ValueError) as exc:
             parse_layout(OcrResult(words=(word,)))
         assert "SYNTHETIC-SENSITIVE-SENTINEL" not in str(exc.value)
+
+
+@pytest.mark.parametrize("confidence", [True, -0.1, 1.1])
+def test_layout_rejects_invalid_confidence(confidence):
+    with pytest.raises(ValueError):
+        parse_layout(OcrResult(words=(OcrWord("synthetic", (1, 1, 5, 5), confidence),)))
+
+
+@pytest.mark.parametrize("text", [None, 123])
+def test_layout_rejects_nontext_words(text):
+    with pytest.raises(ValueError):
+        parse_layout(OcrResult(words=({"text": text, "bbox": (1, 1, 5, 5)},)))
+
+
+def test_layout_rejects_boolean_coordinates():
+    with pytest.raises(ValueError):
+        parse_layout(OcrResult(words=(OcrWord("synthetic", (False, 1, 5, 5), 0.9),)))
+
+
+def test_layout_rejects_multiple_coordinate_styles():
+    box = {
+        "x0": 1,
+        "y0": 1,
+        "x1": 5,
+        "y1": 5,
+        "left": 2,
+        "top": 2,
+        "right": 6,
+        "bottom": 6,
+    }
+    with pytest.raises(ValueError):
+        parse_layout(OcrResult(words=({"text": "synthetic", "bbox": box},)))
+
+
+def test_layout_coordinate_errors_have_no_raw_context():
+    with pytest.raises(ValueError) as caught:
+        parse_layout(
+            OcrResult(
+                words=(
+                    {
+                        "text": "synthetic",
+                        "bbox": ("synthetic-sensitive-value", 1, 5, 5),
+                    },
+                )
+            )
+        )
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_layout_iterator_errors_are_sanitized():
+    class Input:
+        def words_iter(self):
+            raise RuntimeError("synthetic-sensitive-value")
+            yield
+
+        @property
+        def words(self):
+            return self.words_iter()
+
+    with pytest.raises(ValueError) as caught:
+        parse_layout(Input())
+    assert caught.value.__context__ is None
+    assert "synthetic-sensitive-value" not in str(caught.value)
+
+
+def test_layout_word_collection_is_bounded():
+    with pytest.raises(ValueError):
+        parse_layout(OcrResult(words=(OcrWord("", (1, 1, 5, 5), 0.9),) * 4097))
+
+
+def test_layout_page_dimension_alias_conflict_is_rejected():
+    result = OcrResult(
+        words=(OcrWord("synthetic", (1, 1, 5, 5), 0.9),),
+        metadata={"page_dimensions": {0: (10, 10), "0": (100, 100)}},
+    )
+    with pytest.raises(ValueError):
+        parse_layout(result)
+
+
+@pytest.mark.parametrize("start", [True, 0.5])
+def test_layout_projection_rejects_noninteger_offsets(start):
+    document = parse_layout(_clinical_page())
+    with pytest.raises(ValueError):
+        document.spans_for_range(start, 5)
+
+
+def test_layout_reverse_projection_rejects_fractional_page():
+    document = parse_layout(_clinical_page())
+    with pytest.raises(ValueError):
+        document.offsets_for_bbox(0.5, document.spans[0].bbox)
+
+
+def test_layout_bounds_separators():
+    with pytest.raises(ValueError):
+        parse_layout(_clinical_page(), separator="x" * 4097)

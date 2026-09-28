@@ -84,3 +84,10 @@ Synthetic layout fixtures report exact-position reading-order and table-cell
 assignment accuracy through `evaluate_layout`; the committed two-column lab
 fixture scores 1.00 for both. OCR confidence is carried through unchanged and
 does not certify the extracted clinical content.
+
+Layout parsing is bounded to 4,096 input words, 4,096 characters per word or
+separator, and 1 MiB of source word text. Confidence must be finite and within
+[0, 1]; boolean coordinates, ambiguous geometry, conflicting page dimensions,
+and non-integer projection offsets are rejected. Public parse and projection
+errors discard raw conversion and iterator exception context. Output text and
+metadata remain sensitive source data and must not be logged as audit records.

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import wraps
+from itertools import islice
 from math import isfinite
 from statistics import median
 from typing import Any
@@ -19,6 +21,37 @@ from .base import ExtractedDocument, SourceSpan
 from .ocr import OcrResult, OcrWord
 
 BBox = tuple[float, float, float, float]
+
+
+def _safe_boundary(function):
+    """Expose stable layout failures without external exception context."""
+
+    @wraps(function)
+    def checked(*args, **kwargs):
+        error_type, message = ValueError, "invalid OCR layout input"
+        try:
+            return function(*args, **kwargs)
+        except TypeError:
+            error_type = TypeError
+        except ValueError as error:
+            if str(error) in {
+                "column_gap must be finite and non-negative",
+                "line_tolerance must be finite and non-negative",
+                "character offsets are outside the layout document",
+            }:
+                message = str(error)
+        except Exception:
+            pass
+        raise error_type(message)
+
+    return checked
+
+
+def _bounded(values, limit=4096):
+    result = tuple(islice(iter(values), limit + 1))
+    if len(result) > limit:
+        raise ValueError("layout input limit exceeded")
+    return result
 
 
 @dataclass(frozen=True)
@@ -265,8 +298,11 @@ class LayoutDocument:
         """Return the number of mapped OCR words."""
         return len(self.spans)
 
+    @_safe_boundary
     def location_at(self, offset: int) -> LayoutSpan | None:
         """Return the word mapping covering ``offset``, if it is mapped."""
+        if type(offset) is not int:
+            raise ValueError("invalid character offset")
         if offset < 0 or offset >= len(self.text):
             return None
         for span in self.spans:
@@ -274,6 +310,7 @@ class LayoutDocument:
                 return span
         return None
 
+    @_safe_boundary
     def spans_for_range(self, start: int, end: int) -> tuple[LayoutSpan, ...]:
         """Return word mappings touched by a half-open character range."""
         _validate_offsets(self.text, start, end)
@@ -287,6 +324,7 @@ class LayoutDocument:
         """Project a character span back to its source word bboxes and pages."""
         return self.spans_for_range(start, end)
 
+    @_safe_boundary
     def offsets_for_bbox(
         self,
         page: int,
@@ -298,6 +336,8 @@ class LayoutDocument:
         ``(x0, y0, x1, y1)``. Exact matching keeps reverse projection
         deterministic and avoids silently selecting neighboring words.
         """
+        if type(page) is not int or page < 0:
+            raise ValueError("invalid page index")
         target = _coerce_bbox(bbox, index=0)
         return tuple(
             span.offsets
@@ -386,8 +426,9 @@ class FakeLayoutInput:
     the OCR result shape directly to :func:`parse_layout`.
     """
 
+    @_safe_boundary
     def __init__(self, words: Iterable[OcrWord], **metadata: Any) -> None:
-        self.words = tuple(words)
+        self.words = _bounded(words)
         self.metadata = {"engine": "fake-layout", **metadata}
 
     def to_ocr_result(self) -> OcrResult:
@@ -418,6 +459,7 @@ class FakeLayoutEngine(FakeLayoutInput):
         return OcrResult(words=self.words, metadata=metadata)
 
 
+@_safe_boundary
 def parse_layout(
     ocr_result: OcrResult | FakeLayoutInput,
     *,
@@ -451,6 +493,8 @@ def parse_layout(
         raise TypeError("separator must be a string")
     if not isinstance(line_separator, str):
         raise TypeError("line_separator must be a string")
+    if len(separator) > 4096 or len(line_separator) > 4096:
+        raise ValueError("layout input limit exceeded")
     for name, value in (
         ("column_gap", column_gap),
         ("line_tolerance", line_tolerance),
@@ -851,6 +895,8 @@ def _page_dimensions(
     if sizes is None:
         return None
     if isinstance(sizes, Mapping):
+        if page in sizes and str(page) in sizes and sizes[page] != sizes[str(page)]:
+            raise ValueError("conflicting OCR page dimensions")
         value = sizes.get(page, sizes.get(str(page)))
     elif isinstance(sizes, Sequence) and not isinstance(sizes, (str, bytes)):
         value = sizes[page] if page < len(sizes) else None
@@ -863,13 +909,13 @@ def _page_dimensions(
 
     try:
         if isinstance(value, PageSize):
-            size = value
+            size = PageSize(value.width, value.height)
         elif isinstance(value, RotationPageSize):
             size = PageSize(value.width, value.height)
         elif isinstance(value, Mapping):
             size = PageSize(value["width"], value["height"])
         else:
-            size = PageSize(*value)
+            size = PageSize(*_bounded(value, 2))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("invalid OCR page dimensions") from exc
     return size.as_tuple()
@@ -925,19 +971,28 @@ def _coerce_records(ocr_result: Any) -> tuple[_WordRecord, ...]:
         raise TypeError("ocr_result must expose a words iterable")
 
     records: list[_WordRecord] = []
-    for index, raw_word in enumerate(raw_words):
-        text = str(_word_value(raw_word, "text", "")).strip()
-        if not text:
+    total_characters = 0
+    for index, raw_word in enumerate(_bounded(raw_words)):
+        text = _word_value(raw_word, "text", "")
+        if not isinstance(text, str) or len(text) > 4096:
+            raise ValueError("invalid OCR word text")
+        total_characters += len(text)
+        if total_characters > 1048576:
+            raise ValueError("layout input limit exceeded")
+        if not text.strip():
             continue
         bbox = _coerce_bbox(_word_value(raw_word, "bbox", None), index=index)
         page = _word_value(raw_word, "page", 0)
         if isinstance(page, bool) or not isinstance(page, int) or page < 0:
             raise ValueError(f"OCR word {index} has an invalid page")
+        raw_confidence = _word_value(raw_word, "confidence", 1.0)
+        if isinstance(raw_confidence, bool):
+            raise ValueError("invalid OCR confidence")
         try:
-            confidence = float(_word_value(raw_word, "confidence", 1.0))
+            confidence = float(raw_confidence)
         except (TypeError, ValueError) as exc:
             raise ValueError(f"OCR word {index} has an invalid confidence") from exc
-        if not isfinite(confidence):
+        if not isfinite(confidence) or not 0 <= confidence <= 1:
             raise ValueError(f"OCR word {index} has an invalid confidence")
         word = (
             raw_word
@@ -956,18 +1011,19 @@ def _word_value(word: Any, name: str, default: Any) -> Any:
 
 def _coerce_bbox(value: Any, *, index: int) -> BBox:
     if isinstance(value, Mapping):
-        if all(key in value for key in ("x0", "y0", "x1", "y1")):
-            value = tuple(value[key] for key in ("x0", "y0", "x1", "y1"))
-        elif all(key in value for key in ("left", "top", "right", "bottom")):
-            value = tuple(value[key] for key in ("left", "top", "right", "bottom"))
+        styles = (("x0", "y0", "x1", "y1"), ("left", "top", "right", "bottom"))
+        present = [keys for keys in styles if any(key in value for key in keys)]
+        if len(present) != 1 or not all(key in value for key in present[0]):
+            raise ValueError("ambiguous OCR bbox")
+        value = tuple(value[key] for key in present[0])
     if isinstance(value, (str, bytes, bytearray)) or value is None:
-        raise ValueError(f"OCR word {index} has an invalid bbox")
-    try:
-        values = tuple(float(number) for number in value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"OCR word {index} has an invalid bbox") from exc
-    if len(values) != 4 or not all(isfinite(number) for number in values):
-        raise ValueError(f"OCR word {index} has an invalid bbox")
+        raise ValueError("invalid OCR bbox")
+    raw_values = _bounded(value, 4)
+    if len(raw_values) != 4 or any(isinstance(number, bool) for number in raw_values):
+        raise ValueError("invalid OCR bbox")
+    values = tuple(float(number) for number in raw_values)
+    if not all(isfinite(number) for number in values):
+        raise ValueError("invalid OCR bbox")
     x0, y0, x1, y1 = values
     if x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0:
         raise ValueError(f"OCR word {index} has an invalid bbox")
@@ -1101,7 +1157,13 @@ def _union_bbox(boxes: Iterable[BBox]) -> BBox:
 
 
 def _validate_offsets(text: str, start: int, end: int) -> None:
-    if start < 0 or end < start or end > len(text):
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or start < 0
+        or end < start
+        or end > len(text)
+    ):
         raise ValueError("character offsets are outside the layout document")
 
 
