@@ -393,6 +393,7 @@ classification:
     - clinical/output-use-policy.md
     - clinical/evidence-coverage.md
     - clinical/human-review-packets.md
+    - clinical/uncertainty-disclosure.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
