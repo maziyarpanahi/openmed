@@ -296,6 +296,7 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
       - Comparator Reports: evaluation/comparator-reports.md
