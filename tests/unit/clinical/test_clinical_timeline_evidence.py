@@ -21,6 +21,126 @@ from openmed.clinical.timeline_graph import (
 from openmed.core.audit import hash_text
 
 
+@pytest.mark.parametrize("field", ["event_type", "relation"])
+def test_freeform_graph_labels_are_opaque(field: str) -> None:
+    private = "patient-jane-doe"
+    event = TimelineGraphEvent(
+        "one",
+        private if field == "event_type" else "event",
+        0,
+        1,
+        temporal_evidence=(
+            TimelineEvidence(
+                0, 1, relation=private if field == "relation" else "temporal_anchor"
+            ),
+        ),
+    )
+    serialized = build_timeline_graph([event]).to_json()
+    assert private not in serialized
+    assert hash_text(private) in serialized
+
+
+@pytest.mark.parametrize("value", ["sha256:patient-jane-doe", "sha256:" + "a" * 63])
+def test_graph_hashes_require_complete_digest(value: str) -> None:
+    with pytest.raises(ValueError):
+        TimelineEvidence(0, 1, text_hash=value)
+
+
+def test_graph_experiencer_is_controlled() -> None:
+    with pytest.raises(ValueError):
+        TimelineGraphEvent(
+            "one", "event", 0, 1, assertion={"experiencer": "patient-jane-doe"}
+        )
+
+
+@pytest.mark.parametrize("typed", [False, True])
+@pytest.mark.parametrize("where", ["event", "evidence", "link"])
+def test_graph_rejects_out_of_document_spans(typed: bool, where: str) -> None:
+    from openmed.clinical.clinical_timeline_evidence import TimelineTemporalLink
+
+    evidence = TimelineEvidence(0, 50) if typed else {"start": 0, "end": 50}
+    events = (
+        [
+            TimelineGraphEvent(
+                "one",
+                "event",
+                0,
+                50 if where == "event" else 1,
+                temporal_evidence=(evidence,) if where == "evidence" else (),
+            )
+        ]
+        if typed
+        else [
+            {
+                "id": "one",
+                "start": 0,
+                "end": 50 if where == "event" else 1,
+                "evidence": [evidence] if where == "evidence" else [],
+            }
+        ]
+    )
+    links = (
+        [TimelineTemporalLink("one", "one", "overlap", (evidence,))]
+        if typed and where == "link"
+        else [
+            {
+                "source": "one",
+                "target": "one",
+                "relation": "overlap",
+                "evidence": [evidence],
+            }
+        ]
+        if where == "link"
+        else []
+    )
+    with pytest.raises(ValueError, match="source document"):
+        build_timeline_graph(events, links, document_text="synthetic")
+
+
+def test_graph_orders_aware_times_by_instant() -> None:
+    graph = build_timeline_graph(
+        [
+            TimelineGraphEvent(
+                "later", "event", 0, 1, timestamp="2026-06-01T08:00:00-04:00"
+            ),
+            TimelineGraphEvent(
+                "earlier", "event", 2, 3, timestamp="2026-06-01T10:00:00Z"
+            ),
+        ]
+    )
+    assert graph.ordered_event_ids == ("earlier", "later")
+
+
+@pytest.mark.parametrize("value", ["0000-02", "2026/2027/2028"])
+def test_graph_rejects_invalid_partial_dates_and_interval_arity(value: str) -> None:
+    with pytest.raises(ValueError):
+        TimelineEvidence(0, 1, normalized_value=value)
+
+
+def test_graph_fixed_envelope_and_sanitized_errors() -> None:
+    from openmed.clinical.clinical_timeline_evidence import TimelineGraph
+
+    with pytest.raises(ValueError):
+        TimelineGraph((), disclaimer="patient-jane-doe")
+    with pytest.raises(ValueError):
+        TimelineGraph((), schema_version=True)
+    with pytest.raises(TypeError) as error:
+        TimelineEvidence(0, 1, confidence="patient-jane-doe")
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+def test_graph_iterator_failures_are_value_free() -> None:
+    def records():
+        yield {"id": "one", "start": 0, "end": 1}
+        raise RuntimeError("patient-jane-doe")
+
+    with pytest.raises(TypeError) as error:
+        build_timeline_graph(records())
+    assert error.value.__context__ is None
+    assert "patient-jane-doe" not in str(error.value)
+
+
 def test_clinical_and_journey_timeline_graph_contracts_remain_distinct() -> None:
     assert TIMELINE_GRAPH_SCHEMA_VERSION == 1
     assert JOURNEY_TIMELINE_GRAPH_SCHEMA_VERSION == "1.0.0"

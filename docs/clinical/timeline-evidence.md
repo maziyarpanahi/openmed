@@ -69,7 +69,7 @@ event type, and event id. Reordering the input iterable therefore produces the
 same graph. `after` links are preserved as `after` in the serialized record but
 are reversed internally for topological ordering.
 
-## Privacy-safe output
+## Source-text-free output and privacy boundaries
 
 Source text is accepted only for in-memory hashing. `to_dict()` and `to_json()`
 contain event types, offsets, normalized temporal values, assertion axes,
@@ -79,6 +79,16 @@ The payloads do not contain event surfaces, temporal surfaces, or arbitrary
 caller metadata. Callers can
 also provide their own SHA-256 or HMAC-SHA-256 hash when the source text is not
 available.
+
+Normalized dates and clinical context can still be protected health data. Keep
+the graph in restricted clinical storage; do not publish it as a value-free
+audit artifact. Known event/evidence labels retain their controlled values;
+custom labels are opaque SHA-256 fingerprints. Experiencers must use the
+supported assertion vocabulary, and supplied hashes require complete digests.
+When source text is supplied, every event and evidence span (including link
+evidence) must fall within that document. Aware timestamps are compared as UTC
+instants. Dates without a timezone remain deterministic ordering hints, not
+proof of absolute chronology relative to timezone-aware events.
 
 ```python
 payload = graph.to_dict()

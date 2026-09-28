@@ -91,18 +91,6 @@ from .care_gaps import (
     evaluate_care_gap,
     load_care_gap_schema,
 )
-from .clinical_timeline_evidence import (
-    TIMELINE_GRAPH_ADVISORY,
-    TIMELINE_GRAPH_SCHEMA_VERSION,
-    TimelineEvidence,
-    TimelineGraph,
-    TimelineGraphCycleError,
-    TimelineGraphEvent,
-    TimelineTemporalLink,
-    build_evidence_linked_timeline,
-    build_timeline_graph,
-    create_timeline_graph,
-)
 from .claim_integrity import (
     CLAIM_INTEGRITY_ADVISORY,
     CLAIM_INTEGRITY_KIND,
@@ -154,6 +142,18 @@ from .claim_integrity import (
     validate_claim_packet_integrity,
     verify_claim_packet_digest,
     verify_claim_packet_integrity,
+)
+from .clinical_timeline_evidence import (
+    TIMELINE_GRAPH_ADVISORY,
+    TIMELINE_GRAPH_SCHEMA_VERSION,
+    TimelineEvidence,
+    TimelineGraph,
+    TimelineGraphCycleError,
+    TimelineGraphEvent,
+    TimelineTemporalLink,
+    build_evidence_linked_timeline,
+    build_timeline_graph,
+    create_timeline_graph,
 )
 from .consent_cache import (
     CONSENT_CACHE_EVENT_TYPE,

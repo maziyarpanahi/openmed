@@ -1,10 +1,11 @@
-"""Privacy-safe evidence-linked clinical timeline graphs.
+"""Source-text-free evidence-linked clinical timeline graphs.
 
 The graph is a small, deterministic composition layer for callers that already
 have event spans, assertion context, and temporal evidence.  Source text may
 be supplied while building the graph, but it is used only in memory to derive
 content hashes.  Graph records never retain source text or arbitrary caller
-metadata.
+metadata. Normalized dates and clinical context remain sensitive health data;
+these records are not suitable for public audit logs.
 """
 
 from __future__ import annotations
@@ -15,13 +16,14 @@ import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, Literal, cast
 
 from openmed.clinical.context import (
     AFFIRMED,
     CERTAIN,
     CERTAINTY_VALUES,
+    EXPERIENCER_VALUES,
     NEGATION_VALUES,
     RECENT,
     TEMPORALITY_VALUES,
@@ -38,7 +40,41 @@ TIMELINE_GRAPH_ADVISORY = (
     "recommendation, or substitute for clinician verification."
 )
 
-_HASH_PREFIXES = ("sha256:", "hmac-sha256:")
+_HASH_RE = re.compile(r"(?:sha256|hmac-sha256):[0-9a-f]{64}")
+_EVENT_TYPES = frozenset(
+    {
+        "event",
+        "procedure",
+        "finding",
+        "observation",
+        "diagnosis",
+        "medication",
+        "medication_change",
+        "lab",
+        "lab_observation",
+        "encounter",
+        "admission",
+        "discharge",
+        "symptom",
+        "treatment",
+        "condition",
+    }
+)
+_EVIDENCE_RELATIONS = frozenset(
+    {
+        "temporal_anchor",
+        "before",
+        "after",
+        "overlap",
+        "precedes",
+        "follows",
+        "date",
+        "time",
+        "duration",
+        "on",
+        "during",
+    }
+)
 _RELATION_ALIASES = {
     "before": "before",
     "precedes": "before",
@@ -101,7 +137,9 @@ class TimelineEvidence:
 
         if not isinstance(self.relation, str) or not self.relation.strip():
             raise TypeError("evidence relation must be a non-empty string")
-        object.__setattr__(self, "relation", self.relation.strip().casefold())
+        object.__setattr__(
+            self, "relation", _safe_label(self.relation, _EVIDENCE_RELATIONS)
+        )
         _validate_confidence(self.confidence, "evidence")
         object.__setattr__(self, "confidence", float(self.confidence))
 
@@ -163,7 +201,9 @@ class TimelineGraphEvent:
         if not isinstance(self.event_type, str) or not self.event_type.strip():
             raise TypeError("event type must be a non-empty string")
         object.__setattr__(self, "event_id", self.event_id.strip())
-        object.__setattr__(self, "event_type", self.event_type.strip().casefold())
+        object.__setattr__(
+            self, "event_type", _safe_label(self.event_type, _EVENT_TYPES)
+        )
         _validate_offset(self.start, self.end, "event")
         object.__setattr__(
             self,
@@ -178,7 +218,9 @@ class TimelineGraphEvent:
         ) or _looks_like_timex(self.temporal_evidence):
             evidence = (_coerce_evidence(self.temporal_evidence),)
         else:
-            evidence = tuple(_coerce_evidence(item) for item in self.temporal_evidence)
+            evidence = tuple(
+                _coerce_evidence(item) for item in _safe_items(self.temporal_evidence)
+            )
         object.__setattr__(
             self,
             "temporal_evidence",
@@ -280,7 +322,9 @@ class TimelineTemporalLink:
         ) or _looks_like_timex(self.evidence):
             evidence = (_coerce_evidence(self.evidence),)
         else:
-            evidence = tuple(_coerce_evidence(item) for item in self.evidence)
+            evidence = tuple(
+                _coerce_evidence(item) for item in _safe_items(self.evidence)
+            )
         object.__setattr__(
             self,
             "evidence",
@@ -329,8 +373,8 @@ class TimelineGraph:
     schema_version: int = TIMELINE_GRAPH_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
-        events = tuple(_coerce_event(event) for event in self.events)
-        links = tuple(_coerce_link(link) for link in self.temporal_links)
+        events = tuple(_coerce_event(event) for event in _safe_items(self.events))
+        links = tuple(_coerce_link(link) for link in _safe_items(self.temporal_links))
         if len({event.event_id for event in events}) != len(events):
             raise ValueError("timeline event ids must be unique")
         event_ids = {event.event_id for event in events}
@@ -344,8 +388,13 @@ class TimelineGraph:
         ordered_links = tuple(sorted(links, key=_link_sort_key))
         object.__setattr__(self, "events", ordered_events)
         object.__setattr__(self, "temporal_links", ordered_links)
-        if self.schema_version != TIMELINE_GRAPH_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != TIMELINE_GRAPH_SCHEMA_VERSION
+        ):
             raise ValueError("unsupported timeline graph schema version")
+        if self.disclaimer != TIMELINE_GRAPH_ADVISORY:
+            raise ValueError("timeline graph disclaimer must use the fixed advisory")
 
     @property
     def links(self) -> tuple[TimelineTemporalLink, ...]:
@@ -386,7 +435,7 @@ class TimelineGraph:
         raise KeyError("timeline event was not found")
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a deterministic, privacy-safe graph payload."""
+        """Return a deterministic payload; clinical dates remain sensitive."""
 
         return {
             "schema_version": self.schema_version,
@@ -448,7 +497,7 @@ def build_timeline_graph(
     if isinstance(events, (Mapping, TimelineGraphEvent)):
         event_values = (events,)
     else:
-        event_values = events
+        event_values = _safe_items(events)
     event_items = tuple(
         _coerce_event(item, document_text=source_text) for item in event_values
     )
@@ -460,8 +509,10 @@ def build_timeline_graph(
     ):
         link_values = (link_items,)
     else:
-        link_values = link_items or ()
-    link_records = tuple(_coerce_link(item) for item in link_values)
+        link_values = _safe_items(link_items) if link_items is not None else ()
+    link_records = tuple(
+        _coerce_link(item, document_text=source_text) for item in link_values
+    )
     return TimelineGraph(events=event_items, temporal_links=link_records)
 
 
@@ -483,15 +534,21 @@ def _coerce_event(
     document_text: str | None = None,
 ) -> TimelineGraphEvent:
     if isinstance(event, TimelineGraphEvent):
-        if event.text_hash is None and document_text is not None:
-            return replace(
-                event, text_hash=hash_text(document_text[event.start : event.end])
-            )
-        return event
+        _validate_document_span(event.start, event.end, document_text)
+        return replace(
+            event,
+            text_hash=event.text_hash
+            if event.text_hash is not None or document_text is None
+            else hash_text(document_text[event.start : event.end]),
+            temporal_evidence=_coerce_evidence_collection(
+                event.temporal_evidence, document_text=document_text
+            ),
+        )
     if not isinstance(event, Mapping):
         raise TypeError("timeline events must be event records or mappings")
 
     start, end = _mapping_offset(event, "event")
+    _validate_document_span(start, end, document_text)
     event_type = _mapping_string(
         event,
         ("event_type", "type", "label"),
@@ -543,9 +600,16 @@ def _coerce_event(
 
 def _coerce_link(
     link: TimelineTemporalLink | Mapping[str, Any] | Any,
+    *,
+    document_text: str | None = None,
 ) -> TimelineTemporalLink:
     if isinstance(link, TimelineTemporalLink):
-        return link
+        return replace(
+            link,
+            evidence=_coerce_evidence_collection(
+                link.evidence, document_text=document_text
+            ),
+        )
 
     relation_type = getattr(link, "relation_type", getattr(link, "relation", None))
     source_id = getattr(link, "source_id", None)
@@ -590,7 +654,7 @@ def _coerce_link(
 
     if source_id is None or target_id is None or relation_type is None:
         raise TypeError("temporal links must provide source, target, and relation")
-    evidence = _coerce_evidence_collection(evidence_value)
+    evidence = _coerce_evidence_collection(evidence_value, document_text=document_text)
     return TimelineTemporalLink(
         source_id=_coerce_identifier(source_id, "temporal link source id"),
         target_id=_coerce_identifier(target_id, "temporal link target id"),
@@ -614,10 +678,7 @@ def _coerce_evidence_collection(
         # copy it into an exception or report; callers should provide a span.
         return ()
     else:
-        try:
-            values = tuple(value)
-        except TypeError as error:
-            raise TypeError("temporal evidence must be a record or iterable") from error
+        values = _safe_items(value)
     return tuple(_coerce_evidence(item, document_text=document_text) for item in values)
 
 
@@ -627,16 +688,18 @@ def _coerce_evidence(
     document_text: str | None = None,
 ) -> TimelineEvidence:
     if isinstance(value, TimelineEvidence):
+        _validate_document_span(value.start, value.end, document_text)
         if value.text_hash is None and document_text is not None:
             return replace(
                 value,
                 text_hash=hash_text(document_text[value.start : value.end]),
             )
-        return value
+        return replace(value)
 
     if _looks_like_timex(value):
         start = getattr(value, "start")
         end = getattr(value, "end")
+        _validate_document_span(start, end, document_text)
         normalized_value = getattr(value, "value", None)
         timex_type = getattr(value, "timex_type", getattr(value, "type", None))
         raw_text = getattr(value, "text", None)
@@ -652,6 +715,7 @@ def _coerce_evidence(
     if not isinstance(value, Mapping):
         raise TypeError("temporal evidence must be evidence records")
     start, end = _mapping_offset(value, "evidence")
+    _validate_document_span(start, end, document_text)
     raw_text = _mapping_optional_string(value, ("text", "surface"))
     text_hash = _mapping_optional_string(value, ("text_hash", "content_hash"))
     if text_hash is None:
@@ -723,6 +787,8 @@ def _coerce_assertion(value: Any) -> ClinicalAssertion:
     experiencer = axes["experiencer"]
     if experiencer is not None:
         experiencer = _axis_string(experiencer, "experiencer")
+        if experiencer not in EXPERIENCER_VALUES:
+            raise ValueError("unsupported assertion experiencer")
     return ClinicalAssertion(
         temporality=temporality,
         certainty=cast(Any, certainty),
@@ -819,6 +885,8 @@ def _timestamp_sort_key(value: str | None) -> tuple[int, str]:
         if len(candidate) == 10:
             return (0, date.fromisoformat(candidate).isoformat())
         parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc)
         return (0, parsed.isoformat())
     except ValueError:
         return (0, candidate)
@@ -840,25 +908,29 @@ def _normalize_temporal_value(value: Any) -> str | None:
     normalized = value.strip()
     if not normalized:
         raise ValueError("temporal value must not be empty")
-    for part in normalized.split("/"):
+    parts = normalized.split("/")
+    if len(parts) > 2 or len(normalized) > 4096:
+        raise ValueError("temporal value must use a normalized date or duration")
+    for part in parts:
         if _TEMPORAL_ATOM_RE.fullmatch(part) is None:
             raise ValueError("temporal value must use a normalized date or duration")
         if part.startswith("P") or part == "..":
             continue
+        valid = True
         try:
             if "T" in part:
                 datetime.fromisoformat(part.replace("Z", "+00:00"))
             elif len(part) == 10:
                 date.fromisoformat(part)
             elif len(part) == 7:
-                if not 1 <= int(part[5:]) <= 12:
+                if int(part[:4]) < 1 or not 1 <= int(part[5:]) <= 12:
                     raise ValueError
             elif int(part) < 1:
                 raise ValueError
-        except ValueError as exc:
-            raise ValueError(
-                "temporal value must use a normalized date or duration"
-            ) from exc
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError("temporal value must use a normalized date or duration")
     return normalized
 
 
@@ -890,10 +962,13 @@ def _validate_offset(start: Any, end: Any, label: str) -> None:
 def _validate_confidence(value: Any, label: str) -> None:
     if isinstance(value, bool):
         raise TypeError(f"{label} confidence must be numeric")
+    numeric = None
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as error:
-        raise TypeError(f"{label} confidence must be numeric") from error
+    except (TypeError, ValueError, OverflowError):
+        pass
+    if numeric is None:
+        raise TypeError(f"{label} confidence must be numeric")
     if not math.isfinite(numeric) or not 0.0 <= numeric <= 1.0:
         raise ValueError(f"{label} confidence must be between 0 and 1")
 
@@ -904,9 +979,35 @@ def _validate_hash(value: Any) -> str | None:
     if not isinstance(value, str):
         raise TypeError("text hash must be a string")
     normalized = value.strip()
-    if not normalized.startswith(_HASH_PREFIXES):
+    if _HASH_RE.fullmatch(normalized) is None:
         raise ValueError("text hash must be a SHA-256 or HMAC-SHA-256 value")
     return normalized
+
+
+def _safe_label(value: str, allowed: frozenset[str]) -> str:
+    normalized = value.strip().casefold()
+    return (
+        normalized
+        if normalized in allowed or _HASH_RE.fullmatch(normalized)
+        else hash_text(value)
+    )
+
+
+def _safe_items(value: Any) -> tuple[Any, ...]:
+    items = None
+    try:
+        items = tuple(value)
+    except Exception:
+        pass
+    if items is None:
+        raise TypeError("timeline records must be a valid iterable")
+    return items
+
+
+def _validate_document_span(start: int, end: int, document_text: str | None) -> None:
+    _validate_offset(start, end, "source")
+    if document_text is not None and end > len(document_text):
+        raise ValueError("span exceeds source document bounds")
 
 
 def _mapping_offset(mapping: Mapping[str, Any], label: str) -> tuple[int, int]:
