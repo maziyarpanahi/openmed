@@ -10,6 +10,7 @@ import pytest
 import openmed.clinical.summarize_backends as backends
 from openmed.clinical.summarize import (
     SummarizationLeakageError,
+    summarize,
     summarize_deidentified,
 )
 from openmed.core.capabilities import MissingOptionalDependencyError
@@ -89,6 +90,35 @@ def test_default_resolves_pinned_registry_model():
     assert isinstance(backend, backends.MLXSummarizerBackend)
     assert resolve_summarizer_model("mlx") == resolve_summarizer_model("maple")
     assert len(resolve_summarizer_model()[1]) == 40
+
+
+def test_raw_note_missing_runtime_fails_before_deidentification(monkeypatch):
+    monkeypatch.setattr(backends.importlib.util, "find_spec", lambda _: None)
+    with pytest.raises(MissingOptionalDependencyError, match=r"openmed\[mlx\]"):
+        summarize("Synthetic note", model="mlx")
+
+
+def test_default_pii_mlx_route_uses_existing_export():
+    from openmed.mlx.inference import _MLX_MODEL_MAP
+
+    model = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+    assert _MLX_MODEL_MAP[model] == model + "-mlx"
+
+
+def test_raw_deidentification_error_drops_private_context(monkeypatch):
+    import importlib
+
+    module = importlib.import_module("openmed.clinical.summarize")
+
+    def fail(*args, **kwargs):
+        assert kwargs["config"].local_only
+        raise RuntimeError("Casey Example private note")
+
+    monkeypatch.setattr(module, "deidentify", fail)
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize("Casey Example private note", model="extractive")
+    assert "Casey" not in str(caught.value)
+    assert caught.value.__context__ is None
 
 
 def test_reasoning_budget_is_reserved_before_model_load(local_runner):

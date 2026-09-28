@@ -51,9 +51,10 @@ def test_summarize_deidentifies_before_backend_and_returns_passing_check(monkeyp
     calls: list[tuple[str, str]] = []
     result = _deidentified_result()
 
-    def fake_deidentify(text: str, *, method: str) -> DeidentificationResult:
+    def fake_deidentify(text: str, *, method: str, config) -> DeidentificationResult:
         calls.append(("deidentify", text))
         assert method == "mask"
+        assert config.local_only is True
         return result
 
     def backend(text: str, *, mode: str) -> str:
@@ -79,7 +80,7 @@ def test_explicit_extractive_summary_contains_no_original_phi(monkeypatch):
     monkeypatch.setattr(
         summarize_module,
         "deidentify",
-        lambda text, *, method: _deidentified_result(),
+        lambda text, *, method, config: _deidentified_result(),
     )
 
     output = summarize(SYNTHETIC_NOTE, model="extractive")

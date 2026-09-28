@@ -202,11 +202,31 @@ def summarize(
         return summarize_deidentified(text, mode=normalized_mode, model=model)
     if not isinstance(text, str):
         raise TypeError("text must be a string or DeidentificationResult")
+    from openmed.clinical.summarize_backends import (
+        LocalSummarizerError,
+        MLXSummarizerBackend,
+        _require_runtime,
+        resolve_summarizer_backend,
+    )
+    from openmed.core.config import OpenMedConfig
     from openmed.core.offline import network_blocked_if_offline
 
-    with network_blocked_if_offline(local_only=True):
-        result = deidentify(text, method="mask")
-    return summarize_deidentified(result, mode=normalized_mode, model=model)
+    backend = resolve_summarizer_backend(model)
+    if isinstance(backend, MLXSummarizerBackend):
+        _require_runtime()
+    failed = False
+    try:
+        with network_blocked_if_offline(local_only=True):
+            result = deidentify(
+                text, method="mask", config=OpenMedConfig(local_only=True)
+            )
+    except Exception:
+        failed = True
+    if failed:
+        raise LocalSummarizerError(
+            "local de-identification failed; prepare cached PII artifacts"
+        )
+    return summarize_deidentified(result, mode=normalized_mode, model=backend)
 
 
 def summarize_deidentified(

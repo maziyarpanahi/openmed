@@ -25,7 +25,19 @@ Pipeline code that already performed de-identification may call
 string to that guarded stage raises an ordering error.
 
 Use `model="mlx"` (or `"maple"`) on Apple Silicon after separately installing
-`openmed[mlx]` and downloading the pinned artifact. Missing dependencies raise
+`openmed[mlx]` and downloading the pinned artifact. Raw-note input also requires
+the cached `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx` artifact and its
+source model's tokenizer. Download these separately before offline inference;
+no conversion, dependency installation or download runs inside `summarize()`.
+With the default cache locations, provision once using:
+
+```bash
+hf download deepgrove/maple-preview-2bit-mlx --revision 361db5da5e74ff6fcdd852d478e1f266ce11013a
+hf download OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx --cache-dir ~/.cache/openmed
+hf download OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 --cache-dir ~/.cache/openmed --include '*.json' --include '*.txt' --include '*.model'
+```
+
+Missing dependencies raise
 `MissingOptionalDependencyError`; missing weights, context overflow, insufficient
 estimated memory, and malformed responses fail closed with content-free errors.
 The adapter runs the shared `summarize` Maple task, template digest, offline
