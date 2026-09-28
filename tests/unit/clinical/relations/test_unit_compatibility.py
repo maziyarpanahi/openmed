@@ -218,3 +218,22 @@ def test_unit_report_revalidates_typed_results():
     object.__setattr__(result, "advisory", "synthetic-sensitive-marker")
     with pytest.raises(ValueError):
         UnitCompatibilityReport((result,))
+
+
+def test_top_level_unit_cannot_hide_incompatible_endpoint_units():
+    with pytest.raises(ValueError):
+        validate_quantitative_relation(
+            {
+                "relation_kind": "dose",
+                "unit": "mg",
+                "left": {"unit": "mg"},
+                "right": {"unit": "mL"},
+            }
+        )
+
+
+def test_conflicting_unit_aliases_fail_closed():
+    with pytest.raises(ValueError):
+        validate_quantitative_relation(
+            {"relation_kind": "dose", "unit": "mg", "units": "mL"}
+        )
