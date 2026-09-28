@@ -112,7 +112,11 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
+      - Clinical SLM Artifact Manifest: models/clinical-slm-manifest.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
+      - Clinical SLM Capability Probes: models/clinical-slm-capabilities.md
+      - Clinical SLM Memory Preflight: models/clinical-slm-memory-preflight.md
+      - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
@@ -144,6 +148,7 @@ nav:
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
       - Clinical NLI Label Contract: clinical/nli-label-contract.md
       - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
@@ -169,13 +174,25 @@ nav:
       - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
       - Relation Review Priority Policy: clinical/relation-review-priority.md
       - Clinical Event Timeline Assembler: clinical/event-timeline.md
+      - Evidence-linked Clinical Timeline Graph: clinical/timeline-evidence.md
       - Serial Measurement Trends: clinical/measurement-trends.md
       - Terminology Snapshot Provenance: clinical/terminology-provenance.md
       - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
       - Consent Cache Invalidation: clinical/consent-cache.md
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
+      - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
+      - Citation Minimality Checks: clinical/citation-minimality.md
+      - Citation Boundary Validation: clinical/citation-boundary-validation.md
+      - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Relation Evidence Binding: clinical/relation-evidence-binding.md
+      - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
+      - Section-Preserving Summary Planning: clinical/summary-section-planning.md
+      - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
+      - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
+      - Empty-evidence Summary Refusal: clinical/summary-empty-evidence.md
+      - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
       - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
@@ -199,6 +216,8 @@ nav:
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
+      - Guarded Relation Directionality: clinical/relation-directionality.md
+      - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Post-de-identification Summarization: clinical/summarization.md
       - Medical Tokenizer: medical-tokenizer.md
@@ -217,6 +236,7 @@ nav:
       - Core Pipeline Observability: core-observability.md
       - No-PHI Telemetry: operations/no-phi-telemetry.md
       - Low-resource Benchmark: benchmarks/low-resource.md
+      - Synthetic SHIELD-Schema Baseline: benchmarks/shield-synthetic.md
       - Chinese and Indic Throughput: benchmarks/i18n-throughput.md
       - Cost vs Cloud: benchmarks/cost-vs-cloud.md
       - Zero-shot NER How-to: zero-shot-howto.md
@@ -276,6 +296,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Claim-level Citation Support: evaluation/citation-support-metrics.md
+      - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
@@ -313,6 +335,21 @@ nav:
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
+      - Guarded evidence packets: clinical/evidence-packets.md
+      - Guarded review-state transitions: clinical/review-transitions.md
+      - Clinical event contradiction reports: clinical/event-contradictions.md
+      - Conservative Temporal Intervals: clinical/temporal-intervals.md
+      - Bucketed Clinical Timelines: clinical/timeline-buckets.md
+      - Evidence-claim contradiction review: clinical/claim-conflicts.md
+      - Human-review queue SLA reports: clinical/review-sla.md
+      - Model-provenance diff reports: evaluation/model-provenance-diff.md
+      - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
+      - Clinical Output Use Policy: clinical/output-use-policy.md
+      - Value-free Evidence Coverage: clinical/evidence-coverage.md
+      - Human-review packets: clinical/human-review-packets.md
+      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
+      - Clinical claim-packet integrity: clinical/claim-integrity.md
+      - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
@@ -321,6 +358,7 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Relation-candidate audit report: evaluation/relation-audit.md
       - Summary omission budgets: clinical/summary-omission-budgets.md
       - Summary demographic minimization: clinical/summary-demographic-minimization.md
       - Bounded local-summary retries: clinical/summary-retry-control.md
