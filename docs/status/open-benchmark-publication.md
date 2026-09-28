@@ -12,9 +12,11 @@ turned those inputs into a page.
 | `models.jsonl` | Canonical model manifest and release metadata. |
 | `gates/baseline.json` | Last-green baseline store per family, tier, and format. |
 | `docs/benchmarks/golden.report.json` | Committed benchmark report evidence. |
+| `docs/benchmarks/shield-synthetic.report.json` | Small synthetic SHIELD-schema control evidence, separate from the SHIELD sample. |
 | `docs/benchmarks/golden.md` | Human-readable benchmark card generated from the report. |
 | `docs/status/index.md` | Trust status page generated from manifest, baseline, and reports. |
 | `docs/leaderboard/index.md` | Open benchmark publication table generated from the same sources. |
+| `docs/benchmarks/shield-synthetic.md` | Public card generated from the synthetic report. |
 | `scripts/status/generate_status.py` | Renderer that keeps status, benchmark cards, and publication rows aligned. |
 
 ## Publication Principles
@@ -82,6 +84,15 @@ different order.
 
 4. Review the generated diff for source paths, hashes, leakage, last-green
    dates, regression and rollback metadata, and freshness.
+   For the synthetic SHIELD-schema control, regenerate the committed JSON with
+   `python -m scripts.status.generate_shield_synthetic_baseline --source-revision
+   <40-character-base-commit>` and include that report as a second `--report`
+   input. Review the source rights, fixture and script SHA-256 values, exact
+   model and configuration revision, limitations, and per-label metrics. A
+   reviewer must confirm that no public-sample or DUA-gated SHIELD row was used.
+   Source and fixture text digests use UTF-8 with LF-normalized checkout
+   newlines (`utf8-lf-v1`), so Windows CRLF conversion cannot change the
+   reproduction identity. Other byte/content changes still invalidate it.
 5. Run the repository test suite:
 
    ```bash
@@ -144,11 +155,20 @@ The epic has been decomposed into independently mergeable slices:
 - #377 adds the nightly trust status refresh.
 - #378 publishes the first open SHIELD baseline results.
 
-The current repository already publishes the committed golden baseline through
+The current repository publishes a small, explicitly synthetic SHIELD-schema
+rules control through `docs/benchmarks/shield-synthetic.report.json` and its
+generated card. It uses two OpenMed-generated notes and does not establish a
+score on the SHIELD public sample or any clinical model. Its JSON and page
+carry the source rights, fixture and script hashes, model and configuration
+revision, reproducibility hash, and limitations. A future measured public-sample
+SHIELD update requires accessible rights-cleared rows and a separately reviewed
+report. DUA-gated records remain eval-only and are never committed.
+
+The repository also publishes the committed golden baseline through
 `docs/benchmarks/golden.report.json`, `docs/benchmarks/golden.md`,
 `docs/status/index.md`, and `docs/leaderboard/index.md`. #378 is responsible
-for adding the first SHIELD baseline numbers once the scheduled status path and
-hosting decision are in place.
+for the first rights-clean SHIELD-schema control once the scheduled status path
+and hosting decision are in place.
 
 ## Review Checklist
 

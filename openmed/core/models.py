@@ -165,6 +165,78 @@ class ModelLoader:
 
         return sorted(set(models))
 
+    def load_local_sequence_classifier(
+        self,
+        model_name: str,
+        *,
+        revision: str | None = None,
+        runtime: str = "torch",
+    ) -> Dict[str, Any]:
+        """Load a cached sequence classifier without contacting a model hub.
+
+        A repository reference requires an immutable commit revision. Local
+        directory references are useful for predownloaded and test artifacts.
+        The returned objects stay in memory; no input text is logged or cached.
+        """
+
+        import re
+
+        if runtime not in {"torch", "onnx"}:
+            raise ValueError("unsupported local sequence-classifier runtime")
+        local_path = self._as_existing_local_path(model_name)
+        if local_path is None and (
+            not isinstance(revision, str)
+            or re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None
+        ):
+            raise ValueError("local sequence classifier requires a pinned revision")
+
+        with network_blocked_if_offline(self.config, local_only=True):
+            resolved = self._resolve_model_name(model_name)
+            reference = self._prepare_model_reference(
+                model_name,
+                resolved,
+                local_only=True,
+                revision=revision,
+            )
+            directory = Path(reference)
+            if not directory.is_dir():
+                raise ModelLoadError(
+                    "local sequence classifier is not cached",
+                    model_name="local-sequence-classifier",
+                )
+
+            _ensure_hf_auto_config()
+            _ensure_hf_auto_tokenizer()
+            config = AutoConfig.from_pretrained(
+                directory, local_files_only=True, trust_remote_code=False
+            )
+            tokenizer = AutoTokenizer.from_pretrained(
+                directory, local_files_only=True, trust_remote_code=False
+            )
+            if runtime == "torch":
+                from transformers import AutoModelForSequenceClassification
+
+                model = AutoModelForSequenceClassification.from_pretrained(
+                    directory, local_files_only=True, trust_remote_code=False
+                )
+                model.eval()
+                return {"model": model, "tokenizer": tokenizer, "config": config}
+
+            import onnxruntime as ort
+
+            model_path = directory / "model_int8.onnx"
+            if not model_path.is_file():
+                model_path = directory / "model.onnx"
+            if not model_path.is_file():
+                raise ModelLoadError(
+                    "local ONNX sequence classifier is missing",
+                    model_name="local-sequence-classifier",
+                )
+            session = ort.InferenceSession(
+                str(model_path), providers=["CPUExecutionProvider"]
+            )
+            return {"model": session, "tokenizer": tokenizer, "config": config}
+
     def load_model(
         self,
         model_name: str,
