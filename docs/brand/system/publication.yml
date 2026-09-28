@@ -372,6 +372,7 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/summary-unsupported-claims.md
     - evaluation/comparator-reports.md
@@ -393,6 +394,7 @@ classification:
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
+    - clinical/language-matrix.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
