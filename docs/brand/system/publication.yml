@@ -394,6 +394,7 @@ classification:
     - clinical/evidence-coverage.md
     - clinical/human-review-packets.md
     - clinical/uncertainty-disclosure.md
+    - clinical/claim-integrity.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
