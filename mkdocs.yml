@@ -334,6 +334,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical event contradiction reports: clinical/event-contradictions.md

@@ -603,6 +603,22 @@ from .journey_contracts import (
     sha256_digest,
     validate_contract_graph,
 )
+from .lab_reference_ranges import (
+    LAB_REFERENCE_RANGE_ADVISORY,
+    REFERENCE_RANGE_SCHEMA_VERSION,
+    LabReferenceRange,
+    ReferenceRangeProvenance,
+    ReferenceRangeResolution,
+    ReferenceRangeState,
+    ReferenceRangeStatus,
+    SyntheticReferenceRange,
+    build_reference_range,
+    compare_reference_ranges,
+    resolve_reference_range,
+)
+from .lab_reference_ranges import (
+    fingerprint_source as fingerprint_lab_reference_source,
+)
 from .lab_values import (
     LAB_FLAG_ADVISORY,
     AbnormalFlag,
@@ -2048,6 +2064,18 @@ __all__ = [
     "split_measurement_text",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "LAB_REFERENCE_RANGE_ADVISORY",
+    "REFERENCE_RANGE_SCHEMA_VERSION",
+    "LabReferenceRange",
+    "ReferenceRangeProvenance",
+    "ReferenceRangeResolution",
+    "ReferenceRangeState",
+    "ReferenceRangeStatus",
+    "SyntheticReferenceRange",
+    "build_reference_range",
+    "compare_reference_ranges",
+    "fingerprint_lab_reference_source",
+    "resolve_reference_range",
     "COREFERENCE_ADVISORY",
     "COMPATIBILITY_SCORER_VERSION",
     "COMPATIBILITY_WEIGHTS",
