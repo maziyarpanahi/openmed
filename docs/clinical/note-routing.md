@@ -93,9 +93,9 @@ assert plan.profile.name == "discharge_summary"
 assert plan.routing_provenance.fallback_reason is None
 ```
 
-Unknown labels and low-confidence predictions use the generic pass-through
+Unknown labels and invalid or low-confidence predictions use the generic pass-through
 profile. The generic route keeps the existing entity list and order. The
-specialized profiles retain absolute source offsets and do not infer clinical
+specialized profiles reject zero-length entities and retain absolute source offsets and do not infer clinical
 decisions.
 
 The committed synthetic fixture harness in

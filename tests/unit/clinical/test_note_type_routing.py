@@ -256,3 +256,23 @@ def test_committed_routing_fixture_is_synthetic_and_unrestricted() -> None:
     assert "DUA" not in raw
     assert all(row["metadata"]["synthetic"] for row in _fixture_rows())
     assert all(not row["metadata"]["restricted_data"] for row in _fixture_rows())
+
+
+def test_discharge_invalid_confidence_falls_back_without_raising():
+    for confidence in (10**400, 2.0, -1.0, True, float("nan")):
+        selection = resolve_profile(
+            {"type": "discharge_summary", "confidence": confidence}
+        )
+        assert selection.profile is GENERIC_PROFILE
+        assert selection.provenance.confidence == 0.0
+
+
+def test_specialized_route_drops_zero_length_entities():
+    row = _fixture_rows()[-1]
+    start = row["text"].index("resolved condition")
+    plan = build_extraction_plan(
+        row["text"],
+        "discharge_summary",
+        problem_mentions=[{"start": start, "end": start}],
+    )
+    assert plan.problem_mentions == ()
