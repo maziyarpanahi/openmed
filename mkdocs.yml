@@ -334,6 +334,8 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
+      - Lab Measurement Normalization: clinical/lab-measurements.md
       - Unit-display normalization audit: clinical/unit-display-audit.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
