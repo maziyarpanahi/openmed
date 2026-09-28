@@ -76,3 +76,15 @@ persist an artifact; both create the destination's parent directory locally.
 
 The report is an investigation aid only. It does not certify relation quality,
 clinical correctness, or a compliance posture.
+
+
+## Validation limits
+
+Each aggregate dimension must sum to the candidate total; conflicting count
+aliases and boolean schema versions are rejected. Typed category records are
+normalized again on entry and before serialization. Batch input is bounded to
+100000 candidates, imported count maps to 4096 entries, and JSON reads to 1 MiB.
+Scalar text is not a candidate batch. Serialization accepts only integer
+indentation from zero through eight. Read/write failures expose fixed error
+categories without retaining raw decoder or filesystem exception details.
+These aggregate counts do not provide a privacy guarantee for small cohorts.

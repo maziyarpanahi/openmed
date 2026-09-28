@@ -14,7 +14,8 @@ import json
 import re
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import wraps
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -116,13 +117,54 @@ _NESTED_RELATION_KEYS = ("relation", "edge")
 _ENDPOINT_KEYS = ("head", "tail", "attribute", "source", "target")
 
 
+MAX_AUDIT_RECORDS = 100000
+MAX_AUDIT_CATEGORIES = 4096
+MAX_AUDIT_JSON_BYTES = 1048576
+MAX_AUDIT_COUNT = 2**63 - 1
+_SAFE_ERRORS = frozenset(
+    {
+        "audit count dimensions must be mappings",
+        "audit count dimension is unreadable",
+        "audit counts must be non-negative integers",
+        "relation candidate sequence is unreadable",
+        "candidate_count must be a non-negative integer",
+        "unsupported relation-candidate audit schema version",
+        "relation-candidate audit report is unreadable",
+        "relation candidates must be an iterable of records",
+        "relation candidate input is unreadable",
+        "audit count totals must equal candidate_count",
+        "audit input exceeds the supported limit",
+        "conflicting candidate count aliases",
+        "audit indent must be an integer between zero and eight",
+    }
+)
+
+
+def _safe_boundary(function):
+    """Expose fixed categories without input-bearing exception chains."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            if function.__name__ in {"to_dict", "to_markdown"}:
+                args = (replace(args[0]), *args[1:])
+            return function(*args, **kwargs)
+        except Exception as error:
+            message = str(error)
+            if message not in _SAFE_ERRORS:
+                message = "invalid relation candidate audit input"
+        raise ValueError(message)
+
+    return wrapped
+
+
 def _normalise_category(value: Any, fallback: str) -> str:
     """Return a bounded token for further vocabulary validation."""
 
-    if not isinstance(value, str):
+    if not isinstance(value, str) or len(value) > 4096:
         return fallback
     try:
-        normalized = value.strip().casefold()
+        normalized = str.__str__(value).strip().casefold()
     except Exception:
         return fallback
     if not normalized:
@@ -161,6 +203,7 @@ def _normalise_count_mapping(
         raise ValueError("audit count dimension is unreadable") from None
 
     counts: Counter[str] = Counter()
+    item_count = 0
     while True:
         try:
             item = next(items)
@@ -168,13 +211,16 @@ def _normalise_count_mapping(
             break
         except Exception:
             raise ValueError("audit count dimension is unreadable") from None
+        item_count += 1
+        if item_count > MAX_AUDIT_CATEGORIES:
+            raise ValueError("audit input exceeds the supported limit")
         try:
             key, raw_count = item
         except Exception:
             raise ValueError("audit count dimension is unreadable") from None
-        if isinstance(raw_count, bool) or not isinstance(raw_count, int):
+        if type(raw_count) is not int:
             raise ValueError("audit counts must be non-negative integers")
-        if raw_count < 0:
+        if not 0 <= raw_count <= MAX_AUDIT_COUNT:
             raise ValueError("audit counts must be non-negative integers")
         counts[_safe_category(key, allowed, fallback)] += raw_count
     return MappingProxyType(dict(sorted(counts.items())))
@@ -186,14 +232,17 @@ def _value(source: Any, keys: Sequence[str]) -> Any:
     if source is None:
         return None
     if isinstance(source, Mapping):
+        values = []
         for key in keys:
             try:
                 value = source.get(key)
             except Exception:
                 continue
             if value is not None:
-                return value
-        return None
+                values.append(value)
+        if any(value != values[0] for value in values[1:]):
+            raise ValueError("conflicting audit category aliases")
+        return values[0] if values else None
 
     for key in keys:
         try:
@@ -288,6 +337,8 @@ def _derive_filtering_reason(candidate: Any, fallback: str) -> str:
     filtered = _nested_value(candidate, ("filtered", "rejected", "pruned"))
     if isinstance(filtered, bool):
         return "filtered" if filtered else fallback
+    if filtered is not None:
+        return OTHER_FILTERING_REASON
 
     status = _nested_value(candidate, ("status", "decision", "disposition"))
     normalized_status = _normalise_category(status, "")
@@ -310,7 +361,7 @@ def _coerce_record(
     """Coerce one candidate without retaining its record-level payload."""
 
     if isinstance(candidate, RelationCandidateAuditRecord):
-        return candidate
+        return replace(candidate)
 
     if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
         try:
@@ -352,6 +403,7 @@ class RelationCandidateAuditRecord:
     section: str = UNSECTIONED_SECTION
     filtering_reason: str = ACCEPTED_FILTERING_REASON
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -374,6 +426,7 @@ class RelationCandidateAuditRecord:
         )
 
     @classmethod
+    @_safe_boundary
     def from_candidate(
         cls,
         candidate: Any,
@@ -398,6 +451,7 @@ class RelationCandidateAuditRecord:
         )
 
     @classmethod
+    @_safe_boundary
     def from_mapping(cls, data: Mapping[str, Any]) -> "RelationCandidateAuditRecord":
         """Build a record from a mapping while ignoring all non-category fields."""
 
@@ -405,6 +459,7 @@ class RelationCandidateAuditRecord:
             raise TypeError("candidate audit input must be a mapping")
         return cls.from_candidate(data)
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, str]:
         """Return the category-only representation of this record."""
 
@@ -431,14 +486,16 @@ class RelationCandidateAuditReport:
     by_filtering_reason: Mapping[str, int] = field(default_factory=dict)
     schema_version: int = RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION
 
+    @_safe_boundary
     def __post_init__(self) -> None:
-        if isinstance(self.candidate_count, bool) or not isinstance(
-            self.candidate_count, int
+        if type(self.candidate_count) is not int:
+            raise ValueError("candidate_count must be a non-negative integer")
+        if not 0 <= self.candidate_count <= MAX_AUDIT_COUNT:
+            raise ValueError("candidate_count must be a non-negative integer")
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION
         ):
-            raise ValueError("candidate_count must be a non-negative integer")
-        if self.candidate_count < 0:
-            raise ValueError("candidate_count must be a non-negative integer")
-        if self.schema_version != RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION:
             raise ValueError("unsupported relation-candidate audit schema version")
 
         object.__setattr__(
@@ -468,6 +525,16 @@ class RelationCandidateAuditReport:
                 fallback=OTHER_FILTERING_REASON,
             ),
         )
+
+        if any(
+            sum(counts.values()) != self.candidate_count
+            for counts in (
+                self.by_relation_family,
+                self.by_section,
+                self.by_filtering_reason,
+            )
+        ):
+            raise ValueError("audit count totals must equal candidate_count")
 
     @property
     def total_candidates(self) -> int:
@@ -505,6 +572,7 @@ class RelationCandidateAuditReport:
             }
         )
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready report containing aggregate categories only."""
 
@@ -518,12 +586,19 @@ class RelationCandidateAuditReport:
         }
 
     @classmethod
+    @_safe_boundary
     def from_dict(cls, data: Mapping[str, Any]) -> "RelationCandidateAuditReport":
         """Build a report from its aggregate JSON representation."""
 
         if not isinstance(data, Mapping):
             raise TypeError("relation-candidate audit report must be a mapping")
         try:
+            if (
+                "candidate_count" in data
+                and "total_candidates" in data
+                and data["candidate_count"] != data["total_candidates"]
+            ):
+                raise ValueError("conflicting candidate count aliases")
             schema_version = data.get(
                 "schema_version", RELATION_CANDIDATE_AUDIT_SCHEMA_VERSION
             )
@@ -546,16 +621,23 @@ class RelationCandidateAuditReport:
         )
 
     @classmethod
+    @_safe_boundary
     def read_json(cls, path: str | Path) -> "RelationCandidateAuditReport":
         """Read a JSON report from *path*."""
 
-        with Path(path).open("r", encoding="utf-8") as handle:
-            payload = json.load(handle)
+        with Path(path).open("rb") as handle:
+            raw = handle.read(MAX_AUDIT_JSON_BYTES + 1)
+        if len(raw) > MAX_AUDIT_JSON_BYTES:
+            raise ValueError("audit input exceeds the supported limit")
+        payload = json.loads(raw)
         return cls.from_dict(payload)
 
+    @_safe_boundary
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the report deterministically as JSON."""
 
+        if type(indent) is not int or not 0 <= indent <= 8:
+            raise ValueError("audit indent must be an integer between zero and eight")
         return json.dumps(
             self.to_dict(),
             allow_nan=False,
@@ -564,6 +646,7 @@ class RelationCandidateAuditReport:
             sort_keys=True,
         )
 
+    @_safe_boundary
     def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
         """Write a deterministic JSON report to *path*."""
 
@@ -572,6 +655,7 @@ class RelationCandidateAuditReport:
         output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
         return output_path
 
+    @_safe_boundary
     def to_markdown(self) -> str:
         """Render a deterministic Markdown summary with no candidate details."""
 
@@ -615,6 +699,7 @@ class RelationCandidateAuditReport:
         )
         return "\n".join(lines) + "\n"
 
+    @_safe_boundary
     def write_markdown(self, path: str | Path) -> Path:
         """Write a deterministic Markdown summary to *path*."""
 
@@ -623,12 +708,14 @@ class RelationCandidateAuditReport:
         output_path.write_text(self.to_markdown(), encoding="utf-8")
         return output_path
 
+    @_safe_boundary
     def __getitem__(self, key: str) -> Any:
         """Allow dictionary-style access to the serialized report."""
 
         return self.to_dict()[key]
 
 
+@_safe_boundary
 def audit_relation_candidates(
     candidates: Iterable[Any] | Mapping[str, Any] | None,
     *,
@@ -668,6 +755,8 @@ def audit_relation_candidates(
         ACCEPTED_FILTERING_REASON,
     )
 
+    if isinstance(candidates, (str, bytes, bytearray)):
+        raise ValueError("relation candidates must be an iterable of records")
     if candidates is None:
         records: Iterable[Any] = ()
     elif isinstance(candidates, Mapping):
@@ -691,6 +780,8 @@ def audit_relation_candidates(
             break
         except Exception:
             raise ValueError("relation candidate input is unreadable") from None
+        if candidate_count >= MAX_AUDIT_RECORDS:
+            raise ValueError("audit input exceeds the supported limit")
         record = _coerce_record(
             candidate,
             default_relation_family=family_default,

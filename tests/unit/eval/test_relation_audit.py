@@ -228,3 +228,79 @@ def test_unreadable_input_never_echoes_sensitive_exception_text() -> None:
             by_section=_UnreadableCounts(),
         )
     assert sensitive_value not in str(error.value)
+
+
+def test_report_dimensions_must_equal_the_candidate_total():
+    with pytest.raises(ValueError):
+        RelationCandidateAuditReport(2, {"drug": 1}, {"assessment": 2}, {"accepted": 2})
+
+
+def test_boolean_schema_is_not_a_version_number():
+    with pytest.raises(ValueError):
+        RelationCandidateAuditReport(0, schema_version=True)
+
+
+def test_conflicting_total_aliases_are_rejected():
+    with pytest.raises(ValueError):
+        RelationCandidateAuditReport.from_dict(
+            {"candidate_count": 0, "total_candidates": 1}
+        )
+
+
+@pytest.mark.parametrize("value", ["synthetic-sensitive-marker", b"synthetic-marker"])
+def test_scalar_text_is_not_a_candidate_batch(value):
+    with pytest.raises(ValueError):
+        audit_relation_candidates(value)
+
+
+def test_invalid_json_discards_private_decoder_context(tmp_path):
+    source = tmp_path / "bad.json"
+    source.write_text('{"synthetic-sensitive-marker":', encoding="utf-8")
+    with pytest.raises(ValueError) as error:
+        RelationCandidateAuditReport.read_json(source)
+    assert error.value.__context__ is None
+    assert not hasattr(error.value, "doc")
+
+
+def test_error_context_does_not_retain_iterator_failure():
+    def values():
+        raise RuntimeError("synthetic-sensitive-marker")
+        yield
+
+    with pytest.raises(ValueError) as error:
+        audit_relation_candidates(values())
+    assert error.value.__context__ is None
+
+
+def test_serialization_indent_cannot_inject_source_values():
+    report = audit_relation_candidates([{}])
+    with pytest.raises(ValueError):
+        report.to_json(indent="synthetic-sensitive-marker")
+
+
+def test_conflicting_filter_flags_cannot_be_counted_as_accepted():
+    with pytest.raises(ValueError):
+        audit_relation_candidates([{"filtered": False, "rejected": True}])
+
+
+def test_non_boolean_filter_flag_goes_to_other_bucket():
+    report = audit_relation_candidates([{"filtered": "false"}])
+    assert report.by_filtering_reason == {"other": 1}
+
+
+def test_audit_iteration_is_bounded(monkeypatch):
+    from itertools import repeat
+
+    import openmed.eval.relation_audit as module
+
+    monkeypatch.setattr(module, "MAX_AUDIT_RECORDS", 2)
+    with pytest.raises(ValueError):
+        audit_relation_candidates(repeat({}))
+
+
+def test_typed_records_are_renormalized():
+    record = RelationCandidateAuditRecord()
+    object.__setattr__(record, "relation_family", "synthetic-sensitive-marker")
+    report = audit_relation_candidates([record])
+    assert report.by_relation_family == {"unknown": 1}
+    assert "synthetic-sensitive-marker" not in record.to_dict().values()
