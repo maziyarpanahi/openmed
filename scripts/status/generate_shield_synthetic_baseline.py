@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
@@ -11,10 +12,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.labels import AGE, DATE, ID_NUM, PHONE, URL
-from openmed.core.repro_hash import (
-    compute_file_digest,
-    compute_reproducibility_hash,
-)
+from openmed.core.repro_hash import compute_reproducibility_hash
 from openmed.eval.cache import hash_fixture_set
 from openmed.eval.harness import BenchmarkFixture, run_benchmark
 from openmed.eval.metrics import EvalSpan
@@ -33,6 +31,16 @@ RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (URL, re.compile(r"\b[a-z0-9.-]+\.invalid\b")),
     (AGE, re.compile(r"\b\d{1,3}\b(?= years old\b)")),
 )
+
+
+def text_file_digest(path: Path) -> str:
+    """Hash UTF-8 source text with checkout newlines normalized to LF.
+
+    Git may materialize CRLF on Windows. Only newline encoding is normalized;
+    all source content, whitespace, and the final newline remain bound.
+    """
+    content = path.read_text(encoding="utf-8").encode("utf-8")
+    return "sha256:" + hashlib.sha256(content).hexdigest()
 
 
 def load_synthetic_fixtures(path: Path = FIXTURE_PATH) -> list[BenchmarkFixture]:
@@ -101,13 +109,14 @@ def generate_report(
     if re.fullmatch(r"[0-9a-f]{40}", source_revision) is None:
         raise ValueError("source_revision must be a full 40-character Git SHA")
     fixtures = load_synthetic_fixtures()
-    fixture_digest = compute_file_digest(FIXTURE_PATH)
-    script_digest = compute_file_digest(Path(__file__))
+    fixture_digest = text_file_digest(FIXTURE_PATH)
+    script_digest = text_file_digest(Path(__file__))
     recipe = {
         "script_sha256": script_digest,
         "rules_revision": "v1",
         "suite": SUITE,
         "harness": "openmed.eval.harness.run_benchmark",
+        "text_digest_format": "utf8-lf-v1",
     }
     data_manifest = {
         "fixture_sha256": fixture_digest,
@@ -133,6 +142,7 @@ def generate_report(
         "model_revision": "v1",
         "config_revision": "v1",
         "script_sha256": script_digest,
+        "text_digest_format": "utf8-lf-v1",
         "source_revision": source_revision,
         "reproducibility_hash": reproduction,
         "evidence_path": "shield-synthetic.report.json",

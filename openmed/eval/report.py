@@ -398,6 +398,10 @@ def _render_shield_synthetic_card(report: BenchmarkReport) -> str:
         raise ValueError("synthetic SHIELD publication requires source rights")
     if not metadata.get("limitations"):
         raise ValueError("synthetic SHIELD publication requires limitations")
+    if re.fullmatch(r"[0-9a-f]{40}", str(metadata.get("source_revision", ""))) is None:
+        raise ValueError(
+            "synthetic SHIELD publication requires a pinned source revision"
+        )
 
     metrics = report.metrics
     leakage = metrics["leakage"]
@@ -417,7 +421,7 @@ def _render_shield_synthetic_card(report: BenchmarkReport) -> str:
     lines = [
         "# Synthetic SHIELD-Schema Baseline",
         "",
-        "This is a local rules control on two OpenMed-generated synthetic notes",
+        f"This is a local rules control on {report.fixture_count} OpenMed-generated synthetic notes",
         "using SHIELD's nine label names. It does not use the SHIELD public sample",
         "or restricted corpus and does not measure a clinical model.",
         "",
@@ -453,6 +457,7 @@ def _render_shield_synthetic_card(report: BenchmarkReport) -> str:
             f"`{metadata['model_revision']}` on `{report.device}`",
             f"- Configuration revision: `{metadata['config_revision']}`",
             f"- Rules script SHA-256: `{metadata['script_sha256']}`",
+            "- Text digests normalize UTF-8 checkout newlines to LF (`utf8-lf-v1`).",
             f"- Source base commit: `{metadata['source_revision']}`",
             f"- Reproducibility hash: `{metadata['reproducibility_hash']}`",
             f"- Report timestamp: `{report.generated_at}`",

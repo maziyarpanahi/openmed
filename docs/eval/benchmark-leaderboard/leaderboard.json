@@ -25,8 +25,8 @@
       "release_tag": "not-released",
       "report_path": "shield-synthetic.report.json",
       "report_url": "reports/shield-synthetic.report.json",
-      "reproducibility_hash": "sha256:d166ab379e01e399e4fe849ca006805b2bf7010e733035dfb546a50bbe9eb558",
-      "run_date": "2026-09-27",
+      "reproducibility_hash": "sha256:2cc88b7070ede609b18fe206a6f3fae95a0fbb0013f84c51962aaa3f06afeae9",
+      "run_date": "2026-09-28",
       "suite": "shield-synthetic"
     }
   ],
@@ -75,8 +75,8 @@
               "release_tag": "not-released",
               "report_path": "shield-synthetic.report.json",
               "report_url": "reports/shield-synthetic.report.json",
-              "reproducibility_hash": "sha256:d166ab379e01e399e4fe849ca006805b2bf7010e733035dfb546a50bbe9eb558",
-              "run_date": "2026-09-27",
+              "reproducibility_hash": "sha256:2cc88b7070ede609b18fe206a6f3fae95a0fbb0013f84c51962aaa3f06afeae9",
+              "run_date": "2026-09-28",
               "suite": "shield-synthetic"
             }
           ]

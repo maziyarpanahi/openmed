@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from openmed.eval.report import BenchmarkReport, render_benchmark_card
 from scripts.status.generate_shield_synthetic_baseline import generate_report
 
@@ -12,6 +14,26 @@ STATUS_CONTRACT = ROOT / "docs" / "status" / "trust-status-contract.md"
 PUBLICATION_PLAN = ROOT / "docs" / "status" / "open-benchmark-publication.md"
 SHIELD_REPORT = ROOT / "docs" / "benchmarks" / "shield-synthetic.report.json"
 SHIELD_CARD = ROOT / "docs" / "benchmarks" / "shield-synthetic.md"
+
+
+def test_synthetic_baseline_hashes_ignore_checkout_newlines(tmp_path: Path) -> None:
+    from scripts.status.generate_shield_synthetic_baseline import text_file_digest
+
+    lf = tmp_path / "lf.txt"
+    crlf = tmp_path / "crlf.txt"
+    changed = tmp_path / "changed.txt"
+    lf.write_bytes(b"synthetic\nfixture\n")
+    crlf.write_bytes(b"synthetic\r\nfixture\r\n")
+    changed.write_bytes(b"synthetic\nchanged\n")
+    assert text_file_digest(lf) == text_file_digest(crlf)
+    assert text_file_digest(lf) != text_file_digest(changed)
+
+
+def test_synthetic_card_rejects_unpinned_command_revision() -> None:
+    report = BenchmarkReport.read_json(SHIELD_REPORT)
+    report.metadata["source_revision"] = "main; echo arbitrary-command"
+    with pytest.raises(ValueError, match="source revision"):
+        render_benchmark_card(report)
 
 
 def _read(path: Path) -> str:
@@ -108,5 +130,8 @@ def test_committed_synthetic_shield_evidence_is_reproducible() -> None:
         committed.metrics["leakage"]["overall"]
         == (regenerated.metrics["leakage"]["overall"])
     )
+    for name, metric in committed.metrics.items():
+        if name not in {"latency", "resources"}:
+            assert metric == regenerated.metrics[name]
     assert SHIELD_CARD.read_text(encoding="utf-8") == render_benchmark_card(committed)
     assert "not clinical model performance" in SHIELD_CARD.read_text(encoding="utf-8")

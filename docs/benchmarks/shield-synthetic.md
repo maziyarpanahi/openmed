@@ -1,6 +1,6 @@
 # Synthetic SHIELD-Schema Baseline
 
-This is a local rules control on two OpenMed-generated synthetic notes
+This is a local rules control on 2 OpenMed-generated synthetic notes
 using SHIELD's nine label names. It does not use the SHIELD public sample
 or restricted corpus and does not measure a clinical model.
 
@@ -32,16 +32,17 @@ or restricted corpus and does not measure a clinical model.
 - Fixture SHA-256: `sha256:3b94709625517cfb4ed583646809607ef2d108568f56dd22989505514983d096`
 - Rules model: `openmed-synthetic-regex-phi-baseline-v1`; revision `v1` on `cpu`
 - Configuration revision: `v1`
-- Rules script SHA-256: `sha256:937436756933dce6a5dd6bef9d3b2151f4cd6752f2eaa5dabac148a016d98f48`
-- Source base commit: `2f6090a74673a45346ef3ee15c66fb8de2c1b60b`
-- Reproducibility hash: `sha256:d166ab379e01e399e4fe849ca006805b2bf7010e733035dfb546a50bbe9eb558`
-- Report timestamp: `2026-09-27T21:30:04.742355+00:00`
+- Rules script SHA-256: `sha256:eb20c575e3a315b6e0fcd5aa7b4714243bee68a1f9427c949f5aa6db46766c88`
+- Text digests normalize UTF-8 checkout newlines to LF (`utf8-lf-v1`).
+- Source base commit: `5132cb95532476e6698b6b440751e8beb553e394`
+- Reproducibility hash: `sha256:2cc88b7070ede609b18fe206a6f3fae95a0fbb0013f84c51962aaa3f06afeae9`
+- Report timestamp: `2026-09-28T11:30:10.614226+00:00`
 
 Recompute the report with:
 
 ```bash
 python -m scripts.status.generate_shield_synthetic_baseline \
-  --source-revision 2f6090a74673a45346ef3ee15c66fb8de2c1b60b
+  --source-revision 5132cb95532476e6698b6b440751e8beb553e394
 ```
 
 Limitations: Two OpenMed-generated synthetic notes using SHIELD label names; no SHIELD public-sample or restricted records were used. This is a rules smoke baseline, not clinical model performance or a high-recall release gate.

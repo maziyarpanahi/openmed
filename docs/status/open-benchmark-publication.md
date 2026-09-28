@@ -90,6 +90,9 @@ different order.
    input. Review the source rights, fixture and script SHA-256 values, exact
    model and configuration revision, limitations, and per-label metrics. A
    reviewer must confirm that no public-sample or DUA-gated SHIELD row was used.
+   Source and fixture text digests use UTF-8 with LF-normalized checkout
+   newlines (`utf8-lf-v1`), so Windows CRLF conversion cannot change the
+   reproduction identity. Other byte/content changes still invalidate it.
 5. Run the repository test suite:
 
    ```bash
