@@ -12,6 +12,11 @@ The public source types are `evidence`, `model`, `policy`, `temporal`, and
 provenance references. Sources are deduplicated and sorted in a stable order;
 they are never reduced to a second aggregate score.
 
+Typed constructors and helpers accept `reason_code=` or `reason=` instead of
+the positional code. Their default applies only when no reason is supplied;
+supplying multiple reason arguments is rejected. A five-item guarded producer
+tuple preserves both the fourth provenance mapping and fifth source collection.
+
 ```python
 from openmed.clinical import (
     SourceSpan,
