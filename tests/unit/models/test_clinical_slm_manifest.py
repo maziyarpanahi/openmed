@@ -26,6 +26,11 @@ from openmed.models.clinical_slm_manifest import (
     verify_clinical_slm_package,
 )
 
+requires_secure_reads = pytest.mark.skipif(
+    not manifest_module._HAS_SECURE_LOCAL_READ,
+    reason="package verification requires POSIX no-follow directory descriptors",
+)
+
 
 def test_typed_manifest_is_revalidated_before_verification(tmp_path):
     package, manifest = _write_package(tmp_path)
@@ -118,6 +123,7 @@ def test_success_cannot_include_failure_reason():
         )
 
 
+@requires_secure_reads
 def test_symlink_swap_between_check_and_open_is_rejected(tmp_path, monkeypatch):
     package, manifest = _write_package(tmp_path)
     weights = package / "weights/model.safetensors"
@@ -136,6 +142,7 @@ def test_symlink_swap_between_check_and_open_is_rejected(tmp_path, monkeypatch):
     assert caught.value.__context__ is None
 
 
+@requires_secure_reads
 def test_same_size_mutation_during_read_is_rejected(tmp_path, monkeypatch):
     package, manifest = _write_package(tmp_path)
     weights = package / "weights/model.safetensors"
@@ -161,6 +168,7 @@ def test_same_size_mutation_during_read_is_rejected(tmp_path, monkeypatch):
         verify_clinical_slm_package(package, manifest)
 
 
+@requires_secure_reads
 def test_nested_manifest_symlink_is_rejected(tmp_path):
     package, _ = _write_package(tmp_path)
     (package / "alias").symlink_to(package, target_is_directory=True)
@@ -213,6 +221,7 @@ def _write_package(tmp_path: Path) -> tuple[Path, ClinicalSLMArtifactManifest]:
     return package, manifest
 
 
+@requires_secure_reads
 def test_valid_package_is_deterministic_and_verified_offline(tmp_path, monkeypatch):
     package, expected = _write_package(tmp_path)
 
@@ -317,6 +326,7 @@ def test_manifest_digest_is_required_on_disk_and_binds_metadata(tmp_path: Path) 
     assert "different-task" not in str(stale.value)
 
 
+@requires_secure_reads
 def test_tampered_and_missing_artifacts_are_rejected_before_loading(
     tmp_path: Path,
 ) -> None:
@@ -337,6 +347,7 @@ def test_tampered_and_missing_artifacts_are_rejected_before_loading(
     assert str(package) not in str(missing.value)
 
 
+@requires_secure_reads
 def test_symlinked_artifacts_are_not_accepted(tmp_path: Path) -> None:
     package, _ = _write_package(tmp_path)
     weights = package / "weights/model.safetensors"
@@ -373,3 +384,15 @@ def test_duplicate_json_fields_and_hostile_mapping_values_do_not_escape(
     with pytest.raises(ClinicalSLMManifestError) as path_error:
         load_clinical_slm_manifest(FailingPath())  # type: ignore[arg-type]
     assert marker not in str(path_error.value)
+
+
+def test_platform_without_secure_reads_can_parse_but_cannot_verify(
+    tmp_path, monkeypatch
+):
+    package, manifest = _write_package(tmp_path)
+    monkeypatch.setattr(manifest_module, "_HAS_SECURE_LOCAL_READ", False)
+    assert load_clinical_slm_manifest(package).to_json() == manifest.to_json()
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        verify_clinical_slm_package(package, manifest)
+    assert caught.value.code == "component_unreadable"
+    assert caught.value.__context__ is None

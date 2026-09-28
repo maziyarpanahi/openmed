@@ -42,6 +42,7 @@ MAX_MODEL_ID_LENGTH: Final = 256
 MAX_PATH_LENGTH: Final = 512
 MAX_ARTIFACT_BYTES: Final = (1 << 63) - 1
 MAX_MANIFEST_BYTES: Final = 8 * 1024 * 1024
+_HAS_SECURE_LOCAL_READ = os.name == "posix" and hasattr(os, "O_NOFOLLOW")
 
 _DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:+/@-]{0,127}$")
@@ -1322,9 +1323,14 @@ def load_clinical_slm_manifest(
             manifest_path = manifest_path / CLINICAL_SLM_MANIFEST_FILENAME
         if manifest_path.is_symlink() or not manifest_path.is_file():
             _fail("manifest_missing", error_type=ClinicalSLMArtifactMissingError)
-        with _open_local_file(
-            manifest_path.parent.resolve(strict=True), manifest_path.name
-        ) as handle:
+        reader = (
+            _open_local_file(
+                manifest_path.parent.resolve(strict=True), manifest_path.name
+            )
+            if _HAS_SECURE_LOCAL_READ
+            else manifest_path.open("rb")
+        )
+        with reader as handle:
             payload = handle.read(MAX_MANIFEST_BYTES + 1)
         if len(payload) > MAX_MANIFEST_BYTES:
             _fail("manifest_unreadable")
@@ -1418,7 +1424,7 @@ def _file_identity(metadata):
 @contextmanager
 def _open_local_file(root: Path, relative_path: str):
     """Hold directory descriptors and reject symlinks throughout a local read."""
-    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+    if not _HAS_SECURE_LOCAL_READ:
         _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
     descriptors = []
     file_descriptor = None
@@ -1501,6 +1507,8 @@ def verify_clinical_slm_package(
     a content-free :class:`ClinicalSLMArtifactError` subclass.
     """
 
+    if not _HAS_SECURE_LOCAL_READ:
+        _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
     root = _validated_package_root(package_root)
     if manifest is None:
         if type(manifest_filename) is not str or not manifest_filename:
