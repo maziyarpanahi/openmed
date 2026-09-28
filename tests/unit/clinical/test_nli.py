@@ -13,25 +13,28 @@ from openmed.clinical.nli import (
 )
 
 
-def test_nli_returns_the_documented_two_field_shape() -> None:
+def test_nli_returns_the_documented_value_free_shape() -> None:
     result = nli(
         "Synthetic patient has pneumonia.",
         "The patient has pneumonia.",
+        backend="heuristic",
     )
 
-    assert set(result) == {"label", "score"}
+    assert set(result) == {"label", "score", "backend_id"}
     assert result["label"] in NLI_LABELS
     assert 0.0 <= result["score"] <= 1.0
     assert result["label"] == "entailment"
+    assert result["backend_id"] == "heuristic"
 
 
-def test_verify_flags_contradiction_and_retains_entailed_claim() -> None:
+def test_verify_flags_contradiction_without_echoing_claims() -> None:
     results = verify(
         [
             "The patient has no pneumonia.",
             "The patient has pneumonia.",
         ],
         "Synthetic patient has pneumonia.",
+        backend="heuristic",
     )
 
     assert [result["label"] for result in results] == [
@@ -40,16 +43,15 @@ def test_verify_flags_contradiction_and_retains_entailed_claim() -> None:
     ]
     assert results[0]["contradicted"] is True
     assert results[1]["contradicted"] is False
-    assert [result["claim"] for result in results] == [
-        "The patient has no pneumonia.",
-        "The patient has pneumonia.",
-    ]
+    assert [result["claim_index"] for result in results] == [0, 1]
+    assert "pneumonia" not in str(results)
 
 
 def test_verify_pairs_aligned_source_spans() -> None:
     results = verify(
         ["No fever is present.", "Pneumonia is present."],
         ["Synthetic fever is present.", "Synthetic pneumonia is present."],
+        backend="heuristic",
     )
 
     assert [result["label"] for result in results] == [
@@ -68,7 +70,7 @@ def test_nli_accepts_a_swappable_backend_without_api_changes() -> None:
 
     result = nli("synthetic source", "synthetic claim", backend=StubBackend())
 
-    assert result == {"label": "neutral", "score": 0.25}
+    assert result == {"label": "neutral", "score": 0.25, "backend_id": "custom-local"}
     assert calls == [("synthetic source", "synthetic claim")]
 
 
@@ -120,4 +122,4 @@ def test_malformed_backend_scores_fail_with_a_stable_error(score) -> None:
     ],
 )
 def test_opposites_in_unrelated_claims_remain_neutral(premise, hypothesis) -> None:
-    assert nli(premise, hypothesis)["label"] == "neutral"
+    assert nli(premise, hypothesis, backend="heuristic")["label"] == "neutral"
