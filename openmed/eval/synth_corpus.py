@@ -254,10 +254,14 @@ def generate_corpus(
         ValueError: If *size* is not positive or *seed* is not an integer.
     """
 
-    if isinstance(seed, bool) or not isinstance(seed, int):
-        raise ValueError("seed must be an integer")
-    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
-        raise ValueError("size must be a positive integer")
+    if (
+        isinstance(seed, bool)
+        or not isinstance(seed, int)
+        or not -(2**63) <= seed < 2**63
+    ):
+        raise ValueError("seed must be a signed 64-bit integer")
+    if isinstance(size, bool) or not isinstance(size, int) or not 1 <= size <= 10_000:
+        raise ValueError("size must be between 1 and 10000")
 
     rows: list[dict[str, Any]] = []
     for index in range(size):

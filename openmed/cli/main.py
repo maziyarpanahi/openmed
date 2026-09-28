@@ -6194,9 +6194,9 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
         run_clinical_phi_shield_benchmark,
         suite_metadata,
     )
+    from openmed.eval.suites.openmed_synth import openmed_synth_execution_metadata
 
     suite = str(args.suite or SHIELD)
-    explicit_models = bool(args.models)
 
     try:
         models = _parse_model_args(args.models or [])
@@ -6288,10 +6288,14 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
                 device=args.device,
                 runner=(
                     openmed_synth_reference_runner
-                    if suite == OPENMED_SYNTH and not explicit_models
+                    if suite == OPENMED_SYNTH and model == OPENMED_SYNTH_REFERENCE_MODEL
                     else None
                 ),
-                metadata=metadata,
+                metadata=(
+                    {**metadata, **openmed_synth_execution_metadata(model)}
+                    if suite == OPENMED_SYNTH
+                    else metadata
+                ),
             )
             for model in models
         ]

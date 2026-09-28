@@ -84,6 +84,26 @@ def openmed_synth_reference_runner(
     return fixture.gold_spans
 
 
+def openmed_synth_execution_metadata(
+    model_name: str, runner: ModelRunner | None = None
+) -> dict[str, Any]:
+    """Describe the execution path without claiming real-model validation."""
+    reference = runner is openmed_synth_reference_runner or (
+        runner is None and model_name == OPENMED_SYNTH_REFERENCE_MODEL
+    )
+    return {
+        "uses_gold_reference": reference,
+        "evaluation_kind": (
+            "fixture_smoke_only"
+            if reference
+            else "caller_supplied_runner"
+            if runner is not None
+            else "model_on_synthetic_corpus"
+        ),
+        "clinical_validation": False,
+    }
+
+
 def run_openmed_synth_benchmark(
     *,
     model_name: str = OPENMED_SYNTH_REFERENCE_MODEL,
@@ -93,7 +113,11 @@ def run_openmed_synth_benchmark(
     runner: ModelRunner | None = None,
     generated_at: str | None = None,
 ) -> BenchmarkReport:
-    """Run the synthetic suite locally without model credentials."""
+    """Run the suite with an explicit gold-smoke, injected, or model path.
+
+    A named model uses the regular local model runner; only the reference alias
+    selects gold spans. Model assets must already be available for offline use.
+    """
 
     fixtures = load_openmed_synth_fixtures(seed=seed, corpus_size=corpus_size)
     return run_benchmark(
@@ -101,9 +125,16 @@ def run_openmed_synth_benchmark(
         suite=OPENMED_SYNTH,
         model_name=model_name,
         device=device,
-        runner=runner or openmed_synth_reference_runner,
+        runner=(
+            openmed_synth_reference_runner
+            if runner is None and model_name == OPENMED_SYNTH_REFERENCE_MODEL
+            else runner
+        ),
         generated_at=generated_at,
-        metadata=openmed_synth_suite_metadata(seed=seed, corpus_size=corpus_size),
+        metadata={
+            **openmed_synth_suite_metadata(seed=seed, corpus_size=corpus_size),
+            **openmed_synth_execution_metadata(model_name, runner),
+        },
     )
 
 
@@ -115,6 +146,7 @@ __all__ = [
     "OPENMED_SYNTH_REFERENCE_MODEL",
     "load_openmed_synth_fixtures",
     "openmed_synth_reference_runner",
+    "openmed_synth_execution_metadata",
     "openmed_synth_suite_metadata",
     "run_openmed_synth_benchmark",
 ]

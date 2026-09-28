@@ -31,3 +31,21 @@ medical-record identifiers are generated synthetic values. This corpus
 contains no real PHI, production records, or DUA-gated data, and it is not
 clinical ground truth. It is an assistive de-identification evaluation
 fixture, not a clinical decision-making or patient-care tool.
+
+## Smoke tests versus model evaluation
+
+`openmed benchmark pii --suite openmed-synth` deliberately returns gold spans
+as a fixture-integrity smoke test. Its report sets `uses_gold_reference: true`
+and `evaluation_kind: fixture_smoke_only`. A perfect smoke score is not model
+performance. The explicit `openmed-synth-reference` alias behaves identically.
+
+Passing a different model name uses the regular local model runner, not gold
+spans; cache the model assets before offline use. An injected Python runner is
+labeled `caller_supplied_runner`, since the harness cannot verify whether it
+actually executes a model. All modes set `clinical_validation: false`.
+
+Generation is bounded to 1–10,000 records and a signed 64-bit seed. The pinned
+hash above was verified with Faker 40.15.0 from `uv.lock`; reproducibility across
+arbitrary Faker versions is not promised. Use the frozen environment when
+reproducing this receipt. Faker values are invented, but accidental resemblance
+to real people or addresses is possible; they are not anonymized patient data.

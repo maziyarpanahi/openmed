@@ -115,3 +115,59 @@ def test_cli_runs_the_suite_without_model_credentials(capsys) -> None:
     assert payload["model_name"] == "openmed-synth-reference"
     assert payload["fixture_count"] == DEFAULT_CORPUS_SIZE
     assert payload["metadata"]["requires_credentials"] is False
+
+
+def test_named_model_uses_actual_runner_not_gold(monkeypatch):
+    from openmed.eval import harness
+    from openmed.eval.suites.openmed_synth import run_openmed_synth_benchmark
+
+    calls = []
+
+    def local_runner(fixture, model_name, device):
+        calls.append((model_name, device))
+        return []
+
+    monkeypatch.setattr(harness, "default_model_runner", local_runner)
+    report = run_openmed_synth_benchmark(model_name="local-test-model", corpus_size=1)
+    assert calls == [("local-test-model", "cpu")]
+    assert report.metadata["evaluation_kind"] == "model_on_synthetic_corpus"
+    assert report.metadata["uses_gold_reference"] is False
+
+
+def test_reference_smoke_test_is_explicitly_labeled():
+    from openmed.eval.suites.openmed_synth import run_openmed_synth_benchmark
+
+    report = run_openmed_synth_benchmark(corpus_size=1)
+    assert report.metadata["uses_gold_reference"] is True
+    assert report.metadata["evaluation_kind"] == "fixture_smoke_only"
+
+
+def test_injected_runner_is_not_mislabeled_as_reference():
+    from openmed.eval.suites.openmed_synth import run_openmed_synth_benchmark
+
+    report = run_openmed_synth_benchmark(corpus_size=1, runner=lambda *args: [])
+    assert report.metadata["uses_gold_reference"] is False
+    assert report.metadata["evaluation_kind"] == "caller_supplied_runner"
+
+
+@pytest.mark.parametrize("size,seed", [(10001, 1), (1, 2**64)])
+def test_generation_has_explicit_resource_bounds(size, seed):
+    with pytest.raises(ValueError):
+        generate_corpus(size=size, seed=seed)
+
+
+def test_cli_reference_alias_is_offline_even_when_explicit(capsys):
+    result = main(
+        [
+            "benchmark",
+            "pii",
+            "--suite",
+            OPENMED_SYNTH,
+            "--model",
+            "openmed-synth-reference",
+        ]
+    )
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["metadata"]["evaluation_kind"] == "fixture_smoke_only"
+    assert payload["metadata"]["uses_gold_reference"] is True
