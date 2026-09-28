@@ -182,6 +182,7 @@ nav:
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
       - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
       - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
+      - Empty-evidence Summary Refusal: clinical/summary-empty-evidence.md
       - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
       - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
