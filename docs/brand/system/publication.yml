@@ -254,6 +254,7 @@ classification:
     - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/summary-section-planning.md
     - clinical/summary-template-profiles.md
     - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
