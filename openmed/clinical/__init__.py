@@ -301,6 +301,29 @@ from .events import (
     extract_medication_change_events,
     score_event_frame_corpus,
 )
+from .evidence_coverage import (
+    COVERAGE_STATUSES,
+    EVIDENCE_COVERAGE_NOTE,
+    EVIDENCE_COVERAGE_SCHEMA_VERSION,
+    CoverageStatus,
+    EvidenceCoverage,
+    EvidenceCoverageCell,
+    EvidenceCoverageEntry,
+    EvidenceCoverageError,
+    EvidenceCoverageMatrix,
+    EvidenceCoverageRecord,
+    build_evidence_coverage,
+    build_evidence_coverage_matrix,
+    fingerprint_source,
+    render_evidence_coverage,
+    render_evidence_coverage_matrix,
+)
+from .evidence_coverage import (
+    REVIEW_STATES as COVERAGE_REVIEW_STATES,
+)
+from .evidence_coverage import (
+    ReviewState as CoverageReviewState,
+)
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,
@@ -329,6 +352,17 @@ from .evidence_packet import (
 )
 from .evidence_packet import (
     REJECTION_CATEGORIES as EVIDENCE_REJECTION_CATEGORIES,
+)
+from .evidence_span_audit import (
+    EVIDENCE_SPAN_AUDIT_ADVISORY,
+    EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION,
+    OVERLAP_KINDS,
+    EvidenceSpan,
+    EvidenceSpanAudit,
+    EvidenceSpanOverlap,
+    OverlapKind,
+    audit_evidence_span_overlaps,
+    audit_evidence_spans,
 )
 from .experiencer import (
     EXPERIENCER_REFINED_VALUES,
@@ -540,6 +574,12 @@ from .nli_assertion_pairs import (
     construct_assertion_aware_pairs,
     validate_assertion_metadata,
     validate_nli_pair,
+)
+from .nli_backends import (
+    EncoderNLIBackend,
+    LocalNLIError,
+    RemoteNLIBackendError,
+    resolve_nli_backend,
 )
 from .nli_experiencer_pairs import (
     CAREGIVER_EXPERIENCER,
@@ -1688,6 +1728,15 @@ __all__ = [
     "EdgeKind",
     "EntityOccurrence",
     "link_documents",
+    "EVIDENCE_SPAN_AUDIT_ADVISORY",
+    "EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION",
+    "OVERLAP_KINDS",
+    "EvidenceSpan",
+    "EvidenceSpanAudit",
+    "EvidenceSpanOverlap",
+    "OverlapKind",
+    "audit_evidence_span_overlaps",
+    "audit_evidence_spans",
     "LabValueEventMention",
     "LAB_RESULT_ADVISORY",
     "LAB_RESULT_CANDIDATE_ADVISORY",
@@ -1725,6 +1774,23 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "COVERAGE_STATUSES",
+    "CoverageStatus",
+    "EVIDENCE_COVERAGE_NOTE",
+    "EVIDENCE_COVERAGE_SCHEMA_VERSION",
+    "COVERAGE_REVIEW_STATES",
+    "CoverageReviewState",
+    "EvidenceCoverage",
+    "EvidenceCoverageCell",
+    "EvidenceCoverageEntry",
+    "EvidenceCoverageError",
+    "EvidenceCoverageMatrix",
+    "EvidenceCoverageRecord",
+    "build_evidence_coverage",
+    "build_evidence_coverage_matrix",
+    "fingerprint_source",
+    "render_evidence_coverage",
+    "render_evidence_coverage_matrix",
     "PROTECTED_TEXT_OMITTED",
     "PROTECTED_TEXT_POLICY",
     "REVIEW_PACKET_ADVISORY",
@@ -2095,6 +2161,10 @@ __all__ = [
     "NLI_LABELS",
     "NLIBackend",
     "NLIResult",
+    "EncoderNLIBackend",
+    "LocalNLIError",
+    "RemoteNLIBackendError",
+    "resolve_nli_backend",
     "HeuristicNLIBackend",
     "VerificationResult",
     "get_default_backend",
