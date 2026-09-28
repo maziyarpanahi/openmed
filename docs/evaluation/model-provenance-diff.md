@@ -40,6 +40,11 @@ component names, fingerprint/version change reasons, and added, removed, or
 changed slice declarations. It never copies unknown manifest fields. Inputs
 with a free-form value in a known provenance field fail with an exception that
 identifies only the safe field name and never echoes the rejected value.
+Identifier-shaped values are also opaque in reports: non-canonical fingerprints,
+versions and slice names are deterministically hashed. Only canonical SHA-256
+tokens and fixed report vocabulary are emitted, so a raw value cannot bypass
+privacy checks merely by omitting spaces. File and conversion errors do not
+retain sensitive exception context.
 
 `report.changed`, `report.drift_detected`, and `report.has_drift` are equivalent
 boolean checks. `report.to_dict()` is JSON-ready and deterministic, while

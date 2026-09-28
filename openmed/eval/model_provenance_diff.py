@@ -85,12 +85,14 @@ def _hash_payload(value: Any) -> str:
 
 
 def _safe_identifier(value: Any, field: str) -> str:
-    if isinstance(value, bool) or value is None:
+    if type(value) not in (str, int, float):
         raise ModelProvenancePrivacyError(f"{field} must be a safe identifier")
     text = str(value).strip()
     if not text or not _SAFE_IDENTIFIER.fullmatch(text):
         raise ModelProvenancePrivacyError(f"{field} must be a safe identifier")
-    return text
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", text):
+        return text
+    return _hash_payload({"kind": "openmed.provenance-identifier.v1", "value": text})
 
 
 def _optional_identifier(value: Any, field: str) -> str | None:
@@ -248,29 +250,33 @@ class ModelProvenanceManifest:
                 raise ModelProvenanceInputError(
                     f"{field} provenance must be a ProvenanceComponent"
                 )
+            object.__setattr__(
+                self, field, ProvenanceComponent(value.fingerprint, value.version)
+            )
         slices = tuple(self.evaluation_slices)
         if any(not isinstance(item, EvaluationSlice) for item in slices):
             raise ModelProvenanceInputError(
                 "evaluation_slices must contain EvaluationSlice values"
             )
+        slices = tuple(
+            EvaluationSlice(item.name, item.fingerprint, item.version)
+            for item in slices
+        )
         names = tuple(item.name for item in slices)
         if len(names) != len(set(names)):
             raise ModelProvenanceInputError("evaluation slice names must be unique")
         object.__setattr__(
             self, "evaluation_slices", tuple(sorted(slices, key=lambda item: item.name))
         )
-        object.__setattr__(
-            self,
-            "schema_version",
-            _safe_identifier(self.schema_version, "manifest schema version"),
-        )
+        if self.schema_version != MODEL_PROVENANCE_DIFF_SCHEMA_VERSION:
+            raise ModelProvenanceInputError("unsupported manifest schema version")
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ModelProvenanceManifest":
         """Normalize a mapping while dropping all non-provenance fields."""
 
         if isinstance(payload, cls):
-            return payload
+            return cls.from_mapping(payload.to_dict())
         if not isinstance(payload, Mapping):
             raise ModelProvenanceInputError("run manifest must be an object")
 
@@ -361,7 +367,7 @@ def _coerce_component(
     fallback_version: Any = _MISSING,
 ) -> ProvenanceComponent:
     if isinstance(value, ProvenanceComponent):
-        return value
+        return ProvenanceComponent(value.fingerprint, value.version)
     if isinstance(value, Mapping):
         return ProvenanceComponent.from_mapping(
             value,
@@ -392,7 +398,7 @@ def _coerce_component(
 
 def _coerce_slice(value: Any) -> EvaluationSlice:
     if isinstance(value, EvaluationSlice):
-        return value
+        return EvaluationSlice(value.name, value.fingerprint, value.version)
     if isinstance(value, Mapping):
         return EvaluationSlice.from_mapping(value)
     if isinstance(value, str):
@@ -431,9 +437,9 @@ def _coerce_slices(value: Any) -> tuple[EvaluationSlice, ...]:
     try:
         slices = tuple(_coerce_slice(item) for item in values)
     except TypeError:
-        raise ModelProvenanceInputError(
-            "evaluation_slices must contain declarations"
-        ) from None
+        slices = None
+    if slices is None:
+        raise ModelProvenanceInputError("evaluation_slices must contain declarations")
     names = tuple(item.name for item in slices)
     if len(names) != len(set(names)):
         raise ModelProvenanceInputError("evaluation slice names must be unique")
@@ -442,7 +448,7 @@ def _coerce_slices(value: Any) -> tuple[EvaluationSlice, ...]:
 
 def _load_manifest(source: Any) -> ModelProvenanceManifest:
     if isinstance(source, ModelProvenanceManifest):
-        return source
+        return ModelProvenanceManifest.from_mapping(source.to_dict())
     if isinstance(source, Mapping):
         return ModelProvenanceManifest.from_mapping(source)
     if isinstance(source, (str, Path)):
@@ -450,9 +456,9 @@ def _load_manifest(source: Any) -> ModelProvenanceManifest:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
-            raise ModelProvenanceInputError(
-                "run manifest could not be read locally"
-            ) from None
+            payload = _MISSING
+        if payload is _MISSING:
+            raise ModelProvenanceInputError("run manifest could not be read locally")
         return ModelProvenanceManifest.from_mapping(payload)
     raise ModelProvenanceInputError("run manifest must be an object or local JSON path")
 
@@ -772,9 +778,13 @@ def write_model_provenance_manifest(
             encoding="utf-8",
         )
     except OSError:
+        failed = True
+    else:
+        failed = False
+    if failed:
         raise ModelProvenanceInputError(
             "normalized manifest could not be written locally"
-        ) from None
+        )
     return output_path
 
 
@@ -803,7 +813,19 @@ def _assert_safe_payload(value: Any, *, path: str) -> None:
             _assert_safe_payload(child, path=f"{path}[{index}]")
         return
     if isinstance(value, str):
-        if not _SAFE_IDENTIFIER.fullmatch(value):
+        allowed = {
+            MODEL_PROVENANCE_DIFF_SCHEMA_VERSION,
+            *PROVENANCE_COMPONENTS,
+            "evaluation_slices",
+            DRIFT_UNCHANGED,
+            DRIFT_FINGERPRINT_CHANGED,
+            DRIFT_VERSION_CHANGED,
+            DRIFT_FINGERPRINT_AND_VERSION_CHANGED,
+            SLICE_ADDED,
+            SLICE_REMOVED,
+            SLICE_CHANGED,
+        }
+        if value not in allowed and not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
             raise ModelProvenancePrivacyError("report contains a free-form value")
         return
     if isinstance(value, (bool, int, float)) or value is None:

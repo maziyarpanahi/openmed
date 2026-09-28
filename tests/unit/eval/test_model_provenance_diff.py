@@ -12,8 +12,10 @@ from openmed.eval.model_provenance_diff import (
     DRIFT_FINGERPRINT_CHANGED,
     DRIFT_VERSION_CHANGED,
     MODEL_PROVENANCE_DIFF_SCHEMA_VERSION,
+    EvaluationSlice,
     ModelProvenanceInputError,
     ModelProvenancePrivacyError,
+    ProvenanceComponent,
     assert_no_raw_text,
     build_model_provenance_manifest,
     diff_model_provenance,
@@ -67,10 +69,10 @@ def test_component_drift_is_classified_by_fingerprint_and_version() -> None:
         DRIFT_VERSION_CHANGED,
     )
     assert report.changed_components == ("model",)
-    assert report.to_dict()["components"]["model"]["after"] == {
-        "fingerprint": "sha256:model-b",
-        "version": "v2",
-    }
+    assert (
+        report.to_dict()["components"]["model"]["after"]
+        == ProvenanceComponent("sha256:model-b", "v2").to_dict()
+    )
 
 
 def test_slice_drift_reports_added_removed_and_changed_declarations() -> None:
@@ -87,9 +89,9 @@ def test_slice_drift_reports_added_removed_and_changed_declarations() -> None:
     report = diff_model_provenance(_manifest(), candidate)
     slices = report.to_dict()["evaluation_slices"]
 
-    assert slices["added"] == ["regression"]
-    assert slices["removed"] == ["multilingual"]
-    assert slices["changed"][0]["name"] == "baseline"
+    assert slices["added"] == [EvaluationSlice("regression").name]
+    assert slices["removed"] == [EvaluationSlice("multilingual").name]
+    assert slices["changed"][0]["name"] == EvaluationSlice("baseline").name
     assert slices["changed"][0]["reasons"] == [DRIFT_FINGERPRINT_CHANGED]
     assert report.changed_components == ("evaluation_slices",)
 
@@ -142,3 +144,31 @@ def test_malformed_manifest_does_not_accept_missing_provenance() -> None:
             _manifest(),
             {"model": {"fingerprint": "sha256:model-b", "version": "v2"}},
         )
+
+
+def test_safe_looking_raw_values_are_opaque_in_reports():
+    marker = "synthetic_person_name"
+    candidate = _manifest(model_fingerprint=marker, model_version=marker)
+    candidate["evaluation_slices"] = [marker]
+    report = diff_model_provenance(_manifest(), candidate)
+    assert marker not in report.to_json() + repr(report)
+    with pytest.raises(ModelProvenancePrivacyError):
+        assert_no_raw_text({"changed_components": [marker]})
+
+
+def test_conversion_and_file_errors_discard_sensitive_context(tmp_path):
+    class BadValue:
+        def __str__(self):
+            raise ValueError("synthetic_private_marker")
+
+    for operation in (
+        lambda: diff_model_provenance(_manifest(), _manifest(model_version=BadValue())),
+        lambda: load_model_provenance_manifest(tmp_path / "synthetic_private_marker"),
+    ):
+        with pytest.raises(
+            (ModelProvenanceInputError, ModelProvenancePrivacyError)
+        ) as caught:
+            operation()
+        assert "synthetic_private_marker" not in str(caught.value)
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
