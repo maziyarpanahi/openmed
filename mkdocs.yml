@@ -315,6 +315,7 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical event contradiction reports: clinical/event-contradictions.md
       - Conservative Temporal Intervals: clinical/temporal-intervals.md
       - Human-review queue SLA reports: clinical/review-sla.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
