@@ -207,3 +207,125 @@ def test_fixture_language_metadata_does_not_echo_arbitrary_values(
     )
 
     assert marker.casefold() not in json.dumps(report).casefold()
+
+
+@pytest.mark.parametrize("marker_value", ["false", 0, None])
+def test_nonboolean_fixture_safety_flags_never_certify_data(tmp_path, marker_value):
+    root = _fixture_root(
+        tmp_path,
+        {
+            "language": "en",
+            "metadata": {"synthetic": True, "contains_phi": marker_value},
+        },
+    )
+    report = build_language_health_matrix(
+        registry=_registry(),
+        manifest_rows=_manifest(),
+        fixture_roots=(root,),
+        languages=("en",),
+    )
+    assert report["languages"][0]["fixture"]["status"] == "contradictory"
+
+
+def test_nested_span_marker_cannot_certify_an_entire_record(tmp_path):
+    root = _fixture_root(tmp_path, {"language": "en", "spans": [{"synthetic": True}]})
+    report = build_language_health_matrix(
+        registry=_registry(),
+        manifest_rows=_manifest(),
+        fixture_roots=(root,),
+        languages=("en",),
+    )
+    assert report["languages"][0]["fixture"]["status"] != "filled"
+
+
+def test_model_and_policy_metadata_are_not_copied(tmp_path):
+    marker = "SyntheticPatientSecret"
+    root = _fixture_root(tmp_path, {"language": "en", "synthetic": True})
+    report = build_language_health_matrix(
+        registry=_registry(model=marker),
+        manifest_rows=_manifest(marker),
+        fixture_roots=(root,),
+        languages=("en",),
+        policy_names=(marker,),
+    )
+    assert marker not in json.dumps(report)
+
+
+def test_script_verdict_cannot_copy_untrusted_values(tmp_path):
+    marker = "SyntheticPatientSecret"
+    rows = _manifest()
+    rows[0]["languages"] = ["hi"]
+    rows[0]["script_coverage"] = {"devanagari": {"verdict": marker}}
+    report = build_language_health_matrix(
+        registry=_registry(code="hi"),
+        manifest_rows=rows,
+        fixture_roots=(),
+        languages=("hi",),
+    )
+    assert marker not in json.dumps(report)
+
+
+def test_manifest_iterator_failure_has_no_sensitive_error_context():
+    def broken():
+        raise RuntimeError("SyntheticPatientSecret")
+        yield {}
+
+    with pytest.raises(ValueError) as caught:
+        build_language_health_matrix(manifest_rows=broken(), fixture_roots=())
+    assert "SyntheticPatientSecret" not in str(caught.value)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_language_health_bounds_manifest_collection():
+    with pytest.raises(ValueError):
+        build_language_health_matrix(
+            manifest_rows=({} for _ in range(8193)), fixture_roots=()
+        )
+
+
+def test_fixture_source_order_does_not_change_matrix(tmp_path):
+    roots = []
+    for name in ("a", "b"):
+        root = tmp_path / name
+        root.mkdir()
+        roots.append(root)
+    kwargs = dict(registry=_registry(), manifest_rows=_manifest(), languages=("en",))
+    assert build_language_health_matrix(
+        fixture_roots=roots, **kwargs
+    ) == build_language_health_matrix(fixture_roots=reversed(roots), **kwargs)
+
+
+def test_route_extension_values_are_hashed(tmp_path):
+    marker = "SyntheticPatientSecret"
+    registry = LanguagePackRegistry()
+    registry.register(
+        LanguagePack(
+            code="en",
+            scripts=(marker,),
+            default_model=marker,
+            segmenter_id=marker,
+            recognizers=(marker,),
+            surrogate_locale=marker,
+            policy_overrides={"profile": marker},
+        )
+    )
+    report = build_language_health_matrix(
+        registry=registry, manifest_rows=[], fixture_roots=(), languages=("en",)
+    )
+    assert marker not in json.dumps(report)
+
+
+def test_cyclic_manifest_metadata_fails_without_context():
+    row = {}
+    row["cycle"] = row
+    with pytest.raises(ValueError) as caught:
+        build_language_health_matrix(manifest_rows=[row], fixture_roots=())
+    assert caught.value.__context__ is None
+
+
+def test_default_matrix_is_offline_and_serializable():
+    report = build_language_health_matrix()
+    assert report["summary"]["language_count"] >= 35
+    assert report == build_language_health_matrix()
+    json.dumps(report)
