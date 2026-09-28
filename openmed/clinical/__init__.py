@@ -301,6 +301,29 @@ from .events import (
     extract_medication_change_events,
     score_event_frame_corpus,
 )
+from .evidence_coverage import (
+    COVERAGE_STATUSES,
+    EVIDENCE_COVERAGE_NOTE,
+    EVIDENCE_COVERAGE_SCHEMA_VERSION,
+    CoverageStatus,
+    EvidenceCoverage,
+    EvidenceCoverageCell,
+    EvidenceCoverageEntry,
+    EvidenceCoverageError,
+    EvidenceCoverageMatrix,
+    EvidenceCoverageRecord,
+    build_evidence_coverage,
+    build_evidence_coverage_matrix,
+    fingerprint_source,
+    render_evidence_coverage,
+    render_evidence_coverage_matrix,
+)
+from .evidence_coverage import (
+    REVIEW_STATES as COVERAGE_REVIEW_STATES,
+)
+from .evidence_coverage import (
+    ReviewState as CoverageReviewState,
+)
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,
@@ -1732,6 +1755,23 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "COVERAGE_STATUSES",
+    "CoverageStatus",
+    "EVIDENCE_COVERAGE_NOTE",
+    "EVIDENCE_COVERAGE_SCHEMA_VERSION",
+    "COVERAGE_REVIEW_STATES",
+    "CoverageReviewState",
+    "EvidenceCoverage",
+    "EvidenceCoverageCell",
+    "EvidenceCoverageEntry",
+    "EvidenceCoverageError",
+    "EvidenceCoverageMatrix",
+    "EvidenceCoverageRecord",
+    "build_evidence_coverage",
+    "build_evidence_coverage_matrix",
+    "fingerprint_source",
+    "render_evidence_coverage",
+    "render_evidence_coverage_matrix",
     "NLI_TEMPORAL_PAIR_SCHEMA_VERSION",
     "NLI_TEMPORAL_PAIR_ADVISORY",
     "CLINICAL_NLI_TEMPORAL_PAIR_ADVISORY",
