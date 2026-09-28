@@ -26,8 +26,10 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from functools import wraps
+from itertools import islice
 from pathlib import Path
 from typing import Any, Final, NoReturn
 
@@ -151,6 +153,28 @@ def _fail(reason_code: str) -> NoReturn:
     raise ClinicalSLMMemoryValidationError(reason_code) from None
 
 
+def _safe_boundary(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        code = "invalid_input"
+        try:
+            return function(*args, **kwargs)
+        except ClinicalSLMMemoryError as error:
+            code = error.reason_code
+        except Exception:
+            pass
+        raise ClinicalSLMMemoryValidationError(code)
+
+    return checked
+
+
+def _bounded(value):
+    result = tuple(islice(iter(value), MAX_COMPONENTS + 1))
+    if len(result) > MAX_COMPONENTS:
+        _fail("artifact_invalid")
+    return result
+
+
 def _canonical_json(value: Any) -> str:
     """Encode safe, internally generated metadata deterministically."""
 
@@ -188,7 +212,7 @@ def _safe_mapping_copy(value: Any, *, reason_code: str) -> dict[str, Any]:
     if not isinstance(value, Mapping) or isinstance(value, (str, bytes, bytearray)):
         _fail(reason_code)
     try:
-        copied = dict(value)
+        copied = {key: value[key] for key in _bounded(value)}
     except (KeyboardInterrupt, SystemExit):
         raise
     except BaseException:
@@ -226,7 +250,7 @@ def _parse_json(payload: str | bytes | bytearray) -> dict[str, Any]:
 def _token(value: Any) -> str:
     """Return a non-sensitive role token for internal component matching."""
 
-    if type(value) is not str:
+    if type(value) is not str or len(value) > 512:
         return ""
     return "".join(_ROLE_RE.findall(value.lower()))
 
@@ -298,7 +322,7 @@ def _iter_values(value: Any, *, reason_code: str) -> tuple[Any, ...]:
         return tuple(copied.items())
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         try:
-            return tuple(value)
+            return _bounded(value)
         except (KeyboardInterrupt, SystemExit):
             raise
         except BaseException:
@@ -313,14 +337,27 @@ def _component_size_records(
     value: Any,
     *,
     role_hint: Any = None,
+    _depth: int = 0,
+    _budget: list[int] | None = None,
 ) -> tuple[tuple[bool, int], ...]:
     """Collect ``(is_weight, size)`` records from component-shaped metadata."""
 
+    if _depth > 32:
+        _fail("artifact_invalid")
+    if _budget is None:
+        _budget = [MAX_COMPONENTS]
     records: list[tuple[bool, int]] = []
     for item in _iter_values(value, reason_code="artifact_invalid"):
+        _budget[0] -= 1
+        if _budget[0] < 0:
+            _fail("artifact_invalid")
         if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
             role, members = item
-            records.extend(_component_size_records(members, role_hint=role))
+            records.extend(
+                _component_size_records(
+                    members, role_hint=role, _depth=_depth + 1, _budget=_budget
+                )
+            )
             continue
         if type(item) is int:
             records.append((_is_weight_role(role_hint), _size_value(item, weight=True)))
@@ -328,11 +365,23 @@ def _component_size_records(
         if not isinstance(item, Mapping):
             _fail("artifact_invalid")
         record = _safe_mapping_copy(item, reason_code="artifact_invalid")
-        role = role_hint
-        for key in _COMPONENT_ROLE_KEYS:
-            if key in record:
-                role = record[key]
-                break
+        present, declared_role = _first_present(
+            record, _COMPONENT_ROLE_KEYS[:-2], conflict_reason="artifact_invalid"
+        )
+        role = (
+            declared_role
+            if present
+            else record.get("name", record.get("path", role_hint))
+        )
+        if (
+            role_hint is not None
+            and present
+            and _token(role_hint) != _token(role)
+            and not (_is_weight_role(role_hint) and _is_weight_role(role))
+        ):
+            _fail("artifact_invalid")
+        if role_hint is not None and not present:
+            role = role_hint
         present, raw_size = _first_present(
             record,
             _SIZE_KEYS,
@@ -349,7 +398,12 @@ def _component_size_records(
             # manifests; recurse without retaining the key or value.
             if "weights" in record:
                 records.extend(
-                    _component_size_records(record["weights"], role_hint="weights")
+                    _component_size_records(
+                        record["weights"],
+                        role_hint="weights",
+                        _depth=_depth + 1,
+                        _budget=_budget,
+                    )
                 )
                 continue
             _fail("artifact_invalid")
@@ -383,6 +437,7 @@ class ClinicalSLMArtifactMemory:
     component_count: int = 1
     fingerprint: str | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         _bounded_int(
             self.weights_bytes,
@@ -411,7 +466,11 @@ class ClinicalSLMArtifactMemory:
                 self.artifact_bytes,
                 self.component_count,
             )
-        elif type(self.fingerprint) is str and _SHA256_RE.fullmatch(self.fingerprint):
+        elif type(
+            self.fingerprint
+        ) is str and self.fingerprint == _artifact_fingerprint(
+            self.weights_bytes, self.artifact_bytes, self.component_count
+        ):
             fingerprint = self.fingerprint
         else:
             _fail("artifact_invalid")
@@ -472,68 +531,58 @@ def _normalize_artifact_mapping(
     """Normalize a model manifest or compact artifact metadata mapping."""
 
     fields = _safe_mapping_copy(payload, reason_code="artifact_invalid")
-    component_count = 1
-
-    direct_weights, raw_weights = _first_present(
-        fields,
-        _WEIGHT_SIZE_KEYS,
-        conflict_reason="artifact_invalid",
+    direct, raw_weights = _first_present(
+        fields, _WEIGHT_SIZE_KEYS, conflict_reason="artifact_invalid"
     )
-    if direct_weights:
-        weights = _size_value(raw_weights, weight=True)
-    else:
-        weights = 0
-        if "weights" in fields:
-            weight_values = _component_size_records(
-                fields["weights"], role_hint="weights"
-            )
-            weights = sum(size for _is_weight, size in weight_values)
-        if not weights:
-            weight_records: list[tuple[bool, int]] = []
-            for key in _COMPONENT_COLLECTION_KEYS:
-                if key in fields:
-                    weight_records.extend(_component_size_records(fields[key]))
-                    break
-            weights = sum(size for is_weight, size in weight_records if is_weight)
-            component_count = len(weight_records)
-        else:
-            component_count = 1
-        if not weights:
-            fallback_present, fallback_value = _first_present(
-                fields,
-                _ARTIFACT_TOTAL_KEYS + _SIZE_KEYS,
-                conflict_reason="artifact_invalid",
-            )
-            if fallback_present:
-                weights = _size_value(fallback_value, weight=True)
-                component_count = max(component_count, 1)
-    if not weights:
-        _fail("weights_missing")
-
-    artifact_bytes: int | None = None
+    collection_present, collection = _first_present(
+        fields, _COMPONENT_COLLECTION_KEYS, conflict_reason="artifact_invalid"
+    )
+    records = _component_size_records(collection) if collection_present else ()
+    declared = []
+    if direct:
+        declared.append(_size_value(raw_weights, weight=True))
+    if "weights" in fields:
+        weight_records = _component_size_records(fields["weights"], role_hint="weights")
+        declared.append(_checked_sum(tuple(size for _, size in weight_records)))
+        if not records:
+            records = weight_records
+    if records:
+        component_weights = _checked_sum(
+            tuple(size for weight, size in records if weight)
+        )
+        if component_weights:
+            declared.append(component_weights)
+        elif declared:
+            _fail("artifact_invalid")
     total_present, total_value = _first_present(
-        fields,
-        _ARTIFACT_TOTAL_KEYS,
-        conflict_reason="artifact_invalid",
+        fields, _ARTIFACT_TOTAL_KEYS, conflict_reason="artifact_invalid"
     )
-    if total_present:
-        artifact_bytes = _size_value(total_value, weight=False)
-    if artifact_bytes is None and not direct_weights:
-        artifact_records: tuple[tuple[bool, int], ...] = ()
-        for key in _COMPONENT_COLLECTION_KEYS:
-            if key in fields:
-                artifact_records = _component_size_records(fields[key])
-                break
-        if artifact_records:
-            artifact_bytes = sum(size for _is_weight, size in artifact_records)
-            component_count = len(artifact_records)
+    artifact_bytes = _size_value(total_value, weight=False) if total_present else None
+    if records:
+        computed_total = _checked_sum(tuple(size for _, size in records))
+        if artifact_bytes is not None and artifact_bytes != computed_total:
+            _fail("artifact_invalid")
+        artifact_bytes = computed_total
+    if not declared:
+        fallback_present, fallback = _first_present(
+            fields,
+            _ARTIFACT_TOTAL_KEYS + _SIZE_KEYS,
+            conflict_reason="artifact_invalid",
+        )
+        if fallback_present:
+            declared.append(_size_value(fallback, weight=True))
+    if not declared or not declared[0]:
+        _fail("weights_missing")
+    if len(set(declared)) != 1:
+        _fail("artifact_invalid")
     return ClinicalSLMArtifactMemory(
-        weights_bytes=weights,
+        weights_bytes=declared[0],
         artifact_bytes=artifact_bytes,
-        component_count=component_count,
+        component_count=len(records) or 1,
     )
 
 
+@_safe_boundary
 def load_clinical_slm_artifact_memory(
     source: Mapping[str, Any]
     | ClinicalSLMArtifactMemory
@@ -552,7 +601,7 @@ def load_clinical_slm_artifact_memory(
     """
 
     if isinstance(source, ClinicalSLMArtifactMemory):
-        return source
+        return replace(source)
     if isinstance(source, Mapping):
         return _normalize_artifact_mapping(source)
     if isinstance(source, (bytes, bytearray)):
@@ -596,7 +645,9 @@ def load_clinical_slm_artifact_memory(
         }:
             if path.stat().st_size > MAX_METADATA_BYTES:
                 _fail("artifact_invalid")
-            return _normalize_artifact_mapping(_parse_json(path.read_bytes()))
+            with path.open("rb") as handle:
+                payload = handle.read(MAX_METADATA_BYTES + 1)
+            return _normalize_artifact_mapping(_parse_json(payload))
         size = path.stat().st_size
     except ClinicalSLMMemoryError:
         raise
@@ -646,6 +697,7 @@ class ClinicalSLMRuntimeProfile:
     name: str
     version: str
 
+    @_safe_boundary
     def __init__(
         self,
         memory_budget_bytes: int | None = None,
@@ -750,6 +802,7 @@ class ClinicalSLMRuntimeProfile:
         object.__setattr__(self, "version", version)
         self.__post_init__()
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         _bounded_int(
             self.memory_budget_bytes,
@@ -842,7 +895,7 @@ class ClinicalSLMRuntimeProfile:
         """Return deterministic, non-sensitive profile metadata."""
 
         return {
-            "name": self.name,
+            "name": "default" if self.name == "default" else "custom",
             "version": self.version,
             "memory_budget_bytes": self.memory_budget_bytes,
             "resident_memory_bytes": self.resident_memory_bytes,
@@ -876,6 +929,8 @@ def _normalize_profile_mapping(
     fields = _safe_mapping_copy(payload, reason_code="profile_invalid")
     nested = fields.get("memory")
     if isinstance(nested, Mapping):
+        if len(fields) != 1:
+            _fail("profile_ambiguous")
         fields = _safe_mapping_copy(nested, reason_code="profile_invalid")
 
     def alias(names: Sequence[str], *, default: Any = None) -> Any:
@@ -950,13 +1005,14 @@ def _normalize_profile_mapping(
     )
 
 
+@_safe_boundary
 def normalize_clinical_slm_runtime_profile(
     profile: ClinicalSLMRuntimeProfile | Mapping[str, Any],
 ) -> ClinicalSLMRuntimeProfile:
     """Validate and return one immutable runtime memory profile."""
 
     if isinstance(profile, ClinicalSLMRuntimeProfile):
-        return profile
+        return replace(profile)
     if isinstance(profile, Mapping):
         return _normalize_profile_mapping(profile)
     _fail("profile_invalid")
@@ -986,6 +1042,7 @@ class ClinicalSLMMemoryEstimate:
     artifact_fingerprint: str
     artifact_component_count: int
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         for value in (
             self.weights_bytes,
@@ -1006,6 +1063,29 @@ class ClinicalSLMMemoryEstimate:
                 positive=False,
                 reason_code="overflow",
             )
+        expected_total = _checked_sum(
+            (
+                self.weights_bytes,
+                self.cache_bytes,
+                self.context_bytes,
+                self.batch_bytes,
+                self.runtime_overhead_bytes,
+            )
+        )
+        available = self.memory_budget_bytes - self.resident_memory_bytes
+        remaining = available - expected_total
+        if (
+            self.weights_bytes <= 0
+            or self.memory_budget_bytes <= 0
+            or available < 0
+            or self.total_bytes != expected_total
+            or self.available_memory_bytes != available
+            or self.remaining_headroom_bytes != remaining
+            or self.headroom_deficit_bytes
+            != max(self.required_headroom_bytes - remaining, 0)
+            or self.fits is not (remaining >= self.required_headroom_bytes)
+        ):
+            _fail("invalid_input")
         if type(self.available_memory_bytes) is not int or not (
             -MAX_MEMORY_BYTES <= self.available_memory_bytes <= MAX_MEMORY_BYTES
         ):
@@ -1085,6 +1165,7 @@ def _checked_sum(values: Sequence[int]) -> int:
     return total
 
 
+@_safe_boundary
 def estimate_clinical_slm_memory(
     artifact: Mapping[str, Any]
     | ClinicalSLMArtifactMemory
@@ -1163,6 +1244,7 @@ class ClinicalSLMMemoryPreflightReport(Mapping[str, Any]):
     reason_codes: tuple[str, ...] = ()
     schema_version: str = MEMORY_SCHEMA_VERSION
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if not isinstance(self.status, MemoryPreflightStatus):
             _fail("invalid_input")
@@ -1172,7 +1254,27 @@ class ClinicalSLMMemoryPreflightReport(Mapping[str, Any]):
             _fail("invalid_input")
         if self.schema_version != MEMORY_SCHEMA_VERSION:
             _fail("invalid_input")
-        reasons = tuple(self.reason_codes)
+        object.__setattr__(self, "estimate", replace(self.estimate))
+        object.__setattr__(self, "profile", replace(self.profile))
+        profile, estimate = self.profile, self.estimate
+        if (
+            estimate.memory_budget_bytes != profile.memory_budget_bytes
+            or estimate.resident_memory_bytes != profile.resident_memory_bytes
+            or estimate.required_headroom_bytes != profile.headroom_bytes
+            or estimate.cache_bytes
+            != profile.context_tokens
+            * profile.batch_size
+            * profile.cache_bytes_per_token
+            or estimate.context_bytes
+            != profile.context_tokens
+            * profile.batch_size
+            * profile.context_bytes_per_token
+            or estimate.batch_bytes != profile.batch_size * profile.batch_bytes
+            or estimate.runtime_overhead_bytes != profile.runtime_overhead_bytes
+        ):
+            _fail("invalid_input")
+        reasons = _bounded(self.reason_codes)
+        object.__setattr__(self, "reason_codes", reasons)
         if any(
             type(reason) is not str or reason not in _REASON_INDEX for reason in reasons
         ):
@@ -1290,6 +1392,7 @@ MemoryPreflightReport = ClinicalSLMMemoryPreflightReport
 ClinicalSLMMemoryReport = ClinicalSLMMemoryPreflightReport
 
 
+@_safe_boundary
 def preflight_clinical_slm_memory(
     artifact: Mapping[str, Any]
     | ClinicalSLMArtifactMemory
@@ -1319,13 +1422,13 @@ def preflight_clinical_slm_memory(
         selected = profile_fields
     elif profile_fields:
         _fail("profile_ambiguous")
-    estimate = estimate_clinical_slm_memory(artifact, selected)
+    normalized_profile = normalize_clinical_slm_runtime_profile(selected)
+    estimate = estimate_clinical_slm_memory(artifact, normalized_profile)
     reasons: list[str] = []
     if not estimate.memory_budget_met:
         reasons.append("memory_budget_exceeded")
     if not estimate.headroom_met:
         reasons.append("headroom_insufficient")
-    normalized_profile = normalize_clinical_slm_runtime_profile(selected)
     return ClinicalSLMMemoryPreflightReport(
         status=(
             MemoryPreflightStatus.ACCEPT
@@ -1344,6 +1447,7 @@ check_clinical_slm_memory = preflight_clinical_slm_memory
 run_clinical_slm_memory_preflight = preflight_clinical_slm_memory
 
 
+@_safe_boundary
 def render_memory_report(
     report: ClinicalSLMMemoryPreflightReport,
     *,
@@ -1353,7 +1457,7 @@ def render_memory_report(
 
     if not isinstance(report, ClinicalSLMMemoryPreflightReport):
         _fail("invalid_input")
-    return report.to_json(indent=indent)
+    return replace(report).to_json(indent=indent)
 
 
 render_json = render_memory_report

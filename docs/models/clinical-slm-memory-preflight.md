@@ -96,3 +96,18 @@ new local profile rather than treating an unknown value as safe.
 The output is an assistive resource gate only. It does not make a diagnosis,
 select treatment, or authorize autonomous clinical action. Clinical workflows
 must retain their existing human-review and post-de-identification controls.
+
+Conflicting weight totals, component collections, grouped roles, or profile
+aliases fail closed. Explicit totals must agree with component sums; a compact
+weight declaration cannot hide larger declared shards. Typed records are
+revalidated, and report arithmetic is checked against the attached profile.
+Collection/traversal work is limited to 4,096 items and 32 nested levels;
+serialized metadata is limited to 16 MiB. Upstream exception context is removed.
+Arbitrary profile names are rendered only as `custom` (or `default`).
+
+Declared sizes are not a measured peak-memory guarantee. Quantized files may
+expand during loading, backends may allocate additional workspaces, and other
+processes may consume memory after this check. Supply conservatively measured
+coefficients and overhead for the actual backend. The fingerprint binds only
+aggregate size metadata, not file contents or model identity, and is not an
+anonymization mechanism. Artifact integrity is a separate gate.

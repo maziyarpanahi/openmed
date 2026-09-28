@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import socket
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +59,115 @@ def _manifest() -> dict[str, object]:
             },
         ],
     }
+
+
+def test_direct_weight_size_cannot_hide_larger_components():
+    payload = _manifest()
+    payload["weights_bytes"] = 1
+    with pytest.raises(ClinicalSLMMemoryError):
+        load_clinical_slm_artifact_memory(payload)
+
+
+def test_typed_profile_is_revalidated():
+    profile = _profile()
+    object.__setattr__(profile, "headroom_bytes", -1)
+    with pytest.raises(ClinicalSLMMemoryError):
+        preflight_clinical_slm_memory(_manifest(), profile)
+
+
+def test_estimate_must_preserve_arithmetic():
+    estimate = estimate_clinical_slm_memory(_manifest(), _profile())
+    with pytest.raises(ClinicalSLMMemoryError):
+        replace(estimate, total_bytes=1)
+
+
+def test_report_rejects_unrelated_profile():
+    report = preflight_clinical_slm_memory(_manifest(), _profile())
+    with pytest.raises(ClinicalSLMMemoryError):
+        replace(report, profile=_profile(memory_budget_bytes=1_000))
+
+
+def test_profile_name_does_not_enter_report():
+    report = preflight_clinical_slm_memory(
+        _manifest(), _profile(name="synthetic_private")
+    )
+    assert "synthetic_private" not in report.to_json()
+
+
+def test_bad_json_discards_upstream_context():
+    with pytest.raises(ClinicalSLMMemoryError) as caught:
+        load_clinical_slm_artifact_memory('{"SYNTHETIC_PRIVATE":')
+    assert caught.value.__context__ is None
+
+
+def test_group_role_cannot_hide_weight_component():
+    payload = {
+        "components": {"weights": [{"component": "tokenizer", "size_bytes": 100}]}
+    }
+    with pytest.raises(ClinicalSLMMemoryError):
+        load_clinical_slm_artifact_memory(payload)
+
+
+def test_component_collection_aliases_cannot_conflict():
+    payload = _manifest()
+    payload["artifacts"] = [{"component": "weights", "size_bytes": 100_000}]
+    with pytest.raises(ClinicalSLMMemoryError):
+        load_clinical_slm_artifact_memory(payload)
+
+
+def test_explicit_fingerprint_must_match_aggregate():
+    artifact = load_clinical_slm_artifact_memory(_manifest())
+    with pytest.raises(ClinicalSLMMemoryError):
+        replace(artifact, fingerprint="sha256:" + "0" * 64)
+
+
+def test_cyclic_components_fail_without_retaining_input():
+    component = {}
+    component["weights"] = component
+    with pytest.raises(ClinicalSLMMemoryError) as caught:
+        load_clinical_slm_artifact_memory({"components": component})
+    assert caught.value.__context__ is None
+
+
+def test_component_collection_is_bounded_before_materializing():
+    reads = []
+
+    class InfiniteComponents(Sequence):
+        def __len__(self):
+            return 10**12
+
+        def __getitem__(self, index):
+            reads.append(index)
+            assert index <= 4096
+            return {"component": "weights", "size_bytes": 1}
+
+    with pytest.raises(ClinicalSLMMemoryError):
+        load_clinical_slm_artifact_memory({"components": InfiniteComponents()})
+    assert len(reads) == 4097
+
+
+def test_weights_collection_counts_each_shard():
+    artifact = load_clinical_slm_artifact_memory(
+        {"weights": [{"size_bytes": 10}, {"size_bytes": 20}]}
+    )
+    assert artifact.weights_bytes == 30
+    assert artifact.artifact_bytes == 30
+    assert artifact.component_count == 2
+
+
+def test_nested_profile_cannot_silently_override_outer_budget():
+    with pytest.raises(ClinicalSLMMemoryError):
+        preflight_clinical_slm_memory(
+            {"weights_bytes": 1},
+            {"memory_budget_bytes": 1, "memory": {"memory_budget_bytes": 10**9}},
+        )
+
+
+def test_typed_artifact_is_revalidated():
+    artifact = load_clinical_slm_artifact_memory(_manifest())
+    object.__setattr__(artifact, "weights_bytes", 1)
+    with pytest.raises(ClinicalSLMMemoryError):
+        preflight_clinical_slm_memory(artifact, _profile())
 
 
 def test_estimate_is_deterministic_and_covers_each_memory_component() -> None:
