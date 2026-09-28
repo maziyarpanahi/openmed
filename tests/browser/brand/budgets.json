@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 90148111,
-    "maximum_unique_payload_bytes": 89783598,
+    "maximum_total_bytes": 90378747,
+    "maximum_unique_payload_bytes": 90014234,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4388694
+    "json": 4393031
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4388694
+    "docs/search/search_index.json": 4393031
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,7 +31,9 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The validated synthetic clinical fixtures build measures 90032625 total bytes, 89668112 unique bytes, and 4382902 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The validated OCR clinical layout build measures 90263261 total bytes, 89898748 unique bytes, and 4387239 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed OCR rotation and normalization build measures 90256845 total bytes, 89892332 unique bytes, and 4385059 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The OCR box normalization over laboratory contracts build measures 90036426 total bytes, 89671913 unique bytes, and 4382421 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The corrected laboratory contracts build measures 89806784 total bytes, 89442271 unique bytes, and 4378440 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed laboratory reference-range build measures 89355028 total bytes, 88990515 unique bytes, and 4369819 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed relation contracts build measures 89120159 total bytes, 88755646 unique bytes, and 4366301 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
