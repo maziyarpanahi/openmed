@@ -6,13 +6,15 @@ import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 from openmed.clinical.context import (
     CERTAINTY_VALUES,
+    EXPERIENCER_VALUES,
     HISTORICAL,
     HYPOTHETICAL,
+    NEGATION_VALUES,
     RECENT,
     TEMPORALITY_VALUES,
     UNCERTAIN,
@@ -207,6 +209,12 @@ def build_timeline(
             certainty = UNCERTAIN
         if certainty not in CERTAINTY_VALUES:
             raise ValueError("timeline certainty must use a ConText axis value")
+        negation = _field(span, "negation", _field(assertion, "negation"))
+        experiencer = _field(span, "experiencer", _field(assertion, "experiencer"))
+        if negation is not None and negation not in NEGATION_VALUES:
+            raise ValueError("timeline negation must use a ConText axis value")
+        if experiencer is not None and experiencer not in EXPERIENCER_VALUES:
+            raise ValueError("timeline experiencer must use a ConText axis value")
 
         label = _field(span, "label", "event")
         event_kind = str(label).casefold() if isinstance(label, str) else "event"
@@ -229,6 +237,8 @@ def build_timeline(
                     assertion=ClinicalAssertion(
                         temporality=temporality,
                         certainty=certainty,
+                        negation=negation,
+                        experiencer=experiencer,
                     ),
                     source_span=(start, end),
                 ),
@@ -269,13 +279,15 @@ def _canonical_date(value: Any) -> str | None:
         elif len(candidate) == 10:
             date.fromisoformat(candidate)
         elif len(candidate) == 7:
-            month = int(candidate[5:7])
-            if not 1 <= month <= 12:
-                raise ValueError
+            date(int(candidate[:4]), int(candidate[5:7]), 1)
         elif int(candidate) < 1:
             raise ValueError
-    except ValueError as exc:
-        raise ValueError("timeline time must be a normalized date") from exc
+    except ValueError:
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise ValueError("timeline time must be a normalized date")
     return candidate
 
 
@@ -341,6 +353,10 @@ def _sort_key(event: ClinicalEvent, lane: str) -> tuple[Any, ...]:
     value = event.normalized_time
     if value is None:
         return 1, "", event.start, event.end, event.entity
+    if "T" in value:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            value = parsed.astimezone(timezone.utc).isoformat()
     return 0, value, event.start, event.end, event.entity
 
 

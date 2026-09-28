@@ -165,3 +165,37 @@ def test_untrusted_caller_time_fields_do_not_enter_report() -> None:
     assert timeline.time_evidence[0].relative_value is None
     assert timeline.time_evidence[1].normalized_value is None
     assert timeline.time_evidence[1].precision == "unknown"
+
+
+def test_supplied_negation_and_experiencer_are_not_lost():
+    timeline = build_timeline(
+        [
+            _span(
+                "finding",
+                0,
+                "historical",
+                assertion={"negation": "negated", "experiencer": "family"},
+            )
+        ]
+    )
+    assertion = timeline.events[0].assertion
+    assert assertion.negation == "negated"
+    assert assertion.experiencer == "family"
+
+
+def test_aware_datetime_order_uses_instants_not_wall_clock_strings():
+    timeline = build_timeline(
+        [
+            _span("first", 10, "recent", normalized_time="2026-01-01T13:00+02:00"),
+            _span("second", 0, "recent", normalized_time="2026-01-01T12:00+00:00"),
+        ]
+    )
+    assert [event.start for event in timeline.events] == [10, 0]
+
+
+def test_zero_year_month_and_date_errors_are_value_free():
+    for value in ("0000-02", "2026-02-30"):
+        with pytest.raises(ValueError) as caught:
+            build_timeline([_span("finding", 0, "recent", normalized_time=value)])
+        assert caught.value.__context__ is None
+        assert caught.value.__cause__ is None
