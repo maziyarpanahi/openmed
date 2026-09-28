@@ -218,3 +218,77 @@ def test_batch_normalization_preserves_input_order_and_is_deterministic() -> Non
     assert first == second
     assert [row["analyte"] for row in first] == ["Sodium", "Potassium"]
     assert all(row["advisory"] == LAB_MEASUREMENT_ADVISORY for row in first)
+
+
+def test_arbitrary_flag_is_not_copied_into_provenance():
+    record = normalize_lab_measurement(5, "mg/dL", flag="SYNTHETIC-PRIVATE-FLAG")
+    assert "synthetic-private" not in json.dumps(record).lower()
+    assert record["interpretation"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"value": "5 mg/dL", "unit": "mmol/L"},
+        {"value": 5, "unit": "mg/dL", "units": "mmol/L"},
+        {"value": 5, "result": 10, "unit": "mg/dL"},
+    ],
+)
+def test_conflicting_measurement_declarations_are_rejected(row):
+    with pytest.raises(ValueError):
+        normalize_lab_measurement(row)
+
+
+def test_range_provenance_cannot_claim_another_unit():
+    record = normalize_lab_measurement(
+        5,
+        "mg/dL",
+        {
+            "low": 1,
+            "high": 10,
+            "unit": "mg/dL",
+            "provenance": {
+                "unit": "mmol/L",
+                "population": "adult",
+                "precision": 1,
+                "source_fingerprint": "sha256:" + "a" * 64,
+            },
+        },
+    )
+    assert record["reference_range_provenance"]["status"] == "unknown"
+
+
+def test_nonboolean_range_boundary_is_not_promoted_to_inclusive():
+    record = normalize_lab_measurement(
+        5, "mg/dL", {"low": 1, "high": 5, "high_inclusive": "false"}
+    )
+    assert record["reference_range"]["status"] == "invalid"
+    assert record["interpretation"] == "unknown"
+
+
+def test_batch_iterator_error_does_not_retain_source_context():
+    def values():
+        raise RuntimeError("SYNTHETIC-PRIVATE-FLAG")
+        yield
+
+    with pytest.raises(ValueError) as caught:
+        normalize_lab_measurements(values())
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC" not in str(caught.value)
+
+
+def test_normalizer_collections_are_bounded(monkeypatch):
+    from openmed.clinical import lab_measurements as module
+
+    monkeypatch.setattr(module, "_MAX_ITEMS", 2)
+    with pytest.raises(ValueError):
+        normalize_lab_measurements(({"value": 1, "unit": "mg/dL"} for _ in range(3)))
+    with pytest.raises(ValueError):
+        normalize_lab_measurement(1, "mg/dL", qualifiers=(str(i) for i in range(3)))
+
+
+def test_canonical_overflow_is_not_serialized_as_infinity():
+    record = normalize_lab_measurement(1e308, "kg")
+    assert record["status"] == "invalid_value"
+    assert record["canonical_value"] is None
+    json.dumps(record, allow_nan=False)

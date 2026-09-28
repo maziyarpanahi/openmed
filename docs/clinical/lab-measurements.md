@@ -74,3 +74,16 @@ measurement record. Missing or malformed provenance yields
 record as the source of its full evidence.
 The implementation is rules-based, deterministic, local-first, and performs no
 network call or wall-clock lookup.
+
+
+## Validation limits
+
+Conflicting mapping aliases or embedded-versus-explicit unit declarations are
+rejected rather than silently overriding evidence. Non-boolean range boundaries
+remain invalid, and canonical numeric overflow is never emitted as infinity.
+Unrecognized explicit flags serialize only the controlled `unknown` value.
+Batch and qualifier collections are limited to 4096 items, input text fields to
+4096 characters, and public failures use fixed errors without source-bearing
+exception context. Range provenance is linked only when its unit matches the
+range's declared unit. These checks do not verify the authenticity of a
+caller-supplied fingerprint or validate a measurement clinically.

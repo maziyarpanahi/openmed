@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
+from functools import wraps
 from typing import Literal, TypedDict
 
 from .lab_values import AbnormalFlag, derive_abnormal_flag, parse_reference_range
@@ -91,6 +93,35 @@ class _UnitDetails(TypedDict):
     dimension: dict[str, int]
 
 
+_MAX_ITEMS = 4096
+_MAX_TEXT_LENGTH = 4096
+
+
+def _safe_boundary(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid laboratory measurement input")
+
+    return wrapped
+
+
+def _bounded_items(values):
+    for index, value in enumerate(values):
+        if index >= _MAX_ITEMS:
+            raise ValueError("measurement collection limit exceeded")
+        yield value
+
+
+def _bounded_text(value):
+    if isinstance(value, str) and len(value) > _MAX_TEXT_LENGTH:
+        raise ValueError("measurement text limit exceeded")
+    return value
+
+
 _SOURCE_FINGERPRINT_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
@@ -123,6 +154,10 @@ def _range_provenance_link(source: object) -> dict[str, str]:
     ):
         return unknown
 
+    if unit != _mapping_value(source, ("unit", "units", "reference_unit")):
+        return unknown
+    for value in (unit, population, locale):
+        _bounded_text(value)
     context = {
         "unit": unit,
         "population": population,
@@ -161,6 +196,7 @@ def _empty_reference_range(
 def _clean_optional_text(value: object) -> str | None:
     if not isinstance(value, str):
         return None
+    _bounded_text(value)
     cleaned = " ".join(value.split())
     return cleaned or None
 
@@ -168,6 +204,7 @@ def _clean_optional_text(value: object) -> str | None:
 def _clean_unit_text(value: object) -> str | None:
     if not isinstance(value, str):
         return None
+    _bounded_text(value)
     cleaned = " ".join(value.strip().split())
     return cleaned or None
 
@@ -246,10 +283,12 @@ def _mapping_value(
     *,
     default: object = None,
 ) -> object:
-    for name in names:
-        if name in source:
-            return source[name]
-    return default
+    values = [
+        source[name] for name in names if name in source and source[name] is not None
+    ]
+    if any(value != values[0] for value in values[1:]):
+        raise ValueError("conflicting measurement fields")
+    return values[0] if values else default
 
 
 def _mapping_offsets(source: Mapping[str, object]) -> object:
@@ -273,7 +312,7 @@ def _normalize_qualifiers(value: object) -> list[str]:
 
     result: list[str] = []
     seen: set[str] = set()
-    for item in values:
+    for item in _bounded_items(values):
         cleaned = _clean_optional_text(item)
         if cleaned is None:
             continue
@@ -288,10 +327,13 @@ def _source_value_parts(
     value: object,
     unit: object,
 ) -> tuple[object, object, str]:
+    _bounded_text(value)
     if isinstance(value, str) and (parts := split_measurement_text(value)) is not None:
         number_text, embedded_unit = parts
         if unit is None:
             return number_text, embedded_unit, "measurement_string"
+        if _clean_unit_text(unit) != _clean_unit_text(embedded_unit):
+            raise ValueError("conflicting embedded measurement unit")
         return number_text, unit, "value_unit_pair"
     if unit is None:
         return value, None, "value_without_unit"
@@ -299,7 +341,7 @@ def _source_value_parts(
 
 
 def _finite_numeric(value: object, *, language: object | None = None) -> float | None:
-    return parse_locale_number(value, language=language)
+    return parse_locale_number(_bounded_text(value), language=language)
 
 
 def _range_parts(
@@ -311,7 +353,7 @@ def _range_parts(
         return _empty_reference_range(), None, "missing"
 
     if isinstance(source, str):
-        parsed = parse_reference_range(source, language=language)
+        parsed = parse_reference_range(_bounded_text(source), language=language)
         low = parsed.get("low")
         high = parsed.get("high")
         if low is None and high is None:
@@ -337,6 +379,11 @@ def _range_parts(
     if not isinstance(source, Mapping):
         return _empty_reference_range(status="invalid"), None, "mapping"
 
+    if any(
+        key in source and type(source[key]) is not bool
+        for key in ("low_inclusive", "high_inclusive")
+    ):
+        return _empty_reference_range(status="invalid"), None, "mapping"
     raw_low = source.get("low")
     raw_high = source.get("high")
     low = _finite_numeric(raw_low, language=language)
@@ -389,7 +436,9 @@ def _canonical_bound(
     if parsed.get("status") != "ok":
         return None
     canonical = parsed.get("canonical_magnitude")
-    return canonical if isinstance(canonical, float) else None
+    return (
+        canonical if isinstance(canonical, float) and math.isfinite(canonical) else None
+    )
 
 
 def _prepare_range(
@@ -431,6 +480,12 @@ def _prepare_range(
         language=language,
     )
 
+    if bound_unit is not None and any(
+        result[raw] is not None and result[canonical] is None
+        for raw, canonical in (("low", "canonical_low"), ("high", "canonical_high"))
+    ):
+        result["status"] = "invalid"
+        return result, source_kind
     if (
         range_unit["status"] == "known"
         and value_unit["status"] == "known"
@@ -518,6 +573,7 @@ def _result_status(
     return "ok", ""
 
 
+@_safe_boundary
 def normalize_lab_measurement(
     measurement: Mapping[str, object] | object,
     unit: object | None = None,
@@ -563,6 +619,7 @@ def normalize_lab_measurement(
         conversion is attempted in that case.
     """
 
+    _bounded_text(language)
     mapping = measurement if isinstance(measurement, Mapping) else None
     if mapping is not None:
         raw_value = _mapping_value(mapping, ("value", "magnitude", "result"))
@@ -617,7 +674,7 @@ def normalize_lab_measurement(
         parsed = parse_measurement(value, value_unit["unit"], language=language)
         if parsed.get("status") == "ok":
             candidate = parsed.get("canonical_magnitude")
-            if isinstance(candidate, float):
+            if isinstance(candidate, float) and math.isfinite(candidate):
                 canonical_value = candidate
 
     normalized_range, range_source = _prepare_range(
@@ -633,6 +690,13 @@ def normalize_lab_measurement(
         language=language,
     )
     status, reason = _result_status(value, value_unit, normalized_range)
+    if (
+        value is not None
+        and value_unit["status"] == "known"
+        and canonical_value is None
+    ):
+        status, reason = "invalid_value", "canonical measurement is not finite"
+        interpretation = "unknown"
 
     analyte_text = _clean_optional_text(raw_analyte)
     safe_flag = _flag_text(raw_flag)
@@ -645,7 +709,9 @@ def normalize_lab_measurement(
     }
     if safe_flag is not None:
         provenance["explicit_flag_provided"] = True
-        provenance["explicit_flag"] = safe_flag.casefold()
+        provenance["explicit_flag"] = derive_abnormal_flag(
+            None, None, explicit_flag=safe_flag, language=language
+        )
 
     return {
         "analyte": analyte_text,
@@ -667,6 +733,7 @@ def normalize_lab_measurement(
     }
 
 
+@_safe_boundary
 def normalize_lab_measurements(
     measurements: Iterable[Mapping[str, object] | object],
     *,
@@ -682,7 +749,7 @@ def normalize_lab_measurements(
         measurements = (measurements,)
     return [
         normalize_lab_measurement(measurement, language=language)
-        for measurement in measurements
+        for measurement in _bounded_items(measurements)
     ]
 
 
