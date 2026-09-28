@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic citation minimality checks for guarded atomic claims,
+  with opaque offset-only reports, token counts, explicit context budgets, and
+  human-review flags (#2742).
+- Added deterministic claim-level citation support metrics with optional
+  clinician adjudication, privacy-safe orphan and unused-evidence counts, and
+  synthetic offline regression coverage (#2754).
+- Added deterministic de-identification-aware citation boundary validation
+  with post-redaction digest binding, replacement-boundary rejection, and
+  value-free review reports (#2741).
 - Added a deterministic, local unsupported-claim rate for clinical summaries,
   with four-state scoring, per-claim-class bootstrap intervals, aggregate-only
   reports, and synthetic offline regression coverage (#2749).

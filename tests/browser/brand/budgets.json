@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 86456561,
-    "maximum_unique_payload_bytes": 86092048,
+    "maximum_total_bytes": 86450237,
+    "maximum_unique_payload_bytes": 86085724,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4309458
+    "json": 4307274
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4309458
+    "docs/search/search_index.json": 4307274
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,7 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The reviewed unsupported-claim evaluator on summary master build measures 86341075 total bytes, 85976562 unique bytes, and 4303666 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed citation boundary on summary master build measures 86334751 total bytes, 85970238 unique bytes, and 4301482 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed summary-contracts build measures 86112622 total bytes, 85748109 unique bytes, and 4298290 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed summary planner guide build measures 85197346 total bytes, 84832833 unique bytes, and 4280258 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed synthetic SHIELD and temporal guide build measures 84967554 total bytes, 84603041 unique bytes, and 4275598 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
