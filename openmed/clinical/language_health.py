@@ -13,6 +13,7 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,95 @@ _PII_FAMILY = "pii"
 _LANGUAGE_CODE = re.compile(r"^[a-z]{2,3}$")
 
 
+_MAX_ITEMS = 8192
+_MAX_FIXTURE_BYTES = 4 * 1024 * 1024
+
+
+def _bounded_items(values, limit=_MAX_ITEMS):
+    if isinstance(values, (str, bytes)):
+        raise ValueError("expected a bounded collection")
+    result = []
+    for item in values:
+        if len(result) >= limit:
+            raise ValueError("collection exceeds bound")
+        result.append(item)
+    return result
+
+
+def _bounded_tree(value, depth=0, seen=None, budget=None):
+    if seen is None:
+        seen, budget = set(), [_MAX_ITEMS]
+    budget[0] -= 1
+    if budget[0] < 0 or depth > 32:
+        raise ValueError("metadata exceeds bound")
+    if isinstance(value, str) and len(value) > _MAX_FIXTURE_BYTES:
+        raise ValueError("text exceeds bound")
+    if isinstance(value, (Mapping, list, tuple)):
+        if id(value) in seen:
+            raise ValueError("cyclic metadata")
+        seen.add(id(value))
+        children = value.items() if isinstance(value, Mapping) else enumerate(value)
+        for key, child in children:
+            _bounded_tree(key, depth + 1, seen, budget)
+            _bounded_tree(child, depth + 1, seen, budget)
+        seen.remove(id(value))
+
+
+def _safe_matrix_call(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid or unavailable language-health inputs")
+
+    return wrapped
+
+
+def _metadata_id(value):
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > 4096:
+        raise ValueError("invalid metadata identifier")
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            ("openmed.language-health.v1:" + value).encode("utf-8")
+        ).hexdigest()
+    )
+
+
+def _sanitize_route(route):
+    route = dict(route)
+    route["model"] = _metadata_id(route["model"])
+    route["scripts"] = [
+        value if value in SCRIPT_LANGUAGE_HINTS else _metadata_id(value)
+        for value in route["scripts"]
+    ]
+    route["script_hints"] = {
+        key if key in SCRIPT_LANGUAGE_HINTS else _metadata_id(key): values
+        for key, values in route["script_hints"].items()
+    }
+    route["segmenter"] = (
+        route["segmenter"]
+        if is_registered_segmenter(route["segmenter"])
+        else _metadata_id(route["segmenter"])
+    )
+    route["recognizers"] = [
+        value
+        if value in {"regex", "model", "builtin-patterns"}
+        else _metadata_id(value)
+        for value in route["recognizers"]
+    ]
+    route["locale"] = (
+        route["locale"]
+        if route["locale"] in LANG_TO_LOCALE.values()
+        else _metadata_id(route["locale"])
+    )
+    return route
+
+
 class LanguageHealthError(RuntimeError):
     """Raised when a language health report contains one or more findings."""
 
@@ -90,12 +180,12 @@ def _safety_flags(value: object) -> tuple[bool, bool]:
     unsafe = False
     if isinstance(value, Mapping):
         for key, child in value.items():
-            normalized_key = str(key).casefold()
+            normalized_key = key.casefold() if isinstance(key, str) else ""
             if normalized_key in _SYNTHETIC_FIXTURE_KEYS and child is True:
                 synthetic = True
-            if normalized_key in _SYNTHETIC_FIXTURE_KEYS and child is False:
+            if normalized_key in _SYNTHETIC_FIXTURE_KEYS and child is not True:
                 unsafe = True
-            if normalized_key in _UNSAFE_FIXTURE_KEYS and child is True:
+            if normalized_key in _UNSAFE_FIXTURE_KEYS and child is not False:
                 unsafe = True
             if isinstance(child, (Mapping, list, tuple)):
                 child_synthetic, child_unsafe = _safety_flags(child)
@@ -112,7 +202,20 @@ def _safety_flags(value: object) -> tuple[bool, bool]:
 def _fixture_safety_status(payloads: Sequence[Mapping[str, Any]]) -> str:
     if not payloads:
         return "unverified"
-    synthetic_flags = [_safety_flags(payload) for payload in payloads]
+    synthetic_flags = []
+    for payload in payloads:
+        _bounded_tree(payload)
+        metadata = payload.get("metadata")
+        declarations = [payload]
+        if isinstance(metadata, Mapping):
+            declarations.append(metadata)
+        synthetic = any(
+            declaration.get(key) is True
+            for declaration in declarations
+            for key in _SYNTHETIC_FIXTURE_KEYS
+        )
+        _nested_marker, unsafe = _safety_flags(payload)
+        synthetic_flags.append((synthetic, unsafe))
     if any(unsafe for _synthetic, unsafe in synthetic_flags):
         return "unsafe"
     if all(synthetic for synthetic, _unsafe in synthetic_flags):
@@ -142,7 +245,10 @@ def _fixture_record(
     payloads: list[Mapping[str, Any]] = []
     parse_errors = 0
     try:
-        raw = path.read_text(encoding="utf-8")
+        with path.open("r", encoding="utf-8") as handle:
+            raw = handle.read(_MAX_FIXTURE_BYTES + 1)
+        if len(raw) > _MAX_FIXTURE_BYTES:
+            raise ValueError("fixture exceeds bound")
     except (OSError, UnicodeError):
         parse_errors = 1
     else:
@@ -193,7 +299,7 @@ def _collect_fixture_evidence(
 ) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     by_language: dict[str, list[dict[str, Any]]] = defaultdict(list)
     global_findings: list[dict[str, Any]] = []
-    for root_value in fixture_roots:
+    for root_value in _bounded_items(fixture_roots, 128):
         root = Path(root_value)
         if not root.is_dir():
             global_findings.append(
@@ -206,7 +312,7 @@ def _collect_fixture_evidence(
             continue
         paths = sorted(
             path
-            for path in root.rglob("*")
+            for path in _bounded_items(root.rglob("*"))
             if path.is_file() and path.suffix.casefold() in {".json", ".jsonl"}
         )
         for path in paths:
@@ -274,7 +380,13 @@ def _script_verdicts(
         for target in targets:
             value = coverage.get(target)
             if isinstance(value, Mapping) and isinstance(value.get("verdict"), str):
-                verdicts[target] = str(value["verdict"])
+                verdict = value["verdict"]
+                if verdict not in {"supported", "unsupported", "unclaimed"}:
+                    verdict = "unverified"
+                previous = verdicts.get(target)
+                verdicts[target] = (
+                    verdict if previous in {None, verdict} else "unsupported"
+                )
     return dict(sorted(verdicts.items()))
 
 
@@ -331,7 +443,7 @@ def _route_component(
         )
 
     if not is_registered_segmenter(pack.segmenter_id):
-        issues.append(f"segmenter {pack.segmenter_id!r} is not registered")
+        issues.append("route segmenter is not registered")
     if not pack.scripts:
         issues.append("route declares no scripts")
     if not pack.recognizers:
@@ -452,15 +564,27 @@ def _model_component(
 def _policy_catalog(
     policy_names: Iterable[str] | None,
 ) -> tuple[list[str], list[str]]:
-    names = list(policy_names) if policy_names is not None else list(list_policies())
-    normalized = sorted({str(name).strip() for name in names if str(name).strip()})
+    names = (
+        _bounded_items(policy_names, 128)
+        if policy_names is not None
+        else list(list_policies())
+    )
+    if any(not isinstance(name, str) or len(name) > 4096 for name in names):
+        raise ValueError("invalid policy identifiers")
+    normalized = sorted({name.strip() for name in names if name.strip()})
+    bundled = set(list_policies())
     invalid: list[str] = []
     for name in normalized:
+        if name not in bundled:
+            invalid.append(name)
+            continue
         try:
             load_policy(name)
         except Exception:
             invalid.append(name)
-    return normalized, invalid
+    return [
+        name if name in bundled else _metadata_id(name) for name in normalized
+    ], invalid
 
 
 def _policy_component(
@@ -480,9 +604,7 @@ def _policy_component(
         if threshold_profile is not None:
             profiles = load_thresholds().get("profiles", {})
             if threshold_profile not in profiles:
-                issues.append(
-                    f"route policy profile {threshold_profile!r} is not in the threshold matrix"
-                )
+                issues.append("route policy profile is not in the threshold matrix")
     status = "filled"
     if not policy_names:
         status = "missing"
@@ -497,7 +619,11 @@ def _policy_component(
             "status": status,
             "profiles": list(policy_names),
             "profile_count": len(policy_names),
-            "threshold_profile": threshold_profile,
+            "threshold_profile": (
+                threshold_profile
+                if threshold_profile in load_thresholds().get("profiles", {})
+                else _metadata_id(threshold_profile)
+            ),
             "scope": "route_override" if threshold_profile else "global",
         },
         issues,
@@ -586,6 +712,7 @@ def _default_languages(
     return languages
 
 
+@_safe_matrix_call
 def build_language_health_matrix(
     *,
     registry: LanguagePackRegistry | None = None,
@@ -619,14 +746,18 @@ def build_language_health_matrix(
 
     resolved_registry = registry or LANGUAGE_PACK_REGISTRY
     if manifest_rows is not None:
-        resolved_manifest_rows = [dict(row) for row in manifest_rows]
+        resolved_manifest_rows = [dict(row) for row in _bounded_items(manifest_rows)]
     else:
         if manifest_path is None:
             resolved_manifest_rows = load_manifest_rows()
         else:
             resolved_manifest_rows = load_manifest_rows(Path(manifest_path))
+    for row in resolved_manifest_rows:
+        _bounded_tree(row)
     resolved_fixture_roots = (
-        tuple(fixture_roots) if fixture_roots is not None else _DEFAULT_FIXTURE_ROOTS
+        tuple(_bounded_items(fixture_roots, 128))
+        if fixture_roots is not None
+        else _DEFAULT_FIXTURE_ROOTS
     )
     fixture_evidence, global_findings = _collect_fixture_evidence(
         resolved_fixture_roots
@@ -644,7 +775,7 @@ def build_language_health_matrix(
     else:
         selected_languages = {
             language
-            for value in languages
+            for value in _bounded_items(languages, 256)
             if (language := _normalize_language(value)) is not None
         }
 
@@ -682,10 +813,11 @@ def build_language_health_matrix(
             str(fixture["status"]),
             str(policy["status"]),
         ]
+        model["default_model"] = _metadata_id(model["default_model"])
         row = {
             "language": language,
             "status": _overall_status(statuses),
-            "route": route,
+            "route": _sanitize_route(route),
             "model": model,
             "fixture": fixture,
             "policy": policy,
@@ -738,9 +870,9 @@ def build_language_health_matrix(
                 if manifest_path is not None
                 else _REPO_ROOT / "models.jsonl"
             ),
-            "fixture_roots": [
-                _source_reference(Path(root)) for root in resolved_fixture_roots
-            ],
+            "fixture_roots": sorted(
+                {_source_reference(Path(root)) for root in resolved_fixture_roots}
+            ),
             "policy_profiles": resolved_policy_names,
             "includes_fixture_text": False,
         },
