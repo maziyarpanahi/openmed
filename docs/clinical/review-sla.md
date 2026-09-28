@@ -54,6 +54,9 @@ bucket counts. It contains no case keys, case contents, or reviewer
 identities. When a detailed classification is needed for local routing,
 `compute_review_sla` returns records whose `case_key` is a stable SHA-256
 value. The raw key is never serialized by this module.
+Direct record construction validates opaque digests, timestamps and fixed
+bucket labels. Report bucket totals must agree with `total_cases`; invalid
+iterators and priorities produce generic errors without retaining raw values.
 
 ```python
 from openmed.clinical import compute_review_sla

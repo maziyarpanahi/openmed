@@ -12,6 +12,7 @@ clinical decision mechanism.
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -104,6 +105,29 @@ class ReviewSLARecord:
     overdue_seconds: int
     overdue_bucket: str
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.opaque_case_key, str) or not re.fullmatch(
+            r"sha256:[0-9a-f]{64}", self.opaque_case_key
+        ):
+            raise ValueError("case key must be an opaque SHA-256 digest")
+        for value, labels in (
+            (self.priority, PRIORITY_LEVELS),
+            (self.age_bucket, AGE_BUCKETS),
+            (self.expiry_bucket, EXPIRY_BUCKETS),
+            (self.overdue_bucket, OVERDUE_BUCKETS),
+        ):
+            if value not in labels:
+                raise ValueError("record contains an unsupported bucket")
+        if any(
+            type(value) is not int or value < 0
+            for value in (self.age_seconds, self.overdue_seconds)
+        ):
+            raise ValueError("record durations must be non-negative integers")
+        for name in ("queued_at", "expires_at"):
+            object.__setattr__(
+                self, name, _coerce_datetime(getattr(self, name), name).isoformat()
+            )
+
     @property
     def case_key(self) -> str:
         """Return the stable opaque key used in this record."""
@@ -144,6 +168,9 @@ class ReviewSLAReport:
     overdue_counts: Mapping[str, int]
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "as_of", _coerce_datetime(self.as_of, "as_of").isoformat()
+        )
         if (
             isinstance(self.total_cases, bool)
             or not isinstance(self.total_cases, int)
@@ -165,6 +192,8 @@ class ReviewSLAReport:
                 normalized[label] = value
             if set(counts) - set(labels):
                 raise ValueError("report contains an unsupported bucket")
+            if sum(normalized.values()) != self.total_cases:
+                raise ValueError("bucket counts must sum to total_cases")
             object.__setattr__(self, field_name, MappingProxyType(normalized))
 
     @property
@@ -376,14 +405,12 @@ def _as_case_iterable(
     if isinstance(cases, (str, bytes)):
         raise TypeError("cases must be an iterable of queue entries")
     try:
-        iter(cases)
-    except TypeError:
-        invalid = True
-    else:
-        invalid = False
-    if invalid:
+        result = tuple(cases)
+    except Exception:
+        result = None
+    if result is None:
         raise TypeError("cases must be an iterable of queue entries")
-    return cases
+    return result
 
 
 def _coerce_case(
@@ -512,12 +539,10 @@ def _normalize_priority(priority: str | int) -> str:
     if isinstance(priority, bool) or not isinstance(priority, (str, int)):
         raise TypeError("priority must be a supported string")
     token = str(priority).strip().lower().replace("_", "-").replace(" ", "-")
-    try:
-        return _PRIORITY_ALIASES[token]
-    except KeyError:
-        raise ValueError(
-            "priority must be one of urgent, high, normal, or low"
-        ) from None
+    canonical = _PRIORITY_ALIASES.get(token)
+    if canonical is None:
+        raise ValueError("priority must be one of urgent, high, normal, or low")
+    return canonical
 
 
 def _duration(value: timedelta | int | float, name: str) -> timedelta:

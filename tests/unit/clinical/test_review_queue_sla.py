@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -209,3 +210,52 @@ def test_bad_input_hooks_do_not_chain_patient_values() -> None:
         assert patient_value not in str(caught.value)
         assert caught.value.__cause__ is None
         assert caught.value.__context__ is None
+
+
+def test_late_iterator_errors_and_invalid_priorities_are_value_free():
+    def cases():
+        yield {"case_key": "synthetic-safe", "queued_at": AS_OF}
+        raise ValueError("synthetic_private_marker")
+
+    for value in (
+        cases(),
+        [
+            {
+                "case_key": "synthetic-safe",
+                "queued_at": AS_OF,
+                "priority": "synthetic_private_marker",
+            }
+        ],
+    ):
+        with pytest.raises((TypeError, ValueError)) as caught:
+            compute_review_sla(value, now=AS_OF)
+        assert "synthetic_private_marker" not in str(caught.value)
+        assert caught.value.__context__ is None
+
+
+def test_direct_report_requires_timestamp_and_consistent_counts():
+    report = build_review_sla_report([], now=AS_OF)
+    with pytest.raises(ValueError):
+        replace(report, as_of="synthetic_private_marker")
+    with pytest.raises(ValueError, match="total_cases"):
+        replace(report, total_cases=1)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "opaque_case_key",
+        "priority",
+        "age_bucket",
+        "expiry_bucket",
+        "overdue_bucket",
+        "queued_at",
+        "expires_at",
+    ],
+)
+def test_direct_record_rejects_raw_metadata(field):
+    record = compute_review_sla(
+        [{"case_key": "synthetic-safe", "queued_at": AS_OF}], now=AS_OF
+    )[0]
+    with pytest.raises(ValueError):
+        replace(record, **{field: "synthetic_private_marker"})
