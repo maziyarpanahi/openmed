@@ -199,3 +199,180 @@ def test_untrusted_dimension_labels_are_not_copied_into_artifacts() -> None:
     assert marker not in scorecard.to_markdown()
     assert scorecard.languages[0].startswith("label_sha256_")
     assert scorecard.families[0].startswith("label_sha256_")
+
+
+def test_metric_summary_keys_are_not_language_evidence():
+    card = build_crosslingual_scorecard(
+        [
+            {
+                "fixture_count": 2,
+                "metrics": {
+                    "character_recall": {"overall": 0.8, "by_language": {"en": 0.8}}
+                },
+            }
+        ],
+        expected_languages=("en",),
+    )
+    assert card.languages == ("en",)
+    assert card.per_language["en"]["recall"] == 0.8
+
+
+def test_zero_support_language_buckets_remain_missing():
+    card = build_crosslingual_scorecard(
+        [
+            {
+                "fixture_count": 2,
+                "metrics": {
+                    "character_recall": {
+                        "by_language": {"en": 0.8, "fr": 1.0},
+                        "total_chars_by_language": {"en": 10, "fr": 0},
+                        "covered_chars_by_language": {"en": 8, "fr": 0},
+                    }
+                },
+            }
+        ],
+        expected_languages=("en", "fr"),
+    )
+    assert card.languages == ("en",)
+    assert card.missing_languages == ("fr",)
+
+
+def test_critical_leakage_rate_is_not_misreported_as_a_count():
+    card = build_crosslingual_scorecard(
+        [{"language": "en", "metrics": {"critical_leakage_rate": 0.5}}]
+    )
+    assert card.per_language["en"]["critical_leakage_count"] is None
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        {"numerator": -1, "denominator": 0, "rate": 0.8},
+        {"numerator": 1, "denominator": -1, "rate": 0.8},
+        {"numerator": 0, "denominator": 0, "rate": 1.0},
+    ],
+)
+def test_invalid_rate_denominators_do_not_invent_support(evidence):
+    card = build_crosslingual_scorecard(
+        [{"language": "en", "metrics": {"recall": evidence}}]
+    )
+    assert card.per_language["en"]["recall"] is None
+
+
+def test_huge_numeric_values_are_sanitized_without_overflow():
+    card = build_crosslingual_scorecard(
+        [{"language": "en", "metrics": {"recall": 10**10000}}]
+    )
+    assert card.per_language["en"]["recall"] is None
+
+
+def test_report_callback_failure_has_no_sensitive_error_context():
+    class Broken:
+        def to_dict(self):
+            raise RuntimeError("SyntheticPatientSecret")
+
+    with pytest.raises(ValueError) as caught:
+        build_crosslingual_scorecard([Broken()])
+    assert "SyntheticPatientSecret" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_scorecard_input_collection_is_bounded():
+    with pytest.raises(ValueError):
+        build_crosslingual_scorecard(({"language": "en"} for _ in range(8193)))
+
+
+def test_direct_scorecard_construction_cannot_bypass_aggregate_boundary():
+    card = CrossLingualScorecard(
+        report_count=1,
+        fixture_count=1,
+        languages=("en",),
+        families=(),
+        per_language={"en": {"recall": 0.5, "raw_text": "SyntheticPatientSecret"}},
+        per_family={},
+    )
+    assert "SyntheticPatientSecret" not in card.to_json()
+
+
+def test_serialized_scorecard_is_detached_from_nested_state():
+    card = build_crosslingual_scorecard(
+        [{"language": "en", "metrics": {"recall": 0.5}}]
+    )
+    payload = card.to_dict()
+    payload["per_language"]["en"]["metrics"]["recall"] = "SyntheticPatientSecret"
+    assert card.per_language["en"]["metrics"]["recall"] == 0.5
+
+
+def test_empty_language_slice_is_not_complete_evidence():
+    card = build_crosslingual_scorecard(
+        [{"metrics": {"per_language": {"en": {}}}}], expected_languages=("en",)
+    )
+    assert card.missing_languages == ("en",)
+
+
+def test_alias_metric_order_is_deterministic():
+    first = {"language": "en", "metrics": {"recall": 0.9, "character_recall": 0.5}}
+    second = {"language": "en", "metrics": {"character_recall": 0.5, "recall": 0.9}}
+    assert (
+        build_crosslingual_scorecard([first]).to_json()
+        == build_crosslingual_scorecard([second]).to_json()
+    )
+
+
+def test_sibling_leakage_support_excludes_global_empty_buckets():
+    card = build_crosslingual_scorecard(
+        [
+            {
+                "fixture_count": 1,
+                "metrics": {
+                    "character_recall": {"by_language": {"en": 0.8, "fr": 1.0}},
+                    "leakage": {"total_chars_by_language": {"en": 10, "fr": 0}},
+                },
+            }
+        ],
+        expected_languages=("en", "fr"),
+    )
+    assert card.languages == ("en",)
+    assert card.missing_languages == ("fr",)
+
+
+def test_unknown_fixture_counts_are_not_character_support():
+    card = build_crosslingual_scorecard(
+        [
+            {
+                "metrics": {
+                    "per_language": {
+                        "en": {"recall": {"numerator": 9, "denominator": 10}},
+                        "fr": {"recall": {"numerator": 15, "denominator": 20}},
+                    }
+                }
+            }
+        ]
+    )
+    assert card.fixture_count == 0
+    assert card.per_language["en"]["counts"]["fixtures"] == 0
+    assert card.per_language["fr"]["counts"]["fixtures"] == 0
+
+
+def test_nested_scorecard_state_is_immutable():
+    card = build_crosslingual_scorecard(
+        [{"language": "en", "metrics": {"recall": 0.5}}]
+    )
+    with pytest.raises(TypeError):
+        card.per_language["en"]["metrics"]["recall"] = "SyntheticPatientSecret"
+
+
+def test_scorecard_recursive_metadata_is_rejected_without_context():
+    value = {}
+    value["metadata"] = value
+    with pytest.raises(ValueError) as caught:
+        build_crosslingual_scorecard([value])
+    assert caught.value.__context__ is None
+
+
+def test_oversized_latency_aggregation_is_rejected_without_sensitive_context():
+    with pytest.raises(ValueError) as caught:
+        build_crosslingual_scorecard(
+            [{"language": "en", "fixture_count": 3, "metrics": {"latency_ms": 1e308}}]
+        )
+    assert caught.value.__context__ is None

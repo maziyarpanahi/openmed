@@ -51,3 +51,22 @@ report metadata cannot be copied into the artifacts.
 The scorecard is evaluation evidence, not a compliance certification or a
 clinical decision guarantee. Missing metrics are rendered as `n/a` and should
 be investigated before comparing language or family rows.
+
+## Evidence limits
+
+Missing fixture counts are reported as zero (unknown), not inferred from
+character support. Metrics without count evidence use a unit weight.
+Explicit zero-support language buckets do not establish language coverage.
+A leakage rate without a valid denominator is not a leakage event count.
+Weighted p50/p95 values summarize the supplied report percentiles; they are
+not percentiles of pooled raw latency measurements.
+
+Inputs are bounded to 8,192 reports/items per collection and 8,192 structural
+nodes per report, with a maximum nesting depth of 32. Invalid input callbacks,
+recursive metadata, and arithmetic overflow fail with a fixed error that
+does not retain the original exception context. Rows keep only allowed
+aggregate fields, including when constructed directly, and nested state is
+immutable. JSON indentation is bounded to 0–8.
+
+Hashed unknown labels remain linkable pseudonyms, not anonymization. This
+adapter cannot establish whether upstream metrics were evaluated correctly.

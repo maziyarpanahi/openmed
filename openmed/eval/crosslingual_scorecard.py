@@ -21,8 +21,11 @@ import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import wraps
+from itertools import islice
 from numbers import Real
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from openmed.core.language_pack_catalog import SUPPORTED_LANGUAGES
@@ -185,7 +188,7 @@ class CrossLingualScorecardRow:
             "fixture_count": int(self.fixture_count),
             "report_count": int(self.report_count),
         }
-        payload.update(_plain(self.metrics))
+        payload.update(_safe_row(self.metrics))
         return payload
 
     def __getitem__(self, key: str) -> Any:
@@ -213,17 +216,21 @@ class CrossLingualScorecard:
     def __post_init__(self) -> None:
         """Snapshot mappings and ordering so later input mutation cannot drift."""
 
-        object.__setattr__(self, "languages", tuple(sorted(self.languages)))
-        object.__setattr__(self, "families", tuple(sorted(self.families)))
+        object.__setattr__(
+            self, "languages", tuple(sorted(_normalise_labels(self.languages)))
+        )
+        object.__setattr__(
+            self, "families", tuple(sorted(_normalise_labels(self.families)))
+        )
         object.__setattr__(
             self,
             "expected_languages",
-            tuple(sorted(self.expected_languages)),
+            tuple(sorted(_normalise_labels(self.expected_languages))),
         )
         object.__setattr__(
             self,
             "missing_languages",
-            tuple(sorted(self.missing_languages)),
+            tuple(sorted(_normalise_labels(self.missing_languages))),
         )
         object.__setattr__(
             self,
@@ -231,6 +238,14 @@ class CrossLingualScorecard:
             _snapshot_rows(self.per_language),
         )
         object.__setattr__(self, "per_family", _snapshot_rows(self.per_family))
+        for name in (
+            "report_count",
+            "fixture_count",
+            "unlabeled_report_count",
+            "unlabeled_fixture_count",
+            "missing_family_report_count",
+        ):
+            object.__setattr__(self, name, _safe_count(getattr(self, name), default=0))
 
     @classmethod
     def from_reports(
@@ -308,17 +323,19 @@ class CrossLingualScorecard:
             },
             "missing_languages": list(self.missing_languages),
             "by_family": {
-                family: dict(self.per_family[family]) for family in self.families
+                family: _plain(self.per_family.get(family, {}))
+                for family in self.families
             },
             "by_language": {
-                language: dict(self.per_language[language])
+                language: _plain(self.per_language.get(language, {}))
                 for language in self.languages
             },
             "per_family": {
-                family: dict(self.per_family[family]) for family in self.families
+                family: _plain(self.per_family.get(family, {}))
+                for family in self.families
             },
             "per_language": {
-                language: dict(self.per_language[language])
+                language: _plain(self.per_language.get(language, {}))
                 for language in self.languages
             },
             "report_count": int(self.report_count),
@@ -327,6 +344,9 @@ class CrossLingualScorecard:
 
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the scorecard with stable key ordering."""
+
+        if type(indent) is not int or not 0 <= indent <= 8:
+            raise ValueError("scorecard indentation must be between zero and eight")
 
         return json.dumps(
             self.to_dict(),
@@ -378,7 +398,9 @@ class CrossLingualScorecard:
         ]
         if self.languages:
             for language in self.languages:
-                lines.append(_markdown_group_row(language, self.per_language[language]))
+                lines.append(
+                    _markdown_group_row(language, self.per_language.get(language, {}))
+                )
         else:
             lines.append("| `none` | 0 | 0 | n/a | n/a | n/a | n/a | all |")
 
@@ -396,7 +418,9 @@ class CrossLingualScorecard:
         )
         if self.families:
             for family in self.families:
-                lines.append(_markdown_group_row(family, self.per_family[family]))
+                lines.append(
+                    _markdown_group_row(family, self.per_family.get(family, {}))
+                )
         else:
             lines.append("| `none` | 0 | 0 | n/a | n/a | n/a | n/a | all |")
 
@@ -467,7 +491,7 @@ class CrossLingualScorecardRenderer:
                 "expected_languages",
                 tuple(_normalise_labels(self.expected_languages)),
             )
-        object.__setattr__(self, "manifest_rows", tuple(self.manifest_rows))
+        object.__setattr__(self, "manifest_rows", _bounded(self.manifest_rows))
 
     def build(self, reports: Any) -> CrossLingualScorecard:
         """Build a scorecard from report objects or report mappings."""
@@ -507,6 +531,42 @@ class CrossLingualScorecardRenderer:
         return self.build(reports).to_markdown()
 
 
+def _bounded(values):
+    result = tuple(islice(iter(values), 8193))
+    if len(result) > 8192:
+        raise ValueError("scorecard input exceeds its collection limit")
+    return result
+
+
+def _safe_scorecard_call(function):
+    @wraps(function)
+    def guarded(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid or oversized scorecard evidence")
+
+    return guarded
+
+
+def _validate_shape(value, depth=0, budget=None):
+    if budget is None:
+        budget = [8192]
+    budget[0] -= 1
+    if depth > 32 or budget[0] < 0:
+        raise ValueError("scorecard evidence exceeds its structural limit")
+    if isinstance(value, Mapping):
+        for key, item in _bounded(value.items()):
+            if not isinstance(key, str) or len(key) > 1024:
+                raise ValueError("invalid scorecard field")
+            _validate_shape(item, depth + 1, budget)
+    elif isinstance(value, (list, tuple)):
+        for item in _bounded(value):
+            _validate_shape(item, depth + 1, budget)
+
+
+@_safe_scorecard_call
 def build_crosslingual_scorecard(
     reports: Iterable[Any],
     *,
@@ -593,16 +653,29 @@ def build_crosslingual_scorecard(
                 report,
                 language_count=len(language_payloads),
             )
+            if language_payload.get("_zero_support") or (
+                "total_chars" in language_payload
+                and (_finite_number(language_payload["total_chars"]) or 0) <= 0
+            ):
+                continue
+            source = language_payload or (
+                report.metrics if language == report.language else {}
+            )
+            samples = _samples_for_source(source, fixture_count)
+            if language == report.language and len(language_payloads) == 1:
+                samples = _fill_missing_samples(
+                    samples, report.metrics, report.fixture_count
+                )
+            if (
+                language != report.language
+                and not any(samples.values())
+                and not _safe_count(language_payload.get("fixture_count"), default=0)
+            ):
+                continue
             observations.append((language, language_payload, fixture_count))
             observed_languages.add(language)
             group = language_groups.setdefault(language, _GroupAccumulator())
             group.add_report(fixture_count)
-            source = language_payload or report.metrics
-            samples = _samples_for_source(source, fixture_count)
-            if len(observations) == 1 and len(language_payloads) == 1:
-                samples = _fill_missing_samples(
-                    samples, report.metrics, report.fixture_count
-                )
             group.add_samples(samples)
 
         family_samples: dict[str, list[_MetricSample]] = {
@@ -986,6 +1059,7 @@ def _normalize_report(report: Any) -> _NormalizedReport:
     else:
         raise TypeError("evaluation reports must be mappings or report objects")
 
+    _validate_shape(root)
     raw_metrics = root.get("metrics")
     metrics = dict(raw_metrics) if isinstance(raw_metrics, Mapping) else root
     metadata = root.get("metadata")
@@ -1012,7 +1086,7 @@ def _normalize_report(report: Any) -> _NormalizedReport:
         root.get("model_name"),
         metadata_mapping.get("model_name"),
     )
-    fixture_count = _safe_count(root.get("fixture_count"), default=1)
+    fixture_count = _safe_count(root.get("fixture_count"), default=0)
     return _NormalizedReport(
         root=root,
         metrics=metrics,
@@ -1034,13 +1108,13 @@ def _coerce_report_items(reports: Any) -> tuple[Any, ...]:
             if isinstance(nested, Sequence) and not isinstance(
                 nested, (str, bytes, bytearray)
             ):
-                return tuple(nested)
+                return _bounded(nested)
         if any(
             key in reports
             for key in ("metrics", "suite", "model_name", "language", "metadata")
         ):
             return (reports,)
-        values = tuple(reports.values())
+        values = _bounded(reports.values())
         if values and all(isinstance(value, Mapping) for value in values):
             return values
         return (reports,)
@@ -1049,7 +1123,7 @@ def _coerce_report_items(reports: Any) -> tuple[Any, ...]:
     if isinstance(reports, (str, bytes, bytearray)):
         raise TypeError("evaluation reports must be report objects or collections")
     try:
-        return tuple(reports)
+        return _bounded(reports)
     except TypeError as exc:
         raise TypeError(
             "evaluation reports must be report objects or collections"
@@ -1083,13 +1157,13 @@ def _resolve_family_lookup(
 ) -> dict[str, str]:
     lookup: dict[str, str] = {}
     if family_by_model is not None:
-        for model, value in family_by_model.items():
+        for model, value in _bounded(family_by_model.items()):
             family = value.get("family") if isinstance(value, Mapping) else value
             safe_family = _safe_label(family)
             if safe_family is not None:
                 lookup[str(model)] = safe_family
     if manifest_rows is not None:
-        for row in manifest_rows:
+        for row in _bounded(manifest_rows):
             if not isinstance(row, Mapping):
                 continue
             model = _first_text(row.get("model_name"), row.get("repo_id"))
@@ -1130,6 +1204,37 @@ def _collect_language_payloads(
                     by_language = _language_mapping(value)
                     if by_language is not None:
                         for language, metric_value in by_language.items():
+                            support = (
+                                value.get("total_chars_by_language", {}).get(language)
+                                if isinstance(
+                                    value.get("total_chars_by_language"), Mapping
+                                )
+                                else None
+                            )
+                            if (
+                                support is not None
+                                and (_finite_number(support) or 0) <= 0
+                            ):
+                                merge(language, {"_zero_support": True})
+                                continue
+                            if support is not None and key in {
+                                _normalise_key(a) for a in _METRIC_ALIASES["recall"]
+                            }:
+                                covered = (
+                                    value.get("covered_chars_by_language", {}).get(
+                                        language
+                                    )
+                                    if isinstance(
+                                        value.get("covered_chars_by_language"), Mapping
+                                    )
+                                    else None
+                                )
+                                metric_value = {
+                                    "rate": metric_value,
+                                    "denominator": support,
+                                }
+                                if covered is not None:
+                                    metric_value["numerator"] = covered
                             merge(language, {str(raw_key): metric_value})
                     scan(value, depth + 1)
                 continue
@@ -1165,10 +1270,11 @@ def _language_mapping(value: Mapping[str, Any]) -> Mapping[str, Any] | None:
             if nested is not None:
                 candidate.update(nested)
             continue
+        if not isinstance(raw_key, str) or _LOCALE_PATTERN.fullmatch(raw_key) is None:
+            continue
         language = _safe_label(raw_key)
-        if language is None or _normalise_key(raw_key) in _NON_LANGUAGE_KEYS:
-            return None
-        candidate[language] = item
+        if language is not None:
+            candidate[language] = item
     return candidate or None
 
 
@@ -1183,11 +1289,7 @@ def _language_fixture_count(
         return direct
     if language_count == 1:
         return report.fixture_count
-    for metric in ("recall", "abstention"):
-        sample = _sample_for_metric(payload, metric, report.fixture_count)
-        if sample is not None and sample.denominator is not None:
-            return max(int(round(sample.denominator)), 1)
-    return 1
+    return 0
 
 
 def _samples_for_source(
@@ -1269,7 +1371,7 @@ def _sample_for_metric(
 
 
 def _find_metric_value(source: Mapping[str, Any], metric: str) -> Any:
-    aliases = {_normalise_key(alias) for alias in _METRIC_ALIASES[metric]}
+    aliases = tuple(_normalise_key(alias) for alias in _METRIC_ALIASES[metric])
     candidates: list[Mapping[str, Any]] = []
     seen: set[int] = set()
 
@@ -1286,8 +1388,12 @@ def _find_metric_value(source: Mapping[str, Any], metric: str) -> Any:
 
     visit(source, 0)
     for mapping in candidates:
-        for key, value in mapping.items():
-            if _normalise_key(key) in aliases:
+        normalized = {_normalise_key(key): value for key, value in mapping.items()}
+        for alias in aliases:
+            if alias in normalized:
+                value = normalized[alias]
+                if alias == "critical_leakage_rate" and not isinstance(value, Mapping):
+                    return {"rate": value}
                 return value
     return _MISSING
 
@@ -1326,6 +1432,16 @@ def _rate_sample(
             rate = _number_from_keys(value, _METRIC_ALIASES[metric])
     else:
         rate = _finite_number(value)
+    if isinstance(value, Mapping):
+        keys = {_normalise_key(key) for key in value}
+        if keys.intersection({"denominator", "gold", "support", "total"}) and (
+            denominator is None or denominator <= 0
+        ):
+            return None
+        if numerator is not None and (
+            numerator < 0 or (denominator is not None and numerator > denominator)
+        ):
+            return None
     if numerator is not None and denominator is not None and denominator > 0:
         rate = numerator / denominator
     if rate is None or not 0.0 <= rate <= 1.0:
@@ -1361,11 +1477,16 @@ def _count_sample(value: Any, default_weight: int) -> _MetricSample | None:
         if count is None:
             rate = _number_from_keys(value, ("rate", "critical_leakage_rate"))
             denominator = _number_from_keys(value, ("denominator", "total"))
-            if rate is not None and denominator is not None:
+            if (
+                rate is not None
+                and 0 <= rate <= 1
+                and denominator is not None
+                and denominator > 0
+            ):
                 count = rate * denominator
     else:
         count = _finite_number(value)
-    if count is None or count < 0:
+    if count is None or not math.isfinite(count) or count < 0 or not count.is_integer():
         return None
     return _MetricSample(
         metric="critical_leakage",
@@ -1441,7 +1562,10 @@ def _weighted_latency(samples: Sequence[_MetricSample]) -> float | None:
 
 
 def _clean_float(value: float) -> float:
-    return round(float(value), 12)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite scorecard aggregate")
+    return round(number, 12)
 
 
 def _integer_or_float(value: float) -> int | float:
@@ -1452,10 +1576,10 @@ def _integer_or_float(value: float) -> int | float:
 
 
 def _number_from_keys(mapping: Mapping[str, Any], keys: Sequence[str]) -> float | None:
-    targets = {_normalise_key(key) for key in keys}
-    for key, value in mapping.items():
-        if _normalise_key(key) in targets:
-            number = _finite_number(value)
+    normalized = {_normalise_key(key): value for key, value in mapping.items()}
+    for key in keys:
+        if _normalise_key(key) in normalized:
+            number = _finite_number(normalized[_normalise_key(key)])
             if number is not None:
                 return number
     return None
@@ -1464,13 +1588,16 @@ def _number_from_keys(mapping: Mapping[str, Any], keys: Sequence[str]) -> float 
 def _finite_number(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, Real):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
     return number if math.isfinite(number) else None
 
 
 def _safe_count(value: Any, *, default: int) -> int:
     number = _finite_number(value)
-    if number is None or number < 0:
+    if number is None or number < 0 or not number.is_integer():
         return default
     return int(number)
 
@@ -1502,6 +1629,8 @@ def _safe_label(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     normalized = value.strip()
+    if re.fullmatch(r"label_sha256_[0-9a-f]{32}", normalized):
+        return normalized
     if _LABEL_PATTERN.fullmatch(normalized) is None:
         return None
     language = re.split(r"[-_]", normalized, maxsplit=1)[0].casefold()
@@ -1516,7 +1645,7 @@ def _safe_label(value: Any) -> str | None:
 def _normalise_labels(values: Sequence[str]) -> tuple[str, ...]:
     if isinstance(values, (str, bytes, bytearray)):
         values = (str(values),)
-    result = {_safe_label(value) for value in values}
+    result = {_safe_label(value) for value in _bounded(values)}
     result.discard(None)
     return tuple(sorted(result))  # type: ignore[arg-type]
 
@@ -1526,13 +1655,68 @@ def _normalise_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text).strip("_")
 
 
-def _snapshot_rows(
-    rows: Mapping[str, Mapping[str, Any]],
-) -> dict[str, Mapping[str, Any]]:
-    return {
-        str(key): _plain(value)
-        for key, value in sorted(rows.items(), key=lambda item: str(item[0]))
+def _safe_row(row):
+    scalar_keys = {
+        "report_count",
+        "fixture_count",
+        "recall",
+        "abstention",
+        "abstention_rate",
+        "critical_leakage",
+        "critical_leakage_count",
+        "latency_ms",
+        "latency_mean_ms",
+        "latency_p50_ms",
+        "latency_p95_ms",
     }
+    result = {key: _finite_number(row[key]) for key in scalar_keys if key in row}
+    for key in ("missing_metrics", "observed_metrics"):
+        if key in row:
+            result[key] = [
+                value for value in _bounded(row[key]) if value in SCORECARD_METRICS
+            ]
+    for key in ("metrics", "metric_counts", "counts"):
+        if isinstance(row.get(key), Mapping):
+            allowed = set(SCORECARD_METRICS) | {"reports", "fixtures", "latency"}
+            result[key] = {}
+            for name, value in _bounded(row[key].items()):
+                if name not in allowed:
+                    continue
+                if isinstance(value, Mapping):
+                    result[key][name] = {
+                        field: _finite_number(value[field])
+                        for field in (
+                            "numerator",
+                            "denominator",
+                            "observations",
+                            "weight",
+                            "count",
+                            "reports",
+                            "missing_reports",
+                        )
+                        if field in value
+                    }
+                else:
+                    result[key][name] = _finite_number(value)
+    return result
+
+
+def _freeze(value):
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _snapshot_rows(rows):
+    return _freeze(
+        {
+            _safe_label(key): _safe_row(value)
+            for key, value in _bounded(rows.items())
+            if _safe_label(key) is not None and isinstance(value, Mapping)
+        }
+    )
 
 
 def _plain(value: Any) -> Any:
