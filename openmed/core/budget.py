@@ -241,12 +241,20 @@ def coerce_budget(
 
     Raises:
         TypeError: If ``budget`` is not a supported type.
+        InputError: If a mapping contains unsupported fields or invalid values.
     """
     if budget is None:
         return None
     if isinstance(budget, RequestBudget):
         return None if budget.is_unlimited else budget
     if isinstance(budget, Mapping):
+        allowed_fields = ("max_wall_time", "max_input_chars")
+        if any(key not in allowed_fields for key in budget):
+            raise InputError(
+                "Budget mapping contains unsupported fields. Use max_wall_time "
+                "and max_input_chars.",
+                details={"argument": "budget", "allowed_fields": list(allowed_fields)},
+            )
         coerced = RequestBudget(
             max_wall_time=budget.get("max_wall_time"),
             max_input_chars=budget.get("max_input_chars"),
