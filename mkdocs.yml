@@ -179,6 +179,8 @@ nav:
       - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Section-Preserving Summary Planning: clinical/summary-section-planning.md
+      - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
       - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
       - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
       - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
