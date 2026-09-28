@@ -593,6 +593,12 @@ from .nli_assertion_pairs import (
     validate_assertion_metadata,
     validate_nli_pair,
 )
+from .nli_backends import (
+    EncoderNLIBackend,
+    LocalNLIError,
+    RemoteNLIBackendError,
+    resolve_nli_backend,
+)
 from .nli_experiencer_pairs import (
     CAREGIVER_EXPERIENCER,
     CLINICAL_NLI_EXPERIENCER_PAIR_ADVISORY,
@@ -2147,6 +2153,10 @@ __all__ = [
     "NLI_LABELS",
     "NLIBackend",
     "NLIResult",
+    "EncoderNLIBackend",
+    "LocalNLIError",
+    "RemoteNLIBackendError",
+    "resolve_nli_backend",
     "HeuristicNLIBackend",
     "VerificationResult",
     "get_default_backend",
