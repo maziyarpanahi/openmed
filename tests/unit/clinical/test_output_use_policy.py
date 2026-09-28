@@ -48,6 +48,29 @@ def test_default_policy_allows_reviewed_synthetic_documentation() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "alias,conflicting_value",
+    [
+        ("output_category", "action"),
+        ("declared_purpose", "clinical_decision"),
+        ("intended_audience", "patient"),
+        ("review", "rejected"),
+        ("decision_trigger", True),
+        ("policy_digest", "synthetic-unknown-policy"),
+    ],
+)
+def test_multiple_mapping_aliases_fail_closed(alias, conflicting_value) -> None:
+    payload = _reviewable_summary().to_dict()
+    payload[alias] = conflicting_value
+    decision = evaluate_output_use(payload)
+    assert not decision.allowed
+    assert decision.reason_codes == ("declaration_ambiguous",)
+    with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
+        OutputUseDeclaration.from_mapping(payload)
+    with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
+        enforce_output_use(payload)
+
+
 def test_keyword_and_mapping_forms_are_equivalent() -> None:
     declaration = _reviewable_summary()
     mapping = {
