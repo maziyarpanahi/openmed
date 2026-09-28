@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 91057780,
-    "maximum_unique_payload_bytes": 90693267,
+    "maximum_total_bytes": 91512896,
+    "maximum_unique_payload_bytes": 91148383,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4406142
+    "json": 4414466
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4406142
+    "docs/search/search_index.json": 4414466
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The integrated language-health and scorecard guides build measures 91397410 total bytes, 91032897 unique bytes, and 4408674 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed document-routing evaluation stack build measures 90942294 total bytes, 90577781 unique bytes, and 4400350 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The combined OCR geometry and layout build measures 90485620 total bytes, 90121107 unique bytes, and 4389641 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The validated OCR clinical layout build measures 90263261 total bytes, 89898748 unique bytes, and 4387239 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
