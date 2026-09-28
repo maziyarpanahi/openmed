@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80546339,
-    "maximum_unique_payload_bytes": 80208760,
+    "maximum_total_bytes": 80778614,
+    "maximum_unique_payload_bytes": 80441035,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -23,7 +23,7 @@
   "route_transfer_bytes": {
     "/": 3145728,
     "/docs/": 5560423,
-    "/docs/model-tokenizer-script-coverage/": 7660085
+    "/docs/model-tokenizer-script-coverage/": 7774063
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,7 +31,9 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, and local guardrail evidence guides with bounded documentation headroom.",
+    "The review-state guide increases tokenizer-route transfer to 7667259 bytes in the staged Chromium check; its ceiling retains the existing 106804-byte allowance. Other route limits remain unchanged.",
+    "The review-state guide on current master stages 80663128 total bytes and 80325549 unique payload bytes. Aggregate ceilings retain the existing 4736-byte platform allowance plus 110750 bytes of bounded headroom; search and all other limits are unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and clinical review-state guides with bounded documentation headroom.",
     "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
     "The combined schema fingerprint and processing summary diff guides stage 79540641 total bytes, 79203062 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
     "With the multimodal batch-memory guide, the staged artifact measures 79767347 total bytes, 79429768 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
