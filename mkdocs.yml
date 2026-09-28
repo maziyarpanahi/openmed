@@ -336,8 +336,10 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Synthetic Clinical Fixtures: evaluation/clinical-fixtures.md
       - OCR box-coordinate normalization: multimodal/box-normalization.md
       - OCR page-rotation transforms: multimodal/page-rotation.md
+      - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
       - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
       - Lab Measurement Normalization: clinical/lab-measurements.md
