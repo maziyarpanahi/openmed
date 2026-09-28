@@ -97,7 +97,14 @@ def _flash_attention_2_is_available() -> bool:
     torch = _import_torch()
     cuda = getattr(torch, "cuda", None)
     is_available = getattr(cuda, "is_available", None)
-    return callable(is_available) and bool(is_available())
+    if not callable(is_available):
+        return False
+    try:
+        return bool(is_available())
+    except Exception:
+        # A broken optional runtime probe is not an available accelerator.
+        # Do not include native exception details in downgrade diagnostics.
+        return False
 
 
 def _sdpa_is_available() -> bool:
