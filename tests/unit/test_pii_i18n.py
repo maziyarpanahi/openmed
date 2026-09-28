@@ -167,6 +167,7 @@ class TestConstants:
             "it",
             "es",
             "nl",
+            "pl",
             "hi",
             "kn",
             "ml",
@@ -206,7 +207,6 @@ class TestConstants:
             "ha",
             "ig",
             "yo",
-            "pl",
             "lv",
             "sk",
             "ms",
@@ -8051,5 +8051,71 @@ class TestAfricanHealthFacilityCodes:
         assert leakage == 0
 
 
+def test_polish_pack_routes_locally_with_native_locale_and_identifier_provider():
+    from openmed.core.anonymizer.locales import resolve_locale
+    from openmed.core.language_pack import get_language_pack
+    from openmed.core.language_pack_catalog import (
+        NATIONAL_ID_ONLY_LANGUAGES,
+        NATIONAL_ID_PROVIDERS,
+        SUPPORTED_LANGUAGES,
+    )
+    from openmed.core.language_router import LanguageRouter
+    from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA, LANGUAGE_MONTH_NAMES
+
+    pack = get_language_pack("pl")
+    assert pack is not None
+    assert pack.default_model == "OpenMed/privacy-filter-multilingual"
+    assert "pl" in SUPPORTED_LANGUAGES
+    assert "pl" not in NATIONAL_ID_ONLY_LANGUAGES
+    assert NATIONAL_ID_PROVIDERS["pl"] == ("pl_PL", "pesel")
+    assert resolve_locale("pl") == "pl_PL"
+    assert LANGUAGE_MONTH_NAMES["pl"][0] == "stycznia"
+    assert LANGUAGE_MONTH_NAMES["pl"][-1] == "grudnia"
+    assert LANGUAGE_FAKE_DATA["pl"]["ID_NUM"]
+
+    router = LanguageRouter(use_optional_lid=False)
+    polish = router.route("Pacjent: PESEL 85031512344, kod pocztowy 00-001.")
+    assert polish.language == "pl"
+    assert polish.runs[0].source == "stdlib:routing-marker"
+    assert "pl" in polish.runs[0].candidates
+    assert router.route("Patient stable.").language == "en"
+
+
+def test_polish_pesel_surrogates_preserve_checksum_and_change_source():
+    from openmed.core.pii_i18n import validate_polish_pesel
+
+    anonymizer = Anonymizer(lang="pl", consistent=True, seed=294)
+    for source in ("85031512344", "01272256782"):
+        assert validate_polish_pesel(source)
+        surrogate = anonymizer.surrogate(source, "national_id")
+        assert surrogate != source
+        assert validate_polish_pesel(surrogate)
+        assert anonymizer.surrogate(source, "national_id") == surrogate
+        assert not validate_polish_pesel(source[:-1] + str((int(source[-1]) + 1) % 10))
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.parametrize("phone", ["+48 501 034 005", "501 000 005", "501034005"])
+def test_polish_phone_groups_allow_internal_zeros(phone):
+    from openmed.core.pii import _apply_safety_sweep_to_result
+    from openmed.core.pii_i18n import _POLISH_PII_PATTERNS
+    from openmed.processing.outputs import PredictionResult
+
+    assert any(
+        re.fullmatch(pattern.pattern, phone, pattern.flags)
+        for pattern in _POLISH_PII_PATTERNS
+        if pattern.entity_type == "phone_number"
+    )
+    text = f"Telefon {phone}."
+    empty = PredictionResult(
+        text=text,
+        entities=[],
+        model_name="offline",
+        timestamp="2026-09-28T00:00:00Z",
+        metadata={},
+    )
+    result, _ = _apply_safety_sweep_to_result(text, empty, lang="pl")
+    assert any(text[entity.start : entity.end] == phone for entity in result.entities)

@@ -123,3 +123,20 @@ def test_faq_parity_rejects_visible_answer_drift() -> None:
     )
     validator._validate_faq_parity(drifted, faq_page, errors)
     assert any("visible FAQ disagrees with JSON-LD" in error for error in errors)
+
+
+def test_brand_rejects_substituted_national_id_only_language(monkeypatch):
+    validator = _load_validator()
+    original = validator._load_json
+
+    def changed(path):
+        value = original(path)
+        if path == "docs/brand/system/claims.yml":
+            value = deepcopy(value)
+            value["claims"]["national_id_only_languages"]["value"][0] = "zz"
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", changed)
+    assert any(
+        "national-ID-only language claim" in error for error in validator.validate()
+    )
