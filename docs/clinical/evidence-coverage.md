@@ -10,6 +10,10 @@ offsets, dates, and model output are not read into the report. Source values
 can be fingerprinted locally with `fingerprint_source`; only the resulting
 `sha256:` digest is serialized.
 
+Custom evidence-class keys are matched to caller-supplied review-state and
+fingerprint maps before their names become opaque digests. Invalid encoded
+class names raise a value-free error without retaining a decoding exception.
+
 ```python
 from openmed.clinical import (
     build_evidence_coverage_matrix,

@@ -144,10 +144,10 @@ nav:
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
       - Clinical NLI Label Contract: clinical/nli-label-contract.md
       - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
       - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
-      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
       - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
       - Clinical Data-quality Profiler: clinical/data-quality-profiler.md
       - Offline Terminology Grounding: grounding.md
@@ -314,15 +314,15 @@ nav:
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
+      - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
       - Clinical Output Use Policy: clinical/output-use-policy.md
+      - Value-free Evidence Coverage: clinical/evidence-coverage.md
+      - Human-review packets: clinical/human-review-packets.md
+      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
+      - Clinical claim-packet integrity: clinical/claim-integrity.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
-      - Value-free Evidence Coverage: clinical/evidence-coverage.md
-      - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
-      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
-      - Clinical claim-packet integrity: clinical/claim-integrity.md
-      - Human-review packets: clinical/human-review-packets.md
       - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md

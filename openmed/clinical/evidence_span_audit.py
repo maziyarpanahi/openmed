@@ -15,6 +15,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import Any
 
 EVIDENCE_SPAN_AUDIT_SCHEMA_VERSION = "1.0"
@@ -255,7 +256,7 @@ class EvidenceSpanAudit:
 
         object.__setattr__(self, "spans", normalized_spans)
         object.__setattr__(self, "overlaps", normalized_overlaps)
-        object.__setattr__(self, "counts", counts)
+        object.__setattr__(self, "counts", MappingProxyType(counts))
         object.__setattr__(
             self, "fingerprint", _fingerprint(self._fingerprint_payload())
         )

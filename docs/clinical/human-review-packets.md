@@ -19,7 +19,11 @@ policy. Gate details are limited to structured values and omit free-form source
 fields. Unstructured identifiers, labels, citation titles and publication
 details, uncertainty labels, statuses, and reason codes are represented by
 stable hashes in default output. Use categorical codes and opaque identifiers
-for fields that must remain readable in a saved review report.
+for fields that must remain readable in a saved review report. All caller-defined
+identifiers and reference details are hashed, including lowercase tokens. Only
+the fixed built-in label/status/reason vocabulary stays readable; arbitrary
+string metadata and numeric identifier fields are opaque. Nested metadata is
+immutable, and serialized dictionaries are independent copies.
 
 ```python
 from openmed.clinical import (
@@ -87,6 +91,9 @@ object. Callers should keep this output local and avoid placing it in logs,
 shared reports, fixtures, or telemetry. The packet object and its default
 serializers never expose protected values accidentally.
 
+Both render flags require literal booleans. Strings such as `"false"`, integers,
+and other truthy values are rejected instead of enabling protected rendering.
+
 ## Gate interpretation
 
 Gate results describe upstream policy or quality checks. A failed blocking gate
@@ -94,3 +101,6 @@ sets `review_status` to `blocked`; a failed non-blocking gate sets it to
 `review_required`; passing gates set it to `ready_for_review`. These statuses do
 not constitute clinical decisions. When no gate results are supplied, the
 status is `not_evaluated`.
+
+An explicit review status cannot upgrade a failed gate to a ready/approved
+state. A conflicting override is rejected.

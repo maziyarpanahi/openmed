@@ -557,7 +557,7 @@ def _iter_claim_requirements(claim: object) -> Iterable[object]:
                 raise EvidenceCoverageError("required evidence needs an evidence_class")
             normalized_class = _identifier(evidence_class, "evidence_class")
             if normalized_class not in explicit_classes:
-                yield _claim_level_requirement(claim, normalized_class, required_item)
+                yield _claim_level_requirement(claim, evidence_class, required_item)
         return
 
     evidence = _field_value(claim, "evidence")
@@ -634,9 +634,14 @@ def _requirement_class(requirement: object) -> object | None:
         return evidence_class
     if isinstance(requirement, bytes):
         try:
-            return requirement.decode()
-        except UnicodeDecodeError as exc:
-            raise EvidenceCoverageError("evidence_class must be an identifier") from exc
+            decoded = requirement.decode()
+        except UnicodeDecodeError:
+            invalid = True
+        else:
+            invalid = False
+        if invalid:
+            raise EvidenceCoverageError("evidence_class must be an identifier")
+        return decoded
     if isinstance(requirement, str):
         return requirement
     return None

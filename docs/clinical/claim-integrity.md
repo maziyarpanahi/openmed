@@ -72,8 +72,10 @@ report = check_claim_packet_integrity(
 The aggregate report uses fixed reason codes for unresolved or malformed
 references, duplicate records or references, missing or unexpected records,
 reference reordering, record/reference mutation, and final digest mismatch.
-Missing target records and duplicate identifiers fail closed. Reordering a
-reference list changes the digest and is reported as `reordered_reference`
+Missing target records and duplicate identifiers fail closed. Naming a
+metadata field like a reference does not turn it into one: only the
+documented reference keys are excluded from record-content mutation checks.
+Reordering a reference list changes the digest and is reported as `reordered_reference`
 when the same reference multiset is present in the baseline.
 
 The implementation performs no mandatory network call, reads no external

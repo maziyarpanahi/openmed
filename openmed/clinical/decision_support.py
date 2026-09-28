@@ -422,7 +422,7 @@ def _coerce_result(
                 "[, provenance[, uncertainty_sources]]) tuple"
             )
         suggestion, source_spans, confidence = parts[0], parts[1], parts[2]
-        provenance = parts[3] if len(parts) == 4 else None
+        provenance = parts[3] if len(parts) >= 4 else None
         uncertainty_sources = parts[4] if len(parts) == 5 else None
         return build_guarded_suggestion(
             suggestion,

@@ -214,3 +214,17 @@ def test_digest_mutation_is_detected_without_a_baseline_packet() -> None:
     assert report.digest_matches is False
     assert report.issues == (DIGEST_MISMATCH_REASON,)
     assert "synthetic changed policy" not in report.to_json()
+
+
+@pytest.mark.parametrize(
+    "field", ["source_metadata", "evidence_score", "citation_note", "policy_note"]
+)
+def test_reference_like_metadata_changes_are_record_mutations(field):
+    expected = _packet()
+    candidate = _packet()
+    expected["claims"][0][field] = "synthetic original"
+    candidate["claims"][0][field] = "synthetic changed"
+    report = check_claim_packet_integrity(candidate, expected_packet=expected)
+    assert report.mutated_record_count == 1
+    assert MUTATED_RECORD_REASON in report.issues
+    assert report.mutated_reference_count == 0

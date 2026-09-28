@@ -17,6 +17,10 @@ review state, whether the use can trigger a decision, and the fingerprint of
 the policy being applied. The default policy is bundled and requires no network
 call or external service.
 
+Supply each field once. A mapping that supplies both a canonical field and its
+alias is denied as `declaration_ambiguous`, including contradictory decision or
+review flags; no alias silently takes precedence.
+
 ```python
 from openmed.clinical.output_use_policy import (
     DEFAULT_OUTPUT_USE_POLICY,

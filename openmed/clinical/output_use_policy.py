@@ -505,6 +505,8 @@ class OutputUseDecision:
 
 
 def _first_present(payload: Mapping[str, Any], *keys: str) -> Any:
+    if sum(key in payload for key in keys) > 1:
+        raise OutputUsePolicyError(OutputUseReasonCode.DECLARATION_AMBIGUOUS.value)
     for key in keys:
         if key in payload:
             return payload[key]
@@ -568,7 +570,11 @@ def _declaration_from_input(
     if isinstance(declaration, OutputUseDeclaration):
         return declaration, ()
     if isinstance(declaration, Mapping):
-        return OutputUseDeclaration.from_mapping(declaration), ()
+        try:
+            value = OutputUseDeclaration.from_mapping(declaration)
+        except OutputUsePolicyError as error:
+            return None, error.reason_codes
+        return value, ()
     return None, (OutputUseReasonCode.DECLARATION_INVALID.value,)
 
 

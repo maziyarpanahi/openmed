@@ -12,6 +12,7 @@ clinical labels, fetch a source map, or make a network request.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -890,7 +891,17 @@ def _normalize_range(
         parent_key = _identifier(parent_value, -1)
 
     expected_hash = _first(source_entry, _SOURCE_HASH_KEYS)
-    if expected_hash is not None and not isinstance(expected_hash, str):
+    if expected_hash is not None and (
+        not isinstance(expected_hash, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", expected_hash) is None
+    ):
+        issues.append(
+            SectionProvenanceIssue(
+                category="source_map",
+                code="invalid_source_hash",
+                index=index,
+            )
+        )
         expected_hash = None
 
     return (
@@ -968,13 +979,13 @@ def _parent_index_from_key(
     key = item.parent_key
     if key[0] == "index":
         return int(key[1]) if 0 <= int(key[1]) < len(ranges) else None
+    for candidate in ranges:
+        if candidate.identifier_key == key:
+            return candidate.index
     if key[0] == "int":
         candidate = int(key[1])
         if 0 <= candidate < len(ranges):
             return candidate
-    for candidate in ranges:
-        if candidate.identifier_key == key:
-            return candidate.index
     return None
 
 

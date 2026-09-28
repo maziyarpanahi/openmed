@@ -341,12 +341,21 @@ class UncertaintySource:
         )
 
 
+def _typed_default_code(
+    code: Any, default: str, reason_code: str | None, reason: str | None
+) -> Any:
+    """Apply a convenience default only when no reason was supplied."""
+    if code is _MISSING:
+        return default if reason_code is None and reason is None else None
+    return code
+
+
 class EvidenceUncertaintySource(UncertaintySource):
     """Typed convenience constructor for evidence uncertainty."""
 
     def __init__(
         self,
-        code: str | None = "insufficient",
+        code: str | None | object = _MISSING,
         active: bool = True,
         references: Iterable[str] | str | None = None,
         *,
@@ -356,7 +365,7 @@ class EvidenceUncertaintySource(UncertaintySource):
     ) -> None:
         super().__init__(
             UncertaintySourceType.EVIDENCE,
-            code,
+            _typed_default_code(code, "insufficient", reason_code, reason),
             active,
             references,
             reason_code=reason_code,
@@ -370,7 +379,7 @@ class ModelUncertaintySource(UncertaintySource):
 
     def __init__(
         self,
-        code: str | None = "ambiguous",
+        code: str | None | object = _MISSING,
         active: bool = True,
         references: Iterable[str] | str | None = None,
         *,
@@ -380,7 +389,7 @@ class ModelUncertaintySource(UncertaintySource):
     ) -> None:
         super().__init__(
             UncertaintySourceType.MODEL,
-            code,
+            _typed_default_code(code, "ambiguous", reason_code, reason),
             active,
             references,
             reason_code=reason_code,
@@ -394,7 +403,7 @@ class PolicyUncertaintySource(UncertaintySource):
 
     def __init__(
         self,
-        code: str | None = "insufficient",
+        code: str | None | object = _MISSING,
         active: bool = True,
         references: Iterable[str] | str | None = None,
         *,
@@ -404,7 +413,7 @@ class PolicyUncertaintySource(UncertaintySource):
     ) -> None:
         super().__init__(
             UncertaintySourceType.POLICY,
-            code,
+            _typed_default_code(code, "insufficient", reason_code, reason),
             active,
             references,
             reason_code=reason_code,
@@ -418,7 +427,7 @@ class TemporalUncertaintySource(UncertaintySource):
 
     def __init__(
         self,
-        code: str | None = "unresolved",
+        code: str | None | object = _MISSING,
         active: bool = True,
         references: Iterable[str] | str | None = None,
         *,
@@ -428,7 +437,7 @@ class TemporalUncertaintySource(UncertaintySource):
     ) -> None:
         super().__init__(
             UncertaintySourceType.TEMPORAL,
-            code,
+            _typed_default_code(code, "unresolved", reason_code, reason),
             active,
             references,
             reason_code=reason_code,
@@ -442,7 +451,7 @@ class ConflictUncertaintySource(UncertaintySource):
 
     def __init__(
         self,
-        code: str | None = "unresolved",
+        code: str | None | object = _MISSING,
         active: bool = True,
         references: Iterable[str] | str | None = None,
         *,
@@ -452,7 +461,7 @@ class ConflictUncertaintySource(UncertaintySource):
     ) -> None:
         super().__init__(
             UncertaintySourceType.CONFLICT,
-            code,
+            _typed_default_code(code, "unresolved", reason_code, reason),
             active,
             references,
             reason_code=reason_code,
@@ -635,7 +644,7 @@ ClinicalUncertaintySources = UncertaintySources
 
 
 def evidence_uncertainty(
-    code: str | None = "insufficient",
+    code: str | None | object = _MISSING,
     *,
     active: bool = True,
     references: Iterable[str] | str | None = None,
@@ -656,7 +665,7 @@ def evidence_uncertainty(
 
 
 def model_uncertainty(
-    code: str | None = "ambiguous",
+    code: str | None | object = _MISSING,
     *,
     active: bool = True,
     references: Iterable[str] | str | None = None,
@@ -677,7 +686,7 @@ def model_uncertainty(
 
 
 def policy_uncertainty(
-    code: str | None = "insufficient",
+    code: str | None | object = _MISSING,
     *,
     active: bool = True,
     references: Iterable[str] | str | None = None,
@@ -698,7 +707,7 @@ def policy_uncertainty(
 
 
 def temporal_uncertainty(
-    code: str | None = "unresolved",
+    code: str | None | object = _MISSING,
     *,
     active: bool = True,
     references: Iterable[str] | str | None = None,
@@ -719,7 +728,7 @@ def temporal_uncertainty(
 
 
 def conflict_uncertainty(
-    code: str | None = "unresolved",
+    code: str | None | object = _MISSING,
     *,
     active: bool = True,
     references: Iterable[str] | str | None = None,

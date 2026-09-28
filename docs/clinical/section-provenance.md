@@ -71,6 +71,10 @@ A child range can name a parent with `parent_id`. The child must be contained
 by that parent's normalized range. Parent definitions may also be supplied via
 the `parent_sections=` argument.
 
+Explicit numeric parent IDs take precedence over positional fallback. Supplied
+content hashes must use `sha256:<64 lowercase hex>`; invalid values produce an
+`invalid_source_hash` finding without copying the rejected value into the report.
+
 Reports contain only structural offsets, category/code values, counts, and
 SHA-256 hashes. They do not copy labels, identifiers, source-map references, or
 section text. `report.to_json()` and `report.write_json(...)` are deterministic

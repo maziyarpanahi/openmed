@@ -14,6 +14,29 @@ from openmed.clinical.sections.provenance import (
 from openmed.core.audit import hash_text
 
 
+def test_invalid_expected_hash_never_enters_the_report_as_text() -> None:
+    marker = "synthetic-private-hash-field"
+    report = validate_section_provenance(
+        "abcdef", [{"start": 0, "end": 6, "source_hash": marker}]
+    )
+    assert not report.valid
+    assert marker not in report.to_json()
+    assert marker not in repr(report)
+    assert any(issue.code == "invalid_source_hash" for issue in report.issues)
+
+
+def test_explicit_numeric_parent_id_precedes_positional_lookup() -> None:
+    report = validate_section_provenance(
+        "abcdef",
+        [
+            {"id": 1, "start": 0, "end": 6},
+            {"id": 2, "parent_id": 1, "start": 1, "end": 5},
+        ],
+    )
+    assert report.valid
+    assert report.ranges[1].parent_index == 0
+
+
 def test_valid_ranges_are_deterministic_and_source_text_free() -> None:
     text = "HPI: synthetic cough.\nPLAN: synthetic follow-up."
     ranges = (

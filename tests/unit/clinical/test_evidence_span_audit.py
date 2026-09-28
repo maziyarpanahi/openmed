@@ -15,6 +15,16 @@ from openmed.clinical import (
 from openmed.core.audit import hash_text
 
 
+def test_audit_counts_cannot_diverge_from_the_stored_fingerprint() -> None:
+    report = audit_evidence_spans([_span("a", 0, 3), _span("b", 0, 3)])
+    original = report.to_dict()
+    with pytest.raises(TypeError):
+        report.counts["exact"] = 999
+    serialized = report.to_dict()
+    serialized["counts"]["exact"] = 999
+    assert report.to_dict() == original
+
+
 def _span(
     evidence_id: str,
     start: int,
