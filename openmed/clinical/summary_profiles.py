@@ -166,7 +166,9 @@ def _snapshot_mapping(
     try:
         items = list(itertools.islice(value.items(), maximum_items + 1))
     except Exception:
-        raise SummaryProfileError(f"{label} could not be read") from None
+        items = None
+    if items is None:
+        raise SummaryProfileError(f"{label} could not be read")
     if len(items) > maximum_items:
         raise SummaryProfileError(f"{label} exceeds the supported item limit")
 
@@ -269,7 +271,8 @@ def _normalize_field_type(value: Any) -> SummaryFieldType:
     try:
         return SummaryFieldType(value)
     except ValueError:
-        raise SummaryProfileError("field_type is unsupported") from None
+        pass
+    raise SummaryProfileError("field_type is unsupported")
 
 
 @dataclass(frozen=True, slots=True)
@@ -606,7 +609,9 @@ class SummaryValidationReport:
     requires_clinician_review: bool = True
 
     def __post_init__(self) -> None:
-        _canonical_profile_name(self.profile_name)
+        object.__setattr__(
+            self, "profile_name", _canonical_profile_name(self.profile_name)
+        )
         _profile_version(self.profile_version)
         _strict_bool(self.valid, "validation valid")
         _strict_bool(
@@ -624,6 +629,12 @@ class SummaryValidationReport:
         findings = tuple(self.findings)
         if any(type(finding) is not SummaryValidationFinding for finding in findings):
             raise SummaryProfileError("validation findings are invalid")
+        findings = tuple(
+            SummaryValidationFinding(
+                finding.field_name, finding.reason_code, finding.item_index
+            )
+            for finding in findings
+        )
         unknown_count = _nonnegative_integer(
             self.unknown_field_count,
             "validation unknown_field_count",
@@ -1059,7 +1070,9 @@ def _load_profile_json(value: str | bytes | bytearray) -> SummaryTemplateProfile
     try:
         payload_size = len(value.encode("utf-8")) if type(value) is str else len(value)
     except UnicodeError:
-        raise SummaryProfileError("invalid summary profile JSON") from None
+        payload_size = None
+    if payload_size is None:
+        raise SummaryProfileError("invalid summary profile JSON")
     if payload_size > MAX_SUMMARY_PROFILE_JSON_BYTES:
         raise SummaryProfileError(
             "summary profile JSON exceeds the supported size limit"
@@ -1071,7 +1084,9 @@ def _load_profile_json(value: str | bytes | bytearray) -> SummaryTemplateProfile
             parse_constant=_reject_json_constant,
         )
     except (TypeError, ValueError, UnicodeError, RecursionError):
-        raise SummaryProfileError("invalid summary profile JSON") from None
+        payload = _MISSING
+    if payload is _MISSING:
+        raise SummaryProfileError("invalid summary profile JSON")
     if not isinstance(payload, Mapping):
         raise SummaryProfileError("summary profile JSON must contain an object")
     return _load_profile_mapping(payload)
@@ -1082,7 +1097,9 @@ def _read_local_profile(path: Path) -> SummaryTemplateProfile:
         with path.open("rb") as handle:
             payload = handle.read(MAX_SUMMARY_PROFILE_JSON_BYTES + 1)
     except OSError:
-        raise SummaryProfileError("could not read local summary profile") from None
+        payload = None
+    if payload is None:
+        raise SummaryProfileError("could not read local summary profile")
     return _load_profile_json(payload)
 
 
@@ -1155,6 +1172,8 @@ def load_summary_profile(
         referenced_profile = _profile_reference(source, version)
         if referenced_profile is not None:
             return referenced_profile
+        if version is not None:
+            raise SummaryProfileError("local profile paths cannot override version")
         return _read_local_profile(Path(source))
     if isinstance(source, Path):
         if version is not None:
@@ -1212,6 +1231,8 @@ def _validate_field_value(
     if field.repeated:
         if type(value) not in (list, tuple):
             return [SummaryValidationFinding(field.name, "invalid_type")]
+        if field.required and not value:
+            findings.append(SummaryValidationFinding(field.name, "empty_value"))
         if field.max_items is not None and len(value) > field.max_items:
             findings.append(SummaryValidationFinding(field.name, "too_many_items"))
         for index, item in enumerate(value[:MAX_SUMMARY_FIELD_ITEMS]):
@@ -1250,6 +1271,7 @@ def validate_summary_output(
 
     if type(profile) is not SummaryTemplateProfile:
         raise TypeError("profile must be a SummaryTemplateProfile")
+    profile = load_summary_profile(profile)
     data = _snapshot_mapping(
         output,
         "summary output",

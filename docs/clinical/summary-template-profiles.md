@@ -1,5 +1,12 @@
 # Versioned summary template profiles
 
+Validation checks the exact registered profile definition, including typed
+objects, before reporting its catalog digest. Required repeated fields must
+contain at least one item. Local file paths cannot override the version stored
+in the file, whether passed as strings or `Path` objects. Reports canonicalize
+profile aliases and revalidate nested findings; invalid JSON, file reads, and
+field types raise fixed errors without retaining sensitive exception context.
+
 OpenMed's local summary boundary can use a registered summary template profile
 instead of an implicit or free-form system prompt. A profile is a deterministic
 typed contract: it names the bounded fields a local generator may return, the

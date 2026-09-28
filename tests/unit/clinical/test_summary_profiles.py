@@ -239,3 +239,71 @@ def test_profiles_and_fields_are_immutable() -> None:
         BRIEF_HOSPITAL_COURSE_V1.version = "2.0"  # type: ignore[misc]
     with pytest.raises(dataclasses.FrozenInstanceError):
         BRIEF_HOSPITAL_COURSE_V1.fields[0].name = "assessment"  # type: ignore[misc]
+
+
+def test_validation_rejects_altered_registered_definition() -> None:
+    profile = BRIEF_HOSPITAL_COURSE_V1
+    altered = dataclasses.replace(
+        profile,
+        fields=tuple(
+            dataclasses.replace(field, required=False)
+            if field.name == "admission_reason"
+            else field
+            for field in profile.fields
+        ),
+    )
+    with pytest.raises(SummaryProfileError, match="registered"):
+        validate_summary_output(altered, _complete_output(altered))
+
+
+def test_required_repeated_field_cannot_be_empty() -> None:
+    profile = CLINICAL_HANDOFF_V1
+    output = _complete_output(profile)
+    output["plan"] = []
+    report = profile.validate(output)
+    assert not report.valid
+    assert any(
+        f.field_name == "plan" and f.reason_code == "empty_value"
+        for f in report.findings
+    )
+
+
+def test_string_path_cannot_override_version(tmp_path) -> None:
+    path = tmp_path / "profile.json"
+    path.write_text(BHC_V1.to_json())
+    with pytest.raises(SummaryProfileError, match="override"):
+        load_summary_profile(str(path), version="9.0")
+
+
+@pytest.mark.parametrize(
+    "source", ['{"SYNTHETIC_PRIVATE_VALUE":', "missing-SYNTHETIC_PRIVATE_PATH.json"]
+)
+def test_loading_errors_do_not_retain_sensitive_context(source) -> None:
+    with pytest.raises(SummaryProfileError) as caught:
+        load_summary_profile(source)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_field_type_error_does_not_retain_input() -> None:
+    from openmed.clinical.summary_profiles import SummaryTemplateField
+
+    with pytest.raises(SummaryProfileError) as caught:
+        SummaryTemplateField("assessment", "SYNTHETIC_PRIVATE_FIELD_TYPE")
+    assert caught.value.__context__ is None
+
+
+def test_report_canonicalizes_alias_and_revalidates_findings() -> None:
+    from openmed.clinical.summary_profiles import (
+        SummaryValidationFinding,
+        SummaryValidationReport,
+    )
+
+    assert (
+        SummaryValidationReport("bhc", "1.0", True).profile_name
+        == "brief_hospital_course"
+    )
+    finding = SummaryValidationFinding("assessment", "empty_value")
+    object.__setattr__(finding, "reason_code", "SYNTHETIC_PRIVATE_REASON")
+    with pytest.raises(SummaryProfileError):
+        SummaryValidationReport("bhc", "1.0", False, (finding,))
