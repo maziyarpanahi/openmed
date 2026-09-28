@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added cache-only, registry-pinned MLX summarization with capability, memory,
+  prompt-digest and source-token leakage guards. The deterministic CPU baseline
+  now requires explicit `model="extractive"`; missing runtime or artifacts fail
+  closed instead of silently changing backends (#3234).
+
 - Added a Polish (`pl`) PII language pack with native locale surrogates,
   validated PESEL handling, date, phone, address, and postcode patterns, and
   synthetic offset and zero-leakage regression fixtures (#294).

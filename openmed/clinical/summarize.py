@@ -2,13 +2,12 @@
 
 Summarization is deliberately the last generative stage in the clinical
 pipeline.  :func:`summarize` accepts a raw note, de-identifies it locally, and
-then sends only the de-identified text to a caller-supplied backend or the
-deterministic extractive fallback.  :func:`summarize_deidentified` exposes the
+then sends only the de-identified text to a local backend or explicitly selected
+deterministic extraction. :func:`summarize_deidentified` exposes the
 guarded stage for callers that already own a :class:`DeidentificationResult`.
 
-The default backend is intentionally small and deterministic.  A trained
-on-device SLM, including an MLX implementation, can be supplied through the
-``model`` argument without changing the privacy boundary.
+The default is a cache-only MLX backend. Missing artifacts or runtime fail
+closed; use ``model="extractive"`` for the deterministic CPU baseline.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ import hashlib
 import inspect
 import re
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from openmed.core.pii import DeidentificationResult, deidentify
@@ -122,10 +121,11 @@ class SummarizationResult:
     ``result.leakage_check`` or unpack ``summary, leakage_check``.
     """
 
-    summary: str
+    summary: str = field(repr=False)
     leakage_check: LeakageCheck
     mode: str = DEFAULT_SUMMARIZATION_MODE
     backend: str = "deterministic-extractive"
+    template_digest: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.summary, str):
@@ -136,12 +136,22 @@ class SummarizationResult:
             raise ValueError("mode must be a non-empty string")
         if not isinstance(self.backend, str) or not self.backend:
             raise ValueError("backend must be a non-empty string")
+        if self.template_digest is not None and (
+            not isinstance(self.template_digest, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", self.template_digest) is None
+        ):
+            raise ValueError("invalid template digest")
 
     def __iter__(self) -> Iterator[str | LeakageCheck]:
         """Yield the summary and leakage check for tuple-style consumers."""
 
         yield self.summary
         yield self.leakage_check
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """Return value-free backend and template provenance for audit logging."""
+        return {"backend_id": self.backend, "template_digest": self.template_digest}
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible result without source PHI metadata."""
@@ -151,6 +161,7 @@ class SummarizationResult:
             "leakage_check": self.leakage_check.to_dict(),
             "mode": self.mode,
             "backend": self.backend,
+            "metadata": self.metadata,
         }
 
 
@@ -171,8 +182,8 @@ def summarize(
             :func:`openmed.core.pii.deidentify`.
         mode: Summarization mode forwarded to compatible backends. ``"bhc"``
             denotes a brief hospital-course style summary.
-        model: Optional local/on-device backend. It may be callable with the
-            de-identified text or expose ``summarize(text, *, mode=...)``.
+        model: Registry alias (default ``mlx``), explicit ``extractive``, or
+            a caller-owned local callable accepting de-identified text.
 
     Returns:
         A summary and a passing :class:`LeakageCheck`.
@@ -191,7 +202,10 @@ def summarize(
         return summarize_deidentified(text, mode=normalized_mode, model=model)
     if not isinstance(text, str):
         raise TypeError("text must be a string or DeidentificationResult")
-    result = deidentify(text, method="mask")
+    from openmed.core.offline import network_blocked_if_offline
+
+    with network_blocked_if_offline(local_only=True):
+        result = deidentify(text, method="mask")
     return summarize_deidentified(result, mode=normalized_mode, model=model)
 
 
@@ -230,7 +244,10 @@ def summarize_deidentified(
             "the de-identified text still contains a source token"
         )
 
-    summary = _invoke_backend(model, source.deidentified_text, normalized_mode)
+    from openmed.clinical.summarize_backends import resolve_summarizer_backend
+
+    backend = resolve_summarizer_backend(model)
+    summary = _invoke_backend(backend, source.deidentified_text, normalized_mode)
     leakage_check = _build_leakage_check(source, summary)
     if not leakage_check.passed:
         raise SummarizationLeakageError(leakage_check)
@@ -239,7 +256,12 @@ def summarize_deidentified(
         summary=summary,
         leakage_check=leakage_check,
         mode=normalized_mode,
-        backend=_backend_name(model),
+        backend=_backend_name(backend),
+        template_digest=(
+            backend.template_digest
+            if _backend_name(backend) != "caller-supplied-local"
+            else None
+        ),
     )
 
 
@@ -274,6 +296,24 @@ def _require_deidentification_result(value: object) -> DeidentificationResult:
 
 
 def _invoke_backend(model: object | None, text: str, mode: str) -> str:
+    from openmed.clinical.summarize_backends import LocalSummarizerError
+    from openmed.core.capabilities import MissingOptionalDependencyError
+    from openmed.core.offline import network_blocked_if_offline
+
+    failed = False
+    try:
+        with network_blocked_if_offline(local_only=True):
+            return _call_backend(model, text, mode)
+    except MissingOptionalDependencyError:
+        raise
+    except Exception:
+        failed = True
+    if failed:
+        raise LocalSummarizerError("local summarizer execution failed")
+    raise AssertionError("unreachable summarizer state")
+
+
+def _call_backend(model: object | None, text: str, mode: str) -> str:
     if model is None:
         return _extractive_summary(text)
 
@@ -303,7 +343,7 @@ def _invoke_backend(model: object | None, text: str, mode: str) -> str:
         else:
             output = callback(text)
 
-    if not isinstance(output, str):
+    if not isinstance(output, str) or len(output.encode("utf-8")) > 8192:
         raise TypeError("summarizer backend must return a string")
     return output.strip()
 
@@ -319,11 +359,16 @@ def _extractive_summary(text: str) -> str:
 
 
 def _backend_name(model: object | None) -> str:
-    if model is None:
+    from openmed.clinical.summarize_backends import (
+        ExtractiveSummarizerBackend,
+        MLXSummarizerBackend,
+    )
+
+    if type(model) is ExtractiveSummarizerBackend:
         return "deterministic-extractive"
-    if hasattr(model, "summarize"):
-        return f"{type(model).__name__}.summarize"
-    return type(model).__name__
+    if type(model) is MLXSummarizerBackend:
+        return "local-mlx"
+    return "caller-supplied-local"
 
 
 def _source_phi_surfaces(deidentified: Any) -> tuple[str, ...]:

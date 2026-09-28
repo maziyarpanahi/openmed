@@ -1809,6 +1809,19 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     return configured_indic_ner_model()
 
 
+def resolve_summarizer_model(model_key: str = "mlx") -> tuple[str, str]:
+    """Resolve a reviewed summarizer alias to a model and immutable revision.
+
+    This is a runtime selection, not a clinical-quality certification. Artifacts
+    must already be cached; the summarizer never downloads or follows URLs.
+    """
+    from openmed.mlx.lm import MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+
+    if model_key in {"mlx", "maple", "maple-preview", MAPLE_MLX_MODEL}:
+        return MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+    raise ValueError("unregistered local summarizer alias")
+
+
 def get_default_nli_model() -> Optional[str]:
     """Return a released, pinned clinical NLI model or fail closed with ``None``.
 

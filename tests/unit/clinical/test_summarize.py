@@ -75,14 +75,14 @@ def test_summarize_deidentifies_before_backend_and_returns_passing_check(monkeyp
     assert "Casey Example" not in output.summary
 
 
-def test_default_stub_summary_contains_no_original_phi(monkeypatch):
+def test_explicit_extractive_summary_contains_no_original_phi(monkeypatch):
     monkeypatch.setattr(
         summarize_module,
         "deidentify",
         lambda text, *, method: _deidentified_result(),
     )
 
-    output = summarize(SYNTHETIC_NOTE)
+    output = summarize(SYNTHETIC_NOTE, model="extractive")
 
     assert output.summary == (
         "Patient [NAME] presented with a cough. "
@@ -133,7 +133,7 @@ def test_leakage_guard_rejects_partial_source_name_token():
 
 
 def test_result_can_be_unpacked_as_summary_and_leakage_check():
-    summary, check = summarize_deidentified(_deidentified_result())
+    summary, check = summarize_deidentified(_deidentified_result(), model="extractive")
 
     assert summary.startswith("Patient [NAME]")
     assert check.passed is True
