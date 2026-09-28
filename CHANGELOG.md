@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, value-free guarded clinical-output provenance manifests
+  with input/evidence drift detection, model and policy fingerprints, and
+  contiguous human-review transitions (#2578).
 - Added an offline clinical NLI sequence-classifier adapter for pinned PyTorch
   and ONNX artifacts with explicit class mapping, calibrated abstention, and
   structured contradiction prechecks (#3235).
