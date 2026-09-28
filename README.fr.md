@@ -275,7 +275,7 @@ Sur les hôtes non-Apple-Silicon, les noms de modèles MLX sont automatiquement 
 
 ---
 
-## PII multilingue (38 routes prises en charge ; 35 prises en charge par modèle)
+## PII multilingue (39 routes prises en charge ; 35 prises en charge par modèle)
 
 Extraction et dé-identification en `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` et `tr`, soit **le catalogue enregistré de modèles PII** au total.
 

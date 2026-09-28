@@ -71,6 +71,10 @@ def test_cmeee_labels_normalize_through_chinese_core_mapping() -> None:
     assert all(CMEEE_EXPECTED[label] != OTHER for label in core_clinical)
 
 
+def test_chinese_exam_alias_normalizes_to_lab_test() -> None:
+    assert normalize_label("exam", lang="zh") == LAB_TEST
+
+
 @pytest.mark.parametrize(
     ("source_label", "expected"),
     [
