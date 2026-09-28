@@ -389,6 +389,8 @@ classification:
     - export-gguf.md
     - clinical/review-sla.md
     - clinical/review-transitions.md
+    - clinical/evidence-packets.md
+    - clinical/refusal-taxonomy.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
@@ -621,6 +623,9 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - models/clinical-nli.md
+    - evaluation/sdoh-counterfactuals.md
+    - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md

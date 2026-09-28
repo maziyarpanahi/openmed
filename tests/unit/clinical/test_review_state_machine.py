@@ -248,3 +248,19 @@ def test_invalid_transition_exception_does_not_echo_raw_input() -> None:
 
     assert raw_value not in str(caught.value)
     assert caught.value.code == "opaque_event_id_required"
+
+
+def test_fingerprint_case_normalization_survives_history_round_trip() -> None:
+    machine = ReviewStateMachine()
+    expected = _provenance()
+    machine.transition(ReviewState.IN_REVIEW, _event(1), expected.upper())
+    machine.transition(ReviewState.APPROVED, _event(2), expected)
+    payload = [record.to_dict() for record in machine.history]
+    for record in payload:
+        record["policy_fingerprint"] = record["policy_fingerprint"].upper()
+        record["provenance_fingerprint"] = record["provenance_fingerprint"].upper()
+
+    restored = validate_review_history(payload)
+
+    assert restored.to_dict() == machine.report().to_dict()
+    assert all(item.provenance_fingerprint == expected for item in restored.transitions)
