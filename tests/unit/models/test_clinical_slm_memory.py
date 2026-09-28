@@ -170,6 +170,13 @@ def test_typed_artifact_is_revalidated():
         preflight_clinical_slm_memory(artifact, _profile())
 
 
+def test_misspelled_profile_constraint_is_not_ignored():
+    with pytest.raises(ClinicalSLMMemoryError):
+        preflight_clinical_slm_memory(
+            {"weights_bytes": 1}, {"memory_budget_bytes": 10**9, "headrom_bytes": 10**9}
+        )
+
+
 def test_estimate_is_deterministic_and_covers_each_memory_component() -> None:
     profile = _profile()
 

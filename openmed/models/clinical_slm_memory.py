@@ -933,10 +933,13 @@ def _normalize_profile_mapping(
             _fail("profile_ambiguous")
         fields = _safe_mapping_copy(nested, reason_code="profile_invalid")
 
+    used: set[str] = set()
+
     def alias(names: Sequence[str], *, default: Any = None) -> Any:
         present = tuple(name for name in names if name in fields)
         if len(present) > 1:
             _fail("profile_ambiguous")
+        used.update(present)
         return fields[present[0]] if present else default
 
     budget = alias(
@@ -990,7 +993,7 @@ def _normalize_profile_mapping(
         ("resident_memory_bytes", "baseline_memory_bytes", "currently_used_bytes"),
         default=0,
     )
-    return ClinicalSLMRuntimeProfile(
+    normalized = ClinicalSLMRuntimeProfile(
         memory_budget_bytes=budget,
         headroom_bytes=headroom,
         context_tokens=context_tokens,
@@ -1003,6 +1006,9 @@ def _normalize_profile_mapping(
         name=alias(("name", "profile_name"), default="default"),
         version=alias(("version", "profile_version"), default="1.0"),
     )
+    if set(fields) - used:
+        _fail("profile_invalid")
+    return normalized
 
 
 @_safe_boundary
