@@ -335,6 +335,9 @@ nav:
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
       - OCR box-coordinate normalization: multimodal/box-normalization.md
+      - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
+      - Lab Measurement Normalization: clinical/lab-measurements.md
+      - Unit-display normalization audit: clinical/unit-display-audit.md
       - Guarded evidence packets: clinical/evidence-packets.md
       - Guarded review-state transitions: clinical/review-transitions.md
       - Clinical event contradiction reports: clinical/event-contradictions.md
