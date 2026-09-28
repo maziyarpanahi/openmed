@@ -202,3 +202,145 @@ def test_failure_diagnostics_do_not_echo_fixture_text() -> None:
         )
     assert fixture.canonical_text not in str(exc_info.value)
     assert fixture.ocr_text not in str(exc_info.value)
+
+
+def test_complete_offset_miss_scores_zero_f1():
+    from openmed.eval.ocr_routing import score_offset_projection
+
+    score = score_offset_projection([("findings", 0, 1)], [("findings", 2, 3)])
+    assert score.precision == score.recall == score.f1 == 0
+    assert score_offset_projection([], []).f1 == 1
+
+
+def test_untrusted_classifier_fields_do_not_escape_or_enter_reports():
+    sentinel = "SYNTHETIC_PRIVATE_INPUT_123"
+
+    class Hostile:
+        @property
+        def type(self):
+            raise ValueError(sentinel)
+
+    fixture = default_ocr_routing_fixtures()[0]
+    report = run_ocr_routing_eval([fixture], classifier=lambda text: Hostile())
+    assert not report.passed
+    assert sentinel not in report.to_json()
+    assert report.cases[0].classifier_error == "classifier_error"
+
+
+def test_arbitrary_classifier_label_and_exception_names_are_not_published():
+    sentinel = "SYNTHETIC_PRIVATE_INPUT_123"
+    fixture = default_ocr_routing_fixtures()[0]
+    report = run_ocr_routing_eval(
+        [fixture], classifier=lambda text: {"type": sentinel, "confidence": 1}
+    )
+    assert sentinel not in report.to_json()
+    assert report.cases[0].predicted_document_type == "unknown"
+
+    def broken(text):
+        raise type(sentinel, (ValueError,), {})(sentinel)
+
+    report = run_ocr_routing_eval([fixture], classifier=broken, section_detector=broken)
+    assert sentinel not in report.to_json()
+
+
+def test_detector_internal_typeerror_does_not_retry_without_language():
+    calls = []
+
+    def detector(text, language="en"):
+        calls.append(language)
+        raise TypeError("SYNTHETIC_PRIVATE_INPUT_123")
+
+    report = run_ocr_routing_eval(
+        [default_ocr_routing_fixtures()[0]], section_detector=detector
+    )
+    assert calls == ["en"]
+    assert report.cases[0].detector_error == "detector_error"
+
+
+@pytest.mark.parametrize("confidence", [10**1000, 2.0, -1.0])
+def test_invalid_classifier_confidence_fails_to_generic(confidence):
+    fixture = default_ocr_routing_fixtures()[0]
+    report = run_ocr_routing_eval(
+        [fixture],
+        classifier=lambda text: {"type": "radiology_report", "confidence": confidence},
+    )
+    assert report.cases[0].classifier_confidence == 0
+    assert report.cases[0].predicted_profile == "generic"
+
+
+def test_fixture_repr_does_not_include_text():
+    fixture = OcrRoutingFixture("synthetic", "unknown", "SYNTHETIC_PRIVATE_INPUT_123")
+    assert fixture.canonical_text not in repr(fixture)
+
+
+def test_fixture_fallback_flag_requires_boolean():
+    with pytest.raises(ValueError):
+        OcrRoutingFixture("synthetic", "unknown", "A", expect_fallback="false")
+
+
+def test_projection_lengths_reject_boolean_and_boundaries_are_immutable():
+    from openmed.eval.ocr_routing import OffsetProjection
+
+    with pytest.raises(ValueError):
+        OffsetProjection(True, 1, (0, 1))
+    boundaries = [0, 1]
+    projection = OffsetProjection(1, 1, boundaries)
+    boundaries[1] = 999
+    assert projection.project_offset(1) == 1
+
+
+def test_fixture_and_alignment_work_are_bounded():
+    with pytest.raises(ValueError):
+        OcrRoutingFixture("synthetic", "unknown", "a" * 4097)
+    with pytest.raises(ValueError):
+        build_offset_projection("a" * 4097, "b")
+    with pytest.raises(ValueError):
+        build_offset_projection("a" * 3000, "b" * 3000)
+
+
+def test_section_iterator_failures_have_no_sensitive_exception_context():
+    from openmed.eval.ocr_routing import score_offset_projection
+
+    def broken():
+        yield ("findings", 0, 1)
+        raise RuntimeError("SYNTHETIC_PRIVATE_INPUT_123")
+
+    with pytest.raises(ValueError) as raised:
+        score_offset_projection(broken(), [])
+    assert "SYNTHETIC_PRIVATE_INPUT_123" not in str(raised.value)
+    assert raised.value.__context__ is None
+
+
+def test_unbounded_fixture_iterator_stops_at_limit():
+    fixture = default_ocr_routing_fixtures()[0]
+    visited = []
+
+    def fixtures():
+        for index in range(600):
+            visited.append(index)
+            yield replace(fixture, fixture_id=f"synthetic-{index}")
+
+    with pytest.raises(ValueError):
+        run_ocr_routing_eval(fixtures())
+    assert len(visited) <= 513
+
+
+def test_unknown_detector_label_is_hashed_not_copied_to_report():
+    sentinel = "SYNTHETIC_PRIVATE_INPUT_123"
+    fixture = default_ocr_routing_fixtures()[0]
+    report = run_ocr_routing_eval(
+        [fixture], section_detector=lambda text: [(sentinel, 0, 1)]
+    )
+    assert sentinel not in report.to_json()
+    assert report.cases[0].projected_sections[0].label.startswith("sha256:")
+
+
+def test_threshold_conversion_failure_has_safe_context():
+    class Hostile:
+        def __float__(self):
+            raise ValueError("SYNTHETIC_PRIVATE_INPUT_123")
+
+    with pytest.raises(ValueError) as raised:
+        run_ocr_routing_eval(min_route_accuracy=Hostile())
+    assert "SYNTHETIC_PRIVATE_INPUT_123" not in str(raised.value)
+    assert raised.value.__context__ is None

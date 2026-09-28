@@ -17,17 +17,22 @@ evaluation.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
+from functools import wraps
+from itertools import islice
 from math import isfinite
 from pathlib import Path
 from typing import Any
 
 from openmed.clinical.routing import GENERIC_PROFILE_NAME, resolve_profile
 from openmed.clinical.sections import (
+    SECTION_LOINC_CODES,
     UNSECTIONED_SECTION,
     classify_document,
     detect_sections,
@@ -75,13 +80,51 @@ _SPECIALIZED_PROFILES = {
 }
 
 
+_MAX_TEXT = 4096
+_MAX_SECTIONS = 4096
+_MAX_FIXTURES = 512
+_MAX_ALIGNMENT_PAIRS = 4_000_000
+
+
+def _safe_boundary(function):
+    """Raise only structural diagnostics without retaining caller exceptions."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception:
+            pass
+        raise ValueError("invalid or oversized OCR evaluation input")
+
+    return wrapped
+
+
+def _bounded(values, limit):
+    result = tuple(islice(iter(values), limit + 1))
+    if len(result) > limit:
+        raise ValueError("OCR evaluation collection exceeds limit")
+    return result
+
+
+def _safe_section_label(label):
+    if not isinstance(label, str) or not label.strip() or len(label) > _MAX_TEXT:
+        raise ValueError("invalid section label")
+    label = label.strip()
+    if label in SECTION_LOINC_CODES or label == UNSECTIONED_SECTION:
+        return label
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", label):
+        return label
+    return _sha256_digest("section-label", label)
+
+
 def _normalized_document_type(value: object, *, default: str = "unknown") -> str:
     """Normalize a document-family value without exposing caller data."""
 
     if not isinstance(value, str) or not value.strip():
         return default
     normalized = value.strip().casefold().replace("-", "_").replace(" ", "_")
-    return _DOCUMENT_TYPE_ALIASES.get(normalized, normalized)
+    return _DOCUMENT_TYPE_ALIASES.get(normalized, default)
 
 
 def _expected_profile(document_type: str) -> str:
@@ -101,9 +144,9 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
         return default
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
-    if not isfinite(parsed):
+    if not isfinite(parsed) or not 0.0 <= parsed <= 1.0:
         return default
     return round(min(max(parsed, 0.0), 1.0), 6)
 
@@ -135,6 +178,7 @@ class OcrRoutingSection:
     start: int
     end: int
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if not isinstance(self.label, str) or not self.label.strip():
             raise ValueError("section label must be a non-empty string")
@@ -147,7 +191,7 @@ class OcrRoutingSection:
             or self.end <= self.start
         ):
             raise ValueError("section offsets must be a non-empty half-open range")
-        object.__setattr__(self, "label", self.label.strip())
+        object.__setattr__(self, "label", _safe_section_label(self.label))
 
     def to_dict(self) -> dict[str, object]:
         """Return the label and offsets without any source substring."""
@@ -162,7 +206,7 @@ def _coerce_section(raw: object, *, field_name: str, index: int) -> OcrRoutingSe
     """Normalize section-like inputs using only safe structural diagnostics."""
 
     if isinstance(raw, OcrRoutingSection):
-        return raw
+        return replace(raw)
 
     label: object = None
     start: object = None
@@ -212,8 +256,8 @@ class OcrRoutingFixture:
 
     fixture_id: str
     document_family: str
-    canonical_text: str | None = None
-    ocr_text: str | None = None
+    canonical_text: str | None = field(default=None, repr=False)
+    ocr_text: str | None = field(default=None, repr=False)
     gold_sections: Sequence[object] | None = None
     expected_document_type: str | None = None
     expected_profile: str | None = None
@@ -221,6 +265,7 @@ class OcrRoutingFixture:
     expect_fallback: bool | None = None
     text: str | None = field(default=None, repr=False, compare=False)
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if not isinstance(self.fixture_id, str) or not self.fixture_id.strip():
             raise ValueError("fixture_id must be a non-empty string")
@@ -229,10 +274,14 @@ class OcrRoutingFixture:
             canonical = self.text
         elif self.text is not None and self.text != canonical:
             raise ValueError("canonical_text and text must agree")
-        if not isinstance(canonical, str) or not canonical:
+        if (
+            not isinstance(canonical, str)
+            or not canonical
+            or len(canonical) > _MAX_TEXT
+        ):
             raise ValueError("canonical_text must be a non-empty string")
         ocr = canonical if self.ocr_text is None else self.ocr_text
-        if not isinstance(ocr, str) or not ocr:
+        if not isinstance(ocr, str) or not ocr or len(ocr) > _MAX_TEXT:
             raise ValueError("ocr_text must be a non-empty string")
         if not isinstance(self.language, str) or not self.language.strip():
             raise ValueError("language must be a non-empty string")
@@ -243,6 +292,12 @@ class OcrRoutingFixture:
         if not isinstance(expected_profile, str) or not expected_profile.strip():
             raise ValueError("expected_profile must be a non-empty string")
         expected_profile = expected_profile.strip()
+        if expected_profile not in OCR_ROUTING_PROFILES:
+            raise ValueError("unsupported expected profile")
+        if self.expect_fallback is not None and not isinstance(
+            self.expect_fallback, bool
+        ):
+            raise ValueError("expect_fallback must be boolean")
 
         if self.gold_sections is None:
             detected = detect_sections(canonical, include_unsectioned=False)
@@ -258,7 +313,9 @@ class OcrRoutingFixture:
                     field_name="gold_sections",
                     index=index,
                 )
-                for index, section in enumerate(self.gold_sections)
+                for index, section in enumerate(
+                    _bounded(self.gold_sections, _MAX_SECTIONS)
+                )
             )
         for index, section in enumerate(sections):
             if section.end > len(canonical):
@@ -335,9 +392,14 @@ class OffsetProjection:
     target_length: int
     boundaries: tuple[int, ...]
 
+    @_safe_boundary
     def __post_init__(self) -> None:
-        if self.source_length < 0 or self.target_length < 0:
+        if any(
+            type(value) is not int or not 0 <= value <= _MAX_TEXT
+            for value in (self.source_length, self.target_length)
+        ):
             raise ValueError("projection lengths must be non-negative")
+        object.__setattr__(self, "boundaries", _bounded(self.boundaries, _MAX_TEXT + 1))
         if len(self.boundaries) != self.source_length + 1:
             raise ValueError("projection must include one boundary per source offset")
         previous = -1
@@ -368,6 +430,7 @@ class OffsetProjection:
             or offset > self.source_length
         ):
             raise ValueError("source offset is outside the projection")
+        self.__post_init__()
         return self.boundaries[offset]
 
     def project_span(self, start: int, end: int) -> tuple[int, int]:
@@ -402,6 +465,7 @@ class OffsetProjection:
         }
 
 
+@_safe_boundary
 def build_offset_projection(source_text: str, target_text: str) -> OffsetProjection:
     """Build a deterministic character-boundary map from OCR to canonical text.
 
@@ -415,6 +479,11 @@ def build_offset_projection(source_text: str, target_text: str) -> OffsetProject
     if not isinstance(source_text, str) or not isinstance(target_text, str):
         raise TypeError("projection inputs must be strings")
 
+    if (
+        max(len(source_text), len(target_text)) > _MAX_TEXT
+        or len(source_text) * len(target_text) > _MAX_ALIGNMENT_PAIRS
+    ):
+        raise ValueError("projection alignment exceeds work limit")
     source_length = len(source_text)
     target_length = len(target_text)
     boundaries: list[int | None] = [None] * (source_length + 1)
@@ -503,10 +572,11 @@ class OffsetProjectionScore:
 
 def _f1(precision: float, recall: float) -> float:
     if precision + recall == 0.0:
-        return 1.0
+        return 0.0
     return round(2.0 * precision * recall / (precision + recall), 6)
 
 
+@_safe_boundary
 def score_offset_projection(
     predicted_sections: Iterable[object],
     gold_sections: Iterable[object],
@@ -521,7 +591,7 @@ def score_offset_projection(
     """
 
     predicted: list[OcrRoutingSection] = []
-    for index, raw in enumerate(predicted_sections):
+    for index, raw in enumerate(_bounded(predicted_sections, _MAX_SECTIONS)):
         section = _coerce_section(raw, field_name="predicted_sections", index=index)
         if projection is not None:
             start, end = projection.project_span(section.start, section.end)
@@ -529,7 +599,7 @@ def score_offset_projection(
         predicted.append(section)
     gold = tuple(
         _coerce_section(raw, field_name="gold_sections", index=index)
-        for index, raw in enumerate(gold_sections)
+        for index, raw in enumerate(_bounded(gold_sections, _MAX_SECTIONS))
     )
 
     predicted_counter = Counter(_section_signature(section) for section in predicted)
@@ -959,7 +1029,7 @@ def _normalize_detector_sections(value: object) -> tuple[OcrRoutingSection, ...]
     try:
         return tuple(
             _coerce_section(raw, field_name="detected_sections", index=index)
-            for index, raw in enumerate(value)  # type: ignore[arg-type]
+            for index, raw in enumerate(_bounded(value, _MAX_SECTIONS))  # type: ignore[arg-type]
         )
     except TypeError as exc:
         raise ValueError("section detector did not return an iterable") from exc
@@ -973,12 +1043,15 @@ def _run_section_detector(
     """Call a detector with the public language hook or a one-argument seam."""
 
     try:
+        signature = inspect.signature(detector)
+    except (TypeError, ValueError):
         return detector(text, language=language)
-    except TypeError as first_error:
-        try:
-            return detector(text)
-        except TypeError:
-            raise first_error
+    try:
+        signature.bind(text, language=language)
+    except TypeError:
+        signature.bind(text)
+        return detector(text)
+    return detector(text, language=language)
 
 
 def _case_failures(case: OcrRoutingCaseResult) -> list[OcrRoutingFailure]:
@@ -1065,6 +1138,7 @@ def _case_failures(case: OcrRoutingCaseResult) -> list[OcrRoutingFailure]:
     return failures
 
 
+@_safe_boundary
 def run_ocr_routing_eval(
     fixtures: Iterable[OcrRoutingFixture] | None = None,
     *,
@@ -1089,8 +1163,8 @@ def run_ocr_routing_eval(
 
     Returns:
         A deterministic report whose artifacts never include fixture source
-        text. Classifier and detector exceptions are represented by exception
-        type names so an accidental raw-text exception message cannot enter a
+        text. Classifier and detector exceptions are represented by fixed
+        error categories so an accidental raw-text exception message cannot enter a
         report.
     """
 
@@ -1107,13 +1181,14 @@ def run_ocr_routing_eval(
     ):
         raise ValueError("evaluation thresholds must be between 0 and 1")
 
-    active_fixtures = tuple(
-        default_ocr_routing_fixtures() if fixtures is None else fixtures
+    active_fixtures = _bounded(
+        default_ocr_routing_fixtures() if fixtures is None else fixtures, _MAX_FIXTURES
     )
     if not active_fixtures:
         raise ValueError("OCR routing evaluation requires at least one fixture")
     if any(not isinstance(fixture, OcrRoutingFixture) for fixture in active_fixtures):
         raise TypeError("fixtures must contain OcrRoutingFixture values")
+    active_fixtures = tuple(replace(fixture) for fixture in active_fixtures)
     fixture_ids = [fixture.fixture_id for fixture in active_fixtures]
     if len(fixture_ids) != len(set(fixture_ids)):
         raise ValueError("fixture_id values must be unique")
@@ -1127,17 +1202,19 @@ def run_ocr_routing_eval(
         detector_error: str | None = None
         try:
             classification = classify(fixture.ocr_text or "")
-        except Exception as exc:  # pragma: no cover - exercised by callers
-            classification = {"type": "unknown", "confidence": 0.0}
-            classification_error = type(exc).__name__
-
-        predicted_document_type = _normalized_document_type(
-            _classification_value(classification, "type", classification)
+            predicted_document_type = _normalized_document_type(
+                _classification_value(classification, "type", classification)
+            )
+            confidence = _safe_float(
+                _classification_value(classification, "confidence", 0.0)
+            )
+        except Exception:
+            predicted_document_type = "unknown"
+            confidence = 0.0
+            classification_error = "classifier_error"
+        selection = resolve_profile(
+            {"type": predicted_document_type, "confidence": confidence}
         )
-        confidence = _safe_float(
-            _classification_value(classification, "confidence", 0.0)
-        )
-        selection = resolve_profile(classification)
         predicted_profile = selection.profile_name
         observed_fallback = selection.provenance.fallback_reason is not None
 
@@ -1163,8 +1240,8 @@ def run_ocr_routing_eval(
                 fixture.gold_sections or (),
                 projection=projection,
             )
-        except Exception as exc:  # pragma: no cover - exercised by callers
-            detector_error = type(exc).__name__
+        except Exception:
+            detector_error = "detector_error"
             projected_sections = ()
             offset_score = score_offset_projection((), fixture.gold_sections or ())
             detected = ()

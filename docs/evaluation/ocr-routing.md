@@ -56,3 +56,26 @@ evaluation artifacts.
 
 The routing result is an engineering signal. Downstream clinical review,
 privacy controls, and application-specific safety gates remain required.
+
+## Limits and interpretation
+
+This is a fixture regression gate, not model-accuracy evidence. Unless supplied
+explicitly, gold section boundaries are produced by the same local detector on
+canonical text. A complete mismatch scores zero F1; an empty/empty comparison
+scores one by convention. Every case must pass, even when aggregate thresholds
+are relaxed.
+
+Each text is limited to 4,096 characters and each alignment to 4,000,000
+source/target character pairs. A run accepts at most 512 fixtures and each
+section collection at most 4,096 entries. Oversized inputs fail closed before
+alignment. These limits bound this small offline harness, not the production
+document pipeline.
+
+Classifier and detector errors use fixed categories. Unknown document types
+map to `unknown`; unknown section labels are domain-separated hashes. Callback
+errors do not trigger a second detector invocation. Invalid confidence values
+fall back conservatively to zero.
+
+Fixture IDs and language metadata are caller-owned identifiers: use
+non-sensitive values. Excluding document text is not anonymization of those
+identifiers or proof that a caller-supplied fixture is synthetic.
