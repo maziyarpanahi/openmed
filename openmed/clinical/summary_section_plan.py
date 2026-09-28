@@ -1158,7 +1158,8 @@ def _coerce_refusal_reason(value: object) -> SummaryPlanRefusalReason:
     try:
         return SummaryPlanRefusalReason(value)
     except Exception:
-        raise ValueError("invalid summary section plan refusal reason") from None
+        pass
+    raise ValueError("invalid summary section plan refusal reason")
 
 
 def _safe_count(value: object, field_name: str, *, allow_zero: bool = False) -> int:

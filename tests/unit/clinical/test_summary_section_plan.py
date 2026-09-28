@@ -2,6 +2,17 @@
 
 from __future__ import annotations
 
+
+def test_invalid_refusal_reason_has_no_source_exception_context():
+    import pytest
+
+    from openmed.clinical.summary_section_plan import SummaryPlanRefusal
+
+    with pytest.raises(ValueError) as caught:
+        SummaryPlanRefusal("SYNTHETIC_PRIVATE_REASON", 1)
+    assert caught.value.__context__ is None
+
+
 import hashlib
 import json
 from itertools import repeat
