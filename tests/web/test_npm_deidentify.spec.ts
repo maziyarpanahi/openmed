@@ -69,6 +69,82 @@ test("public runtime surface is snapshot-tested", async () => {
   assert.deepEqual(packageJson.exports, snapshot.packageExports);
 });
 
+test("default span hashes are private per call and consistent within it", async () => {
+  const api = await loadApi();
+  const pipeline = () => [
+    { entity: "B-NAME", word: "Synthetic", start: 0, end: 9, score: 1 },
+    { entity: "B-NAME", word: "Synthetic", start: 14, end: 23, score: 1 },
+  ];
+  const text = "Synthetic met Synthetic";
+  const first = await api.extractPii(text, { pipeline });
+  const second = await api.extractPii(text, { pipeline });
+  const redacted = await api.deidentify(text, { pipeline });
+  assert.equal(first.length, 2);
+  assert.equal(first[0].text_hash, first[1].text_hash);
+  assert.notEqual(first[0].text_hash, second[0].text_hash);
+  assert.notEqual(
+    first[0].text_hash,
+    await api.hmacTextHash("Synthetic", "openmedkit-web"),
+  );
+  assert.equal(redacted.deidentifiedText, "[PERSON] met [PERSON]");
+  assert.notEqual(first[0].text_hash, redacted.spans[0].text_hash);
+});
+
+test("explicit hash keys remain deterministic and byte keys are snapshotted", async () => {
+  const api = await loadApi();
+  const secret = "synthetic-private-fixture-key";
+  const bytes = new TextEncoder().encode(secret);
+  const pipeline = async () => {
+    bytes.fill(0);
+    return [{ entity: "B-NAME", word: "Synthetic", start: 0, end: 9, score: 1 }];
+  };
+  const first = await api.extractPii("Synthetic", { pipeline, hashSecret: bytes });
+  const second = await api.extractPii("Synthetic", {
+    pipeline,
+    hashSecret: secret,
+  });
+  assert.equal(first[0].text_hash, second[0].text_hash);
+  assert.equal(first[0].text_hash, await api.hmacTextHash("Synthetic", secret));
+});
+
+test("empty hash keys fail before inference even with no detections", async () => {
+  const api = await loadApi();
+  for (const secret of ["", new Uint8Array()]) {
+    await assert.rejects(
+      api.hmacTextHash("Synthetic", secret),
+      /hashSecret must not be empty/,
+    );
+    await assert.rejects(
+      api.extractPii("", {
+        hashSecret: secret,
+        pipeline: () => {
+          throw new Error("inference must not run");
+        },
+      }),
+      /hashSecret must not be empty/,
+    );
+  }
+});
+
+test("Node crypto fallback uses random keys and rejects empty keys", async () => {
+  const script = `
+    import assert from 'node:assert/strict';
+    Object.defineProperty(globalThis, 'crypto', { value: undefined, configurable: true });
+    const api = await import(${JSON.stringify(distUrl)});
+    const pipeline = () => [{ entity: 'B-NAME', word: 'Synthetic', start: 0, end: 9, score: 1 }];
+    const first = await api.extractPii('Synthetic', { pipeline });
+    const second = await api.extractPii('Synthetic', { pipeline });
+    assert.notEqual(first[0].text_hash, second[0].text_hash);
+    for (const key of ['', new Uint8Array()]) {
+      await assert.rejects(api.hmacTextHash('Synthetic', key), /hashSecret must not be empty/);
+    }
+    const { createHmac } = await import('node:crypto');
+    assert.equal(await api.hmacTextHash('Synthetic', 'fixture-key'),
+      'hmac-sha256:' + createHmac('sha256', 'fixture-key').update('Synthetic').digest('hex'));
+  `;
+  await promisify(execFile)(process.execPath, ["--input-type=module", "-e", script]);
+});
+
 test("local model loading is offline-only by default", async () => {
   const api = await loadApi();
   const runtime: TransformersRuntime = {

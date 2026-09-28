@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/v3/clinical/trial-study.schema.json",
+  "title": "OpenMed public clinical-trial study version",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_type",
+    "brief_title",
+    "compatibility_policy",
+    "conditions",
+    "eligibility_text",
+    "interventions",
+    "last_update_date",
+    "locations",
+    "official_title",
+    "overall_status",
+    "retrieved_at",
+    "schema_version",
+    "source_digest",
+    "study_id",
+    "version_digest",
+    "version_id"
+  ],
+  "properties": {
+    "artifact_type": {"const": "clinical_trial_study_version"},
+    "brief_title": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "compatibility_policy": {"const": "same_major"},
+    "conditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2048}
+    },
+    "eligibility_text": {"type": "string", "maxLength": 250000},
+    "interventions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/intervention"}
+    },
+    "last_update_date": {
+      "type": "string",
+      "pattern": "^(?:[0-9]{4}|[0-9]{4}-[0-9]{2}|[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+    },
+    "locations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/location"}
+    },
+    "official_title": {
+      "anyOf": [
+        {"type": "string", "minLength": 1, "maxLength": 8192},
+        {"type": "null"}
+      ]
+    },
+    "overall_status": {"type": "string", "minLength": 1, "maxLength": 128},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "schema_version": {"const": "1.0.0"},
+    "source_digest": {"$ref": "#/$defs/digest"},
+    "study_id": {"type": "string", "pattern": "^NCT[0-9]{8}$"},
+    "version_digest": {"$ref": "#/$defs/digest"},
+    "version_id": {"$ref": "#/$defs/opaque_id"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intervention_type", "name"],
+      "properties": {
+        "intervention_type": {"type": "string", "minLength": 1, "maxLength": 128},
+        "name": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["city", "country", "facility", "state"],
+      "properties": {
+        "city": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 512}, {"type": "null"}]},
+        "country": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 512}, {"type": "null"}]},
+        "facility": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 512}, {"type": "null"}]},
+        "state": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 512}, {"type": "null"}]}
+      },
+      "anyOf": [
+        {"required": ["city"], "properties": {"city": {"type": "string"}}},
+        {"required": ["country"], "properties": {"country": {"type": "string"}}},
+        {"required": ["facility"], "properties": {"facility": {"type": "string"}}},
+        {"required": ["state"], "properties": {"state": {"type": "string"}}}
+      ]
+    }
+  }
+}

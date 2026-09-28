@@ -5,8 +5,16 @@ from __future__ import annotations
 import logging
 import re
 import time
-from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Sequence
+from collections.abc import (
+    AsyncIterable,
+    Awaitable,
+    Callable,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass
+from numbers import Integral, Real
 from typing import Any, Dict, List
 
 from openmed.core.decoding import (
@@ -15,6 +23,13 @@ from openmed.core.decoding import (
     coerce_token_classification_spans,
     reconcile_stream_spans,
 )
+from openmed.core.labels import normalize_label
+from openmed.core.model_registry import (
+    get_models_by_category,
+    get_recommended_models,
+)
+from openmed.core.models import ModelLoader
+from openmed.core.offline import OFFLINE_ENV_VAR, OfflineModeError, is_local_only
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +75,273 @@ class EntitySpan:
 
 
 TokenClassifier = Callable[[str], Sequence[object] | Any]
+
+
+_CLINICAL_DOMAIN_CATEGORIES = {
+    "anatomy": "Anatomy",
+    "blood": "Hematology",
+    "chemical": "Chemical",
+    "disease": "Disease",
+    "drug": "Pharmaceutical",
+    "genome": "Genomics",
+    "genomics": "Genomics",
+    "hematology": "Hematology",
+    "medical": "Medical",
+    "medication": "Pharmaceutical",
+    "oncology": "Oncology",
+    "pathology": "Pathology",
+    "pharma": "Pharmaceutical",
+    "pharmaceutical": "Pharmaceutical",
+    "protein": "Protein",
+    "species": "Species",
+}
+_CLINICAL_TIER_TARGET_SIZES = {
+    "fast": "Tiny",
+    "balanced": "Medium",
+    "accurate": "Large",
+}
+_CLINICAL_TIER_PREFERENCE_TOKENS = {
+    "fast": ("tinymed", "small"),
+    "balanced": ("supermedical", "bioclinical", "electramed", "superclinical"),
+    "accurate": ("superclinical", "supermedical"),
+}
+
+
+def _normalize_clinical_domain(domain: str) -> str:
+    """Resolve a user-facing clinical domain to a registry category."""
+
+    if not isinstance(domain, str):
+        raise TypeError("domain must be a string")
+    key = domain.strip().casefold().replace("_", "-").replace(" ", "-")
+    category = _CLINICAL_DOMAIN_CATEGORIES.get(key)
+    if category is None:
+        supported = ", ".join(sorted(_CLINICAL_DOMAIN_CATEGORIES))
+        raise ValueError(
+            f"unsupported clinical domain {domain!r}; expected one of: {supported}"
+        )
+    return category
+
+
+def _normalize_clinical_tier(tier: str) -> str:
+    """Validate and normalize a clinical model tier."""
+
+    if not isinstance(tier, str):
+        raise TypeError("tier must be a string")
+    normalized = tier.strip().casefold()
+    if normalized not in _CLINICAL_TIER_TARGET_SIZES:
+        supported = ", ".join(sorted(_CLINICAL_TIER_TARGET_SIZES))
+        raise ValueError(f"unsupported clinical tier {tier!r}; expected: {supported}")
+    return normalized
+
+
+def _registry_model_id(model: object) -> str | None:
+    """Return a usable repository id from a registry model object."""
+
+    model_id = getattr(model, "model_id", None)
+    if not isinstance(model_id, str) or not model_id.strip():
+        return None
+    return model_id.strip()
+
+
+def _is_token_classification_model(model: object) -> bool:
+    """Return whether a registry entry can back the helper's pipeline."""
+
+    model_id = _registry_model_id(model)
+    if model_id is None or model_id.casefold().endswith("-mlx"):
+        return False
+    task = getattr(model, "task", "token-classification")
+    return task is None or str(task).casefold() in {
+        "",
+        "unknown",
+        "token-classification",
+        "token_classification",
+    }
+
+
+def _resolve_clinical_model(domain: str, tier: str) -> str:
+    """Select a deterministic registry model for a clinical domain and tier."""
+
+    category_models = [
+        model
+        for model in get_models_by_category(domain)
+        if _is_token_classification_model(model)
+    ]
+    recommended_models = [
+        model
+        for model in get_recommended_models(tier)
+        if _is_token_classification_model(model)
+        and str(getattr(model, "category", "")).casefold() == domain.casefold()
+    ]
+    if recommended_models:
+        recommended_id = _registry_model_id(recommended_models[0])
+        if recommended_id is not None:
+            return recommended_id
+
+    if not category_models:
+        raise LookupError(f"no token-classification models are registered for {domain}")
+
+    target_size = _CLINICAL_TIER_TARGET_SIZES[tier]
+    sized_models = [
+        model
+        for model in category_models
+        if getattr(model, "size_category", None) == target_size
+        or getattr(model, "tier", None) == target_size
+    ]
+    candidates = sized_models or category_models
+    preference_tokens = _CLINICAL_TIER_PREFERENCE_TOKENS[tier]
+
+    def sort_key(model: object) -> tuple[int, int, str]:
+        model_id = _registry_model_id(model) or ""
+        lowered_id = model_id.casefold()
+        token_rank = next(
+            (
+                index
+                for index, token in enumerate(preference_tokens)
+                if token in lowered_id
+            ),
+            len(preference_tokens),
+        )
+        param_count = getattr(model, "param_count", None)
+        parameter_order = int(param_count) if isinstance(param_count, int) else 0
+        if tier == "accurate":
+            parameter_order = -parameter_order
+        return token_rank, parameter_order, lowered_id
+
+    selected = sorted(candidates, key=sort_key)[0]
+    selected_id = _registry_model_id(selected)
+    if selected_id is None:  # pragma: no cover - filtered above
+        raise LookupError(f"no usable model is registered for {domain}")
+    return selected_id
+
+
+def _iter_prediction_mappings(value: object) -> Iterable[Mapping[str, Any]]:
+    """Flatten common token-classification output shapes into mappings."""
+
+    if isinstance(value, EntitySpan):
+        yield value.to_dict()
+        return
+    if isinstance(value, Mapping):
+        nested = value.get("entities")
+        if nested is not None and not any(
+            key in value for key in ("text", "word", "label", "entity", "entity_group")
+        ):
+            yield from _iter_prediction_mappings(nested)
+        else:
+            yield value
+        return
+    if isinstance(value, (str, bytes)):
+        return
+    if isinstance(value, Iterable):
+        for item in value:
+            yield from _iter_prediction_mappings(item)
+
+
+def _clinical_span_from_prediction(
+    prediction: Mapping[str, Any], source_text: str
+) -> EntitySpan | None:
+    """Convert one model prediction into a canonical, offset-safe span."""
+
+    raw_text = prediction.get("text", prediction.get("word"))
+    start = prediction.get("start")
+    end = prediction.get("end")
+    if start is None or end is None:
+        if not isinstance(raw_text, str) or not raw_text:
+            return None
+        start = source_text.find(raw_text)
+        if start < 0 or source_text.find(raw_text, start + 1) >= 0:
+            return None
+        end = start + len(raw_text)
+    if (
+        isinstance(start, bool)
+        or isinstance(end, bool)
+        or not isinstance(start, Integral)
+        or not isinstance(end, Integral)
+        or not 0 <= start < end <= len(source_text)
+    ):
+        return None
+    score = prediction.get("score", prediction.get("confidence", 1.0))
+    if score is None:
+        score = 1.0
+    if isinstance(score, bool) or not isinstance(score, Real) or not 0 <= score <= 1:
+        return None
+    raw_label = prediction.get("label")
+    if raw_label in (None, ""):
+        raw_label = prediction.get("entity_group", prediction.get("entity", ""))
+    if not isinstance(raw_label, str):
+        return None
+    return EntitySpan(
+        text=source_text[start:end],
+        label=normalize_label(raw_label),
+        start=int(start),
+        end=int(end),
+        score=float(score),
+    )
+
+
+def extract_clinical_entities(
+    text: str,
+    domain: str = "disease",
+    tier: str = "balanced",
+    model_id: str | None = None,
+) -> List[EntitySpan]:
+    """Extract canonical biomedical entity spans with a registry-selected model.
+
+    Args:
+        text: Clinical text to classify.
+        domain: Registry domain, such as ``"disease"`` or ``"oncology"``.
+        tier: Model size preference: ``"fast"``, ``"balanced"``, or
+            ``"accurate"``.
+        model_id: Optional registry key, repository id, or local model path.
+
+    Returns:
+        A list of :class:`EntitySpan` values with canonical labels and source
+        character offsets.
+
+    Raises:
+        OfflineModeError: If offline mode is active and the selected model is
+            not available in the local cache.
+    """
+
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    normalized_domain = _normalize_clinical_domain(domain)
+    normalized_tier = _normalize_clinical_tier(tier)
+    if model_id is not None:
+        if not isinstance(model_id, str) or not model_id.strip():
+            raise ValueError("model_id must be a non-empty string or None")
+        selected_model_id = model_id.strip()
+    else:
+        selected_model_id = _resolve_clinical_model(
+            normalized_domain,
+            normalized_tier,
+        )
+
+    if not text:
+        return []
+
+    loader = ModelLoader()
+    try:
+        classifier = loader.create_pipeline(
+            selected_model_id,
+            task="token-classification",
+            aggregation_strategy="simple",
+        )
+    except Exception as exc:
+        if is_local_only(loader.config):
+            raise OfflineModeError(
+                f"Clinical model {selected_model_id!r} is not available in the "
+                f"local cache; {OFFLINE_ENV_VAR}/local_only=True blocks loading. "
+                f"Cache the model before offline use or unset {OFFLINE_ENV_VAR}."
+            ) from exc
+        raise
+
+    predictions = classifier(text)
+
+    return [
+        span
+        for prediction in _iter_prediction_mappings(predictions)
+        if (span := _clinical_span_from_prediction(prediction, text)) is not None
+    ]
 
 
 @dataclass(frozen=True)

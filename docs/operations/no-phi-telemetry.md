@@ -61,3 +61,40 @@ categories include `validation`, `timeout`, `dependency`, `network`,
 collector. It does not configure or contact a collector itself. This utility
 provides an aggregate telemetry contract; it is not a compliance
 certification or a clinical decision guarantee.
+
+## Service-wide operational events
+
+`openmed.service.operational.OperationalEvent` is the shared contract for
+ingestion, model, store, job, queue, query, and export observations. Category,
+operation, and state are closed enums; counts and durations are bounded
+aggregates. The service Prometheus registry renders these as
+`openmed_service_operational_total` and
+`openmed_service_operational_duration_seconds`. The same validated event can
+produce OpenTelemetry attributes with `operational_trace_attributes()`.
+
+States preserve `partial`, `unknown`, `conflict`, `unsupported`, `denied`, and
+`failure` instead of folding them into success. `OperationalAlert` carries only
+the category, operation, state, observed count, threshold, and time window. It
+has no field for source values, record identifiers, model input, or reviewer
+identity.
+
+The operational contract is versioned as `1.0.0` with `same_major`
+compatibility. A caller cannot introduce arbitrary metric labels or trace
+attributes by passing a free-form operation name. Committed JSON Schemas cover
+operational events, alerts, and limit decisions, and are validated in the
+offline test suite.
+
+## Pre-work resource limits
+
+`openmed.guard.operational_limits` provides one versioned policy for request
+bytes, JSON depth and node count, string bytes, pagination, archive entry
+count, declared uncompressed bytes, and compression ratio. ZIP inspection
+reads central-directory metadata only and does not open or decompress members.
+Encrypted, malformed, traversing, linked, duplicate, oversized, or
+high-expansion archives fail closed with counts-only decisions.
+
+The REST and GraphQL application installs a body-size middleware for `POST`,
+`PUT`, and `PATCH`. `OPENMED_SERVICE_MAX_REQUEST_BYTES` may lower or raise the
+default within the library's safe ceiling. Declared sizes are rejected before
+the body is read; streamed bodies are counted and rejected before route parsing
+or model execution.

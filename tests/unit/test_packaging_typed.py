@@ -7,8 +7,8 @@ consumers:
   requires the marker to live inside the installed package), and
 * the hatch build ``include`` list still declares ``/openmed/py.typed`` so the
   marker ships in the built wheel and sdist, and
-* the newer v1.6 public surfaces expose resolvable type hints and type-check
-  cleanly with the pinned development checker over just those modules.
+* the newer v1.6 public surfaces expose resolvable type hints. The dedicated
+  ``make type-check`` and CI lint gates run the pinned checker over that scope.
 """
 
 from __future__ import annotations
@@ -16,8 +16,6 @@ from __future__ import annotations
 import importlib
 import importlib.resources
 import inspect
-import subprocess
-import sys
 import typing
 from pathlib import Path
 
@@ -31,12 +29,11 @@ except ModuleNotFoundError:  # pragma: no cover - exercised on Python 3.10
 import openmed
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PACKAGE_ROOT = Path(openmed.__file__).resolve().parent
 PY_TYPED_INCLUDE = "/openmed/py.typed"
 
-# The newer v1.6 public modules whose annotations this task hardened. Keeping
-# the list here means the type-check step and the "annotations resolve" spot
-# check stay in lockstep with the packaging guarantee.
+# The newer v1.6 public modules whose runtime annotations this task hardened.
+# Static checking for the same scope is configured in ``pyproject.toml`` and
+# enforced by ``make type-check`` and the CI lint job.
 TYPED_MODULES = (
     "openmed.core.audit",
     "openmed.core.pipeline",
@@ -125,26 +122,3 @@ def test_typed_modules_expose_resolvable_hints(module_name: str) -> None:
                 pytest.fail(
                     f"{module_name}.{qualname} has an unresolvable type hint: {exc}"
                 )
-
-
-def test_scoped_modules_type_check_cleanly() -> None:
-    """Type-check the scoped v1.6 modules with the pinned mypy dependency."""
-
-    module_paths = [
-        str(PACKAGE_ROOT.parent / f"{name.replace('.', '/')}.py")
-        for name in TYPED_MODULES
-    ]
-
-    cmd = [sys.executable, "-m", "mypy", *module_paths]
-
-    result = subprocess.run(  # noqa: S603 - fixed, non-user-supplied argv
-        cmd,
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0, (
-        "mypy reported type errors on the scoped v1.6 modules:\n"
-        f"{result.stdout}\n{result.stderr}"
-    )

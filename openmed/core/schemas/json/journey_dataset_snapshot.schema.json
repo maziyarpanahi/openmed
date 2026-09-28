@@ -1,0 +1,27 @@
+{
+  "$id": "https://openmed.dev/schemas/v3/journey/dataset-snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "attributes": {"type": "object"},
+    "component_versions": {"additionalProperties": {"maxLength": 256, "minLength": 1, "type": "string"}, "propertyNames": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"}, "type": "object"},
+    "created_at": {"format": "date-time", "type": "string"},
+    "dataset_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "file_hashes": {"additionalProperties": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, "type": "object"},
+    "license_tags": {"items": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "manifest_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "parent_snapshot_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "query_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "record_count": {"minimum": 0, "type": "integer"},
+    "schema_hash": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "schema_version": {"pattern": "^1(?:\\.[0-9]+){0,2}$", "type": "string"},
+    "snapshot_id": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"},
+    "source_artifact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "source_fact_ids": {"items": {"pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$", "type": "string"}, "type": "array", "uniqueItems": true},
+    "split_hashes": {"additionalProperties": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, "propertyNames": {"pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"}, "type": "object"}
+  },
+  "required": ["attributes", "component_versions", "created_at", "dataset_id", "file_hashes", "license_tags", "manifest_hash", "parent_snapshot_ids", "query_hash", "record_count", "schema_hash", "schema_version", "snapshot_id", "source_artifact_ids", "source_fact_ids", "split_hashes"],
+  "schema_version": 1,
+  "title": "OpenMedJourneyDatasetSnapshot",
+  "type": "object"
+}

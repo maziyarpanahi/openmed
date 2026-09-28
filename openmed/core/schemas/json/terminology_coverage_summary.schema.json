@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/terminology_coverage_summary.schema.json",
+  "title": "OpenMed terminology coverage summary",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ambiguous",
+    "ambiguous_rate",
+    "compatibility_policy",
+    "mapped",
+    "mapped_rate",
+    "rejected",
+    "rejected_rate",
+    "schema_version",
+    "total",
+    "unmapped",
+    "unmapped_rate"
+  ],
+  "properties": {
+    "ambiguous": {"type": "integer", "minimum": 0},
+    "ambiguous_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "compatibility_policy": {"const": "same_major"},
+    "mapped": {"type": "integer", "minimum": 0},
+    "mapped_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "rejected": {"type": "integer", "minimum": 0},
+    "rejected_rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "schema_version": {"const": "1.0.0"},
+    "total": {"type": "integer", "minimum": 0},
+    "unmapped": {"type": "integer", "minimum": 0},
+    "unmapped_rate": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}

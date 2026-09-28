@@ -1,6 +1,6 @@
 {
   "name": "openmed",
-  "version": "2.3.0",
+  "version": "2.5.0",
   "description": "On-device medical AI and de-identification for browsers and Node.js.",
   "keywords": [
     "medical-ai",

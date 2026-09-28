@@ -265,7 +265,8 @@ class AliasEmbeddingIndex:
 
         Neighbors are de-duplicated per ``(system, code)`` keeping the strongest
         similarity, then ordered by score descending with a stable tie-break on
-        the concept code.
+        the concept code. The alias search budget grows when necessary so
+        duplicate aliases do not leave available distinct concepts unreturned.
         """
 
         if k <= 0:
@@ -277,9 +278,21 @@ class AliasEmbeddingIndex:
         if not self._records:
             return []
 
-        # Over-fetch neighbors so per-concept de-duplication can still fill k.
+        # A fixed alias budget can be exhausted by one concept. Grow the
+        # budget only when de-duplication would leave fewer than k candidates,
+        # and stop at the number of indexed rows even if fewer concepts exist.
         fetch = min(len(self._records), max(k * 4, k))
-        neighbors = self._neighbors(vector, fetch)
+        while True:
+            neighbors = self._neighbors(vector, fetch)
+            concept_count = len(
+                {
+                    (self._records[row].system, self._records[row].code)
+                    for row, _ in neighbors
+                }
+            )
+            if concept_count >= k or fetch == len(self._records):
+                break
+            fetch = min(len(self._records), fetch * 2)
 
         resolved_language = normalize_language(source_language)
         best: dict[tuple[str, str], Candidate] = {}

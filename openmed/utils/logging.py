@@ -39,11 +39,14 @@ def get_logger(name: str) -> logging.Logger:
     """Get a logger instance for OpenMed modules.
 
     Args:
-        name: Name of the logger (usually __name__).
+        name: Fully qualified OpenMed logger name (usually __name__), or a
+            short name to place under the ``openmed`` namespace.
 
     Returns:
         Logger instance.
     """
+    if name == "openmed" or name.startswith("openmed."):
+        return logging.getLogger(name)
     return logging.getLogger(f"openmed.{name}")
 
 

@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from . import labels as label_taxonomy
 from .manifest_schema import LANGUAGE_SCRIPT_TARGETS
-from .registry_service import (
+from .registry_slots import (
     load_registry_state,
     pointer_targets,
     semantic_version,
@@ -437,6 +437,16 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.DISEASE,
         label_taxonomy.CELL,
     ],
+    # Forward metadata for future lab-value models; no dedicated Lab model is
+    # registered today. LOINC grounding remains an external follow-up.
+    "Lab": [
+        label_taxonomy.LAB_TEST,
+        label_taxonomy.LAB_VALUE,
+        label_taxonomy.UNIT,
+        label_taxonomy.REFERENCE_RANGE,
+        label_taxonomy.ABNORMAL_FLAG,
+        label_taxonomy.SPECIMEN,
+    ],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
     "Cardiology": [
@@ -510,6 +520,28 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.PROCEDURE,
         label_taxonomy.DEVICE,
         label_taxonomy.ANATOMY,
+    ],
+    # Forward metadata for future Immunology, MentalHealth, and Dentistry
+    # models; no specialty models are registered today (see issue #2358).
+    "Immunology": [
+        label_taxonomy.ALLERGEN,
+        label_taxonomy.FINDING,
+        label_taxonomy.IMMUNIZATION,
+        label_taxonomy.PROTEIN,
+    ],
+    # Substance-use and SDOH entities remain out of scope for this category
+    # and are owned by OM-056. Mental-health spans are high-sensitivity content
+    # for redaction review.
+    "MentalHealth": [
+        label_taxonomy.PSYCH_SYMPTOM,
+        label_taxonomy.PROBLEM,
+        label_taxonomy.MEDICATION,
+        label_taxonomy.PROCEDURE,
+    ],
+    "Dentistry": [
+        label_taxonomy.TOOTH,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PROCEDURE,
     ],
     "Privacy": _PII_ENTITY_TYPES,
 }
@@ -639,12 +671,55 @@ def _clean_model_tokens(tokens: Iterable[str]) -> List[str]:
     return cleaned
 
 
+_PORTUGUESE_NER_LANGUAGE_TOKENS = frozenset(
+    {"portuguese", "brazil", "brazilian", "pt", "ptbr", "br"}
+)
+_PORTUGUESE_NER_CATEGORY_TOKENS = {
+    "Hematology": frozenset({"bloodcancerdetect", "hematology", "hematologia"}),
+    "Disease": frozenset({"diseasedetect", "disease", "doenca"}),
+    "Pharmaceutical": frozenset(
+        {"pharmadetect", "pharmaceutical", "drug", "medicamento"}
+    ),
+    "Oncology": frozenset({"oncologydetect", "oncology", "cancer"}),
+    "Anatomy": frozenset({"anatomydetect", "anatomy", "anatomia"}),
+    "Genomics": frozenset({"genomedetect", "genomicdetect", "dnadetect", "genomics"}),
+    "Chemical": frozenset({"chemicaldetect", "chemical", "chem", "quimica", "quimico"}),
+    "Species": frozenset({"speciesdetect", "organismdetect", "species", "organism"}),
+    "Protein": frozenset({"proteindetect", "protein", "proteina"}),
+    "Pathology": frozenset({"pathologydetect", "pathology", "patologia"}),
+}
+
+
+def _portuguese_ner_category_from_row(row: Dict[str, Any]) -> Optional[str]:
+    """Return the inferred category for a Portuguese NER repository, if any."""
+    if str(row.get("family") or "").casefold() != "ner":
+        return None
+
+    tokens = {token.casefold() for token in _split_repo_tokens(row.get("repo_id", ""))}
+    if not tokens.intersection(_PORTUGUESE_NER_LANGUAGE_TOKENS):
+        return None
+
+    for category, family_tokens in _PORTUGUESE_NER_CATEGORY_TOKENS.items():
+        if tokens.intersection(family_tokens):
+            return category
+    return None
+
+
 def _category_from_row(row: Dict[str, Any]) -> str:
     repo = row.get("repo_id", "").lower()
     family = str(row.get("family") or "").lower()
 
+    if family == "clinical-nli" and row.get("task") in {
+        "text-classification",
+        "sequence-classification",
+    }:
+        return "Clinical NLI"
+
     if family == "pii" or "pii" in repo or "privacy-filter" in repo:
         return "Privacy"
+    portuguese_category = _portuguese_ner_category_from_row(row)
+    if portuguese_category is not None:
+        return portuguese_category
     if "bloodcancerdetect" in repo or "hematology" in repo or "leukemia" in repo:
         return "Hematology"
     if "diseasedetect" in repo:
@@ -681,7 +756,7 @@ def _display_name_from_row(row: Dict[str, Any]) -> str:
 
 
 def _specialization_from_row(row: Dict[str, Any], category: str) -> str:
-    languages = row.get("languages") or []
+    languages = _languages_from_row(row)
     language = ""
     if len(languages) == 1 and languages[0] != "en":
         language = f"{languages[0].upper()} "
@@ -756,8 +831,19 @@ def _size_category(row: Dict[str, Any]) -> str:
     return "Unknown"
 
 
+def _languages_from_row(row: Dict[str, Any]) -> List[str]:
+    """Return manifest languages, inferring Portuguese for tagged NER repos."""
+    languages = list(row.get("languages") or [])
+    if languages:
+        return languages
+    if _portuguese_ner_category_from_row(row) is not None:
+        return ["pt"]
+    return languages
+
+
 def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
     category = _category_from_row(row)
+    languages = _languages_from_row(row)
     return ModelInfo(
         model_id=row["repo_id"],
         display_name=_display_name_from_row(row),
@@ -769,7 +855,7 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         recommended_confidence=_recommended_confidence(category),
         family=str(row.get("family") or "Unknown"),
         task=str(row.get("task") or "unknown"),
-        languages=list(row.get("languages") or []),
+        languages=languages,
         tier=row.get("tier"),
         param_count=row.get("param_count"),
         architecture=row.get("architecture"),
@@ -1077,7 +1163,12 @@ def _add_pointer_aliases(
 ) -> None:
     by_repo_id = {model.model_id: model for model in registry.values()}
     slots = registry_state.get("slots", {})
-    for slot, pointers in pointer_targets(registry_state).items():
+    pointer_sets = pointer_targets(registry_state)
+    family_counts: dict[str, int] = {}
+    for key in pointer_sets:
+        family = key.split("::", 1)[0]
+        family_counts[family] = family_counts.get(family, 0) + 1
+    for slot, pointers in pointer_sets.items():
         checkpoints = slots.get(slot, {}).get("checkpoints", {})
         for pointer_name, repo_id in pointers.items():
             if repo_id is None:
@@ -1091,6 +1182,9 @@ def _add_pointer_aliases(
             if isinstance(assigned, str) and assigned:
                 model = replace(model, semantic_version=assigned)
             registry[_slug(f"{slot}_{pointer_name}")] = model
+            family = slot.split("::", 1)[0]
+            if family_counts[family] == 1:
+                registry[_slug(f"{family}_{pointer_name}")] = model
 
 
 def _build_registry(
@@ -1333,6 +1427,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Hematology",
         "Contains hematological terms",
     ),
+    "\\blab\\b|mmol\\s*/\\s*l\\b|mg\\s*/\\s*dl\\b|\\bwbc\\b|hemoglobin|creatinine|reference\\s+range|elevated|abnormal|\\bpanel\\b": (
+        "Lab",
+        "Contains laboratory measurement terms",
+    ),
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
         "Contains nutrition/diet-order terms",
@@ -1348,6 +1446,18 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic": (
         "Procedures",
         "Contains procedure/surgical terms",
+    ),
+    "allerg|anaphylaxis|vaccine|igg|antibody": (
+        "Immunology",
+        "Contains immunology/allergy terms",
+    ),
+    "depression|anxiety|psychosis|suicidal|antidepressant": (
+        "MentalHealth",
+        "Contains mental-health terms",
+    ),
+    r"caries|extraction|crown|periodontal|tooth\s*#": (
+        "Dentistry",
+        "Contains dentistry/oral-health terms",
     ),
 }
 
@@ -1629,6 +1739,21 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     return language_models
 
 
+def get_ner_models_by_language(lang: str) -> Dict[str, ModelInfo]:
+    """Return non-privacy NER models whose manifest language matches ``lang``."""
+    normalized_lang = str(lang).strip().casefold()
+    if not normalized_lang:
+        return {}
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if info.category != "Privacy"
+        and info.family.casefold() == "ner"
+        and normalized_lang
+        in {language.casefold() for language in (info.languages or [])}
+    }
+
+
 def _configured_indic_pii_model(lang: str) -> Dict[str, ModelInfo]:
     from ..ner.families.indic import configured_indic_ner_model
     from .pii_i18n import INDIC_NER_LANGUAGES, LANGUAGE_NAMES
@@ -1682,6 +1807,32 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     from ..ner.families.indic import configured_indic_ner_model
 
     return configured_indic_ner_model()
+
+
+def get_default_nli_model() -> Optional[str]:
+    """Return a released, pinned clinical NLI model or fail closed with ``None``.
+
+    Registry entries created for training or tests cannot become the default.
+    A model must carry an immutable revision, class mapping, and calibration.
+    """
+
+    candidates = [
+        info
+        for info in OPENMED_MODELS.values()
+        if info.category == "Clinical NLI"
+        and info.task in {"text-classification", "sequence-classification"}
+        and info.license is not None
+        and info.license.casefold() in {"apache-2.0", "mit", "bsd-3-clause"}
+        and isinstance(info.provenance.get("revision"), str)
+        and re.fullmatch(r"[0-9a-fA-F]{40}", info.provenance["revision"])
+        and isinstance(info.provenance.get("nli_label_mapping"), dict)
+        and isinstance(info.provenance.get("nli_calibration"), dict)
+        and info.released
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda info: (info.released or "", info.model_id))
+    return candidates[-1].model_id
 
 
 def resolve_pii_family_transfer_route(

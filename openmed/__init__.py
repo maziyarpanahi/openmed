@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     )
     from .core.results import AnalyzeResult
     from .processing import BatchProcessor
+    from .processing.advanced_ner import extract_clinical_entities
     from .processing.sentences import SentenceSpan
 
 _LAZY_IMPORTS = {
@@ -102,8 +103,12 @@ _LAZY_IMPORTS = {
     "get_model_info": ".core.model_registry",
     "get_model_suggestions": ".core.model_registry",
     "get_models_by_category": ".core.model_registry",
+    "get_ner_models_by_language": ".core.model_registry",
     "get_pii_models_by_language": ".core.model_registry",
     "ground": ".clinical.grounding",
+    "GroundedConcept": ".clinical.grounding",
+    "GroundingConfigError": ".clinical.grounding",
+    "GroundingResult": ".clinical.grounding",
     "list_model_categories": ".core.model_registry",
     "ModelQuery": ".core.model_search",
     "ModelSearchResult": ".core.model_search",
@@ -193,6 +198,7 @@ _LAZY_IMPORTS = {
     "redact_dataset": ".processing",
     "sentence_utils": ".processing",
     "AdvancedNERProcessor": ".processing.advanced_ner",
+    "extract_clinical_entities": ".processing.advanced_ner",
     "StreamingReplayResult": ".processing.advanced_ner",
     "StreamingTokenClassifier": ".processing.advanced_ner",
     "create_advanced_processor": ".processing.advanced_ner",
@@ -886,6 +892,7 @@ __all__ = [
     "abatch",
     "redact_dataset",
     "AdvancedNERProcessor",
+    "extract_clinical_entities",
     "StreamingReplayResult",
     "StreamingTokenClassifier",
     "create_advanced_processor",
@@ -904,8 +911,13 @@ __all__ = [
     "get_all_models",
     "list_model_categories",
     "get_model_suggestions",
+    "get_ner_models_by_language",
     "get_pii_models_by_language",
     "get_default_pii_model",
+    "ground",
+    "GroundedConcept",
+    "GroundingConfigError",
+    "GroundingResult",
     # Hugging Face Hub model-pull helpers
     "prefetch_model",
     "list_cached_models",
