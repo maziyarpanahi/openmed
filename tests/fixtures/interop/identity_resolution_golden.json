@@ -1,0 +1,73 @@
+{
+  "expected": {
+    "candidate_keys": [
+      "patient_0000000000000001"
+    ],
+    "canonical_key": "patient_0000000000000001",
+    "evidence_count": 2,
+    "review_required": false,
+    "state": "matched"
+  },
+  "links": [
+    {
+      "active": true,
+      "canonical_key": "patient_0000000000000001",
+      "evidence_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "link_id": "link_0000000000000001",
+      "policy_id": "openmed.identity.default",
+      "policy_version": "1.0.0",
+      "recorded_at": "2026-01-02T03:04:05Z",
+      "schema_version": "1.0.0",
+      "source_key": {
+        "entity_type": "patient",
+        "local_key": "local_0000000000000001",
+        "schema_version": "1.0.0",
+        "source_id": "source_0000000000000001"
+      }
+    },
+    {
+      "active": true,
+      "canonical_key": "patient_0000000000000001",
+      "evidence_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "link_id": "link_0000000000000002",
+      "policy_id": "openmed.identity.default",
+      "policy_version": "1.0.0",
+      "recorded_at": "2026-01-02T03:04:05Z",
+      "schema_version": "1.0.0",
+      "source_key": {
+        "entity_type": "patient",
+        "local_key": "local_0000000000000002",
+        "schema_version": "1.0.0",
+        "source_id": "source_0000000000000002"
+      }
+    }
+  ],
+  "request": {
+    "attributes": [
+      "identified_access"
+    ],
+    "entity_type": "patient",
+    "policy_id": "openmed.identity.default",
+    "policy_version": "1.0.0",
+    "purpose": "care",
+    "request_id": "request_aaaaaaaaaaaaaaaa",
+    "requested_at": "2026-01-02T04:04:05Z",
+    "role": "clinician",
+    "schema_version": "1.0.0",
+    "source_keys": [
+      {
+        "entity_type": "patient",
+        "local_key": "local_0000000000000001",
+        "schema_version": "1.0.0",
+        "source_id": "source_0000000000000001"
+      },
+      {
+        "entity_type": "patient",
+        "local_key": "local_0000000000000002",
+        "schema_version": "1.0.0",
+        "source_id": "source_0000000000000002"
+      }
+    ]
+  },
+  "schema_version": 1
+}

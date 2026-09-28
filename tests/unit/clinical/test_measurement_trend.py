@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from openmed.clinical import (
     TREND_ADVISORY,
     build_measurement_trends,
     extract_measurement_trends,
+    serialize_measurement_trends,
 )
 
 FIXTURE = (
@@ -459,3 +461,150 @@ def test_advisory_is_attached_to_every_trend():
 
 def test_empty_input_yields_no_trends():
     assert extract_measurement_trends([]) == []
+
+
+# ---------------------------------------------------------------------------
+# Stable JSON serialization (#3107)
+# ---------------------------------------------------------------------------
+
+SERIALIZED_FIXTURE = FIXTURE.with_name("measurement_trend_serialized.jsonl")
+
+
+def _load_serialized_fixture() -> list[dict]:
+    with SERIALIZED_FIXTURE.open(encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle if line.strip()]
+
+
+def test_serialized_fixture_covers_each_trend_shape():
+    rows = _load_serialized_fixture()
+
+    assert all(row["metadata"]["synthetic"] is True for row in rows)
+    assert {row["name"] for row in rows} == {
+        "ordered",
+        "mixed",
+        "unknown",
+        "incomparable",
+    }
+
+
+@pytest.mark.parametrize("row", _load_serialized_fixture(), ids=lambda row: row["name"])
+def test_serialization_matches_golden_for_every_input_order(row):
+    for permutation in itertools.permutations(row["points"]):
+        trends = extract_measurement_trends(
+            list(permutation), reference_date=row["reference_date"]
+        )
+        assert serialize_measurement_trends(trends) == row["expected"]
+
+
+def test_serialization_sorts_groups_and_canonicalizes_entity_label():
+    points = [
+        {"entity": "weight", "value": 80, "unit": "kg", "timepoint": "2026-01-01"},
+        {"entity": "Albumin", "value": 4.0, "unit": "g/dL", "timepoint": "2026-01-01"},
+        {"entity": "Weight", "value": 78, "unit": "kg", "timepoint": "2026-02-01"},
+        {"entity": "albumin", "value": 3.8, "unit": "g/dL", "timepoint": "2026-02-01"},
+    ]
+
+    outputs = {
+        serialize_measurement_trends(extract_measurement_trends(list(order)))
+        for order in itertools.permutations(points)
+    }
+
+    assert len(outputs) == 1
+    serialized = json.loads(outputs.pop())
+    # Grouping is case-insensitive; the label is the lowest spelling in the group.
+    assert [trend["entity"] for trend in serialized] == ["Albumin", "Weight"]
+
+
+def test_same_timepoint_tie_no_longer_depends_on_input_order():
+    # 14 mm and 1.4 cm normalize to 0.014 and 0.013999999999999999: equal within
+    # tolerance, so not a conflict, but not bitwise equal. Which one ended the
+    # series used to follow input order and moved last_value and delta with it.
+    base = {
+        "entity": "Tumor size",
+        "value": 12,
+        "unit": "mm",
+        "timepoint": "2026-01-05",
+    }
+    in_mm = {
+        "entity": "Tumor size",
+        "value": 14,
+        "unit": "mm",
+        "timepoint": "2026-02-05",
+    }
+    in_cm = {"entity": "Tumor size", "value": "1.4 cm", "timepoint": "2026-02-05"}
+
+    forward = extract_measurement_trends([base, in_mm, in_cm])[0]
+    backward = extract_measurement_trends([base, in_cm, in_mm])[0]
+
+    assert forward["direction"] == backward["direction"] == "increasing"
+    assert forward["last_value"] == backward["last_value"]
+    assert forward["delta"] == backward["delta"]
+    assert forward["points"] == backward["points"]
+
+
+def test_serialization_is_compact_with_sorted_keys():
+    trends = extract_measurement_trends(
+        [
+            {"entity": "Weight", "value": 80, "unit": "kg", "timepoint": "2026-01-01"},
+            {"entity": "Weight", "value": 78, "unit": "kg", "timepoint": "2026-02-01"},
+        ]
+    )
+
+    text = serialize_measurement_trends(trends)
+    parsed = json.loads(text)
+
+    assert text == json.dumps(parsed, separators=(",", ":"), sort_keys=True)
+    assert set(parsed[0]) == set(trends[0])
+
+
+def test_serialization_does_not_reorder_the_callers_trends():
+    trends = extract_measurement_trends(
+        [
+            {"entity": "Weight", "value": 12, "unit": "furlongs"},
+            {"entity": "Weight", "value": 80, "unit": "kg"},
+            {"entity": "Weight", "value": 11, "unit": "fathoms"},
+        ]
+    )
+    before = json.dumps(trends, sort_keys=True)
+
+    serialize_measurement_trends(trends)
+
+    assert json.dumps(trends, sort_keys=True) == before
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("delta", float("nan")),
+        ("first_value", float("inf")),
+        ("last_value", float("-inf")),
+    ],
+)
+def test_serialization_rejects_non_finite_derived_trend_values(field, value):
+    trend = extract_measurement_trends(
+        [
+            {"entity": "Weight", "value": 80, "unit": "kg", "timepoint": "2026-01-01"},
+            {"entity": "Weight", "value": 78, "unit": "kg", "timepoint": "2026-02-01"},
+        ]
+    )[0]
+    trend[field] = value
+
+    with pytest.raises(ValueError, match=f"{field} for 'Weight' must be finite"):
+        serialize_measurement_trends([trend])
+
+
+def test_serialization_rejects_non_finite_point_magnitude():
+    trend = extract_measurement_trends(
+        [
+            {"entity": "Weight", "value": 80, "unit": "kg", "timepoint": "2026-01-01"},
+            {"entity": "Weight", "value": 78, "unit": "kg", "timepoint": "2026-02-01"},
+        ]
+    )[0]
+    trend["points"][1]["canonical_magnitude"] = float("nan")
+
+    with pytest.raises(ValueError, match=r"points\[1\]\.canonical_magnitude"):
+        serialize_measurement_trends([trend])
+
+
+def test_serialization_of_no_trends_is_an_empty_array():
+    assert serialize_measurement_trends([]) == "[]"

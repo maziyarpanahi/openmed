@@ -1155,7 +1155,7 @@ class ReleaseRuntime:
         )
 
     def promote(self, candidate: NightlyCandidate, report: GateReport) -> str:
-        from openmed.core.registry_service import RegistryService
+        from openmed.core.registry_slots import SlotRegistryService as RegistryService
 
         service = RegistryService(
             manifest_path=self.manifest_path,
@@ -1181,7 +1181,7 @@ class ReleaseRuntime:
         candidate: NightlyCandidate,
         report: GateReport,
     ) -> str:
-        from openmed.core.registry_service import RegistryService
+        from openmed.core.registry_slots import SlotRegistryService as RegistryService
 
         service = RegistryService(
             manifest_path=self.manifest_path,
@@ -1196,7 +1196,7 @@ class ReleaseRuntime:
         return str(service.pointers(candidate.family)["last_green"])
 
     def rollback(self, candidate: NightlyCandidate) -> str:
-        from openmed.core.registry_service import RegistryService
+        from openmed.core.registry_slots import SlotRegistryService as RegistryService
 
         service = RegistryService(
             manifest_path=self.manifest_path,

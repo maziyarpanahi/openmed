@@ -22,6 +22,8 @@ from openmed.service.metrics import (
     MODEL_REJECTION_NAME,
     MODEL_RESIDENT_BYTES_NAME,
     MODEL_RESIDENT_NAME,
+    OPERATIONAL_DURATION_NAME,
+    OPERATIONAL_TOTAL_NAME,
     PAGED_KV_CACHE_BUDGET_BYTES_NAME,
     PAGED_KV_CACHE_CAPACITY_NAME,
     PAGED_KV_CACHE_EVICTION_NAME,
@@ -214,12 +216,35 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
     assert metric_lines
     for line in metric_lines:
         assert _metric_label_names(line) <= {
+            "category",
+            "operation",
             "route",
+            "state",
             "status_code",
             "le",
             "priority",
             "queue",
         }
+
+
+def test_journey_query_records_typed_value_free_operation(monkeypatch) -> None:
+    _configure_service_env(monkeypatch, metrics_enabled=True)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
+        response = client.get(
+            "/v1/journey/resources",
+            params={"resource_type": "fact"},
+        )
+        metrics = client.get("/metrics").text
+
+    assert response.status_code == 200
+    labels = 'category="query",operation="list",state="empty"'
+    assert f"{OPERATIONAL_TOTAL_NAME}{{{labels}}} 1" in metrics
+    assert f"{OPERATIONAL_DURATION_NAME}_count{{{labels}}} 1" in metrics
 
 
 def test_warm_pool_model_counters_are_aggregate_only() -> None:

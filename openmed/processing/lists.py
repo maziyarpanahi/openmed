@@ -171,6 +171,9 @@ def parse_lists(text: str) -> list[ListItemSpan]:
 def validate_list_items(text: str, items: Sequence[ListItemSpan]) -> None:
     """Validate offsets, hierarchy, ordering, and exact source alignment.
 
+    Siblings under the same parent must not overlap; ancestor containment is
+    allowed.
+
     Args:
         text: Original source text.
         items: Candidate list items in source order.
@@ -182,6 +185,7 @@ def validate_list_items(text: str, items: Sequence[ListItemSpan]) -> None:
 
     previous_start = -1
     previous_top_end = 0
+    previous_child_ends: dict[int, int] = {}
     for index, item in enumerate(items):
         if not isinstance(item, ListItemSpan):
             raise ValueError(f"list item {index} is not a ListItemSpan")
@@ -204,6 +208,10 @@ def validate_list_items(text: str, items: Sequence[ListItemSpan]) -> None:
                 raise ValueError(f"list item {index} skips a nesting level")
             if not (parent.start <= item.start and item.end <= parent.end):
                 raise ValueError(f"list item {index} falls outside its parent")
+            previous_end = previous_child_ends.get(item.parent_index, parent.start)
+            if item.start < previous_end:
+                raise ValueError(f"nested list item {index} overlaps its sibling")
+            previous_child_ends[item.parent_index] = item.end
 
         previous_start = item.start
 

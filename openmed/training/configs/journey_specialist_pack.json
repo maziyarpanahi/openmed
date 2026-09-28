@@ -1,0 +1,187 @@
+{
+  "aggregate_gpu_budget_usd": 1000.0,
+  "compatibility_policy": "same_major",
+  "dataset": {
+    "bundled": true,
+    "content_digest": "sha256:256fa952eb26715cc6d66091c57c3f0a902bb6c98663114904b71eb1ed43feff",
+    "license": "cc0-1.0",
+    "record_count": 42,
+    "resource": "journey_specialist_synthetic.jsonl",
+    "revision": "1.0.0",
+    "source_id": "openmed/journey-specialist-synthetic",
+    "synthetic": true,
+    "usage_lane": "distributable"
+  },
+  "pack_id": "openmed.journey.specialist.v1",
+  "recipes": [
+    {
+      "adapter": {
+        "alpha": 16,
+        "dropout": 0.05,
+        "method": "lora",
+        "rank": 8,
+        "target_modules": ["query_proj", "value_proj"],
+        "trainable_ratio_ceiling": 0.015
+      },
+      "backbone": {
+        "architecture": "sequence_classifier",
+        "license": "mit",
+        "model_id": "microsoft/deberta-v3-small",
+        "revision": "a36c739020e01763fe789b4b85e2df55d6180012"
+      },
+      "baseline_id": "builtin/assertion_rules.v1",
+      "calibration_method": "temperature",
+      "estimated_gpu_hours": 30.0,
+      "export_formats": ["safetensors", "onnx"],
+      "hourly_cost_usd": 3.0,
+      "labels": ["absent", "family", "possible", "present"],
+      "maximum_ece": 0.1,
+      "maximum_quantized_macro_f1_delta": 0.01,
+      "minimum_candidate_improvement": 0.01,
+      "minimum_coverage": 0.7,
+      "minimum_macro_f1": 0.8,
+      "minimum_per_class_recall": 0.65,
+      "minimum_subgroup_recall": 0.6,
+      "mixed_precision": "bf16",
+      "output_schema": "assertion_certainty_experiencer",
+      "quantization_targets": ["int8"],
+      "seed": 17,
+      "stop_rule": {
+        "maximum_gpu_hours": 30.0,
+        "maximum_steps": 2500,
+        "metric": "macro_f1",
+        "minimum_delta": 0.001,
+        "mode": "max",
+        "patience": 2
+      },
+      "task": "assertion"
+    },
+    {
+      "adapter": {
+        "alpha": 16,
+        "dropout": 0.05,
+        "method": "lora",
+        "rank": 8,
+        "target_modules": ["query_proj", "value_proj"],
+        "trainable_ratio_ceiling": 0.015
+      },
+      "backbone": {
+        "architecture": "sequence_classifier",
+        "license": "mit",
+        "model_id": "microsoft/deberta-v3-small",
+        "revision": "a36c739020e01763fe789b4b85e2df55d6180012"
+      },
+      "baseline_id": "builtin/temporality_rules.v1",
+      "calibration_method": "temperature",
+      "estimated_gpu_hours": 36.0,
+      "export_formats": ["safetensors", "onnx"],
+      "hourly_cost_usd": 3.0,
+      "labels": ["current", "historical", "planned", "unknown"],
+      "maximum_ece": 0.1,
+      "maximum_quantized_macro_f1_delta": 0.01,
+      "minimum_candidate_improvement": 0.01,
+      "minimum_coverage": 0.7,
+      "minimum_macro_f1": 0.8,
+      "minimum_per_class_recall": 0.65,
+      "minimum_subgroup_recall": 0.6,
+      "mixed_precision": "bf16",
+      "output_schema": "temporal_status",
+      "quantization_targets": ["int8"],
+      "seed": 23,
+      "stop_rule": {
+        "maximum_gpu_hours": 36.0,
+        "maximum_steps": 3000,
+        "metric": "macro_f1",
+        "minimum_delta": 0.001,
+        "mode": "max",
+        "patience": 2
+      },
+      "task": "temporality"
+    },
+    {
+      "adapter": {
+        "alpha": 32,
+        "dropout": 0.05,
+        "method": "lora",
+        "rank": 16,
+        "target_modules": ["query_proj", "value_proj"],
+        "trainable_ratio_ceiling": 0.02
+      },
+      "backbone": {
+        "architecture": "span_pair_classifier",
+        "license": "mit",
+        "model_id": "microsoft/deberta-v3-small",
+        "revision": "a36c739020e01763fe789b4b85e2df55d6180012"
+      },
+      "baseline_id": "builtin/relation_rules.v1",
+      "calibration_method": "temperature",
+      "estimated_gpu_hours": 60.0,
+      "export_formats": ["safetensors", "onnx"],
+      "hourly_cost_usd": 3.0,
+      "labels": ["adverse_event", "no_relation", "relation"],
+      "maximum_ece": 0.12,
+      "maximum_quantized_macro_f1_delta": 0.015,
+      "minimum_candidate_improvement": 0.01,
+      "minimum_coverage": 0.7,
+      "minimum_macro_f1": 0.75,
+      "minimum_per_class_recall": 0.6,
+      "minimum_subgroup_recall": 0.55,
+      "mixed_precision": "bf16",
+      "output_schema": "relation_score",
+      "quantization_targets": ["int8"],
+      "seed": 29,
+      "stop_rule": {
+        "maximum_gpu_hours": 60.0,
+        "maximum_steps": 4000,
+        "metric": "macro_f1",
+        "minimum_delta": 0.001,
+        "mode": "max",
+        "patience": 3
+      },
+      "task": "pair_scoring"
+    },
+    {
+      "adapter": {
+        "alpha": 16,
+        "dropout": 0.05,
+        "method": "lora",
+        "rank": 8,
+        "target_modules": ["query_proj", "value_proj"],
+        "trainable_ratio_ceiling": 0.015
+      },
+      "backbone": {
+        "architecture": "sequence_classifier",
+        "license": "mit",
+        "model_id": "microsoft/deberta-v3-small",
+        "revision": "a36c739020e01763fe789b4b85e2df55d6180012"
+      },
+      "baseline_id": "builtin/fixed_option_rules.v1",
+      "calibration_method": "temperature",
+      "estimated_gpu_hours": 30.0,
+      "export_formats": ["safetensors", "onnx"],
+      "hourly_cost_usd": 3.0,
+      "labels": ["insufficient_evidence", "no", "yes"],
+      "maximum_ece": 0.1,
+      "maximum_quantized_macro_f1_delta": 0.01,
+      "minimum_candidate_improvement": 0.01,
+      "minimum_coverage": 0.7,
+      "minimum_macro_f1": 0.8,
+      "minimum_per_class_recall": 0.65,
+      "minimum_subgroup_recall": 0.6,
+      "mixed_precision": "bf16",
+      "output_schema": "fixed_option_decision",
+      "quantization_targets": ["int8"],
+      "seed": 31,
+      "stop_rule": {
+        "maximum_gpu_hours": 30.0,
+        "maximum_steps": 2500,
+        "metric": "macro_f1",
+        "minimum_delta": 0.001,
+        "mode": "max",
+        "patience": 2
+      },
+      "task": "classification"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

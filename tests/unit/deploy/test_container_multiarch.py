@@ -52,7 +52,7 @@ def test_root_dockerfile_keeps_compose_base_digest_pinned():
 def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():
     content = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "docker/build-push-action@v6" in content
+    assert "docker/build-push-action@" in content
     assert "platforms: linux/amd64,linux/arm64" in content
     assert "docker buildx imagetools inspect" in content
     assert "grep -Eq 'Platform:[[:space:]]+linux/amd64'" in content

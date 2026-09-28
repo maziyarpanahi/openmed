@@ -228,6 +228,8 @@ def _validate_vocabulary(vocabulary_name: str, vocabulary: object) -> None:
     if not isinstance(statuses, Mapping) or not statuses:
         raise ValueError(f"{vocabulary_name} vocabulary requires statuses")
 
+    # Normalized cue -> (status, 1-based position) of its first occurrence.
+    seen_cues: dict[str, tuple[str, int]] = {}
     for status in priority:
         entry = statuses.get(status)
         if not isinstance(entry, Mapping):
@@ -235,6 +237,7 @@ def _validate_vocabulary(vocabulary_name: str, vocabulary: object) -> None:
         cues = entry.get("cues")
         if not _is_str_sequence(cues):
             raise ValueError(f"{vocabulary_name}.{status} requires string cues")
+        _reject_duplicate_cues(vocabulary_name, str(status), cues, seen_cues)
 
     missing = set(statuses) - set(priority)
     if missing:
@@ -258,6 +261,42 @@ def _validate_vocabulary(vocabulary_name: str, vocabulary: object) -> None:
     for key in ("negated", "historical_current"):
         if not isinstance(overrides.get(key), str) or not overrides[key]:
             raise ValueError(f"{vocabulary_name} axis_overrides.{key} is required")
+
+
+def _reject_duplicate_cues(
+    vocabulary_name: str,
+    status: str,
+    cues: Sequence[str],
+    seen_cues: dict[str, tuple[str, int]],
+) -> None:
+    """Reject cues that collide once normalized the way matching normalizes them.
+
+    A cue listed under two statuses is matched by whichever status comes first
+    in ``priority``, so the second listing is dead configuration that reads as
+    if it worked. Errors name the vocabulary, statuses, and cue positions but
+    never the cue text itself.
+    """
+
+    for position, cue in enumerate(cues, start=1):
+        normalized = _normalize_phrase(cue)
+        if not normalized:
+            # Blank after normalization: never matches, so it cannot collide.
+            continue
+        first = seen_cues.get(normalized)
+        if first is None:
+            seen_cues[normalized] = (status, position)
+            continue
+        first_status, first_position = first
+        if first_status == status:
+            raise ValueError(
+                f"{vocabulary_name}.{status} repeats a cue after normalization "
+                f"(cues {first_position} and {position})"
+            )
+        raise ValueError(
+            f"{vocabulary_name} vocabulary lists one normalized cue under two "
+            f"statuses: {first_status} (cue {first_position}) and "
+            f"{status} (cue {position})"
+        )
 
 
 def _is_str_sequence(value: object) -> bool:
