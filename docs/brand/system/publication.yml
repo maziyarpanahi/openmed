@@ -254,7 +254,12 @@ classification:
     - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
     - clinical/citation-boundary-validation.md
+    - clinical/summary-output-normalization.md
     - clinical/evidence-tables.md
+    - clinical/summary-section-planning.md
+    - clinical/summary-template-profiles.md
+    - clinical/summary-length-budgets.md
+    - clinical/summary-empty-evidence.md
     - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
@@ -297,6 +302,7 @@ classification:
     - core-observability.md
     - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
+    - benchmarks/shield-synthetic.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
     - zero-shot-howto.md

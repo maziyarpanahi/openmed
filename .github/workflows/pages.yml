@@ -95,6 +95,7 @@ jobs:
             --manifest models.jsonl \
             --baseline gates/baseline.json \
             --report docs/benchmarks/golden.report.json \
+            --report docs/benchmarks/shield-synthetic.report.json \
             --nightly-report docs/status/evidence/nightly-control.json \
             --benchmarks-dir docs/benchmarks \
             --leaderboard-dir docs/leaderboard \
