@@ -3,6 +3,35 @@
 `run_benchmark` executes a model over a sequence of `BenchmarkFixture` objects and returns a
 `BenchmarkReport` whose `metrics` dict contains the standard OM-018 metric bundle.
 
+## Inspect suites and compare reports
+
+These commands inspect local metadata and saved reports without running models
+or fetching datasets:
+
+```bash
+openmed benchmark list-suites
+openmed benchmark describe n2c2 --json
+openmed benchmark compare baseline.json candidate.json --json
+openmed benchmark compare baseline.json candidate.json --fail-on-regression
+```
+
+The registry supplies task names, category mappings, license metadata and access
+requirements. Public synthetic fixtures do not authorize access to restricted
+real-world corpora. Unnormalized source licenses are reported explicitly.
+
+Comparison reports candidate-minus-baseline deltas for recognized aggregate
+leakage, recall and F1 metrics. Lower leakage and higher recall/F1 are better;
+any adverse delta is a descriptive regression, with no statistical tolerance
+implied. Missing metrics are unavailable, not zero or a passing result.
+Reports must have matching registered suites and positive, equal fixture counts.
+This is not proof that their underlying corpora match and does not replace the
+release gates. Only allow-listed aggregate metric names and rates are emitted;
+report paths, model names, arbitrary metadata and per-document fields are not.
+
+The default inspection exit status is 0 even when a regression is reported.
+`--fail-on-regression` returns 1 for regression or missing evidence; invalid,
+empty, mismatched or over-8-MiB reports return 2. All commands support `--json`.
+
 ## Chinese clinical NER
 
 The `chinese-clinical-ner` suite ships a tiny synthetic CMeEE-shaped fixture

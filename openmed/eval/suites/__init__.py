@@ -490,7 +490,36 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
+_TASK_FALLBACKS = {
+    GOLDEN: "clinical_deidentification",
+    OPENMED_SYNTH: "clinical_deidentification",
+    I2B2: "clinical_deidentification",
+    N2C2: "clinical_deidentification",
+    SHIELD: "clinical_deidentification",
+    POLICY_COMPLIANCE: "privacy_policy_compliance",
+    MULTIMODAL_DICOM: "dicom_deidentification",
+    CODE_MIXED_ROUTING: "code_mixed_privacy_routing",
+    INDIA_HEALTH_ID_LEAKAGE: "health_identifier_leakage",
+    INDIAN_MULTI_ID: "multi_identifier_detection",
+    INDIC_NAME_CONSISTENCY: "name_surrogate_consistency",
+    INDIA_CLINICAL_PHI_LEAKAGE: "clinical_deidentification",
+    INDIA_SURROGATE_CONSISTENCY: "identifier_surrogate_consistency",
+    TEMPORAL_CONSISTENCY: "temporal_assertion_consistency",
+    GROUNDING_CALIBRATION: "grounding_calibration",
+    CLINICAL_DOMAIN_COVERAGE: "clinical_domain_coverage",
+}
+
+
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
+    """Return registry metadata with an explicit, non-placeholder task."""
+    suite = validate_suite_name(name)
+    metadata = _suite_metadata(suite, **kwargs)
+    if not metadata.get("task"):
+        metadata["task"] = _TASK_FALLBACKS[suite]
+    return metadata
+
+
+def _suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
     if suite == CLINICAL_DOMAIN_COVERAGE:
