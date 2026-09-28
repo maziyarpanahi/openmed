@@ -64,7 +64,11 @@ from ._output import (
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
-from .benchmark import add_cost_command, add_generalization_command
+from .benchmark import (
+    add_cost_command,
+    add_generalization_command,
+    add_metadata_commands,
+)
 from .calibrate import add_calibrate_command
 from .contract import (
     OFFLINE_ERROR_CODE,
@@ -3119,6 +3123,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
     add_cost_command(benchmark_sub)
     add_generalization_command(benchmark_sub)
+    add_metadata_commands(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
