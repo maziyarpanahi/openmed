@@ -392,6 +392,7 @@ classification:
     - export-gguf.md
     - clinical/event-contradictions.md
     - clinical/temporal-intervals.md
+    - clinical/claim-conflicts.md
     - clinical/review-sla.md
     - evaluation/model-provenance-diff.md
     - clinical/evidence-span-audit.md
