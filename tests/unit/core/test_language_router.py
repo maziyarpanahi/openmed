@@ -176,9 +176,18 @@ def test_urdu_disambiguation_never_resolves_the_hausa_candidate():
 
 
 def test_urdu_evidence_without_a_registered_pack_falls_back_to_arabic():
-    # The built-in catalog ships no ``ur`` pack, so Urdu evidence must land on
-    # the documented Arabic fallback at a visibly lower confidence.
-    router = LanguageRouter(use_optional_lid=False)
+    # An explicitly supplied pack set can omit Urdu, retaining the documented
+    # Arabic fallback at a visibly lower confidence.
+    from openmed.core.language_pack_catalog import LANGUAGE_PACK_ADAPTERS
+
+    router = LanguageRouter(
+        packs=tuple(
+            pack
+            for pack in LANGUAGE_PACK_ADAPTERS.registry.iter_packs()
+            if pack.code != "ur"
+        ),
+        use_optional_lid=False,
+    )
 
     urdu = router.route(_URDU_TEXT)
     arabic = router.route(_ARABIC_TEXT)
@@ -202,7 +211,16 @@ def test_urdu_evidence_without_a_registered_pack_falls_back_to_arabic():
 def test_arabic_fallback_confidence_weights_the_document_decision():
     # Hangul is the only script whose sole candidate pack routes at 0.99, so it
     # isolates the Arabic fallback's 0.8 in the length-weighted document score.
-    router = LanguageRouter(use_optional_lid=False)
+    from openmed.core.language_pack_catalog import LANGUAGE_PACK_ADAPTERS
+
+    router = LanguageRouter(
+        packs=tuple(
+            pack
+            for pack in LANGUAGE_PACK_ADAPTERS.registry.iter_packs()
+            if pack.code != "ur"
+        ),
+        use_optional_lid=False,
+    )
     prefix = "".join(chr(codepoint) for codepoint in (0xD658, 0xC790)) + " "
     decision = router.route(prefix + _URDU_TEXT)
 

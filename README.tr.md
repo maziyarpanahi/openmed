@@ -275,7 +275,7 @@ Apple Silicon olmayan ana makinelerde MLX model adları otomatik olarak ilgili P
 
 ---
 
-## Çok dilli PII (41 desteklenen yol; 35 model destekli)
+## Çok dilli PII (42 desteklenen yol; 35 model destekli)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme: toplam **kayıtlı PII model kataloğu**.
 

@@ -275,7 +275,7 @@ Auf Nicht-Apple-Silicon-Hosts werden MLX-Modellnamen automatisch durch den passe
 
 ---
 
-## Mehrsprachige PII (41 unterstützte Routen; 35 modellgestützt)
+## Mehrsprachige PII (42 unterstützte Routen; 35 modellgestützt)
 
 Extraktion und De-Identifikation in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` und `tr`, insgesamt **der registrierte PII-Modellkatalog**.
 

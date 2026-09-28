@@ -70,6 +70,7 @@ _INDIA_LOCALES = frozenset(
         "or_IN",
         "pa_IN",
         "ta_IN",
+        "ur_IN",
     }
 )
 
@@ -716,6 +717,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "ml_IN",
         "pa_IN",
         "mr_IN",
+        "ur_IN",
         "en_IN",
         "or_IN",
         "ta_IN",
@@ -808,6 +810,7 @@ _LOCALE_ID_METHODS = {
     "mr_IN": "aadhaar",
     "or_IN": "aadhaar",
     "ta_IN": "aadhaar",
+    "ur_IN": "aadhaar",
     "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
@@ -1080,7 +1083,16 @@ def _gen_id_num(faker, original, *, locale):
             return faker.hong_kong_macau_permit(original)
         if validate_taiwan_compatriot_permit(original):
             return faker.taiwan_compatriot_permit(original)
-    if locale in {"as_IN", "en_IN", "hi_IN", "ml_IN", "mr_IN", "or_IN", "te_IN"}:
+    if locale in {
+        "as_IN",
+        "en_IN",
+        "hi_IN",
+        "ml_IN",
+        "mr_IN",
+        "or_IN",
+        "te_IN",
+        "ur_IN",
+    }:
         india_health_id = _india_health_id_surrogate(faker, original)
         if india_health_id is not None:
             return india_health_id

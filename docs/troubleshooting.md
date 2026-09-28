@@ -397,9 +397,9 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **40 supported PII
+**Cause.** PII extraction and de-identification support **42 supported PII
 language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja,
-kn, ko, ml, mr, nl, no, or, pa, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
+kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, and zu**.
 Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
 The optional Indic NER adapter can serve Assamese, Bengali, Gujarati, Hindi,

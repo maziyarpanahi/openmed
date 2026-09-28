@@ -110,6 +110,7 @@ const (
 	LangXH PIILanguage = "xh"
 	LangZH PIILanguage = "zh"
 	LangUK PIILanguage = "uk"
+	LangUR PIILanguage = "ur"
 	LangCS PIILanguage = "cs"
 	LangEL PIILanguage = "el"
 	LangVI PIILanguage = "vi"

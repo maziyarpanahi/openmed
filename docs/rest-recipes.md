@@ -174,10 +174,10 @@ hardware):
 ## Extract PII — `POST /pii/extract`
 
 Detect personally identifiable information. Unless `model_name` is set, OpenMed
-selects the recommended PII model for `lang`. The 40 supported PII language
+selects the recommended PII model for `lang`. The 42 supported PII language
 codes: `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`,
 `id`, `it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`,
-`ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`. Russian currently uses a
+`ta`, `te`, `th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh`, and `zu`. Russian currently uses a
 documented multilingual default-model placeholder. An optional Indic NER
 adapter can be configured with `OPENMED_INDIC_NER_MODEL` or an explicit model;
 Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia,

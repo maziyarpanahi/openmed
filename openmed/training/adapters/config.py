@@ -437,8 +437,10 @@ DEFAULT_LANGUAGE_FAMILIES: Mapping[str, LanguageFamily] = MappingProxyType(
                 "pa",
                 "ta",
                 "te",
+                "ur",
             ),
             scripts=(
+                "Arabic",
                 "Bengali",
                 "Devanagari",
                 "Gujarati",

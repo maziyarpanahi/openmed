@@ -110,7 +110,7 @@ routing is first requested, and do not download or bundle model weights.
 | `te`   | Telugu     | `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`   | `en_IN`      | No Faker Telugu locale — `en_IN` approximation (warns once). |
 | `th`   | Thai       | `OpenMed/privacy-filter-multilingual`                      | `th_TH`      | Served by the multilingual privacy filter; Thai NID-aware.   |
 | `tr`   | Turkish    | `OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1`   | `tr_TR`      | TCKN surrogates.                                             |
-| `ur`   | Urdu       | `user-supplied`                                             | `ur_PK`      | CNIC validator; `en_PK` Faker backend warns once.            |
+| `ur`   | Urdu       | `OpenMed/privacy-filter-multilingual`                      | `ur_IN`      | Indian ID patterns and Aadhaar surrogates; `en_IN` Faker backend warns once. |
 | `xh`   | isiXhosa   | `OpenMed/privacy-filter-multilingual`                      | `xh_ZA`      | Nguni patterns; `zu_ZA` Faker approximation warns once.      |
 | `zh`   | Chinese    | `OpenMed/OpenMed-PII-Chinese-BigMed-Large-560M-v1`         | `zh_CN`      | Dedicated Chinese PII registry entry.                        |
 | `zu`   | isiZulu    | `OpenMed/privacy-filter-multilingual`                      | `zu_ZA`      | Nguni patterns with checksum-valid South African ID support.  |
@@ -121,7 +121,7 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` ship no bundled weights and require a caller-supplied model.
-Malayalam, Punjabi, Polish, Russian, and Tamil retain explicit public placeholder routes for
+Malayalam, Punjabi, Polish, Russian, Tamil, and Urdu retain explicit public placeholder routes for
 compatibility, but those routes are not claims of dedicated trained weights.
 Codes absent from the table entirely (for
 example `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
@@ -129,8 +129,9 @@ Several of them still have
 validator-backed national-ID coverage
 (`openmed.core.pii_i18n.NATIONAL_ID_ONLY_LANGUAGES`); see
 [PII Anonymization](anonymization.md#clinical-id-checksums) for the ID providers.
-Urdu uses the conceptual `ur_PK` locale for CNIC dispatch and Faker's installed
-`en_PK` backend for general surrogate data, with a one-time approximation warning.
+Urdu defaults to `ur_IN` and Faker's installed `en_IN` backend for general
+surrogate data, with a one-time approximation warning. Callers can still select
+`ur_PK` explicitly for CNIC validation.
 
 The optional Indic NER adapter never downloads a checkpoint automatically.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
@@ -144,17 +145,17 @@ Malayalam route has a different fallback contract:
 
 - `ml` now has a built-in multilingual fallback. The optional Indic NER adapter
   remains available when the caller supplies its weights explicitly.
-- `ne` and `ur` read `user-supplied`. They have no adapter and no env-var path,
+- `ne` reads `user-supplied`. It has no adapter and no env-var path,
   so omitting `model_name` raises `ValueError: Language '<code>' has no bundled
   OpenMed PII model; pass an explicit model_name (user-supplied-model
-  languages: ne, ur)`.
+  languages: ne)`.
 
 The `user-supplied` column value is a registry placeholder rather than a
 loadable repository. Passing it back as `model_name` raises the same error as
 omitting it, so a value copied from `openmed_list_pii_languages` never becomes a
 download attempt.
 `SUPPORTED_LANGUAGES` includes registered fallback packs such as `pa` but excludes
-the two routes that require user-supplied weights.
+the route that requires user-supplied weights.
 
 ## Indian-English and code-mixed clinical notes
 
@@ -428,11 +429,16 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] சென்றார்.
 
 ### Urdu — `ur`
 
-- Model: `user-supplied` · locale `ur_PK`
+This rules-and-surrogates pack uses a named default-model placeholder, not
+verified trained Urdu coverage. Synthetic fixtures test source offsets and
+bidi-safe masking, not clinical accuracy. Horizontal non-breaking spaces in
+honorific names remain part of the original source span.
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ur_IN`
 
 ```text
-Before: فاطمہ خان لاہور میں حیات ہسپتال گئیں۔
-After:  [PERSON] [LOCATION] میں [ORGANIZATION] گئیں۔
+Before: مریض محترمہ فاطمہ خان، آدھار ۲۴۶۷ ۷۸۳۲ ۵۴۸۴۔
+After:  مریض [PERSON]، آدھار [ID_NUM]۔
 ```
 
 ### Hebrew — `he`
