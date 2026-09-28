@@ -353,7 +353,9 @@ def test_advisory_exposed():
     assert isinstance(SCHEMA_EXTRACT_ADVISORY, str) and SCHEMA_EXTRACT_ADVISORY
 
 
-@pytest.mark.parametrize("raw", ["1e3", "10-20", "2 and 3", "1/2"])
+@pytest.mark.parametrize(
+    "raw", ["1e3", "10-20", "2 and 3", "1/2", "3,5 and 8", "1.2.3 and 8"]
+)
 def test_ambiguous_numeric_value_is_not_silently_truncated(raw):
     result = extract_to_schema(
         "Dose: " + raw, {"properties": {"dose": {"type": "number"}}}

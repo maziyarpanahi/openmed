@@ -529,12 +529,20 @@ def _coerce(spec: _FieldSpec, raw: str) -> tuple[Any, str | None]:
     elif field_type == "integer":
         matches = list(_NUMBER_TOKEN_RE.finditer(raw))
         match = matches[0] if len(matches) == 1 else None
+        if match is not None and any(
+            char.isdigit() for char in raw[: match.start()] + raw[match.end() :]
+        ):
+            match = None
         if match is None or "." in match.group():
             return None, "expected an integer value"
         value = int(match.group())
     elif field_type == "number":
         matches = list(_NUMBER_TOKEN_RE.finditer(raw))
         match = matches[0] if len(matches) == 1 else None
+        if match is not None and any(
+            char.isdigit() for char in raw[: match.start()] + raw[match.end() :]
+        ):
+            match = None
         if match is None:
             return None, "expected a numeric value"
         value = float(match.group())
