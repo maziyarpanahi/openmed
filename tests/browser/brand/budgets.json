@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 89922270,
-    "maximum_unique_payload_bytes": 89557757,
+    "maximum_total_bytes": 90144078,
+    "maximum_unique_payload_bytes": 89779565,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4384232
+    "json": 4386634
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4384232
+    "docs/search/search_index.json": 4386634
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The DICOM provenance on current master build measures 90028592 total bytes, 89664079 unique bytes, and 4380842 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The corrected laboratory contracts build measures 89806784 total bytes, 89442271 unique bytes, and 4378440 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed laboratory reference-range build measures 89355028 total bytes, 88990515 unique bytes, and 4369819 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed relation contracts build measures 89120159 total bytes, 88755646 unique bytes, and 4366301 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
