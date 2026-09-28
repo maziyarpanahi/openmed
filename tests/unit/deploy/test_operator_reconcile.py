@@ -730,6 +730,10 @@ def test_manifests_wire_least_privilege_rbac_and_single_operator_replica() -> No
     assert "--all-namespaces" in container["args"]
     assert container["securityContext"]["readOnlyRootFilesystem"] is True
     assert container["securityContext"]["capabilities"]["drop"] == ["ALL"]
+    assert container["livenessProbe"]["httpGet"]["path"] == "/healthz"
+    assert container["readinessProbe"]["httpGet"]["path"] == "/healthz"
+    assert deployment["spec"]["revisionHistoryLimit"] == 3
+    assert deployment["spec"]["progressDeadlineSeconds"] == 120
 
     kustomization = yaml.safe_load(
         (OPERATOR_DIR / "kustomization.yaml").read_text(encoding="utf-8")
@@ -740,7 +744,22 @@ def test_manifests_wire_least_privilege_rbac_and_single_operator_replica() -> No
         "service-account.yaml",
         "role-binding.yaml",
         "deployment.yaml",
+        "network-policy.yaml",
         "rbac.yaml",
+    }
+    network_policy = yaml.safe_load(
+        (OPERATOR_DIR / "network-policy.yaml").read_text(encoding="utf-8")
+    )
+    assert network_policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
+    assert network_policy["spec"]["ingress"] == []
+    assert {
+        port["port"]
+        for rule in network_policy["spec"]["egress"]
+        for port in rule["ports"]
+    } == {
+        53,
+        443,
+        6443,
     }
     dockerfile = (OPERATOR_DIR / "Dockerfile").read_text(encoding="utf-8")
     assert '"kopf==${KOPF_VERSION}"' in dockerfile

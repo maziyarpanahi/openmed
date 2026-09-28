@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.dev/schemas/ingestion_stage_invalidation.schema.json",
+  "schema_version": 1,
+  "title": "OpenMed ingestion pipeline stage invalidation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "compatibility_policy",
+    "invalidation_id",
+    "job_id",
+    "reason_code",
+    "recorded_at",
+    "replacement_job_id",
+    "schema_version",
+    "stage_manifest_id"
+  ],
+  "properties": {
+    "compatibility_policy": {"const": "same_major"},
+    "invalidation_id": {"$ref": "#/$defs/opaque_id"},
+    "job_id": {"$ref": "#/$defs/opaque_id"},
+    "reason_code": {"$ref": "#/$defs/controlled"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "replacement_job_id": {"$ref": "#/$defs/opaque_id"},
+    "schema_version": {"const": "1.0.0"},
+    "stage_manifest_id": {"$ref": "#/$defs/opaque_id"}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    }
+  }
+}

@@ -154,6 +154,7 @@ export interface ExtractPiiOptions {
   loaderOptions?: LoadModelOptions;
   threshold?: number;
   docId?: string;
+  /** Non-empty private key for stable hashes; omitted keys are random per call. */
   hashSecret?: string | Uint8Array;
   detector?: string | null;
   lang?: string;

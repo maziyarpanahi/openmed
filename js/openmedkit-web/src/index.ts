@@ -128,13 +128,19 @@ export type {
 
 export const DEFAULT_MODEL_ID =
   "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android";
-const DEFAULT_HASH_SECRET = "openmedkit-web";
 const ONNX_ANDROID_REPO_PATTERN = /-onnx-android$/i;
 
 export async function extractPii(
   text: string,
   options: ExtractPiiOptions = {},
 ): Promise<OpenMedSpan[]> {
+  const hashSecret =
+    options.hashSecret == null
+      ? await ephemeralHashSecret()
+      : new Uint8Array(toBytes(options.hashSecret));
+  if (hashSecret.byteLength === 0) {
+    throw new Error("hashSecret must not be empty");
+  }
   const model = options.model ?? DEFAULT_MODEL_ID;
   const pipeline =
     options.pipeline ??
@@ -160,10 +166,7 @@ export async function extractPii(
       doc_id: options.docId ?? "document",
       start: entity.start,
       end: entity.end,
-      text_hash: await hmacTextHash(
-        surface,
-        options.hashSecret ?? DEFAULT_HASH_SECRET,
-      ),
+      text_hash: await hmacTextHash(surface, hashSecret),
       entity_type: entity.entity_type,
       canonical_label: entity.canonical_label,
       policy_label: entity.policy_label,
@@ -228,7 +231,10 @@ export async function hmacTextHash(
   secret: string | Uint8Array,
 ): Promise<`hmac-sha256:${string}`> {
   const payload = toBytes(surface);
-  const key = toBytes(secret);
+  const key = new Uint8Array(toBytes(secret));
+  if (key.byteLength === 0) {
+    throw new Error("hashSecret must not be empty");
+  }
   const subtle = globalThis.crypto?.subtle;
   if (subtle) {
     const cryptoKey = await subtle.importKey(
@@ -245,6 +251,14 @@ export async function hmacTextHash(
   const { createHmac } = await import("node:crypto");
   const digest = createHmac("sha256", key).update(payload).digest("hex");
   return `hmac-sha256:${digest}`;
+}
+
+async function ephemeralHashSecret(): Promise<Uint8Array> {
+  if (globalThis.crypto?.getRandomValues) {
+    return globalThis.crypto.getRandomValues(new Uint8Array(32));
+  }
+  const { randomBytes } = await import("node:crypto");
+  return randomBytes(32);
 }
 
 function toBytes(value: string | Uint8Array): Uint8Array {

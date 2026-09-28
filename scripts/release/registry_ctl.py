@@ -17,11 +17,13 @@ from openmed.core.manifest_diff import (
     registry_surface_errors,
 )
 from openmed.core.model_registry import MANIFEST_PATH
-from openmed.core.registry_service import (
+from openmed.core.registry_slots import (
     REGISTRY_STATE_PATH,
     RegistryError,
-    RegistryService,
     migrate_registry_state_file,
+)
+from openmed.core.registry_slots import (
+    SlotRegistryService as RegistryService,
 )
 from openmed.eval.data_license_gate import data_license_gate_errors
 from openmed.eval.release_gates import GateReport

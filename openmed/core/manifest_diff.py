@@ -19,7 +19,7 @@ from .language_pack_catalog import (
 )
 from .model_card import render_model_card
 from .model_registry import MANIFEST_PATH, build_registry, load_manifest_rows
-from .registry_service import (
+from .registry_slots import (
     REGISTRY_STATE_PATH,
     RegistryError,
     load_registry_state,

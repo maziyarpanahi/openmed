@@ -14,6 +14,7 @@ __all__ = [
 
 
 SYSTEM_URIS: Mapping[str, str] = {
+    "cvx": "http://hl7.org/fhir/sid/cvx",
     "rxnorm": "http://www.nlm.nih.gov/research/umls/rxnorm",
     "icd10cm": "http://hl7.org/fhir/sid/icd-10-cm",
     "loinc": "http://loinc.org",
@@ -25,6 +26,7 @@ SYSTEM_URIS: Mapping[str, str] = {
 }
 
 SYSTEM_ALIASES: Mapping[str, str] = {
+    "cvx": "cvx",
     "rxnorm": "rxnorm",
     "rx-norm": "rxnorm",
     "rx_norm": "rxnorm",

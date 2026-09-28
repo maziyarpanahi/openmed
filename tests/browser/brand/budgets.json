@@ -1,9 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_files": 531,
-    "maximum_total_bytes": 50038623,
-    "maximum_unique_payload_bytes": 49701044,
+    "maximum_total_bytes": 86228108,
+    "maximum_unique_payload_bytes": 85863595,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -13,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 3473408
+    "json": 4304082
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 3473408
+    "docs/search/search_index.json": 4304082
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 4849664,
-    "/docs/model-tokenizer-script-coverage/": 6946816
+    "/docs/": 5681985,
+    "/docs/model-tokenizer-script-coverage/": 7774063
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -32,16 +31,49 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "Artifact limits are based on the exact staged v2.3 schema candidate plus the audited documentation, federated metrics, and manifest-backed catalog surfaces, including MkDocs search and multilingual tokenizer payloads, with bounded release headroom.",
-    "The audited current-master candidate plus the clinical privacy, clinical context analysis, and streamed OCR guides contains 531 files, 49927873 total bytes, 49590294 unique payload bytes, and 337579 duplicate payload bytes.",
-    "The 49701044-byte unique-payload ceiling and 50038623-byte total-payload ceiling retain 110750 bytes of bounded documentation headroom.",
-    "The clinical guides remain searchable. The measured search index is 3435851 bytes; its JSON ceiling is 3473408 bytes. Other per-file caps, route transfer caps, duplicate-byte allowance, source-map exclusion, and page metric budgets are unchanged.",
+    "The reviewed summary-contracts build measures 86112622 total bytes, 85748109 unique bytes, and 4298290 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed summary planner guide build measures 85197346 total bytes, 84832833 unique bytes, and 4280258 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed synthetic SHIELD and temporal guide build measures 84967554 total bytes, 84603041 unique bytes, and 4275598 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The combined temporal review guide build measures 84691444 total bytes, 84353865 unique bytes, and 4271760 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed temporal normalization on provenance master build measures 83809074 total bytes, 83471495 unique bytes, and 4257393 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The combined provenance review guide build measures 83593126 total bytes, 83255547 unique bytes, and 4253608 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed provenance and assurance guide build measures 83162940 total bytes, 82825361 unique bytes, and 4247574 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The reviewed assurance guide build measures 82933941 total bytes, 82596362 unique bytes, and 4242757 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
+    "The repaired uncertainty guide on master e05eadb5c stages 81307371 total bytes and 80969792 unique bytes. Aggregate ceilings retain the existing 115486-byte allowance; search measures 4214744 bytes within its unchanged ceiling. Route and other limits are unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and typed uncertainty guides with bounded documentation headroom.",
+    "The combined guard-contract Chromium build measures 5562683 bytes on /docs/; its ceiling retains the prior 119302-byte transfer allowance.",
+    "The combined guard-contract rehearsal on master 02f6b5cb2 stages 81088485 total bytes, 80750906 unique bytes, and 4211426 search bytes. Aggregate and search ceilings retain their previous 115486-byte and 5792-byte allowances. All other limits are unchanged.",
+    "With reviewed evidence-packet and state guides, the staged artifact measures 80875529 total bytes, 80537950 unique bytes, and 4208283 search bytes. Aggregate ceilings preserve 115486 bytes of platform/headroom allowance; search preserves 5792 bytes. Other limits are unchanged.",
+    "The review-state guide increases tokenizer-route transfer to 7667259 bytes in the staged Chromium check; its ceiling retains the existing 106804-byte allowance. Other route limits remain unchanged.",
+    "The review-state guide on current master stages 80663128 total bytes and 80325549 unique payload bytes. Aggregate ceilings retain the existing 4736-byte platform allowance plus 110750 bytes of bounded headroom; search and all other limits are unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and clinical review-state guides with bounded documentation headroom.",
+    "The refusal-taxonomy guide measures 7666661 tokenizer-route transfer bytes; the ceiling retains the previous 106804-byte allowance.",
+    "The refusal-taxonomy guide on current master stages 80658783 total bytes and 80321204 unique bytes. Aggregate ceilings retain the existing 115486-byte platform/headroom allowance; other limits are unchanged.",
+    "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and refusal taxonomy guides with bounded documentation headroom.",
+    "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
+    "The combined schema fingerprint and processing summary diff guides stage 79540641 total bytes, 79203062 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the multimodal batch-memory guide, the staged artifact measures 79767347 total bytes, 79429768 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the agent run commitment guide, the staged artifact measures 79975507 total bytes, 79637928 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the agent action-phase guide, the staged artifact measures 80186914 total bytes, 79849335 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the clinical review-state guide on current master, the staged artifact measures 80403272 total bytes, 80065693 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the guarded evidence-packet guide and review-state guide, the staged artifact measures 80615366 total bytes, 80277787 unique payload bytes, 337579 duplicate payload bytes, and a 4193748-byte search index on macOS.",
+    "Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged. The review-state guide remains searchable.",
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom; the search index measures 4193748 bytes below its 4201866-byte JSON ceiling, preserving 8118 bytes of measured headroom.",
+    "With the clinical refusal-taxonomy guide on current master, the staged artifact measures 80398973 total bytes, 80061394 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "The combined current-master ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The refusal-taxonomy guide remains searchable; the combined search index measures 4188930 bytes below its unchanged 4197641-byte JSON ceiling.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined search index measures 4185784 bytes against its 4197641-byte JSON ceiling; the 5752-byte increase preserves its previous measured headroom.",
+    "With the synthetic SDOH counterfactual guide on current master, the staged artifact measures 80315687 total bytes, 79978108 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "With the synthetic SDOH counterfactual and false-positive stress guides, the staged artifact measures 80430853 total bytes, 80093274 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
+    "After integrating the clinical domain catalogs with both synthetic SDOH guides, the staged artifact measures 80446445 total bytes, 80108866 unique payload bytes, and 337579 duplicate payload bytes on macOS; the aggregate ceilings remain unchanged.",
+    "The aggregate ceilings retain the largest observed 4736-byte platform delta plus 110750 bytes of bounded headroom over the combined synthetic SDOH guide staging build. Per-file non-JSON caps, duplicate-byte allowance, source-map exclusion, and page metric budgets remain unchanged.",
+    "The published clinical, agent, multimodal, language-pack, interoperability, governance, social-needs, outbound-privacy, evidence-recency, NLI, and guardrail guides remain searchable. The combined catalog and SDOH search index measures 4200319 bytes against its 4206111-byte JSON ceiling, retaining 5792 bytes of headroom.",
     "The generated 2266-row model registry remains directly accessible but is excluded from global search indexing so unrelated documentation routes do not absorb its search payload.",
     "Unique and duplicate byte limits hash file content so MkDocs duplication remains visible.",
     "No source maps ship; runtime JavaScript remains intact.",
     "Route transfer budgets use fresh browser contexts and first-party Content-Length values.",
-    "The /docs/ route measured 4730362 bytes on the audited master build; its 4849664-byte ceiling retains 119302 bytes of bounded transfer headroom.",
-    "The tokenizer coverage route measured 6842165 bytes locally on the staged master build; its 6946816-byte ceiling retains 104651 bytes of bounded transfer headroom.",
+    "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
+    "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
   ]

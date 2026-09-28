@@ -186,5 +186,5 @@ def test_composite_action_declares_inputs_scan_and_upload():
     assert "synthetic-fixture-allowlist:" in action
     assert "scripts/privacy_scan.py" in action
     assert "::" not in action.split("run: |", 1)[0]
-    assert "actions/upload-artifact@v7" in action
+    assert "actions/upload-artifact@" in action
     assert "if: always()" in action

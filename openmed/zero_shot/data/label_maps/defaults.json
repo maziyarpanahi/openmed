@@ -116,6 +116,17 @@
     "Tissue",
     "PathologicalFormation"
   ],
+  "oncology_staging": [
+    "TumorCategory",
+    "NodeCategory",
+    "MetastasisCategory",
+    "StageGroup",
+    "TumorGrade",
+    "TumorSize",
+    "ReceptorStatus",
+    "ResponseAssessment",
+    "PrimarySite"
+  ],
   "anatomy": [
     "Organ",
     "Tissue",
@@ -153,10 +164,28 @@
     "Condition",
     "Pathology"
   ],
+  "pathology_histology": [
+    "SpecimenType",
+    "GrossDescription",
+    "HistologicFinding",
+    "HistologicGrade",
+    "MarginStatus",
+    "ImmunohistochemistryStain",
+    "MitoticCount",
+    "TissueSite"
+  ],
   "hematology": [
     "Cancer",
     "Disease",
     "CellLine"
+  ],
+  "lab": [
+    "LabTest",
+    "LabValue",
+    "Unit",
+    "ReferenceRange",
+    "AbnormalFlag",
+    "Specimen"
   ],
   "cardiology": [
     "CardiacFinding",
@@ -178,6 +207,15 @@
     "Morphology",
     "Distribution",
     "Anatomy"
+  ],
+  "wound_assessment": [
+    "WoundType",
+    "WoundLocation",
+    "WoundStage",
+    "WoundDimension",
+    "ExudateDescriptor",
+    "TissueType",
+    "DressingType"
   ],
   "ophthalmology": [
     "EyeFinding",
@@ -291,5 +329,57 @@
     "CareIntervention",
     "PainScore",
     "SkinAssessment"
+  ],
+  "medical_device": [
+    "DeviceType",
+    "DeviceIdentifier",
+    "Manufacturer",
+    "ModelNumber",
+    "ImplantSite",
+    "DeviceStatus"
+  ],
+  "functional_status": [
+    "ADLActivity",
+    "AssistanceLevel",
+    "MobilityAbility",
+    "AssistiveDevice",
+    "FunctionalScale",
+    "CognitiveStatus"
+  ],
+  "obstetrics_gynecology": [
+    "GravidityParity",
+    "GestationalAge",
+    "FetalFinding",
+    "MenstrualHistory",
+    "ObstetricEvent",
+    "GynecologicFinding",
+    "DeliveryMode"
+  ],
+  "substance_use_history": [
+    "Substance",
+    "UseStatus",
+    "UseQuantity",
+    "UseFrequency",
+    "UseDuration",
+    "QuitDate",
+    "PackYears"
+  ],
+  "immunology": [
+    "Allergen",
+    "AllergicReaction",
+    "Immunization",
+    "Antibody"
+  ],
+  "mental_health": [
+    "PsychiatricSymptom",
+    "Diagnosis",
+    "Medication",
+    "Therapy"
+  ],
+  "dentistry": [
+    "Tooth",
+    "DentalCondition",
+    "DentalProcedure",
+    "Restoration"
   ]
 }

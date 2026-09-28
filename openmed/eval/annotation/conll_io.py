@@ -50,7 +50,9 @@ def parse_conll(
     Two-column ``TOKEN TAG`` and traditional multi-column rows are accepted;
     the first column is the token and the last is the NER tag. BIO is the
     canonical output, while BIOES/BILOU tags are accepted on import. Blank
-    lines mark sentence boundaries.
+    lines mark sentence boundaries. A row beginning with a literal ``#`` and
+    ending in a valid tag is token data when it aligns with the next source
+    token; otherwise space-prefixed hash comments retain their usual meaning.
 
     Args:
         text: Exact source text used to recover character offsets.
@@ -308,9 +310,19 @@ def _align_rows(
         if not stripped:
             sentence_break = True
             continue
-        if stripped == "#" or stripped.startswith("# "):
-            continue
         fields = stripped.split()
+        # A literal hash token is valid with spaces as well as tabs. Use the
+        # next source token to avoid misclassifying comments ending in a tag.
+        hash_token_row = (
+            len(fields) >= 2
+            and fields[0] == "#"
+            and (fields[-1] == "O" or _TAG_RE.fullmatch(fields[-1]) is not None)
+        )
+        if hash_token_row:
+            hash_start = text.find("#", cursor)
+            hash_token_row = hash_start >= 0 and not text[cursor:hash_start].strip()
+        if (stripped == "#" or stripped.startswith("# ")) and not hash_token_row:
+            continue
         if fields[0] == "-DOCSTART-":
             sentence_break = True
             continue

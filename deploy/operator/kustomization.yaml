@@ -7,3 +7,4 @@ resources:
   - rbac.yaml
   - role-binding.yaml
   - deployment.yaml
+  - network-policy.yaml

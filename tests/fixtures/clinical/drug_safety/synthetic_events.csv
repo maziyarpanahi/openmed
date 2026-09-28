@@ -1,0 +1,22 @@
+report_id,drug,event,seriousness,exposure_start_day,exposure_end_day
+R01,Drug A,Event X,serious,0,30
+R02,Drug A,Event X,serious,0,30
+R03,Drug A,Event X,serious,0,30
+R04,Drug A,Event X,serious,0,30
+R05,Drug A,Event Y,serious,0,30
+R06,Drug A,Event Y,serious,0,30
+R07,Drug A,Event Y,serious,0,30
+R08,Drug A,Event Y,serious,0,30
+R09,Drug A,Event Y,serious,0,30
+R10,Drug A,Event Y,serious,0,30
+R11,Drug B,Event X,serious,0,30
+R12,Drug B,Event X,serious,0,30
+R13,Drug B,Event Y,serious,0,30
+R14,Drug B,Event Y,serious,0,30
+R15,Drug B,Event Y,serious,0,30
+R16,Drug B,Event Y,serious,0,30
+R17,Drug B,Event Y,serious,0,30
+R18,Drug B,Event Y,serious,0,30
+R19,Drug B,Event Y,serious,0,30
+R20,Drug B,Event Y,serious,0,30
+R01,Drug A,Event X,serious,0,30
