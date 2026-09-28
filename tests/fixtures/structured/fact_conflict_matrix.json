@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "cases": [
+    {
+      "name": "value",
+      "changes": {"value": {"code": "synthetic-b"}},
+      "expected": ["source", "value"]
+    },
+    {
+      "name": "unit",
+      "changes": {"unit": "mmol/L"},
+      "expected": ["source", "unit"]
+    },
+    {
+      "name": "time",
+      "changes": {"effective_time": {"instant": "2026-01-02T00:00:00Z"}},
+      "expected": ["source", "time"]
+    },
+    {
+      "name": "status",
+      "changes": {"status": "corrected"},
+      "expected": ["source", "status"]
+    },
+    {
+      "name": "identity",
+      "changes": {"encounter_id": "encounter_bbbbbbbbbbbbbbbb"},
+      "expected": ["identity", "source"]
+    }
+  ]
+}

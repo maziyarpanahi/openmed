@@ -190,7 +190,12 @@ test("extension matches local model spans, masks without network, and honors sit
     await expect(note).not.toHaveAttribute("data-openmed-phi-count");
 
     await toggle.click();
-    await expect(status).toContainText("ready");
+    await expect(toggle).toHaveAttribute("data-enabled", "true");
+    await expect(note).toHaveAttribute(
+      "data-openmed-phi-count",
+      String(modelOutput.length),
+    );
+    await expect(mask).toBeEnabled();
     await policy.evaluate((element) => {
       if (!(element instanceof HTMLSelectElement)) {
         throw new Error("Synthetic fixture is missing the policy selector");

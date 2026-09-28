@@ -11,6 +11,25 @@ from openmed.core.labels import ID_NUM
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash, load_schema
 
 
+@pytest.mark.parametrize("key", ["", b""])
+def test_hmac_rejects_empty_explicit_keys(key):
+    with pytest.raises(ValueError, match="non-empty"):
+        hmac_text_hash("synthetic", key)
+
+
+def test_hmac_preserves_explicit_utf8_and_byte_keys():
+    import hashlib
+    import hmac
+
+    key = "synthetic-key-é"
+    expected = (
+        "hmac-sha256:"
+        + hmac.new(key.encode(), b"synthetic", hashlib.sha256).hexdigest()
+    )
+    assert hmac_text_hash("synthetic", key) == expected
+    assert hmac_text_hash(b"synthetic", key.encode()) == expected
+
+
 def _span() -> OpenMedSpan:
     return OpenMedSpan(
         doc_id="doc-1",

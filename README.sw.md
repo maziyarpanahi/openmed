@@ -24,7 +24,7 @@ Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada 
 </p>
 
 <p>
-  <b>Maingizo 2,266 ya manifesti</b> &nbsp;·&nbsp; <b>Lugha 33 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>Maingizo 2,266 ya manifesti</b> &nbsp;·&nbsp; <b>Lugha 35 za PII zinazotumia modeli</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -432,17 +432,17 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 36 zinazotumika; 33 zikitumia modeli)
+## PII ya lugha nyingi (njia 39 zinazotumika; 35 zikitumia modeli)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 35 ya lugha za PII**:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 39 ya lugha za PII**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`,
+`ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
 `th`, `tr`, `uk`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
 katalogi iliyosajiliwa ya modeli za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
 chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
 na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia nne za ziada (`gu`, `kn`, `ml`
-na `pa`) na inaweza pia kuhudumia Kiassam, Kibengali, Kihindi, Kimarathi, Kiodia, Kitamil na Kitelugu.
+iliyosanidiwa na mtumiaji hukubali njia moja ya ziada (`pa`)
+na inaweza pia kuhudumia Kiassam, Kibengali, Kigujarati, Kihindi, Kikannada, Kimalayalam, Kimarathi, Kiodia, Kitamil na Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,

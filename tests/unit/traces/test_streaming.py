@@ -23,6 +23,22 @@ def _fake_redactor(text: str) -> str:
     return text.replace(SYNTHETIC_NAME, "[NAME]").replace(SYNTHETIC_EMAIL, "[EMAIL]")
 
 
+def test_default_trace_keys_are_private_per_redactor():
+    from openmed.traces.streaming import TraceRedactionConfig
+
+    records = [{"message": f"Contact {SYNTHETIC_EMAIL}"}]
+    first = TraceRedactor(method="hash")
+    output = list(first.iter_records(records))
+    assert output == list(first.iter_records(records))
+    assert output != list(TraceRedactor(method="hash").iter_records(records))
+    assert TraceRedactionConfig().hmac_secret != TraceRedactionConfig().hmac_secret
+    assert SYNTHETIC_EMAIL not in json.dumps(output)
+    explicit = {"method": "hash", "hmac_secret": "synthetic-linkage-key"}
+    assert list(TraceRedactor(**explicit).iter_records(records)) == list(
+        TraceRedactor(**explicit).iter_records(records)
+    )
+
+
 def _records(count: int = 5) -> list[dict[str, Any]]:
     return [
         {

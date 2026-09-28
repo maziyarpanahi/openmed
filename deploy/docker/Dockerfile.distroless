@@ -22,7 +22,7 @@ RUN python -m pip install --upgrade pip \
         torch \
     && python -m pip install \
         --target /opt/openmed/python \
-        ".[hf,service]" \
+        ".[hf,journey,mcp,service]" \
     && python -m compileall -q /opt/openmed/python \
     && mkdir -p \
         /runtime/cache/huggingface \

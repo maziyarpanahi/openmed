@@ -1,0 +1,566 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/omop_fact_projection.schema.json",
+  "title": "OpenMed OMOP 5.4 clinical fact projection",
+  "schema_version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cdm_version",
+    "compatibility_policy",
+    "etl_runs",
+    "losses",
+    "mapping_outcomes",
+    "projection_id",
+    "provenance",
+    "schema_version",
+    "summary",
+    "tables",
+    "vocabulary_snapshot"
+  ],
+  "properties": {
+    "cdm_version": {"const": "5.4"},
+    "compatibility_policy": {"const": "same_major"},
+    "etl_runs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/etl_run"}
+    },
+    "losses": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/loss"}
+    },
+    "mapping_outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/mapping_outcome"}
+    },
+    "projection_id": {"$ref": "#/$defs/opaque_id"},
+    "provenance": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/provenance"}
+    },
+    "schema_version": {"const": "1.0.0"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "tables": {"$ref": "#/$defs/tables"},
+    "vocabulary_snapshot": {"$ref": "#/$defs/vocabulary_snapshot"}
+  },
+  "$defs": {
+    "controlled": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+    },
+    "vocabulary_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:/-]{0,19}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaque_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[A-Za-z0-9_-]{16,128}$"
+    },
+    "positive_id": {"type": "integer", "minimum": 1},
+    "concept_id": {"type": "integer", "minimum": 0},
+    "nullable_id": {
+      "oneOf": [{"$ref": "#/$defs/positive_id"}, {"type": "null"}]
+    },
+    "nullable_concept_id": {
+      "oneOf": [{"$ref": "#/$defs/concept_id"}, {"type": "null"}]
+    },
+    "nullable_text": {"type": ["string", "null"]},
+    "nullable_number": {"type": ["number", "null"]},
+    "nullable_date": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "vocabulary_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundled", "digest", "license", "snapshot_id", "usage_lane", "version"],
+      "properties": {
+        "bundled": {"type": "boolean"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "license": {"$ref": "#/$defs/controlled"},
+        "snapshot_id": {"$ref": "#/$defs/controlled"},
+        "usage_lane": {"enum": ["redistributable", "user_supplied"]},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "concept_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome_id",
+        "reason_code",
+        "requires_review",
+        "snapshot_digest",
+        "source_code",
+        "source_concept_id",
+        "source_system",
+        "standard_code",
+        "standard_concept_id",
+        "standard_vocabulary",
+        "state",
+        "valid_end_date",
+        "valid_start_date"
+      ],
+      "properties": {
+        "outcome_id": {"$ref": "#/$defs/digest"},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "requires_review": {"type": "boolean"},
+        "snapshot_digest": {"$ref": "#/$defs/digest"},
+        "source_code": {"type": "string", "minLength": 1, "maxLength": 50},
+        "source_concept_id": {"$ref": "#/$defs/concept_id"},
+        "source_system": {"$ref": "#/$defs/vocabulary_id"},
+        "standard_code": {"type": ["string", "null"], "maxLength": 256},
+        "standard_concept_id": {"$ref": "#/$defs/concept_id"},
+        "standard_vocabulary": {"$ref": "#/$defs/vocabulary_id"},
+        "state": {"enum": ["mapped", "unmapped", "ambiguous", "rejected"]},
+        "valid_end_date": {"$ref": "#/$defs/date"},
+        "valid_start_date": {"$ref": "#/$defs/date"}
+      }
+    },
+    "mapping_outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_id", "mapping", "row_id", "source_key", "table"],
+      "properties": {
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "mapping": {"$ref": "#/$defs/concept_mapping"},
+        "row_id": {"$ref": "#/$defs/positive_id"},
+        "source_key": {"$ref": "#/$defs/opaque_id"},
+        "table": {
+          "enum": [
+            "condition_occurrence",
+            "drug_exposure",
+            "procedure_occurrence",
+            "measurement",
+            "observation"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correction_of",
+        "dataset_split",
+        "encounter_id",
+        "etl_run_id",
+        "evidence_ids",
+        "fact_id",
+        "mapping_outcome_id",
+        "provenance_id",
+        "row_id",
+        "source_evidence_key",
+        "source_key",
+        "source_revision",
+        "subject_id",
+        "table"
+      ],
+      "properties": {
+        "correction_of": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "dataset_split": {"enum": ["train", "validation", "holdout", null]},
+        "encounter_id": {"oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]},
+        "etl_run_id": {"$ref": "#/$defs/opaque_id"},
+        "evidence_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "mapping_outcome_id": {"$ref": "#/$defs/digest"},
+        "provenance_id": {"$ref": "#/$defs/opaque_id"},
+        "row_id": {"$ref": "#/$defs/positive_id"},
+        "source_evidence_key": {"$ref": "#/$defs/digest"},
+        "source_key": {"$ref": "#/$defs/opaque_id"},
+        "source_revision": {"$ref": "#/$defs/digest"},
+        "subject_id": {"$ref": "#/$defs/opaque_id"},
+        "table": {
+          "enum": [
+            "condition_occurrence",
+            "drug_exposure",
+            "procedure_occurrence",
+            "measurement",
+            "observation"
+          ]
+        }
+      }
+    },
+    "loss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_id", "fields", "reason_code", "source_key"],
+      "properties": {
+        "fact_id": {"$ref": "#/$defs/opaque_id"},
+        "fields": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/controlled"}},
+        "reason_code": {"$ref": "#/$defs/controlled"},
+        "source_key": {"$ref": "#/$defs/opaque_id"}
+      }
+    },
+    "etl_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cdm_version",
+        "compatibility_policy",
+        "etl_version",
+        "input_digest",
+        "input_fact_ids",
+        "mode",
+        "occurred_at",
+        "output_digest",
+        "row_counts",
+        "run_id",
+        "schema_version",
+        "source_keys",
+        "superseded_fact_ids",
+        "vocabulary_snapshot_digest"
+      ],
+      "properties": {
+        "cdm_version": {"const": "5.4"},
+        "compatibility_policy": {"const": "same_major"},
+        "etl_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "input_digest": {"$ref": "#/$defs/digest"},
+        "input_fact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "mode": {"enum": ["append", "replace_by_source"]},
+        "occurred_at": {"type": "string", "format": "date-time"},
+        "output_digest": {"$ref": "#/$defs/digest"},
+        "row_counts": {"$ref": "#/$defs/row_counts"},
+        "run_id": {"$ref": "#/$defs/opaque_id"},
+        "schema_version": {"const": "1.0.0"},
+        "source_keys": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "superseded_fact_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaque_id"}},
+        "vocabulary_snapshot_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "row_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition_occurrence",
+        "drug_exposure",
+        "measurement",
+        "note",
+        "observation",
+        "person",
+        "procedure_occurrence",
+        "source_to_concept_map",
+        "visit_occurrence"
+      ],
+      "properties": {
+        "condition_occurrence": {"type": "integer", "minimum": 0},
+        "drug_exposure": {"type": "integer", "minimum": 0},
+        "measurement": {"type": "integer", "minimum": 0},
+        "note": {"type": "integer", "minimum": 0},
+        "observation": {"type": "integer", "minimum": 0},
+        "person": {"type": "integer", "minimum": 0},
+        "procedure_occurrence": {"type": "integer", "minimum": 0},
+        "source_to_concept_map": {"type": "integer", "minimum": 0},
+        "visit_occurrence": {"type": "integer", "minimum": 0}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_fact_count", "etl_run_count", "loss_counts", "mapping_counts", "row_counts"],
+      "properties": {
+        "current_fact_count": {"type": "integer", "minimum": 0},
+        "etl_run_count": {"type": "integer", "minimum": 1},
+        "loss_counts": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/controlled"},
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "mapping_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ambiguous", "mapped", "rejected", "unmapped"],
+          "properties": {
+            "ambiguous": {"type": "integer", "minimum": 0},
+            "mapped": {"type": "integer", "minimum": 0},
+            "rejected": {"type": "integer", "minimum": 0},
+            "unmapped": {"type": "integer", "minimum": 0}
+          }
+        },
+        "row_counts": {"$ref": "#/$defs/row_counts"}
+      }
+    },
+    "tables": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "condition_occurrence",
+        "drug_exposure",
+        "measurement",
+        "note",
+        "observation",
+        "person",
+        "procedure_occurrence",
+        "source_to_concept_map",
+        "visit_occurrence"
+      ],
+      "properties": {
+        "person": {"type": "array", "items": {"$ref": "#/$defs/person"}},
+        "visit_occurrence": {"type": "array", "items": {"$ref": "#/$defs/visit"}},
+        "note": {"type": "array", "items": {"$ref": "#/$defs/note"}},
+        "condition_occurrence": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+        "drug_exposure": {"type": "array", "items": {"$ref": "#/$defs/drug"}},
+        "procedure_occurrence": {"type": "array", "items": {"$ref": "#/$defs/procedure"}},
+        "measurement": {"type": "array", "items": {"$ref": "#/$defs/measurement"}},
+        "observation": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+        "source_to_concept_map": {"type": "array", "items": {"$ref": "#/$defs/source_map"}}
+      }
+    },
+    "person": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["person_id", "gender_concept_id", "year_of_birth", "month_of_birth", "day_of_birth", "birth_datetime", "race_concept_id", "ethnicity_concept_id", "location_id", "provider_id", "care_site_id", "person_source_value", "gender_source_value", "gender_source_concept_id", "race_source_value", "race_source_concept_id", "ethnicity_source_value", "ethnicity_source_concept_id"],
+      "properties": {
+        "person_id": {"$ref": "#/$defs/positive_id"},
+        "gender_concept_id": {"$ref": "#/$defs/concept_id"},
+        "year_of_birth": {"type": ["integer", "null"]},
+        "month_of_birth": {"type": ["integer", "null"]},
+        "day_of_birth": {"type": ["integer", "null"]},
+        "birth_datetime": {"$ref": "#/$defs/nullable_text"},
+        "race_concept_id": {"$ref": "#/$defs/concept_id"},
+        "ethnicity_concept_id": {"$ref": "#/$defs/concept_id"},
+        "location_id": {"$ref": "#/$defs/nullable_id"},
+        "provider_id": {"$ref": "#/$defs/nullable_id"},
+        "care_site_id": {"$ref": "#/$defs/nullable_id"},
+        "person_source_value": {"$ref": "#/$defs/opaque_id"},
+        "gender_source_value": {"$ref": "#/$defs/nullable_text"},
+        "gender_source_concept_id": {"$ref": "#/$defs/concept_id"},
+        "race_source_value": {"$ref": "#/$defs/nullable_text"},
+        "race_source_concept_id": {"$ref": "#/$defs/concept_id"},
+        "ethnicity_source_value": {"$ref": "#/$defs/nullable_text"},
+        "ethnicity_source_concept_id": {"$ref": "#/$defs/concept_id"}
+      }
+    },
+    "visit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visit_occurrence_id", "person_id", "visit_concept_id", "visit_start_date", "visit_start_datetime", "visit_end_date", "visit_end_datetime", "visit_type_concept_id", "provider_id", "care_site_id", "visit_source_value", "visit_source_concept_id", "admitted_from_concept_id", "admitted_from_source_value", "discharged_to_concept_id", "discharged_to_source_value", "preceding_visit_occurrence_id"],
+      "properties": {
+        "visit_occurrence_id": {"$ref": "#/$defs/positive_id"},
+        "person_id": {"$ref": "#/$defs/positive_id"},
+        "visit_concept_id": {"$ref": "#/$defs/concept_id"},
+        "visit_start_date": {"$ref": "#/$defs/date"},
+        "visit_start_datetime": {"$ref": "#/$defs/nullable_text"},
+        "visit_end_date": {"$ref": "#/$defs/date"},
+        "visit_end_datetime": {"$ref": "#/$defs/nullable_text"},
+        "visit_type_concept_id": {"$ref": "#/$defs/concept_id"},
+        "provider_id": {"$ref": "#/$defs/nullable_id"},
+        "care_site_id": {"$ref": "#/$defs/nullable_id"},
+        "visit_source_value": {"oneOf": [{"$ref": "#/$defs/opaque_id"}, {"type": "null"}]},
+        "visit_source_concept_id": {"$ref": "#/$defs/concept_id"},
+        "admitted_from_concept_id": {"$ref": "#/$defs/concept_id"},
+        "admitted_from_source_value": {"$ref": "#/$defs/nullable_text"},
+        "discharged_to_concept_id": {"$ref": "#/$defs/concept_id"},
+        "discharged_to_source_value": {"$ref": "#/$defs/nullable_text"},
+        "preceding_visit_occurrence_id": {"$ref": "#/$defs/nullable_id"}
+      }
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["note_id", "person_id", "note_date", "note_datetime", "note_type_concept_id", "note_class_concept_id", "note_title", "note_text", "encoding_concept_id", "language_concept_id", "provider_id", "visit_occurrence_id", "visit_detail_id", "note_source_value", "note_event_id", "note_event_field_concept_id"],
+      "properties": {
+        "note_id": {"$ref": "#/$defs/positive_id"},
+        "person_id": {"$ref": "#/$defs/positive_id"},
+        "note_date": {"$ref": "#/$defs/date"},
+        "note_datetime": {"$ref": "#/$defs/nullable_text"},
+        "note_type_concept_id": {"$ref": "#/$defs/concept_id"},
+        "note_class_concept_id": {"$ref": "#/$defs/concept_id"},
+        "note_title": {"$ref": "#/$defs/nullable_text"},
+        "note_text": {"const": ""},
+        "encoding_concept_id": {"$ref": "#/$defs/concept_id"},
+        "language_concept_id": {"$ref": "#/$defs/concept_id"},
+        "provider_id": {"$ref": "#/$defs/nullable_id"},
+        "visit_occurrence_id": {"$ref": "#/$defs/positive_id"},
+        "visit_detail_id": {"$ref": "#/$defs/nullable_id"},
+        "note_source_value": {"$ref": "#/$defs/opaque_id"},
+        "note_event_id": {"$ref": "#/$defs/nullable_id"},
+        "note_event_field_concept_id": {"$ref": "#/$defs/concept_id"}
+      }
+    },
+    "domain_common": {
+      "type": "object",
+      "required": ["person_id", "visit_occurrence_id", "visit_detail_id"],
+      "properties": {
+        "person_id": {"$ref": "#/$defs/positive_id"},
+        "visit_occurrence_id": {"$ref": "#/$defs/positive_id"},
+        "visit_detail_id": {"$ref": "#/$defs/nullable_id"}
+      }
+    },
+    "condition": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/domain_common"},
+        {
+          "type": "object",
+          "required": ["condition_occurrence_id", "condition_concept_id", "condition_start_date", "condition_start_datetime", "condition_end_date", "condition_end_datetime", "condition_type_concept_id", "condition_status_concept_id", "stop_reason", "provider_id", "condition_source_value", "condition_source_concept_id", "condition_status_source_value"],
+          "properties": {
+            "condition_occurrence_id": {"$ref": "#/$defs/positive_id"},
+            "condition_concept_id": {"$ref": "#/$defs/concept_id"},
+            "condition_start_date": {"$ref": "#/$defs/date"},
+            "condition_start_datetime": {"$ref": "#/$defs/nullable_text"},
+            "condition_end_date": {"$ref": "#/$defs/nullable_date"},
+            "condition_end_datetime": {"$ref": "#/$defs/nullable_text"},
+            "condition_type_concept_id": {"$ref": "#/$defs/concept_id"},
+            "condition_status_concept_id": {"$ref": "#/$defs/concept_id"},
+            "stop_reason": {"$ref": "#/$defs/nullable_text"},
+            "provider_id": {"$ref": "#/$defs/nullable_id"},
+            "condition_source_value": {"type": "string", "minLength": 1},
+            "condition_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "condition_status_source_value": {"$ref": "#/$defs/nullable_text"}
+          }
+        }
+      ]
+    },
+    "drug": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/domain_common"},
+        {
+          "type": "object",
+          "required": ["drug_exposure_id", "drug_concept_id", "drug_exposure_start_date", "drug_exposure_start_datetime", "drug_exposure_end_date", "drug_exposure_end_datetime", "verbatim_end_date", "drug_type_concept_id", "stop_reason", "refills", "quantity", "days_supply", "sig", "route_concept_id", "lot_number", "provider_id", "drug_source_value", "drug_source_concept_id", "route_source_value", "dose_unit_source_value"],
+          "properties": {
+            "drug_exposure_id": {"$ref": "#/$defs/positive_id"},
+            "drug_concept_id": {"$ref": "#/$defs/concept_id"},
+            "drug_exposure_start_date": {"$ref": "#/$defs/date"},
+            "drug_exposure_start_datetime": {"$ref": "#/$defs/nullable_text"},
+            "drug_exposure_end_date": {"$ref": "#/$defs/date"},
+            "drug_exposure_end_datetime": {"$ref": "#/$defs/nullable_text"},
+            "verbatim_end_date": {"$ref": "#/$defs/nullable_date"},
+            "drug_type_concept_id": {"$ref": "#/$defs/concept_id"},
+            "stop_reason": {"$ref": "#/$defs/nullable_text"},
+            "refills": {"type": ["integer", "null"]},
+            "quantity": {"$ref": "#/$defs/nullable_number"},
+            "days_supply": {"$ref": "#/$defs/nullable_number"},
+            "sig": {"$ref": "#/$defs/nullable_text"},
+            "route_concept_id": {"$ref": "#/$defs/concept_id"},
+            "lot_number": {"$ref": "#/$defs/nullable_text"},
+            "provider_id": {"$ref": "#/$defs/nullable_id"},
+            "drug_source_value": {"type": "string", "minLength": 1},
+            "drug_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "route_source_value": {"$ref": "#/$defs/nullable_text"},
+            "dose_unit_source_value": {"$ref": "#/$defs/nullable_text"}
+          }
+        }
+      ]
+    },
+    "procedure": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/domain_common"},
+        {
+          "type": "object",
+          "required": ["procedure_occurrence_id", "procedure_concept_id", "procedure_date", "procedure_datetime", "procedure_end_date", "procedure_end_datetime", "procedure_type_concept_id", "modifier_concept_id", "quantity", "provider_id", "procedure_source_value", "procedure_source_concept_id", "modifier_source_value"],
+          "properties": {
+            "procedure_occurrence_id": {"$ref": "#/$defs/positive_id"},
+            "procedure_concept_id": {"$ref": "#/$defs/concept_id"},
+            "procedure_date": {"$ref": "#/$defs/date"},
+            "procedure_datetime": {"$ref": "#/$defs/nullable_text"},
+            "procedure_end_date": {"$ref": "#/$defs/nullable_date"},
+            "procedure_end_datetime": {"$ref": "#/$defs/nullable_text"},
+            "procedure_type_concept_id": {"$ref": "#/$defs/concept_id"},
+            "modifier_concept_id": {"$ref": "#/$defs/concept_id"},
+            "quantity": {"$ref": "#/$defs/nullable_number"},
+            "provider_id": {"$ref": "#/$defs/nullable_id"},
+            "procedure_source_value": {"type": "string", "minLength": 1},
+            "procedure_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "modifier_source_value": {"$ref": "#/$defs/nullable_text"}
+          }
+        }
+      ]
+    },
+    "measurement": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/domain_common"},
+        {
+          "type": "object",
+          "required": ["measurement_id", "measurement_concept_id", "measurement_date", "measurement_datetime", "measurement_time", "measurement_type_concept_id", "operator_concept_id", "value_as_number", "value_as_concept_id", "unit_concept_id", "range_low", "range_high", "provider_id", "measurement_source_value", "measurement_source_concept_id", "unit_source_value", "unit_source_concept_id", "value_source_value", "measurement_event_id", "meas_event_field_concept_id"],
+          "properties": {
+            "measurement_id": {"$ref": "#/$defs/positive_id"},
+            "measurement_concept_id": {"$ref": "#/$defs/concept_id"},
+            "measurement_date": {"$ref": "#/$defs/date"},
+            "measurement_datetime": {"$ref": "#/$defs/nullable_text"},
+            "measurement_time": {"$ref": "#/$defs/nullable_text"},
+            "measurement_type_concept_id": {"$ref": "#/$defs/concept_id"},
+            "operator_concept_id": {"$ref": "#/$defs/concept_id"},
+            "value_as_number": {"$ref": "#/$defs/nullable_number"},
+            "value_as_concept_id": {"$ref": "#/$defs/concept_id"},
+            "unit_concept_id": {"$ref": "#/$defs/concept_id"},
+            "range_low": {"$ref": "#/$defs/nullable_number"},
+            "range_high": {"$ref": "#/$defs/nullable_number"},
+            "provider_id": {"$ref": "#/$defs/nullable_id"},
+            "measurement_source_value": {"type": "string", "minLength": 1},
+            "measurement_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "unit_source_value": {"$ref": "#/$defs/nullable_text"},
+            "unit_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "value_source_value": {"$ref": "#/$defs/nullable_text"},
+            "measurement_event_id": {"$ref": "#/$defs/nullable_id"},
+            "meas_event_field_concept_id": {"$ref": "#/$defs/concept_id"}
+          }
+        }
+      ]
+    },
+    "observation": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {"$ref": "#/$defs/domain_common"},
+        {
+          "type": "object",
+          "required": ["observation_id", "observation_concept_id", "observation_date", "observation_datetime", "observation_type_concept_id", "value_as_number", "value_as_string", "value_as_concept_id", "qualifier_concept_id", "unit_concept_id", "provider_id", "observation_source_value", "observation_source_concept_id", "unit_source_value", "qualifier_source_value", "value_source_value", "observation_event_id", "obs_event_field_concept_id"],
+          "properties": {
+            "observation_id": {"$ref": "#/$defs/positive_id"},
+            "observation_concept_id": {"$ref": "#/$defs/concept_id"},
+            "observation_date": {"$ref": "#/$defs/date"},
+            "observation_datetime": {"$ref": "#/$defs/nullable_text"},
+            "observation_type_concept_id": {"$ref": "#/$defs/concept_id"},
+            "value_as_number": {"$ref": "#/$defs/nullable_number"},
+            "value_as_string": {"$ref": "#/$defs/nullable_text"},
+            "value_as_concept_id": {"$ref": "#/$defs/concept_id"},
+            "qualifier_concept_id": {"$ref": "#/$defs/concept_id"},
+            "unit_concept_id": {"$ref": "#/$defs/concept_id"},
+            "provider_id": {"$ref": "#/$defs/nullable_id"},
+            "observation_source_value": {"type": "string", "minLength": 1},
+            "observation_source_concept_id": {"$ref": "#/$defs/concept_id"},
+            "unit_source_value": {"$ref": "#/$defs/nullable_text"},
+            "qualifier_source_value": {"$ref": "#/$defs/nullable_text"},
+            "value_source_value": {"$ref": "#/$defs/nullable_text"},
+            "observation_event_id": {"$ref": "#/$defs/nullable_id"},
+            "obs_event_field_concept_id": {"$ref": "#/$defs/concept_id"}
+          }
+        }
+      ]
+    },
+    "source_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_code", "source_concept_id", "source_vocabulary_id", "source_code_description", "target_concept_id", "target_vocabulary_id", "valid_start_date", "valid_end_date", "invalid_reason"],
+      "properties": {
+        "source_code": {"type": "string", "minLength": 1, "maxLength": 50},
+        "source_concept_id": {"$ref": "#/$defs/concept_id"},
+        "source_vocabulary_id": {"$ref": "#/$defs/vocabulary_id"},
+        "source_code_description": {"$ref": "#/$defs/nullable_text"},
+        "target_concept_id": {"$ref": "#/$defs/concept_id"},
+        "target_vocabulary_id": {"$ref": "#/$defs/vocabulary_id"},
+        "valid_start_date": {"$ref": "#/$defs/date"},
+        "valid_end_date": {"$ref": "#/$defs/date"},
+        "invalid_reason": {"enum": ["D", "U", null]}
+      }
+    }
+  }
+}

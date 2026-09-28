@@ -11,6 +11,7 @@ from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
 
 from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
+from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
 
 GRAPHQL_PATH = "/graphql"
@@ -39,11 +40,19 @@ def mount_graphql(
     app: FastAPI,
     *,
     runtime_getter: Callable[[Request], ServiceRuntime],
+    resource_getter: Callable[[Request], JourneyResourceCatalog],
 ) -> None:
     """Mount the GraphQL endpoint on an existing OpenMed service app."""
 
     async def get_context(request: Request) -> OpenMedGraphQLContext:
-        return OpenMedGraphQLContext(runtime_getter(request))
+        policy = getattr(request.app.state, "journey_access_policy", None)
+        if not isinstance(policy, JourneyAccessPolicy):
+            policy = JourneyAccessPolicy()
+        return OpenMedGraphQLContext(
+            runtime_getter(request),
+            resource_getter(request),
+            policy,
+        )
 
     router = PrivacySafeGraphQLRouter(
         schema,

@@ -164,6 +164,35 @@ def test_malformed_address_header_is_extracted_and_redacted_without_crashing(
     assert b"Synthetic Clinic <clinic@" not in result.email_bytes
 
 
+@pytest.mark.parametrize("value", ["a:b:;;", "Synthetic Clinic <clinic@"])
+def test_address_header_probe_returns_false_for_unparsable_values(value: str):
+    assert email_module._address_header_is_valid("From", value) is False
+
+
+def test_address_header_probe_accepts_valid_addresses():
+    assert (
+        email_module._address_header_is_valid(
+            "To", "Synthetic Clinic <clinic@example.invalid>"
+        )
+        is True
+    )
+
+
+def test_nested_group_address_header_is_redacted_without_crashing(monkeypatch):
+    payload = b"From: a:b:;;\r\nTo: x@y.invalid\r\nSubject: s\r\n\r\nbody\r\n"
+
+    monkeypatch.setattr(
+        email_module._TextProcessor,
+        "redact",
+        lambda _self, text: SimpleNamespace(text=text),
+    )
+    result = redact_email(payload, models=lambda text, **_: text)
+    message = _parsed(result.email_bytes)
+
+    assert str(message["From"]) == "redacted-address@openmed.invalid"
+    assert b"a:b:;;" not in result.email_bytes
+
+
 def test_redact_email_redacts_headers_plain_html_and_attachment_metadata(
     tmp_path: Path,
     monkeypatch,
