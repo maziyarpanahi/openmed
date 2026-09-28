@@ -65,3 +65,7 @@ This contract is an evidence and review boundary, not a clinical decision
 engine, compliance certification, diagnosis, or eligibility determination.
 Use synthetic or public data in tests and examples. Restricted SHAC data is
 not bundled or loaded by this module.
+
+The [synthetic SDOH counterfactual checks](../evaluation/sdoh-counterfactuals.md)
+test whether non-causal demographic substitutions change finding labels or
+confidence while keeping the Social History evidence fixed.
