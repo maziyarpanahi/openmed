@@ -411,6 +411,7 @@ classification:
     - export-gguf.md
     - multimodal/box-normalization.md
     - multimodal/page-rotation.md
+    - multimodal/dicom-sr-provenance.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md
     - clinical/unit-display-audit.md
