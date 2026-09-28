@@ -14,8 +14,79 @@ from openmed.clinical import (
     build_review_packet,
     render_review_packet,
 )
+from openmed.core.audit import hash_text
 
 SYNTHETIC_PROTECTED_VALUE = "SYNTHETIC_PROTECTED_VALUE_42"
+
+
+@pytest.mark.parametrize("flag", ["false", "true", 0, 1, None, []])
+def test_non_boolean_protected_render_flags_are_rejected(flag):
+    finding = ReviewFinding("synthetic-id", "finding", text=SYNTHETIC_PROTECTED_VALUE)
+    citation = ReviewCitation(
+        "synthetic-citation", "source", text=SYNTHETIC_PROTECTED_VALUE
+    )
+    packet = build_review_packet([finding], [citation])
+    for render in (
+        finding.to_dict,
+        citation.to_dict,
+        packet.to_dict,
+        packet.to_json,
+        packet.to_markdown,
+    ):
+        with pytest.raises(ValueError, match="boolean"):
+            render(include_protected_text=flag)
+    for keyword in ("include_protected_text", "allow_protected_text"):
+        with pytest.raises(ValueError, match="boolean"):
+            render_review_packet(packet, **{keyword: flag})
+
+
+def test_lowercase_identifiers_labels_and_metadata_are_not_plaintext():
+    marker = "synthetic-private-marker"
+    packet = build_review_packet(
+        [ReviewFinding(marker, marker, attributes={"name": marker, "id": 123456})],
+        [
+            ReviewCitation(
+                marker, marker, locator="section-" + marker, metadata={"source": marker}
+            )
+        ],
+        [ReviewGateResult(marker, True, details={"identifier": marker})],
+    )
+    for rendered in (packet.to_json(), packet.to_markdown(), repr(packet)):
+        assert marker not in rendered
+        assert "123456" not in rendered
+
+
+def test_review_status_cannot_override_a_blocking_gate():
+    with pytest.raises(ValueError, match="gate"):
+        build_review_packet(
+            gates=[ReviewGateResult("privacy", False, blocking=True)],
+            review_status="ready_for_review",
+        )
+
+
+def test_nested_metadata_is_frozen_and_rendered_as_an_independent_copy():
+    finding = ReviewFinding(
+        "synthetic-id", "finding", attributes={"source": {"count": 1}}
+    )
+    packet = build_review_packet([finding])
+    original = packet.to_json()
+    with pytest.raises(TypeError):
+        finding.attributes["source"]["count"] = 2
+    rendered = packet.to_dict()
+    rendered["findings"][0]["attributes"]["source"]["count"] = 3
+    assert packet.to_json() == original
+
+
+def test_opaque_identifiers_preserve_citation_links_when_reconstructed():
+    citation = ReviewCitation("synthetic-citation", "source")
+    finding = ReviewFinding(
+        "synthetic-finding", "finding", citation_ids=(citation.citation_id,)
+    )
+    assert finding.citation_ids == (citation.citation_id,)
+    assert (
+        ReviewCitation(citation.citation_id, citation.source).citation_id
+        == citation.citation_id
+    )
 
 
 def test_typed_packet_is_deterministic_and_reports_gate_status():
@@ -74,7 +145,10 @@ def test_typed_packet_is_deterministic_and_reports_gate_status():
         "gate_count": 2,
         "review_required": True,
     }
-    assert payload["findings"][0]["finding_id"] == "finding-1"
+    assert {item["finding_id"] for item in payload["findings"]} == {
+        "identifier:" + hash_text("finding-1"),
+        "identifier:" + hash_text("finding-2"),
+    }
     assert SYNTHETIC_PROTECTED_VALUE not in first.to_json()
     assert payload["findings"][0]["protected_text_available"] is True
     assert payload["findings"][0]["source_hash"].startswith("sha256:")
@@ -198,7 +272,7 @@ def test_gate_report_like_objects_are_accepted_without_network_access():
     )
 
     assert packet.review_status == "ready_for_review"
-    assert packet.gate_results[0].gate_id == "local-check"
+    assert packet.gate_results[0].gate_id == "identifier:" + hash_text("local-check")
     assert packet.gate_results[0].details["metric"] == 0.9
 
 
