@@ -70,3 +70,13 @@ behavior for a pair of typed ranges.
 
 All functions are deterministic and local-only. Keep committed fixtures
 synthetic and use hashes, offsets, or counts rather than patient values.
+
+## Validation limits
+
+Partial target provenance returns unknown even when only one range is available.
+Conflicting nested and top-level fields, invalid schema versions, and non-boolean
+bound flags are rejected. Optional locale and open bounds use deterministic
+ordering without filling in missing values. Source metadata is bounded to 4096
+nodes, 32 nesting levels and 4096 characters or bytes per string; candidate
+collections are bounded to 4096. Failures do not retain source-bearing exception
+causes or context. Fingerprints establish stable identity, not authenticity.

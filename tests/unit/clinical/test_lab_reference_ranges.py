@@ -158,3 +158,103 @@ def test_incomplete_provenance_is_rejected_without_echoing_values() -> None:
         )
 
     assert "instrument" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "target", [{"unit": "mg/dL"}, {"locale": "fr-FR"}, {"precision": 2}]
+)
+def test_partial_target_provenance_never_falls_back_to_single_range(target):
+    result = resolve_reference_range([_range()], **target)
+    assert result.status is ReferenceRangeStatus.UNKNOWN
+    assert result.reference_range is None
+
+
+def test_optional_locale_and_bounds_have_total_deterministic_order():
+    from dataclasses import replace
+
+    first = _range(locale=None)
+    second = _range(locale="en-US")
+    assert (
+        compare_reference_ranges(first, second).status is ReferenceRangeStatus.UNKNOWN
+    )
+    open_low = replace(first, low=None)
+    assert (
+        resolve_reference_range([first, open_low]).status
+        is ReferenceRangeStatus.CONFLICT
+    )
+
+
+def test_mapping_source_can_be_fingerprinted_without_existing_digest():
+    from openmed.clinical.lab_reference_ranges import reference_range_from_mapping
+
+    result = reference_range_from_mapping(
+        {
+            "analyte": "sodium",
+            "low": 135,
+            "high": 145,
+            "unit": "mmol/L",
+            "population": "adult",
+            "precision": 0,
+            "source": "synthetic-device",
+        }
+    )
+    assert result.source_fingerprint == fingerprint_source("synthetic-device")
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"low_inclusive": "false"},
+        {"schema_version": True},
+        {"unit": "mg/dL"},
+        {"analyte": 123},
+    ],
+)
+def test_mapping_rejects_invalid_or_conflicting_contract_fields(update):
+    from openmed.clinical.lab_reference_ranges import reference_range_from_mapping
+
+    payload = _range().to_dict()
+    payload.update(update)
+    with pytest.raises(ValueError):
+        reference_range_from_mapping(payload)
+
+
+def test_numeric_errors_do_not_retain_private_cause_or_context():
+    with pytest.raises(ValueError) as caught:
+        build_reference_range(
+            "sodium",
+            "SYNTHETIC-PRIVATE-NUMBER",
+            145,
+            unit="mmol/L",
+            population="adult",
+            precision=0,
+            source="fixture",
+        )
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC" not in str(caught.value)
+
+
+def test_candidate_and_source_nesting_limits(monkeypatch):
+    from openmed.clinical import lab_reference_ranges as module
+
+    monkeypatch.setattr(module, "_MAX_ITEMS", 2)
+    with pytest.raises(ValueError):
+        resolve_reference_range((_range() for _ in range(3)))
+    cyclic = {}
+    cyclic["nested"] = cyclic
+    with pytest.raises(ValueError) as caught:
+        fingerprint_source(cyclic)
+    assert caught.value.__context__ is None
+
+
+def test_direct_resolution_cannot_claim_known_without_a_range():
+    from openmed.clinical import ReferenceRangeResolution
+
+    with pytest.raises(ValueError):
+        ReferenceRangeResolution(
+            status=ReferenceRangeStatus.KNOWN,
+            reference_range=None,
+            reason="single explicit range",
+            candidate_count=1,
+        )

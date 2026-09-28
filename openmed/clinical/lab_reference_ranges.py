@@ -18,8 +18,9 @@ import json
 import math
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from functools import wraps
 from typing import Literal
 
 REFERENCE_RANGE_SCHEMA_VERSION = 1
@@ -30,6 +31,36 @@ LAB_REFERENCE_RANGE_ADVISORY = (
 )
 
 ReferenceRangeState = Literal["known", "unknown", "conflict"]
+
+_MAX_ITEMS = 4096
+_MAX_TEXT = 4096
+_MAX_DEPTH = 32
+_SAFE_ERRORS = {
+    "reference range low bound cannot exceed high bound",
+    "reference range source provenance is required",
+}
+
+
+def _safe_boundary(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        message = "invalid reference-range input"
+        try:
+            return function(*args, **kwargs)
+        except Exception as exc:
+            if type(exc) is ValueError and str(exc) in _SAFE_ERRORS:
+                message = str(exc)
+        raise ValueError(message)
+
+    return wrapped
+
+
+def _bounded_items(values):
+    for index, value in enumerate(values):
+        if index >= _MAX_ITEMS:
+            raise ValueError("reference-range collection limit exceeded")
+        yield value
+
 
 _HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LOCALE_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$")
@@ -45,7 +76,7 @@ class ReferenceRangeStatus(str, Enum):
 
 
 def _normalized_text(value: object, field_name: str) -> str:
-    if not isinstance(value, str):
+    if not isinstance(value, str) or len(value) > _MAX_TEXT:
         raise ValueError(f"reference-range {field_name} must be a non-empty string")
     normalized = " ".join(value.split())
     if not normalized:
@@ -86,9 +117,17 @@ def _finite_number(value: object, field_name: str) -> float:
     return number
 
 
-def _canonical_source_value(value: object) -> object:
+def _canonical_source_value(
+    value: object, depth: int = 0, budget: list[int] | None = None
+) -> object:
     """Return a stable JSON-compatible source value without retaining it."""
 
+    budget = [_MAX_ITEMS] if budget is None else budget
+    budget[0] -= 1
+    if depth > _MAX_DEPTH or budget[0] < 0:
+        raise ValueError("source metadata limit exceeded")
+    if isinstance(value, (str, bytes)) and len(value) > _MAX_TEXT:
+        raise ValueError("source metadata text limit exceeded")
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
@@ -99,16 +138,17 @@ def _canonical_source_value(value: object) -> object:
         return {"bytes_sha256": hashlib.sha256(value).hexdigest()}
     if isinstance(value, Mapping):
         normalized: dict[str, object] = {}
-        for key, item in value.items():
-            if not isinstance(key, str) or not key:
+        for key, item in _bounded_items(value.items()):
+            if not isinstance(key, str) or not key or len(key) > _MAX_TEXT:
                 raise ValueError("source metadata keys must be non-empty strings")
-            normalized[key] = _canonical_source_value(item)
+            normalized[key] = _canonical_source_value(item, depth + 1, budget)
         return {key: normalized[key] for key in sorted(normalized)}
     if isinstance(value, (list, tuple)):
-        return [_canonical_source_value(item) for item in value]
+        return [_canonical_source_value(item) for item in _bounded_items(value)]
     raise TypeError("source metadata must be JSON-compatible")
 
 
+@_safe_boundary
 def fingerprint_source(source: object) -> str:
     """Return a deterministic SHA-256 fingerprint for local source metadata.
 
@@ -129,6 +169,7 @@ def fingerprint_source(source: object) -> str:
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
+@_safe_boundary
 def source_fingerprint(source: object) -> str:
     """Alias for :func:`fingerprint_source` used by callers building records."""
 
@@ -152,12 +193,13 @@ class ReferenceRangeProvenance:
     source_fingerprint: str
     locale: str | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         unit = _normalized_text(self.unit, "unit")
         population = _normalized_population(self.population)
         if isinstance(self.precision, bool) or not isinstance(self.precision, int):
             raise ValueError("reference-range precision must be a non-negative integer")
-        if self.precision < 0:
+        if not 0 <= self.precision <= 32:
             raise ValueError("reference-range precision must be a non-negative integer")
         fingerprint = _normalized_fingerprint(self.source_fingerprint)
         locale = _normalized_locale(self.locale)
@@ -185,9 +227,11 @@ class ReferenceRangeProvenance:
             return False
         return self.identity_key == other.identity_key
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic, source-value-free mapping."""
 
+        replace(self)
         return {
             "unit": self.unit,
             "population": self.population,
@@ -208,6 +252,7 @@ class LabReferenceRange:
     low_inclusive: bool = True
     high_inclusive: bool = True
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         analyte = _normalized_text(self.analyte, "analyte")
         low = None if self.low is None else _finite_number(self.low, "low")
@@ -222,6 +267,7 @@ class LabReferenceRange:
             self.high_inclusive, bool
         ):
             raise ValueError("reference-range inclusivity flags must be booleans")
+        object.__setattr__(self, "provenance", replace(self.provenance))
         object.__setattr__(self, "analyte", analyte)
         object.__setattr__(self, "low", low)
         object.__setattr__(self, "high", high)
@@ -268,9 +314,11 @@ class LabReferenceRange:
 
         return self.low, self.high, self.low_inclusive, self.high_inclusive
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-ready range with nested and convenient provenance."""
 
+        replace(self)
         provenance = self.provenance.to_dict()
         return {
             "schema_version": REFERENCE_RANGE_SCHEMA_VERSION,
@@ -296,6 +344,7 @@ ReferenceRange = LabReferenceRange
 SyntheticReferenceRange = LabReferenceRange
 
 
+@_safe_boundary
 def build_reference_range(
     analyte: str,
     low: object | None,
@@ -346,6 +395,7 @@ def build_reference_range(
 create_reference_range = build_reference_range
 
 
+@_safe_boundary
 def reference_range_from_mapping(
     payload: Mapping[str, object],
     *,
@@ -355,11 +405,48 @@ def reference_range_from_mapping(
 
     if not isinstance(payload, Mapping):
         raise TypeError("reference range payload must be a mapping")
-    nested = payload.get("range") or payload.get("reference_range")
-    range_payload = nested if isinstance(nested, Mapping) else payload
-    provenance_payload = payload.get("provenance")
+    if "schema_version" in payload and (
+        type(payload["schema_version"]) is not int
+        or payload["schema_version"] != REFERENCE_RANGE_SCHEMA_VERSION
+    ):
+        raise ValueError("invalid reference-range schema")
+    if "advisory" in payload and payload["advisory"] != LAB_REFERENCE_RANGE_ADVISORY:
+        raise ValueError("invalid reference-range advisory")
+    nested_values = [
+        payload[key]
+        for key in ("range", "reference_range")
+        if payload.get(key) is not None
+    ]
+    if any(
+        not isinstance(item, Mapping) or item != nested_values[0]
+        for item in nested_values
+    ):
+        raise ValueError("conflicting nested range")
+    range_payload = nested_values[0] if nested_values else payload
+    provenance_payload = payload.get("provenance", payload)
     if not isinstance(provenance_payload, Mapping):
-        provenance_payload = payload
+        raise ValueError("invalid range provenance")
+    for key in (
+        "unit",
+        "population",
+        "precision",
+        "source_fingerprint",
+        "locale",
+        "source",
+    ):
+        if (
+            key in payload
+            and key in provenance_payload
+            and payload[key] != provenance_payload[key]
+        ):
+            raise ValueError("conflicting range provenance")
+    for key in ("low", "high", "low_inclusive", "high_inclusive"):
+        if (
+            key in payload
+            and key in range_payload
+            and payload[key] != range_payload[key]
+        ):
+            raise ValueError("conflicting range bounds")
 
     raw_source = source if source is not None else provenance_payload.get("source")
     raw_fingerprint = provenance_payload.get("source_fingerprint")
@@ -368,27 +455,36 @@ def reference_range_from_mapping(
     if raw_source is not None:
         raw_fingerprint = fingerprint_source(raw_source)
 
-    required = ("unit", "population", "precision", "source_fingerprint")
-    if any(provenance_payload.get(key) is None for key in required):
+    required = ("unit", "population", "precision")
+    if raw_fingerprint is None or any(
+        provenance_payload.get(key) is None for key in required
+    ):
         raise ValueError("reference range provenance is incomplete")
-    analyte = payload.get("analyte") or payload.get("test") or payload.get("name")
+    analytes = [
+        payload[key]
+        for key in ("analyte", "test", "name")
+        if payload.get(key) is not None
+    ]
+    if any(value != analytes[0] for value in analytes[1:]):
+        raise ValueError("conflicting analyte aliases")
+    analyte = analytes[0] if analytes else None
     if analyte is None:
         raise ValueError("reference range analyte is required")
     return build_reference_range(
-        analyte=str(analyte),
+        analyte=analyte,
         low=range_payload.get("low"),
         high=range_payload.get("high"),
-        unit=str(provenance_payload["unit"]),
-        population=str(provenance_payload["population"]),
+        unit=provenance_payload["unit"],
+        population=provenance_payload["population"],
         precision=provenance_payload["precision"],  # type: ignore[arg-type]
-        source_fingerprint=str(raw_fingerprint),
+        source_fingerprint=raw_fingerprint,
         locale=(
             None
             if provenance_payload.get("locale") is None
-            else str(provenance_payload["locale"])
+            else provenance_payload["locale"]
         ),
-        low_inclusive=bool(range_payload.get("low_inclusive", True)),
-        high_inclusive=bool(range_payload.get("high_inclusive", True)),
+        low_inclusive=range_payload.get("low_inclusive", True),
+        high_inclusive=range_payload.get("high_inclusive", True),
     )
 
 
@@ -404,6 +500,45 @@ class ReferenceRangeResolution:
     reason: str
     candidate_count: int = 0
     advisory: str = LAB_REFERENCE_RANGE_ADVISORY
+
+    @_safe_boundary
+    def __post_init__(self):
+        reasons = {
+            "analyte context is required when candidates contain multiple analytes",
+            "no reference range matched the explicit context",
+            "no reference range matched the explicit provenance",
+            "matching provenance has conflicting range bounds",
+            "exact provenance match",
+            "multiple explicit ranges have conflicting provenance or bounds",
+            "single explicit range",
+            "analytes do not have matching explicit identities",
+            "locale provenance differs and cannot be inferred",
+            "unit, population, or precision provenance differs",
+            "source provenance identifies different range instruments",
+            "matching provenance and bounds",
+            "target provenance is incomplete",
+        }
+        if (
+            not isinstance(self.status, ReferenceRangeStatus)
+            or self.reason not in reasons
+        ):
+            raise ValueError("invalid range resolution")
+        if (
+            type(self.candidate_count) is not int
+            or not 0 <= self.candidate_count <= _MAX_ITEMS
+        ):
+            raise ValueError("invalid range candidate count")
+        if self.advisory != LAB_REFERENCE_RANGE_ADVISORY:
+            raise ValueError("invalid range advisory")
+        if self.status is ReferenceRangeStatus.KNOWN:
+            if (
+                not isinstance(self.reference_range, LabReferenceRange)
+                or self.candidate_count < 1
+            ):
+                raise ValueError("known resolution requires range evidence")
+            object.__setattr__(self, "reference_range", replace(self.reference_range))
+        elif self.reference_range is not None:
+            raise ValueError("unresolved range cannot carry a selection")
 
     @property
     def state(self) -> ReferenceRangeState:
@@ -435,9 +570,11 @@ class ReferenceRangeResolution:
 
         return self.is_conflict
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic resolution without candidate raw text."""
 
+        replace(self)
         return {
             "schema_version": REFERENCE_RANGE_SCHEMA_VERSION,
             "status": self.status.value,
@@ -463,10 +600,10 @@ def _coerce_candidates(
     else:
         values = ranges
     coerced = tuple(
-        value
+        replace(value)
         if isinstance(value, LabReferenceRange)
         else reference_range_from_mapping(value)
-        for value in values
+        for value in _bounded_items(values)
     )
     return tuple(sorted(coerced, key=_range_sort_key))
 
@@ -476,8 +613,19 @@ def _range_sort_key(
 ) -> tuple[object, ...]:
     return (
         value.analyte_key,
-        value.provenance.identity_key,
-        value.bounds_key,
+        (
+            *value.provenance.identity_key[:-1],
+            value.locale is not None,
+            value.locale or "",
+        ),
+        (
+            value.low is not None,
+            value.low or 0.0,
+            value.high is not None,
+            value.high or 0.0,
+            value.low_inclusive,
+            value.high_inclusive,
+        ),
     )
 
 
@@ -494,7 +642,7 @@ def _coerce_target_provenance(
     if provenance is not None and any(value is not None for value in explicit):
         raise ValueError("provide provenance or individual provenance fields, not both")
     if isinstance(provenance, ReferenceRangeProvenance):
-        return provenance
+        return replace(provenance)
     if isinstance(provenance, Mapping):
         return ReferenceRangeProvenance(
             unit=provenance.get("unit"),  # type: ignore[arg-type]
@@ -534,6 +682,7 @@ def _resolution(
     )
 
 
+@_safe_boundary
 def resolve_reference_range(
     ranges: Iterable[LabReferenceRange | Mapping[str, object]]
     | LabReferenceRange
@@ -566,6 +715,23 @@ def resolve_reference_range(
         source_fingerprint=source_fingerprint,
         locale=locale,
     )
+    if target is None and any(
+        value is not None
+        for value in (
+            provenance,
+            unit,
+            population,
+            precision,
+            source_fingerprint,
+            locale,
+        )
+    ):
+        return _resolution(
+            ReferenceRangeStatus.UNKNOWN,
+            "target provenance is incomplete",
+            None,
+            candidates,
+        )
     if analyte is not None:
         analyte_key = _normalized_text(analyte, "analyte").casefold()
         candidates = tuple(
@@ -628,6 +794,7 @@ def resolve_reference_range(
     )
 
 
+@_safe_boundary
 def compare_reference_ranges(
     left: LabReferenceRange | Mapping[str, object],
     right: LabReferenceRange | Mapping[str, object],
@@ -635,12 +802,12 @@ def compare_reference_ranges(
     """Compare two ranges without converting or inferring their context."""
 
     left_range = (
-        left
+        replace(left)
         if isinstance(left, LabReferenceRange)
         else reference_range_from_mapping(left)
     )
     right_range = (
-        right
+        replace(right)
         if isinstance(right, LabReferenceRange)
         else reference_range_from_mapping(right)
     )
