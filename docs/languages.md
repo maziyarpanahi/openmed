@@ -93,7 +93,7 @@ routing is first requested, and do not download or bundle model weights.
 | `ja`   | Japanese   | `OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1`        | `ja_JP`      | Family-name-first `PERSON` spans.                            |
 | `kn`   | Kannada    | `OpenMed/privacy-filter-multilingual`                       | `kn_IN`      | Karnataka PIN/Aadhaar patterns; `en_IN` approximation warns once; initial-led names keep `ಅವರು` outside the span. |
 | `ko`   | Korean     | `OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1`        | `ko_KR`      | Resident Registration Number (RRN) surrogates.               |
-| `ml`   | Malayalam  | `OpenMed/privacy-filter-multilingual`                       | `ml_IN`      | Multilingual fallback; optional Indic NER weights; Indian Faker fallback. |
+| `ml`   | Malayalam  | `OpenMed/privacy-filter-multilingual`                      | `ml_IN`      | Chillu-safe patterns, Aadhaar; `en_IN` Faker approximation. |
 | `mr`   | Marathi    | `OpenMed/privacy-filter-multilingual`                       | `mr_IN`      | Three-part names; `hi_IN` Faker approximation warns once.    |
 | `ne`   | Nepali     | `user-supplied`                                             | `ne_NP`      | Native Faker locale; no bundled weights — pass `model_name`.  |
 | `nl`   | Dutch      | `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`    | `nl_NL`      | BSN (Elfproef) surrogates via `nl_NL.ssn`.                   |
@@ -120,7 +120,7 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` ship no bundled weights and require a caller-supplied model.
-Malayalam, Russian, and Tamil retain explicit public placeholder routes for
+Malayalam, Punjabi, Russian, and Tamil retain explicit public placeholder routes for
 compatibility, but those routes are not claims of dedicated trained weights.
 Codes absent from the table entirely (for
 example `pl`, `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
@@ -178,13 +178,13 @@ receives the input and offset-only token spans and must return one of `hi`,
 `token_language_tags=` still take precedence. Audit metadata retains offsets,
 labels, and hashes rather than token surfaces.
 
-For `lang="hi"` or `lang="te"`, a note containing both Latin and Devanagari
-(or Latin and Telugu) automatically activates the India clinical route. OpenMed
-segments the note into offset-preserving script runs, adds bounded context to
-each run so PERSON and LOCATION spans can cross a script boundary, sends Latin
-windows to the registered English clinical model, and sends Indic windows to
-the language's registered Hindi or Telugu model. Caller-supplied model IDs or
-local model paths are used for every window instead; OpenMed does not select an
+For `lang="hi"`, `lang="ml"`, or `lang="te"`, a note containing both Latin and
+the language's Indic script automatically activates the India clinical route.
+OpenMed segments the note into offset-preserving script runs, adds bounded
+context to each run so PERSON and LOCATION spans can cross a script boundary,
+sends Latin windows to the registered English clinical model, and sends Indic
+windows to the language's registered model. Caller-supplied model IDs or local
+model paths are used for every window instead; OpenMed does not select an
 unregistered third-party model automatically.
 
 The documented first-party fallback is
@@ -361,11 +361,11 @@ After:  ಕೃತಕ ಟಿಪ್ಪಣಿ: ಶ್ರೀ [PERSON] ಅವರು, 
 
 ### Malayalam — `ml`
 
-- Model: `OpenMed/privacy-filter-multilingual` · locale `ml_IN`
+- Model: `OpenMed/privacy-filter-multilingual` · locale `ml_IN` (`en_IN` Faker backend); an optional local Indic NER model can be supplied explicitly.
 
 ```text
-Before: അരുൺ കൊച്ചിയിൽ അമൃത ആശുപത്രിയിൽ പോയി.
-After:  [PERSON] [LOCATION] [ORGANIZATION] പോയി.
+Before: രോഗി ശ്രീ പുതുശ്ശേരി രാമൻ, ആധാർ ൨൪൬൭ ൭൮൩൨ ൫൪൮൪.
+After:  രോഗി ശ്രീ [PERSON], ആധാർ [ID_NUM].
 ```
 
 ### Marathi — `mr`
@@ -401,6 +401,9 @@ After:  [PERSON] [LOCATION] [ORGANIZATION] ଗଲେ।
   with Faker's `en_IN` backend; warns once)
 - Built-in Gurmukhi patterns cover Punjabi dates, Indian mobile numbers,
   Aadhaar, Punjab/Chandigarh PIN codes, and honorific-anchored full names.
+  Honorifics accept one to eight horizontal spaces, tabs, or non-breaking
+  spaces without shifting the name span. These are bounded synthetic regression
+  checks, not a trained Punjabi model or clinical-quality claim.
   Replacement names preserve `ਸਿੰਘ` and `ਕੌਰ` gender suffixes. A configured
   Indic adapter may still be selected explicitly.
 

@@ -7234,6 +7234,15 @@ _PUNJABI_MONTH_PATTERN = "|".join(
 )
 
 _PUNJABI_NAME_CONTEXT = ["ਸ.", "ਸਰਦਾਰਨੀ", "ਬੀਬੀ", "ਡਾ."]
+_PUNJABI_HONORIFIC_PREFIX = (
+    "(?:"
+    + "|".join(
+        rf"(?<={re.escape(honorific)}[ \t\u00a0]{{{width}}})"
+        for honorific in _PUNJABI_NAME_CONTEXT
+        for width in range(1, 9)
+    )
+    + ")"
+)
 _PUNJABI_DATE_CONTEXT = [
     "ਜਨਮ",
     "ਜਨਮ ਮਿਤੀ",
@@ -7427,7 +7436,7 @@ _PUNJABI_PIN_CONTEXT = ["ਪਿੰਨ", "ਪਿੰਨ ਕੋਡ", "ਡਾਕ", "
 
 _PUNJABI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        rf"(?:(?<=ਸ\. )|(?<=ਸਰਦਾਰਨੀ )|(?<=ਬੀਬੀ )|(?<=ਡਾ\. ))"
+        rf"{_PUNJABI_HONORIFIC_PREFIX}"
         rf"{_PUNJABI_FULL_NAME}"
         rf"(?![\u0A00-\u0A7F])",
         "name",

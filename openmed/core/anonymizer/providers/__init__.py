@@ -127,6 +127,7 @@ from .script_names import (
     GUJARATI_LANGUAGE_PACK,
     HAN_LANGUAGE_PACK,
     KANNADA_LANGUAGE_PACK,
+    PUNJABI_LANGUAGE_PACK,
     SCRIPT_NAME_PACKS,
     TELUGU_LANGUAGE_PACK,
     generate_devanagari_name,

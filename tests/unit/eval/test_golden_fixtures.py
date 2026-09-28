@@ -2248,3 +2248,39 @@ def test_punjabi_fixtures_pass_zero_leakage_release_gate_offline():
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
     assert gate.details["evaluated"] == {"pa": 0.0}
+
+
+def test_punjabi_pack_export_resolves():
+    from openmed.core.anonymizer import providers
+
+    assert providers.PUNJABI_LANGUAGE_PACK.code == "pa"
+
+
+@pytest.mark.parametrize("separator", ["  ", "\t", "\u00a0", " \t "])
+def test_punjabi_name_offsets_survive_horizontal_spacing(separator):
+    name = "ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ"
+    text = f"ਮਰੀਜ਼ ਸ.{separator}{name}."
+    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["pa"])
+    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
+        name
+    ]
+
+
+@pytest.mark.parametrize(
+    "source,suffix",
+    [
+        ("ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ", "ਸਿੰਘ"),
+        ("ਗੁਰਲੀਨ ਕੌਰ", "ਕੌਰ"),
+    ],
+)
+def test_punjabi_name_surrogates_are_distinct_consistent_and_keep_suffix(
+    source, suffix
+):
+    from openmed.core.anonymizer import Anonymizer
+
+    anonymizer = Anonymizer(lang="pa", consistent=True, seed=1517)
+    result = anonymizer.surrogate(source, "name")
+    assert result != source
+    assert result.endswith(" " + suffix)
+    assert result == anonymizer.surrogate(source, "name")
+    assert source.split()[0] not in result
