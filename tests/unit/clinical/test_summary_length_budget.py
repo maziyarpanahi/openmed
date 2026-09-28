@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -13,6 +14,10 @@ from openmed.clinical.summary_length_budget import (
     SummaryLengthBudgetPolicy,
     build_summary_length_budget,
 )
+
+
+def _opaque(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()
 
 
 def test_budget_is_stable_for_equivalent_demand_orderings() -> None:
@@ -72,7 +77,11 @@ def test_budget_respects_minimums_weights_and_global_cap() -> None:
     assert budget.budget_for("safety") == 3
     assert budget.budget_for("problems") == 2
     assert budget.budget_for("follow_up") == 2
-    assert budget.deferred_evidence_classes == ("follow_up", "problems", "safety")
+    assert budget.deferred_evidence_classes == (
+        "follow_up",
+        "safety",
+        _opaque("problems"),
+    )
 
 
 def test_severely_constrained_budget_keeps_priority_order_deterministically() -> None:
@@ -94,7 +103,11 @@ def test_severely_constrained_budget_keeps_priority_order_deterministically() ->
     assert budget.budget_for("safety") == 4
     assert budget.budget_for("problems") == 1
     assert budget.budget_for("follow_up") == 0
-    assert budget.deferred_evidence_classes == ("follow_up", "problems", "safety")
+    assert budget.deferred_evidence_classes == (
+        "follow_up",
+        "safety",
+        _opaque("problems"),
+    )
     assert budget.allocation_for("follow_up").status == "deferred"
 
 
@@ -152,7 +165,7 @@ def test_mapping_policy_is_closed_and_serialization_is_byte_stable() -> None:
 
     expected = budget.to_json()
     assert expected == budget.to_json()
-    assert json.loads(expected)["policy_id"] == "synthetic_mapping"
+    assert json.loads(expected)["policy_id"] == _opaque("synthetic_mapping")
     assert budget.budget_for("follow_up") == 0
 
 
@@ -190,3 +203,72 @@ def test_no_model_or_network_is_needed_for_budget_planning(monkeypatch) -> None:
     assert budget.allocated_tokens == 32
     assert budget.truncated is True
     assert budget.deferred_evidence_classes == ("active_problems", "safety")
+
+
+def test_typed_demand_cannot_bypass_approval() -> None:
+    from openmed.clinical.summary_length_budget import SummaryEvidenceDemand
+
+    demand = SummaryEvidenceDemand("safety", 8)
+    object.__setattr__(demand, "approved", False)
+    with pytest.raises(SummaryLengthBudgetError):
+        build_summary_length_budget(32, [demand])
+
+
+def test_typed_policy_is_revalidated() -> None:
+    item = SummaryEvidenceClassPolicy("safety", 0)
+    policy = SummaryLengthBudgetPolicy(classes=(item,))
+    object.__setattr__(policy.classes[0], "weight", 0)
+    with pytest.raises(SummaryLengthBudgetError):
+        build_summary_length_budget(32, {"safety": 8}, policy=policy)
+
+
+def test_deferred_metadata_requires_positive_tokens() -> None:
+    from openmed.clinical.summary_length_budget import SummaryTruncationMetadata
+
+    with pytest.raises(SummaryLengthBudgetError):
+        SummaryTruncationMetadata(("safety",), 0)
+
+
+def test_iterator_failure_has_no_sensitive_exception_context() -> None:
+    def broken():
+        raise ValueError("SYNTHETIC_PRIVATE_CANARY")
+        yield
+
+    with pytest.raises(SummaryLengthBudgetError) as caught:
+        build_summary_length_budget(32, broken())
+    assert caught.value.__context__ is None
+
+
+def test_cycles_fail_closed() -> None:
+    cycle = {}
+    cycle["evidence"] = cycle
+    with pytest.raises(SummaryLengthBudgetError):
+        build_summary_length_budget(32, cycle)
+
+
+def test_custom_policy_identifiers_are_opaque() -> None:
+    policy = SummaryLengthBudgetPolicy(
+        policy_id="patient_jane_doe",
+        classes=(SummaryEvidenceClassPolicy("patient_jane_doe", 0),),
+    )
+    budget = build_summary_length_budget(8, {"patient_jane_doe": 12}, policy=policy)
+    assert "jane_doe" not in budget.to_json() + repr(budget) + repr(policy)
+
+
+def test_direct_policy_rejects_unbounded_classes() -> None:
+    from itertools import repeat
+
+    with pytest.raises(SummaryLengthBudgetError):
+        SummaryLengthBudgetPolicy(
+            classes=repeat(SummaryEvidenceClassPolicy("safety", 0))
+        )
+
+
+def test_mapping_failure_is_sanitized() -> None:
+    class Broken(dict):
+        def items(self):
+            raise ValueError("SYNTHETIC_PRIVATE_CANARY")
+
+    with pytest.raises(SummaryLengthBudgetError) as caught:
+        build_summary_length_budget(32, {"safety": 4}, policy=Broken())
+    assert caught.value.__context__ is None

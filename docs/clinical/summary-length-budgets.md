@@ -99,6 +99,15 @@ other sensitive content as identifiers. Unknown classes are rejected with a
 fixed `SummaryLengthBudgetError` reason rather than silently entering a
 generation plan.
 
+The seven built-in class names and default policy ID remain readable. Custom
+class and policy IDs are represented by stable SHA-256 references, including
+in repr output; canonical lowercase digest references round-trip unchanged.
+Lookups such as `budget_for()` accept the original custom name. Hashing is
+pseudonymization, not anonymization. Typed policies and demands are rebuilt
+at the boundary; classes, allocations, and recursive containers are bounded.
+Contradictory truncation counts and invalid approval flags fail closed, and
+iterator or mapping failures do not retain sensitive exception context.
+
 ## Safe reports and local-first operation
 
 `SummaryLengthBudget.to_dict()` and `to_json()` contain only the policy id,

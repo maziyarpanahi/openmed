@@ -16,6 +16,7 @@ or a guarantee of summary completeness.
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import re
@@ -44,6 +45,17 @@ _IDENTIFIER_RE = re.compile(
 )
 _POLICY_ID_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
 _MISSING = object()
+_PUBLIC_CLASSES = frozenset(
+    {
+        "safety",
+        "active_problems",
+        "medications",
+        "key_findings",
+        "procedures",
+        "pending_items",
+        "follow_up",
+    }
+)
 
 
 class SummaryLengthBudgetReason(str, Enum):
@@ -89,9 +101,52 @@ class SummaryLengthBudgetError(ValueError):
 
 
 def _identifier(value: object) -> str:
+    if type(value) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+        return value
     if type(value) is not str or _IDENTIFIER_RE.fullmatch(value) is None:
         raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_EVIDENCE_CLASS)
-    return value
+    return (
+        value
+        if value in _PUBLIC_CLASSES
+        else "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+    )
+
+
+def _policy_identifier(value: object) -> str:
+    if type(value) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+        return value
+    if type(value) is not str or _POLICY_ID_RE.fullmatch(value) is None:
+        raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
+    return (
+        value
+        if value == SUMMARY_LENGTH_BUDGET_POLICY_ID
+        else "sha256:" + hashlib.sha256(value.encode()).hexdigest()
+    )
+
+
+def _bounded_values(
+    value: object,
+    reason: SummaryLengthBudgetReason,
+    limit: int = MAX_SUMMARY_EVIDENCE_CLASSES,
+) -> tuple[Any, ...]:
+    try:
+        rows = tuple(itertools.islice(value, limit + 1))
+    except Exception:
+        rows = None
+    if rows is None or len(rows) > limit:
+        raise SummaryLengthBudgetError(reason)
+    return rows
+
+
+def _safe_mapping(value: Mapping, reason: SummaryLengthBudgetReason) -> dict:
+    rows = _bounded_items(value, reason)
+    try:
+        result = dict(rows)
+    except Exception:
+        result = None
+    if result is None or len(result) != len(rows):
+        raise SummaryLengthBudgetError(reason)
+    return result
 
 
 def _safe_count(value: object, reason: SummaryLengthBudgetReason) -> int:
@@ -242,11 +297,7 @@ class SummaryLengthBudgetPolicy:
             self.schema_version != SUMMARY_LENGTH_BUDGET_SCHEMA_VERSION
         ):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.UNSUPPORTED_SCHEMA)
-        if (
-            type(self.policy_id) is not str
-            or _POLICY_ID_RE.fullmatch(self.policy_id) is None
-        ):
-            raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
+        object.__setattr__(self, "policy_id", _policy_identifier(self.policy_id))
         if self.requires_clinician_review is not True:
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
         if self.autonomous_decision is not False:
@@ -254,18 +305,25 @@ class SummaryLengthBudgetPolicy:
         if self.disclaimer != SUMMARY_LENGTH_BUDGET_DISCLAIMER:
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
 
-        try:
-            classes = tuple(self.classes)
-        except Exception:
-            raise SummaryLengthBudgetError(
-                SummaryLengthBudgetReason.INVALID_POLICY
-            ) from None
+        classes = _bounded_values(
+            self.classes, SummaryLengthBudgetReason.INVALID_POLICY
+        )
         if not classes or len(classes) > MAX_SUMMARY_EVIDENCE_CLASSES:
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
         if any(type(item) is not SummaryEvidenceClassPolicy for item in classes):
             raise SummaryLengthBudgetError(
                 SummaryLengthBudgetReason.INVALID_POLICY_CLASS
             )
+        classes = tuple(
+            SummaryEvidenceClassPolicy(
+                item.evidence_class,
+                item.priority,
+                item.weight,
+                item.minimum_tokens,
+                item.maximum_tokens,
+            )
+            for item in classes
+        )
         if len({item.evidence_class for item in classes}) != len(classes):
             raise SummaryLengthBudgetError(
                 SummaryLengthBudgetReason.INVALID_POLICY_CLASS
@@ -311,6 +369,7 @@ class SummaryLengthBudgetPolicy:
 
         if not isinstance(value, Mapping):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
+        value = _safe_mapping(value, SummaryLengthBudgetReason.INVALID_POLICY)
         allowed = {
             "classes",
             "evidence_classes",
@@ -409,6 +468,7 @@ class SummaryEvidenceDemand:
 
         if not isinstance(value, Mapping):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_EVIDENCE)
+        value = _safe_mapping(value, SummaryLengthBudgetReason.INVALID_EVIDENCE)
         allowed = {
             "evidence_class",
             "class_name",
@@ -515,7 +575,10 @@ class SummaryTruncationMetadata:
     deferred_tokens: int
 
     def __post_init__(self) -> None:
-        classes = tuple(self.deferred_evidence_classes)
+        classes = _bounded_values(
+            self.deferred_evidence_classes, SummaryLengthBudgetReason.INVALID_INPUT
+        )
+        classes = tuple(sorted(_identifier(item) for item in classes))
         if (
             any(type(evidence_class) is not str for evidence_class in classes)
             or tuple(sorted(classes)) != classes
@@ -530,6 +593,8 @@ class SummaryTruncationMetadata:
             SummaryLengthBudgetReason.INVALID_INPUT,
         )
         if not classes and self.deferred_tokens != 0:
+            raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
+        if classes and self.deferred_tokens < len(classes):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
         object.__setattr__(self, "deferred_evidence_classes", classes)
 
@@ -573,11 +638,7 @@ class SummaryLengthBudget:
 
     def __post_init__(self) -> None:
         _positive_count(self.max_tokens, SummaryLengthBudgetReason.INVALID_MAX_TOKENS)
-        if (
-            type(self.policy_id) is not str
-            or _POLICY_ID_RE.fullmatch(self.policy_id) is None
-        ):
-            raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
+        object.__setattr__(self, "policy_id", _policy_identifier(self.policy_id))
         if type(self.schema_version) is not int or (
             self.schema_version != SUMMARY_LENGTH_BUDGET_SCHEMA_VERSION
         ):
@@ -589,9 +650,20 @@ class SummaryLengthBudget:
         if self.disclaimer != SUMMARY_LENGTH_BUDGET_DISCLAIMER:
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
 
-        allocations = tuple(self.allocations)
+        allocations = _bounded_values(
+            self.allocations, SummaryLengthBudgetReason.INVALID_INPUT
+        )
         if any(type(item) is not SummaryClassTokenAllocation for item in allocations):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
+        allocations = tuple(
+            SummaryClassTokenAllocation(
+                item.evidence_class,
+                item.requested_tokens,
+                item.allocated_tokens,
+                item.deferred_tokens,
+            )
+            for item in allocations
+        )
         if len({item.evidence_class for item in allocations}) != len(allocations):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
         if (
@@ -619,7 +691,12 @@ class SummaryLengthBudget:
                 item.evidence_class for item in allocations if item.deferred_tokens > 0
             )
         )
-        if tuple(self.deferred_evidence_classes) != deferred:
+        if (
+            _bounded_values(
+                self.deferred_evidence_classes, SummaryLengthBudgetReason.INVALID_INPUT
+            )
+            != deferred
+        ):
             raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_INPUT)
         object.__setattr__(self, "allocations", allocations)
         object.__setattr__(self, "deferred_evidence_classes", deferred)
@@ -956,9 +1033,16 @@ def _coerce_policy(
     value: SummaryLengthBudgetPolicy | Mapping[str, Any] | None,
 ) -> SummaryLengthBudgetPolicy:
     if value is None:
-        return DEFAULT_SUMMARY_LENGTH_POLICY
+        value = DEFAULT_SUMMARY_LENGTH_POLICY
     if type(value) is SummaryLengthBudgetPolicy:
-        return value
+        return SummaryLengthBudgetPolicy(
+            classes=value.classes,
+            policy_id=value.policy_id,
+            schema_version=value.schema_version,
+            requires_clinician_review=value.requires_clinician_review,
+            autonomous_decision=value.autonomous_decision,
+            disclaimer=value.disclaimer,
+        )
     if isinstance(value, Mapping):
         return SummaryLengthBudgetPolicy.from_mapping(value)
     raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_POLICY)
@@ -974,7 +1058,7 @@ def _coerce_policy_classes(value: object) -> tuple[SummaryEvidenceClassPolicy, .
                 raise SummaryLengthBudgetError(
                     SummaryLengthBudgetReason.INVALID_POLICY_CLASS
                 )
-            row = dict(config)
+            row = _safe_mapping(config, SummaryLengthBudgetReason.INVALID_POLICY_CLASS)
             row.setdefault("evidence_class", name)
             rows.append(row)
     else:
@@ -1035,10 +1119,13 @@ def _coerce_policy_classes(value: object) -> tuple[SummaryEvidenceClassPolicy, .
 
 
 def _coerce_demands(
-    value: object, global_limit: int
+    value: object, global_limit: int, _depth: int = 0
 ) -> tuple[SummaryEvidenceDemand, ...]:
+    if _depth > 32:
+        raise SummaryLengthBudgetError(SummaryLengthBudgetReason.INVALID_EVIDENCE)
     rows: list[Any]
     if isinstance(value, Mapping):
+        value = _safe_mapping(value, SummaryLengthBudgetReason.INVALID_EVIDENCE)
         nested = tuple(
             key for key in ("evidence", "evidence_classes", "classes") if key in value
         )
@@ -1047,13 +1134,15 @@ def _coerce_demands(
                 raise SummaryLengthBudgetError(
                     SummaryLengthBudgetReason.INVALID_EVIDENCE
                 )
-            return _coerce_demands(value[nested[0]], global_limit)
+            return _coerce_demands(value[nested[0]], global_limit, _depth + 1)
         rows = []
         for name, token_value in _bounded_items(
             value, SummaryLengthBudgetReason.INVALID_EVIDENCE
         ):
             if isinstance(token_value, Mapping):
-                row = dict(token_value)
+                row = _safe_mapping(
+                    token_value, SummaryLengthBudgetReason.INVALID_EVIDENCE
+                )
                 row.setdefault("evidence_class", name)
                 rows.append(row)
             else:
@@ -1073,7 +1162,11 @@ def _coerce_demands(
     demands: list[SummaryEvidenceDemand] = []
     for row in rows:
         if isinstance(row, SummaryEvidenceDemand):
-            demands.append(row)
+            demands.append(
+                SummaryEvidenceDemand(
+                    row.evidence_class, row.requested_tokens, row.approved
+                )
+            )
         elif isinstance(row, SummaryEvidenceClassPolicy):
             demands.append(SummaryEvidenceDemand(row.evidence_class, global_limit))
         elif isinstance(row, str):
@@ -1108,7 +1201,9 @@ def _bounded_sequence(value: object, reason: SummaryLengthBudgetReason) -> list[
     try:
         rows = list(itertools.islice(value, MAX_SUMMARY_EVIDENCE_CLASSES * 4 + 1))
     except Exception:
-        raise SummaryLengthBudgetError(reason) from None
+        rows = None
+    if rows is None:
+        raise SummaryLengthBudgetError(reason)
     if len(rows) > MAX_SUMMARY_EVIDENCE_CLASSES * 4:
         raise SummaryLengthBudgetError(reason, rejected_count=len(rows))
     return rows
@@ -1122,7 +1217,9 @@ def _bounded_items(
             itertools.islice(value.items(), MAX_SUMMARY_EVIDENCE_CLASSES * 4 + 1)
         )
     except Exception:
-        raise SummaryLengthBudgetError(reason) from None
+        rows = None
+    if rows is None:
+        raise SummaryLengthBudgetError(reason)
     if len(rows) > MAX_SUMMARY_EVIDENCE_CLASSES * 4:
         raise SummaryLengthBudgetError(reason, rejected_count=len(rows))
     return rows
