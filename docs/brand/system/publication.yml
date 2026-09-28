@@ -219,6 +219,7 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/section-provenance.md
     - clinical/nli-label-contract.md
     - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
@@ -388,8 +389,12 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
-    - clinical/claim-integrity.md
+    - clinical/evidence-span-audit.md
+    - clinical/output-use-policy.md
+    - clinical/evidence-coverage.md
     - clinical/human-review-packets.md
+    - clinical/uncertainty-disclosure.md
+    - clinical/claim-integrity.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
     - clinical/refusal-taxonomy.md
