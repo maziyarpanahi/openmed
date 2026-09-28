@@ -239,6 +239,16 @@ def test_custom_backend_metadata_does_not_use_class_name():
     assert "SYNTHETIC_PRIVATE" not in json.dumps(result.metadata)
 
 
+def test_custom_missing_dependency_cannot_echo_note_in_error():
+    def backend(text):
+        raise MissingOptionalDependencyError(package="local", feature=text, extra="hf")
+
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize_deidentified(deidentified(), model=backend)
+    assert "cough" not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
 @pytest.mark.parametrize("budget", [True, 0, -1, 1.5, 2**51])
 def test_memory_budget_validation(budget):
     with pytest.raises(backends.LocalSummarizerError):
