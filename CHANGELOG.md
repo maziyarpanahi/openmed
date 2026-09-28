@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a Polish (`pl`) PII language pack with native locale surrogates,
+  validated PESEL handling, date, phone, address, and postcode patterns, and
+  synthetic offset and zero-leakage regression fixtures (#294).
 - Added deterministic citation minimality checks for guarded atomic claims,
   with opaque offset-only reports, token counts, explicit context budgets, and
   human-review flags (#2742).
