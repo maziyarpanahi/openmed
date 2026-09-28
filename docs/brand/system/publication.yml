@@ -412,6 +412,8 @@ classification:
     - evaluation/clinical-fixtures.md
     - multimodal/box-normalization.md
     - multimodal/page-rotation.md
+    - evaluation/ocr-routing.md
+    - evaluation/clinical-fixtures.md
     - multimodal/dicom-sr-provenance.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md
