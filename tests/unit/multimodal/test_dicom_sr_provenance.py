@@ -240,3 +240,97 @@ def test_provenance_is_deterministic_and_advisory_is_value_free():
 
     assert first == second
     assert "report values" in DICOM_SR_PROVENANCE_ADVISORY
+
+
+def test_explicit_offsets_must_belong_to_declared_item():
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance(
+            [{"finding_id": "f", "item_path": "1.3.1.3", "source_offsets": (105, 110)}],
+            document=_document(),
+        )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"id": "other"},
+        {"source_start": 80, "start": 81, "source_end": 90},
+        {"source_offsets": (80, 90), "provenance": {"start": 81, "end": 90}},
+        {"template_id": "1502", "template_identifier": "1503"},
+        {"template_id": "9999"},
+    ],
+)
+def test_conflicting_finding_declarations_are_rejected(extra):
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance(
+            [{"finding_id": "f", "item_path": "1.3.1.3", **extra}], document=_document()
+        )
+
+
+def test_document_and_explicit_spans_cannot_be_mixed():
+    with pytest.raises((TypeError, DicomSrProvenanceError)):
+        build_dicom_sr_provenance({"f": "1"}, document=_document(), spans=_SPANS)
+
+
+def test_document_offsets_must_fit_source_text():
+    document = ExtractedDocument(
+        text="x", spans=_SPANS, metadata={"content_items": _CONTENT_ITEMS}
+    )
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance({"f": "1"}, document=document)
+
+
+def test_span_metadata_and_top_level_path_must_agree():
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance(
+            {"f": "1"},
+            spans=[
+                {"start": 0, "end": 5, "item_path": "1", "metadata": {"node_path": "2"}}
+            ],
+        )
+
+
+def test_rendered_record_checks_all_offset_aliases():
+    with pytest.raises(DicomSrProvenanceError):
+        render_dicom_sr_provenance(
+            [
+                {
+                    "finding_id": "f",
+                    "item_path": "1",
+                    "start": 0,
+                    "end": 5,
+                    "source_offsets": (1, 5),
+                }
+            ]
+        )
+
+
+def test_findings_iterator_failure_has_no_raw_context():
+    def broken():
+        raise RuntimeError("synthetic-sensitive-value")
+        yield
+
+    with pytest.raises(DicomSrProvenanceError) as caught:
+        build_dicom_sr_provenance(broken())
+    assert caught.value.__context__ is None
+    assert "synthetic-sensitive-value" not in str(caught.value)
+
+
+def test_provenance_collections_are_bounded():
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance([(str(i), "1") for i in range(4097)])
+
+
+def test_mutated_record_is_revalidated_before_rendering():
+    from openmed.multimodal.dicom_sr_provenance import DicomSrProvenanceRecord
+
+    record = DicomSrProvenanceRecord("f", "1")
+    object.__setattr__(record, "source_start", True)
+    object.__setattr__(record, "source_end", 3)
+    with pytest.raises(DicomSrProvenanceError):
+        render_dicom_sr_provenance([record])
+
+
+def test_item_path_depth_is_bounded():
+    with pytest.raises(DicomSrProvenanceError):
+        build_dicom_sr_provenance({"f": ".".join(["1"] * 65)})

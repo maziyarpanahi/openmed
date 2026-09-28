@@ -16,7 +16,9 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
 from typing import Any
 
 from .base import ExtractedDocument, SourceSpan
@@ -74,6 +76,42 @@ class AmbiguousDicomSrItemPathError(DicomSrProvenanceError):
 AmbiguousItemPathError = AmbiguousDicomSrItemPathError
 
 
+def _safe_boundary(function):
+    """Discard external exception context and source-bearing messages."""
+
+    @wraps(function)
+    def checked(*args, **kwargs):
+        error_type, message = (
+            DicomSrProvenanceError,
+            "invalid DICOM-SR provenance input",
+        )
+        try:
+            return function(*args, **kwargs)
+        except AmbiguousDicomSrItemPathError as error:
+            error_type = AmbiguousDicomSrItemPathError
+            if "duplicate item path" in str(error):
+                message = "duplicate item path"
+            elif "multiple item paths" in str(error):
+                message = "multiple item paths"
+        except DicomSrProvenanceError as error:
+            if "1-based dotted" in str(error):
+                message = "must be a 1-based dotted item path"
+            elif "must supply an item path" in str(error):
+                message = "must supply an item path or source offsets"
+        except Exception:
+            pass
+        raise error_type(message)
+
+    return checked
+
+
+def _bounded(values):
+    result = tuple(islice(iter(values), 4097))
+    if len(result) > 4096:
+        raise DicomSrProvenanceError("input limit exceeded")
+    return result
+
+
 @dataclass(frozen=True)
 class DicomSrProvenanceRecord(Mapping[str, Any]):
     """One value-free reference from a finding to a DICOM-SR content item.
@@ -90,6 +128,7 @@ class DicomSrProvenanceRecord(Mapping[str, Any]):
     source_start: int | None = None
     source_end: int | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         _validate_identifier(self.finding_id, context="finding identifier")
         _validate_item_path(self.item_path, context="item path")
@@ -110,9 +149,11 @@ class DicomSrProvenanceRecord(Mapping[str, Any]):
             return None
         return self.source_start, self.source_end
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return only the allowlisted, JSON-serializable record fields."""
 
+        replace(self)
         return {
             "finding_id": self.finding_id,
             "item_path": self.item_path,
@@ -148,6 +189,7 @@ class _SpanInfo:
     end: int
 
 
+@_safe_boundary
 def build_dicom_sr_provenance(
     findings: Iterable[Mapping[str, Any] | Sequence[Any]] | Mapping[Any, Any],
     content_items: Sequence[Mapping[str, Any]] | ExtractedDocument | None = None,
@@ -229,6 +271,14 @@ def build_dicom_sr_provenance(
             )
 
         mapped_span = span_index.get(item_path)
+        if (
+            mapped_span is not None
+            and explicit_start is not None
+            and not (
+                mapped_span.start <= explicit_start < explicit_end <= mapped_span.end
+            )
+        ):
+            raise AmbiguousDicomSrItemPathError("offsets conflict with declared path")
         source_start = explicit_start
         source_end = explicit_end
         if source_start is None and mapped_span is not None:
@@ -236,8 +286,15 @@ def build_dicom_sr_provenance(
             source_end = mapped_span.end
 
         template_id = _nearest_template_id(item_path, item_index)
+        declared_template = _finding_template_id(finding, index=index)
+        if (
+            template_id is not None
+            and declared_template is not None
+            and template_id != declared_template
+        ):
+            raise AmbiguousDicomSrItemPathError("conflicting template identifiers")
         if template_id is None:
-            template_id = _finding_template_id(finding, index=index)
+            template_id = declared_template
 
         records.append(
             DicomSrProvenanceRecord(
@@ -271,6 +328,7 @@ def map_dicom_sr_provenance(
     )
 
 
+@_safe_boundary
 def render_dicom_sr_provenance(
     records: Iterable[DicomSrProvenanceRecord | Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -285,11 +343,12 @@ def render_dicom_sr_provenance(
         record
         if isinstance(record, DicomSrProvenanceRecord)
         else _record_from_mapping(record, index=index)
-        for index, record in enumerate(records)
+        for index, record in enumerate(_bounded(records))
     ]
     return [record.to_dict() for record in sorted(normalized, key=_record_sort_key)]
 
 
+@_safe_boundary
 def serialize_dicom_sr_provenance(
     records: Iterable[DicomSrProvenanceRecord | Mapping[str, Any]],
 ) -> str:
@@ -312,6 +371,8 @@ def _resolve_sources(
 ) -> tuple[Sequence[Mapping[str, Any]], Sequence[SourceSpan | Mapping[str, Any]]]:
     if spans is not None and source_spans is not None:
         raise TypeError("spans and source_spans are mutually exclusive")
+    if document is not None and (spans is not None or source_spans is not None):
+        raise TypeError("document already supplies source spans")
     if content_items is not None and document is not None:
         raise TypeError("content_items and document are mutually exclusive")
 
@@ -333,7 +394,14 @@ def _resolve_sources(
     else:
         resolved_items = content_items
 
-    return resolved_items, resolved_spans or ()
+    resolved_items = _bounded(resolved_items)
+    resolved_spans = _bounded(resolved_spans) if resolved_spans is not None else ()
+    if document is not None:
+        for index, span in enumerate(resolved_spans):
+            _, end, _ = _span_fields(span, index=index)
+            if end > len(document.text):
+                raise DicomSrProvenanceError("source offsets exceed document")
+    return resolved_items, resolved_spans
 
 
 def _index_content_items(
@@ -366,11 +434,11 @@ def _index_source_spans(
             metadata,
             context=f"source span at index {span_index}",
         )
-        if path is None and isinstance(raw_span, Mapping):
-            path = _path_from_aliases(
-                raw_span,
-                context=f"source span at index {span_index}",
-            )
+        if isinstance(raw_span, Mapping):
+            outer_path = _path_from_aliases(raw_span, context="source span")
+            if path is not None and outer_path is not None and path != outer_path:
+                raise AmbiguousDicomSrItemPathError("conflicting source paths")
+            path = path or outer_path
         if path is None:
             continue
         if path in index:
@@ -414,9 +482,17 @@ def _normalise_findings(
         if _looks_like_single_finding(findings):
             return [findings]
         normalized: list[dict[str, Any]] = []
-        for finding_id, specification in findings.items():
+        for finding_id, specification in _bounded(findings.items()):
             if isinstance(specification, Mapping):
                 row = dict(specification)
+                declared = _first_present(row, _IDENTIFIER_FIELDS)
+                if (
+                    declared is not None
+                    and str(declared).strip() != str(finding_id).strip()
+                ):
+                    raise AmbiguousDicomSrItemPathError(
+                        "conflicting finding identifiers"
+                    )
                 row.setdefault("finding_id", finding_id)
             else:
                 row = {"finding_id": finding_id, "item_path": specification}
@@ -424,7 +500,7 @@ def _normalise_findings(
         return normalized
     if isinstance(findings, (str, bytes)):
         raise TypeError("findings must be mappings or an iterable of finding records")
-    return list(findings)
+    return list(_bounded(findings))
 
 
 def _looks_like_single_finding(value: Mapping[Any, Any]) -> bool:
@@ -545,13 +621,12 @@ def _finding_offsets(
         end = _first_present(finding, _OFFSET_END_FIELDS)
         pairs.append((start, end))
 
-    if not pairs:
-        provenance = finding.get("provenance")
-        if isinstance(provenance, Mapping):
-            nested_start = _first_present(provenance, _OFFSET_START_FIELDS)
-            nested_end = _first_present(provenance, _OFFSET_END_FIELDS)
-            if nested_start is not None or nested_end is not None:
-                pairs.append((nested_start, nested_end))
+    provenance = finding.get("provenance")
+    if isinstance(provenance, Mapping):
+        nested_start = _first_present(provenance, _OFFSET_START_FIELDS)
+        nested_end = _first_present(provenance, _OFFSET_END_FIELDS)
+        if nested_start is not None or nested_end is not None:
+            pairs.append((nested_start, nested_end))
 
     if not pairs:
         return None, None
@@ -656,17 +731,24 @@ def _coerce_item_path(value: Any, *, context: str) -> str:
 
 
 def _validate_item_path(value: Any, *, context: str) -> None:
-    if not isinstance(value, str) or _ITEM_PATH_RE.fullmatch(value) is None:
+    if (
+        not isinstance(value, str)
+        or len(value) > 4096
+        or value.count(".") >= 64
+        or _ITEM_PATH_RE.fullmatch(value) is None
+    ):
         raise DicomSrProvenanceError(f"{context} must be a 1-based dotted item path")
 
 
 def _validate_identifier(value: Any, *, context: str) -> None:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value or len(value) > 4096:
         raise DicomSrProvenanceError(f"{context} must be non-empty")
 
 
 def _validate_template_id(value: Any) -> None:
-    if value is not None and (not isinstance(value, str) or not value):
+    if value is not None and (
+        not isinstance(value, str) or not value or len(value) > 4096
+    ):
         raise DicomSrProvenanceError("template identifier must be a non-empty string")
 
 
@@ -701,10 +783,17 @@ def _coerce_optional_string(value: Any) -> str | None:
 
 
 def _first_present(value: Mapping[str, Any], fields: Sequence[str]) -> Any:
-    for field in fields:
-        if field in value and value[field] is not None:
-            return value[field]
-    return None
+    present = [
+        value[field] for field in fields if field in value and value[field] is not None
+    ]
+    if not present:
+        return None
+    if any(
+        candidate != present[0] or type(candidate) is not type(present[0])
+        for candidate in present[1:]
+    ):
+        raise AmbiguousDicomSrItemPathError("conflicting field aliases")
+    return present[0]
 
 
 def _record_from_mapping(
@@ -727,17 +816,7 @@ def _record_from_mapping(
         {"finding_id": finding_id},
         index=index,
     )
-    start = _first_present(value, _OFFSET_START_FIELDS)
-    end = _first_present(value, _OFFSET_END_FIELDS)
-    if start is None and end is None:
-        offset_pair = _first_present(value, _OFFSET_CONTAINER_FIELDS)
-        if offset_pair is not None:
-            start, end = _offset_pair(offset_pair, index=index, field="source_offsets")
-    validated_start, validated_end = (
-        _validated_offset_pair((start, end), index=index)
-        if start is not None or end is not None
-        else (None, None)
-    )
+    validated_start, validated_end = _finding_offsets(value, index=index)
     template_id = _finding_template_id(value, index=index)
     return DicomSrProvenanceRecord(
         finding_id=normalized_id,

@@ -38,3 +38,11 @@ print(serialize_dicom_sr_provenance(records))
 
 The mapper is deterministic and local-only. It is an evidence-linking aid, not
 a clinical interpretation or a substitute for qualified review.
+
+Explicit offsets must fit the declared item span, and source spans must fit a
+supplied document. Conflicting identifier, template, path and offset aliases
+are rejected. Collections are limited to 4,096 entries and item paths to 64
+levels; reference strings are limited to 4,096 characters. Rendering revalidates
+typed records, and public errors discard raw exception context. Finding and
+template identifiers are caller-owned opaque references, not anonymized values;
+never place report text or patient identifiers in those fields.
