@@ -136,6 +136,8 @@ def test_report_guard_rejects_raw_value_and_unsafe_field() -> None:
         assert_no_raw_text({"notes": "synthetic note payload"})
     with pytest.raises(ModelProvenancePrivacyError):
         assert_no_raw_text({"safe_field": "synthetic free form value"})
+    with pytest.raises(ModelProvenancePrivacyError):
+        assert_no_raw_text({"synthetic_person_identifier": True})
 
 
 def test_malformed_manifest_does_not_accept_missing_provenance() -> None:

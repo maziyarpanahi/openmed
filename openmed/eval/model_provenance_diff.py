@@ -804,7 +804,28 @@ def _assert_safe_payload(value: Any, *, path: str) -> None:
         for key, child in value.items():
             if not isinstance(key, str) or key.casefold() in _RAW_VALUE_KEYS:
                 raise ModelProvenancePrivacyError("report contains a forbidden field")
-            if not _SAFE_IDENTIFIER.fullmatch(key):
+            if key not in {
+                *PROVENANCE_COMPONENTS,
+                "schema_version",
+                "before_manifest_fingerprint",
+                "after_manifest_fingerprint",
+                "changed",
+                "drift_detected",
+                "changed_components",
+                "drift_categories",
+                "components",
+                "evaluation_slices",
+                "added",
+                "removed",
+                "classification",
+                "reasons",
+                "before",
+                "after",
+                "fingerprint",
+                "version",
+                "name",
+                "change",
+            }:
                 raise ModelProvenancePrivacyError("report contains an unsafe field")
             _assert_safe_payload(child, path=f"{path}.{key}")
         return
