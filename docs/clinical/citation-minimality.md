@@ -82,3 +82,14 @@ credentials. The offsets let an authorized reviewer navigate the original
 source in the caller's controlled system; they are not a substitute for that
 review. Citation minimality is not a compliance certification or a guarantee
 of clinical correctness.
+
+Claims, citations and report records are bounded to 4,096 items; nested span
+wrappers are bounded to 32 levels. Typed records are reconstructed and validated
+at input boundaries, including nested offsets, opaque references, token counts,
+review flags and policy/status consistency. Conflicting offset aliases fail
+closed; invalid iterators do not retain upstream exception messages.
+
+This checks only submitted citations. A claim with no citation contributes to
+`claim_count` but has no minimality record; use a separate citation-coverage
+gate to detect missing citations. A zero flagged count does not prove complete
+coverage or semantic support.

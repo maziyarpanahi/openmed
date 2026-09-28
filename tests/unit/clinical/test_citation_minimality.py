@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
@@ -33,6 +33,77 @@ def _span(source: str, value: str) -> CitationSpan:
 
 def _claim(source: str, value: str = "beta") -> AtomicClaim:
     return AtomicClaim(_reference("claim-1"), _span(source, value))
+
+
+def test_mutated_typed_claim_and_span_fail_closed():
+    claim = _claim("alpha beta")
+    object.__setattr__(claim.required_span, "start", -1)
+    with pytest.raises(CitationMinimalityError):
+        check_citation_minimality("alpha beta", [claim], [])
+
+
+def test_mutated_typed_identifier_never_reaches_report():
+    claim = _claim("alpha beta")
+    citation = ClaimCitation(claim.claim_id, claim.required_span)
+    object.__setattr__(citation, "citation_id", "SYNTHETIC_PRIVATE")
+    with pytest.raises(CitationMinimalityError):
+        check_citation_minimality("alpha beta", [claim], [citation])
+
+
+def test_record_review_flag_must_match_status():
+    claim = _claim("alpha beta gamma")
+    report = check_citation_minimality(
+        "alpha beta gamma",
+        [claim],
+        [ClaimCitation(claim.claim_id, CitationSpan(0, 16))],
+    )
+    with pytest.raises(CitationMinimalityError):
+        replace(report.records[0], review_required=False)
+
+
+def test_report_revalidates_nested_records_and_claim_count():
+    claim = _claim("alpha beta")
+    report = check_citation_minimality(
+        "alpha beta", [claim], [ClaimCitation(claim.claim_id, claim.required_span)]
+    )
+    with pytest.raises(CitationMinimalityError):
+        replace(report, claim_count=0)
+    object.__setattr__(report.records[0], "claim_id", "SYNTHETIC_PRIVATE")
+    with pytest.raises(CitationMinimalityError):
+        replace(report)
+
+
+def test_collection_failure_discards_private_exception_context():
+    def broken():
+        raise ValueError("SYNTHETIC_PRIVATE")
+        yield
+
+    with pytest.raises(CitationMinimalityError) as caught:
+        check_citation_minimality("alpha beta", broken(), [])
+    assert caught.value.__context__ is None
+
+
+def test_conflicting_span_aliases_fail_closed():
+    with pytest.raises(CitationMinimalityError):
+        CitationSpan.from_obj({"start": 0, "source_start": 1, "end": 2})
+
+
+def test_nested_and_endless_inputs_are_bounded():
+    first, second = {}, {}
+    first["offset"] = second
+    second["offset"] = first
+    with pytest.raises(CitationMinimalityError):
+        CitationSpan.from_obj(first)
+    consumed = []
+
+    def endless():
+        while True:
+            consumed.append(1)
+            yield _claim("alpha beta")
+
+    with pytest.raises(CitationMinimalityError):
+        check_citation_minimality("alpha beta", endless(), [])
+    assert len(consumed) == 4097
 
 
 def test_exact_citation_is_minimal_and_value_free() -> None:

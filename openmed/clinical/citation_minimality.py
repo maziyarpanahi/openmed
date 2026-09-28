@@ -18,8 +18,9 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from itertools import islice
 from typing import Any, Final
 
 __all__ = [
@@ -51,6 +52,18 @@ _MISSING = object()
 
 class CitationMinimalityError(ValueError):
     """Raised when citation minimality inputs cannot be evaluated safely."""
+
+
+def _bounded(value: Any, limit: int = 4096) -> tuple[Any, ...]:
+    rows = None
+    if not isinstance(value, (str, bytes, bytearray)):
+        try:
+            rows = tuple(islice(iter(value), limit + 1))
+        except Exception:
+            pass
+    if rows is None or len(rows) > limit:
+        raise CitationMinimalityError("citation collection is invalid or exceeds limit")
+    return rows
 
 
 class CitationMinimalityStatus(str, Enum):
@@ -85,7 +98,7 @@ class CitationSpan:
         return {"start": self.start, "end": self.end}
 
     @classmethod
-    def from_obj(cls, value: Any) -> "CitationSpan":
+    def from_obj(cls, value: Any, _depth: int = 0) -> "CitationSpan":
         """Build a span from a two-item sequence or span-like object.
 
         Mappings may use ``start``/``end`` or ``source_start``/
@@ -94,15 +107,17 @@ class CitationSpan:
         copying their source values.
         """
 
+        if _depth > 32:
+            raise CitationMinimalityError("citation span nesting exceeds limit")
         if isinstance(value, cls):
-            return value
+            return cls(value.start, value.end)
 
         start = _read(value, ("start", "source_start"))
         end = _read(value, ("end", "source_end"))
         if start is _MISSING or end is _MISSING:
             nested = _read(value, ("source_offset", "source_offsets", "offset"))
             if nested is not _MISSING and nested is not value:
-                return cls.from_obj(nested)
+                return cls.from_obj(nested, _depth + 1)
             if isinstance(value, Mapping):
                 raise CitationMinimalityError(
                     "citation spans require start and end offsets"
@@ -111,12 +126,7 @@ class CitationSpan:
                 raise CitationMinimalityError(
                     "citation spans require start and end offsets"
                 )
-            try:
-                values = tuple(value)
-            except Exception:
-                raise CitationMinimalityError(
-                    "citation spans require start and end offsets"
-                ) from None
+            values = _bounded(value, 2)
             if len(values) != 2:
                 raise CitationMinimalityError(
                     "citation spans require start and end offsets"
@@ -170,7 +180,7 @@ class AtomicClaim:
         """Build a claim from a typed record or value-free mapping."""
 
         if isinstance(value, cls):
-            return value
+            return cls(value.claim_id, value.required_span)
         claim_id = _read(value, ("claim_id", "id"))
         if claim_id is _MISSING:
             raise CitationMinimalityError("atomic claims require an opaque claim id")
@@ -266,7 +276,7 @@ class ClaimCitation:
         """Build a citation from a typed record or value-free mapping."""
 
         if isinstance(value, cls):
-            return value
+            return cls(value.claim_id, value.source_span, value.citation_id)
         claim_id = _read(value, ("claim_id", "id"))
         if claim_id is _MISSING:
             raise CitationMinimalityError("citations require an opaque claim id")
@@ -347,24 +357,41 @@ class CitationMinimalityRecord:
                 raise CitationMinimalityError(
                     "token counts must be non-negative integers"
                 )
-        try:
-            status = CitationMinimalityStatus(self.status)
-        except Exception:
-            raise CitationMinimalityError(
-                "unsupported citation minimality status"
-            ) from None
+        status = next(
+            (item for item in CitationMinimalityStatus if self.status == item), None
+        )
+        if status is None:
+            raise CitationMinimalityError("unsupported citation minimality status")
         if type(self.review_required) is not bool:
             raise CitationMinimalityError("review_required must be a boolean")
-        try:
-            context_spans = tuple(self.excess_context_spans)
-        except Exception:
-            raise CitationMinimalityError(
-                "excess context must contain CitationSpan records"
-            ) from None
+        context_spans = _bounded(self.excess_context_spans, 2)
         if any(not isinstance(span, CitationSpan) for span in context_spans):
             raise CitationMinimalityError(
                 "excess context must contain CitationSpan records"
             )
+        context_spans = tuple(CitationSpan.from_obj(span) for span in context_spans)
+        covers = (
+            self.citation_span.start <= self.required_span.start
+            and self.citation_span.end >= self.required_span.end
+        )
+        if self.review_required != (status is not CitationMinimalityStatus.MINIMAL):
+            raise CitationMinimalityError("citation review flag conflicts with status")
+        if (status is CitationMinimalityStatus.MISSING_REQUIRED_SPAN) == covers:
+            raise CitationMinimalityError("citation status conflicts with coverage")
+        expected_context = (
+            _excess_context_spans(self.citation_span, self.required_span)
+            if covers
+            else ()
+        )
+        if context_spans != expected_context or self.required_token_count < 1:
+            raise CitationMinimalityError(
+                "citation context or token counts are invalid"
+            )
+        expected_excess = (
+            self.citation_token_count - self.required_token_count if covers else 0
+        )
+        if self.excess_token_count != expected_excess:
+            raise CitationMinimalityError("citation token counts are inconsistent")
         object.__setattr__(self, "status", status)
         object.__setattr__(self, "excess_context_spans", context_spans)
 
@@ -454,16 +481,24 @@ class CitationMinimalityReport:
             or self.disclaimer != CITATION_MINIMALITY_DISCLAIMER
         ):
             raise CitationMinimalityError("citation minimality disclaimer is required")
-        try:
-            records = tuple(self.records)
-        except Exception:
-            raise CitationMinimalityError(
-                "records must contain CitationMinimalityRecord values"
-            ) from None
+        records = _bounded(self.records)
         if any(not isinstance(record, CitationMinimalityRecord) for record in records):
             raise CitationMinimalityError(
                 "records must contain CitationMinimalityRecord values"
             )
+        records = tuple(replace(record) for record in records)
+        if len({record.claim_id for record in records}) > self.claim_count:
+            raise CitationMinimalityError("claim_count is inconsistent")
+        for record in records:
+            if record.status is CitationMinimalityStatus.MISSING_REQUIRED_SPAN:
+                continue
+            expected = (
+                CitationMinimalityStatus.EXCESS_CONTEXT
+                if record.excess_token_count > self.max_excess_tokens
+                else CitationMinimalityStatus.MINIMAL
+            )
+            if record.status is not expected:
+                raise CitationMinimalityError("citation status conflicts with policy")
         object.__setattr__(
             self,
             "records",
@@ -720,12 +755,7 @@ def _collection(value: Any, label: str) -> tuple[Any, ...]:
         value = (value,) if nested is _MISSING else nested
     if isinstance(value, (str, bytes, bytearray)):
         raise CitationMinimalityError(f"{label} must be an iterable of records")
-    try:
-        return tuple(value)
-    except Exception:
-        raise CitationMinimalityError(
-            f"{label} must be an iterable of records"
-        ) from None
+    return _bounded(value)
 
 
 def _span_value(value: Any, names: tuple[str, ...]) -> Any:
@@ -751,26 +781,23 @@ def _span_from_fields(
 
 
 def _read(value: Any, names: tuple[str, ...]) -> Any:
-    if isinstance(value, Mapping):
+    found = []
+    failed = False
+    try:
         for name in names:
-            try:
+            if isinstance(value, Mapping):
                 if name in value:
-                    return value[name]
-            except Exception:
-                raise CitationMinimalityError(
-                    "citation record fields are invalid"
-                ) from None
-        return _MISSING
-    for name in names:
-        try:
-            return getattr(value, name)
-        except AttributeError:
-            continue
-        except Exception:
-            raise CitationMinimalityError(
-                "citation record fields are invalid"
-            ) from None
-    return _MISSING
+                    found.append(value[name])
+            else:
+                item = getattr(value, name, _MISSING)
+                if item is not _MISSING:
+                    found.append(item)
+        failed = bool(found) and any(item != found[0] for item in found)
+    except Exception:
+        failed = True
+    if failed:
+        raise CitationMinimalityError("citation record fields are invalid")
+    return found[0] if found else _MISSING
 
 
 def _opaque_reference(value: Any) -> str:
