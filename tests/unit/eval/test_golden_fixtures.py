@@ -2193,3 +2193,24 @@ def test_bengali_golden_fixtures_pass_offline_zero_leakage_gate():
     assert report.metrics["leakage"]["by_language"]["bn"] == 0.0
     gate = _per_language_residual_leakage_check(report.metrics, report.metadata)
     assert gate.passed is True
+
+
+@pytest.mark.parametrize("digits", ["1207", "১২৩৪", "700001", "৭০০০০১"])
+def test_bengali_standalone_postcodes_remain_detectable(digits):
+    from openmed.core.pii import _apply_safety_sweep_to_result
+    from openmed.processing.outputs import PredictionResult
+
+    text = f"পোস্টকোড {digits}।"
+    empty = PredictionResult(
+        text=text,
+        entities=[],
+        model_name="offline",
+        timestamp="2026-09-28T00:00:00Z",
+        metadata={},
+    )
+    result, _ = _apply_safety_sweep_to_result(text, empty, lang="bn")
+    assert any(
+        text[entity.start : entity.end] == digits
+        and normalize_label(entity.label, "bn") == "ZIPCODE"
+        for entity in result.entities
+    )
