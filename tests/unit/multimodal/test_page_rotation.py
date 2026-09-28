@@ -186,3 +186,69 @@ def test_mapping_coordinates_are_supported_without_guessing_orientation():
         (100, 200),
         90,
     ) == (120.0, 10.0, 180.0, 40.0)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"bbox": (1, 2, 3, 4), "x0": 9},
+        {"left": 1, "top": 2, "right": 3, "bottom": 4, "x0": 9},
+        {"bbox": {"1": 2, "2": 3, "3": 4, "4": 5}},
+    ],
+)
+def test_partial_or_nested_coordinate_representations_rejected(value):
+    with pytest.raises(GeometryValidationError):
+        transform_bbox(value, (100, 200), 0)
+
+
+def test_conversion_failure_has_no_raw_context():
+    with pytest.raises(GeometryValidationError) as caught:
+        transform_point(("synthetic-sensitive-value", 2), (100, 200), 0)
+    assert caught.value.__context__ is None
+
+
+def test_iterator_failure_has_no_raw_context():
+    from openmed.multimodal import transform_ocr_words
+
+    def broken():
+        raise RuntimeError("synthetic-sensitive-value")
+        yield
+
+    with pytest.raises(GeometryValidationError) as caught:
+        transform_ocr_words(broken(), (100, 200), 0)
+    assert caught.value.__context__ is None
+    assert "synthetic-sensitive-value" not in str(caught.value)
+
+
+def test_word_collection_is_bounded():
+    from openmed.multimodal import transform_ocr_words
+
+    word = OcrWord("synthetic", (1, 2, 3, 4), 0.9)
+    with pytest.raises(GeometryValidationError):
+        transform_ocr_words([word] * 4097, (100, 200), 0)
+
+
+def test_coordinate_iterator_stops_at_required_count():
+    def points():
+        yield 1
+        yield 2
+        yield 3
+        raise AssertionError("must not exhaust unbounded input")
+
+    with pytest.raises(GeometryValidationError) as caught:
+        transform_point(points(), (100, 200), 0)
+    assert caught.value.__context__ is None
+
+
+def test_mutated_typed_dimensions_are_revalidated():
+    dimensions = PageDimensions(100, 200)
+    object.__setattr__(dimensions, "width", -1)
+    with pytest.raises(InvalidPageDimensionsError):
+        PageTransform(dimensions, 0)
+
+
+def test_mutated_transform_rotation_is_revalidated():
+    transformer = PageTransform((100, 200), 0)
+    object.__setattr__(transformer, "rotation", 45)
+    with pytest.raises(AmbiguousOrientationError):
+        transformer.point((1, 2))

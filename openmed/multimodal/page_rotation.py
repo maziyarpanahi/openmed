@@ -17,6 +17,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import IntEnum
+from functools import wraps
+from itertools import islice
 from math import isfinite
 from typing import Any, TypeAlias
 
@@ -51,6 +53,32 @@ class GeometryValidationError(PageRotationError):
 
 class OutOfBoundsError(GeometryValidationError):
     """Raised when geometry extends outside the supplied page bounds."""
+
+
+def _safe_boundary(function):
+    """Discard raw conversion and iterator exceptions at public boundaries."""
+
+    @wraps(function)
+    def checked(*args, **kwargs):
+        error_type = GeometryValidationError
+        reason, field_name = "invalid geometry input", None
+        try:
+            return function(*args, **kwargs)
+        except PageRotationError as error:
+            error_type = type(error)
+            reason, field_name = error.reason, error.field_name
+        except Exception:
+            pass
+        raise error_type(reason, field_name=field_name)
+
+    return checked
+
+
+def _bounded(values, limit=4096):
+    result = tuple(islice(iter(values), limit + 1))
+    if len(result) > limit:
+        raise GeometryValidationError("input limit exceeded")
+    return result
 
 
 class PageRotation(IntEnum):
@@ -118,6 +146,7 @@ class PageSize:
     width: float
     height: float
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(self, "width", _dimension(self.width, field_name="width"))
         object.__setattr__(self, "height", _dimension(self.height, field_name="height"))
@@ -136,7 +165,7 @@ BBoxLike: TypeAlias = Sequence[Any] | Mapping[str, Any]
 
 def _coerce_page_size(value: PageSizeLike | None) -> PageSize:
     if isinstance(value, PageSize):
-        return value
+        return replace(value)
     if value is None:
         raise InvalidPageDimensionsError(
             "page size is required", field_name="page_size"
@@ -152,7 +181,7 @@ def _coerce_page_size(value: PageSizeLike | None) -> PageSize:
             "width and height are required", field_name="page_size"
         )
     try:
-        dimensions = tuple(value)
+        dimensions = tuple(islice(iter(value), 3))
     except TypeError:
         raise InvalidPageDimensionsError(
             "width and height are required", field_name="page_size"
@@ -252,6 +281,12 @@ def _coordinates(value: Any, *, field_name: str, count: int) -> tuple[float, ...
                 ("bbox", ("x0", "y0", "x1", "y1")),
                 ("edges", ("left", "top", "right", "bottom")),
             )
+            for _, keys in representations:
+                supplied = [key for key in keys if key in value]
+                if supplied and len(supplied) != len(keys):
+                    raise GeometryValidationError(
+                        "incomplete coordinate representation", field_name=field_name
+                    )
             present = [
                 keys for _, keys in representations if all(key in value for key in keys)
             ]
@@ -271,12 +306,12 @@ def _coordinates(value: Any, *, field_name: str, count: int) -> tuple[float, ...
                 raise GeometryValidationError(
                     "multiple box representations supplied", field_name=field_name
                 )
-    if isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, (str, bytes, bytearray, Mapping)):
         raise GeometryValidationError(
             f"{count} coordinates are required", field_name=field_name
         )
     try:
-        raw = tuple(value)
+        raw = tuple(islice(iter(value), count + 1))
     except TypeError:
         raise GeometryValidationError(
             f"{count} coordinates are required", field_name=field_name
@@ -343,6 +378,7 @@ class PageTransform:
     page_size: PageSizeLike
     rotation: PageRotationLike
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(self, "page_size", _coerce_page_size(self.page_size))
         object.__setattr__(self, "rotation", _coerce_rotation(self.rotation))
@@ -373,23 +409,29 @@ class PageTransform:
 
         return PageRotation((360 - int(self.rotation)) % 360)
 
+    @_safe_boundary
     def inverse(self) -> "PageTransform":
         """Return a transform that maps target geometry back to the source."""
 
+        replace(self)
         return PageTransform(self.target_size, self.inverse_rotation)
 
+    @_safe_boundary
     def point(self, point: PointLike) -> Point:
         """Transform one validated page-space point."""
 
+        replace(self)
         return _rotated_point(
             _validate_point(point, self.page_size),
             self.page_size,
             self.rotation,
         )
 
+    @_safe_boundary
     def bbox(self, box: BBoxLike) -> BBox:
         """Transform one validated axis-aligned OCR bounding box."""
 
+        replace(self)
         return _rotated_bbox(
             _validate_bbox(box, self.page_size),
             self.page_size,
@@ -416,6 +458,7 @@ def _make_transform(
     )
 
 
+@_safe_boundary
 def transform_point(
     point: PointLike,
     page_size: PageSizeLike | None = None,
@@ -442,6 +485,7 @@ def transform_point(
     ).point(point)
 
 
+@_safe_boundary
 def transform_bbox(
     box: BBoxLike,
     page_size: PageSizeLike | None = None,
@@ -546,6 +590,7 @@ def rotate_box(
     )
 
 
+@_safe_boundary
 def transform_ocr_words(
     words: Iterable[OcrWord],
     page_size: PageSizeLike | None = None,
@@ -564,9 +609,12 @@ def transform_ocr_words(
         height=height,
         orientation=orientation,
     )
-    return tuple(replace(word, bbox=transformer.bbox(word.bbox)) for word in words)
+    return tuple(
+        replace(word, bbox=transformer.bbox(word.bbox)) for word in _bounded(words)
+    )
 
 
+@_safe_boundary
 def transform_ocr_result(
     result: OcrResult,
     page_size: PageSizeLike | None = None,
@@ -596,6 +644,7 @@ def transform_ocr_result(
     return OcrResult(words=words, metadata=dict(result.metadata))
 
 
+@_safe_boundary
 def transform_source_spans(
     spans: Iterable[SourceSpan],
     page_size: PageSizeLike | None = None,
@@ -616,10 +665,11 @@ def transform_source_spans(
     )
     return tuple(
         span if span.bbox is None else replace(span, bbox=transformer.bbox(span.bbox))
-        for span in spans
+        for span in _bounded(spans)
     )
 
 
+@_safe_boundary
 def transform_document(
     document: ExtractedDocument,
     page_size: PageSizeLike | None = None,

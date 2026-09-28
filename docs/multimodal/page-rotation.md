@@ -38,3 +38,10 @@ inverted boxes, non-finite coordinates, and out-of-bounds geometry raise
 validation errors. Inputs are rejected rather than clipped so a transform
 cannot silently change source provenance. Error messages contain stable field
 names and reason codes, not coordinates, OCR text, or source references.
+
+Collections are bounded to 4,096 words or spans per call. Coordinate and page
+dimension iterators consume at most the required count plus one; partial or
+multiple coordinate representations and nested coordinate mappings are rejected.
+Typed geometry is revalidated at transform boundaries. Conversion and iterator
+failures do not retain raw exception context. Preserved document text and metadata
+remain sensitive caller data; transformed records are not de-identified reports.
