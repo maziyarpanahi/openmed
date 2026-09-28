@@ -620,6 +620,8 @@ classification:
     - api-reference.md
   link_only:
     - models/clinical-nli.md
+    - evaluation/sdoh-counterfactuals.md
+    - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
