@@ -74,20 +74,34 @@ def build_dataset_provenance(
 
 
 def compute_dataset_content_hash(path: str | Path) -> str:
-    """Hash a dataset file or directory without retaining its bytes."""
+    """Hash a dataset file or directory without retaining file contents.
+
+    Files are streamed in bounded 1 MiB chunks. Directory manifests still retain
+    one digest per file, and the resulting digest encoding is unchanged.
+    """
 
     source_path = Path(path)
     if not source_path.exists():
         raise FileNotFoundError(f"dataset source does not exist: {source_path}")
     if source_path.is_file():
-        return _hash_bytes(source_path.read_bytes())
+        return _hash_file(source_path)
 
     entries = {
-        child.relative_to(source_path).as_posix(): _hash_bytes(child.read_bytes())
+        child.relative_to(source_path).as_posix(): _hash_file(child)
         for child in sorted(source_path.rglob("*"))
         if child.is_file()
     }
     return _hash_json({"files": entries})
+
+
+def _hash_file(path: Path) -> str:
+    """Hash a file with bounded read buffers and the existing digest format."""
+
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
 
 
 def build_training_data_manifest(
@@ -97,7 +111,11 @@ def build_training_data_manifest(
     data_revision: str,
     source: str | None = None,
 ) -> dict[str, Any]:
-    """Build a content-addressed manifest without persisting raw text."""
+    """Build a content-addressed manifest without persisting raw text.
+
+    For mapping fixtures, the first non-None field among ``gold_spans``,
+    ``spans``, and ``entities`` is authoritative, including an empty list.
+    """
 
     entries = sorted(
         (_fixture_manifest_entry(fixture) for fixture in fixtures),
@@ -212,12 +230,11 @@ def _fixture_language(fixture: Any) -> str | None:
 
 def _fixture_spans(fixture: Any) -> Iterable[Any]:
     if isinstance(fixture, Mapping):
-        return (
-            fixture.get("gold_spans")
-            or fixture.get("spans")
-            or fixture.get("entities")
-            or []
-        )
+        for field in ("gold_spans", "spans", "entities"):
+            value = fixture.get(field)
+            if value is not None:
+                return value
+        return []
     return getattr(fixture, "gold_spans", ())
 
 
