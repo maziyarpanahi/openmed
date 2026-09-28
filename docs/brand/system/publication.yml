@@ -219,6 +219,7 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/section-provenance.md
     - clinical/nli-label-contract.md
     - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
@@ -251,6 +252,7 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
     - clinical/summary-claim-segmentation.md
@@ -387,6 +389,8 @@ classification:
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
+    - clinical/evidence-span-audit.md
+    - clinical/output-use-policy.md
     - clinical/evidence-coverage.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
