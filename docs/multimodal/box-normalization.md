@@ -83,3 +83,12 @@ it is not a place for OCR text, a patient identifier, or a file payload. The
 normalizer does not accept OCR text, does not include input values in
 exceptions, and emits only geometry and provenance metadata. Tests and
 examples use synthetic references only.
+
+Serialized normalized-page records and typed results can be passed back to the
+normalizer without applying their source-unit or source-origin transform twice.
+Conflicting declarations, nested coordinate metadata, cyclic mappings, and
+conflicting page-size aliases are rejected. Batches are limited to 4,096 boxes;
+mapping traversal to 4,096 values and 32 levels; opaque references to 4,096
+characters. Conversion and iterator failures expose only stable errors, without
+retaining raw exception context. Caller-supplied references remain caller-owned
+data, not anonymized identifiers.

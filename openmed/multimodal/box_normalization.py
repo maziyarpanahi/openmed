@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
+from functools import wraps
 from typing import Any, TypeAlias
 
 BBox: TypeAlias = tuple[float, float, float, float]
@@ -60,6 +61,47 @@ InvalidBoxError = BoxValidationError
 CoordinateNormalizationError = BoxNormalizationError
 
 
+def _safe_boundary(function):
+    """Keep external conversion/iterator exceptions out of public errors."""
+
+    @wraps(function)
+    def checked(*args, **kwargs):
+        error_type = BoxValidationError
+        reason = "invalid coordinate input"
+        field_name = None
+        try:
+            return function(*args, **kwargs)
+        except BoxNormalizationError as error:
+            error_type = type(error)
+            reason, field_name = error.reason, error.field_name
+        except Exception:
+            pass
+        raise error_type(reason, field_name=field_name)
+
+    return checked
+
+
+def _check_structure(value):
+    """Bound mapping depth and size before interpreting coordinate payloads."""
+    stack = [(value, 0)]
+    seen = set()
+    count = 0
+    while stack:
+        item, depth = stack.pop()
+        count += 1
+        if count > 4096 or depth > 32:
+            raise BoxValidationError("input limit exceeded")
+        if isinstance(item, Mapping):
+            if id(item) in seen:
+                raise AmbiguousBoxError("cyclic coordinate mapping")
+            seen.add(id(item))
+            if len(item) > 4096:
+                raise BoxValidationError("input limit exceeded")
+            stack.extend((entry, depth + 1) for entry in item.values())
+        elif isinstance(item, (str, bytes)) and len(item) > 4096:
+            raise BoxValidationError("input limit exceeded")
+
+
 class CoordinateUnit(str, Enum):
     """Supported source units for OCR coordinates."""
 
@@ -68,6 +110,7 @@ class CoordinateUnit(str, Enum):
     NORMALIZED = "normalized"
 
     @classmethod
+    @_safe_boundary
     def coerce(cls, value: Any) -> "CoordinateUnit":
         if isinstance(value, cls):
             return value
@@ -102,6 +145,7 @@ class CoordinateOrigin(str, Enum):
     BOTTOM_LEFT = "bottom-left"
 
     @classmethod
+    @_safe_boundary
     def coerce(cls, value: Any) -> "CoordinateOrigin":
         if isinstance(value, cls):
             return value
@@ -164,6 +208,7 @@ class PageSize:
     width: float
     height: float
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -207,7 +252,7 @@ def _validate_page(page: Any) -> int:
 def _validate_source_ref(value: Any) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value or len(value) > 4096:
         raise BoxValidationError(
             "source_ref must be a non-empty opaque string", field_name="source_ref"
         )
@@ -253,6 +298,7 @@ class NormalizedBox:
     source_origin: CoordinateOrigin = CoordinateOrigin.TOP_LEFT
     source_ref: str | None = field(default=None, repr=False)
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -297,6 +343,7 @@ class NormalizedBox:
 
         return self.bbox
 
+    @_safe_boundary
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready, provenance-preserving representation.
 
@@ -305,6 +352,7 @@ class NormalizedBox:
         and never emits source text.
         """
 
+        replace(self)
         payload: dict[str, Any] = {
             "bbox": list(self.bbox),
             "coordinate_system": "normalized-page",
@@ -347,6 +395,30 @@ def _single_mapping_value(
 
 def _coordinate_payload(raw: Any, *, format_hint: Any = None) -> BBox:
     if isinstance(raw, Mapping):
+        allowed = {
+            "bbox",
+            "box",
+            "coordinates",
+            "x0",
+            "y0",
+            "x1",
+            "y1",
+            "left",
+            "top",
+            "right",
+            "bottom",
+            "x",
+            "y",
+            "width",
+            "height",
+            "format",
+        }
+        if set(raw) - allowed:
+            raise AmbiguousBoxError("nested coordinate metadata is ambiguous")
+        if format_hint is not None and raw.get("format", format_hint) != format_hint:
+            raise AmbiguousBoxError("conflicting coordinate formats")
+        if format_hint is not None and "format" not in raw:
+            raw = dict(raw, format=format_hint)
         return _coordinates_from_mapping(raw)
     if isinstance(raw, (str, bytes, bytearray)) or not isinstance(raw, Sequence):
         raise BoxValidationError("box must contain four coordinates", field_name="bbox")
@@ -400,6 +472,14 @@ def _coordinates_from_mapping(mapping: Mapping[str, Any]) -> BBox:
         )
 
     style, keys = direct_styles[0]
+    hint = mapping.get("format")
+    formats = (
+        {"xywh", "left-top-width-height"}
+        if style == "xywh"
+        else {"xyxy", "ltrb", "left-top-right-bottom"}
+    )
+    if hint is not None and (not isinstance(hint, str) or hint.lower() not in formats):
+        raise AmbiguousBoxError("conflicting coordinate formats")
     coordinates = tuple(_finite_float(mapping[key], field_name="bbox") for key in keys)
     if style == "xywh":
         x, y, width, height = coordinates
@@ -471,8 +551,12 @@ def _coerce_page_size(value: Any) -> PageSize | None:
     if isinstance(value, PageSize):
         return value
     if isinstance(value, Mapping):
-        width = value.get("width", value.get("page_width"))
-        height = value.get("height", value.get("page_height"))
+        width = _single_mapping_value(
+            value, ("width", "page_width"), field_name="page_width"
+        )
+        height = _single_mapping_value(
+            value, ("height", "page_height"), field_name="page_height"
+        )
         if width is None or height is None:
             raise BoxValidationError(
                 "page width and height are both required", field_name="page_size"
@@ -563,6 +647,7 @@ def _resolve_source_ref(explicit: Any, embedded: Any) -> str | None:
     return explicit_ref if explicit_ref is not None else embedded_ref
 
 
+@_safe_boundary
 def normalize_box(
     box: BoxLike,
     *,
@@ -601,17 +686,37 @@ def normalize_box(
         BoxValidationError: If coordinates or page geometry are malformed.
     """
 
-    if (
-        isinstance(box, NormalizedBox)
-        and unit is None
-        and page_size is None
-        and page_width is None
-        and page_height is None
-        and origin is None
-        and page is None
-        and source_ref is None
-    ):
-        return box
+    _check_structure(box)
+    if isinstance(box, Mapping) and "coordinate_system" in box:
+        if box["coordinate_system"] != "normalized-page":
+            raise BoxValidationError("unsupported coordinate system")
+        allowed = {
+            "bbox",
+            "coordinate_system",
+            "page",
+            "source_unit",
+            "source_origin",
+            "source_ref",
+        }
+        if set(box) - allowed:
+            raise AmbiguousBoxError("conflicting normalized coordinate declaration")
+        box = NormalizedBox(
+            bbox=box.get("bbox", ()),
+            page=box.get("page", 0),
+            source_unit=box.get("source_unit", CoordinateUnit.NORMALIZED),
+            source_origin=box.get("source_origin", CoordinateOrigin.TOP_LEFT),
+            source_ref=box.get("source_ref"),
+        )
+    if isinstance(box, NormalizedBox):
+        replace(box)
+        _resolve_unit(unit, box.source_unit)
+        _resolve_origin(origin, box.source_origin)
+        _resolve_page_size(page_size, page_width, page_height, None)
+        resolved_page = _resolve_page(page, box.page)
+        resolved_ref = _resolve_source_ref(source_ref, box.source_ref)
+        if resolved_page == box.page and resolved_ref == box.source_ref:
+            return box
+        return replace(box, page=resolved_page, source_ref=resolved_ref)
 
     parsed = _parse_input(box)
     resolved_unit = _resolve_unit(unit, parsed.unit)
@@ -657,6 +762,7 @@ def normalize_box(
     )
 
 
+@_safe_boundary
 def normalize_boxes(
     boxes: Iterable[BoxLike],
     *,
@@ -670,6 +776,11 @@ def normalize_boxes(
 ) -> tuple[NormalizedBox, ...]:
     """Normalize an ordered collection while preserving source references."""
 
+    bounded = []
+    for box in boxes:
+        if len(bounded) >= 4096:
+            raise BoxValidationError("input limit exceeded")
+        bounded.append(box)
     return tuple(
         normalize_box(
             box,
@@ -681,7 +792,7 @@ def normalize_boxes(
             page=page,
             source_ref=source_ref,
         )
-        for box in boxes
+        for box in bounded
     )
 
 
