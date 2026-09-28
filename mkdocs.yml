@@ -178,6 +178,7 @@ nav:
       - Clinical Timeline Provenance: clinical/timeline-provenance.md
       - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
       - Deterministic Citation Ordering: clinical/citation-ordering.md
+      - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
       - Versioned Summary Template Profiles: clinical/summary-template-profiles.md

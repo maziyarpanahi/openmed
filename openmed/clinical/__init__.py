@@ -1402,6 +1402,15 @@ from .summary_length_budget import (
     build_summary_length_budget,
     plan_summary_length_budget,
 )
+from .summary_output_normalizer import (
+    SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES,
+    SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION,
+    SummaryOutputNormalization,
+    SummaryOutputNormalizationError,
+    SummaryOutputNormalizer,
+    normalize_summary_output,
+    normalize_summary_text,
+)
 from .summary_profiles import (
     BHC_V1,
     BRIEF_HOSPITAL_COURSE_V1,
@@ -2440,6 +2449,13 @@ __all__ = [
     "summary_profile_digest",
     "validate_summary",
     "validate_summary_output",
+    "SUMMARY_OUTPUT_NORMALIZATION_OPERATION_CODES",
+    "SUMMARY_OUTPUT_NORMALIZATION_SCHEMA_VERSION",
+    "SummaryOutputNormalization",
+    "SummaryOutputNormalizationError",
+    "SummaryOutputNormalizer",
+    "normalize_summary_output",
+    "normalize_summary_text",
     "NormalizedTimex",
     "normalize_temporal",
     "BUCKETED_TIMELINE_ADVISORY",
