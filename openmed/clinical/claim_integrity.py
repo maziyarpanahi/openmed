@@ -807,7 +807,10 @@ def _record_without_references(
 ) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for field, value in canonical.items():
-        if _reference_target(section, field) is None:
+        if (
+            field not in _REFERENCE_FIELDS[section]
+            or _reference_target(section, field) is None
+        ):
             result[field] = value
     return result
 
