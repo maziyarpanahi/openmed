@@ -622,6 +622,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - models/clinical-nli.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
