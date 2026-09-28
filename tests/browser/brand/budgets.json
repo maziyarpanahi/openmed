@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 87376913,
-    "maximum_unique_payload_bytes": 87012400,
+    "maximum_total_bytes": 88079986,
+    "maximum_unique_payload_bytes": 87715473,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,17 +12,17 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4330634
+    "json": 4348161
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4330634
+    "docs/search/search_index.json": 4348161
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 5681985,
+    "/docs/": 5817753,
     "/docs/model-tokenizer-script-coverage/": 7883001
   },
   "page_metrics": {
@@ -31,6 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The combined local-model contract Chromium build measures 5698451 transfer bytes on /docs/; its ceiling retains the existing 119302-byte allowance. Other route limits are unchanged.",
+    "The reviewed combined local-model contracts build measures 87964500 total bytes, 87599987 unique bytes, and 4342369 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed local-model manifest build measures 87261427 total bytes, 86896914 unique bytes, and 4324842 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed combined citation-contracts build measures 87024324 total bytes, 86659811 unique bytes, and 4318697 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; the tokenizer route retains its separately reviewed 106804-byte transfer allowance.",
     "The reviewed citation boundary on summary master build measures 86334751 total bytes, 85970238 unique bytes, and 4301482 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
