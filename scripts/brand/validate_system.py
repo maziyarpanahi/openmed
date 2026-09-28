@@ -1118,8 +1118,8 @@ def _validate_claims(errors: list[str]) -> None:
                 f"claim {claim_name} is {claims[claim_name]['value']!r}, "
                 f"expected {value!r}"
             )
-    if len(claims["national_id_only_languages"]["value"]) != 17:
-        errors.append("national-ID-only language claim must contain 17 codes")
+    if len(claims["national_id_only_languages"]["value"]) != 16:
+        errors.append("national-ID-only language claim must contain 16 codes")
 
     try:
         generated_at = dt.date.fromisoformat(registry["generated_at"])
