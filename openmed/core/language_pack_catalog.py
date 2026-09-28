@@ -29,7 +29,7 @@ REGISTERED_SEGMENTERS = frozenset({"jieba", "pysbd", "unicode-sentence"})
 # These built-in routes intentionally use a named fallback until dedicated
 # public PII weights are available. They must not be represented as
 # trained/model-backed languages in release claims.
-DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "pa", "ru", "ta"})
+DEFAULT_MODEL_PLACEHOLDER_LANGUAGES = frozenset({"fa", "ml", "pa", "pl", "ru", "ta"})
 
 
 def is_registered_segmenter(segmenter_id: str) -> bool:
@@ -107,6 +107,14 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "nl_NL",
         ("Latin",),
         national_id_provider=("nl_NL", "ssn"),
+    ),
+    _pack(
+        "pl",
+        "OpenMed/privacy-filter-multilingual",
+        "pl_PL",
+        ("Latin",),
+        national_id_provider=("pl_PL", "pesel"),
+        routing_markers=("pacjent", "pacjentka", "pesel", "kod pocztowy"),
     ),
     HINDI_LANGUAGE_PACK,
     _pack(
@@ -378,7 +386,6 @@ NATIONAL_ID_ONLY_CAPABILITIES: Mapping[str, NationalIdOnlyCapability] = {
     "ha": NationalIdOnlyCapability("ha_NG", ("ha_NG", "nigeria_nin")),
     "ig": NationalIdOnlyCapability("ig_NG", ("ig_NG", "nigeria_nin")),
     "yo": NationalIdOnlyCapability("yo_NG", ("yo_NG", "nigeria_nin")),
-    "pl": NationalIdOnlyCapability("pl_PL", ("pl_PL", "pesel")),
     "lv": NationalIdOnlyCapability("lv_LV", ("lv_LV", "personas_kods")),
     "sk": NationalIdOnlyCapability("sk_SK", ("sk_SK", "rodne_cislo")),
     "ms": NationalIdOnlyCapability("ms_MY", ("ms_MY", "mykad")),
@@ -447,6 +454,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
         "pt",
         "tr",
         "cs",
+        "pl",
         "sw",
         "ig",
         "yo",

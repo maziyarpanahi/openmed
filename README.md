@@ -516,11 +516,11 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (40 supported routes; 35 model-backed)
+## Multilingual PII (41 supported routes; 35 model-backed)
 
-Extraction and de-identification support **40 supported PII language codes**:
+Extraction and de-identification support **41 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
-`it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
+`it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`,
 `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh`, and `zu`, with **the registry-backed PII model catalog** in total.
 Russian routing currently uses a documented multilingual default-model
 placeholder. Bengali, Chinese, and Tamil have dedicated registry entries.
@@ -529,7 +529,7 @@ Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and
 Telugu. Set `OPENMED_INDIC_NER_MODEL`; OpenMed never
 bundles or automatically selects those optional weights.
 OpenMed also includes validator-backed national-ID coverage for additional
-ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Finnish.
+ID-only locales such as Latvian, Slovak, Malay, Filipino, and Finnish.
 
 See the [per-language guide](docs/languages.md) for each code's default PII
 model, Faker locale, and a before/after de-identification example.
