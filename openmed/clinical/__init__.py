@@ -318,8 +318,12 @@ from .evidence_coverage import (
     render_evidence_coverage,
     render_evidence_coverage_matrix,
 )
+from .evidence_coverage import (
     REVIEW_STATES as COVERAGE_REVIEW_STATES,
+)
+from .evidence_coverage import (
     ReviewState as CoverageReviewState,
+)
 from .evidence_packet import (
     EVIDENCE_PACKET_KIND,
     EVIDENCE_PACKET_SCHEMA_VERSION,

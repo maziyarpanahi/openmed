@@ -168,6 +168,34 @@ def test_claim_level_class_maps_are_normalized_into_cells():
     }
 
 
+def test_custom_class_mapping_is_resolved_before_opaque_normalization():
+    custom_class = "synthetic-custom-laboratory"
+    fingerprint = fingerprint_source("synthetic-source")
+    matrix = build_evidence_coverage_matrix(
+        {
+            "claim-a": {
+                "required_evidence_classes": [custom_class],
+                "review_states": {custom_class: "reviewed"},
+                "source_fingerprints_by_class": {custom_class: fingerprint},
+            }
+        }
+    )
+    assert matrix.records[0].status == "present"
+    assert matrix.records[0].source_fingerprints == (fingerprint,)
+    assert matrix.records[0].evidence_class == fingerprint_source(custom_class)
+    assert custom_class not in matrix.to_json()
+
+
+def test_invalid_class_bytes_do_not_retain_the_decoding_exception():
+    with pytest.raises(EvidenceCoverageError) as caught:
+        build_evidence_coverage_matrix(
+            {"claim-a": {"required_evidence": [b"synthetic-private-\xff"]}}
+        )
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert "synthetic-private" not in str(caught.value)
+
+
 def test_duplicate_class_sources_merge_and_disagreement_is_conflicting():
     matrix = build_evidence_coverage_matrix(
         [
