@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from itertools import repeat
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,6 +23,10 @@ PRIVATE_SENTINELS = (
     "SYNTHETIC_SOURCE_SURFACE",
     "SYNTHETIC_EVIDENCE_VALUE",
 )
+
+
+def _opaque(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode()).hexdigest()
 
 
 def _evidence(
@@ -52,10 +59,13 @@ def test_planner_groups_approved_evidence_by_section_and_orders_it() -> None:
 
     assert plan.status == SUMMARY_PLAN_STATUS_READY
     assert plan.refusal is None
-    assert [group.section_id for group in plan.groups] == ["s-1", "s-2"]
+    assert [group.section_id for group in plan.groups] == [
+        _opaque("s-1"),
+        _opaque("s-2"),
+    ]
     assert [item.evidence_id for item in plan.groups[0].evidence] == [
-        "e-1a",
-        "e-1b",
+        _opaque("e-1a"),
+        _opaque("e-1b"),
     ]
     assert plan.input_evidence_count == 4
     assert plan.approved_evidence_count == 3
@@ -121,8 +131,8 @@ def test_strict_consumer_gets_fixed_code_error_for_refused_plan() -> None:
 def test_section_metadata_orders_groups_without_replacing_evidence_ids() -> None:
     plan = build_summary_section_plan(
         [
-            _evidence("e-later", "section-later", 8, 12),
-            _evidence("e-earlier", "section-earlier", 80, 84),
+            _evidence("e-later", "section-later", 80, 84),
+            _evidence("e-earlier", "section-earlier", 8, 12),
         ],
         sections=[
             {"id": "section-earlier", "start": 4, "end": 20},
@@ -131,13 +141,13 @@ def test_section_metadata_orders_groups_without_replacing_evidence_ids() -> None
     )
 
     assert [group.section_id for group in plan.groups] == [
-        "section-earlier",
-        "section-later",
+        _opaque("section-earlier"),
+        _opaque("section-later"),
     ]
     assert plan.groups[0].source_offset == (4, 20)
     assert [item.evidence_id for group in plan.groups for item in group.evidence] == [
-        "e-earlier",
-        "e-later",
+        _opaque("e-earlier"),
+        _opaque("e-later"),
     ]
 
 
@@ -158,7 +168,7 @@ def test_named_approved_collection_and_detected_sections_are_supported() -> None
     )
 
     assert plan.ready is True
-    assert plan.groups[0].source_section_id == "s-1"
+    assert plan.groups[0].source_section_id == _opaque("s-1")
 
 
 def test_evidence_with_unknown_section_is_refused_when_sections_are_supplied() -> None:
@@ -196,3 +206,74 @@ def test_plan_disclaimer_is_fixed_and_value_free() -> None:
 
     assert plan.to_dict()["disclaimer"] == SUMMARY_SECTION_PLAN_DISCLAIMER
     assert "clinical" in SUMMARY_SECTION_PLAN_DISCLAIMER.casefold()
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"review_status": "rejected"},
+        {"is_approved": False},
+        {"approval": {"approved": False}},
+    ],
+)
+def test_conflicting_approval_is_refused(extra) -> None:
+    row = _evidence("e-1", "s-1", 1, 2)
+    row.update(extra)
+    assert (
+        build_summary_section_plan([row]).refusal_reason
+        is SummaryPlanRefusalReason.INVALID_APPROVAL
+    )
+
+
+def test_object_disapproval_is_not_ignored() -> None:
+    row = SimpleNamespace(evidence_id="e-1", section_id="s-1", is_approved=False)
+    assert build_summary_section_plan([row]).approved_evidence_count == 0
+
+
+def test_section_offsets_bound_evidence() -> None:
+    plan = build_summary_section_plan(
+        [_evidence("e-1", "s-1", 30, 35)],
+        sections=[{"id": "s-1", "start": 0, "end": 20}],
+    )
+    assert plan.refusal_reason is SummaryPlanRefusalReason.INVALID_SOURCE_OFFSET
+
+
+def test_conflicting_duplicate_evidence_is_refused() -> None:
+    plan = build_summary_section_plan(
+        [_evidence("e-1", "s-1", 1, 2), _evidence("e-1", "s-2", 3, 4)]
+    )
+    assert plan.refusal_reason is SummaryPlanRefusalReason.INVALID_EVIDENCE
+
+
+def test_identifiers_are_opaque_in_reports_and_repr() -> None:
+    plan = build_summary_section_plan(
+        [_evidence("patient-jane-doe", "patient-jane-doe-section", 1, 2)]
+    )
+    assert plan.ready
+    assert "jane-doe" not in plan.to_json() + repr(plan)
+
+
+def test_typed_evidence_is_revalidated() -> None:
+    from openmed.clinical.summary_section_plan import SummaryEvidence
+
+    row = SummaryEvidence("e-1", "s-1", 1, 2)
+    object.__setattr__(row, "source_end", -1)
+    assert build_summary_section_plan([row]).refused
+
+
+def test_cyclic_and_unbounded_inputs_are_refused() -> None:
+    cycle = {}
+    cycle["records"] = cycle
+    assert build_summary_section_plan(cycle).refused
+    assert (
+        build_summary_section_plan(repeat(_evidence("e-1", "s-1", 1, 2))).refusal_reason
+        is SummaryPlanRefusalReason.EVIDENCE_LIMIT
+    )
+    assert build_summary_section_plan([], sections=repeat({"id": "s-1"})).refused
+
+
+def test_direct_ready_plan_rejects_inconsistent_counts() -> None:
+    from openmed.clinical.summary_section_plan import SummarySectionPlan
+
+    with pytest.raises(ValueError, match="counts"):
+        SummarySectionPlan(input_evidence_count=1)

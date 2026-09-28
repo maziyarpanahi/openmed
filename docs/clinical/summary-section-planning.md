@@ -27,10 +27,7 @@ plan = build_summary_section_plan(
 )
 
 assert plan.ready
-assert [group.section_id for group in plan.groups] == [
-    "s-history",
-    "s-assessment",
-]
+assert [group.evidence[0].source_start for group in plan.groups] == [10, 40]
 ```
 
 The returned plan is metadata-only. Each reference contains its evidence ID,
@@ -38,6 +35,13 @@ section ID, approval marker, and optional source offsets. A local generator can
 resolve those offsets against the operator-controlled source document while
 the plan report remains free of source text, extracted values, labels, and
 model output. The planner has no model or network dependency.
+
+Caller identifiers are SHA-256 references in the plan, including its repr;
+canonical lowercase SHA-256 references remain unchanged. The fixed canonical
+section identifier `assessment_and_plan` is preserved. Keep any ID lookup in
+the operator-controlled process. Hashing is pseudonymization, not anonymization.
+The package-level `SummaryEvidence` keeps its existing summary-input contract;
+use `SummarySectionEvidence` or `SummaryEvidenceReference` for this planner.
 
 ## Approval and ordering
 
@@ -48,6 +52,12 @@ sorted by source start/end offsets and then stable evidence ID. Section groups
 are sorted by detected section offsets when optional `sections` metadata is
 provided; otherwise the first evidence offset, then section ID, determines
 their order. Reordering the input cannot change `plan.to_json()`.
+
+Contradictory approval aliases refuse the whole plan. Duplicate evidence IDs
+and evidence outside supplied section bounds also refuse it. Evidence and
+section iterables are consumed only up to 4,097 rows (a 4,096-row limit plus an
+overflow sentinel); nested containers are depth-bounded. Typed records are
+revalidated instead of bypassing these checks.
 
 ```python
 plan = build_summary_section_plan(

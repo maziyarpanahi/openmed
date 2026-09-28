@@ -14,11 +14,13 @@ decision, or qualify evidence as clinically true.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
+from itertools import islice
 from typing import Any, Final, Literal, cast
 
 SUMMARY_SECTION_PLAN_SCHEMA_VERSION: Final[int] = 1
@@ -213,14 +215,32 @@ class SummarySectionGroup:
                 SummaryPlanRefusalReason.INVALID_SECTION_ID,
             ),
         )
-        evidence = tuple(self.evidence)
+        evidence = _bounded_rows(self.evidence)
         if any(type(item) is not SummaryEvidence for item in evidence):
             raise ValueError("summary section group evidence is invalid")
+        evidence = tuple(
+            SummaryEvidence(
+                item.evidence_id,
+                item.section_id,
+                item.source_start,
+                item.source_end,
+                item.approved,
+            )
+            for item in evidence
+        )
         if any(item.section_id != self.section_id for item in evidence):
             raise ValueError("summary section group evidence has a mismatched section")
         if any(not item.approved for item in evidence):
             raise ValueError("summary section group contains unapproved evidence")
         start, end = _optional_source_offsets(self.section_start, self.section_end)
+        if start is not None and any(
+            item.source_start is not None
+            and (item.source_start < start or item.source_end > end)
+            for item in evidence
+        ):
+            raise ValueError("summary section evidence is outside section bounds")
+        if len({item.evidence_id for item in evidence}) != len(evidence):
+            raise ValueError("summary section evidence identifiers are duplicated")
         object.__setattr__(self, "evidence", tuple(sorted(evidence, key=_evidence_key)))
         object.__setattr__(self, "section_start", start)
         object.__setattr__(self, "section_end", end)
@@ -307,9 +327,23 @@ class SummarySectionPlan:
             SUMMARY_PLAN_STATUS_REFUSED,
         }:
             raise ValueError("invalid summary section plan status")
-        sections = tuple(self.sections)
+        sections = _bounded_rows(self.sections)
         if any(type(section) is not SummarySectionGroup for section in sections):
             raise ValueError("summary section plan sections are invalid")
+        sections = tuple(
+            SummarySectionGroup(
+                section.section_id,
+                section.evidence,
+                section.section_start,
+                section.section_end,
+            )
+            for section in sections
+        )
+        ids = [item.evidence_id for section in sections for item in section.evidence]
+        if len(ids) > MAX_SUMMARY_PLAN_EVIDENCE or len(set(ids)) != len(ids):
+            raise ValueError("summary section plan evidence identifiers are invalid")
+        if len({section.section_id for section in sections}) != len(sections):
+            raise ValueError("summary section plan section identifiers are duplicated")
         if tuple(sorted(sections, key=_section_key)) != sections:
             raise ValueError("summary section plan sections are not deterministic")
         for field_name in (
@@ -331,14 +365,27 @@ class SummarySectionPlan:
         if self.status == SUMMARY_PLAN_STATUS_READY and self.refusal is not None:
             raise ValueError("ready summary section plan cannot contain a refusal")
         if self.status == SUMMARY_PLAN_STATUS_REFUSED:
-            if self.refusal is None:
+            if type(self.refusal) is not SummaryPlanRefusal:
                 raise ValueError("refused summary section plan requires a reason")
+            object.__setattr__(
+                self,
+                "refusal",
+                SummaryPlanRefusal(self.refusal.reason, self.refusal.rejected_count),
+            )
             if sections:
                 raise ValueError("refused summary section plan cannot contain sections")
         if self.approved_evidence_count != sum(
             section.evidence_count for section in sections
         ):
             raise ValueError("summary section plan evidence counts are inconsistent")
+        if (
+            self.status == SUMMARY_PLAN_STATUS_READY
+            and self.input_evidence_count
+            != self.approved_evidence_count + self.excluded_evidence_count
+        ):
+            raise ValueError("summary section plan input counts are inconsistent")
+        if self.excluded_evidence_count > self.input_evidence_count:
+            raise ValueError("summary section plan excluded counts are inconsistent")
         object.__setattr__(self, "sections", sections)
 
     @property
@@ -554,6 +601,28 @@ def build_summary_section_plan(
                     rejected_count=1,
                 )
 
+    seen_ids: set[str] = set()
+    for item in selected:
+        if item.evidence_id in seen_ids:
+            return _refused_plan(
+                SummaryPlanRefusalReason.INVALID_EVIDENCE,
+                input_count=input_count,
+                excluded_count=excluded_count,
+            )
+        seen_ids.add(item.evidence_id)
+        metadata = section_metadata.get(item.section_id)
+        if (
+            metadata is not None
+            and metadata.start is not None
+            and item.source_start is not None
+            and (item.source_start < metadata.start or item.source_end > metadata.end)
+        ):
+            return _refused_plan(
+                SummaryPlanRefusalReason.INVALID_SOURCE_OFFSET,
+                input_count=input_count,
+                excluded_count=excluded_count,
+            )
+
     grouped: dict[str, list[SummaryEvidence]] = {}
     for item in selected:
         grouped.setdefault(item.section_id, []).append(item)
@@ -650,7 +719,10 @@ def _refused_plan(
 
 def _materialize_evidence(
     evidence: Iterable[Any] | Mapping[str, Any] | None,
+    _depth: int = 0,
 ) -> tuple[Any, ...]:
+    if _depth > 32:
+        raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
     if evidence is None:
         return ()
     if isinstance(evidence, Mapping):
@@ -677,25 +749,25 @@ def _materialize_evidence(
             nested = _first_field(evidence, (container_name,))
             if nested is not _MISSING:
                 return _materialize_evidence(
-                    cast(Iterable[Any] | Mapping[str, Any] | None, nested)
+                    cast(Iterable[Any] | Mapping[str, Any] | None, nested), _depth + 1
                 )
         try:
-            return tuple(evidence.values())
+            return _bounded_rows(evidence.values())
+        except _PlanInputError:
+            raise
         except Exception:
             raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE) from None
     if isinstance(evidence, (str, bytes, bytearray)):
         raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
     try:
-        return tuple(evidence)
+        return _bounded_rows(evidence)
+    except _PlanInputError:
+        raise
     except Exception:
         raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE) from None
 
 
 def _coerce_evidence(raw: Any) -> SummaryEvidence | None:
-    if isinstance(raw, SummaryEvidence):
-        if not raw.approved:
-            return None
-        return raw
     data = _mapping_view(raw)
     if data is None:
         raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
@@ -755,16 +827,21 @@ def _mapping_view(raw: Any) -> Mapping[str, Any] | None:
         "section_id",
         "source_section_id",
         "section_identifier",
+        "sectionId",
         "section",
+        "source_section",
         "start",
         "end",
         "source_start",
         "source_end",
         "source_offset",
+        "source_offsets",
         "source_span",
         "offset",
         "span",
         "approved",
+        "is_approved",
+        "approval",
         "review_status",
         "approval_status",
         "status",
@@ -803,30 +880,31 @@ def _section_identifier(data: Mapping[str, Any]) -> object:
 
 
 def _approval_state(data: Mapping[str, Any]) -> bool | object | None:
-    approved = _first_field(data, ("approved", "is_approved"))
-    if approved is not _MISSING:
-        if type(approved) is not bool:
-            return None
-        return approved if approved else _UNAPPROVED
-
+    states: list[bool | object | None] = []
+    sources = [data]
     approval = _first_field(data, ("approval",))
     if isinstance(approval, Mapping):
-        nested = _first_field(approval, ("approved", "is_approved"))
-        if nested is not _MISSING:
-            if type(nested) is not bool:
-                return None
-            return nested if nested else _UNAPPROVED
-        approval = _first_field(approval, ("status", "state"))
-    if approval is not _MISSING:
-        return _approval_status_value(approval)
-
-    status = _first_field(data, ("review_status", "approval_status", "status"))
-    if status is not _MISSING:
-        return _approval_status_value(status)
-    # The function's input contract is an approved-evidence boundary. Missing
-    # approval metadata therefore means "already approved", while explicit
-    # rejection is always excluded.
-    return True
+        sources.append(approval)
+    elif approval is not _MISSING:
+        states.append(_approval_status_value(approval))
+    for source in sources:
+        for name in ("approved", "is_approved"):
+            value = _first_field(source, (name,))
+            if value is not _MISSING:
+                states.append(
+                    (value if value else _UNAPPROVED) if type(value) is bool else None
+                )
+        for name in ("review_status", "approval_status", "status", "state"):
+            value = _first_field(source, (name,))
+            if value is not _MISSING:
+                states.append(_approval_status_value(value))
+    if any(state is None for state in states):
+        return None
+    if any(state is True for state in states) and any(
+        state is _UNAPPROVED for state in states
+    ):
+        return None
+    return _UNAPPROVED if any(state is _UNAPPROVED for state in states) else True
 
 
 def _approval_status_value(value: Any) -> bool | object | None:
@@ -911,12 +989,15 @@ def _coerce_section_metadata(
 
 def _materialize_sections(
     sections: Iterable[Any] | Mapping[str, Any],
+    _depth: int = 0,
 ) -> tuple[Any, ...]:
+    if _depth > 32:
+        raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
     if isinstance(sections, Mapping):
         nested = _first_field(sections, ("sections", "clinical_sections"))
         if nested is not _MISSING:
             return _materialize_sections(
-                cast(Iterable[Any] | Mapping[str, Any], nested)
+                cast(Iterable[Any] | Mapping[str, Any], nested), _depth + 1
             )
         if _has_any_key(
             sections,
@@ -924,15 +1005,31 @@ def _materialize_sections(
         ):
             return (sections,)
         try:
-            return tuple(sections.values())
+            return _bounded_rows(sections.values())
+        except _PlanInputError:
+            raise
         except Exception:
             raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE) from None
     if isinstance(sections, (str, bytes, bytearray)):
         raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
     try:
-        return tuple(sections)
+        return _bounded_rows(sections)
+    except _PlanInputError:
+        raise
     except Exception:
         raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE) from None
+
+
+def _bounded_rows(values: Iterable[Any]) -> tuple[Any, ...]:
+    try:
+        rows = tuple(islice(values, MAX_SUMMARY_PLAN_EVIDENCE + 1))
+    except Exception:
+        rows = None
+    if rows is None:
+        raise _PlanInputError(SummaryPlanRefusalReason.INVALID_EVIDENCE)
+    if len(rows) > MAX_SUMMARY_PLAN_EVIDENCE:
+        raise _PlanInputError(SummaryPlanRefusalReason.EVIDENCE_LIMIT)
+    return rows
 
 
 def _first_field(data: Mapping[str, Any], names: Iterable[str]) -> object:
@@ -963,7 +1060,14 @@ def _validated_identifier(
         or _ID_RE.fullmatch(value) is None
     ):
         raise _PlanInputError(reason)
-    return value
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+        return value
+    if (
+        reason is SummaryPlanRefusalReason.INVALID_SECTION_ID
+        and value == "assessment_and_plan"
+    ):
+        return value
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _stable_identifier(
