@@ -321,7 +321,8 @@ def _non_assertive_clause(text: str, span: SpanOffset) -> bool:
         if clause.start() <= span[0] < clause.end():
             value = clause.group(0)
             return bool(
-                _NON_ASSERTIVE_CLAUSE_RE.match(value)
+                text[clause.end() : clause.end() + 1] == "?"
+                or _NON_ASSERTIVE_CLAUSE_RE.match(value)
                 or _UNANSWERED_TEMPLATE_RE.search(value)
             )
     return False

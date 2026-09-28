@@ -182,3 +182,30 @@ def test_double_negated_unemployment_stays_unresolved() -> None:
     assert [(finding.category, finding.status) for finding in findings] == [
         ("employment", "unknown")
     ]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Does the patient drink alcohol?",
+        "Does the patient use recreational drugs?",
+        "Does the patient use tobacco?",
+        "Is the patient unemployed?",
+        "Is the patient homeless?",
+        "Screening: homeless?",
+    ],
+)
+def test_direct_screening_questions_do_not_assert_patient_facts(question: str) -> None:
+    text = f"Social History:\n{question}"
+
+    assert extract_sdoh(text, (), sections=detect_sections(text)) == []
+
+
+def test_question_filter_preserves_adjacent_assertion_and_offsets() -> None:
+    text = "Social History:\nIs the patient homeless? Patient is unemployed."
+    findings = extract_sdoh(text, (), sections=detect_sections(text))
+
+    assert [(finding.category, finding.status) for finding in findings] == [
+        ("employment", "unemployed")
+    ]
+    assert text[slice(*findings[0].span)] == "unemployed"
