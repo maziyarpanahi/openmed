@@ -19,6 +19,83 @@ from openmed.clinical import (
 PRIVATE_SENTINEL = "SYNTHETIC_SOURCE_VALUE"
 
 
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"approved": True, "is_approved": False},
+        {"approved": True, "review_status": "rejected"},
+        {"approved": True, "approval": {"approved": False}},
+        {"approval": {"approved": True, "status": "pending"}},
+    ],
+)
+def test_conflicting_approval_never_invokes_generator(flags) -> None:
+    result = guard_summary_generation(
+        [{"text": PRIVATE_SENTINEL, **flags}],
+        lambda _: pytest.fail("unapproved evidence reached generator"),
+    )
+    assert isinstance(result, SummaryEmptyEvidenceRefusal)
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        {"evidence": []},
+        {"evidence": {"records": []}},
+        [{"text": ""}],
+        [{"text": None}],
+        [{"unexpected": PRIVATE_SENTINEL}],
+        [{"approved": True, "evidence": []}],
+    ],
+)
+def test_empty_or_unknown_payload_refuses(evidence) -> None:
+    assert isinstance(
+        guard_summary_generation(
+            evidence, lambda _: pytest.fail("empty payload reached generator")
+        ),
+        SummaryEmptyEvidenceRefusal,
+    )
+
+
+def test_refusal_exception_revalidates_typed_input() -> None:
+    refusal = SummaryEmptyEvidenceRefusal(0, 0)
+    object.__setattr__(refusal, "disclaimer", PRIVATE_SENTINEL)
+    with pytest.raises(ValueError, match="disclaimer"):
+        SummaryEmptyEvidenceError(refusal)
+
+
+def test_recursive_and_over_limit_sources_fail_closed() -> None:
+    recursive = {}
+    recursive["evidence"] = recursive
+    assert build_summary_empty_evidence_refusal(recursive) is not None
+    consumed = []
+
+    def endless():
+        while True:
+            consumed.append(1)
+            yield {"text": "synthetic evidence"}
+
+    result = build_summary_empty_evidence_refusal(endless())
+    assert result is not None
+    assert len(consumed) == 4097
+    assert result.input_count == 1
+
+
+def test_broken_source_does_not_leak_exception_context() -> None:
+    def broken():
+        raise ValueError(PRIVATE_SENTINEL)
+        yield
+
+    with pytest.raises(SummaryEmptyEvidenceError) as caught:
+        require_summary_evidence(broken())
+    assert caught.value.__context__ is None
+    assert PRIVATE_SENTINEL not in repr(caught.value.to_dict())
+
+
+def test_single_wrapper_preserves_approved_record_identity() -> None:
+    row = {"text": "synthetic evidence"}
+    assert require_summary_evidence({"evidence": [row]})[0] is row
+
+
 def test_empty_input_refuses_without_invoking_the_generator() -> None:
     calls: list[tuple[object, ...]] = []
 

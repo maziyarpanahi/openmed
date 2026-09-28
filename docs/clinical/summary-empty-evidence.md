@@ -57,3 +57,14 @@ because the function parameter is an approved-evidence boundary. Callers that
 want explicit approval should provide `approved: True` and reject records
 before invoking the local generator. An explicit `approved: False`, a rejected
 review status, or `valid: False` is always excluded.
+
+All supplied approval aliases must agree: an approval flag cannot override a
+rejected review state or nested approval. A recognized, non-empty payload is
+required; unknown metadata alone and empty text are not evidence. Single-key
+collection wrappers are unwrapped before record validation.
+
+Collections are limited to 4,096 records, mapping wrappers to 64 keys, and
+nested wrappers to 32 levels. Broken, oversized or recursive containers are
+represented by one invalid-container candidate in the refusal counts; those
+counts do not claim to enumerate an unread source. Typed refusal objects are
+revalidated when constructing the strict exception boundary.

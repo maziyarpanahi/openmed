@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
+from itertools import islice
 from typing import Any, Final, TypeVar
 
 __all__ = [
@@ -271,7 +272,9 @@ class SummaryEmptyEvidenceError(ValueError):
     def __init__(self, refusal: SummaryEmptyEvidenceRefusal) -> None:
         if not isinstance(refusal, SummaryEmptyEvidenceRefusal):
             raise TypeError("refusal must be a SummaryEmptyEvidenceRefusal")
-        self.refusal = refusal
+        self.refusal = SummaryEmptyEvidenceRefusal(
+            **{field.name: getattr(refusal, field.name) for field in fields(refusal)}
+        )
         super().__init__(f"summary_refused_{refusal.refusal_code}")
 
     @property
@@ -382,28 +385,33 @@ def _partition_evidence(
     return rows, tuple(selected), excluded_count
 
 
-def _materialize_evidence(
-    evidence: object,
-) -> tuple[Any, ...]:
+def _materialize_evidence(evidence: object, _depth: int = 0) -> tuple[Any, ...]:
+    if _depth > 32:
+        return (_INVALID_CONTAINER,)
     if evidence is None:
         return ()
     if isinstance(evidence, Mapping):
-        if _looks_like_record(evidence):
-            return (evidence,)
-        nested = _first_field(evidence, _CONTAINER_FIELDS)
-        if nested is not _MISSING:
-            return _materialize_evidence(nested)
+        try:
+            keys = tuple(islice(evidence, 65))
+            if len(keys) > 64:
+                return (_INVALID_CONTAINER,)
+            containers = [key for key in keys if key in _CONTAINER_FIELDS]
+            if containers and all(key in _CONTAINER_FIELDS for key in keys):
+                if len(containers) != 1:
+                    return (_INVALID_CONTAINER,)
+                return _materialize_evidence(evidence[containers[0]], _depth + 1)
+        except Exception:
+            return (_INVALID_CONTAINER,)
         return (evidence,)
     if isinstance(evidence, (str, bytes, bytearray)):
         return (evidence,)
-    if not isinstance(evidence, Iterable):
-        return (_INVALID_CONTAINER,)
     try:
-        return tuple(evidence)
+        rows = tuple(islice(iter(evidence), 4097))
     except Exception:
-        # A broken or non-iterable source is represented as one invalid item.
-        # The sentinel never escapes into a report or exception.
         return (_INVALID_CONTAINER,)
+    if len(rows) > 4096:
+        return (_INVALID_CONTAINER,)
+    return rows
 
 
 def _classify_evidence(value: Any) -> object:
@@ -454,50 +462,55 @@ def _mapping_view(value: Any) -> Mapping[str, Any] | None:
 
 
 def _has_payload(data: Mapping[str, Any]) -> bool:
-    try:
-        keys = tuple(data.keys())
-    except Exception:
-        return False
-    if any(key not in _CONTROL_FIELDS for key in keys):
-        return True
-    return any(
-        _first_field(data, (field_name,)) is not _MISSING
-        for field_name in _PAYLOAD_FIELDS
-    )
+    for name in _PAYLOAD_FIELDS:
+        value = _first_field(data, (name,))
+        if value is _MISSING or value is _INVALID or value is None:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                return True
+        elif isinstance(value, (Mapping, list, tuple, bytes, bytearray)):
+            try:
+                if len(value):
+                    return True
+            except Exception:
+                continue
+        elif type(value) in {int, float}:
+            # Zero is meaningful for numeric evidence and source offsets.
+            return True
+    return False
 
 
 def _approval_state(data: Mapping[str, Any]) -> object:
-    approved = _first_field(data, ("approved", "is_approved"))
-    if approved is not _MISSING:
-        if type(approved) is not bool:
-            return _INVALID
-        return True if approved else _UNAPPROVED
-
+    states = []
+    for name in ("approved", "is_approved"):
+        value = _first_field(data, (name,))
+        if value is not _MISSING:
+            states.append(
+                (True if value else _UNAPPROVED) if type(value) is bool else _INVALID
+            )
     approval = _first_field(data, ("approval",))
     if approval is not _MISSING:
         if isinstance(approval, Mapping):
-            nested = _first_field(
-                approval,
-                ("approved", "is_approved", "status", "state"),
+            nested = []
+            for name in ("approved", "is_approved", "status", "state"):
+                value = _first_field(approval, (name,))
+                if value is not _MISSING:
+                    nested.append(_approval_value(value))
+            states.extend(nested or [_INVALID])
+        else:
+            states.append(_approval_value(approval))
+    for name in ("approval_status", "review_status", "state", "status"):
+        value = _first_field(data, (name,))
+        if value is not _MISSING:
+            states.append(
+                _approval_value(value, allow_unknown_status=name in {"state", "status"})
             )
-            if nested is _MISSING:
-                return _INVALID
-            return _approval_value(nested)
-        return _approval_value(approval)
-
-    for field_name in ("approval_status", "review_status", "state", "status"):
-        value = _first_field(data, (field_name,))
-        if value is _MISSING:
-            continue
-        state = _approval_value(
-            value,
-            allow_unknown_status=field_name in {"state", "status"},
-        )
-        if state is not _MISSING:
-            return state
-    # The parameter is explicitly an approved-evidence boundary. Callers may
-    # therefore omit redundant approval metadata, while explicit rejection is
-    # still fail-closed above.
+    if any(state is _INVALID for state in states):
+        return _INVALID
+    if any(state is _UNAPPROVED for state in states):
+        return _UNAPPROVED
+    # Missing metadata retains the caller's already-approved contract.
     return True
 
 
@@ -523,13 +536,6 @@ def _approval_value(value: Any, *, allow_unknown_status: bool = False) -> object
     if allow_unknown_status:
         return _MISSING
     return _INVALID
-
-
-def _looks_like_record(value: Mapping[str, Any]) -> bool:
-    try:
-        return any(name in value for name in _RECORD_MARKERS)
-    except Exception:
-        return True
 
 
 def _first_field(value: Mapping[str, Any], names: Iterable[str]) -> object:
