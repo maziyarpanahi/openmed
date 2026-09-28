@@ -245,3 +245,68 @@ def test_batch_validation_is_input_order_independent() -> None:
 def test_missing_relation_shape_fails_closed() -> None:
     with pytest.raises(RelationShapeError, match="two endpoints"):
         validate_guarded_relation({"relation_type": "causes"})
+
+
+def test_validated_record_cannot_claim_reversed_roles():
+    from openmed.clinical.relations.directionality import ValidatedRelationDirection
+
+    with pytest.raises(ValueError):
+        ValidatedRelationDirection("treatment", "treatment", "MEDICATION", "CONDITION")
+
+
+def test_direction_alias_conflict_fails_closed():
+    with pytest.raises(ValueError):
+        validate_guarded_relation(
+            {
+                "relation_type": "treatment",
+                "source": "CONDITION",
+                "target": "MEDICATION",
+                "direction": "forward",
+                "orientation": "reverse",
+            }
+        )
+
+
+def test_direction_getter_failure_cannot_default_to_forward():
+    class Candidate:
+        relation_type = "treatment"
+        source = "CONDITION"
+        target = "MEDICATION"
+
+        @property
+        def direction(self):
+            raise RuntimeError("synthetic-sensitive-marker")
+
+    with pytest.raises(ValueError) as error:
+        validate_guarded_relation(Candidate())
+    assert error.value.__context__ is None
+
+
+def test_direction_batch_is_bounded():
+    from itertools import repeat
+
+    with pytest.raises(ValueError):
+        validate_guarded_relations(
+            repeat(
+                {
+                    "relation_type": "treatment",
+                    "source": "CONDITION",
+                    "target": "MEDICATION",
+                }
+            )
+        )
+
+
+def test_public_error_constructor_emits_only_canonical_metadata():
+    from openmed.clinical.relations.directionality import InvalidEndpointTypeError
+
+    marker = "synthetic-sensitive-marker"
+    error = InvalidEndpointTypeError(
+        relation_type=marker,
+        relation_class=marker,
+        endpoint=marker,
+        expected_types=(marker,),
+        observed_type=marker,
+    )
+    assert marker not in str(error)
+    assert marker not in json.dumps(error.to_dict())

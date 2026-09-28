@@ -267,3 +267,63 @@ def test_input_order_does_not_change_evidence_order() -> None:
     reverse = bind_relation_evidence(reversed_candidate)
     assert forward == reverse
     assert [span.offset for span in forward.evidence_spans] == [(18, 25), (30, 35)]
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {"negation": "unrecognized"},
+        {"certainty": "unknown"},
+        {"temporality": "unknown"},
+    ],
+)
+def test_unknown_assertion_axes_never_become_affirmed(state):
+    candidate = _candidate()
+    candidate["assertion_state"] = state
+    with pytest.raises(EvidenceBindingError):
+        bind_relation_evidence(candidate)
+
+
+def test_conflicting_assertion_aliases_fail_closed():
+    candidate = _candidate()
+    candidate["assertion_status"] = "negated"
+    with pytest.raises(EvidenceBindingError):
+        bind_relation_evidence(candidate)
+
+
+def test_typed_span_is_revalidated_at_workflow_boundary():
+    bound = bind_relation_evidence(_candidate())
+    object.__setattr__(bound.head, "start", -1)
+    with pytest.raises(EvidenceBindingError):
+        require_guarded_relations((bound,))
+
+
+def test_typed_relation_guardrails_are_revalidated():
+    bound = bind_relation_evidence(_candidate())
+    object.__setattr__(bound, "autonomous_decision", True)
+    with pytest.raises(EvidenceBindingError):
+        require_guarded_relations((bound,))
+
+
+def test_evidence_cycles_and_unbounded_batches_fail_safely():
+    from itertools import repeat
+
+    cycle = {}
+    cycle["span"] = cycle
+    candidate = _candidate()
+    candidate["head"] = cycle
+    with pytest.raises(EvidenceBindingError):
+        bind_relation_evidence(candidate)
+    with pytest.raises(EvidenceBindingError):
+        require_guarded_relations(repeat(bind_relation_evidence(_candidate())))
+
+
+def test_unreadable_metadata_errors_discard_context():
+    class BadMapping(dict):
+        def get(self, *args):
+            raise RuntimeError("synthetic-sensitive-marker")
+
+    with pytest.raises(EvidenceBindingError) as error:
+        bind_relation_evidence(BadMapping())
+    assert error.value.__context__ is None
+    assert "synthetic-sensitive-marker" not in str(error.value)

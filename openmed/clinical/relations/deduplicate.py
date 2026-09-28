@@ -22,7 +22,9 @@ import math
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from functools import wraps
+from itertools import islice
 from types import MappingProxyType
 from typing import Any, Final
 
@@ -63,6 +65,7 @@ _SOURCE_FIELDS: tuple[str, ...] = (
 )
 _EVIDENCE_FIELDS: tuple[str, ...] = (
     "evidence_locations",
+    "evidence_spans",
     "evidence",
     "locations",
 )
@@ -70,6 +73,63 @@ _EVIDENCE_FIELDS: tuple[str, ...] = (
 
 class RelationDeduplicationError(ValueError):
     """Raised when relation candidates cannot be collapsed safely."""
+
+
+_CONTEXT_VALUES = {
+    "assertion_status": {
+        "affirmed",
+        "negated",
+        "uncertain",
+        "historical",
+        "hypothetical",
+        "unknown",
+        "confirmed",
+        "refuted",
+        "conditional",
+        "possible",
+    },
+    "negation": {"affirmed", "negated", "unknown", "present", "absent"},
+    "polarity": {"positive", "negative", "affirmed", "negated", "unknown"},
+    "certainty": {"certain", "uncertain", "possible", "confirmed", "unknown"},
+    "temporality": {
+        "current",
+        "recent",
+        "historical",
+        "hypothetical",
+        "future",
+        "conditional",
+        "unknown",
+    },
+    "experiencer": {"patient", "family", "other", "unknown"},
+}
+
+
+def _safe_boundary(function):
+    """Discard untrusted exception details at the public boundary."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except RelationDeduplicationError as error:
+            message = str(error)
+        except Exception:
+            message = "relation metadata cannot be validated"
+        raise RelationDeduplicationError(message)
+
+    return wrapped
+
+
+def _bounded_items(value):
+    try:
+        items = tuple(islice(iter(value), 4097))
+    except Exception:
+        raise RelationDeduplicationError("relation collection cannot be read") from None
+    if len(items) > 4096:
+        raise RelationDeduplicationError(
+            "relation collection exceeds the supported limit"
+        )
+    return items
 
 
 @dataclass(frozen=True)
@@ -86,6 +146,7 @@ class RelationEvidence:
     start: int
     end: int
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(self, "source_id", _source_identifier(self.source_id))
         start, end = _offset_pair((self.start, self.end))
@@ -127,6 +188,7 @@ class NormalizedRelationCandidate:
     source_id: str | None = None
     context: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -137,12 +199,12 @@ class NormalizedRelationCandidate:
         object.__setattr__(self, "tail", _normalized_text(self.tail, "tail"))
         object.__setattr__(self, "score", _score(self.score))
 
-        evidence = tuple(self.evidence)
-        if any(not isinstance(item, RelationEvidence) for item in evidence):
+        evidence = _bounded_items(self.evidence)
+        if any(type(item) is not RelationEvidence for item in evidence):
             raise RelationDeduplicationError(
                 "relation candidate evidence must contain RelationEvidence"
             )
-        object.__setattr__(self, "evidence", evidence)
+        object.__setattr__(self, "evidence", tuple(replace(item) for item in evidence))
         if self.source_id is not None:
             object.__setattr__(self, "source_id", _source_identifier(self.source_id))
         object.__setattr__(self, "context", _context_mapping(self.context))
@@ -198,6 +260,7 @@ class CollapsedRelation:
     schema_version: int = RELATION_DEDUPLICATION_SCHEMA_VERSION
     advisory: str = RELATION_DEDUPLICATION_ADVISORY
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
@@ -207,16 +270,22 @@ class CollapsedRelation:
         object.__setattr__(self, "head", _normalized_text(self.head, "head"))
         object.__setattr__(self, "tail", _normalized_text(self.tail, "tail"))
         object.__setattr__(self, "score", _score(self.score))
-        if self.schema_version != RELATION_DEDUPLICATION_SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != RELATION_DEDUPLICATION_SCHEMA_VERSION
+        ):
             raise RelationDeduplicationError(
                 "unsupported relation deduplication schema version"
             )
-        if not isinstance(self.advisory, str) or not self.advisory:
+        if self.advisory != RELATION_DEDUPLICATION_ADVISORY:
             raise RelationDeduplicationError(
                 "relation deduplication advisory is required"
             )
 
-        evidence = tuple(sorted(set(self.evidence_locations), key=_evidence_key))
+        values = _bounded_items(self.evidence_locations)
+        if any(type(item) is not RelationEvidence for item in values):
+            raise RelationDeduplicationError("invalid relation evidence record")
+        evidence = tuple(sorted({replace(item) for item in values}, key=_evidence_key))
         if not evidence:
             raise RelationDeduplicationError(
                 "collapsed relations require evidence locations"
@@ -313,6 +382,7 @@ class _CoercedCandidate:
     context: Mapping[str, str]
 
 
+@_safe_boundary
 def collapse_duplicate_relations(
     candidates: Iterable[Any] | Mapping[str, Any] | Any,
     *,
@@ -428,7 +498,7 @@ def _candidate_collection(candidates: Any) -> tuple[Any, ...]:
     if isinstance(candidates, Mapping) or _is_relation_record(candidates):
         return (candidates,)
     try:
-        return tuple(candidates)
+        return _bounded_items(candidates)
     except (TypeError, ValueError):
         raise RelationDeduplicationError(
             "relation candidates must be an iterable of records"
@@ -455,6 +525,7 @@ def _coerce_candidate(
     hash_secret: str | bytes | None,
 ) -> _CoercedCandidate:
     if isinstance(raw, NormalizedRelationCandidate):
+        raw = replace(raw)
         relation_type = raw.relation_type
         head = _endpoint_identity(
             raw.head,
@@ -601,6 +672,7 @@ def _endpoint_scalar(
                 "normalized",
                 "normalised",
                 "normalized_id",
+                "span_id",
                 "concept_id",
                 "code",
                 "id",
@@ -630,6 +702,7 @@ def _endpoint_scalar(
             "normalized",
             "normalised",
             "normalized_id",
+            "span_id",
             "concept_id",
             "code",
             "id",
@@ -707,9 +780,20 @@ def _candidate_evidence(
     return tuple(sorted(evidence, key=_evidence_key))
 
 
-def _flatten_evidence(value: Any, *, inherited_source: Any = _MISSING) -> list[Any]:
-    if isinstance(value, RelationEvidence):
-        return [value]
+def _flatten_evidence(
+    value: Any,
+    *,
+    inherited_source: Any = _MISSING,
+    depth: int = 0,
+    budget: list[int] | None = None,
+) -> list[Any]:
+    if budget is None:
+        budget = [4096]
+    budget[0] -= 1
+    if depth > 32 or budget[0] < 0:
+        raise RelationDeduplicationError("evidence nesting exceeds the supported limit")
+    if type(value) is RelationEvidence:
+        return [replace(value)]
     if isinstance(value, Mapping):
         source = _read(value, _SOURCE_FIELDS, inherited_source)
         if _offset_from(value) is not None:
@@ -731,8 +815,10 @@ def _flatten_evidence(value: Any, *, inherited_source: Any = _MISSING) -> list[A
             _MISSING,
         )
         if nested is _MISSING:
-            return []
-        return _flatten_evidence(nested, inherited_source=source)
+            raise RelationDeduplicationError("relation evidence offsets are required")
+        return _flatten_evidence(
+            nested, inherited_source=source, depth=depth + 1, budget=budget
+        )
     nested_offsets = _read(
         value,
         ("evidence_locations", "evidence", "locations", "evidence_sentence_offsets"),
@@ -740,7 +826,9 @@ def _flatten_evidence(value: Any, *, inherited_source: Any = _MISSING) -> list[A
     )
     if nested_offsets is not _MISSING:
         source = _read(value, _SOURCE_FIELDS, inherited_source)
-        return _flatten_evidence(nested_offsets, inherited_source=source)
+        return _flatten_evidence(
+            nested_offsets, inherited_source=source, depth=depth + 1, budget=budget
+        )
     if _offset_from(value) is not None:
         if inherited_source is not _MISSING:
             return [{"source_id": inherited_source, "offset": value}]
@@ -751,10 +839,17 @@ def _flatten_evidence(value: Any, *, inherited_source: Any = _MISSING) -> list[A
                 return [{"source_id": inherited_source, "offset": value}]
             return [value]
         items: list[Any] = []
-        for child in value:
-            items.extend(_flatten_evidence(child, inherited_source=inherited_source))
+        for child in _bounded_items(value):
+            items.extend(
+                _flatten_evidence(
+                    child,
+                    inherited_source=inherited_source,
+                    depth=depth + 1,
+                    budget=budget,
+                )
+            )
         return items
-    return []
+    raise RelationDeduplicationError("relation evidence offsets are required")
 
 
 def _evidence_offset_and_source(
@@ -829,8 +924,15 @@ def _candidate_context(raw: Any) -> Mapping[str, str]:
     elif assertion is not _MISSING:
         values["assertion_status"] = assertion
     for field_name in _CONTEXT_FIELDS:
-        value = _read(raw, (field_name,), _MISSING)
+        names = (
+            ("assertion_status", "assertion_state")
+            if field_name == "assertion_status"
+            else (field_name,)
+        )
+        value = _read(raw, names, _MISSING)
         if value is not _MISSING:
+            if field_name in values and values[field_name] != value:
+                raise RelationDeduplicationError("conflicting relation context")
             values[field_name] = value
     return _context_mapping(values)
 
@@ -840,34 +942,54 @@ def _context_mapping(value: Mapping[str, Any] | Any) -> MappingProxyType:
         return MappingProxyType({})
     if not isinstance(value, Mapping):
         raise RelationDeduplicationError("relation context must be a mapping")
+    if len(value) > 4096:
+        raise RelationDeduplicationError("relation context exceeds the supported limit")
     normalized: dict[str, str] = {}
     for field_name in _CONTEXT_FIELDS:
-        raw_value = value.get(field_name, _MISSING)
+        names = (
+            ("assertion_status", "assertion_state")
+            if field_name == "assertion_status"
+            else (field_name,)
+        )
+        raw_value = _read(value, names, _MISSING)
         if raw_value is _MISSING or raw_value is None:
             continue
         normalized[field_name] = _normalized_text(raw_value, field_name)
+        if normalized[field_name] not in _CONTEXT_VALUES[field_name]:
+            raise RelationDeduplicationError("unsupported relation context value")
     return MappingProxyType(dict(sorted(normalized.items())))
 
 
 def _read(value: Any, names: Sequence[str], default: Any = None) -> Any:
-    if isinstance(value, Mapping):
-        for name in names:
-            if name in value:
-                return value[name]
-        return default
+    candidates = []
     for name in names:
         try:
-            result = getattr(value, name)
-        except (AttributeError, KeyError, TypeError):
-            continue
-        if result is not None:
-            return result
-    return default
+            result = (
+                value.get(name, _MISSING)
+                if isinstance(value, Mapping)
+                else getattr(value, name, _MISSING)
+            )
+        except Exception:
+            raise RelationDeduplicationError(
+                "relation metadata cannot be read"
+            ) from None
+        if result is not _MISSING and result is not None:
+            if not isinstance(value, Mapping):
+                return result
+            candidates.append(result)
+    if not candidates:
+        return default
+    if any(item != candidates[0] for item in candidates[1:]):
+        raise RelationDeduplicationError("conflicting relation metadata aliases")
+    return candidates[0]
 
 
 def _normalized_text(value: Any, field_name: str) -> str:
     if not isinstance(value, str):
         raise RelationDeduplicationError(f"relation {field_name} must be text")
+    if len(value) > 4096:
+        raise RelationDeduplicationError("relation text exceeds the supported limit")
+    value = str.__str__(value)
     normalized = unicodedata.normalize("NFKC", value).casefold()
     normalized = re.sub(r"\s+", " ", normalized).strip()
     if not normalized:
@@ -920,13 +1042,17 @@ def _evidence_key(item: RelationEvidence) -> tuple[Any, ...]:
 
 def _independent_noisy_or(scores: Iterable[float]) -> float:
     complement = 1.0
-    for score in scores:
+    for score in sorted(scores):
         complement *= 1.0 - _score(score)
     return round(1.0 - complement, 6)
 
 
 def _validate_hash_secret(hash_secret: str | bytes | None) -> None:
-    if hash_secret is not None and not isinstance(hash_secret, (str, bytes)):
+    if hash_secret is not None and (
+        not isinstance(hash_secret, (str, bytes))
+        or not hash_secret
+        or len(hash_secret) > 4096
+    ):
         raise RelationDeduplicationError("hash_secret must be text or bytes")
 
 
@@ -937,7 +1063,11 @@ def _source_identifier(
 ) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RelationDeduplicationError("relation source_id must be non-empty text")
-    normalized = value.strip()
+    if len(value) > 4096:
+        raise RelationDeduplicationError(
+            "relation identifier exceeds the supported limit"
+        )
+    normalized = str.__str__(value).strip()
     if _HASH_RE.fullmatch(normalized):
         return normalized
     return _digest_identifier(

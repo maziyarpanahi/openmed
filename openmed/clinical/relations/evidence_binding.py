@@ -21,8 +21,10 @@ import json
 import math
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from functools import wraps
+from itertools import islice
 from typing import Any, Final
 
 from openmed.core.labels import normalize_label
@@ -41,6 +43,37 @@ _RELATION_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 
 class EvidenceBindingError(ValueError):
     """Raised when a guarded relation cannot be bound to source evidence."""
+
+
+MAX_RELATION_ITEMS = 4096
+MAX_RELATION_DEPTH = 32
+MAX_RELATION_TEXT = 1048576
+
+
+def _safe_boundary(function):
+    """Discard input-bearing exception chains at the public boundary."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except EvidenceBindingError as error:
+            message = str(error)
+        except Exception:
+            message = "relation metadata cannot be validated"
+        raise EvidenceBindingError(message)
+
+    return wrapped
+
+
+def _bounded_items(value):
+    try:
+        items = tuple(islice(iter(value), MAX_RELATION_ITEMS + 1))
+    except Exception:
+        raise EvidenceBindingError("relation collection cannot be read") from None
+    if len(items) > MAX_RELATION_ITEMS:
+        raise EvidenceBindingError("relation collection exceeds the supported limit")
+    return items
 
 
 class AssertionState(str, Enum):
@@ -80,6 +113,8 @@ def _string(value: object, field_name: str) -> str:
             raise EvidenceBindingError(f"{field_name} must be a string") from None
     else:
         raise EvidenceBindingError(f"{field_name} must be a string")
+    if len(result) > MAX_RELATION_TEXT:
+        raise EvidenceBindingError("relation text exceeds the supported limit")
     if not result:
         raise EvidenceBindingError(f"{field_name} must be non-empty")
     return result
@@ -146,6 +181,7 @@ def _digest_identifier(
     return f"hmac-sha256:{digest}"
 
 
+@_safe_boundary
 def hash_document_id(
     document_id: object,
     *,
@@ -165,23 +201,25 @@ def hash_document_id(
 
 
 def _field(value: object, names: Sequence[str]) -> object:
-    if isinstance(value, Mapping):
-        for name in names:
-            try:
-                candidate = value.get(name, _MISSING)
-            except Exception:
-                raise EvidenceBindingError("relation metadata cannot be read") from None
-            if candidate is not _MISSING:
-                return candidate
-        return _MISSING
+    candidates = []
     for name in names:
         try:
-            candidate = getattr(value, name, _MISSING)
+            candidate = (
+                value.get(name, _MISSING)
+                if isinstance(value, Mapping)
+                else getattr(value, name, _MISSING)
+            )
         except Exception:
             raise EvidenceBindingError("relation metadata cannot be read") from None
         if candidate is not _MISSING:
-            return candidate
-    return _MISSING
+            if not isinstance(value, Mapping):
+                return candidate
+            candidates.append(candidate)
+    if not candidates:
+        return _MISSING
+    if any(candidate != candidates[0] for candidate in candidates[1:]):
+        raise EvidenceBindingError("conflicting relation metadata aliases")
+    return candidates[0]
 
 
 def _relation_type(value: object) -> str:
@@ -218,11 +256,15 @@ def _document_identifier(
     return hash_document_id(value, hash_secret=hash_secret)
 
 
-def _offset_pair(value: object, *, field_name: str = "span offsets") -> tuple[int, int]:
+def _offset_pair(
+    value: object, *, field_name: str = "span offsets", depth: int = 0
+) -> tuple[int, int]:
+    if depth > MAX_RELATION_DEPTH:
+        raise EvidenceBindingError("span nesting exceeds the supported limit")
     if isinstance(value, Mapping):
         nested = _field(value, ("source_offsets", "offset", "span"))
         if nested is not _MISSING and nested is not value:
-            return _offset_pair(nested, field_name=field_name)
+            return _offset_pair(nested, field_name=field_name, depth=depth + 1)
         start = _field(value, ("start", "source_start"))
         end = _field(value, ("end", "source_end"))
     elif isinstance(value, (tuple, list)) and len(value) == 2:
@@ -230,7 +272,7 @@ def _offset_pair(value: object, *, field_name: str = "span offsets") -> tuple[in
     else:
         nested = _field(value, ("source_offsets", "offset", "span"))
         if nested is not _MISSING and nested is not value:
-            return _offset_pair(nested, field_name=field_name)
+            return _offset_pair(nested, field_name=field_name, depth=depth + 1)
         start = _field(value, ("start", "source_start"))
         end = _field(value, ("end", "source_end"))
     if start is _MISSING or end is _MISSING:
@@ -266,6 +308,7 @@ class EvidenceSpan:
     span_id: str | None = None
     text_hash: str | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         document_id = _document_identifier(self.document_id)
         start, end = _offset_pair((self.start, self.end))
@@ -286,6 +329,7 @@ class EvidenceSpan:
         object.__setattr__(self, "text_hash", text_hash)
 
     @classmethod
+    @_safe_boundary
     def from_obj(
         cls,
         value: object,
@@ -301,7 +345,9 @@ class EvidenceSpan:
         document after normalization.
         """
 
-        if isinstance(value, cls):
+        document_length = _coerce_document_length(document_length)
+        if type(value) is cls:
+            value = replace(value)
             if document_id is not _MISSING:
                 expected = _document_identifier(
                     document_id,
@@ -389,7 +435,9 @@ class EvidenceSpan:
         return payload
 
 
-def _assertion_state(value: object) -> AssertionState:
+def _assertion_state(value: object, depth: int = 0) -> AssertionState:
+    if depth > MAX_RELATION_DEPTH:
+        raise EvidenceBindingError("assertion nesting exceeds the supported limit")
     if isinstance(value, AssertionState):
         return value
     if isinstance(value, Enum):
@@ -400,10 +448,24 @@ def _assertion_state(value: object) -> AssertionState:
             ("assertion_state", "assertion_status", "status", "state"),
         )
         if direct is not _MISSING and direct is not value:
-            return _assertion_state(direct)
+            return _assertion_state(direct, depth + 1)
         negation = _field(value, ("negation",))
         temporality = _field(value, ("temporality", "temporality_status"))
         certainty = _field(value, ("certainty", "uncertainty"))
+        for axis, allowed in (
+            (
+                negation,
+                {"affirmed", "confirmed", "present", "negated", "refuted", "absent"},
+            ),
+            (
+                temporality,
+                {"current", "recent", "historical", "hypothetical", "conditional"},
+            ),
+            (certainty, {"certain", "confirmed", "uncertain", "possible"}),
+        ):
+            if axis is not _MISSING and axis is not None:
+                if _string(axis, "assertion axis").casefold() not in allowed:
+                    raise EvidenceBindingError("assertion axis is unsupported")
         if negation is not _MISSING and negation is not None:
             negation_text = _string(negation, "assertion negation").casefold()
             if negation_text in {"negated", "refuted", "absent"}:
@@ -455,7 +517,9 @@ def _document_text_length(
     return text_length
 
 
-def _evidence_items(value: object) -> tuple[object, ...]:
+def _evidence_items(value: object, depth: int = 0) -> tuple[object, ...]:
+    if depth > MAX_RELATION_DEPTH:
+        raise EvidenceBindingError("evidence nesting exceeds the supported limit")
     if value is _MISSING or value is None:
         raise EvidenceBindingError("relation evidence spans are required")
     if isinstance(value, EvidenceSpan):
@@ -466,7 +530,7 @@ def _evidence_items(value: object) -> tuple[object, ...]:
             ("evidence_spans", "spans", "offsets", "sentences"),
         )
         if nested is not _MISSING and nested is not value:
-            return _evidence_items(nested)
+            return _evidence_items(nested, depth + 1)
         return (value,)
     if isinstance(value, (str, bytes, bytearray)):
         raise EvidenceBindingError("relation evidence spans must be iterable")
@@ -475,7 +539,7 @@ def _evidence_items(value: object) -> tuple[object, ...]:
         if type(first) is int and type(second) is int:
             return (value,)
     try:
-        items = tuple(value)  # type: ignore[arg-type]
+        items = _bounded_items(value)
     except Exception:
         raise EvidenceBindingError("relation evidence spans must be iterable") from None
     if not items:
@@ -516,11 +580,14 @@ class GuardedRelation:
     schema_version: int = EVIDENCE_BINDING_SCHEMA_VERSION
     advisory: str = EVIDENCE_BINDING_ADVISORY
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         relation_type = _relation_type(self.relation_type)
         document_id = _document_identifier(self.document_id)
         if type(self.head) is not EvidenceSpan or type(self.tail) is not EvidenceSpan:
             raise EvidenceBindingError("relation endpoint spans are required")
+        object.__setattr__(self, "head", replace(self.head))
+        object.__setattr__(self, "tail", replace(self.tail))
         if self.head.document_id != document_id or self.tail.document_id != document_id:
             raise EvidenceBindingError("relation endpoint document_id does not match")
         if self.head.offset == self.tail.offset:
@@ -528,13 +595,14 @@ class GuardedRelation:
         if isinstance(self.evidence_spans, (str, bytes, bytearray)):
             raise EvidenceBindingError("relation evidence spans must be iterable")
         try:
-            evidence = tuple(self.evidence_spans)
+            evidence = _bounded_items(self.evidence_spans)
         except Exception:
             raise EvidenceBindingError(
                 "relation evidence spans must be iterable"
             ) from None
         if not evidence or any(type(span) is not EvidenceSpan for span in evidence):
             raise EvidenceBindingError("relation evidence spans are required")
+        evidence = tuple(replace(span) for span in evidence)
         if any(span.document_id != document_id for span in evidence):
             raise EvidenceBindingError("relation evidence document_id does not match")
         if type(self.schema_version) is not int or (
@@ -706,6 +774,7 @@ def _relation_field(
     return value
 
 
+@_safe_boundary
 def bind_relation_evidence(
     relation: object,
     *,
@@ -767,8 +836,7 @@ def bind_relation_evidence(
         ):
             raise EvidenceBindingError("bound relation overrides are not supported")
         length = _document_text_length(document_text, document_length)
-        validate_guarded_relation(relation, document_length=length)
-        return relation
+        return validate_guarded_relation(relation, document_length=length)
 
     payload = _relation_payload(relation)
     relation_type = _relation_field(
@@ -881,6 +949,7 @@ def bind_relation_evidence(
     )
 
 
+@_safe_boundary
 def validate_guarded_relation(
     relation: object,
     *,
@@ -892,6 +961,7 @@ def validate_guarded_relation(
         raise EvidenceBindingError(
             "summary and review workflows require bound relation records"
         )
+    relation = replace(relation)
     length = _coerce_document_length(document_length)
     _validate_document_bounds(relation.head, length)
     _validate_document_bounds(relation.tail, length)
@@ -900,6 +970,7 @@ def validate_guarded_relation(
     return relation
 
 
+@_safe_boundary
 def require_guarded_relations(
     relations: Iterable[GuardedRelation],
     *,
@@ -918,7 +989,7 @@ def require_guarded_relations(
     if isinstance(relations, (str, bytes, bytearray, Mapping)):
         raise EvidenceBindingError("workflow relation records must be iterable")
     try:
-        records = tuple(relations)
+        records = _bounded_items(relations)
     except Exception:
         raise EvidenceBindingError(
             "workflow relation records must be iterable"
@@ -930,6 +1001,7 @@ def require_guarded_relations(
     return tuple(sorted(validated, key=GuardedRelation.stable_key))
 
 
+@_safe_boundary
 def bind_relation_records(
     relations: Iterable[object],
     *,
@@ -946,7 +1018,7 @@ def bind_relation_records(
     if isinstance(relations, (str, bytes, bytearray, Mapping)):
         raise EvidenceBindingError("relation records must be iterable")
     try:
-        records = tuple(relations)
+        records = _bounded_items(relations)
     except Exception:
         raise EvidenceBindingError("relation records must be iterable") from None
     bound = tuple(
@@ -965,6 +1037,7 @@ def bind_relation_records(
     return tuple(sorted(bound, key=GuardedRelation.stable_key))
 
 
+@_safe_boundary
 def validate_relation_evidence(
     relation: object,
     **kwargs: Any,

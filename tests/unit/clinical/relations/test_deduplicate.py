@@ -182,3 +182,84 @@ def test_invalid_candidates_fail_without_echoing_submitted_values() -> None:
         )
 
     assert sensitive_marker not in str(raised.value)
+
+
+def test_assertion_state_alias_separates_contradictory_edges():
+    candidate = {
+        "relation_type": "treats",
+        "normalized_head": "synthetic:h",
+        "normalized_tail": "synthetic:t",
+        "score": 0.8,
+        "evidence": [{"start": 0, "end": 5}],
+    }
+    result = collapse_duplicate_relations(
+        [
+            {**candidate, "assertion_state": "affirmed"},
+            {**candidate, "assertion_state": "negated"},
+        ]
+    )
+    assert len(result) == 2
+
+
+def test_malformed_evidence_is_not_silently_discarded():
+    with pytest.raises(RelationDeduplicationError):
+        collapse_duplicate_relations(
+            {
+                "relation_type": "treats",
+                "normalized_head": "synthetic:h",
+                "normalized_tail": "synthetic:t",
+                "score": 0.8,
+                "evidence": [{"start": 0, "end": 5}, {"start": -1, "end": 4}],
+            }
+        )
+
+
+def test_unknown_assertion_context_is_not_exported():
+    with pytest.raises(RelationDeduplicationError):
+        collapse_duplicate_relations(
+            {
+                "relation_type": "treats",
+                "normalized_head": "synthetic:h",
+                "normalized_tail": "synthetic:t",
+                "score": 0.8,
+                "context": {"negation": "synthetic-sensitive-marker"},
+                "evidence": [{"start": 0, "end": 5}],
+            }
+        )
+
+
+def test_deduplication_accepts_bound_relations_without_losing_assertion():
+    from openmed.clinical.relations.evidence_binding import bind_relation_evidence
+
+    relation = bind_relation_evidence(
+        {
+            "relation_type": "treats",
+            "document_id": "synthetic-doc",
+            "head": {"start": 0, "end": 4, "span_id": "synthetic-head"},
+            "tail": {"start": 6, "end": 10, "span_id": "synthetic-tail"},
+            "evidence_spans": [{"start": 0, "end": 12}],
+            "assertion_state": "negated",
+            "confidence": 0.8,
+        }
+    )
+    result = collapse_duplicate_relations(relation)
+    assert result[0].context["assertion_status"] == "negated"
+    assert result[0].evidence_locations[0].offset == (0, 12)
+
+
+def test_deduplication_rejects_cycles_and_unbounded_batches():
+    from itertools import repeat
+
+    candidate = {
+        "relation_type": "treats",
+        "normalized_head": "synthetic:h",
+        "normalized_tail": "synthetic:t",
+        "score": 0.8,
+        "evidence": [{"start": 0, "end": 5}],
+    }
+    with pytest.raises(RelationDeduplicationError):
+        collapse_duplicate_relations(repeat(candidate))
+    cycle = []
+    cycle.append(cycle)
+    with pytest.raises(RelationDeduplicationError):
+        collapse_duplicate_relations({**candidate, "evidence": cycle})
