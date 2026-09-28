@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 80546339,
-    "maximum_unique_payload_bytes": 80208760,
+    "maximum_total_bytes": 80774269,
+    "maximum_unique_payload_bytes": 80436690,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -23,7 +23,7 @@
   "route_transfer_bytes": {
     "/": 3145728,
     "/docs/": 5560423,
-    "/docs/model-tokenizer-script-coverage/": 7660085
+    "/docs/model-tokenizer-script-coverage/": 7773465
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,6 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The refusal-taxonomy guide measures 7666661 tokenizer-route transfer bytes; the ceiling retains the previous 106804-byte allowance.",
+    "The refusal-taxonomy guide on current master stages 80658783 total bytes and 80321204 unique bytes. Aggregate ceilings retain the existing 115486-byte platform/headroom allowance; other limits are unchanged.",
     "Artifact byte limits cover the exact staged V3 Journey, summary, clinical evaluation, FHIR/OMOP, agent governance, grounding, data-quality, PHI-preflight, guarded-relation, reviewer-disagreement, review-packet lifecycle, SMART scope-audit, schema-compatibility, social-needs, outbound-privacy, evidence-recency, bounded NLI, local guardrail evidence, and refusal taxonomy guides with bounded documentation headroom.",
     "The unchanged 6ff3809 base stages 79128774 total bytes, 78791195 unique payload bytes, and 337579 duplicate payload bytes on Linux.",
     "The combined schema fingerprint and processing summary diff guides stage 79540641 total bytes, 79203062 unique payload bytes, and 337579 duplicate payload bytes on macOS.",
