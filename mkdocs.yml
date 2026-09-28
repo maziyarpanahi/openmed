@@ -186,6 +186,8 @@ nav:
       - Citation Boundary Validation: clinical/citation-boundary-validation.md
       - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
       - Clinical Evidence Tables: clinical/evidence-tables.md
+      - Relation Evidence Binding: clinical/relation-evidence-binding.md
+      - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
       - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
       - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
@@ -214,6 +216,8 @@ nav:
       - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
       - Multilingual Clinical Relations: clinical/multilingual-relations.md
+      - Guarded Relation Directionality: clinical/relation-directionality.md
+      - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
       - Medication Sig Parser: clinical/sig-parser.md
       - Post-de-identification Summarization: clinical/summarization.md
       - Medical Tokenizer: medical-tokenizer.md
@@ -354,6 +358,7 @@ nav:
       - Radiology Finding Profile: clinical/radiology-profile.md
       - Pathology result profile: clinical/pathology-profile.md
       - Structured discharge-summary profile: clinical/discharge-profile.md
+      - Relation-candidate audit report: evaluation/relation-audit.md
       - Summary omission budgets: clinical/summary-omission-budgets.md
       - Summary demographic minimization: clinical/summary-demographic-minimization.md
       - Bounded local-summary retries: clinical/summary-retry-control.md
