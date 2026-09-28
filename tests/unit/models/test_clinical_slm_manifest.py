@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import socket
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+import openmed.models.clinical_slm_manifest as manifest_module
 from openmed.models.clinical_slm_manifest import (
     CLINICAL_SLM_MANIFEST_FILENAME,
     ClinicalSLMArtifact,
@@ -17,10 +20,154 @@ from openmed.models.clinical_slm_manifest import (
     ClinicalSLMArtifactMissingError,
     ClinicalSLMManifestError,
     ClinicalSLMQuantization,
+    ClinicalSLMVerificationResult,
     load_clinical_slm_manifest,
     validate_clinical_slm_manifest,
     verify_clinical_slm_package,
 )
+
+
+def test_typed_manifest_is_revalidated_before_verification(tmp_path):
+    package, manifest = _write_package(tmp_path)
+    object.__setattr__(manifest, "offline", False)
+    with pytest.raises(ClinicalSLMManifestError):
+        verify_clinical_slm_package(package, manifest)
+
+
+def test_nested_typed_license_is_revalidated(tmp_path):
+    _, manifest = _write_package(tmp_path)
+    object.__setattr__(manifest.licenses[0], "spdx_id", "SYNTHETIC_PRIVATE")
+    with pytest.raises(ClinicalSLMManifestError):
+        replace(manifest, manifest_digest=None)
+
+
+def test_quantization_bits_must_agree_with_scheme():
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMQuantization("int4", bits=8)
+
+
+def test_format_aliases_cannot_disagree():
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMArtifact(
+            "weights",
+            "model.bin",
+            "a" * 64,
+            1,
+            format="safetensors",
+            format_name="pickle",
+        )
+
+
+def test_verification_result_reason_codes_are_fixed():
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMVerificationResult(
+            True, 4, 4, 10, "a" * 64, reason_codes=("synthetic_private",)
+        )
+
+
+def test_zero_component_verification_is_not_success():
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMVerificationResult(True, 0, 0, 0, "a" * 64)
+
+
+def test_json_failure_discards_sensitive_context():
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        ClinicalSLMArtifactManifest.from_json('{"SYNTHETIC_PRIVATE":')
+    assert caught.value.__context__ is None
+
+
+def test_grouped_component_cannot_override_its_role(tmp_path):
+    _, manifest = _write_package(tmp_path)
+    payload = manifest.to_dict()
+    payload["components"] = {"weights": [payload["components"][0]]}
+    assert payload["components"]["weights"][0]["component"] != "weights"
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMArtifactManifest.from_mapping(payload)
+
+
+def test_collection_read_stops_at_bound(tmp_path):
+    _, manifest = _write_package(tmp_path)
+    reads = []
+
+    class UnboundedTasks(Sequence):
+        def __len__(self):
+            return 10**12
+
+        def __getitem__(self, index):
+            reads.append(index)
+            assert index <= manifest_module.MAX_COMPONENTS
+            return f"task-{index}"
+
+    with pytest.raises(ClinicalSLMManifestError):
+        replace(manifest, supported_tasks=UnboundedTasks(), manifest_digest=None)
+    assert len(reads) == manifest_module.MAX_COMPONENTS + 1
+
+
+def test_large_json_is_rejected_before_parsing(monkeypatch):
+    monkeypatch.setattr(manifest_module, "MAX_MANIFEST_BYTES", 16)
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        ClinicalSLMArtifactManifest.from_json(" " * 17)
+    assert caught.value.code == "manifest_unreadable"
+    assert caught.value.__context__ is None
+
+
+def test_success_cannot_include_failure_reason():
+    with pytest.raises(ClinicalSLMManifestError):
+        ClinicalSLMVerificationResult(
+            True, 4, 4, 10, "a" * 64, reason_codes=("component_mutated",)
+        )
+
+
+def test_symlink_swap_between_check_and_open_is_rejected(tmp_path, monkeypatch):
+    package, manifest = _write_package(tmp_path)
+    weights = package / "weights/model.safetensors"
+    backup = package / "weights/backup.safetensors"
+    real_open = manifest_module.os.open
+
+    def swap(path, flags, *args, **kwargs):
+        if path == "model.safetensors":
+            weights.rename(backup)
+            weights.symlink_to(backup.name)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(manifest_module.os, "open", swap)
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        verify_clinical_slm_package(package, manifest)
+    assert caught.value.__context__ is None
+
+
+def test_same_size_mutation_during_read_is_rejected(tmp_path, monkeypatch):
+    package, manifest = _write_package(tmp_path)
+    weights = package / "weights/model.safetensors"
+    original_sha256 = manifest_module.hashlib.sha256
+
+    class MutatingDigest:
+        def __init__(self):
+            self.digest = original_sha256()
+
+        def update(self, chunk):
+            self.digest.update(chunk)
+            if chunk == b"synthetic weights":
+                weights.write_bytes(b"synthetic weights")
+
+        def hexdigest(self):
+            return self.digest.hexdigest()
+
+    def digest_factory(*args):
+        return original_sha256(*args) if args else MutatingDigest()
+
+    monkeypatch.setattr(manifest_module.hashlib, "sha256", digest_factory)
+    with pytest.raises(ClinicalSLMManifestError):
+        verify_clinical_slm_package(package, manifest)
+
+
+def test_nested_manifest_symlink_is_rejected(tmp_path):
+    package, _ = _write_package(tmp_path)
+    (package / "alias").symlink_to(package, target_is_directory=True)
+    with pytest.raises(ClinicalSLMManifestError):
+        verify_clinical_slm_package(
+            package, manifest_filename="alias/clinical-slm-manifest.json"
+        )
 
 
 def _write_package(tmp_path: Path) -> tuple[Path, ClinicalSLMArtifactManifest]:

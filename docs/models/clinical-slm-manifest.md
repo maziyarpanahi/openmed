@@ -114,3 +114,18 @@ trusted manifest digest when distributing a package. The manifest is a
 load-time integrity and provenance gate, not a compliance certification,
 medical device, or autonomous clinical decision guarantee. Human review is
 required by the manifest and cannot be disabled through its metadata.
+
+Collection inputs are limited to 4,096 entries and serialized manifests to
+8 MiB. Typed records are revalidated at the verification boundary; conflicting
+aliases, component roles, and quantization bit widths are rejected. Errors
+discard upstream exception context, which may otherwise retain input values.
+
+Disk verification currently requires POSIX directory-descriptor and no-follow
+file-open support (Linux/macOS). On other platforms it fails closed; metadata
+construction and validation remain available. Directory descriptors prevent
+following a component or parent symlink swapped during traversal. File identity,
+size, timestamps, and bytes read are checked across each read. Keep the package
+immutable through verification **and subsequent runtime loading**: this gate
+does not lock files against another process or verify a later runtime's reads.
+A self-digest detects inconsistency, not authenticity; pin the expected manifest
+digest through a trusted distribution channel. Hashes are not anonymization.

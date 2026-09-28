@@ -22,7 +22,10 @@ import os
 import re
 import stat
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from functools import wraps
+from itertools import islice
 from pathlib import Path, PurePosixPath
 from typing import Any, Final
 
@@ -38,6 +41,7 @@ MAX_IDENTIFIER_LENGTH: Final = 128
 MAX_MODEL_ID_LENGTH: Final = 256
 MAX_PATH_LENGTH: Final = 512
 MAX_ARTIFACT_BYTES: Final = (1 << 63) - 1
+MAX_MANIFEST_BYTES: Final = 8 * 1024 * 1024
 
 _DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:+/@-]{0,127}$")
@@ -229,6 +233,29 @@ def _fail(
     raise error_type(code, field_name) from None
 
 
+def _safe_boundary(function):
+    @wraps(function)
+    def checked(*args, **kwargs):
+        kind = ClinicalSLMValidationError
+        code, field = "invalid_input", None
+        try:
+            return function(*args, **kwargs)
+        except ClinicalSLMManifestError as error:
+            kind, code, field = type(error), error.code, error.field_name
+        except Exception:
+            pass
+        raise kind(code, field)
+
+    return checked
+
+
+def _bounded(value: Any, limit: int = MAX_COMPONENTS) -> tuple[Any, ...]:
+    values = tuple(islice(iter(value), limit + 1))
+    if len(values) > limit:
+        _fail("invalid_input")
+    return values
+
+
 def _canonical_json(value: Any) -> str:
     try:
         return json.dumps(
@@ -357,7 +384,7 @@ def _mapping_copy(value: Any, *, field_name: str) -> dict[str, Any]:
     if not isinstance(value, Mapping) or isinstance(value, (str, bytes, bytearray)):
         _fail("invalid_input", field_name)
     try:
-        copied = dict(value)
+        copied = {key: value[key] for key in _bounded(value)}
     except (KeyboardInterrupt, SystemExit):
         raise
     except BaseException:
@@ -383,6 +410,7 @@ class ClinicalSLMArtifact:
     executable: bool
     format: str | None
 
+    @_safe_boundary
     def __init__(
         self,
         component: str | None = None,
@@ -426,8 +454,7 @@ class ClinicalSLMArtifact:
             "executable",
             _normalise_bool(executable, "component"),
         )
-        if format is None:
-            format = format_name
+        format = _first_alias((format, format_name), default=None)
         if format is not None:
             format = _normalise_identifier(format, "component")
         object.__setattr__(self, "format", format)
@@ -462,6 +489,7 @@ class ClinicalSLMArtifact:
         return self.size_bytes
 
     @classmethod
+    @_safe_boundary
     def from_mapping(
         cls,
         payload: Mapping[str, Any],
@@ -480,6 +508,10 @@ class ClinicalSLMArtifact:
         )
         if component is None:
             _fail("missing_field", "component")
+        if default_component is not None and _normalise_component_kind(
+            component
+        ) != _normalise_component_kind(default_component):
+            _fail("invalid_component", "components")
         return cls(
             component=component,
             path=_first_value(fields, ("path",)),
@@ -527,6 +559,7 @@ class ClinicalSLMQuantization:
     group_size: int | None = None
     symmetric: bool | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if (
             type(self.scheme) is not str
@@ -539,6 +572,21 @@ class ClinicalSLMQuantization:
         if scheme in {"unknown", "unspecified", "other"}:
             _fail("invalid_quantization", "quantization")
         object.__setattr__(self, "scheme", scheme)
+        expected_bits = {
+            "int2": 2,
+            "int3": 3,
+            "int4": 4,
+            "int8": 8,
+            "fp16": 16,
+            "bf16": 16,
+            "fp32": 32,
+        }.get(scheme)
+        if (
+            expected_bits is not None
+            and self.bits is not None
+            and self.bits != expected_bits
+        ):
+            _fail("invalid_quantization", "quantization")
         if self.bits is not None and (
             type(self.bits) is not int or self.bits not in {2, 3, 4, 8, 16, 32}
         ):
@@ -566,6 +614,7 @@ class ClinicalSLMQuantization:
         return "ClinicalSLMQuantization(<metadata>)"
 
     @classmethod
+    @_safe_boundary
     def from_mapping(
         cls, payload: Mapping[str, Any] | str
     ) -> "ClinicalSLMQuantization":
@@ -606,6 +655,7 @@ class ClinicalSLMLicense:
     component: str
     spdx_id: str
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         component = self.component.lower() if type(self.component) is str else None
         if component != "all":
@@ -638,6 +688,7 @@ class ClinicalSLMLicense:
         return self.spdx_id
 
     @classmethod
+    @_safe_boundary
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ClinicalSLMLicense":
         """Build a license declaration from a strict mapping."""
 
@@ -665,7 +716,7 @@ ComponentLicense = ClinicalSLMLicense
 def _normalise_components(value: Any) -> tuple[ClinicalSLMArtifact, ...]:
     if isinstance(value, Mapping):
         entries: list[ClinicalSLMArtifact] = []
-        for component, members in value.items():
+        for component, members in _bounded(value.items()):
             if type(component) is not str:
                 _fail("invalid_component", "components")
             if isinstance(members, Mapping):
@@ -676,11 +727,13 @@ def _normalise_components(value: Any) -> tuple[ClinicalSLMArtifact, ...]:
                 members_to_read = members
             else:
                 _fail("invalid_component", "components")
-            for member in members_to_read:
+            for member in _bounded(members_to_read):
+                if len(entries) >= MAX_COMPONENTS:
+                    _fail("invalid_component", "components")
                 if isinstance(member, ClinicalSLMArtifact):
                     if member.component != _normalise_component_kind(component):
                         _fail("invalid_component", "components")
-                    entries.append(member)
+                    entries.append(replace(member))
                 else:
                     entries.append(
                         ClinicalSLMArtifact.from_mapping(
@@ -691,10 +744,10 @@ def _normalise_components(value: Any) -> tuple[ClinicalSLMArtifact, ...]:
         values = entries
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         values = [
-            item
+            replace(item)
             if isinstance(item, ClinicalSLMArtifact)
             else ClinicalSLMArtifact.from_mapping(item)
-            for item in value
+            for item in _bounded(value)
         ]
     else:
         _fail("invalid_component", "components")
@@ -725,9 +778,9 @@ def _normalise_licenses(value: Any) -> tuple[ClinicalSLMLicense, ...]:
         _fail("invalid_input", "licenses")
 
     licenses: list[ClinicalSLMLicense] = []
-    for entry in entries:
+    for entry in _bounded(entries):
         if isinstance(entry, ClinicalSLMLicense):
-            licenses.append(entry)
+            licenses.append(replace(entry))
         elif isinstance(entry, Mapping):
             licenses.append(ClinicalSLMLicense.from_mapping(entry))
         else:
@@ -744,7 +797,7 @@ def _normalise_tasks(value: Any) -> tuple[str, ...]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
         _fail("invalid_tasks", "supported_tasks")
     tasks: list[str] = []
-    for task in value:
+    for task in _bounded(value):
         if (
             type(task) is not str
             or not task
@@ -809,6 +862,7 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
     human_review_required: bool = True
     manifest_digest: str | None = None
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if self.schema_version != CLINICAL_SLM_MANIFEST_SCHEMA_VERSION:
             _fail("unsupported_schema", "schema_version")
@@ -822,7 +876,7 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
         components = _normalise_components(self.components)
         object.__setattr__(self, "components", components)
         if isinstance(self.quantization, ClinicalSLMQuantization):
-            quantization = self.quantization
+            quantization = replace(self.quantization)
         else:
             quantization = ClinicalSLMQuantization.from_mapping(self.quantization)
         object.__setattr__(self, "quantization", quantization)
@@ -929,6 +983,7 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
         return tuple(item for item in self.components if item.component == kind)
 
     @classmethod
+    @_safe_boundary
     def from_mapping(
         cls,
         payload: Mapping[str, Any],
@@ -972,11 +1027,8 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
                     _fail("invalid_component", "components")
                 role_values.append(
                     [
-                        {
-                            **_mapping_copy(member, field_name="component"),
-                            "component": role,
-                        }
-                        for member in role_members
+                        ClinicalSLMArtifact.from_mapping(member, default_component=role)
+                        for member in _bounded(role_members)
                     ]
                 )
         if not role_values:
@@ -1016,6 +1068,7 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
         )
 
     @classmethod
+    @_safe_boundary
     def from_json(
         cls,
         payload: str | bytes | bytearray,
@@ -1025,6 +1078,11 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
         """Build a validated manifest from a duplicate-free JSON object."""
 
         try:
+            if (
+                not isinstance(payload, (str, bytes, bytearray))
+                or len(payload) > MAX_MANIFEST_BYTES
+            ):
+                _fail("manifest_unreadable")
             decoded = json.loads(payload, object_pairs_hook=_strict_json_object)
         except ClinicalSLMManifestError:
             raise
@@ -1084,13 +1142,15 @@ ClinicalSLMManifest = ClinicalSLMArtifactManifest
 def _flatten_component_values(values: Iterable[Any]) -> tuple[ClinicalSLMArtifact, ...]:
     flattened: list[Any] = []
     try:
-        for value in values:
+        for value in _bounded(values):
             if isinstance(value, Mapping):
-                flattened.extend(value.items())
+                flattened.extend(
+                    _bounded(value.items(), MAX_COMPONENTS - len(flattened))
+                )
             elif isinstance(value, Sequence) and not isinstance(
                 value, (str, bytes, bytearray)
             ):
-                flattened.extend(value)
+                flattened.extend(_bounded(value, MAX_COMPONENTS - len(flattened)))
             else:
                 _fail("invalid_component", "components")
     except (KeyboardInterrupt, SystemExit):
@@ -1104,6 +1164,8 @@ def _flatten_component_values(values: Iterable[Any]) -> tuple[ClinicalSLMArtifac
     # flattened into explicit records while preserving the caller's role.
     records: list[ClinicalSLMArtifact] = []
     for value in flattened:
+        if len(records) >= MAX_COMPONENTS:
+            _fail("invalid_component", "components")
         if isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], str):
             role, members = value
             if isinstance(members, Mapping):
@@ -1112,7 +1174,7 @@ def _flatten_component_values(values: Iterable[Any]) -> tuple[ClinicalSLMArtifac
                 members, (str, bytes, bytearray)
             ):
                 _fail("invalid_component", "components")
-            for member in members:
+            for member in _bounded(members, MAX_COMPONENTS - len(records)):
                 if isinstance(member, Mapping):
                     records.append(
                         ClinicalSLMArtifact.from_mapping(
@@ -1123,7 +1185,7 @@ def _flatten_component_values(values: Iterable[Any]) -> tuple[ClinicalSLMArtifac
                 else:
                     _fail("invalid_component", "components")
         elif isinstance(value, ClinicalSLMArtifact):
-            records.append(value)
+            records.append(replace(value))
         elif isinstance(value, Mapping):
             records.append(ClinicalSLMArtifact.from_mapping(value))
         else:
@@ -1151,6 +1213,7 @@ class ClinicalSLMVerificationResult:
     manifest_digest: str
     reason_codes: tuple[str, ...] = ()
 
+    @_safe_boundary
     def __post_init__(self) -> None:
         if type(self.verified) is not bool or not self.verified:
             _fail("package_invalid", error_type=ClinicalSLMArtifactError)
@@ -1161,16 +1224,24 @@ class ClinicalSLMVerificationResult:
         ):
             if type(value) is not int or value < 0:
                 _fail("package_invalid", error_type=ClinicalSLMArtifactError)
-        if self.executable_component_count > self.component_count:
+        if (
+            not 4 <= self.component_count <= MAX_COMPONENTS
+            or self.bytes_checked < self.component_count
+            or self.executable_component_count > self.component_count
+        ):
             _fail("package_invalid", error_type=ClinicalSLMArtifactError)
         object.__setattr__(
             self,
             "manifest_digest",
             _normalise_digest(self.manifest_digest, "manifest_digest"),
         )
-        if type(self.reason_codes) is not tuple or any(
-            type(code) is not str or _REASON_CODE_RE.fullmatch(code) is None
-            for code in self.reason_codes
+        if (
+            self.reason_codes
+            or type(self.reason_codes) is not tuple
+            or any(
+                type(code) is not str or code not in _ERROR_MESSAGES
+                for code in self.reason_codes
+            )
         ):
             _fail("package_invalid", error_type=ClinicalSLMArtifactError)
 
@@ -1212,6 +1283,7 @@ class ClinicalSLMVerificationResult:
 ManifestVerificationResult = ClinicalSLMVerificationResult
 
 
+@_safe_boundary
 def validate_clinical_slm_manifest(
     manifest: ClinicalSLMArtifactManifest | Mapping[str, Any],
     *,
@@ -1220,13 +1292,16 @@ def validate_clinical_slm_manifest(
     """Validate and return an immutable clinical SLM manifest."""
 
     if isinstance(manifest, ClinicalSLMArtifactManifest):
-        return manifest
+        if require_manifest_digest and manifest.manifest_digest is None:
+            _fail("manifest_digest_required", "manifest_digest")
+        return replace(manifest)
     return ClinicalSLMArtifactManifest.from_mapping(
         manifest,
         require_manifest_digest=require_manifest_digest,
     )
 
 
+@_safe_boundary
 def load_clinical_slm_manifest(
     path: str | Path,
     *,
@@ -1247,7 +1322,12 @@ def load_clinical_slm_manifest(
             manifest_path = manifest_path / CLINICAL_SLM_MANIFEST_FILENAME
         if manifest_path.is_symlink() or not manifest_path.is_file():
             _fail("manifest_missing", error_type=ClinicalSLMArtifactMissingError)
-        payload = manifest_path.read_bytes()
+        with _open_local_file(
+            manifest_path.parent.resolve(strict=True), manifest_path.name
+        ) as handle:
+            payload = handle.read(MAX_MANIFEST_BYTES + 1)
+        if len(payload) > MAX_MANIFEST_BYTES:
+            _fail("manifest_unreadable")
     except ClinicalSLMManifestError:
         raise
     except (KeyboardInterrupt, SystemExit):
@@ -1325,25 +1405,88 @@ def _local_artifact_path(root: Path, relative_path: str) -> Path:
     return current
 
 
-def _hash_local_artifact(path: Path) -> tuple[str, int]:
+def _file_identity(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+@contextmanager
+def _open_local_file(root: Path, relative_path: str):
+    """Hold directory descriptors and reject symlinks throughout a local read."""
+    if os.name != "posix" or not hasattr(os, "O_NOFOLLOW"):
+        _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
+    descriptors = []
+    file_descriptor = None
     try:
-        before = path.stat()
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        parent = os.open(root, directory_flags)
+        descriptors.append(parent)
+        root_identity = os.fstat(parent)
+        parts = PurePosixPath(relative_path).parts
+        for part in parts[:-1]:
+            parent = os.open(part, directory_flags, dir_fd=parent)
+            descriptors.append(parent)
+        file_descriptor = os.open(
+            parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent
+        )
+        before = os.fstat(file_descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
+        with os.fdopen(file_descriptor, "rb") as handle:
+            file_descriptor = None
+            yield handle
+            after = os.fstat(handle.fileno())
+        named = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+        current_root = root.lstat()
+        if (
+            _file_identity(before) != _file_identity(after)
+            or _file_identity(after) != _file_identity(named)
+            or (current_root.st_dev, current_root.st_ino)
+            != (root_identity.st_dev, root_identity.st_ino)
+            or not stat.S_ISDIR(current_root.st_mode)
+        ):
+            _fail("component_mutated", "component", error_type=ClinicalSLMArtifactError)
+    except (OSError, ValueError):
+        _fail("component_unreadable", "component", error_type=ClinicalSLMArtifactError)
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+
+def _hash_local_artifact(root: Path, relative_path: str) -> tuple[str, int]:
+    try:
         digest = hashlib.sha256()
-        with path.open("rb") as handle:
+        count = 0
+        with _open_local_file(root, relative_path) as handle:
+            before = os.fstat(handle.fileno())
             while chunk := handle.read(1024 * 1024):
                 digest.update(chunk)
-            after = os.fstat(handle.fileno())
+                count += len(chunk)
+                if count > before.st_size:
+                    _fail(
+                        "component_mutated",
+                        "component",
+                        error_type=ClinicalSLMArtifactError,
+                    )
     except (OSError, ValueError):
         _fail(
             "component_unreadable",
             "component",
             error_type=ClinicalSLMArtifactError,
         )
-    if before.st_size != after.st_size:
+    if before.st_size != count:
         _fail("component_mutated", "component", error_type=ClinicalSLMArtifactError)
-    return f"sha256:{digest.hexdigest()}", after.st_size
+    return f"sha256:{digest.hexdigest()}", count
 
 
+@_safe_boundary
 def verify_clinical_slm_package(
     package_root: str | Path,
     manifest: ClinicalSLMArtifactManifest | Mapping[str, Any] | None = None,
@@ -1366,16 +1509,21 @@ def verify_clinical_slm_package(
                 "package_root",
                 error_type=ClinicalSLMArtifactError,
             )
-        manifest_path = root / _normalise_path(manifest_filename)
-        loaded = load_clinical_slm_manifest(manifest_path)
+        relative_manifest = _normalise_path(manifest_filename)
+        _local_artifact_path(root, relative_manifest)
+        with _open_local_file(root, relative_manifest) as handle:
+            payload = handle.read(MAX_MANIFEST_BYTES + 1)
+        loaded = ClinicalSLMArtifactManifest.from_json(
+            payload, require_manifest_digest=True
+        )
     else:
         loaded = validate_clinical_slm_manifest(manifest, require_manifest_digest=True)
 
     total_bytes = 0
     executable_count = 0
     for artifact in loaded.components:
-        local_path = _local_artifact_path(root, artifact.path)
-        actual_digest, actual_size = _hash_local_artifact(local_path)
+        _local_artifact_path(root, artifact.path)
+        actual_digest, actual_size = _hash_local_artifact(root, artifact.path)
         if actual_size != artifact.size_bytes:
             _fail(
                 "component_size_mismatch",
@@ -1409,6 +1557,7 @@ def verify_clinical_slm_artifacts(
     return verify_clinical_slm_package(package_root, manifest)
 
 
+@_safe_boundary
 def compute_clinical_slm_manifest_digest(
     manifest: ClinicalSLMArtifactManifest | Mapping[str, Any],
 ) -> str:
