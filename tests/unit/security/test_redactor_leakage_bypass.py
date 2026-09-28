@@ -209,6 +209,33 @@ def test_ac02_other_split_identifiers_are_recovered(text, label):
     assert label in _swept_labels(safety_sweep(text, []))
 
 
+@pytest.mark.parametrize("prefix", ["MRN: ", "MRN #", "MRN: #", "mrn:"])
+def test_ac02_mrn_prefix_variants_preserve_full_source_span(prefix):
+    surface = f"{prefix}1,2,3,4,5,6"
+    text = f"Synthetic {surface} is recorded."
+    matches = [
+        entity
+        for entity in safety_sweep(text, [])
+        if entity.label == "medical_record_number"
+    ]
+    assert len(matches) == 1
+    assert text[matches[0].start : matches[0].end] == surface
+    assert surface not in _deidentify_with_blind_model(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "label"),
+    [
+        ("SSN 1.2.3.4.5.6.7.8.9.0", "ssn"),
+        ("SSN 0.1.2.3.4.5.6.7.8.9.0", "ssn"),
+        ("Card 4.111.111.111.111.111.0", "credit_debit_card"),
+        ("MRN: 1,2,3,4,5,6,7,8,9,0,1", "medical_record_number"),
+    ],
+)
+def test_ac02_overlong_split_runs_are_not_partial_identifiers(text, label):
+    assert label not in _swept_labels(safety_sweep(text, []))
+
+
 @pytest.mark.parametrize(
     "text",
     [

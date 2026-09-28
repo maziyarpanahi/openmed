@@ -183,9 +183,15 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
             surface = match.group()
             if not any(char in surface for char in ".,·"):
                 continue
+            if label != "iban" and (
+                re.search(r"\d[-.,· ]{0,2}$", text[max(0, start - 3) : start])
+                or re.match(r"[-.,· ]{0,2}\d", text[end : end + 3])
+            ):
+                # Never reinterpret a fragment of a longer separated digit run.
+                continue
             canonical = re.sub(r"[-.,·\s]", "", surface)
             if label == "medical_record_number":
-                if not re.fullmatch(r"MRN\d{6,10}", canonical, re.I):
+                if not re.fullmatch(r"MRN[:#]*\d{6,10}", canonical, re.I):
                     continue
             elif not _validated(pattern, canonical):
                 continue
