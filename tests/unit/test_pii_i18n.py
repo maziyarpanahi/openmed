@@ -8092,3 +8092,26 @@ def test_polish_pesel_surrogates_preserve_checksum_and_change_source():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.parametrize("phone", ["+48 501 034 005", "501 000 005", "501034005"])
+def test_polish_phone_groups_allow_internal_zeros(phone):
+    from openmed.core.pii import _apply_safety_sweep_to_result
+    from openmed.core.pii_i18n import _POLISH_PII_PATTERNS
+    from openmed.processing.outputs import PredictionResult
+
+    assert any(
+        re.fullmatch(pattern.pattern, phone, pattern.flags)
+        for pattern in _POLISH_PII_PATTERNS
+        if pattern.entity_type == "phone_number"
+    )
+    text = f"Telefon {phone}."
+    empty = PredictionResult(
+        text=text,
+        entities=[],
+        model_name="offline",
+        timestamp="2026-09-28T00:00:00Z",
+        metadata={},
+    )
+    result, _ = _apply_safety_sweep_to_result(text, empty, lang="pl")
+    assert any(text[entity.start : entity.end] == phone for entity in result.entities)

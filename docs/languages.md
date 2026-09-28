@@ -122,8 +122,8 @@ Chinese segmentation and Han-script routing use the dedicated `zh` registry
 entry. Being listed above does **not** by itself mean a code is model-backed:
 the rows whose model column reads `env:OPENMED_INDIC_NER_MODEL` or
 `user-supplied` (`pa`, `ne`, and `ur`) ship no bundled
-weights and require a caller-supplied model. Russian and Tamil retain explicit
-public placeholder routes for compatibility, but neither placeholder is a
+weights and require a caller-supplied model. Polish, Russian, and Tamil retain explicit
+public placeholder routes for compatibility, but none of these placeholders is a
 claim of dedicated trained weights. Codes absent from the table entirely (for
 example `lv`, `sk`, `ms`, `tl`, and `fi`) are not model-backed either.
 Several of them still have
@@ -502,6 +502,10 @@ After:  Pasient [NAME], fødselsnummer [ID]
 ```
 
 ### Polish — `pl`
+
+This is a rules-and-surrogates pack with a named default-model placeholder,
+not a claim of trained Polish model coverage. Its synthetic leakage tests do
+not establish clinical accuracy.
 
 - Model: `OpenMed/privacy-filter-multilingual` · locale `pl_PL`
 

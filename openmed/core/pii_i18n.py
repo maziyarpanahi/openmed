@@ -8843,7 +8843,7 @@ _POLISH_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+48[\s.-]?)?[1-9]\d{2}(?:[\s.-]?[1-9]\d{2}){2}(?!\w)",
+        r"(?<!\w)(?:\+48[\s.-]?)?[1-9]\d{2}(?:[\s.-]?\d{3}){2}(?!\w)",
         "phone_number",
         priority=9,
         base_score=0.6,

@@ -6,9 +6,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "2b2e4e953f87fa2d2dfffd67b53bf1e8cc263bf46c7ebb63f7cca8ac53e73262",
+          "source_sha256": "4bcb48cc1dba0c1247c6fdba875905a1c56964242acdbcf1d2443c716870b63e",
           "translation_heading": "__preamble__",
-          "translation_sha256": "2e71ab8339bd9f85b5355c883aec791f03dd3689a9b5f47ee48710a245ff3daa"
+          "translation_sha256": "685d6a1e51056fc054c7f29a7a99fd5055ed55e3b32f456ae79a9a4788a39a06"
         },
         {
           "source_heading": "See it in action",
@@ -77,9 +77,9 @@
           "translation_sha256": "903ecbd112324deef7821e67ce8f0dd96a4e683e0cf24322fb43df777d43d8b9"
         },
         {
-          "source_heading": "Multilingual PII (40 supported routes; 36 model-backed)",
+          "source_heading": "Multilingual PII (40 supported routes; 35 model-backed)",
           "source_sha256": "23c77512e2eb2ccb98e97f4305bbbd32ac9d0b8353df8926bebc06539654cc93",
-          "translation_heading": "बहुभाषी PII (40 समर्थित रूट; 36 मॉडल-समर्थित)",
+          "translation_heading": "बहुभाषी PII (40 समर्थित रूट; 35 मॉडल-समर्थित)",
           "translation_sha256": "d9b7f780fbc054259d98f22062cada40307dda9947b0800d1cb09e77ba03eba7"
         },
         {
@@ -142,9 +142,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "2b2e4e953f87fa2d2dfffd67b53bf1e8cc263bf46c7ebb63f7cca8ac53e73262",
+          "source_sha256": "4bcb48cc1dba0c1247c6fdba875905a1c56964242acdbcf1d2443c716870b63e",
           "translation_heading": "__preamble__",
-          "translation_sha256": "aff9e6d92871d3f0da550d7f35419aeb9fce704d1ff8825cb9723ff6c9ecc2c2"
+          "translation_sha256": "66c75d155c283f85549527e7bc6f5b359e3d0fa4cfe0eb67a19c04f270121c26"
         },
         {
           "source_heading": "See it in action",
@@ -213,9 +213,9 @@
           "translation_sha256": "2c16671646ed5d5c9392578dfc826f21b79a7536cef01b40645a6327a851563e"
         },
         {
-          "source_heading": "Multilingual PII (40 supported routes; 36 model-backed)",
+          "source_heading": "Multilingual PII (40 supported routes; 35 model-backed)",
           "source_sha256": "23c77512e2eb2ccb98e97f4305bbbd32ac9d0b8353df8926bebc06539654cc93",
-          "translation_heading": "PII ya lugha nyingi (njia 40 zinazotumika; 36 zikitumia modeli)",
+          "translation_heading": "PII ya lugha nyingi (njia 40 zinazotumika; 35 zikitumia modeli)",
           "translation_sha256": "2f4b7e58372e30fd5a7b8ad802ef6bae57e4c6e11d61d2dacdc673e5ddc46f92"
         },
         {
@@ -278,9 +278,9 @@
       "sections": [
         {
           "source_heading": "__preamble__",
-          "source_sha256": "2b2e4e953f87fa2d2dfffd67b53bf1e8cc263bf46c7ebb63f7cca8ac53e73262",
+          "source_sha256": "4bcb48cc1dba0c1247c6fdba875905a1c56964242acdbcf1d2443c716870b63e",
           "translation_heading": "__preamble__",
-          "translation_sha256": "33b2dfb3297c357fc99716953030cf7a70eacf2469817ddcd00aa13b91c5dfc5"
+          "translation_sha256": "bf68c4203d7922b24705963209c38aa34bc430d3907b523b3e71fae51c722eee"
         },
         {
           "source_heading": "See it in action",
@@ -349,9 +349,9 @@
           "translation_sha256": "c86a5f3b107cd56cf58f72bb771934b1b1afc021d24f07f85d5325b14d45b62e"
         },
         {
-          "source_heading": "Multilingual PII (40 supported routes; 36 model-backed)",
+          "source_heading": "Multilingual PII (40 supported routes; 35 model-backed)",
           "source_sha256": "23c77512e2eb2ccb98e97f4305bbbd32ac9d0b8353df8926bebc06539654cc93",
-          "translation_heading": "多语言 PII（40 条支持的路由；36 条由模型支持）",
+          "translation_heading": "多语言 PII（40 条支持的路由；35 条由模型支持）",
           "translation_sha256": "8d4bb9ff716ebc3563c8dab773efb592302b1acb4d30f879dbfc6e8ac47f0708"
         },
         {

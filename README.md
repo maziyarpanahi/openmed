@@ -24,7 +24,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 </p>
 
 <p>
-  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>36 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
+  <b>2,266 manifest entries</b> &nbsp;·&nbsp; <b>35 model-backed PII languages</b> &nbsp;·&nbsp; <b>Apache-2.0 SDK</b>
 </p>
 
 <p>
@@ -516,7 +516,7 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (40 supported routes; 36 model-backed)
+## Multilingual PII (40 supported routes; 35 model-backed)
 
 Extraction and de-identification support **40 supported PII language codes**:
 `am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`,
