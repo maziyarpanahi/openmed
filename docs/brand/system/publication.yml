@@ -219,6 +219,7 @@ classification:
     - structured/terminology-cache.md
     - structured/redaction-contract.md
     - clinical/context-and-extraction.md
+    - clinical/section-provenance.md
     - clinical/nli-label-contract.md
     - clinical/nli-assertion-pairs.md
     - clinical/nli-experiencer-pairs.md
@@ -244,14 +245,17 @@ classification:
     - clinical/diagnosis-treatment-relations.md
     - clinical/relation-review-priority.md
     - clinical/event-timeline.md
+    - clinical/timeline-evidence.md
     - clinical/measurement-trends.md
     - clinical/terminology-provenance.md
     - clinical/status-vocabulary.md
     - clinical/consent-cache.md
     - clinical/timeline-provenance.md
+    - clinical/guarded-output-provenance.md
     - clinical/citation-ordering.md
     - clinical/citation-boundary-validation.md
     - clinical/evidence-tables.md
+    - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
     - clinical/summary-claim-segmentation.md
@@ -390,6 +394,20 @@ classification:
     - export-gguf.md
     - clinical/evidence-packets.md
     - clinical/review-transitions.md
+    - clinical/event-contradictions.md
+    - clinical/temporal-intervals.md
+    - clinical/timeline-buckets.md
+    - clinical/claim-conflicts.md
+    - clinical/review-sla.md
+    - evaluation/model-provenance-diff.md
+    - clinical/evidence-span-audit.md
+    - clinical/output-use-policy.md
+    - clinical/evidence-coverage.md
+    - clinical/human-review-packets.md
+    - clinical/uncertainty-disclosure.md
+    - clinical/claim-integrity.md
+    - clinical/review-transitions.md
+    - clinical/refusal-taxonomy.md
     - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
@@ -622,6 +640,9 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - models/clinical-nli.md
+    - evaluation/sdoh-counterfactuals.md
+    - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md

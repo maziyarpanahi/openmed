@@ -1,15 +1,12 @@
 """Local-first natural-language-inference checks for clinical claims.
 
-The public :func:`nli` entry point is deliberately backend-neutral.  The
-default backend is a deterministic lexical heuristic suitable for offline
-development and synthetic fixtures; a caller-supplied MLX head can implement
-the same ``predict(premise, hypothesis)`` contract without changing callers.
+The public :func:`nli` entry point is backend-neutral. Its default selects a
+released local sequence classifier and fails closed until one is registered.
+The deterministic lexical heuristic remains an explicit development option.
 
-The :func:`verify` helper is the small hook consumed by future summarization or
-grounding stages when they expose ``verify=True``.  It evaluates every claim,
-retains the original claim in the result, and adds an explicit
-``contradicted`` flag.  Verification is assistive review metadata, not a
-clinical decision.
+The :func:`verify` helper evaluates every claim and returns value-free label,
+score, backend, and review metadata. Verification is assistive review evidence,
+not a clinical decision.
 
 MedNLI is not bundled.  It is DUA-gated and eval-only; the BigBio mirror is
 represented by the repository's gated stub and must be supplied separately by
@@ -24,8 +21,8 @@ import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
 
-NLI_LABELS = ("entailment", "contradiction", "neutral")
-NliLabel = Literal["entailment", "contradiction", "neutral"]
+NLI_LABELS = ("entailment", "contradiction", "neutral", "abstention")
+NliLabel = Literal["entailment", "contradiction", "neutral", "abstention"]
 
 NLI_ADVISORY = (
     "Clinical NLI verification is assistive grounding evidence for human "
@@ -39,25 +36,27 @@ MEDNLI_DATA_POLICY = (
 
 
 class NLIResult(TypedDict):
-    """The stable two-field result returned by :func:`nli`."""
+    """A value-free four-state result returned by :func:`nli`."""
 
+    label: NliLabel
+    score: float
+    backend_id: str
+
+
+class _RawNLIResult(TypedDict):
     label: NliLabel
     score: float
 
 
 class VerificationResult(TypedDict):
-    """One claim result returned by :func:`verify`.
+    """One value-free claim result returned by :func:`verify`."""
 
-    ``claim`` and ``source`` retain the caller's original values so an
-    audit/review layer can preserve its own span or provenance object.  The
-    verifier never drops a claim merely because it is contradicted.
-    """
-
-    claim: Any
-    source: Any
+    claim_index: int
     label: NliLabel
     score: float
+    backend_id: str
     contradicted: bool
+    review_required: bool
 
 
 @runtime_checkable
@@ -84,23 +83,25 @@ class HeuristicNLIBackend:
     opposites; unsupported inferences are returned as ``neutral``.
     """
 
-    def predict(self, premise: str, hypothesis: str) -> NLIResult:
+    backend_id = "heuristic"
+
+    def predict(self, premise: str, hypothesis: str) -> _RawNLIResult:
         """Return a deterministic three-way classification."""
 
         return _heuristic_prediction(premise, hypothesis)
 
 
 HEURISTIC_NLI_BACKEND = HeuristicNLIBackend()
-DEFAULT_NLI_BACKEND: NLIBackendLike = HEURISTIC_NLI_BACKEND
+DEFAULT_NLI_BACKEND: NLIBackendLike | str = "local"
 
 
-def get_default_backend() -> NLIBackendLike:
+def get_default_backend() -> NLIBackendLike | str:
     """Return the process-wide backend used when none is passed to :func:`nli`."""
 
     return DEFAULT_NLI_BACKEND
 
 
-def set_default_backend(backend: NLIBackendLike) -> None:
+def set_default_backend(backend: NLIBackendLike | str) -> None:
     """Replace the default backend used by :func:`nli`.
 
     Dependency injection through the ``backend=`` argument is preferred for
@@ -108,7 +109,8 @@ def set_default_backend(backend: NLIBackendLike) -> None:
     process that installs one local model at startup.
     """
 
-    _validate_backend(backend)
+    if not isinstance(backend, str):
+        _validate_backend(backend)
     global DEFAULT_NLI_BACKEND
     DEFAULT_NLI_BACKEND = backend
 
@@ -117,21 +119,19 @@ def nli(
     premise: str,
     hypothesis: str,
     *,
-    backend: NLIBackendLike | None = None,
+    backend: NLIBackendLike | str | None = None,
 ) -> NLIResult:
     """Classify a premise and hypothesis using a swappable NLI backend.
 
     Args:
         premise: Source span or other evidence text.
         hypothesis: Generated or grounded claim to check.
-        backend: Optional backend implementing :class:`NLIBackend` or a
-            two-argument callable.  The deterministic heuristic is used by
-            default.
+        backend: A local registry alias, ``"local"``, ``"heuristic"``, or a
+            local backend implementing :class:`NLIBackend`.
 
     Returns:
-        A JSON-compatible mapping with exactly ``label`` and ``score`` keys.
-        ``label`` is one of ``entailment``, ``contradiction``, or ``neutral``;
-        ``score`` is a finite confidence in ``[0, 1]``.
+        A value-free mapping with ``label``, ``score``, and ``backend_id``.
+        ``label`` has four states, including explicit ``abstention``.
 
     Raises:
         TypeError: If either text is not a string or the backend is invalid.
@@ -142,16 +142,20 @@ def nli(
     premise = _required_text(premise, "premise")
     hypothesis = _required_text(hypothesis, "hypothesis")
     selected_backend = DEFAULT_NLI_BACKEND if backend is None else backend
+    from .nli_backends import resolve_nli_backend
+
+    selected_backend = resolve_nli_backend(selected_backend)
     _validate_backend(selected_backend)
     raw_result = _call_backend(selected_backend, premise, hypothesis)
-    return _normalize_result(raw_result)
+    backend_id = getattr(selected_backend, "backend_id", "custom-local")
+    return _normalize_result(raw_result, backend_id)
 
 
 def verify(
     claims: Iterable[Any] | Any,
     source: Any,
     *,
-    backend: NLIBackendLike | None = None,
+    backend: NLIBackendLike | str | None = None,
 ) -> list[VerificationResult]:
     """Verify claims against source text or source spans.
 
@@ -162,10 +166,9 @@ def verify(
     ``source``/``evidence`` aliases.  A claim may also be a ``(source, claim)``
     pair, which is useful when a caller already has aligned spans.
 
-    Each result preserves the claim and source values and contains the NLI
-    label, score, and an explicit ``contradicted`` flag.  This is intentionally
-    suitable for a caller's optional ``verify=True`` stage: contradicted
-    claims remain visible for reviewer or audit handling.
+    Each result contains only an index, label, score, backend id, and review
+    flags. Contradicted claims remain visible by their index without retaining
+    source or claim text in the returned metadata.
 
     Args:
         claims: One claim or an iterable of claim records.
@@ -190,20 +193,30 @@ def verify(
     aligned_sources = _align_sources(source_items, len(claim_items))
 
     results: list[VerificationResult] = []
+    selected_backend: NLIBackendLike | str | None = None
     for index, (raw_claim, fallback_source) in enumerate(
         zip(claim_items, aligned_sources, strict=True)
     ):
         claim_value, claim_text, claim_source = _claim_parts(raw_claim)
         source_value = fallback_source if claim_source is None else claim_source
         source_text = _text_from_record(source_value, "source")
-        result = nli(source_text, claim_text, backend=backend)
+        result = _structured_precheck(source_value, claim_value)
+        if result is None:
+            if selected_backend is None:
+                from .nli_backends import resolve_nli_backend
+
+                selected_backend = resolve_nli_backend(
+                    DEFAULT_NLI_BACKEND if backend is None else backend
+                )
+            result = nli(source_text, claim_text, backend=selected_backend)
         results.append(
             {
-                "claim": claim_value,
-                "source": source_value,
+                "claim_index": index,
                 "label": result["label"],
                 "score": result["score"],
+                "backend_id": result["backend_id"],
                 "contradicted": result["label"] == "contradiction",
+                "review_required": result["label"] == "abstention",
             }
         )
     return results
@@ -215,18 +228,23 @@ def _call_backend(
     hypothesis: str,
 ) -> Mapping[str, Any]:
     predictor = getattr(backend, "predict", None)
-    if callable(predictor):
-        result = predictor(premise, hypothesis)
-    elif callable(backend):
-        result = backend(premise, hypothesis)
-    else:  # pragma: no cover - guarded by _validate_backend
-        raise TypeError("NLI backend must implement predict or be callable")
+    try:
+        if callable(predictor):
+            result = predictor(premise, hypothesis)
+        elif callable(backend):
+            result = backend(premise, hypothesis)
+        else:  # pragma: no cover - guarded by _validate_backend
+            raise TypeError("NLI backend must implement predict or be callable")
+    except Exception:
+        from .nli_backends import LocalNLIError
+
+        raise LocalNLIError("local NLI inference failed") from None
     if not isinstance(result, Mapping):
         raise TypeError("NLI backend must return a mapping")
     return result
 
 
-def _normalize_result(result: Mapping[str, Any]) -> NLIResult:
+def _normalize_result(result: Mapping[str, Any], backend_id: object) -> NLIResult:
     label = result.get("label")
     if not isinstance(label, str):
         raise TypeError("NLI backend result label must be a string")
@@ -243,10 +261,43 @@ def _normalize_result(result: Mapping[str, Any]) -> NLIResult:
     normalized_score = float(score)
     if not math.isfinite(normalized_score):
         raise ValueError("NLI backend result score must be finite and in [0, 1]")
+    if (
+        not isinstance(backend_id, str)
+        or re.fullmatch(r"[a-z][a-z0-9-]{0,63}", backend_id) is None
+    ):
+        raise ValueError("NLI backend id must be a short safe token")
     return {
         "label": normalized_label,  # type: ignore[typeddict-item]
         "score": normalized_score,
+        "backend_id": backend_id,
     }
+
+
+def _structured_precheck(source: Any, claim: Any) -> NLIResult | None:
+    if not isinstance(source, Mapping) or not isinstance(claim, Mapping):
+        return None
+    for field, module, function in (
+        ("numeric", "nli_numeric_precheck", "numeric_contradiction_precheck"),
+        (
+            "medication_status",
+            "nli_medication_status",
+            "medication_status_contradiction_precheck",
+        ),
+    ):
+        if field not in source or field not in claim:
+            continue
+        try:
+            from importlib import import_module
+
+            precheck = getattr(import_module(f"openmed.clinical.{module}"), function)
+            outcome = precheck(source[field], claim[field])
+        except Exception:
+            return {"label": "abstention", "score": 1.0, "backend_id": "precheck"}
+        if outcome.status.value == "contradiction":
+            return {"label": "contradiction", "score": 1.0, "backend_id": "precheck"}
+        if outcome.status.value == "review_required":
+            return {"label": "abstention", "score": 1.0, "backend_id": "precheck"}
+    return None
 
 
 def _validate_backend(backend: object) -> None:
@@ -262,7 +313,7 @@ def _required_text(value: Any, field_name: str) -> str:
     return value
 
 
-def _heuristic_prediction(premise: str, hypothesis: str) -> NLIResult:
+def _heuristic_prediction(premise: str, hypothesis: str) -> _RawNLIResult:
     _required_text(premise, "premise")
     _required_text(hypothesis, "hypothesis")
     premise_normalized = _normalize_text(premise)
@@ -285,7 +336,7 @@ def _heuristic_prediction(premise: str, hypothesis: str) -> NLIResult:
     return {"label": "neutral", "score": 0.5}
 
 
-def _classify_pair(premise: str, hypothesis: str) -> NLIResult:
+def _classify_pair(premise: str, hypothesis: str) -> _RawNLIResult:
     premise_tokens = _content_tokens(premise)
     hypothesis_tokens = _content_tokens(hypothesis)
     if not premise_tokens or not hypothesis_tokens:
