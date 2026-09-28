@@ -57,9 +57,13 @@ cannot be established is marked conflicting rather than assigned a locale.
 Normalization is rules-based, offline, and deterministic. It does not read
 environment state, consult a timezone database, use the wall clock, emit logs,
 or make network calls. `to_dict()` includes offsets and structured metadata but
-does not include the raw source surface. Callers can therefore attach the
-result to an audit record without duplicating note text; any source text shown
-to a reviewer should still be handled under the caller's PHI policy.
+does not include surrounding source prose. Normalized dates and times can still
+be identifying clinical data: keep these results under the caller's PHI policy,
+not in public logs or audit artifacts. Use offsets and fingerprints for public
+audit records. Explicit timezone offsets participate in clock-time comparisons;
+mixed known and unknown timezones are not assigned an ordering. Invalid years,
+repeated interval prefixes, and expressions longer than 4096 characters remain
+unknown rather than being guessed or raising parser-limit errors.
 
 This is assistive normalization metadata, not a diagnosis, treatment
 recommendation, or clinical decision.

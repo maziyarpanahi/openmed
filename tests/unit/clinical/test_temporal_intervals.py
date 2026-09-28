@@ -21,6 +21,7 @@ from openmed.clinical.temporal_intervals import (
     TemporalIntervalNormalizer,
     normalize_temporal_interval,
     normalize_temporal_intervals,
+    parse_temporal_value,
 )
 
 
@@ -171,3 +172,37 @@ def test_normalization_is_deterministic_offline_and_wrapper_is_stateless(
 def test_invalid_spans_are_rejected(span) -> None:
     with pytest.raises((TypeError, ValueError)):
         normalize_temporal_intervals("abc", [span])
+
+
+@pytest.mark.parametrize("value", ["0000-02", "0000-02/2024-01"])
+def test_zero_year_month_is_unknown_without_invalid_date_comparison(value):
+    result = parse_temporal_value(value)
+    assert result.status == "unknown"
+    assert result.value is None
+    assert "year" in result.unknown_components
+
+
+@pytest.mark.parametrize("offsets", [{"source_start": -1}, {"source_end": 0}])
+def test_direct_parser_rejects_invalid_nonempty_source_offsets(offsets):
+    with pytest.raises(ValueError, match="source"):
+        parse_temporal_value("2024", **offsets)
+
+
+@pytest.mark.parametrize(
+    ("value", "conflicting"),
+    [
+        ("13:00+02:00/12:00+00:00", False),
+        ("11:00+00:00/12:00+02:00", True),
+        ("13:00/12:00+02:00", False),
+    ],
+)
+def test_clock_interval_order_respects_timezone_offsets(value, conflicting):
+    result = parse_temporal_value(value)
+    assert ("interval_order" in result.conflicts) is conflicting
+
+
+def test_repeated_prefixes_and_oversized_durations_remain_unknown():
+    for value in ("from " * 1100 + "2024", "9" * 5000 + " days"):
+        result = parse_temporal_value(value)
+        assert result.status == "unknown"
+        assert result.value is None
