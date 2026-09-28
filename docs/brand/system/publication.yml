@@ -252,6 +252,7 @@ classification:
     - clinical/timeline-provenance.md
     - clinical/citation-ordering.md
     - clinical/evidence-tables.md
+    - clinical/uncertainty-source-types.md
     - clinical/nli-premise-windows.md
     - clinical/nli-hypothesis-guard.md
     - clinical/summary-claim-segmentation.md
@@ -623,6 +624,7 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
+    - models/clinical-nli.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
     - clinical/context-analysis.md
