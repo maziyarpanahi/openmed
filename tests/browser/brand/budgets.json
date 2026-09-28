@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 89235645,
-    "maximum_unique_payload_bytes": 88871132,
+    "maximum_total_bytes": 89464300,
+    "maximum_unique_payload_bytes": 89099787,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4372093
+    "json": 4376074
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4372093
+    "docs/search/search_index.json": 4376074
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed OCR box normalization build measures 89348814 total bytes, 88984301 unique bytes, and 4370282 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The reviewed relation contracts build measures 89120159 total bytes, 88755646 unique bytes, and 4366301 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
     "The combined local-model contract Chromium build measures 5698451 transfer bytes on /docs/; its ceiling retains the existing 119302-byte allowance. Other route limits are unchanged.",
     "The reviewed combined local-model contracts build measures 87964500 total bytes, 87599987 unique bytes, and 4342369 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; other limits are unchanged.",
