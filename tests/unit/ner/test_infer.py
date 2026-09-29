@@ -218,9 +218,12 @@ def test_malformed_gliner_offset_error_does_not_echo_entity_text() -> None:
         infer_module._convert_gliner_entity(
             {"text": "synthetic-private-5550199", "label": "Drug", "score": 0.9}
         )
-    assert "synthetic-private-5550199" not in "".join(
-        traceback.format_exception(caught.value)
+    # ``format_exception`` renders the caller's own source lines on Python 3.13+,
+    # so inspect the exception rendering instead of the full traceback.
+    rendered = "".join(
+        traceback.format_exception_only(type(caught.value), caught.value)
     )
+    assert "synthetic-private-5550199" not in rendered
 
 
 @pytest.mark.parametrize("offset", [True, 1.5, "private-offset", -1])
