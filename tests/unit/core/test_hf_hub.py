@@ -461,8 +461,30 @@ def test_prefetch_model_downloads_through_hf_endpoint_mirror(
     assert ("GET", download_path) in requests
 
 
-def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
+def _usable_bash() -> str | None:
+    """Return a bash that can actually run here, or ``None``.
+
+    On Windows ``shutil.which("bash")`` finds ``%SystemRoot%\\System32\\bash.exe``,
+    which is the WSL launcher rather than a shell. On a host without a WSL
+    distribution it exits non-zero and prints a non-UTF-8 error, so the caller
+    cannot run ``bash -n`` at all and previously crashed while decoding that
+    output.
+    """
     bash = shutil.which("bash")
+    if bash is None:
+        return None
+    probe = subprocess.run(
+        [bash, "-c", "exit 0"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return bash if probe.returncode == 0 else None
+
+
+def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
+    bash = _usable_bash()
     if bash is None:
         pytest.skip("bash is not available on this platform")
 
@@ -476,6 +498,8 @@ def test_low_bandwidth_bash_snippets_are_syntax_valid() -> None:
             capture_output=True,
             input=textwrap.dedent(block),
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         assert completed.returncode == 0, (
             f"bash block {index} is not copy-paste valid:\n{completed.stderr}"
