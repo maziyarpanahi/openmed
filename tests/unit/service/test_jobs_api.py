@@ -238,6 +238,8 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
     assert completed["completed_at"] == "2026-01-01T00:00:11Z"
     assert completed["expires_at"] == "2026-01-01T00:00:21Z"
     assert completed["status"] == "done"
+
+
 def test_submit_snapshots_the_request_before_queueing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
