@@ -12,6 +12,12 @@ For the model families available by clinical specialty, use the
 
 ## Privacy And De-identification
 
+The [guarded clinical brief](clinical/clinical-brief.md) composes local
+de-identification, reviewed evidence, generation, NLI, citations and review
+metadata. `examples/v30_clinical_brief.py` demonstrates the full hand-off on a
+fixed synthetic note with clearly labelled test-only providers; it is not a
+model-quality or clinical readiness claim.
+
 | Area | What it covers | Where to look |
 | --- | --- | --- |
 | Policy-aware de-identification | `deidentify`, policy profiles, calibrated thresholds, arbitration, cascade routing, safety sweeps, custom recognizers, and clinical term protection. | `openmed/core/pii.py`, `openmed/core/pipeline.py`, `openmed/core/policy.py`, `openmed/core/clinical_protect.py`, [PII Anonymization](./anonymization.md) |

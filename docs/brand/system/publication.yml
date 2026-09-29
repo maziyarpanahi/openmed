@@ -265,6 +265,7 @@ classification:
     - clinical/relation-deduplication.md
     - clinical/summary-section-planning.md
     - clinical/clinical-brief.md
+    - demo/clinical-brief.md
     - clinical/summary-template-profiles.md
     - clinical/summary-length-budgets.md
     - clinical/summary-empty-evidence.md

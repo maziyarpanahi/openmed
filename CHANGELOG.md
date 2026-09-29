@@ -1,5 +1,8 @@
 # Changelog
 
+- Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
+  explicit fixture-provider disclaimers and a recording script.
+
 - Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
   local review lookup, separate protected/audit CLI files and content-free logs.
 

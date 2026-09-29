@@ -89,6 +89,23 @@ for entity in result.entities:
 
 ---
 
+## 30 秒运行临床摘要示例
+
+在源码检出目录中运行仅使用 CPU 的合成数据接口演示：
+
+```bash
+python examples/v30_clinical_brief.py
+# 可选：--model mlx，需要在 Apple 芯片设备上预先缓存固定版本的模型。
+```
+
+该示例对内置记录进行去标识化、实体抽取和概念匹配，然后输出带来源引用的摘要、
+核验结果和不含原始值的审核包。**NER/NLI 提供程序是明确标注的合成测试替身，
+不是经过训练的模型，也不代表临床验证。** 不接受外部记录输入。
+MLX 输出若缺乏证据支持会被拒绝，不会绕过保护检查。
+详见[摘要指南](docs/clinical/clinical-brief.md)和[演示脚本](docs/demo/clinical-brief.md)。
+
+---
+
 ## 使用智能体构建？
 
 请从[面向使用者的智能体指南](docs/agent-usage.md)开始，或加载精选的
