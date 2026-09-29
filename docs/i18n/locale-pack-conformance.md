@@ -114,4 +114,4 @@ the canonical JSON, blocks socket calls, and exercises every component failing
 independently, both identity and external evidence scopes, usage errors, and the
 CLI help and JSON envelopes. Related references:
 [Offline structural locale tags](locale-tags.md) and the
-[clinical language-pack readiness matrix](language-readiness-matrix.md).
+[clinical language matrix](../clinical/language-matrix.md).
