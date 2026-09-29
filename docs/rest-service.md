@@ -13,6 +13,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /ground`
+- `POST /brief`
 - `POST /profile`
 - `POST /pii/extract`
 - `POST /pii/extract/stream`
@@ -501,6 +502,14 @@ Request body:
 ```
 
 Returns the same shape as OpenMed `analyze_text(..., output_format="dict")`.
+
+### `POST /brief`
+
+Build a local guarded brief with `text`, `model` (local alias), `profile` and an
+optional opaque `review_id`. Configure the trusted application review provider
+as described in [Clinical brief](clinical/clinical-brief.md). Missing review or
+local model configuration fails closed. The response contains protected summary
+text plus value-free citations, metrics and review metadata; never log it.
 
 ### `POST /ground`
 

@@ -1516,7 +1516,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             return response
         except (TypeError, ValueError):
             return _error_response(
-                422, "brief_invalid_request", "Invalid local brief request."
+                422, "validation_error", "Invalid local brief request."
             )
 
     @app.post("/ground", response_model=GroundResponse)
