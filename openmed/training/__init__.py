@@ -267,6 +267,22 @@ __all__ = [
     "load_teacher_ensemble_config",
     "resolve_family_agreement_policy",
     "validate_ensemble_against_manifest",
+    "DP_BUDGET_MAX_EPSILON",
+    "DP_BUDGET_POLICY_FIELDS",
+    "DP_BUDGET_POLICY_REASON_CODES",
+    "DP_BUDGET_POLICY_SCHEMA_VERSION",
+    "DPAccountant",
+    "DPBudgetPolicy",
+    "DPBudgetPolicyError",
+    "DPBudgetPolicyFinding",
+    "DPBudgetPolicyRejected",
+    "DPBudgetPolicyReport",
+    "DPBudgetScope",
+    "DPComposition",
+    "DPExhaustion",
+    "build_dp_budget_policy",
+    "fingerprint_dp_budget_policy",
+    "validate_dp_budget_policy",
 ]
 
 
@@ -616,4 +632,24 @@ def __getattr__(name: str) -> Any:
     }:
         repro_verify = import_module(".repro_verify", __name__)
         return getattr(repro_verify, name)
+    if name in {
+        "DP_BUDGET_MAX_EPSILON",
+        "DP_BUDGET_POLICY_FIELDS",
+        "DP_BUDGET_POLICY_REASON_CODES",
+        "DP_BUDGET_POLICY_SCHEMA_VERSION",
+        "DPAccountant",
+        "DPBudgetPolicy",
+        "DPBudgetPolicyError",
+        "DPBudgetPolicyFinding",
+        "DPBudgetPolicyRejected",
+        "DPBudgetPolicyReport",
+        "DPBudgetScope",
+        "DPComposition",
+        "DPExhaustion",
+        "build_dp_budget_policy",
+        "fingerprint_dp_budget_policy",
+        "validate_dp_budget_policy",
+    }:
+        dp_budget_policy = import_module(".dp_budget_policy", __name__)
+        return getattr(dp_budget_policy, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
