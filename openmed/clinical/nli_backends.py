@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Mapping
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,7 @@ class EncoderNLIBackend:
         reference = str(model_ref)
         if _is_remote(reference):
             raise RemoteNLIBackendError("remote NLI backends are prohibited")
-        if runtime not in {"torch", "onnx"}:
+        if runtime not in {"torch", "onnx", "mlx"}:
             raise LocalNLIError("unsupported local NLI runtime")
         if not isinstance(thresholds, NLIThresholds):
             raise LocalNLIError("calibrated NLI thresholds are required")
@@ -127,10 +128,19 @@ class EncoderNLIBackend:
                     "backend_id": self.backend_id,
                 }
             if self.runtime == "torch":
-                logits = model(**encoded).logits[0].tolist()
-            else:
+                with artifact.get("inference_context", nullcontext)():
+                    logits = model(**encoded).logits[0].tolist()
+            elif self.runtime == "onnx":
                 feeds = {item.name: encoded[item.name] for item in model.get_inputs()}
                 logits = model.run(None, feeds)[0][0].tolist()
+            else:
+                import mlx.core as mx
+
+                output = model(
+                    **{name: mx.array(value) for name, value in encoded.items()}
+                )
+                mx.eval(output)
+                logits = output[0].tolist()
             if len(logits) != 3 or not all(math.isfinite(float(x)) for x in logits):
                 raise ValueError("invalid classifier output")
             peak = max(float(x) for x in logits)

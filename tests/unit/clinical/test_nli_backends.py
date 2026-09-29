@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -295,3 +296,48 @@ def test_loader_encloses_local_resolution_in_offline_guard(
             "OpenMed/Synthetic-NLI", revision="a" * 40
         )
     assert events == [True]
+
+
+def test_torch_inference_context_is_used_without_requiring_torch_in_fake_loader():
+    backend, loader = _backend((5.0, 0.0, 0.0))
+    artifact = loader.load_local_sequence_classifier(
+        "synthetic", revision=None, runtime="torch"
+    )
+    events = []
+
+    @contextmanager
+    def inference_context():
+        events.append("enter")
+        yield
+        events.append("exit")
+
+    artifact["inference_context"] = inference_context
+    backend._artifact = artifact
+    assert (
+        backend.predict("synthetic source", "synthetic claim")["label"] == "entailment"
+    )
+    assert events == ["enter", "exit"]
+
+
+def test_fake_mlx_checkpoint_has_the_same_offline_four_state_contract(monkeypatch):
+    events = []
+    core = SimpleNamespace(
+        array=lambda value: value, eval=lambda value: events.append("evaluated")
+    )
+    monkeypatch.setitem(sys.modules, "mlx", SimpleNamespace(core=core))
+    monkeypatch.setitem(sys.modules, "mlx.core", core)
+    backend = EncoderNLIBackend(
+        "synthetic-local-mlx",
+        runtime="mlx",
+        label_mapping={"0": "entailment", "1": "neutral", "2": "contradiction"},
+        thresholds=NLIThresholds(),
+        loader=object(),
+    )
+    backend._artifact = {
+        "tokenizer": lambda *_args, **_kwargs: {"input_ids": [[1]]},
+        "model": lambda **_kwargs: _FakeLogits((5.0, 0.0, 0.0)),
+    }
+    assert (
+        backend.predict("synthetic source", "synthetic claim")["label"] == "entailment"
+    )
+    assert events == ["evaluated"]
