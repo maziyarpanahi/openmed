@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
   now requires explicit `model="extractive"`; missing runtime or artifacts fail
   closed instead of silently changing backends (#3234).
+- Added a bounded, value-free synthetic memorization audit that fingerprints
+  protected reference material, blocks exact, paraphrase-style and exposure
+  matches on configurable signals, and renders canonical digest-only JSON
+  evidence with offline golden tests (#2853).
 - Added offline benchmark suite listing and description, explicit task metadata,
   and aggregate report comparison with missing-evidence and regression verdicts
   (#286).
