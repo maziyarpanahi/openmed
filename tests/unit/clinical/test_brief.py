@@ -112,6 +112,7 @@ def test_composes_every_stage_and_preserves_safe_serialization():
     assert brief.envelope["requires_human_review"]
     assert not brief.envelope["is_diagnostic"]
     assert brief.to_dict()["metrics"]["leakage"]["passed"]
+    assert brief.metrics["coverage"]["recall"] == 1.0
     assert SENTENCES[0] not in json.dumps(brief.to_dict())
     assert SENTENCES[0] not in repr(brief)
     assert brief.to_response()["summary"] == brief.summary
