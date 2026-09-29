@@ -563,8 +563,19 @@ def _compose(value, model, profile_name, context, completed):
     coverage = compute_summary_fact_coverage(rows, claims)
     stage("citation_support")
     support = compute_citation_support_metrics(
-        [{k: v for k, v in c.items() if k != "evidence_ids"} for c in claims], rows
+        [
+            {
+                **{k: v for k, v in claim.items() if k != "evidence_ids"},
+                "start": segment.start,
+                "end": segment.end,
+                "source_length": len(summary),
+            }
+            for claim, (_, segment, _, _) in zip(claims, aligned)
+        ],
+        rows,
     )
+    if not support.deterministic.passed:
+        raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
     stage("empty_evidence")
     require_summary_evidence(rows)
     stage("privacy")

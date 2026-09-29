@@ -304,3 +304,23 @@ def test_required_stage_failure_is_not_skipped(monkeypatch, module, name):
     assert brief.refusal_reason is BriefRefusal.STAGE_FAILED
     assert brief.summary == ""
     assert "PRIVATE_STAGE_ERROR" not in json.dumps(brief.to_dict())
+
+
+def test_failed_deterministic_support_check_refuses_partial_output(monkeypatch):
+    import importlib
+    from types import SimpleNamespace
+
+    metrics = importlib.import_module("openmed.eval.citation_support_metrics")
+
+    result, context = fixture_context()
+    monkeypatch.setattr(
+        metrics,
+        "compute_citation_support_metrics",
+        lambda *args, **kwargs: SimpleNamespace(
+            deterministic=SimpleNamespace(passed=False)
+        ),
+    )
+    brief = build_clinical_brief(result, context=context, model="extractive")
+    assert brief.refusal_reason is BriefRefusal.UNSUPPORTED_CLAIM
+    assert brief.summary == ""
+    assert brief.citations == ()

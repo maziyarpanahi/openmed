@@ -23,6 +23,12 @@
           "translation_sha256": "b5229bedf898ec9ccffb46434b64f4f1d9533ef685262548475026af88b91b24"
         },
         {
+          "source_heading": "Clinical brief in 30 seconds",
+          "source_sha256": "0089d52b9dcf107be237b2745627d523e281dee421f9353e2a673d2a49ea04a8",
+          "translation_heading": "30 सेकंड में क्लिनिकल सारांश का उदाहरण",
+          "translation_sha256": "c4d626615db46ca707d6088ddf2a4f7b28029d993725f8da0890d4e762130e59"
+        },
+        {
           "source_heading": "Building with an agent?",
           "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
           "translation_heading": "एजेंट के साथ बना रहे हैं?",
@@ -159,6 +165,12 @@
           "translation_sha256": "ef97849c0c8a63162844e4a23b673d5f6d8f3f09f15ab87ea836fb7f9d887572"
         },
         {
+          "source_heading": "Clinical brief in 30 seconds",
+          "source_sha256": "0089d52b9dcf107be237b2745627d523e281dee421f9353e2a673d2a49ea04a8",
+          "translation_heading": "Mfano wa muhtasari wa kliniki kwa sekunde 30",
+          "translation_sha256": "44699c025f2486300c7beeb7e4c99ba8ea3b3394544993894ab2590446ecde14"
+        },
+        {
           "source_heading": "Building with an agent?",
           "source_sha256": "87225eb799321611452bc99996662616f5e95dbe6c23d5c79c43266be83bd1ce",
           "translation_heading": "Unajenga kwa wakala?",
@@ -293,6 +305,12 @@
           "source_sha256": "c94ce4d86734ca10a3bb580a16a20a9fc1b30a42b206991862f98d0eb246b189",
           "translation_heading": "30 秒上手示例",
           "translation_sha256": "912ba4c4ddc27248b1f6a257ee5d4f389f2f01871fc822857bec869e3be35f25"
+        },
+        {
+          "source_heading": "Clinical brief in 30 seconds",
+          "source_sha256": "0089d52b9dcf107be237b2745627d523e281dee421f9353e2a673d2a49ea04a8",
+          "translation_heading": "30 秒运行临床摘要示例",
+          "translation_sha256": "001d2724eb4cde5bc866a0c62cf9d714be4c45ec30361dd656e2647e08f83973"
         },
         {
           "source_heading": "Building with an agent?",

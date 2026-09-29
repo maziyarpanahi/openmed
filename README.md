@@ -89,6 +89,24 @@ A clinical NER model using the local runtime after its required artifacts are av
 
 ---
 
+## Clinical brief in 30 seconds
+
+From a source checkout, run the CPU-only synthetic contract demonstration:
+
+```bash
+python examples/v30_clinical_brief.py
+# Optional: --model mlx, with the pinned model already cached on Apple silicon.
+```
+
+It de-identifies an embedded note, extracts and grounds a finding, then prints
+a cited brief, verdicts and a value-free review packet. **NER/NLI providers are
+explicit synthetic test doubles, not trained-model or clinical validation.**
+No external note input is accepted. The MLX option may refuse unsupported output;
+it never bypasses the guards. See the [brief guide](docs/clinical/clinical-brief.md)
+and [demo script](docs/demo/clinical-brief.md) for the boundaries and local setup.
+
+---
+
 ## Building with an agent?
 
 Start with the [consumer agent-usage guide](docs/agent-usage.md), or load the

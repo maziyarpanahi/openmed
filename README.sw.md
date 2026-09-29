@@ -89,6 +89,26 @@ Modeli ya NER ya kliniki hutumia runtime ya ndani baada ya vipengee vinavyohitaj
 
 ---
 
+## Mfano wa muhtasari wa kliniki kwa sekunde 30
+
+Kutoka kwenye nakala ya msimbo, endesha onyesho la mikataba ya kiolesura kwa data
+sintetiki kwa kutumia CPU pekee:
+
+```bash
+python examples/v30_clinical_brief.py
+# Hiari: --model mlx; modeli ya toleo lililowekwa ihifadhiwe mapema kwenye Apple silicon.
+```
+
+Mfano huondoa utambulisho kwenye dokezo lililojumuishwa, hutoa na kuoanisha dhana,
+kisha huonyesha muhtasari wenye marejeo, matokeo ya ukaguzi na pakiti ya mapitio
+isiyo na thamani ghafi. **Watoa huduma wa NER/NLI ni vibadala vya majaribio ya
+data sintetiki, si modeli zilizofunzwa wala uthibitisho wa kliniki.** Haukubali
+madokezo ya nje. MLX inaweza kukataa matokeo yasiyoungwa mkono; haipiti ukaguzi
+wa usalama. Angalia [mwongozo](docs/clinical/clinical-brief.md) na
+[hati ya onyesho](docs/demo/clinical-brief.md) kwa mipaka na usanidi wa ndani.
+
+---
+
 ## Unajenga kwa wakala?
 
 Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia

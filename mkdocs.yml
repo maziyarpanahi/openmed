@@ -190,6 +190,7 @@ nav:
       - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
       - Section-Preserving Summary Planning: clinical/summary-section-planning.md
       - Guarded Clinical Brief: clinical/clinical-brief.md
+      - Synthetic Brief Walkthrough: demo/clinical-brief.md
       - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
       - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
       - Empty-evidence Summary Refusal: clinical/summary-empty-evidence.md
