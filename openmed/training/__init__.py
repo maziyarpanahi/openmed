@@ -195,6 +195,20 @@ __all__ = [
     "build_directid_dataset_evidence",
     "build_federated_round_status",
     "build_federated_metric_envelope",
+    "clip_federated_update",
+    "fingerprint_clipping_policy",
+    "CLIPPING_REASON_CODES",
+    "ClippedFederatedUpdate",
+    "FederatedClippingPolicy",
+    "FederatedClippingReport",
+    "FederatedLayerClipDiagnostics",
+    "FederatedUpdateClippingError",
+    "MAX_CLIPPING_ELEMENTS_PER_LAYER",
+    "MAX_CLIPPING_LAYERS",
+    "MAX_CLIPPING_NORM_BOUND",
+    "MAX_CLIPPING_TOTAL_ELEMENTS",
+    "MAX_CLIPPING_VALUE",
+    "UPDATE_CLIPPING_SCHEMA_VERSION",
     "build_specialist_split",
     "config_hash",
     "clinical_family_recipe_hash",
@@ -610,6 +624,24 @@ def __getattr__(name: str) -> Any:
     }:
         ensemble = import_module(".ensemble", __name__)
         return getattr(ensemble, name)
+    if name in {
+        "CLIPPING_REASON_CODES",
+        "MAX_CLIPPING_ELEMENTS_PER_LAYER",
+        "MAX_CLIPPING_LAYERS",
+        "MAX_CLIPPING_NORM_BOUND",
+        "MAX_CLIPPING_TOTAL_ELEMENTS",
+        "MAX_CLIPPING_VALUE",
+        "UPDATE_CLIPPING_SCHEMA_VERSION",
+        "ClippedFederatedUpdate",
+        "FederatedClippingPolicy",
+        "FederatedClippingReport",
+        "FederatedLayerClipDiagnostics",
+        "FederatedUpdateClippingError",
+        "clip_federated_update",
+        "fingerprint_clipping_policy",
+    }:
+        update_clipping = import_module(".federated.update_clipping", __name__)
+        return getattr(update_clipping, name)
     if name in {
         "ReproVerificationResult",
         "verify_reproducibility_inputs",

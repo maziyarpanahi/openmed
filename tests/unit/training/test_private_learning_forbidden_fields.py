@@ -11,6 +11,10 @@ from typing import Any, Callable
 
 import pytest
 
+from openmed.training.federated.update_clipping import (
+    FederatedClippingPolicy,
+    FederatedUpdateClippingError,
+)
 from openmed.training.federated_metrics import (
     FederatedMetricEnvelope,
     FederatedMetricError,
@@ -93,6 +97,13 @@ def _round_payload() -> dict[str, Any]:
     return FederatedRoundLifecycle(state=FederatedRoundState.PLANNED).to_dict()
 
 
+def _clipping_policy_payload() -> dict[str, Any]:
+    return FederatedClippingPolicy(
+        global_norm_bound=1.0,
+        per_layer_bounds=(("adapter.lora_A.weight", 0.5),),
+    ).to_dict()
+
+
 def _as_json(parse: Callable[[str], object]) -> Callable[[Any], object]:
     return lambda payload: parse(json.dumps(payload))
 
@@ -171,6 +182,25 @@ SURFACES: dict[str, Surface] = {
         _as_json(FederatedRoundLifecycle.from_json),
         FederatedRoundStateError,
         "invalid federated round lifecycle payload",
+    ),
+    "clipping-policy-dict": Surface(
+        _clipping_policy_payload,
+        FederatedClippingPolicy.from_dict,
+        FederatedUpdateClippingError,
+        "invalid clipping policy fields",
+    ),
+    "clipping-policy-json": Surface(
+        _clipping_policy_payload,
+        _as_json(FederatedClippingPolicy.from_json),
+        FederatedUpdateClippingError,
+        "invalid clipping policy fields",
+    ),
+    "clipping-policy-bound": Surface(
+        _clipping_policy_payload,
+        FederatedClippingPolicy.from_dict,
+        FederatedUpdateClippingError,
+        "invalid clipping policy fields",
+        ("per_layer_bounds", 0),
     ),
 }
 
