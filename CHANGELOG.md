@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, content-free federated capability compatibility preflight that
+  compares one anonymous client capability envelope with one round requirement,
+  fails closed on undeclared mandatory capabilities, separates optional
+  capability differences from hard incompatibilities, and renders byte-stable
+  JSON reports with offline golden tests (#2982).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
