@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The GraphQL endpoint now executes operations over `POST` only, keeps the
+  GraphiQL IDE behind the explicit `OPENMED_PROFILE=dev` development profile,
+  and returns `Cache-Control: no-store`, `Pragma: no-cache` and
+  `Referrer-Policy: no-referrer` on every `/graphql` response (#3544).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic

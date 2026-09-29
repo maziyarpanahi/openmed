@@ -1783,7 +1783,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="job not found")
         return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
-    from .graphql_app import mount_graphql
+    from .graphql_app import GraphQLPrivacyHeadersMiddleware, mount_graphql
 
     mount_graphql(
         app,
@@ -1817,6 +1817,9 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
     )
+    # Registered last so it is outermost: every /graphql response, including
+    # rejections raised by the middlewares above, carries the privacy headers.
+    app.add_middleware(GraphQLPrivacyHeadersMiddleware)
     return app
 
 
