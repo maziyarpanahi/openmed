@@ -1,24 +1,24 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 92448657,
-    "maximum_unique_payload_bytes": 92084144,
+    "maximum_total_bytes": 92729809,
+    "maximum_unique_payload_bytes": 92365296,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
   "largest_file_bytes": {
     "css": 153600,
     "font": 65536,
-    "html": 2359296,
+    "html": 2392236,
     "image": 262144,
     "javascript": 716800,
-    "json": 4442708
+    "json": 4482662
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
-    "docs/model-tokenizer-script-coverage/index.html": 2359296,
+    "docs/model-tokenizer-script-coverage/index.html": 2392236,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4442708
+    "docs/search/search_index.json": 4482662
   },
   "route_transfer_bytes": {
     "/": 3145728,
