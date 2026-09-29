@@ -1,5 +1,8 @@
 # Changelog
 
+- Add fail-closed summary release gates, seeded synthetic benchmark execution,
+  counts-only extractive/MLX evidence and daily committed-report verification.
+
 All notable changes to OpenMed will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
