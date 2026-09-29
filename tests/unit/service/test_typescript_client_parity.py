@@ -16,6 +16,7 @@ SDK_TSCONFIG_PATH = SDK_ROOT / "tsconfig.json"
 SDK_PACKAGE_PATH = SDK_ROOT / "package.json"
 
 CLIENT_METHOD_BY_PATH = {
+    "/brief": "brief",
     "/analyze": "analyze",
     "/cohort/resolve": "resolveCohort",
     "/v1/decisions": "decision",
