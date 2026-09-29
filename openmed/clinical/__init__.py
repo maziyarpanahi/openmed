@@ -65,6 +65,14 @@ from .boilerplate import (
     detect_copy_forward,
     load_boilerplate_template_corpus,
 )
+from .brief import (
+    BriefContext,
+    BriefFact,
+    BriefRefusal,
+    ClinicalBrief,
+    brief_policy_fingerprint,
+    build_clinical_brief,
+)
 from .cancer_staging import (
     TNM_STAGING_ADVISORY,
     TnmBasis,
@@ -1847,6 +1855,12 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "BriefContext",
+    "BriefFact",
+    "BriefRefusal",
+    "ClinicalBrief",
+    "brief_policy_fingerprint",
+    "build_clinical_brief",
     "OFFICIAL_TRIAL_API_URL",
     "TRIAL_COMPATIBILITY_POLICY",
     "TRIAL_CRITERIA_COMPATIBILITY_POLICY",
