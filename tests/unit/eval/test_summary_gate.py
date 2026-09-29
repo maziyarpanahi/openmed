@@ -152,7 +152,7 @@ def test_daily_workflow_always_consumes_both_reports():
     import yaml
 
     workflow = yaml.safe_load(
-        (BASELINE.parent.parent / ".github/workflows/release-gates.yml").read_text()
+        (BASELINE.parent.parent / ".github/workflows/summary-evidence.yml").read_text()
     )
     job = workflow["jobs"]["summary-evidence"]
     command = job["steps"][-1]["run"]

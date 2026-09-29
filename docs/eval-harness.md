@@ -19,7 +19,9 @@ They record actual runs, not a claim that either backend is release-ready.
 `python -m openmed.eval.summary_benchmark --verify report.json` returns exit 1
 for failed, missing or invalid evidence. The daily summary-evidence job consumes
 the committed reports and stays red while their release checks fail; it does
-not skip for a missing candidate. Synthetic checks never authorize clinical use.
+not skip for a missing candidate. It runs in `summary-evidence.yml`, separate
+from the manual-only model release workflow; manual `release-gates.yml` also
+consumes the same reports. Synthetic checks never authorize clinical use.
 
 Credentialed evaluations can call `load_summary_eval_dataset("mimic-iv-bhc",
 path=...)`. This delegates to the existing local-only DUA loader and refuses an

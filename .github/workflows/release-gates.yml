@@ -1,8 +1,6 @@
 name: Model Release Gates
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
   workflow_dispatch:
     inputs:
       candidate:
@@ -80,7 +78,6 @@ jobs:
 
   release-gates:
     if: >-
-      github.event_name != 'schedule' &&
       github.event_name != 'repository_dispatch' &&
       github.event.inputs.rollback_family == ''
     runs-on: ubuntu-latest

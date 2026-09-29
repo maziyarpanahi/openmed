@@ -20,6 +20,7 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.service.brief import brief_response_schema
 from openmed.service.journey_workflows import (
     JOURNEY_WORKFLOW_DEFINITIONS,
     JourneyWorkflowDefinition,
@@ -1851,6 +1852,38 @@ def _decision_tool_spec() -> ToolSpec:
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    _tool_spec(
+        name="openmed_brief",
+        title="Build Guarded Clinical Brief",
+        description="Build a local clinical brief from reviewed evidence; output requires human review.",
+        read_only_hint=True,
+        parameters=(
+            _parameter("text", _schema("string", minLength=1, maxLength=16384), str),
+            _parameter(
+                "model",
+                _schema("string", enum=["mlx", "extractive", "maple", "maple-preview"]),
+                str,
+                "mlx",
+            ),
+            _parameter(
+                "profile",
+                _schema(
+                    "string",
+                    enum=[
+                        "bhc",
+                        "brief_hospital_course",
+                        "clinical_handoff",
+                        "discharge_summary",
+                        "problem_oriented",
+                    ],
+                ),
+                str,
+                "bhc",
+            ),
+            _parameter("review_id", _nullable("string"), Optional[str], None),
+        ),
+        output_schema=brief_response_schema(),
+    ),
     _decision_tool_spec(),
     _tool_spec(
         name="openmed_analyze_text",

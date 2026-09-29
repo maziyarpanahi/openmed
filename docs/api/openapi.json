@@ -95,6 +95,189 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "BriefRequest": {
+        "additionalProperties": false,
+        "description": "Bounded local brief request; review configuration stays server-owned.",
+        "properties": {
+          "model": {
+            "default": "mlx",
+            "enum": [
+              "mlx",
+              "extractive",
+              "maple",
+              "maple-preview"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "profile": {
+            "default": "bhc",
+            "enum": [
+              "bhc",
+              "brief_hospital_course",
+              "clinical_handoff",
+              "discharge_summary",
+              "problem_oriented"
+            ],
+            "title": "Profile",
+            "type": "string"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "text": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "BriefRequest",
+        "type": "object"
+      },
+      "BriefResponse": {
+        "additionalProperties": false,
+        "description": "Protected brief response; never use this model as an access-log payload.",
+        "properties": {
+          "backend_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Id"
+          },
+          "citations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "digest": {
+            "title": "Digest",
+            "type": "string"
+          },
+          "envelope": {
+            "additionalProperties": true,
+            "title": "Envelope",
+            "type": "object"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "profile_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Digest"
+          },
+          "provenance": {
+            "additionalProperties": true,
+            "title": "Provenance",
+            "type": "object"
+          },
+          "refusal_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal Reason"
+          },
+          "review_packet": {
+            "additionalProperties": true,
+            "title": "Review Packet",
+            "type": "object"
+          },
+          "schema_version": {
+            "const": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "needs_review",
+              "refused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "summary_characters": {
+            "title": "Summary Characters",
+            "type": "integer"
+          },
+          "summary_digest": {
+            "title": "Summary Digest",
+            "type": "string"
+          },
+          "verdicts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Verdicts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "summary",
+          "refusal_reason",
+          "summary_digest",
+          "summary_characters",
+          "digest",
+          "stages",
+          "citations",
+          "verdicts",
+          "metrics",
+          "envelope",
+          "review_packet",
+          "provenance",
+          "profile_digest",
+          "backend_id"
+        ],
+        "title": "BriefResponse",
+        "type": "object"
+      },
       "CohortResolveRequest": {
         "additionalProperties": false,
         "description": "Request schema for in-memory ``POST /cohort/resolve``.",
@@ -2411,6 +2594,45 @@
           }
         },
         "summary": "Analyze"
+      }
+    },
+    "/brief": {
+      "post": {
+        "description": "Return the shared local brief without recording protected content.",
+        "operationId": "brief_route_brief_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Brief Route"
       }
     },
     "/cohort/resolve": {

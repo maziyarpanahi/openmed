@@ -593,6 +593,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
+    from .brief import add_brief_command
+
+    add_brief_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
