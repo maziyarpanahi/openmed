@@ -1,5 +1,7 @@
 # Changelog
 
+- Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
+  native leakage/envelope/citation validation and shared Python wire fixtures.
 - Add fail-closed summary release gates, seeded synthetic benchmark execution,
   counts-only extractive/MLX evidence and daily committed-report verification.
 - Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
