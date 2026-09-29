@@ -379,6 +379,8 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public func generateMapleBrief() async {
         guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
+        let revision = piiRevision
+        let identifiers = currentPIIOutput?.entities.map(\.text) ?? []
         clinicalBrief = nil
         mapleBrief = nil
         guard let evaluate = briefEvaluator, let privacyCheck = briefPrivacyCheck else {
@@ -398,14 +400,16 @@ public final class ScanFlowViewModel: ObservableObject {
         do {
             let verified = try await runtime.clinicalBrief(
                 maskedText: masked,
-                originalIdentifiers: currentPIIOutput?.entities.map(\.text) ?? [],
+                originalIdentifiers: identifiers,
                 evaluate: evaluate,
                 privacyCheck: privacyCheck
             )
+            guard revision == piiRevision, masked == currentPIIOutput?.maskedText else { return }
             clinicalBrief = verified
             mapleBrief = verified.summary
             HapticsCenter.impact(.soft)
         } catch {
+            guard revision == piiRevision, masked == currentPIIOutput?.maskedText else { return }
             errorMessage = "Clinical brief refused. Check local model, evidence and review configuration."
             HapticsCenter.notify(.error)
             log.error("Clinical brief refused")
@@ -491,6 +495,7 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public func reset(clearing scope: ResetScope = .all) {
         errorMessage = nil
+        clinicalBrief = nil
         switch scope {
         case .all:
             piiRevision += 1
