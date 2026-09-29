@@ -64,3 +64,27 @@ identifies the failure boundary, not a claim that the stage passed.
 The synthetic unit fixtures use explicitly labelled test-only NLI scores and
 privacy detectors. They verify orchestration and refusal behavior, not model
 quality, clinical validation or a release benchmark.
+
+## CLI and service interfaces
+
+`openmed brief note.txt --model extractive --profile bhc --review-id <digest>
+--context-factory my_application.review:provider --summary-output summary.txt
+--review-output review.json` writes separate, newly created mode-0600 files. It
+never overwrites existing destinations. Exit 1 means refusal; stdout contains
+only counts, status and a digest. The installed factory is trusted local Python
+configuration, not an upload or a server request parameter. It returns a callable
+`(original_text, review_id) -> (DeidentificationResult, BriefContext)` backed by
+the application's existing review and access-control store. Do not use this
+mechanism to invent review histories or accept untrusted executable modules.
+
+`POST /brief`, Python `OpenMedClient.brief(text, model="extractive",
+review_id=...)`, TypeScript `client.brief({text, model: "extractive",
+review_id})`, and the read-only MCP `openmed_brief` tool share the protected
+response. Models are restricted to local aliases; remote URLs, approval records
+and NLI scores are not accepted in requests. The opaque review reference is 64
+lowercase hexadecimal characters. Configure REST with
+`app.state.brief_context_provider` or MCP with the local runtime's
+`brief_context_provider`; that provider must authorize access for the caller.
+Missing review configuration returns a typed refusal, not an unguarded summary.
+REST access logs add only bounded outcome vocabulary and counts to the normal
+request duration. Never log the response: `summary` is protected content.

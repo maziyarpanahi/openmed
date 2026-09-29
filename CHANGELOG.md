@@ -1,5 +1,8 @@
 # Changelog
 
+- Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
+  local review lookup, separate protected/audit CLI files and content-free logs.
+
 All notable changes to OpenMed will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

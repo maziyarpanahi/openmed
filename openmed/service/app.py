@@ -68,6 +68,7 @@ from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
     service_log_config_from_env,
+    set_access_log_brief,
     set_access_log_grounding,
     set_access_log_model_name,
 )
@@ -104,6 +105,8 @@ from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
+    BriefRequest,
+    BriefResponse,
     CohortResolveRequest,
     DeidentifyJobRequest,
     FHIRBulkExportRequest,
@@ -152,6 +155,7 @@ _MODEL_BACKED_PATHS = frozenset(
         "/graphql",
         "/analyze",
         "/ground",
+        "/brief",
         "/pii/extract",
         "/pii/extract/stream",
         "/pii/deidentify",
@@ -1492,6 +1496,28 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             },
         ):
             return await run_in_threadpool(_profile_summary, payload)
+
+    @app.post("/brief", response_model=BriefResponse)
+    async def brief_route(payload: BriefRequest, request: Request) -> Dict[str, Any]:
+        """Return the shared local brief without recording protected content."""
+        from .brief import brief_response
+
+        provider = getattr(request.app.state, "brief_context_provider", None)
+        try:
+            response = await run_in_threadpool(
+                brief_response,
+                payload.text,
+                model=payload.model,
+                profile=payload.profile,
+                review_id=payload.review_id,
+                context_provider=provider,
+            )
+            set_access_log_brief(request, response)
+            return response
+        except (TypeError, ValueError):
+            return _error_response(
+                422, "brief_invalid_request", "Invalid local brief request."
+            )
 
     @app.post("/ground", response_model=GroundResponse)
     async def ground_route(payload: GroundRequest, request: Request) -> Dict[str, Any]:
