@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic Draft 2020-12 JSON Schema exports for the multimodal
+  preflight artifacts (asset manifests, asset batches, abstention records,
+  processing summaries and provider result envelopes) with offline resolution,
+  pinned rendering digests and drift tests binding each document to its Python
+  loader (#3051).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
