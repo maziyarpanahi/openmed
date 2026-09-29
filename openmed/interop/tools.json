@@ -171,6 +171,161 @@
       "annotations": {
         "destructiveHint": false,
         "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Build Guarded Clinical Brief"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Build a local clinical brief from reviewed evidence; output requires human review.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "default": "mlx",
+            "enum": [
+              "mlx",
+              "extractive",
+              "maple",
+              "maple-preview"
+            ],
+            "type": "string"
+          },
+          "profile": {
+            "default": "bhc",
+            "enum": [
+              "bhc",
+              "brief_hospital_course",
+              "clinical_handoff",
+              "discharge_summary",
+              "problem_oriented"
+            ],
+            "type": "string"
+          },
+          "review_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_brief",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "backend_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "citations": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "envelope": {
+            "type": "object"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "profile_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "refusal_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "review_packet": {
+            "type": "object"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "needs_review",
+              "refused"
+            ],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summary_characters": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "summary_digest": {
+            "type": "string"
+          },
+          "verdicts": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "summary",
+          "refusal_reason",
+          "summary_digest",
+          "summary_characters",
+          "digest",
+          "stages",
+          "citations",
+          "verdicts",
+          "metrics",
+          "envelope",
+          "review_packet",
+          "provenance",
+          "profile_digest",
+          "backend_id"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
         "openWorldHint": true,
         "readOnlyHint": true,
         "title": "Plan Clinical Pipeline"

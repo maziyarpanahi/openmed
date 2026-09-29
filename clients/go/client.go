@@ -221,6 +221,14 @@ type AnalyzeRequest struct {
 	KeepAlive           any                  `json:"keep_alive,omitempty"`
 }
 
+// BriefRequest requests a local guarded brief; review remains application-owned.
+type BriefRequest struct {
+	Text     string  `json:"text"`
+	Model    string  `json:"model,omitempty"`
+	Profile  string  `json:"profile,omitempty"`
+	ReviewID *string `json:"review_id,omitempty"`
+}
+
 // GroundRequest is the request body for POST /ground.
 type GroundRequest struct {
 	Entities       []JSONObject `json:"entities,omitempty"`
@@ -1166,6 +1174,15 @@ func (c *Client) BaseURL() string { return c.baseURL }
 func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeResponse, error) {
 	var out AnalyzeResponse
 	if err := c.post(ctx, "/analyze", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Brief calls POST /brief. The response contains protected summary content.
+func (c *Client) Brief(ctx context.Context, req BriefRequest) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/brief", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

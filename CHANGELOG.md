@@ -2,6 +2,8 @@
 
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
   native leakage/envelope/citation validation and shared Python wire fixtures.
+- Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
+  local review lookup, separate protected/audit CLI files and content-free logs.
 
 All notable changes to OpenMed will be documented in this file.
 
