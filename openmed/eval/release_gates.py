@@ -328,6 +328,13 @@ class GateCheck:
         )
 
 
+def evaluate_summary_gate(**kwargs) -> tuple[GateCheck, ...]:
+    """Evaluate the guarded summary release family with explicit local evidence."""
+    from openmed.eval.summary_gate import evaluate_summary_gate as evaluate
+
+    return evaluate(**kwargs)
+
+
 def evaluate_i18n_throughput_gate(
     report: Mapping[str, Any],
     baseline: Mapping[str, Any],
