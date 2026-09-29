@@ -362,6 +362,7 @@ def _compose(value, model, profile_name, context, completed):
     rows = [
         {
             "evidence_id": r.reference_id,
+            "fact_id": r.reference_id,
             "start": r.start,
             "end": r.end,
             "section_id": _digest(
@@ -628,6 +629,7 @@ def _compose(value, model, profile_name, context, completed):
         },
         provenance=provenance.to_dict(),
         profile_digest=profile.digest,
+        envelope=envelope.to_dict(),
         backend_id=generated.metadata["backend_id"],
         review_packet=review.to_dict(),
     )
