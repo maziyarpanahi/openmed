@@ -24,6 +24,23 @@ __all__ = [
     "FEDERATED_SCHEDULE_PHASES",
     "FEDERATED_SCHEDULE_SCHEMA_VERSION",
     "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
+    "DEFAULT_MAX_DECLARED_CAPABILITIES",
+    "FEDERATED_COMPATIBILITY_FIELDS",
+    "FEDERATED_COMPATIBILITY_REASON_CODES",
+    "FEDERATED_COMPATIBILITY_SCHEMA_VERSION",
+    "MAX_PROTOCOL_VERSION",
+    "MIN_PROTOCOL_VERSION",
+    "FederatedClientCapabilityEnvelope",
+    "FederatedCompatibilityError",
+    "FederatedCompatibilityFinding",
+    "FederatedCompatibilityReasonCode",
+    "FederatedCompatibilityReport",
+    "FederatedCompatibilityVerdict",
+    "FederatedResourceClass",
+    "FederatedRoundRequirement",
+    "FederatedSecureAggregationMode",
+    "FederatedTrainingBackend",
+    "check_federated_compatibility",
     "MAX_FEDERATED_PHASE_DURATION_SECONDS",
     "MAX_LORA_TRAINABLE_RATIO",
     "JOURNEY_SPECIALIST_ADAPTER_METHODS",
@@ -370,6 +387,27 @@ def __getattr__(name: str) -> Any:
     }:
         federated_round = import_module(".federated_round", __name__)
         return getattr(federated_round, name)
+    if name in {
+        "DEFAULT_MAX_DECLARED_CAPABILITIES",
+        "FEDERATED_COMPATIBILITY_FIELDS",
+        "FEDERATED_COMPATIBILITY_REASON_CODES",
+        "FEDERATED_COMPATIBILITY_SCHEMA_VERSION",
+        "MAX_PROTOCOL_VERSION",
+        "MIN_PROTOCOL_VERSION",
+        "FederatedClientCapabilityEnvelope",
+        "FederatedCompatibilityError",
+        "FederatedCompatibilityFinding",
+        "FederatedCompatibilityReasonCode",
+        "FederatedCompatibilityReport",
+        "FederatedCompatibilityVerdict",
+        "FederatedResourceClass",
+        "FederatedRoundRequirement",
+        "FederatedSecureAggregationMode",
+        "FederatedTrainingBackend",
+        "check_federated_compatibility",
+    }:
+        federated_compatibility = import_module(".federated_compatibility", __name__)
+        return getattr(federated_compatibility, name)
     if name in {
         "CLINICAL_PRIVACY_CHECKPOINT_NAME",
         "CLINICAL_PRIVACY_CHECKPOINT_SCHEMA_VERSION",
