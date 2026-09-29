@@ -1,0 +1,172 @@
+{
+  "device": "cpu",
+  "fixture_count": 3,
+  "generated_at": null,
+  "metadata": {
+    "adjudication_available": false,
+    "aggregate_only": true,
+    "clinical_validation": false,
+    "fixture_digest": "sha256:bf9bd5efbd645e3b977e5b358b362f3b0b7e809b6ca8282fcef75666c933f786",
+    "model_revision": null,
+    "output_digest": "sha256:79c018cd08babb008c8bcefd2c67db578fd75665b5da9f3a25c1d77fb5780988",
+    "protocol": "gold-masked-literal-assertion-sentence-v1",
+    "report_digest": "sha256:cf432b2329896f2d8b60ece9214baca821fc4b8abd37540a5efd15aea5f9e17d",
+    "synthetic_only": true,
+    "threshold_digest": "sha256:c64fd184ac79fe335674ef1f28b03e7ff2bed3d02431f9187aec410c7deebf6f"
+  },
+  "metrics": {
+    "checks": [
+      [
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_clinical_fact_recall",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_fact_coverage",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.0,
+            "value": 0.0
+          },
+          "gate": "summary_unsupported_claim_rate",
+          "passed": true,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 1.0,
+            "value": null
+          },
+          "gate": "summary_citation_support",
+          "passed": false,
+          "reason": "missing_adjudication"
+        },
+        {
+          "details": {
+            "checked_token_count": 2,
+            "leaked_token_count": 0,
+            "leaked_token_hashes": [],
+            "passed": true
+          },
+          "gate": "summary_leakage",
+          "passed": true,
+          "reason": "measured"
+        }
+      ],
+      [
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_clinical_fact_recall",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_fact_coverage",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.0,
+            "value": 0.0
+          },
+          "gate": "summary_unsupported_claim_rate",
+          "passed": true,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 1.0,
+            "value": null
+          },
+          "gate": "summary_citation_support",
+          "passed": false,
+          "reason": "missing_adjudication"
+        },
+        {
+          "details": {
+            "checked_token_count": 2,
+            "leaked_token_count": 0,
+            "leaked_token_hashes": [],
+            "passed": true
+          },
+          "gate": "summary_leakage",
+          "passed": true,
+          "reason": "measured"
+        }
+      ],
+      [
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_clinical_fact_recall",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.95,
+            "value": 0.75
+          },
+          "gate": "summary_fact_coverage",
+          "passed": false,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 0.0,
+            "value": 0.0
+          },
+          "gate": "summary_unsupported_claim_rate",
+          "passed": true,
+          "reason": "measured"
+        },
+        {
+          "details": {
+            "threshold": 1.0,
+            "value": null
+          },
+          "gate": "summary_citation_support",
+          "passed": false,
+          "reason": "missing_adjudication"
+        },
+        {
+          "details": {
+            "checked_token_count": 2,
+            "leaked_token_count": 0,
+            "leaked_token_hashes": [],
+            "passed": true
+          },
+          "gate": "summary_leakage",
+          "passed": true,
+          "reason": "measured"
+        }
+      ]
+    ],
+    "failed_fixture_count": 3,
+    "generated_count": 3
+  },
+  "model_name": "extractive",
+  "suite": "summaries"
+}
