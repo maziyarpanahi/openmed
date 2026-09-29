@@ -24,7 +24,7 @@
         "source_start": 133
       }
     ],
-    "digest": "sha256:723f8f91daaae1f4ad9385effc83972101802ef0fb5e5cf271594b4813b8b1dc",
+    "digest": "sha256:7ea2dd64da4bf8d1e96cda07e408cf6b296f204d69698e5f87aa1e600d25958f",
     "envelope": {
       "disclaimer": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.",
       "human_review_mode": true,
@@ -81,8 +81,8 @@
         "deterministic_span_checks": {
           "citation_count": 3,
           "citation_span_validity": 1.0,
-          "claim_span_count": 0,
-          "claim_span_validity": 0.0,
+          "claim_span_count": 3,
+          "claim_span_validity": 1.0,
           "duplicate_citation_count": 0,
           "evidence_span_count": 3,
           "evidence_span_validity": 1.0,
@@ -90,11 +90,11 @@
           "invalid_citation_reasons": {},
           "invalid_claim_span_count": 0,
           "invalid_evidence_span_count": 0,
-          "missing_claim_span_count": 3,
+          "missing_claim_span_count": 0,
           "missing_evidence_span_count": 0,
-          "passed": false,
+          "passed": true,
           "valid_citation_count": 3,
-          "valid_claim_span_count": 0,
+          "valid_claim_span_count": 3,
           "valid_evidence_span_count": 3
         },
         "disclaimer": "Claim-level citation metrics are evaluation evidence only; they are not a clinical decision, compliance certification, or guarantee of clinical truth. Qualified human review remains required before clinical use.",
@@ -104,9 +104,9 @@
         "orphan_claim_rate": 0.0,
         "provenance": {
           "adjudication_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-          "claim_digest": "sha256:0520e7a72e50081b4f096bb0781eb6d16a24bcd5311fe522d0cfbe72381d5444",
+          "claim_digest": "sha256:959a6e01b76b7736bb0c8e82a5a22e6a6f6f460652f7d218d12844940f1a9c2e",
           "evidence_digest": "sha256:a3ee4607532bc88ad65e16d2584cad290a51da8a1961fd918d85374038b90daa",
-          "input_digest": "sha256:ca23e2da296e0d1d85d03384b6036dcdd7aeafa3045a10a880db5893d65294fd"
+          "input_digest": "sha256:2732c741666e33e8f61c8f9db1fe67b2caed8c0db0b2d0286aa7e640af72907a"
         },
         "schema_version": 1,
         "suite": "citation_support_metrics",

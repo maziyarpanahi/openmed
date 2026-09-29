@@ -26,6 +26,9 @@ def test_brief_pipeline_golden_is_offline_cited_and_bounded(monkeypatch):
     brief = result["brief"]
     assert brief["status"] == "needs_review"
     assert len(brief["citations"]) == len(brief["verdicts"]) == 3
+    span_checks = brief["metrics"]["citation_support"]["deterministic_span_checks"]
+    assert span_checks["passed"] is True
+    assert span_checks["valid_claim_span_count"] == 3
     assert result["grounding"][0]["candidate_count"] > 0
     assert "demo.patient@example.test" not in json.dumps(result)
     assert "212-555-0198" not in json.dumps(result)
