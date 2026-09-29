@@ -1,5 +1,8 @@
 # Changelog
 
+- Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
+  native leakage/envelope/citation validation and shared Python wire fixtures.
+
 All notable changes to OpenMed will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

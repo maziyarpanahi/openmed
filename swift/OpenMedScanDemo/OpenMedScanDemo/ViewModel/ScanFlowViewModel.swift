@@ -139,6 +139,10 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     @Published public var mapleBrief: String?
+    @Published public var clinicalBrief: ClinicalBrief?
+    /// Trusted on-device integrations. Missing review/NLI configuration refuses.
+    public var briefEvaluator: (@Sendable (String, String) async throws -> Data)?
+    public var briefPrivacyCheck: (@Sendable (String) throws -> Bool)?
     @Published public var mapleChatTurns: [MapleChatTurn] = []
     @Published public var mapleChatDraft: String = ""
 
@@ -375,6 +379,12 @@ public final class ScanFlowViewModel: ObservableObject {
 
     public func generateMapleBrief() async {
         guard let masked = currentPIIOutput?.maskedText, !isWorking else { return }
+        clinicalBrief = nil
+        mapleBrief = nil
+        guard let evaluate = briefEvaluator, let privacyCheck = briefPrivacyCheck else {
+            errorMessage = "Clinical brief requires configured local reviewed evidence and NLI verification."
+            return
+        }
         guard downloads.state(for: .maplePreview) == .ready else {
             errorMessage = "Maple is not ready — download it first."
             return
@@ -386,16 +396,19 @@ public final class ScanFlowViewModel: ObservableObject {
             status = nil
         }
         do {
-            mapleBrief = try await runtime.reason(
+            let verified = try await runtime.clinicalBrief(
                 maskedText: masked,
-                question: "What are the key clinical facts, relationships, uncertainties, and follow-up items?",
-                messages: []
+                originalIdentifiers: currentPIIOutput?.entities.map(\.text) ?? [],
+                evaluate: evaluate,
+                privacyCheck: privacyCheck
             )
+            clinicalBrief = verified
+            mapleBrief = verified.summary
             HapticsCenter.impact(.soft)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Clinical brief refused. Check local model, evidence and review configuration."
             HapticsCenter.notify(.error)
-            log.error("Maple brief failed: \(error.localizedDescription, privacy: .public)")
+            log.error("Clinical brief refused")
         }
     }
 
