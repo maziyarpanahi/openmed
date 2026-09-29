@@ -8,6 +8,8 @@
   counts-only extractive/MLX evidence and daily committed-report verification.
 - Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
   local review lookup, separate protected/audit CLI files and content-free logs.
+- Add deterministic edge-VLM execution memory plans that select the smallest
+  declared device tier or abstain, with no cloud fallback.
 
 All notable changes to OpenMed will be documented in this file.
 
@@ -21,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
+- Added deterministic edge-VLM execution memory plans with bounded integer
+  estimation, smallest-fitting device tier selection, content-free abstain
+  reasons and no cloud fallback (#2792).
 
 ### Added
 
