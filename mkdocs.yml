@@ -320,6 +320,7 @@ nav:
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Language Route Health Matrix: clinical/language-matrix.md
       - Public Benchmark Leaderboard: eval/leaderboard.md

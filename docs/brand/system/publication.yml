@@ -395,6 +395,7 @@ classification:
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
+    - evaluation/synthetic-memorization.md
     - clinical-validation-protocol.md
     - clinical/language-matrix.md
     - eval/leaderboard.md
