@@ -1,6 +1,6 @@
 schema_version: openmed.training.clinical_nli.v1
 preset_name: clinical_nli_small
-status: preparation_only
+status: local_training_recipe
 seed: 3236
 base_model:
   model_ref: OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1
@@ -12,20 +12,33 @@ base_model:
 labels: [contradiction, neutral, entailment]
 training:
   sequence_length: 512
-  learning_rate: 0.00002
+  optimizer: AdamW
+  learning_rate: 0.00005
   batch_size: 16
-  gradient_accumulation_steps: 2
+  gradient_accumulation_steps: 1
   epochs: 3
   weight_decay: 0.01
-  validation_interval_steps: 250
-  early_stopping_metric: macro_f1
-  deterministic: true
+  validation_interval: epoch
+  selection_metric: validation_accuracy_with_binary_partial_labels
+  deterministic_seed: true
+  bitwise_mps_determinism_claimed: false
+  overlength_policy: drop_without_truncation
   mixed_precision: false
   paid_compute_authorized: false
 data:
-  public_training_manifest: null
+  public_training_manifest: corpus-manifest.json
   public_license_audit_required: true
-  synthetic_training_manifest: null
+  synthetic_training_manifest: corpus-manifest.json
+  public_three_way:
+    model_ref: nyu-mll/multi_nli
+    revision: da70db2af9d09693783c3320c4249840212ee221
+    excluded_genres: [fiction]
+    train_sample_limit: 24000
+  public_biomedical:
+    source: https://stonybrooknlp.github.io/BioNLI/
+    license: cc-by-4.0
+    label_protocol: binary_partial_labels_not_invented_contradictions
+    train_sample_limit: 12000
   patient_data_allowed: false
   mednli: eval_only_user_supplied
   mednli_download_allowed: false
@@ -36,6 +49,19 @@ splits:
   test: 0.1
   deduplicate_before_split: true
 exports: [pytorch, onnx_int8, mlx]
+candidate_quality:
+  public_three_way_accuracy_minimum: 0.65
+  biomedical_binary_accuracy_minimum: 0.75
+  synthetic_three_way_accuracy_minimum: 0.90
+  calibration_precision_minimum: 0.99
+  calibration_recall_minimum: 0.25
+  calibration_false_positive_rate_maximum: 0.01
+  heldout_entailment_recall_minimum: 0.25
+  negation_false_entailment_count_maximum: 0
+  parity_fixture_count_minimum: 96
+  mlx_probability_delta_maximum: 0.001
+  onnx_int8_probability_delta_maximum: 0.05
+  onnx_int8_argmax_agreement_minimum: 0.98
 required_evidence:
   - public_and_synthetic_accuracy
   - clinical_error_slices

@@ -181,7 +181,7 @@ class ModelLoader:
 
         import re
 
-        if runtime not in {"torch", "onnx"}:
+        if runtime not in {"torch", "onnx", "mlx"}:
             raise ValueError("unsupported local sequence-classifier runtime")
         local_path = self._as_existing_local_path(model_name)
         if local_path is None and (
@@ -214,12 +214,24 @@ class ModelLoader:
                 directory, local_files_only=True, trust_remote_code=False
             )
             if runtime == "torch":
+                import torch
                 from transformers import AutoModelForSequenceClassification
 
                 model = AutoModelForSequenceClassification.from_pretrained(
                     directory, local_files_only=True, trust_remote_code=False
                 )
                 model.eval()
+                return {
+                    "model": model,
+                    "tokenizer": tokenizer,
+                    "config": config,
+                    "inference_context": torch.inference_mode,
+                }
+
+            if runtime == "mlx":
+                from openmed.mlx.models.bert_sc import load_model
+
+                model = load_model(directory / "mlx")
                 return {"model": model, "tokenizer": tokenizer, "config": config}
 
             import onnxruntime as ort
