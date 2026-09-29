@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import stat
 from types import SimpleNamespace
 
@@ -137,8 +138,9 @@ def test_cli_separates_protected_content_and_private_audit(tmp_path, capsys):
     assert "summary" not in audit
     assert "dehydration" not in args.review_output.read_text()
     assert "dehydration" not in capsys.readouterr().out
-    for path in (args.summary_output, args.review_output):
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if os.name != "nt":
+        for path in (args.summary_output, args.review_output):
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 @pytest.mark.parametrize("collision", ["existing", "same", "symlink"])
