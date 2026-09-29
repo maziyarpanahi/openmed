@@ -226,6 +226,9 @@ def _result(summary, reason, completed, **values):
         "citations": [],
         "verdicts": [],
         "metrics": {},
+        "backend_id": None,
+        "profile_digest": None,
+        "provenance": {},
         "envelope": {
             "requires_human_review": True,
             "is_diagnostic": False,
