@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added differential-privacy budget summaries that aggregate already-validated
+  consumption metadata by model family and composition method, with a
+  configurable minimum-cell floor, bucketized epsilon counts and byte-stable
+  JSON/Markdown rendering, plus offline golden tests (#3097).
+
+### Added
+
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
   now requires explicit `model="extractive"`; missing runtime or artifacts fail
