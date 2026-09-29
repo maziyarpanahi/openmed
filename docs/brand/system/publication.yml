@@ -420,6 +420,7 @@ classification:
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
+    - multimodal/dicom-transfer-syntax-preflight.md
     - clinical/lab-reference-ranges.md
     - clinical/lab-measurements.md
     - clinical/unit-display-audit.md
