@@ -267,6 +267,20 @@ __all__ = [
     "load_teacher_ensemble_config",
     "resolve_family_agreement_policy",
     "validate_ensemble_against_manifest",
+    "DEFAULT_FEDERATED_UPDATE_MINIMUM_GROUP_SIZE",
+    "DEFAULT_MAX_BATCH_UPDATES",
+    "FEDERATED_UPDATE_BATCH_REASON_CODES",
+    "FEDERATED_UPDATE_BATCH_SCHEMA_VERSION",
+    "MAX_BATCH_UPDATES",
+    "FederatedUpdateBatchError",
+    "FederatedUpdateBatchFinding",
+    "FederatedUpdateBatchPolicy",
+    "FederatedUpdateBatchReasonCode",
+    "FederatedUpdateBatchReport",
+    "FederatedUpdateBatchStatus",
+    "FederatedUpdateGroup",
+    "FederatedUpdateOutcome",
+    "check_federated_update_batch",
 ]
 
 
@@ -333,6 +347,24 @@ def __getattr__(name: str) -> Any:
             ".federated_update_metadata", __name__
         )
         return getattr(federated_update_metadata, name)
+    if name in {
+        "DEFAULT_FEDERATED_UPDATE_MINIMUM_GROUP_SIZE",
+        "DEFAULT_MAX_BATCH_UPDATES",
+        "FEDERATED_UPDATE_BATCH_REASON_CODES",
+        "FEDERATED_UPDATE_BATCH_SCHEMA_VERSION",
+        "MAX_BATCH_UPDATES",
+        "FederatedUpdateBatchError",
+        "FederatedUpdateBatchFinding",
+        "FederatedUpdateBatchPolicy",
+        "FederatedUpdateBatchReasonCode",
+        "FederatedUpdateBatchReport",
+        "FederatedUpdateBatchStatus",
+        "FederatedUpdateGroup",
+        "FederatedUpdateOutcome",
+        "check_federated_update_batch",
+    }:
+        federated_update_batch = import_module(".federated_update_batch", __name__)
+        return getattr(federated_update_batch, name)
     if name in {
         "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
         "FEDERATED_ROUND_STATUS_SCHEMA_VERSION",
