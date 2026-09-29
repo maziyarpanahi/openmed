@@ -1,0 +1,78 @@
+"""Offline streaming-ASR provider contracts.
+
+The subpackage re-exports the public surface of
+:mod:`openmed.multimodal.streaming.speech.providers` so callers can import from
+one stable location while the module keeps the implementation.
+"""
+
+from __future__ import annotations
+
+from .providers import (
+    MAX_BUFFERED_BYTE_COUNT,
+    MAX_BUFFERED_CHUNKS,
+    MAX_BUFFERED_DURATION_MS,
+    MAX_CHANNEL_COUNT,
+    MAX_CHUNK_BYTE_COUNT,
+    MAX_CHUNK_DURATION_MS,
+    MAX_CHUNK_SEQUENCE,
+    MAX_ENTRYPOINT_CHARS,
+    MAX_HYPOTHESIS_CHARS,
+    MAX_PARTIAL_HYPOTHESES,
+    MAX_PROVIDER_LANGUAGES,
+    MAX_PROVIDER_REVISION_CHARS,
+    MAX_SAMPLE_RATE_HZ,
+    MAX_SEGMENTS,
+    MAX_STREAM_DURATION_MS,
+    MAX_TOKEN_TIMES,
+    SPEECH_PROVIDER_CONTRACT_VERSION,
+    SPEECH_PROVIDER_REASON_CODES,
+    AudioChunk,
+    FinalizedSegment,
+    LanguageConfidence,
+    PartialHypothesis,
+    ProviderProvenance,
+    RegisteredSpeechProvider,
+    SpeechProviderDeclaration,
+    SpeechProviderError,
+    SpeechStreamLimits,
+    StreamingAsrSession,
+    StreamingAsrSessionReport,
+    StreamState,
+    TokenTime,
+    register_speech_providers,
+)
+
+__all__ = [
+    "MAX_BUFFERED_BYTE_COUNT",
+    "MAX_BUFFERED_CHUNKS",
+    "MAX_BUFFERED_DURATION_MS",
+    "MAX_CHANNEL_COUNT",
+    "MAX_CHUNK_BYTE_COUNT",
+    "MAX_CHUNK_DURATION_MS",
+    "MAX_CHUNK_SEQUENCE",
+    "MAX_ENTRYPOINT_CHARS",
+    "MAX_HYPOTHESIS_CHARS",
+    "MAX_PARTIAL_HYPOTHESES",
+    "MAX_PROVIDER_LANGUAGES",
+    "MAX_PROVIDER_REVISION_CHARS",
+    "MAX_SAMPLE_RATE_HZ",
+    "MAX_SEGMENTS",
+    "MAX_STREAM_DURATION_MS",
+    "MAX_TOKEN_TIMES",
+    "SPEECH_PROVIDER_CONTRACT_VERSION",
+    "SPEECH_PROVIDER_REASON_CODES",
+    "AudioChunk",
+    "FinalizedSegment",
+    "LanguageConfidence",
+    "PartialHypothesis",
+    "ProviderProvenance",
+    "RegisteredSpeechProvider",
+    "SpeechProviderDeclaration",
+    "SpeechProviderError",
+    "SpeechStreamLimits",
+    "StreamState",
+    "StreamingAsrSession",
+    "StreamingAsrSessionReport",
+    "TokenTime",
+    "register_speech_providers",
+]
