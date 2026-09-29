@@ -1,5 +1,8 @@
 # Changelog
 
+- Add deterministic client-update clipping with trusted global and per-layer
+  L2 norm bounds, content-free diagnostics and strict policy JSON parsing.
+
 - Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
   explicit fixture-provider disclaimers and a recording script.
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
@@ -21,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
+- Added deterministic client-update clipping that scales dense adapter deltas to
+  a trusted global or per-layer L2 norm bound, with a policy allowlist, frozen
+  reason codes, content-free reports and canonical policy fingerprints (#2825).
 
 ### Added
 
