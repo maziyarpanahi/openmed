@@ -260,13 +260,22 @@ class DeidentifyJobQueue:
         )
 
     def submit(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        """Submit one de-identification job and return its initial metadata."""
+        """Submit one de-identification job and return its initial metadata.
+
+        The request is snapshotted before it is queued, so the persisted
+        metadata and the work a worker runs describe the same submission even
+        if the caller keeps mutating the request object it passed in.
+        """
         with self._lock:
             if self._shutdown:
                 raise RuntimeError("Job queue is shutting down")
-            record = self._new_record(payload)
+            snapshot = copy.deepcopy(payload)
+            record = self._new_record(snapshot)
             self.store.create(record)
-            self._executor.submit(self._run_job, _JobWorkItem(record["id"], payload))
+            self._executor.submit(
+                self._run_job,
+                _JobWorkItem(record["id"], snapshot),
+            )
             return _copy_record(record)
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
