@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Fixed-order clinical brief composition over explicitly reviewed synthetic
+  evidence, with local generation, calibrated NLI integration, exact citations,
+  rendered-packet privacy checks and value-free review/provenance output.
+
+### Added
+
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
   now requires explicit `model="extractive"`; missing runtime or artifacts fail
