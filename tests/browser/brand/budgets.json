@@ -1,23 +1,34 @@
 {
+  "schema_version": 2,
   "artifact": {
+    "maximum_total_bytes": 92719751,
+    "maximum_unique_payload_bytes": 92355238,
     "maximum_duplicate_payload_bytes": 458752,
-    "maximum_source_map_files": 0,
-    "maximum_total_bytes": 92576588,
-    "maximum_unique_payload_bytes": 92212075
-  },
-  "governed_payload_bytes": {
-    "docs/assets/javascripts/lunr/wordcut.js": 716800,
-    "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/model-tokenizer-script-coverage/index.html": 2359296,
-    "docs/search/search_index.json": 4449108
+    "maximum_source_map_files": 0
   },
   "largest_file_bytes": {
     "css": 153600,
     "font": 65536,
-    "html": 2359296,
+    "html": 2392222,
     "image": 262144,
     "javascript": 716800,
-    "json": 4449108
+    "json": 4482399
+  },
+  "governed_payload_bytes": {
+    "docs/assets/javascripts/lunr/wordcut.js": 716800,
+    "docs/model-tokenizer-script-coverage/index.html": 2392222,
+    "docs/model-tokenizer-script-coverage.json": 1572864,
+    "docs/search/search_index.json": 4482399
+  },
+  "route_transfer_bytes": {
+    "/": 3145728,
+    "/docs/": 5817753,
+    "/docs/model-tokenizer-script-coverage/": 7992837
+  },
+  "page_metrics": {
+    "cumulative_layout_shift": 0.1,
+    "largest_contentful_paint_ms": 2500,
+    "representative_interaction_latency_ms": 200
   },
   "notes": [
     "The reviewed synthetic brief walkthrough with native integration measures 92333171 total bytes, 91968658 unique bytes, and 4436916 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; all route, individual non-JSON, duplicate and source-map limits are unchanged.",
@@ -86,16 +97,5 @@
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
     "Runtime model downloads in the opt-in browser demo are excluded."
-  ],
-  "page_metrics": {
-    "cumulative_layout_shift": 0.1,
-    "largest_contentful_paint_ms": 2500,
-    "representative_interaction_latency_ms": 200
-  },
-  "route_transfer_bytes": {
-    "/": 3145728,
-    "/docs/": 5817753,
-    "/docs/model-tokenizer-script-coverage/": 7992837
-  },
-  "schema_version": 2
+  ]
 }
