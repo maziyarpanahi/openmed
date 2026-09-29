@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -237,6 +238,111 @@ def test_terminal_record_keeps_its_full_metadata_ttl_after_completion(
     assert completed["completed_at"] == "2026-01-01T00:00:11Z"
     assert completed["expires_at"] == "2026-01-01T00:00:21Z"
     assert completed["status"] == "done"
+
+
+def test_shutdown_settles_jobs_cancelled_before_they_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, max_workers=1)
+    payload = DeidentifyJobRequest(
+        documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
+    )
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_process(
+        _payload: DeidentifyJobRequest, _document: DeidentifyJobDocument
+    ):
+        started.set()
+        release.wait(timeout=10)
+        return SimpleNamespace(pii_entities=[])
+
+    monkeypatch.setattr(queue, "_deidentify_document", blocking_process)
+    running_id = ""
+    try:
+        running_id = queue.submit(payload)["id"]
+        assert started.wait(timeout=10)
+        queued_id = queue.submit(payload)["id"]
+
+        queue.shutdown()
+    finally:
+        release.set()
+
+    reopened = jobs.LocalJobStore(store.path)
+    cancelled = reopened.get(queued_id)
+    assert cancelled is not None
+    assert cancelled["status"] == "failed"
+    assert cancelled["error"] == {
+        "type": "CancelledError",
+        "message": "Job was cancelled before it started",
+    }
+    assert cancelled["started_at"] is None
+    assert cancelled["completed_at"] is not None
+
+    running = store.get(running_id)
+    for _ in range(500):
+        running = store.get(running_id)
+        if running is not None and running["status"] in {"done", "failed"}:
+            break
+        time.sleep(0.01)
+    assert running is not None
+    assert running["status"] == "done"
+
+
+def test_submit_registers_done_callback_outside_the_lock(tmp_path: Path) -> None:
+    from concurrent.futures import Future
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    class AlreadyFinishedExecutor:
+        """Executor that returns futures which have already completed."""
+
+        def __init__(self) -> None:
+            self.submitted = 0
+
+        def submit(self, fn, *args, **kwargs) -> Future[None]:
+            del fn, args, kwargs
+            self.submitted += 1
+            future: Future[None] = Future()
+            future.set_result(None)
+            return future
+
+        def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+            del wait, cancel_futures
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    queue = jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, max_workers=1)
+    executor = AlreadyFinishedExecutor()
+    # A future that is already done runs its callback in the submitting thread.
+    queue._executor = executor
+    payload = DeidentifyJobRequest(
+        documents=[DeidentifyJobDocument(id="synthetic-0", text="synthetic sample")]
+    )
+
+    submitted: dict[str, Any] = {}
+
+    def submit() -> None:
+        submitted.update(queue.submit(payload))
+
+    worker = threading.Thread(target=submit, name="synthetic-submit", daemon=True)
+    worker.start()
+    worker.join(timeout=10)
+    if worker.is_alive():  # pragma: no cover - only on a reintroduced deadlock
+        raise AssertionError("submit() deadlocked while registering the callback")
+
+    assert executor.submitted == 1
+    assert submitted["status"] == "queued"
+    assert submitted["id"] in store._records
+    # The callback must have run without re-entering the submit lock.
+    assert queue._pending == {}
 
 
 def _wait_for_job(
