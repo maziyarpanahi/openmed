@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the offline `openmed i18n check` locale-pack conformance command
+  with one independent result per component, a closed set of stable reason
+  codes, deterministic text/JSON output and offline golden tests (#3103).
+
+### Added
+
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
   now requires explicit `model="extractive"`; missing runtime or artifacts fail

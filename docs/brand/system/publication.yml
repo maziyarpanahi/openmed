@@ -345,6 +345,7 @@ classification:
     - multimodal/image-geometry.md
     - i18n/locale-tags.md
     - multimodal/media-type-detection.md
+    - i18n/locale-pack-conformance.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-geometry-preflight.md
     - multimodal/ocr-streaming.md
