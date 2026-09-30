@@ -267,6 +267,25 @@ __all__ = [
     "load_teacher_ensemble_config",
     "resolve_family_agreement_policy",
     "validate_ensemble_against_manifest",
+    "DEFAULT_RENYI_ORDERS",
+    "MAX_ACCOUNTED_ROUNDS",
+    "MAX_CLIPPING_NORM",
+    "MAX_NOISE_MULTIPLIER",
+    "MAX_RENYI_ORDERS",
+    "MAX_RENYI_ORDER",
+    "RDP_ACCOUNTANT_SCHEMA_VERSION",
+    "RDP_ACCOUNTING_REASON_CODES",
+    "FederatedRenyiRound",
+    "RdpAccountantError",
+    "RenyiAccountingReport",
+    "RenyiFederationPolicy",
+    "RenyiRoundDecision",
+    "account_federated_rounds",
+    "compose_renyi_curve",
+    "evaluate_federation_round",
+    "fingerprint_accounting_report",
+    "renyi_to_dp",
+    "round_renyi_epsilon",
 ]
 
 
@@ -616,4 +635,27 @@ def __getattr__(name: str) -> Any:
     }:
         repro_verify = import_module(".repro_verify", __name__)
         return getattr(repro_verify, name)
+    if name in {
+        "DEFAULT_RENYI_ORDERS",
+        "MAX_ACCOUNTED_ROUNDS",
+        "MAX_CLIPPING_NORM",
+        "MAX_NOISE_MULTIPLIER",
+        "MAX_RENYI_ORDERS",
+        "MAX_RENYI_ORDER",
+        "RDP_ACCOUNTANT_SCHEMA_VERSION",
+        "RDP_ACCOUNTING_REASON_CODES",
+        "FederatedRenyiRound",
+        "RdpAccountantError",
+        "RenyiAccountingReport",
+        "RenyiFederationPolicy",
+        "RenyiRoundDecision",
+        "account_federated_rounds",
+        "compose_renyi_curve",
+        "evaluate_federation_round",
+        "fingerprint_accounting_report",
+        "renyi_to_dp",
+        "round_renyi_epsilon",
+    }:
+        rdp_accountant = import_module(".federated.rdp_accountant", __name__)
+        return getattr(rdp_accountant, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

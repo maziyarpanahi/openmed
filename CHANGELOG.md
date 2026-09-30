@@ -1,5 +1,7 @@
 # Changelog
 
+- Add a round-aware Renyi privacy accountant with convexity sampling bounds,
+  deterministic reports and a pre-round federation admission gate.
 - Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
   explicit fixture-provider disclaimers and a recording script.
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
@@ -21,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
+- Added a round-aware Renyi privacy accountant that composes per-round
+  sampling, clipping and noise mechanics into canonical epsilon/delta reports,
+  rejects duplicate or out-of-range rounds, and blocks a federated round before
+  it can exceed the federation policy (#2826).
 
 ### Added
 
