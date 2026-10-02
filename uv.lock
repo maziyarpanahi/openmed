@@ -11481,6 +11481,7 @@ dependencies = [
     { name = "jieba" },
     { name = "pysbd" },
     { name = "pyyaml" },
+    { name = "tomli", marker = "python_full_version < '3.11' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
 
 [package.optional-dependencies]
@@ -11958,6 +11959,7 @@ requires-dist = [
     { name = "tokenizers", marker = "extra == 'hf'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'mlx'", specifier = ">=0.15" },
     { name = "tokenizers", marker = "extra == 'onnx-runtime'", specifier = ">=0.15" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'coreml'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'gliner'", specifier = ">=2.0" },

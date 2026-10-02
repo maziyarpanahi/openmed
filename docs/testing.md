@@ -10,6 +10,9 @@ and macOS. These versions and OS families are declared in `pyproject.toml`'s
 classifiers. `requires-python >=3.10` is an installation floor, not a promise
 that an unlisted future interpreter or alternative Python implementation is
 qualified. Adding one requires a reviewed metadata, CI and documentation change.
+Python 3.10 installs the MIT-licensed `tomli` backport required by the SDK's TOML
+readers; newer interpreters use the standard-library `tomllib` instead. The
+backport is a conditional core dependency, not an accidental development extra.
 
 | Lane | Required combinations | What it proves |
 | --- | --- | --- |
