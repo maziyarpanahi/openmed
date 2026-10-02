@@ -250,15 +250,18 @@ def test_translation_groups_are_complete_without_false_fallback_routes() -> None
 
 
 def test_localized_entry_pages_keep_content_and_link_parity() -> None:
+    from openmed.core.language_pack_catalog import DEFAULT_PII_MODELS
+
     english_index = (DOCS / "index.md").read_text(encoding="utf-8")
     chinese_index = (DOCS / "index.zh.md").read_text(encoding="utf-8")
     hindi_index = (DOCS / "index.hi.md").read_text(encoding="utf-8")
 
     for localized in (chinese_index, hindi_index):
         assert "/docs/export-onnx-webgpu/" in localized
-        assert "34" in localized
+        assert re.search(rf"\*\*{len(DEFAULT_PII_MODELS)}\s", localized)
         assert re.search(r"(?m)^    - ", localized)
         assert re.search(r"(?m)^5\. ", localized)
+    assert re.search(rf"\*\*{len(DEFAULT_PII_MODELS)}\s", english_index)
     assert re.search(r"(?m)^    - ", english_index)
     assert re.search(r"(?m)^5\. ", english_index)
 

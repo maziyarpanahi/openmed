@@ -1,14 +1,5 @@
 # Changelog
 
-- Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
-  explicit fixture-provider disclaimers and a recording script.
-- Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
-  native leakage/envelope/citation validation and shared Python wire fixtures.
-- Add fail-closed summary release gates, seeded synthetic benchmark execution,
-  counts-only extractive/MLX evidence and daily committed-report verification.
-- Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
-  local review lookup, separate protected/audit CLI files and content-free logs.
-
 All notable changes to OpenMed will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
@@ -16,13 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-02
+
 ### Added
 
+- Offline synthetic clinical-brief walkthrough, golden pipeline test, explicit
+  fixture-provider disclaimers and a recording script.
+- OpenMedKit guarded clinical-brief packets, local Maple brief generation,
+  native leakage/envelope/citation validation and shared Python wire fixtures.
+- Fail-closed summary model-promotion gates and seeded, counts-only
+  extractive/MLX benchmark evidence. Failed reports remain failed and do not
+  qualify models; training and model publication are optional, separate from
+  the library/SDK release.
+- Guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
+  local review lookup, separate protected/audit CLI files and content-free logs.
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
-
-### Added
 
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
@@ -256,6 +257,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Training and new-checkpoint publication are optional research, without a
+  library-release milestone or feature-blocking relationship. SDK readiness
+  verifies retained artifacts and pointers separately from model promotion.
+- Align active Python, npm, Android, Swift demo and Helm version surfaces at
+  3.0.0. Document grounding and GraphQL migrations for the major release, and
+  include Journey and clinical-brief golden coverage in SDK readiness evidence.
 - Clinical NLI now fails closed when no released local checkpoint is registered;
   lexical verification requires `backend="heuristic"`, and results expose
   value-free four-state metadata instead of source or claim text (#3235).
@@ -299,6 +306,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing permissions are limited to the publish job.
 
 ### Fixed
+- Require patched PyJWT versions in the locked dependency graph and bound CI
+  tests with per-test timeout diagnostics rather than six-hour silent hangs.
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping

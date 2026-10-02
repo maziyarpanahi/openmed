@@ -102,7 +102,7 @@ Em hardware Apple compatível, o OpenMed pode usar **MLX** e **[OpenMedKit](swif
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -393,7 +393,7 @@ Se o OpenMed for útil na sua pesquisa, por favor, cite:
 
 Se o OpenMed for útil para você, uma estrela ajuda outros a descobri-lo.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 2 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
