@@ -124,6 +124,7 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/json-schemas.md
     - agent/reviewer-handoffs.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
