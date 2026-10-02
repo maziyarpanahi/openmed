@@ -138,9 +138,15 @@ def test_cli_separates_protected_content_and_private_audit(tmp_path, capsys):
     assert "summary" not in audit
     assert "dehydration" not in args.review_output.read_text()
     assert "dehydration" not in capsys.readouterr().out
-    if os.name != "nt":
-        for path in (args.summary_output, args.review_output):
+    for path in (args.summary_output, args.review_output):
+        assert path.is_file() and not path.is_symlink()
+        if os.name != "nt":
             assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        else:
+            # Windows stat exposes read/write attributes, not Unix ACLs.
+            mode = stat.S_IMODE(path.stat().st_mode)
+            assert mode & stat.S_IREAD
+            assert mode & stat.S_IWRITE
 
 
 @pytest.mark.parametrize("collision", ["existing", "same", "symlink"])
