@@ -479,6 +479,7 @@ def _run_brief_probe(profile: str, source_root: Path) -> SmokeReport:
                 checks.append(_passed(active))
             active = "no_network"
             assert not network_attempts
+            assert socket.socket.connect is blocked
             assert (
                 marker not in captured.getvalue()
                 and "dehydration" not in captured.getvalue()

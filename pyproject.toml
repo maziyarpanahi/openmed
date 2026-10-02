@@ -436,7 +436,11 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "tornado>=6.5.9",
+  "urllib3>=2.8.0",
+  "virtualenv>=21.7.13",
   "betterproto==2.0.0b6; python_version >= '3.11'",
+  "pyjwt>=2.14.0",
 ]
 override-dependencies = [
   # Beam 2.75 caps these below their patched releases even though its
