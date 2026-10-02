@@ -83,6 +83,9 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
         == versions
     )
     assert project["requires-python"] == ">=3.10"
+    # CLI imports dependency-report parsing even in a minimal installation.
+    # Development extras used to hide this missing Python 3.10 backport.
+    assert "tomli>=2.0; python_version < '3.11'" in project["dependencies"]
     assert {
         "Operating System :: POSIX :: Linux",
         "Operating System :: Microsoft :: Windows",

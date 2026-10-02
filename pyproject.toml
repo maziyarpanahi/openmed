@@ -40,6 +40,7 @@ dependencies = [
   "faker>=22.0",
   "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 authors = [
