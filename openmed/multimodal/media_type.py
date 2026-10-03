@@ -47,10 +47,16 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         return "image/jpeg"
     if bounded.startswith((b"II*\x00", b"MM\x00*")):
         return "image/tiff"
+    if bounded.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if bounded.startswith(b"BM"):
+        return "image/bmp"
     if len(bounded) >= 132 and bounded[128:132] == b"DICM":
         return "application/dicom"
     if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WAVE":
         return "audio/wav"
+    if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WEBP":
+        return "image/webp"
     return None
 
 

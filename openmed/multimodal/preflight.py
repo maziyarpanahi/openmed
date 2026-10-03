@@ -86,6 +86,9 @@ _DETECTED_MEDIA_TYPES: Final = frozenset(
         "image/png",
         "image/jpeg",
         "image/tiff",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
         "application/dicom",
         "audio/wav",
     }

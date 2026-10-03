@@ -39,6 +39,9 @@ from openmed.multimodal.preflight import (
 )
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+GIF = b"GIF89a" + b"\x00" * 66
+WEBP = b"RIFF\x14\x00\x00\x00WEBPVP8 " + b"\x00" * 60
+BMP = b"BM" + b"\x00" * 70
 PDF = b"%PDF-1.7\n" + b"\x00" * 63
 DICOM = b"\x00" * 128 + b"DICM" + b"\x00" * 60
 WAV = b"RIFF\x10\x00\x00\x00WAVE" + b"\x00" * 60
@@ -60,6 +63,9 @@ def manifest(source: bytes, media_type: str, **fields):
 
 
 IMAGE_MANIFEST = manifest(PNG, "image/png", width=8, height=8)
+GIF_MANIFEST = manifest(GIF, "image/gif", width=8, height=8)
+WEBP_MANIFEST = manifest(WEBP, "image/webp", width=8, height=8)
+BMP_MANIFEST = manifest(BMP, "image/bmp", width=8, height=8)
 PDF_MANIFEST = manifest(PDF, "application/pdf", pages=2)
 DICOM_MANIFEST = manifest(DICOM, "application/dicom", width=4, height=4, frames=2)
 AUDIO_MANIFEST = manifest(WAV, "audio/wav", duration_seconds=1.5)
@@ -90,6 +96,9 @@ def checks(report: PreflightReport) -> list[tuple[str, str]]:
     ("data", "source", "modality", "profile", "detected"),
     [
         pytest.param(IMAGE_MANIFEST, PNG, "image", IMAGE_V1, "image/png", id="image"),
+        pytest.param(GIF_MANIFEST, GIF, "image", IMAGE_V1, "image/gif", id="gif"),
+        pytest.param(WEBP_MANIFEST, WEBP, "image", IMAGE_V1, "image/webp", id="webp"),
+        pytest.param(BMP_MANIFEST, BMP, "image", IMAGE_V1, "image/bmp", id="bmp"),
         pytest.param(
             DICOM_MANIFEST, DICOM, "dicom", DICOM_V1, "application/dicom", id="dicom"
         ),
@@ -239,15 +248,24 @@ def test_malformed_manifest_abstains_before_the_source_is_touched(data):
 # --- media type -------------------------------------------------------------------
 
 
-def test_media_mismatch_is_a_fail_closed_finding():
-    report = preflight_asset(manifest(PDF, "image/png", width=8, height=8), PDF)
+@pytest.mark.parametrize(
+    ("source", "detected", "declared"),
+    [
+        (PDF, "application/pdf", "image/png"),
+        (GIF, "image/gif", "image/png"),
+        (WEBP, "image/webp", "image/bmp"),
+        (BMP, "image/bmp", "image/jpeg"),
+    ],
+)
+def test_media_mismatch_is_a_fail_closed_finding(source, detected, declared):
+    report = preflight_asset(manifest(source, declared, width=8, height=8), source)
 
     assert report.status is PreflightStatus.ABSTAIN
     assert report.abstention.reason is AbstentionReason.UNSUPPORTED_MEDIA
-    assert report.detected_media_type == "application/pdf"
+    assert report.detected_media_type == detected
     assert report.media_type_status is MediaTypeStatus.MISMATCH
     assert checks(report) == [("media_type", "mismatch")]
-    assert report.digest == AssetDigest(sha(PDF), len(PDF))
+    assert report.digest == AssetDigest(sha(source), len(source))
 
 
 @pytest.mark.parametrize(
@@ -255,10 +273,12 @@ def test_media_mismatch_is_a_fail_closed_finding():
     [
         pytest.param(b"\x89PN", "image/png", id="truncated_prefix"),
         pytest.param(
-            b"RIFF\x00\x00\x00\x00WEBPVP8 " + b"\x00" * 60,
+            b"RIFF\x00\x00\x00\x00UNKN" + b"\x00" * 60,
             "image/webp",
-            id="unsupported_signature",
+            id="unsupported_riff_signature",
         ),
+        pytest.param(b"GIF8", "image/gif", id="truncated_gif"),
+        pytest.param(b"B", "image/bmp", id="truncated_bmp"),
         pytest.param(b"\x00" * 200, "image/png", id="zero_bytes"),
     ],
 )
@@ -274,6 +294,9 @@ def test_undetectable_media_is_unknown_never_a_match(source, media_type):
 def test_media_type_status_agrees_with_the_media_type_validator():
     for source, declared in (
         (PNG, "image/png"),
+        (GIF, "image/gif"),
+        (WEBP, "image/webp"),
+        (BMP, "image/bmp"),
         (PDF, "image/png"),
         (b"?", "image/png"),
     ):
