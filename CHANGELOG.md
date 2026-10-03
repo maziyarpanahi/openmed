@@ -16,11 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Include ranked grounding alternatives in MedMentions top-k accuracy without
-  crediting withheld selections or turning abstentions into predictions (#3569).
-
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
@@ -318,6 +313,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
 - Reject non-integer sharding counts before reading documents.
+- Include ranked grounding alternatives in MedMentions top-k accuracy without
+  crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
