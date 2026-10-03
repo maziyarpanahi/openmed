@@ -15,6 +15,52 @@ FIXTURE = Path(__file__).parent / "fixtures" / "synthetic_phi_ccda.xml"
 HL7 = {"hl7": CDA_NAMESPACE}
 
 
+def test_default_headers_cover_relatives_birthplace_and_narrative_surfaces():
+    values = {
+        "guardian": ("GuardianSynthetic", "41 Guardian Street", "tel:555-0111"),
+        "relative": ("RelativeSynthetic", "42 Relative Street", "tel:555-0122"),
+        "informant": ("InformantSynthetic", "43 Informant Street", "tel:555-0133"),
+    }
+
+    def actor(name, address, phone, person_tag):
+        return f'<addr><streetAddressLine>{address}</streetAddressLine></addr><telecom value="{phone}"/><{person_tag}><name>{name}</name></{person_tag}>'
+
+    xml = f'''<ClinicalDocument xmlns="{CDA_NAMESPACE}"><recordTarget><patientRole><patient>
+      <guardian>{actor(*values["guardian"], "guardianPerson")}</guardian>
+      <birthplace><place><addr><city>BirthCitySynthetic</city><county>BirthCountySynthetic</county></addr></place></birthplace>
+      </patient></patientRole></recordTarget>
+      <participant><associatedEntity>{actor(*values["relative"], "associatedPerson")}</associatedEntity></participant>
+      <informant><relatedEntity>{actor(*values["informant"], "relatedPerson")}</relatedEntity></informant>
+      <component><structuredBody><component><section><text>GuardianSynthetic RelativeSynthetic InformantSynthetic BirthCitySynthetic BirthCountySynthetic</text>
+      <entry><observation><value code="SYNTHETIC_CLINICAL"/></observation></entry>
+      </section></component></structuredBody></component></ClinicalDocument>'''
+    report = {}
+    result = str(cda.redact_cda(xml, date_shift_days=1, coverage_report=report))
+    for person in values.values():
+        for value in person:
+            assert value not in result
+    assert "BirthCitySynthetic" not in result
+    assert "BirthCountySynthetic" not in result
+    assert "SYNTHETIC_CLINICAL" in result
+    assert _parse(result).tag == f"{{{CDA_NAMESPACE}}}ClinicalDocument"
+    assert report == {
+        "unmapped_elements": [],
+        "unmapped_counts": {"person": 0, "address": 0, "telecom": 0},
+    }
+
+
+def test_unmapped_cda_report_has_counts_controlled_paths_and_no_values():
+    import json
+
+    xml = f'<ClinicalDocument xmlns="{CDA_NAMESPACE}"><PrivateTagSynthetic><addr>PrivateAddressSynthetic</addr><telecom value="PrivatePhoneSynthetic"/><person><name>PrivateNameSynthetic</name></person></PrivateTagSynthetic></ClinicalDocument>'
+    report = {}
+    cda.redact_cda(xml, coverage_report=report)
+    rendered = json.dumps(report)
+    assert "Private" not in rendered
+    assert report["unmapped_counts"] == {"person": 1, "address": 1, "telecom": 1}
+    assert all(set(row) == {"path", "count"} for row in report["unmapped_elements"])
+
+
 def _parse(xml: str) -> ET.Element:
     return ET.fromstring(xml.encode())
 

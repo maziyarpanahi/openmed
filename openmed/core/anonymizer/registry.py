@@ -32,6 +32,7 @@ from ..language_pack import (
     get_language_pack,
     register_language_pack,
 )
+from ..locale_formats import date_order_for_locale
 from ..schemas.span import OpenMedSpan, hmac_text_hash
 from .format_preserve import (
     preserve_date_format,
@@ -39,7 +40,7 @@ from .format_preserve import (
     preserve_id_pattern,
     preserve_phone_format,
 )
-from .locales import ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
+from .locales import LANG_TO_LOCALE, ZH_CN_ADDRESS_LOCALE, is_chinese_name_locale
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
@@ -702,56 +703,23 @@ def _gen_gps(faker, original, *, locale):
 # Time
 # ---------------------------------------------------------------------------
 
-# Day-first locales — same set as openmed.core.pii._DAY_FIRST_LANGS but
-# expressed in Faker locale terms.
 _DAY_FIRST_LOCALES = frozenset(
-    {
-        "fr_FR",
-        "de_DE",
-        "it_IT",
-        "es_ES",
-        "nl_NL",
-        "as_IN",
-        "bn_BD",
-        "hi_IN",
-        "ml_IN",
-        "pa_IN",
-        "mr_IN",
-        "ur_IN",
-        "en_IN",
-        "or_IN",
-        "ta_IN",
-        "pt_PT",
-        "pt_BR",
-        "he_IL",
-        "id_ID",
-        "ms_MY",
-        "fil_PH",
-        "sv_SE",
-        "da_DK",
-        "no_NO",
-        "th_TH",
-        "uk_UA",
-        "cs_CZ",
-        "sk_SK",
-        "af_ZA",
-        "en_ZA",
-        "zu_ZA",
-        "xh_ZA",
-        "el_GR",
-        "vi_VN",
-    }
+    locale
+    for locale in {*LANG_TO_LOCALE.values(), "en_IN", "en_GB", "en_ZA"}
+    if date_order_for_locale(locale) == "dmy"
 )
 
 
 def _gen_date(faker, original, *, locale):
-    day_first = locale in _DAY_FIRST_LOCALES
-    return preserve_date_format(original, day_first=day_first, rng=faker.random)
+    return preserve_date_format(
+        original, date_order=date_order_for_locale(locale), rng=faker.random
+    )
 
 
 def _gen_date_of_birth(faker, original, *, locale):
-    day_first = locale in _DAY_FIRST_LOCALES
-    return preserve_date_format(original, day_first=day_first, rng=faker.random)
+    return preserve_date_format(
+        original, date_order=date_order_for_locale(locale), rng=faker.random
+    )
 
 
 def _gen_time(faker, original, *, locale):

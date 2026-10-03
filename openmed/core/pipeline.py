@@ -1176,6 +1176,21 @@ class Pipeline:
         if self.lang == "auto":
             router = self.language_router or LanguageRouter()
             decision = router.route(text)
+            unsupported = [
+                run.script
+                for run in decision.runs
+                if run.reason == "unsupported_script"
+                and any(char.isalpha() for char in text[run.start : run.end])
+            ]
+            if unsupported and router.fallback_pack is None:
+                raise InputError(
+                    "Automatic routing encountered an unsupported script. "
+                    "Configure an explicit LanguageRouter fallback_pack to proceed.",
+                    details={
+                        "reason": "unsupported_script",
+                        "scripts": sorted(set(unsupported)),
+                    },
+                )
             lang = decision.language
             script = decision.dominant_script
             model_name = pii._resolve_effective_pii_model(self.model_name, lang)
@@ -2212,6 +2227,7 @@ def _language_run_metadata(run: Any) -> dict[str, object]:
         "language": run.language,
         "confidence": run.confidence,
         "source": run.source,
+        "reason": run.reason,
     }
 
 
@@ -2233,8 +2249,10 @@ def _deterministic_patterns(
         validator=clinical_ids.validate_luhn,
     )
     if lang == "en":
+        from .pii_i18n import _numeric_date_pattern
+
         if locale is None:
-            return [luhn_mrn, *PII_PATTERNS]
+            return [luhn_mrn, *PII_PATTERNS, _numeric_date_pattern(lang)]
 
         from .pii_i18n import LOCALE_PII_PATTERNS
 
@@ -2255,6 +2273,7 @@ def _deterministic_patterns(
             luhn_mrn,
             *PII_PATTERNS,
             *locale_patterns,
+            _numeric_date_pattern(locale or lang),
         ]
 
     from .pii_i18n import get_patterns_for_language
