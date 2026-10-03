@@ -214,13 +214,17 @@ def test_infer_biomedical_uses_defaults_threshold_and_canonical_labels(
 def test_malformed_gliner_offset_error_does_not_echo_entity_text() -> None:
     import traceback
 
+    marker = "synthetic-private-5550199"
+    entity = {"text": marker, "label": "Drug", "score": 0.9}
     with pytest.raises(KeyError) as caught:
-        infer_module._convert_gliner_entity(
-            {"text": "synthetic-private-5550199", "label": "Drug", "score": 0.9}
-        )
-    assert "synthetic-private-5550199" not in "".join(
-        traceback.format_exception(caught.value)
+        infer_module._convert_gliner_entity(entity)
+    # Keep literals out of the raising call's source excerpt on Python 3.13+.
+    # Assert the message AND the full exception chain; neither may leak values.
+    rendered = "".join(
+        traceback.format_exception_only(type(caught.value), caught.value)
     )
+    assert marker not in rendered
+    assert marker not in "".join(traceback.format_exception(caught.value))
 
 
 @pytest.mark.parametrize("offset", [True, 1.5, "private-offset", -1])
