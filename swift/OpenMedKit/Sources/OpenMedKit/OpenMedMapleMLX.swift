@@ -810,6 +810,7 @@
         /// Releases model ownership. Call before switching to another large
         /// on-device model.
         public func unload() {
+            guard container != nil else { return }
             container = nil
             OpenMed.clearRuntimeMemoryCache()
         }
