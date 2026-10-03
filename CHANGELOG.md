@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve tokenizer-provided subword offsets from any standard `Mapping`
+  output when projecting token labels, keeping the absent-offset fallback (#3561).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
