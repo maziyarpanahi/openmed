@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate calibration targets as booleans or numeric zero/one, including
+  aliases, instead of treating non-empty strings as positive labels (#3568).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
