@@ -275,7 +275,9 @@ jobs:
     - name: Test with pytest
       timeout-minutes: 45
       run: >-
-        uv run --frozen pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+        uv run --frozen python -c
+        "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
+        --cov=openmed --cov-report=xml --cov-report=term-missing
         --tb=line --show-capture=no --color=no --code-highlight=no -ra
         --junitxml=pytest-results.xml
 

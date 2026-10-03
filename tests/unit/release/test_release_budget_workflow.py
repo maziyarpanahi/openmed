@@ -1,7 +1,9 @@
 """CI build and release-budget wiring tests."""
 
 import shlex
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -14,6 +16,13 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[3]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 MAKEFILE = ROOT / "Makefile"
+PYTEST_DIAGNOSTIC_WRAPPER = (
+    "import faulthandler, pytest; "
+    "diagnostics = type('CiSummaryDiagnostics', (), "
+    "{'pytest_sessionfinish': lambda self, session, exitstatus: "
+    "faulthandler.dump_traceback_later(120, repeat=True)})(); "
+    "raise SystemExit(pytest.main(plugins=[diagnostics]))"
+)
 
 
 def _load_ci() -> dict[str, object]:
@@ -135,7 +144,9 @@ def _assert_full_suite_diagnostics(lane):
         "uv",
         "run",
         "--frozen",
-        "pytest",
+        "python",
+        "-c",
+        PYTEST_DIAGNOSTIC_WRAPPER,
         "--cov=openmed",
         "--cov-report=xml",
         "--cov-report=term-missing",
@@ -170,6 +181,41 @@ def test_full_suite_diagnostics_preserve_discovery_and_failure_semantics():
     options = project["tool"]["pytest"]["ini_options"]
     assert options["testpaths"] == ["tests"]
     assert not options.get("addopts")
+
+
+@pytest.mark.parametrize("exit_code", [0, 1, 2, 3, 4, 5])
+def test_ci_pytest_diagnostic_wrapper_preserves_arguments_and_exit_status(
+    monkeypatch, exit_code
+):
+    steps = _load_ci()["jobs"]["test"]["steps"]
+    step = next(step for step in steps if step.get("name") == "Test with pytest")
+    argv = shlex.split(step["run"])
+    wrapper = argv[argv.index("-c") + 1]
+    pytest_args = argv[argv.index("-c") + 2 :]
+    observed = []
+
+    def dump_traceback_later(timeout, *, repeat):
+        observed.append(("diagnostics", timeout, repeat))
+
+    def main(*, plugins):
+        observed.append(("pytest", sys.argv[1:]))
+        assert len(plugins) == 1
+        # Pytest cancels ordinary watchdogs on test errors. Arm this one at
+        # session finish so it survives into error-summary rendering.
+        plugins[0].pytest_sessionfinish(session=None, exitstatus=exit_code)
+        return exit_code
+
+    monkeypatch.setitem(
+        sys.modules,
+        "faulthandler",
+        SimpleNamespace(dump_traceback_later=dump_traceback_later),
+    )
+    monkeypatch.setitem(sys.modules, "pytest", SimpleNamespace(main=main))
+    monkeypatch.setattr(sys, "argv", ["-c", *pytest_args])
+    with pytest.raises(SystemExit) as result:
+        exec(compile(wrapper, "<ci-pytest-diagnostics>", "exec"), {})
+    assert result.value.code == exit_code
+    assert observed == [("pytest", pytest_args), ("diagnostics", 120, True)]
 
 
 @pytest.mark.parametrize(
