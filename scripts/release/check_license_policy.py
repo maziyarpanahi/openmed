@@ -153,6 +153,7 @@ REVIEWED_LICENSES = {
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "pyspark": "Apache-2.0",
+    "tomli": "MIT",
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
