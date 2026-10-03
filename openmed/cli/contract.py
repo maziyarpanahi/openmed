@@ -58,6 +58,7 @@ class CliContractFixture:
     data: dict[str, Any] | None = None
     error_code: str | None = None
     error_message: str | None = None
+    outcome: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name or self.name != self.name.strip():
@@ -74,8 +75,22 @@ class CliContractFixture:
 
         if self.expected_exit_code == EXIT_OK and not has_data:
             raise ValueError("successful fixtures must provide data")
-        if self.expected_exit_code != EXIT_OK and not has_error:
+        if self.outcome not in {None, "completed", "refused", "check_failed", "failed"}:
+            raise ValueError("fixture outcome is invalid")
+        if (
+            self.expected_exit_code != EXIT_OK
+            and not has_error
+            and self.outcome not in {"refused", "check_failed"}
+        ):
             raise ValueError("failed fixtures must provide an error")
+        if self.outcome in {"refused", "check_failed"} and (
+            not has_data or self.expected_exit_code != EXIT_ERROR
+        ):
+            raise ValueError("negative outcomes require data and exit 1")
+        if self.outcome == "completed" and self.expected_exit_code != EXIT_OK:
+            raise ValueError("completed outcomes require exit 0")
+        if self.outcome == "failed" and not has_error:
+            raise ValueError("failed outcomes require an error")
 
         if self.data is not None:
             object.__setattr__(self, "data", _copy_json_object(self.data))
@@ -92,19 +107,23 @@ class CliContractFixture:
         """Return the exact JSON envelope expected for this fixture."""
 
         if self.data is not None:
-            return {
+            payload = {
                 "ok": True,
                 "command": self.command,
                 "data": _copy_json_object(self.data),
             }
-        return {
-            "ok": False,
-            "command": self.command,
-            "error": {
-                "code": self.error_code,
-                "message": self.error_message,
-            },
-        }
+        else:
+            payload = {
+                "ok": False,
+                "command": self.command,
+                "error": {
+                    "code": self.error_code,
+                    "message": self.error_message,
+                },
+            }
+        if self.outcome is not None:
+            payload["outcome"] = self.outcome
+        return payload
 
 
 @dataclass(frozen=True)
@@ -129,7 +148,12 @@ def render_contract_fixture(fixture: CliContractFixture) -> CliContractResult:
     args = argparse.Namespace(json_output=True, command_path=fixture.command)
     stream = StringIO()
     if fixture.data is not None:
-        exit_code = emit(args, _copy_json_object(fixture.data), stream=stream)
+        exit_code = emit(
+            args,
+            _copy_json_object(fixture.data),
+            stream=stream,
+            outcome=fixture.outcome,
+        )
     else:
         error = CliError(
             fixture.error_message or "Contract fixture failed.",
@@ -201,6 +225,52 @@ CONTRACT_FIXTURES = (
     VALIDATION_FAILURE_FIXTURE,
     OFFLINE_FAILURE_FIXTURE,
     PRIVACY_POLICY_FAILURE_FIXTURE,
+    CliContractFixture(
+        name="brief_needs_review",
+        command="brief",
+        expected_exit_code=EXIT_OK,
+        outcome="completed",
+        data={
+            "status": "needs_review",
+            "refusal_reason": None,
+            "summary_characters": 0,
+            "digest": "sha256:" + "0" * 64,
+        },
+    ),
+    CliContractFixture(
+        name="brief_refused",
+        command="brief",
+        expected_exit_code=EXIT_ERROR,
+        outcome="refused",
+        data={
+            "status": "refused",
+            "refusal_reason": "review_required",
+            "summary_characters": 0,
+            "digest": "sha256:" + "0" * 64,
+        },
+    ),
+    CliContractFixture(
+        name="brief_failed",
+        command="brief",
+        expected_exit_code=EXIT_ERROR,
+        outcome="failed",
+        error_code="brief_failed",
+        error_message="Brief request or output failed.",
+    ),
+    CliContractFixture(
+        name="doctor_check_failed",
+        command="doctor",
+        expected_exit_code=EXIT_ERROR,
+        outcome="check_failed",
+        data={"checks": [], "has_failure": True},
+    ),
+    CliContractFixture(
+        name="fhir_check_failed",
+        command="fhir validate",
+        expected_exit_code=EXIT_ERROR,
+        outcome="check_failed",
+        data={"valid": False},
+    ),
 )
 
 
