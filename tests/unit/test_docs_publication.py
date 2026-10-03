@@ -207,6 +207,35 @@ def test_every_link_only_page_is_reachable_from_the_documentation_nav() -> None:
     assert set(classification["link_only"]) <= reachable
 
 
+def _nav_section(node: object, title: str) -> object:
+    if isinstance(node, list):
+        for child in node:
+            if (found := _nav_section(child, title)) is not None:
+                return found
+    if isinstance(node, dict):
+        for key, child in node.items():
+            if key == title:
+                return child
+            if (found := _nav_section(child, title)) is not None:
+                return found
+    return None
+
+
+def test_private_learning_pages_are_grouped_under_one_section() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    section = _nav_section(config["nav"], "Private Learning")
+    assert section is not None
+    grouped = _nav_paths(section)
+    expected = {
+        relative
+        for relative in _public_default_markdown()
+        if relative.startswith(("private-learning/", "training/federated-"))
+    }
+
+    assert grouped[0] == "private-learning/index.md"
+    assert set(grouped) == expected
+
+
 def test_translation_groups_are_complete_without_false_fallback_routes() -> None:
     config = _load_yaml(MKDOCS, base=True)
     publication = _load_yaml(PUBLICATION)
