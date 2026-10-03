@@ -28,6 +28,34 @@ from openmed.agent.permissions.grants import (
 
 KEY = b"local-test-key-material-32-bytes!!"
 OTHER_KEY = b"different-local-key-material-32b!"
+NOW = 1_700_000_000
+
+
+def _deeply_nested_json_value(value: Any, depth: int = 70) -> Any:
+    nested = value
+    for _ in range(depth):
+        nested = [nested]
+    return nested
+
+
+def test_manifest_json_depth_failure_is_typed() -> None:
+    payload = json.dumps(
+        {
+            "schema_version": CAPABILITY_GRANT_SCHEMA_VERSION,
+            "constraints": _deeply_nested_json_value("synthetic-private-grant"),
+            "expires_at": NOW + 60,
+            "key_id": "default",
+            "signature": "hmac-sha256:" + "a" * 64,
+        }
+    )
+
+    with pytest.raises(CapabilityGrantValidationError) as caught:
+        CapabilityGrantManifest.from_json(payload)
+
+    assert caught.value.code == "json_too_deep"
+    assert caught.value.field_name == "manifest"
+
+
 EXPIRES_AT = 2_000_000_000
 
 

@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Final, cast
 
+from openmed.agent.artifact_reference import _json_exceeds_max_depth
 from openmed.agent.correlation import ActionId, CorrelationIdError, RunId
 from openmed.agent.identifiers import GovernanceIdError, ToolId, WorkflowId
 
@@ -1246,6 +1247,8 @@ def _parse_json(serialized: Any, field_name: str) -> Mapping[str, Any]:
         raise
     except BaseException:
         raise RecoveryError("invalid_json", field_name) from None
+    if _json_exceeds_max_depth(decoded):
+        raise RecoveryError("json_too_deep", field_name)
     if not isinstance(decoded, Mapping):
         raise RecoveryError("not_a_mapping", field_name)
     return decoded

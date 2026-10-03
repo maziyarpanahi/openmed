@@ -37,6 +37,27 @@ EXPIRES_AT = 2_000_000_000
 NOW = EXPIRES_AT - 100
 
 
+def _deeply_nested_json_value(value: Any, depth: int = 70) -> Any:
+    nested = value
+    for _ in range(depth):
+        nested = [nested]
+    return nested
+
+
+def test_token_json_depth_failure_is_typed_and_value_free() -> None:
+    marker = "SYNTHETIC_PRIVATE_APPROVAL_SENTINEL"
+    token_payload = _token().to_dict()
+    token_payload["action_digest"] = _deeply_nested_json_value(marker)
+    payload = json.dumps(token_payload)
+
+    with pytest.raises(ApprovalTokenValidationError) as caught:
+        ApprovalToken.from_json(payload)
+
+    assert caught.value.code == "json_too_deep"
+    assert caught.value.field_name == "token"
+    assert marker not in "".join(traceback.format_exception(caught.value))
+
+
 def _token(**overrides: Any) -> ApprovalToken:
     values = {
         "action_digest": ACTION_DIGEST,

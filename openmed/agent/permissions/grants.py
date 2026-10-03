@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar, cast
 
+from openmed.agent.artifact_reference import _json_exceeds_max_depth
 from openmed.agent.identifiers import GovernanceIdError, PolicyId, ToolId
 
 CAPABILITY_GRANT_SCHEMA_VERSION = "openmed.agent.capability_grant.v1"
@@ -329,6 +330,8 @@ class CapabilityGrantManifest:
             payload = json.loads(serialized, object_pairs_hook=_strict_json_object)
         except (TypeError, ValueError, UnicodeError, RecursionError):
             raise CapabilityGrantValidationError("invalid_json", "manifest") from None
+        if _json_exceeds_max_depth(payload):
+            raise CapabilityGrantValidationError("json_too_deep", "manifest")
         return cls.from_dict(payload)
 
     def __repr__(self) -> str:
