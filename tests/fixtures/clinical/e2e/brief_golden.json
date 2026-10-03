@@ -24,7 +24,7 @@
         "source_start": 133
       }
     ],
-    "digest": "sha256:7ea2dd64da4bf8d1e96cda07e408cf6b296f204d69698e5f87aa1e600d25958f",
+    "digest": "sha256:192d8d3371641858c373e70aff44ed5ec9736a6007aca14d648a4869ca52570f",
     "envelope": {
       "disclaimer": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.",
       "human_review_mode": true,
@@ -147,6 +147,77 @@
         "leaked_token_count": 0,
         "leaked_token_hashes": [],
         "passed": true
+      },
+      "length_budget": {
+        "budget": {
+          "allocated_tokens": 115,
+          "allocations": [
+            {
+              "allocated_tokens": 75,
+              "deferred_tokens": 0,
+              "evidence_class": "active_problems",
+              "requested_tokens": 75,
+              "status": "included"
+            },
+            {
+              "allocated_tokens": 0,
+              "deferred_tokens": 0,
+              "evidence_class": "follow_up",
+              "requested_tokens": 0,
+              "status": "empty"
+            },
+            {
+              "allocated_tokens": 40,
+              "deferred_tokens": 0,
+              "evidence_class": "key_findings",
+              "requested_tokens": 40,
+              "status": "included"
+            },
+            {
+              "allocated_tokens": 0,
+              "deferred_tokens": 0,
+              "evidence_class": "medications",
+              "requested_tokens": 0,
+              "status": "empty"
+            },
+            {
+              "allocated_tokens": 0,
+              "deferred_tokens": 0,
+              "evidence_class": "pending_items",
+              "requested_tokens": 0,
+              "status": "empty"
+            },
+            {
+              "allocated_tokens": 0,
+              "deferred_tokens": 0,
+              "evidence_class": "procedures",
+              "requested_tokens": 0,
+              "status": "empty"
+            },
+            {
+              "allocated_tokens": 0,
+              "deferred_tokens": 0,
+              "evidence_class": "safety",
+              "requested_tokens": 0,
+              "status": "empty"
+            }
+          ],
+          "autonomous_decision": false,
+          "disclaimer": "Clinical summary length budgets are deterministic assistive review artifacts, not clinical decisions or autonomous summaries. Qualified clinical review is required.",
+          "max_tokens": 2048,
+          "policy_id": "clinical_summary_v1",
+          "requested_tokens": 115,
+          "requires_clinician_review": true,
+          "schema_version": 1,
+          "truncation": {
+            "deferred_evidence_classes": [],
+            "deferred_tokens": 0,
+            "occurred": false
+          },
+          "unused_tokens": 1933
+        },
+        "estimator_id": "utf8-byte-upper-bound-v1",
+        "mapping_id": "brief-profile-evidence-classes-v1"
       },
       "temporal_order": {
         "advisory": "Temporal-order validation is a deterministic review aid. Invalid or ambiguous ordering requires review and does not rewrite the clinical claim.",

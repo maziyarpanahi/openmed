@@ -19,8 +19,9 @@ history or assumes that de-identification is evidence approval.
 `BriefContext` contains the existing `EvidencePacket`, its content digest, one
 `BriefFact` per reference, a calibrated local three-class NLI callback with its
 `NLIThresholds`, and a local privacy detector. The callback must identify the
-same calibration as its thresholds. A trained default NLI artifact is a separate
-release prerequisite; this API does not invent one or fall back to a heuristic.
+same calibration as its thresholds. Training a default NLI artifact is optional
+research, not an SDK release prerequisite; applications supply their calibrated
+local verifier. This API does not invent one or fall back to a heuristic.
 
 Before reviewing references, calculate `brief_policy_fingerprint(text, facts,
 profile)`. This binds the review history to the exact de-identified text,
@@ -55,6 +56,35 @@ plugins and must not invoke external processes/services themselves.
 Exceptions from backends are not copied into reports or chained into public
 errors. The `stages` trace records entered stages; on refusal the last stage
 identifies the failure boundary, not a claim that the stage passed.
+
+The complete reason vocabulary is `invalid_input`, `review_required`,
+`empty_evidence`, `invalid_evidence`, `unsupported_claim`, `nli_unavailable`,
+`nli_rejected`, `privacy`, `length_budget_exceeded`, `model_unavailable`, and
+`stage_failed`. Missing local runtime packages, unknown local aliases and
+uncached artifacts use `model_unavailable`; unexpected execution failures remain
+`stage_failed`. Remote providers remain prohibited. CLI, REST, MCP and clients
+preserve these codes without exception messages, package details or private paths.
+OpenMedKit reports `model_unavailable` for an unloaded or unavailable model.
+
+### Evidence length budgets
+
+The immutable `brief-profile-evidence-classes-v1` mapping assigns reviewed
+profile fields to the existing `clinical_summary_v1` policy classes. Admission,
+diagnoses, active problems and assessment share `active_problems`; background,
+current situation, discharge condition, course and key findings share
+`key_findings`. Discharge medications, procedures, pending items, follow-up/plan,
+and safety concerns map to their matching classes. Unknown fields are refused.
+
+`utf8-byte-upper-bound-v1` estimates demand as UTF-8 bytes plus one separator
+between spans in each class. It is deliberately conservative, especially for
+non-ASCII text; it is not a measured backend token count. Class caps are 192 for
+active problems, 160 for findings, 128 each for medications and safety, and 96
+each for procedures, pending items and follow-up, under the global 2,048 budget.
+Deferred classes yield `length_budget_exceeded` at the length-budget stage before
+generation. No policy cap is silently relaxed. The mapping, estimator identity
+and counts-only budget are recorded in `metrics.length_budget`, bound into the
+brief audit digest as budget provenance; source spans and tokenizer output are
+never recorded there.
 
 ## Output handling
 
