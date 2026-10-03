@@ -8,6 +8,16 @@ dynamic = ["version"]
 description = "Local-first SDK for clinical extraction and de-identification workflows on hardware you control."
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+]
 license = { text = "Apache-2.0" }
 keywords = [
   "biomedical",
@@ -30,6 +40,7 @@ dependencies = [
   "faker>=22.0",
   "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 authors = [
@@ -426,7 +437,11 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "tornado>=6.5.9",
+  "urllib3>=2.8.0",
+  "virtualenv>=21.7.13",
   "betterproto==2.0.0b6; python_version >= '3.11'",
+  "pyjwt>=2.14.0",
 ]
 override-dependencies = [
   # Beam 2.75 caps these below their patched releases even though its
