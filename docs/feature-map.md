@@ -3,12 +3,29 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
+[OpenMed v3.0.0 migration](migration/2.5-to-3.0.md) and the
+[changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md), the historical
 [OpenMed v2.5.0 Release Notes](./release/v2.5.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
 [OpenMed v1.8.0 Release Notes](./release/v1.8.0.md), and the historical
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
 For the model families available by clinical specialty, use the
 [clinical-domain model guide](clinical-domains.md).
+
+## Longitudinal Patient Journey
+
+Journey capabilities are primarily implemented in Python. Shared client and
+OpenMedKit contracts do not imply native execution of every Python feature.
+Optional training is not a feature or SDK-release prerequisite; independently
+qualified local models and explicit caller-supplied providers remain subject
+to runtime calibration, privacy and evidence requirements.
+
+| Area | What it covers | Where to look |
+| --- | --- | --- |
+| Versioned evidence and history | Immutable source artifacts, facts, conflicts, corrections and point-in-time snapshots. | [Journey contracts](clinical/journey-contracts.md), [Longitudinal Journey](clinical/longitudinal-journey.md) |
+| Governed local storage | Content-addressed files, transactional SQLite history, optional PostgreSQL metadata and replay-safe ingestion. | [Local Journey store](structured/local-journey-store.md), [PostgreSQL/object store](structured/postgres-object-journey-store.md) |
+| Common resource surfaces | Governed Python, REST, GraphQL and read-only SQL resources with pagination and typed errors. | [Journey resource API](api/journey-resources.md) |
+| Contract and release evidence | Synthetic end-to-end fixtures, replay, privacy, provenance and platform-sensitive release gates. | [Golden Journey](interop/v3-golden-journey.md), [Journey release gate](release/v3.0-journey-release-gate.md) |
 
 ## Privacy And De-identification
 
@@ -99,7 +116,7 @@ model-quality or clinical readiness claim.
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 2.5.0 Release Notes](./release/v2.5.0.md) - review the current v2 feature release, coverage, and migration notes.
+2. [OpenMed 3.0.0 migration](migration/2.5-to-3.0.md) - review intentional API changes and validation requirements.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.

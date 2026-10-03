@@ -1032,6 +1032,7 @@ def _validate_fonts_and_consumers(errors: list[str]) -> None:
 
 def _validate_claims(errors: list[str]) -> None:
     sys.path.insert(0, str(REPO_ROOT))
+    from openmed.__about__ import __version__  # noqa: PLC0415
     from openmed.core.language_pack_catalog import (  # noqa: PLC0415
         DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
         DEFAULT_PII_MODELS,
@@ -1066,7 +1067,7 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.5.0",
+        "package_version": __version__,
         "repository_model_snapshot": 2266,
         "hugging_face_openmed_owned_snapshot": 2266,
         "supported_pii_languages": len(DEFAULT_PII_MODELS),
