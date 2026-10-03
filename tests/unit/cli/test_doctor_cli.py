@@ -3,10 +3,106 @@ from __future__ import annotations
 import argparse
 import json
 
+import pytest
+
 from openmed.cli import main_module
 from openmed.cli.main import _handle_doctor
 from openmed.core import doctor as doctor_module
 from openmed.core.doctor import run_diagnostics
+
+
+def _fake_brief_cache(root, model, revision, *, main=False):
+    repository = root / ("models--" + model.replace("/", "--"))
+    snapshot = repository / "snapshots" / revision
+    snapshot.mkdir(parents=True)
+    for filename in ("config.json", "tokenizer.json", "model.safetensors"):
+        (snapshot / filename).write_text("synthetic", encoding="utf-8")
+    if main:
+        (repository / "refs").mkdir()
+        (repository / "refs/main").write_text(revision, encoding="ascii")
+    return snapshot
+
+
+@pytest.mark.parametrize("missing", [None, "runtime", "revision", "pii"])
+def test_brief_readiness_uses_only_local_cache_metadata(monkeypatch, tmp_path, missing):
+    import socket
+
+    from openmed.core import model_registry
+
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    monkeypatch.setattr(doctor_module.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(doctor_module.platform, "machine", lambda: "arm64")
+    monkeypatch.setattr(
+        doctor_module.importlib.util,
+        "find_spec",
+        lambda _: None if missing == "runtime" else object(),
+    )
+    monkeypatch.setattr(model_registry, "get_default_nli_model", lambda: None)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Readiness must not import runtimes, load models or use network")
+
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(socket.socket, "connect", forbidden)
+    monkeypatch.setattr(doctor_module.importlib, "import_module", forbidden)
+    model, revision = model_registry.resolve_summarizer_model()
+    if missing != "revision":
+        _fake_brief_cache(tmp_path, model, revision)
+    if missing != "pii":
+        _fake_brief_cache(
+            tmp_path, model_registry.get_default_pii_model("en"), "a" * 40, main=True
+        )
+    before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
+    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
+    assert checks["brief_extractive"]["status"] == "PASS"
+    assert checks["brief_mlx_platform"]["status"] == "PASS"
+    for case, key in (
+        ("runtime", "brief_mlx_runtime"),
+        ("revision", "brief_summarizer_cache"),
+        ("pii", "brief_raw_note_pii_cache"),
+    ):
+        assert checks[key]["status"] == ("WARN" if missing == case else "PASS")
+    assert checks["brief_nli_provider"]["code"] == "caller_nli_provider_required"
+    serialized = json.dumps(checks)
+    assert str(tmp_path) not in serialized
+    assert model not in serialized
+    assert "model.safetensors" not in serialized
+    assert before == sorted(
+        str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+    )
+
+
+def test_brief_cache_requires_complete_safe_shards(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    index = snapshot / "model.safetensors.index.json"
+    for filename in (
+        "../outside.safetensors",
+        "missing.safetensors",
+        "/abs.safetensors",
+    ):
+        index.write_text(json.dumps({"weight_map": {"weight": filename}}))
+        assert not doctor_module._brief_cached_artifact(model, revision)
+    (snapshot / "shard-1.safetensors").write_text("synthetic")
+    index.write_text(json.dumps({"weight_map": {"weight": "shard-1.safetensors"}}))
+    assert doctor_module._brief_cached_artifact(model, revision)
+
+
+def test_readiness_extractives_do_not_require_apple_runtime(monkeypatch):
+    from openmed.core import model_registry
+
+    monkeypatch.setattr(doctor_module.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(doctor_module, "_brief_module_present", lambda _: False)
+    monkeypatch.setattr(doctor_module, "_brief_cached_artifact", lambda *_: False)
+    monkeypatch.setattr(
+        model_registry, "get_default_nli_model", lambda: "registered-local-nli"
+    )
+    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
+    assert checks["brief_extractive"]["status"] == "PASS"
+    assert checks["brief_mlx_platform"]["status"] == "WARN"
+    assert checks["brief_nli_provider"]["status"] == "PASS"
 
 
 def test_run_diagnostics_returns_list():
@@ -35,6 +131,9 @@ def test_required_checks_present():
     assert "openmed_offline" in names
     assert "manifest_exists" in names
     assert "manifest_rows" in names
+    assert "brief_extractive" in names
+    assert "brief_summarizer_cache" in names
+    assert "brief_nli_provider" in names
 
 
 def test_hf_token_not_exposed(monkeypatch):

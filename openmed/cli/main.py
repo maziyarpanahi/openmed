@@ -5584,8 +5584,12 @@ def _handle_fhir_validate(args: argparse.Namespace) -> int:
         "outcome": outcome,
     }
     human = json.dumps(outcome, indent=2, sort_keys=True)
-    return_code = emit(args, payload, human=human)
-    return 1 if blocking else return_code
+    return emit(
+        args,
+        payload,
+        human=human,
+        outcome="check_failed" if blocking else "completed",
+    )
 
 
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
@@ -7823,12 +7827,12 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         if item.get("hint"):
             human_lines.append(f"      Hint: {item['hint']}")
 
-    emit(
+    return emit(
         args,
         {"checks": results, "has_failure": has_fail},
         human="\n".join(human_lines),
+        outcome="check_failed" if has_fail else "completed",
     )
-    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
