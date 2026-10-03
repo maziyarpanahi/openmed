@@ -333,6 +333,18 @@ def test_validator_help_command_is_successful_and_local() -> None:
     assert "without network access" in result.stdout
 
 
+def test_missing_repository_root_returns_a_fixed_error(tmp_path: Path) -> None:
+    validator = _load_validator()
+    report = validator.validate_repository(
+        tmp_path / "synthetic-private-missing-root", run_helper_help=False
+    )
+    output = validator.format_report(report)
+    assert not report.ok
+    assert "repository root cannot be resolved" in output
+    assert "synthetic-private-missing-root" not in output
+    assert str(tmp_path) not in output
+
+
 def test_helper_environment_drops_ambient_credentials(
     tmp_path: Path,
     monkeypatch,
