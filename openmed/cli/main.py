@@ -64,7 +64,11 @@ from ._output import (
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
-from .benchmark import add_cost_command, add_generalization_command
+from .benchmark import (
+    add_cost_command,
+    add_generalization_command,
+    add_metadata_commands,
+)
 from .calibrate import add_calibrate_command
 from .contract import (
     OFFLINE_ERROR_CODE,
@@ -589,6 +593,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
+    from .brief import add_brief_command
+
+    add_brief_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -3119,6 +3126,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
     add_cost_command(benchmark_sub)
     add_generalization_command(benchmark_sub)
+    add_metadata_commands(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
@@ -6186,16 +6194,24 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     from openmed.eval.datasets import CLINICAL_PRIVACY_MODEL_ID
     from openmed.eval.harness import run_benchmark
     from openmed.eval.suites import (
+        OPENMED_SYNTH,
+        OPENMED_SYNTH_REFERENCE_MODEL,
         SHIELD,
         load_suite_fixtures,
+        openmed_synth_reference_runner,
         run_clinical_phi_shield_benchmark,
         suite_metadata,
     )
+    from openmed.eval.suites.openmed_synth import openmed_synth_execution_metadata
+
+    suite = str(args.suite or SHIELD)
 
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
         raise CliError(str(exc), code="invalid_argument", exit_code=EXIT_USAGE)
+    if not models and suite == OPENMED_SYNTH:
+        models = [OPENMED_SYNTH_REFERENCE_MODEL]
     if not models:
         raise CliError(
             "At least one model identifier is required.",
@@ -6203,7 +6219,6 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
             exit_code=EXIT_USAGE,
         )
 
-    suite = str(args.suite or SHIELD)
     if args.checkpoint_manifest_ref and args.checkpoint_manifest is None:
         raise CliError(
             "--checkpoint-manifest-ref requires --checkpoint-manifest.",
@@ -6279,7 +6294,16 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
                 suite=suite,
                 model_name=model,
                 device=args.device,
-                metadata=metadata,
+                runner=(
+                    openmed_synth_reference_runner
+                    if suite == OPENMED_SYNTH and model == OPENMED_SYNTH_REFERENCE_MODEL
+                    else None
+                ),
+                metadata=(
+                    {**metadata, **openmed_synth_execution_metadata(model)}
+                    if suite == OPENMED_SYNTH
+                    else metadata
+                ),
             )
             for model in models
         ]

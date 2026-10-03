@@ -12,13 +12,19 @@ For the model families available by clinical specialty, use the
 
 ## Privacy And De-identification
 
+The [guarded clinical brief](clinical/clinical-brief.md) composes local
+de-identification, reviewed evidence, generation, NLI, citations and review
+metadata. `examples/v30_clinical_brief.py` demonstrates the full hand-off on a
+fixed synthetic note with clearly labelled test-only providers; it is not a
+model-quality or clinical readiness claim.
+
 | Area | What it covers | Where to look |
 | --- | --- | --- |
 | Policy-aware de-identification | `deidentify`, policy profiles, calibrated thresholds, arbitration, cascade routing, safety sweeps, custom recognizers, and clinical term protection. | `openmed/core/pii.py`, `openmed/core/pipeline.py`, `openmed/core/policy.py`, `openmed/core/clinical_protect.py`, [PII Anonymization](./anonymization.md) |
 | Canonical span contracts | Versioned `OpenMedSpan`, schema fingerprints, redaction action schemas, provenance, and compatibility gates. | `openmed/core/schemas/`, [De-identification API](./api/deidentification.md), `examples/v16_policy_audit_release_gates.py` |
 | Audit and review evidence | Signed audit reports, reproducibility hashes, review bundles, FHIR `Provenance`/`AuditEvent`, audit diffs, and PHI-safe previews. | `openmed/core/audit.py`, `openmed/core/redaction_preview.py`, `openmed/risk/audit_diff.py`, `openmed/clinical/exporters/fhir/provenance.py`, `examples/v16_policy_audit_release_gates.py` |
 | Runtime de-identification features | `DeidentificationResult.to_dataframe`, surrogate vaults, patient-keyed date shifting, format-preserving redaction, minimum-necessary action selection, streaming redaction, explain traces, section stamping, and risk budgets. | `openmed/core/pii.py`, `openmed/core/surrogate_vault.py`, `openmed/core/date_shift.py`, `openmed/core/anonymizer/format_preserve.py`, `openmed/core/redaction_strength.py`, `openmed/core/streaming.py`, `openmed/core/explain.py`, `openmed/risk/budget.py` |
-| Multilingual PII | 38 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter adds two optional routes and can also serve Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
+| Multilingual PII | 42 supported PII language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, and zu; Russian uses a documented default-model placeholder. Bengali, Chinese, and Tamil have dedicated registry entries. A user-configured Indic adapter can serve Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and Telugu. Locale validators, script detection, date/number normalization, deterministic locale PHI generation, and ID-only national-ID providers cover the wider routing surface. | `openmed/core/pii_i18n.py`, `openmed/core/script_detect.py`, `openmed/core/locale_formats.py`, `openmed/core/anonymizer/locales.py`, `openmed/training/synthetic/locale_phi.py`, `examples/pii_multilingual_new_languages.py` |
 
 ## Multimodal And Structured Inputs
 

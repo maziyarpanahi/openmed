@@ -273,6 +273,17 @@ from openmed.eval.suites.omop_quality import (
     FrozenOmopQualityFixture,
     load_frozen_omop_quality_fixture,
 )
+from openmed.eval.suites.openmed_synth import (
+    OPENMED_SYNTH,
+    OPENMED_SYNTH_DATASET_CARD,
+    OPENMED_SYNTH_DEFAULT_CORPUS_SIZE,
+    OPENMED_SYNTH_DEFAULT_SEED,
+    OPENMED_SYNTH_REFERENCE_MODEL,
+    load_openmed_synth_fixtures,
+    openmed_synth_reference_runner,
+    openmed_synth_suite_metadata,
+    run_openmed_synth_benchmark,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -348,6 +359,7 @@ PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
+    OPENMED_SYNTH,
     I2B2,
     N2C2,
     SHIELD,
@@ -397,6 +409,14 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         )
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == OPENMED_SYNTH:
+        return load_openmed_synth_fixtures(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == GROUNDING_CALIBRATION:
         from openmed.eval.suites.grounding_calibration import load_grounding_gold
 
@@ -470,7 +490,36 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
+_TASK_FALLBACKS = {
+    GOLDEN: "clinical_deidentification",
+    OPENMED_SYNTH: "clinical_deidentification",
+    I2B2: "clinical_deidentification",
+    N2C2: "clinical_deidentification",
+    SHIELD: "clinical_deidentification",
+    POLICY_COMPLIANCE: "privacy_policy_compliance",
+    MULTIMODAL_DICOM: "dicom_deidentification",
+    CODE_MIXED_ROUTING: "code_mixed_privacy_routing",
+    INDIA_HEALTH_ID_LEAKAGE: "health_identifier_leakage",
+    INDIAN_MULTI_ID: "multi_identifier_detection",
+    INDIC_NAME_CONSISTENCY: "name_surrogate_consistency",
+    INDIA_CLINICAL_PHI_LEAKAGE: "clinical_deidentification",
+    INDIA_SURROGATE_CONSISTENCY: "identifier_surrogate_consistency",
+    TEMPORAL_CONSISTENCY: "temporal_assertion_consistency",
+    GROUNDING_CALIBRATION: "grounding_calibration",
+    CLINICAL_DOMAIN_COVERAGE: "clinical_domain_coverage",
+}
+
+
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
+    """Return registry metadata with an explicit, non-placeholder task."""
+    suite = validate_suite_name(name)
+    metadata = _suite_metadata(suite, **kwargs)
+    if not metadata.get("task"):
+        metadata["task"] = _TASK_FALLBACKS[suite]
+    return metadata
+
+
+def _suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
     if suite == CLINICAL_DOMAIN_COVERAGE:
@@ -500,6 +549,14 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         )
 
         return grounding_calibration_metadata(**kwargs)
+    if suite == OPENMED_SYNTH:
+        return openmed_synth_suite_metadata(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
@@ -650,6 +707,11 @@ __all__ = [
     "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
+    "OPENMED_SYNTH",
+    "OPENMED_SYNTH_DATASET_CARD",
+    "OPENMED_SYNTH_DEFAULT_CORPUS_SIZE",
+    "OPENMED_SYNTH_DEFAULT_SEED",
+    "OPENMED_SYNTH_REFERENCE_MODEL",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
@@ -724,6 +786,10 @@ __all__ = [
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
+    "load_openmed_synth_fixtures",
+    "openmed_synth_reference_runner",
+    "openmed_synth_suite_metadata",
+    "run_openmed_synth_benchmark",
     "run_domain_coverage",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",
