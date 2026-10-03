@@ -59,6 +59,7 @@ _REQUIRED_REQUIREMENTS: Final = {
     "jieba": "jieba>=0.42.1,<0.43",
     "pysbd": "pysbd>=0.3.4,<0.4",
     "pyyaml": "pyyaml>=6.0",
+    "tomli": "tomli>=2.0; python_version < '3.11'",
 }
 _OPTIONAL_BOUNDARY: Final = {
     "huggingface-hub": ("huggingface-hub>=0.30", "Apache-2.0", True),
@@ -774,6 +775,12 @@ _REQUIRED_DEPENDENCIES: Final = (
         requirement=_REQUIRED_REQUIREMENTS["pyyaml"],
         license="MIT",
         purpose="Reading local policy configuration.",
+    ),
+    DependencySpec(
+        name="tomli",
+        requirement=_REQUIRED_REQUIREMENTS["tomli"],
+        license="MIT",
+        purpose="Reading local TOML metadata on Python 3.10.",
     ),
 )
 
