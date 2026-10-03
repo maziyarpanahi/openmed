@@ -89,6 +89,26 @@ Modeli ya NER ya kliniki hutumia runtime ya ndani baada ya vipengee vinavyohitaj
 
 ---
 
+## Mfano wa muhtasari wa kliniki kwa sekunde 30
+
+Kutoka kwenye nakala ya msimbo, endesha onyesho la mikataba ya kiolesura kwa data
+sintetiki kwa kutumia CPU pekee:
+
+```bash
+python examples/v30_clinical_brief.py
+# Hiari: --model mlx; modeli ya toleo lililowekwa ihifadhiwe mapema kwenye Apple silicon.
+```
+
+Mfano huondoa utambulisho kwenye dokezo lililojumuishwa, hutoa na kuoanisha dhana,
+kisha huonyesha muhtasari wenye marejeo, matokeo ya ukaguzi na pakiti ya mapitio
+isiyo na thamani ghafi. **Watoa huduma wa NER/NLI ni vibadala vya majaribio ya
+data sintetiki, si modeli zilizofunzwa wala uthibitisho wa kliniki.** Haukubali
+madokezo ya nje. MLX inaweza kukataa matokeo yasiyoungwa mkono; haipiti ukaguzi
+wa usalama. Angalia [mwongozo](docs/clinical/clinical-brief.md) na
+[hati ya onyesho](docs/demo/clinical-brief.md) kwa mipaka na usanidi wa ndani.
+
+---
+
 ## Unajenga kwa wakala?
 
 Anza na [mwongozo wa matumizi ya wakala](docs/agent-usage.md), au pakia
@@ -432,17 +452,18 @@ Tazama [usanifu wa Privacy Filter na uelekezaji wa backend](docs/anonymization.m
 
 ---
 
-## PII ya lugha nyingi (njia 38 zinazotumika; 35 zikitumia modeli)
+## PII ya lugha nyingi (njia 42 zinazotumika; 35 zikitumia modeli)
 
-Utoaji na uondoaji utambulisho huunga mkono **misimbo 35 ya lugha za PII**:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`,
-`ja`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
-`th`, `tr`, `uk`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
+Utoaji na uondoaji utambulisho huunga mkono **misimbo 40 ya lugha za PII**:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`,
+`ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`,
+`th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh` na `zu`, pamoja na checkpoint
 katalogi iliyosajiliwa ya modeli za PII. Uelekezaji wa Kirusi kwa sasa hutumia kishikilia nafasi cha modeli
 chaguo-msingi ya lugha nyingi kilichoelezwa kwenye nyaraka. Kibengali, Kichina
 na Kitamil vina maingizo maalumu ya sajili. Familia ya hiari ya Indic NER
-iliyosanidiwa na mtumiaji hukubali njia nne za ziada (`gu`, `kn`, `ml`
-na `pa`) na inaweza pia kuhudumia Kiassam, Kibengali, Kihindi, Kimarathi, Kiodia, Kitamil na Kitelugu.
+iliyosanidiwa na mtumiaji inaweza kuhudumia Kiassam, Kibengali, Kigujarati,
+Kihindi, Kikannada, Kimalayalam, Kimarathi, Kiodia, Kipunjabi, Kitamil na
+Kitelugu.
 Weka `OPENMED_INDIC_NER_MODEL`; OpenMed haijumuishi wala kuchagua uzito huo
 kiotomatiki. OpenMed pia ina uthibitishaji wa vitambulisho vya kitaifa kwa
 maeneo ya ziada yanayotumia kitambulisho pekee, kama vile Poland, Latvia,

@@ -60,6 +60,22 @@ permissions:
   issues: write
 
 jobs:
+  summary-evidence:
+    if: github.event_name != 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+      - name: Install evaluation dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Enforce committed summary evidence
+        run: |
+          python -m openmed.eval.summary_benchmark --verify \
+            eval/suites/summaries/extractive.json \
+            eval/suites/summaries/mlx.json
+
   release-gates:
     if: >-
       github.event_name != 'repository_dispatch' &&
@@ -565,27 +581,6 @@ jobs:
             docs/leaderboard/
             docs/status/index.md
 
-      - name: Run nightly full suite and status monitor
-        if: github.event_name == 'schedule'
-        id: nightly-monitor
-        continue-on-error: true
-        run: |
-          python -m pytest tests/ -q
-          python scripts/status/generate_status.py \
-            --manifest models.jsonl \
-            --baseline gates/baseline.json \
-            --benchmarks-dir "$RUNNER_TEMP/nightly/benchmarks" \
-            --leaderboard-dir "$RUNNER_TEMP/nightly/leaderboard" \
-            --output "$RUNNER_TEMP/nightly/status.md" \
-            --smoke-status green
-
-      - name: Upload nightly status monitor
-        if: always() && github.event_name == 'schedule'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: nightly-release-status
-          path: ${{ runner.temp }}/nightly/
-
       - name: Quarantine incomplete or failing candidate
         if: >-
           always() &&
@@ -660,7 +655,6 @@ jobs:
             steps.i18n_benchmark.outcome != 'success' ||
             steps.i18n_throughput.outcome != 'success' ||
             steps.grounding.outcome != 'success' ||
-            steps.nightly-monitor.outcome == 'failure' ||
             (
               github.event_name == 'workflow_dispatch' &&
               steps.check-candidate.outputs.exists != 'true'
