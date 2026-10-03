@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 from dataclasses import MISSING, fields
+from pathlib import Path
 from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 import httpx
@@ -15,9 +17,13 @@ from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.client import (
     CLIENT_ENDPOINTS,
+    CLIENT_OPENAPI_EXCLUSIONS,
     AnalyzeRequest,
     BriefRequest,
+    CohortResolveRequest,
+    ConceptAncestorRequest,
     FixedOptionDecisionRequest,
+    GroundRequest,
     ModelUnloadRequest,
     OpenMedAPIError,
     OpenMedClient,
@@ -26,6 +32,7 @@ from openmed.service.client import (
     PIIExtractStreamRequest,
     PIILanguage,
     PrivacyGatewayRequest,
+    ProfileRequest,
 )
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
@@ -237,6 +244,9 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     spec = json.loads(open("docs/api/openapi.json", encoding="utf-8").read())
     request_types = {
         "brief": BriefRequest,
+        "ground": GroundRequest,
+        "profile": ProfileRequest,
+        "resolve_cohort": CohortResolveRequest,
         "analyze": AnalyzeRequest,
         "extract_pii": PIIExtractRequest,
         "extract_pii_stream": PIIExtractStreamRequest,
@@ -249,6 +259,9 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
 
     assert set(CLIENT_ENDPOINTS) == {
         "brief",
+        "ground",
+        "profile",
+        "resolve_cohort",
         "analyze",
         "extract_pii",
         "extract_pii_stream",
@@ -287,6 +300,201 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
                 continue
             openapi_values = _schema_enum_values(schema["properties"][field_name])
             assert literal_values == openapi_values
+
+
+def _assert_openapi_path_coverage(spec: dict[str, Any]) -> None:
+    covered = {endpoint.path for endpoint in CLIENT_ENDPOINTS.values()}
+    excluded = set(CLIENT_OPENAPI_EXCLUSIONS)
+    assert not covered & excluded, "Implemented paths must not remain excluded"
+    assert all(reason.strip() for reason in CLIENT_OPENAPI_EXCLUSIONS.values())
+    assert set(spec["paths"]) == covered | excluded, (
+        "Every OpenAPI path needs a Python client method or documented exclusion"
+    )
+
+
+def test_client_covers_every_openapi_path_or_explicitly_excludes_it() -> None:
+    spec = json.loads(Path("docs/api/openapi.json").read_text(encoding="utf-8"))
+    _assert_openapi_path_coverage(spec)
+    docs = Path("docs/rest-service.md").read_text(encoding="utf-8")
+    for path in CLIENT_OPENAPI_EXCLUSIONS:
+        assert f"`{path}`" in docs
+
+
+def test_new_openapi_path_cannot_silently_escape_client_coverage() -> None:
+    spec = json.loads(Path("docs/api/openapi.json").read_text(encoding="utf-8"))
+    spec["paths"]["/synthetic-unimplemented-path"] = {"post": {}}
+    with pytest.raises(AssertionError, match="Every OpenAPI path"):
+        _assert_openapi_path_coverage(spec)
+
+
+def test_client_concept_hierarchy_fields_match_openapi() -> None:
+    spec = json.loads(Path("docs/api/openapi.json").read_text(encoding="utf-8"))
+    schema = spec["components"]["schemas"]["ConceptAncestorRequest"]
+    assert (
+        {field.name for field in fields(ConceptAncestorRequest)}
+        == set(schema["properties"])
+        == set(schema["required"])
+    )
+    for request_type in (GroundRequest, ProfileRequest, CohortResolveRequest):
+        properties = spec["components"]["schemas"][request_type.__name__]["properties"]
+        for field in fields(request_type):
+            if "default" in properties[field.name]:
+                assert field.default == properties[field.name]["default"]
+
+
+@pytest.mark.parametrize(
+    ("method", "kwargs", "path", "payload"),
+    [
+        (
+            "ground",
+            {
+                "entities": [{"text": "synthetic finding", "start": 0, "end": 17}],
+                "systems": ["icd10cm"],
+                "source_language": "fr",
+                "top_k": 2,
+            },
+            "/ground",
+            {
+                "text": None,
+                "entities": [{"text": "synthetic finding", "start": 0, "end": 17}],
+                "systems": ["icd10cm"],
+                "source_language": "fr",
+                "top_k": 2,
+                "offline": True,
+            },
+        ),
+        (
+            "profile",
+            {
+                "records_jsonl": "{}\n",
+                "completeness_floor": 0.8,
+                "required_fields": ["condition"],
+                "athena_index": {"synthetic": {}},
+            },
+            "/profile",
+            {
+                "records_jsonl": "{}\n",
+                "completeness_floor": 0.8,
+                "required_fields": ["condition"],
+                "athena_index": {"synthetic": {}},
+            },
+        ),
+        (
+            "resolve_cohort",
+            {
+                "phenotype": {"name": "synthetic"},
+                "records_jsonl": "{}\n",
+                "concept_ancestors": [ConceptAncestorRequest(1, 2)],
+                "completeness_floor": 0.7,
+                "required_fields": ["condition"],
+            },
+            "/cohort/resolve",
+            {
+                "phenotype": {"name": "synthetic"},
+                "records_jsonl": "{}\n",
+                "concept_ancestors": [
+                    {"ancestor_concept_id": 1, "descendant_concept_id": 2}
+                ],
+                "completeness_floor": 0.7,
+                "required_fields": ["condition"],
+            },
+        ),
+    ],
+)
+def test_clinical_client_methods_use_injected_transport(
+    monkeypatch, method, kwargs, path, payload
+) -> None:
+    def reject_network(*args, **kwargs):
+        raise AssertionError("Test must not open a network connection")
+
+    monkeypatch.setattr(socket, "create_connection", reject_network)
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        assert request.method == "POST"
+        assert request.url.path == path
+        assert json.loads(request.content) == payload
+        assert request.headers["X-Request-ID"] == "opaque-request"
+        return httpx.Response(200, json={"schema_version": "synthetic-v1"})
+
+    with OpenMedClient(transport=httpx.MockTransport(handler)) as client:
+        result = getattr(client, method)(**kwargs, request_id="opaque-request")
+    assert result == {"schema_version": "synthetic-v1"}
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    ("method", "kwargs"),
+    [
+        ("ground", {"text": "synthetic-sensitive-marker"}),
+        ("profile", {"records_jsonl": "synthetic-sensitive-marker"}),
+        (
+            "resolve_cohort",
+            {"phenotype": {}, "records_jsonl": "synthetic-sensitive-marker"},
+        ),
+    ],
+)
+def test_clinical_client_errors_do_not_include_submitted_content(
+    method, kwargs, caplog
+) -> None:
+    def handler(request):
+        return httpx.Response(
+            422,
+            headers={"X-Request-ID": "opaque-response"},
+            json={
+                "error": {
+                    "code": "validation_error",
+                    "message": "Request validation failed",
+                    "details": None,
+                }
+            },
+        )
+
+    with OpenMedClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(OpenMedAPIError) as caught:
+            getattr(client, method)(**kwargs)
+    assert caught.value.code == "validation_error"
+    assert caught.value.status_code == 422
+    assert caught.value.request_id == "opaque-response"
+    assert caught.value.details is None
+    assert "synthetic-sensitive-marker" not in str(caught.value) + caplog.text
+
+
+def test_clinical_client_methods_work_with_local_asgi_routes(
+    rest_client, tmp_path, monkeypatch
+) -> None:
+    from openmed.clinical.grounding import VocabLoader
+    from openmed.structured.cohort import PhenotypeDefinition
+
+    def reject_network(*args, **kwargs):
+        raise AssertionError("Test must not open a network connection")
+
+    monkeypatch.setattr(socket, "create_connection", reject_network)
+    root = Path(__file__).resolve().parents[3]
+    vocabulary = root / "openmed/eval/golden/fixtures/grounding_vocab_synthetic.jsonl"
+    cache = tmp_path / "grounding"
+    VocabLoader(cache_dir=cache, local_only=True).import_snapshot(
+        "icd10cm", vocabulary, version="synthetic-fixture-1"
+    )
+    monkeypatch.setenv("OPENMED_GROUNDING_CACHE_DIR", str(cache))
+    ground = rest_client.ground("type 2 diabetes", systems=["icd10cm"])
+    assert ground["results"][0]["code"] == "E11.9"
+
+    records = '{"note_id":"synthetic","person_id":"synthetic","entities":[]}\n'
+    profile = rest_client.profile(records)
+    assert profile["gate"]["passed"] is True
+
+    fixtures = root / "tests/fixtures/cohort"
+    phenotype = PhenotypeDefinition.load(
+        fixtures / "phenotypes/diabetes_on_metformin.json"
+    )
+    cohort = rest_client.resolve_cohort(
+        phenotype.to_dict(),
+        (fixtures / "synthetic_grounded.jsonl").read_text(encoding="utf-8"),
+        concept_ancestors=[ConceptAncestorRequest(201826, 443238)],
+    )
+    assert cohort["provenance"]["matched_patient_count"] == 2
 
 
 def test_client_pii_language_literal_matches_core() -> None:
