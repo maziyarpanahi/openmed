@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject missing requested splits in named CMeEE directories before loading
+  another split, while preserving explicit-file and generic-directory use (#3563).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
