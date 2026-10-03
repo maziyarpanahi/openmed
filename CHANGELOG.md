@@ -16,11 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Report non-object catalog JSONL rows through the normal coherence diagnostic
-  path with physical line numbers, without exposing row values or paths (#3562).
-
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
@@ -314,6 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moved under a later caller (#3501).
 
 - Hash dataset files with bounded memory (#3510).
+- Report non-object catalog JSONL rows through the normal coherence diagnostic
+  path with physical line numbers, without exposing row values or paths (#3562).
 - Respect explicitly empty gold annotations (#3511).
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
