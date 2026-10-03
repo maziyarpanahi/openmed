@@ -7,7 +7,7 @@ import pytest
 from openmed.core import doctor
 
 
-@pytest.mark.parametrize("failure", [OSError, RuntimeError, ValueError])
+@pytest.mark.parametrize("failure", [OSError, RuntimeError, ValueError, TypeError])
 def test_broken_native_import_is_reported_and_remaining_checks_run(
     monkeypatch, failure
 ):
@@ -29,6 +29,26 @@ def test_broken_native_import_is_reported_and_remaining_checks_run(
     assert "SYNTHETIC_ERROR_VALUE" not in json.dumps(checks)
     assert by_name["hf"]["status"] == "PASS"
     assert by_name["multimodal"]["details"] == "Pillow installed"
+
+
+@pytest.mark.parametrize(
+    "parent", [Exception, OSError, RuntimeError, ValueError, TypeError]
+)
+def test_custom_exception_names_never_enter_diagnostics(monkeypatch, parent):
+    private_name = "SYNTHETIC_PRIVATE_EXCEPTION_CLASS"
+    failure = type(private_name, (parent,), {})
+
+    def load(name):
+        if name == "onnxruntime":
+            raise failure("SYNTHETIC_PRIVATE_MESSAGE")
+        return object()
+
+    monkeypatch.setattr(doctor.importlib, "import_module", load)
+    checks = []
+    doctor._check_optional_dependencies(checks)
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(checks)
+    result = next(check for check in checks if check["name"] == "onnx")
+    assert result["details"] == f"onnxruntime import failed ({parent.__name__})"
 
 
 @pytest.mark.parametrize("failure", [ImportError, ModuleNotFoundError])

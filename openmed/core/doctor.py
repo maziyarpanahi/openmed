@@ -214,11 +214,22 @@ def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
             )
             continue
         except Exception as exc:
+            # Subclass names, like exception messages, may contain private data.
+            family = "Exception"
+            for exception_type, label in (
+                (OSError, "OSError"),
+                (RuntimeError, "RuntimeError"),
+                (ValueError, "ValueError"),
+                (TypeError, "TypeError"),
+            ):
+                if isinstance(exc, exception_type):
+                    family = label
+                    break
             checks.append(
                 _check(
                     name,
                     "WARN",
-                    f"{module_name} import failed ({type(exc).__name__})",
+                    f"{module_name} import failed ({family})",
                     "Check this optional dependency's platform and binary compatibility.",
                 )
             )
