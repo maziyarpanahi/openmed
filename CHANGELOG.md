@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Report non-object catalog JSONL rows through the normal coherence diagnostic
+  path with physical line numbers, without exposing row values or paths (#3562).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
