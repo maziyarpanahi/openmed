@@ -16,12 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Omit unchecked PDF annotation appearances in both raster redaction paths;
-  add explicit local detection of mapped annotation contents and appearances,
-  fail-closed unsupported geometry, and value-free annotation reports (#3726).
-
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
@@ -307,6 +301,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
