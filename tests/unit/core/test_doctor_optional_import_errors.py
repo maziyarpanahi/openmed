@@ -51,6 +51,43 @@ def test_custom_exception_names_never_enter_diagnostics(monkeypatch, parent):
     assert result["details"] == f"onnxruntime import failed ({parent.__name__})"
 
 
+@pytest.mark.parametrize(
+    "parent", [Exception, OSError, RuntimeError, ValueError, TypeError]
+)
+def test_exception_class_hooks_are_not_invoked(monkeypatch, parent):
+    hook_calls = []
+
+    def private_class_hook(_self):
+        hook_calls.append(True)
+        raise RuntimeError("SYNTHETIC_PRIVATE_CLASS_HOOK")
+
+    failure = type(
+        "SYNTHETIC_PRIVATE_EXCEPTION_CLASS",
+        (parent,),
+        {"__class__": property(private_class_hook)},
+    )
+    seen = []
+
+    def load(name):
+        seen.append(name)
+        if name == "onnxruntime":
+            raise failure("SYNTHETIC_PRIVATE_MESSAGE")
+        return object()
+
+    monkeypatch.setattr(doctor.importlib, "import_module", load)
+    checks = []
+    doctor._check_optional_dependencies(checks)
+    assert hook_calls == []
+    assert seen == list(doctor.OPTIONAL_EXTRAS.values())
+    by_name = {check["name"]: check for check in checks}
+    assert by_name["onnx"]["details"] == (
+        f"onnxruntime import failed ({parent.__name__})"
+    )
+    assert by_name["hf"]["status"] == "PASS"
+    assert by_name["multimodal"]["status"] == "PASS"
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(checks)
+
+
 @pytest.mark.parametrize("failure", [ImportError, ModuleNotFoundError])
 def test_missing_dependency_behavior_is_preserved(monkeypatch, failure):
     def missing(name):

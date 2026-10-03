@@ -222,7 +222,7 @@ def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
                 (ValueError, "ValueError"),
                 (TypeError, "TypeError"),
             ):
-                if isinstance(exc, exception_type):
+                if issubclass(type(exc), exception_type):
                     family = label
                     break
             checks.append(
