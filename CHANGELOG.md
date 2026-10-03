@@ -1,11 +1,5 @@
 # Changelog
 
-- Confine service bulk paths to operator roots, restrict request-selected models,
-  and enforce complete REST route and GraphQL field scopes before execution.
-- Reject invalid JWT NumericDates, bound production token lifetimes, omit
-  credentials from config serialization, and use private atomic config writes.
-- Launch reference services with content-free structured access logs only.
-
 - Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
   explicit fixture-provider disclaimers and a recording script.
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
@@ -320,6 +314,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inference, including Transformers 5.x pipeline and component loading (#1983).
 - Reject non-integer sharding counts before reading documents.
 - Reject overlapping sibling items at nested list levels.
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
