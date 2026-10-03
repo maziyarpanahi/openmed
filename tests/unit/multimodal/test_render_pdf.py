@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import traceback
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,552 @@ def _project_name(path: Path):
     regions = project_text_spans(document, [(start, end)])
     assert regions
     return regions
+
+
+def _annotation_pixels(source, bbox=(72, 212, 300, 252)):
+    import pdfplumber
+
+    with pdfplumber.open(source) as pdf:
+        image = pdf.pages[0].to_image(resolution=72, antialias=True).original
+        return image.convert("L").crop(bbox).tobytes()
+
+
+def _fake_annotation_ocr(pixels):
+    # Synthetic fixture OCR double: glyph-like dark pixels, not a solid mask.
+    fraction = sum(pixel < 128 for pixel in pixels) / len(pixels)
+    return "SYNTHETIC_AP_3726" if 0.002 < fraction < 0.9 else ""
+
+
+@pytest.mark.parametrize("subtype", ["FreeText", "Stamp", "Text", "Widget"])
+@pytest.mark.parametrize("renderer", ["verified", "document"])
+def test_default_render_omits_undetected_annotation_pixels(tmp_path, subtype, renderer):
+    from openmed.multimodal.documents_pdf import _render_redacted_pdf
+
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes(subtype))
+    assert "SYNTHETIC_AP_3726" not in extract_pdf(source).text
+    # Widgets may not be drawn by a viewer without a forms environment. Their
+    # appearance remains covered by the opt-in flattened rendering controls.
+    if subtype != "Widget":
+        assert _fake_annotation_ocr(_annotation_pixels(source))
+    regions = _project_name(source)
+    if renderer == "verified":
+        result = render_redacted_pdf(source, output, regions)
+        assert result.passed
+        assert result.layout_fidelity.pages[0].outside_changed_fraction == 0
+        report = result.to_dict()
+    else:
+        annotations = []
+        output.write_bytes(
+            _render_redacted_pdf(source, regions, annotation_report=annotations)
+        )
+        report = {"annotations": annotations}
+    pixels = _annotation_pixels(output)
+    assert not _fake_annotation_ocr(pixels)
+    assert all(pixel > 245 for pixel in pixels)
+    assert report["annotations"] == [
+        {
+            "page": 0,
+            "annotation_count": 1,
+            "omitted_annotation_count": 1,
+            "subtypes": {subtype: 1},
+        }
+    ]
+    assert "SYNTHETIC_" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("subtype", ["FreeText", "Stamp", "Text", "Widget"])
+@pytest.mark.parametrize("state_dictionary", [False, True])
+def test_opt_in_maps_and_redacts_contents_and_appearance(
+    tmp_path, subtype, state_dictionary
+):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(
+        _load_fixture_builder().annotated_pdf_bytes(
+            subtype, state_dictionary=state_dictionary
+        )
+    )
+    seen = []
+
+    def detector(text, **kwargs):
+        seen.append(text)
+        assert "SYNTHETIC_CONTENTS_3726" in text
+        assert "SYNTHETIC_AP_3726" in text
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    result = render_redacted_pdf(source, output, (), annotation_detector=detector)
+    assert result.passed
+    assert len(seen) == 1
+    pixels = _annotation_pixels(output)
+    assert not _fake_annotation_ocr(pixels)
+    assert all(pixel < 10 for pixel in pixels)
+    assert result.annotations[0]["omitted_annotation_count"] == 0
+    assert "SYNTHETIC_" not in json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize(
+    "malformed", ["bbox", "matrix", "state", "image", "vector", "clipped", "overflow"]
+)
+def test_opt_in_unmappable_appearance_fails_before_output(tmp_path, malformed):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    payload = _load_fixture_builder().annotated_pdf_bytes(malformed=malformed)
+    source.write_bytes(payload)
+    with pytest.raises(ValueError, match="^annotation_appearance_unmappable$"):
+        render_redacted_pdf(source, output, (), annotation_detector=lambda text: [])
+    assert not output.exists()
+    assert source.read_bytes() == payload
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+@pytest.mark.parametrize(
+    "matrix",
+    [
+        None,
+        (2, 0, 0, 0.5, 12, -3),
+        (0, 1, -1, 0, 40, 0),
+        (-1, 0, 0, 1, 228, 0),
+        (1, 0.2, 0.2, 1, 0, 0),
+    ],
+)
+def test_opt_in_rotations_and_appearance_transforms_preserve_mapping(
+    tmp_path, rotation, matrix
+):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(
+        _load_fixture_builder().annotated_pdf_bytes(rotation=rotation, matrix=matrix)
+    )
+    expected_bbox = {
+        0: (72, 212, 300, 252),
+        90: (540, 72, 580, 300),
+        180: (312, 540, 540, 580),
+        270: (212, 312, 252, 540),
+    }[rotation]
+
+    def detector(text, **kwargs):
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    result = render_redacted_pdf(source, output, (), annotation_detector=detector)
+    assert result.passed
+    assert all(pixel < 10 for pixel in _annotation_pixels(output, expected_bbox))
+    assert not _fake_annotation_ocr(_annotation_pixels(output, expected_bbox))
+
+
+def test_opt_in_distinct_crop_fails_closed_before_detector(tmp_path):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(
+        _load_fixture_builder().annotated_pdf_bytes(cropbox=(20, 20, 590, 770))
+    )
+    seen = []
+    with pytest.raises(ValueError, match="^annotation_appearance_unmappable$"):
+        render_redacted_pdf(source, output, (), annotation_detector=seen.append)
+    assert seen == []
+    assert not output.exists()
+
+
+def test_opt_in_preserves_inspected_non_phi_appearance(tmp_path):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(
+        _load_fixture_builder().annotated_pdf_bytes(
+            contents="Routine review", appearance_text="Reviewed"
+        )
+    )
+    seen = []
+
+    def detector(text):
+        seen.append(text)
+        return []
+
+    result = render_redacted_pdf(
+        source, output, _project_name(source), annotation_detector=detector
+    )
+    assert result.passed
+    assert len(seen) == 1
+    assert "Routine review" in seen[0]
+    assert "Reviewed" in seen[0]
+    assert _fake_annotation_ocr(_annotation_pixels(output))
+    assert "Reviewed" in extract_pdf(output).text
+    assert "Reviewed" not in json.dumps(result.to_dict())
+
+
+def test_document_opt_in_requires_detector_and_projects_annotations(tmp_path):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+    policy = {"return_bytes": True, "include_annotations": True}
+    with pytest.raises(ValueError, match="annotation_detector_required"):
+        _pdf_handler(source, policy=policy)
+
+    def detector(text, **kwargs):
+        start = text.index("SYNTHETIC_CONTENTS_3726")
+        return [(start, start + len("SYNTHETIC_CONTENTS_3726"))]
+
+    document = _pdf_handler(source, policy=policy, models=detector)
+    pixels = _annotation_pixels(BytesIO(document.metadata["redacted_pdf_bytes"]))
+    assert not _fake_annotation_ocr(pixels)
+    assert all(pixel < 10 for pixel in pixels)
+    assert "SYNTHETIC_" not in json.dumps(document.metadata["annotations"])
+
+
+@pytest.mark.parametrize("include_annotations", [False, True])
+@pytest.mark.parametrize("source_kind", ["path", "named_stream"])
+def test_document_render_uses_the_detected_source_snapshot(
+    tmp_path, include_annotations, source_kind
+):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    replacement = fx.clean_redaction_pdf_bytes()
+    if source_kind == "path":
+        source = tmp_path / "source.pdf"
+        source.write_bytes(original)
+
+        def replace_source():
+            source.write_bytes(replacement)
+
+    else:
+        source = BytesIO(original)
+        source.name = "routing-only-nonexistent.pdf"
+        source.seek(17)
+
+        def replace_source():
+            source.seek(0)
+            source.write(replacement)
+            source.truncate()
+
+    policy = {"return_bytes": True, "include_annotations": include_annotations}
+
+    def detect_name(text, **kwargs):
+        start = text.index("John")
+        return [(start, start + len("John Doe"))]
+
+    expected = _pdf_handler(BytesIO(original), policy=policy, models=detect_name)
+
+    def detector(text, **kwargs):
+        assert text == expected.text
+        replace_source()
+        return detect_name(text)
+
+    actual = _pdf_handler(source, policy=policy, models=detector)
+    assert actual.text == expected.text
+    assert _annotation_pixels(
+        BytesIO(actual.metadata["redacted_pdf_bytes"]), (0, 0, 612, 792)
+    ) == _annotation_pixels(
+        BytesIO(expected.metadata["redacted_pdf_bytes"]), (0, 0, 612, 792)
+    )
+    if source_kind == "named_stream":
+        assert not source.closed
+        assert source.getvalue() == replacement
+
+
+@pytest.mark.parametrize("source_kind", ["path", "named_stream"])
+def test_annotation_extraction_uses_one_source_snapshot(
+    tmp_path, monkeypatch, source_kind
+):
+    from openmed.multimodal import documents_pdf
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    replacement = fx.clean_redaction_pdf_bytes()
+    if source_kind == "path":
+        source = tmp_path / "source.pdf"
+        source.write_bytes(original)
+    else:
+        source = BytesIO(original)
+        source.name = "routing-only-nonexistent.pdf"
+        source.seek(17)
+    expected = extract_pdf(BytesIO(original), include_annotations=True)
+    prepare = documents_pdf._prepare_annotation_source
+
+    def prepare_then_update(*args, **kwargs):
+        result = prepare(*args, **kwargs)
+        if source_kind == "path":
+            source.write_bytes(replacement)
+        else:
+            source.seek(0)
+            source.write(replacement)
+            source.truncate()
+        return result
+
+    monkeypatch.setattr(
+        documents_pdf, "_prepare_annotation_source", prepare_then_update
+    )
+    assert extract_pdf(source, include_annotations=True) == expected
+    if source_kind == "named_stream":
+        assert not source.closed
+
+
+def test_verified_renderer_font_check_uses_original_snapshot(tmp_path):
+    import pikepdf
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    with pikepdf.open(BytesIO(original)) as pdf:
+        pdf.Root.SyntheticFont = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name("/Font"), Subtype=pikepdf.Name("/Type3")
+            )
+        )
+        pdf.save(source)
+
+    def detector(text):
+        source.write_bytes(original)
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    with pytest.raises(ValueError, match="Type 3 fonts"):
+        render_redacted_pdf(source, output, (), annotation_detector=detector)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("entry_point", ["extract_pdf_regions", "extract_pdf_tables"])
+def test_structured_extraction_uses_one_source_snapshot(
+    tmp_path, monkeypatch, entry_point
+):
+    from openmed.multimodal import documents_pdf_tables
+
+    source = tmp_path / "source.pdf"
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_phi_table.pdf"
+    source.write_bytes(fixture.read_bytes())
+    extract = getattr(documents_pdf_tables, entry_point)
+    expected = extract(source)
+    extract_flat = documents_pdf_tables.extract_pdf
+
+    def extract_then_update(*args, **kwargs):
+        result = extract_flat(*args, **kwargs)
+        source.write_bytes(_load_fixture_builder().original_pdf_bytes())
+        return result
+
+    monkeypatch.setattr(documents_pdf_tables, "extract_pdf", extract_then_update)
+    assert extract(source) == expected
+
+
+def test_document_structured_boxes_cannot_replace_annotation_extent(
+    tmp_path, monkeypatch
+):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+    body_region = _project_name(source)
+    monkeypatch.setattr(
+        "openmed.multimodal.documents_pdf_tables.project_structured_spans",
+        lambda *args, **kwargs: body_region,
+    )
+
+    def detector(text, **kwargs):
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    document = _pdf_handler(
+        source,
+        policy={"return_bytes": True, "include_annotations": True},
+        models=detector,
+    )
+    pixels = _annotation_pixels(BytesIO(document.metadata["redacted_pdf_bytes"]))
+    assert all(pixel < 10 for pixel in pixels)
+
+
+@pytest.mark.parametrize("renderer", ["verified", "document"])
+@pytest.mark.parametrize("existing_output", [False, True])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "none",
+        "scalar",
+        "string",
+        "unknown_mapping",
+        "ambiguous_mapping",
+        "missing_end",
+        "short_sequence",
+        "negative",
+        "overflow",
+        "empty",
+        "reversed",
+        "bool",
+        "float",
+        "numeric_string",
+        "nan",
+        "infinity",
+        "unmapped",
+        "exception",
+    ],
+)
+def test_opt_in_invalid_detector_result_never_publishes(
+    tmp_path, monkeypatch, caplog, renderer, existing_output, case
+):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+    body_regions = _project_name(source)
+    old_output = b"existing destination remains unchanged"
+    if existing_output:
+        output.write_bytes(old_output)
+    marker = "SYNTHETIC_BAD_DETECTOR_3726"
+
+    def detector(text, **kwargs):
+        if case == "exception":
+            raise RuntimeError(marker)
+        return {
+            "none": None,
+            "scalar": 1,
+            "string": marker,
+            "unknown_mapping": {"unexpected": marker},
+            "ambiguous_mapping": {"entities": [], "spans": []},
+            "missing_end": [{"start": 0, "text": marker}],
+            "short_sequence": [(0,)],
+            "negative": [(-1, 2)],
+            "overflow": [(0, len(text) + 1)],
+            "empty": [(1, 1)],
+            "reversed": [(2, 1)],
+            "bool": [(False, 2)],
+            "float": [(0.0, 2)],
+            "numeric_string": [("0", "2")],
+            "nan": [(0, float("nan"))],
+            "infinity": [(0, float("inf"))],
+            "unmapped": [(0, 1)],
+        }[case]
+
+    if case == "unmapped":
+        monkeypatch.setattr(
+            "openmed.multimodal.documents_pdf.project_text_spans",
+            lambda *args, **kwargs: (),
+        )
+    with pytest.raises(ValueError, match="^annotation_detection_failed$") as exc_info:
+        if renderer == "verified":
+            render_redacted_pdf(
+                source,
+                output,
+                body_regions,
+                annotation_detector=detector,
+                overwrite=existing_output,
+            )
+        else:
+            _pdf_handler(
+                source,
+                policy={"output_path": output, "include_annotations": True},
+                models=detector,
+            )
+    if existing_output:
+        assert output.read_bytes() == old_output
+    else:
+        assert not output.exists()
+    formatted = "".join(traceback.format_exception(exc_info.value))
+    assert marker not in formatted
+    assert marker not in caplog.text
+
+
+@pytest.mark.parametrize("shape", ["sequence", "mapping", "result_object"])
+def test_opt_in_accepts_explicit_valid_detector_result_shapes(tmp_path, shape):
+    from types import SimpleNamespace
+
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+
+    def detector(text, **kwargs):
+        start = text.index("SYNTHETIC_AP_3726")
+        end = start + len("SYNTHETIC_AP_3726")
+        if shape == "sequence":
+            return [(start, end)]
+        if shape == "mapping":
+            return {"entities": [{"start": start, "end": end}]}
+        return SimpleNamespace(entities=[SimpleNamespace(start=start, end=end)])
+
+    result = render_redacted_pdf(source, output, (), annotation_detector=detector)
+    assert result.passed
+    assert all(pixel < 10 for pixel in _annotation_pixels(output))
+
+
+@pytest.mark.parametrize("renderer", ["verified", "document"])
+@pytest.mark.parametrize("failure", ["internal_typeerror", "signature", "unbounded"])
+def test_opt_in_detector_is_invoked_once_with_bounded_results(
+    tmp_path, renderer, failure
+):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "existing.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+    output.write_bytes(b"keep existing output")
+    calls = []
+    consumed = []
+
+    def detector(text, **kwargs):
+        calls.append(kwargs)
+        if "lang" in kwargs:
+            raise TypeError("synthetic callback failure")
+        return []
+
+    if failure == "signature":
+        detector.__signature__ = object()
+    elif failure == "unbounded":
+
+        def detector(text, **kwargs):
+            calls.append(kwargs)
+            while True:
+                consumed.append(1)
+                yield (0, 1)
+
+    with pytest.raises(ValueError, match="^annotation_detection_failed$"):
+        if renderer == "verified":
+            render_redacted_pdf(
+                source,
+                output,
+                _project_name(source),
+                annotation_detector=detector,
+                max_regions=3,
+                overwrite=True,
+            )
+        else:
+            _pdf_handler(
+                source,
+                policy={"output_path": output, "include_annotations": True},
+                models=detector,
+            )
+    assert output.read_bytes() == b"keep existing output"
+    assert len(calls) == (0 if failure == "signature" else 1)
+    if failure == "unbounded":
+        assert len(consumed) == (4 if renderer == "verified" else 10_001)
+    if failure == "internal_typeerror":
+        assert calls == [{"lang": None}]
+
+
+def test_opt_in_accepts_required_language_keyword_callback(tmp_path):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(_load_fixture_builder().annotated_pdf_bytes())
+
+    def detector(text, *, lang):
+        assert lang is None
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    assert render_redacted_pdf(source, output, (), annotation_detector=detector).passed
+
+
+def test_annotation_report_closes_custom_subtype_names(tmp_path):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    source.write_bytes(
+        _load_fixture_builder().annotated_pdf_bytes("SYNTHETIC_PRIVATE_SUBTYPE")
+    )
+    result = render_redacted_pdf(source, output, _project_name(source))
+    assert result.annotations[0]["subtypes"] == {"Other": 1}
+    assert "SYNTHETIC_PRIVATE_SUBTYPE" not in json.dumps(result.to_dict())
 
 
 def test_render_removes_source_text_and_preserves_non_phi_layout(tmp_path):

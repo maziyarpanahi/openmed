@@ -268,7 +268,7 @@ def test_project_text_spans_merges_same_line_words(fake_pdfplumber):
 
 
 def test_redact_document_pdf_reports_detected_rectangles(
-    fake_pdfplumber, multimodal_deps_present
+    fake_pdfplumber, multimodal_deps_present, tmp_path
 ):
     def detector(text, *, lang=None):
         return {
@@ -282,7 +282,9 @@ def test_redact_document_pdf_reports_detected_rectangles(
             ]
         }
 
-    doc = redact_document("synthetic_phi.pdf", models={"detector": detector}, lang="en")
+    source = tmp_path / "synthetic_phi.pdf"
+    source.write_bytes(b"synthetic bytes parsed by fake_pdfplumber")
+    doc = redact_document(source, models={"detector": detector}, lang="en")
 
     assert doc.text == "Patient John Doe\nMRN 12345"
     assert doc.metadata["detected_span_count"] == 1
