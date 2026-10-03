@@ -5,10 +5,9 @@ apply calibrated Laplace or Gaussian noise locally and keep an optional,
 numeric-only privacy ledger for one dataset. The ledger uses basic sequential
 composition: query epsilon and delta values are added across releases.
 
-The Gaussian scale uses the common conservative bound
-``sensitivity * sqrt(2 * log(1.25 / delta)) / epsilon``. The bound is intended
-for the usual approximate-DP setting and is exposed so callers can document
-the exact calibration used by their release. Sensitivity is the caller's
+The Gaussian scale is calibrated against the exact Gaussian privacy profile
+(Balle and Wang, 2018, Theorem 8), rather than extending the classical bound
+beyond its proven epsilon range. Sensitivity is the caller's
 responsibility: it must match the adjacency relation and any clipping or
 bounded contribution assumptions for the aggregate.
 
@@ -39,6 +38,7 @@ __all__ = [
     "UtilityReport",
     "gaussian_mechanism",
     "gaussian_noise",
+    "gaussian_privacy_delta",
     "gaussian_scale",
     "gaussian_stddev",
     "laplace_mechanism",
@@ -72,8 +72,8 @@ def _finite_float(value: Any, *, field_name: str) -> float:
         raise TypeError(f"{field_name} must be a real number")
     try:
         result = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise TypeError(f"{field_name} must be a real number") from exc
+    except (TypeError, ValueError, OverflowError):
+        raise TypeError(f"{field_name} must be a real number") from None
     if not math.isfinite(result):
         raise ValueError(f"{field_name} must be finite")
     return result
@@ -144,11 +144,57 @@ def laplace_scale(sensitivity: float, epsilon: float) -> float:
     return sensitivity_value / _epsilon(epsilon)
 
 
+def _scaled_erfc(value: float) -> float:
+    # exp(x*x) * erfc(x), without overflowing in the positive far tail.
+    if value <= 26.0:
+        return math.exp(value * value) * math.erfc(value)
+    inverse_square = (1.0 / value) ** 2
+    term = total = 1.0
+    for index in range(1, 12):
+        term *= -(2 * index - 1) * inverse_square / 2.0
+        total += term
+    return total / math.sqrt(math.pi) / value
+
+
+def gaussian_privacy_delta(sigma: float, sensitivity: float, epsilon: float) -> float:
+    """Return the Gaussian privacy profile at the declared L2 sensitivity.
+
+    Uses Theorem 8 of https://proceedings.mlr.press/v80/balle18a.html.
+    A scaled complementary error function avoids ``exp(epsilon)`` overflow.
+    Zero sensitivity is a constant query and has zero privacy loss.
+    Near catastrophic subtraction cancellation, return the first Gaussian
+    tail alone: a conservative upper bound, never a false zero privacy loss.
+    """
+
+    sigma_value = _sensitivity(sigma)
+    sensitivity_value = _sensitivity(sensitivity)
+    epsilon_value = _epsilon(epsilon)
+    if sensitivity_value == 0.0:
+        return 0.0
+    if sigma_value == 0.0:
+        return 1.0
+    ratio = sigma_value / sensitivity_value
+    if ratio == 0.0:
+        return 1.0
+    x = 0.5 / ratio
+    y = epsilon_value * ratio
+    a = (y - x) / math.sqrt(2.0)
+    b = (y + x) / math.sqrt(2.0)
+    first = 0.5 * math.erfc(a)
+    # b*b - a*a == epsilon, so this equals exp(epsilon)*Phi(-x-y).
+    second = 0.5 * math.exp(-a * a) * _scaled_erfc(b)
+    if first - second <= 1e-8 * first:
+        return first
+    return max(0.0, min(1.0, first - second))
+
+
 def gaussian_scale(sensitivity: float, epsilon: float, delta: float) -> float:
-    """Return the conservative Gaussian standard deviation for ``(epsilon, delta)``.
+    """Return an analytically calibrated Gaussian standard deviation.
 
     ``delta`` must be positive because a Gaussian mechanism cannot use this
-    calibration at ``delta=0``.
+    calibration at ``delta=0``. Bisection maintains a privacy-safe upper bound
+    and adds a small floating-point margin before checking the final scale.
+    Unrepresentable scales fail closed instead of returning zero or infinity.
     """
 
     sensitivity_value = _sensitivity(sensitivity)
@@ -156,11 +202,25 @@ def gaussian_scale(sensitivity: float, epsilon: float, delta: float) -> float:
     delta_value = _delta(delta)
     if delta_value <= 0.0:
         raise ValueError("Gaussian mechanism requires delta greater than zero")
-    return (
-        sensitivity_value
-        * math.sqrt(2.0 * math.log(1.25 / delta_value))
-        / epsilon_value
-    )
+    if sensitivity_value == 0.0:
+        return 0.0
+    lower, upper = 0.0, 1.0
+    while gaussian_privacy_delta(upper, 1.0, epsilon_value) > delta_value:
+        upper *= 2.0
+        if not math.isfinite(upper):
+            raise ValueError("Gaussian calibration is not representable")
+    for _ in range(100):
+        midpoint = (lower + upper) / 2.0
+        if gaussian_privacy_delta(midpoint, 1.0, epsilon_value) > delta_value:
+            lower = midpoint
+        else:
+            upper = midpoint
+    scale = sensitivity_value * upper * (1.0 + 1e-12)
+    if not math.isfinite(scale) or scale <= 0.0:
+        raise ValueError("Gaussian calibration is not representable")
+    if gaussian_privacy_delta(scale, sensitivity_value, epsilon_value) > delta_value:
+        raise ValueError("Gaussian calibration failed its privacy check")
+    return scale
 
 
 gaussian_stddev = gaussian_scale
@@ -253,6 +313,9 @@ class PrivacySpend:
             "delta": self.delta,
             "sensitivity": self.sensitivity,
             "noise_scale": self.noise_scale,
+            "calibration_method": (
+                "analytic_gaussian" if self.mechanism == "gaussian" else "laplace"
+            ),
         }
 
 

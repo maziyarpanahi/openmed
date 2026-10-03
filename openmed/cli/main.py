@@ -1649,6 +1649,11 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
     dp_parser.add_argument("--label", default="aggregate_query")
     dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Allow seeded synthetic experiments; outputs are not private releases.",
+    )
     dp_parser.add_argument("--overwrite", action="store_true")
     dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
@@ -4524,6 +4529,12 @@ def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
         release_aggregate,
     )
 
+    if args.seed is not None and not args.test_mode:
+        raise CliError(
+            "Seeded aggregate releases require --test-mode and synthetic data.",
+            code="dp_seed_requires_test_mode",
+            exit_code=EXIT_ERROR,
+        )
     _preflight_structured_paths(
         inputs=((args.input, "Aggregate input", frozenset({".json"})),),
         outputs=((args.output, "Aggregate output", frozenset({".json"})),),
