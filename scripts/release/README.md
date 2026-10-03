@@ -33,19 +33,30 @@ OpenMed keeps package-size and core-import budgets in
    python scripts/release/check_import_budget.py
    ```
 
-The committed wheel baseline is 5,709,568 bytes. Its maximum is 6,280,525
+The committed wheel baseline is 7,036,059 bytes. Its maximum is 7,739,665
 bytes, which provides 10% headroom. A fresh `import openmed` must remain at or
 below 300,000 cumulative microseconds on `ubuntu-latest`, and it must not load
 `jieba`, `opencc`, `pypinyin`, or `indicnlp`.
 
-The baseline was measured from the clinical-fact integration candidate on
-`ubuntu-latest` in [CI run 35787695425](https://github.com/maziyarpanahi/openmed/actions/runs/35787695425).
-The previous 5,185,410-byte baseline, measured from `master` commit
-`dbfe2415e58325f1b21c6ec013672f08fa46d32b`, no longer covers the reviewed
-Journey contracts, model packs, fact normalization, ingestion, terminology,
-reconciliation, and timeline implementation. The candidate exceeded the prior
-5,703,951-byte maximum by 5,617 bytes. The baseline now records that measured
-candidate while retaining the repository's 10% future headroom rule.
+The baseline records `master` commit
+`a88fe2feb699fd1945d053859998e54e00237825`. An Ubuntu 24.04 x86-64 rebuild
+with uv 0.11.28, Python 3.11.15 and Hatchling 1.32.4 produced a 7,036,059-byte
+wheel with SHA-256
+`670169af4a50f40db81b05eab20272fe3f1946dbdf95dbe25fb80c1ad09bd5e4`,
+identical to the macOS rebuild. The PR build job also rebuilds the frozen base
+on `ubuntu-latest` and requires its measured size to equal the proposed baseline
+before accepting a budget refresh; the local reproduction is not a substitute
+for that hosted check.
+
+The previous 6,319,377-byte baseline predates already-merged clinical brief,
+SDOH, local NLI, language, evaluation and agent capabilities. Unchanged master
+exceeded the old 6,951,315-byte maximum by 84,744 bytes. The installed-SDK
+candidate at `88b12440f2a05a2f982e1ff98f364db88dc117e2` added only 238 bytes,
+measured at 7,036,297 bytes in
+[CI run 37135994309](https://github.com/maziyarpanahi/openmed/actions/runs/37135994309).
+Both wheels have the same 1,495 members, with every source/resource payload
+matching its Git revision. This refresh records accepted source growth; it
+does not change package contents, compression, 10% headroom or import limits.
 
 The JSON size report records the wheel size plus total site-packages bytes for
 `openmed`, `openmed[zh]`, and `openmed[indic]`. Each language profile includes
@@ -65,6 +76,12 @@ not accept environment-variable overrides.
    `maximum_cumulative_microseconds` and explain the regression or intentional
    startup work in the pull request.
 5. Run both checks above and include the resulting measurements in the review.
+
+For a pull request that changes the budget file, CI independently archives and
+builds the event's frozen base commit. A different measured wheel size fails
+the build, and CI retains the baseline artifacts. Re-measure and update the
+baseline if `master` has changed; do not use an environment override or disable
+the comparison.
 
 Do not raise a budget merely to make an unexplained regression pass.
 

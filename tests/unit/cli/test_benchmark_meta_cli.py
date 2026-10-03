@@ -134,9 +134,14 @@ def test_mismatched_or_empty_reports_rejected(suite, count, tmp_path, capsys):
 
 
 @pytest.mark.parametrize(
-    "data", ["{CaseySecret", "[]", "{}", '{"metrics": 1}', "x" * (8 * 1024**2 + 1)]
+    "data",
+    ["{CaseySecret", "[]", "{}", '{"metrics": 1}', "x" * (8 * 1024**2 + 1)],
+    ids=["invalid-json", "wrong-root", "empty-object", "invalid-metrics", "oversized"],
 )
-def test_malformed_or_oversized_file_rejected(data, tmp_path, capsys):
+def test_malformed_or_oversized_file_rejected(data, tmp_path, capsys, request):
+    # Pytest exports node IDs in PYTEST_CURRENT_TEST. Keep payloads out of
+    # identifiers so the 8 MiB case fits Windows' environment-variable limit.
+    assert len(request.node.nodeid) < 256
     path = tmp_path / "CaseySecret.json"
     path.write_text(data)
     assert (
