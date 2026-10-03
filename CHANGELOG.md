@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
