@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Any, Optional, cast
 
 import strawberry
-from graphql import GraphQLError
+from graphql import GraphQLError, ValidationRule
+from strawberry.extensions import SchemaExtension
 from strawberry.fastapi import BaseContext
 from strawberry.scalars import JSON
 from strawberry.types import Info
@@ -16,6 +17,7 @@ from openmed.core.labels import CANONICAL_LABELS, policy_label_for
 from openmed.core.policy import PolicyProfile, load_policy
 from openmed.risk import risk_report
 
+from .auth import AuthPrincipal, scopes_satisfy
 from .journey_resources import (
     JourneyAccessPolicy,
     JourneyResourceCatalog,
@@ -25,11 +27,47 @@ from .journey_resources import (
     parse_access_attributes,
     parse_resource_fields,
 )
-from .runtime import ServiceRuntime
+from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 SAFE_RESOLVER_ERROR = "The OpenMed GraphQL operation could not be completed."
+GRAPHQL_FIELD_SCOPES = {
+    "analyze": ("analyze:write",),
+    "deidentify": ("pii:write",),
+    "journeyResources": ("journey:read",),
+    "entityTypes": (),
+}
+
+
+class FieldScopeExtension(SchemaExtension):
+    """Authorize the complete GraphQL document before any resolver executes."""
+
+    def on_validate(self):
+        context = self.execution_context.context
+        request = getattr(context, "request", None)
+        auth = getattr(
+            getattr(getattr(request, "app", None), "state", None), "auth", None
+        )
+        if auth is not None and auth.enabled:
+            principal = request.scope.get("openmed.auth")
+            granted = principal.scopes if isinstance(principal, AuthPrincipal) else ()
+
+            class FieldScopeRule(ValidationRule):
+                def enter_field(self, node, *_):
+                    parent = self.context.get_parent_type()
+                    if parent is not None and parent.name == "Query":
+                        required = GRAPHQL_FIELD_SCOPES.get(node.name.value, ())
+                        if not scopes_satisfy(granted, required):
+                            self.report_error(
+                                GraphQLError(
+                                    "Operation is not permitted.",
+                                    extensions={"code": "OPENMED_FORBIDDEN"},
+                                )
+                            )
+
+            self.execution_context.validation_rules += (FieldScopeRule,)
+        yield
 
 
 class OpenMedGraphQLContext(BaseContext):
@@ -501,6 +539,10 @@ class Query:
             payload = input.to_request()
             result = await _run_analyze(info.context.runtime, payload)
             return AnalyzePayload.from_mapping(result)
+        except ModelNotServedError:
+            raise GraphQLError(
+                "Requested model is not served", extensions={"code": "model_not_served"}
+            ) from None
         except Exception:
             raise GraphQLError(
                 SAFE_RESOLVER_ERROR,
@@ -518,6 +560,10 @@ class Query:
             payload = input.to_request()
             result = await _run_deidentify(info.context.runtime, payload)
             return DeidentifyPayload.from_mapping(result, policy_name=payload.policy)
+        except ModelNotServedError:
+            raise GraphQLError(
+                "Requested model is not served", extensions={"code": "model_not_served"}
+            ) from None
         except Exception:
             raise GraphQLError(
                 SAFE_RESOLVER_ERROR,
@@ -585,7 +631,7 @@ class PrivacySafeSchema(strawberry.Schema):
         """Suppress Strawberry's default exception logger to protect PHI."""
 
 
-schema = PrivacySafeSchema(query=Query)
+schema = PrivacySafeSchema(query=Query, extensions=[FieldScopeExtension])
 
 
 async def _run_analyze(

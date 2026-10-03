@@ -324,7 +324,7 @@ Mfano wa matokeo:
 **Huduma ya REST**
 
 ```bash
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `GET /health` · `POST /analyze` · `POST /pii/extract` ·
@@ -491,7 +491,7 @@ pamoja wa pipeline na majibu ya hitilafu yaliyounganishwa.
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # au kwa Docker
 docker build -t openmed:local .
@@ -610,7 +610,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

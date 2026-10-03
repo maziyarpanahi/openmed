@@ -166,7 +166,7 @@ analyze_text(
 **Service REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -312,7 +312,7 @@ Un service FastAPI compatible Docker, avec validation des requêtes, préchargem
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -393,7 +393,7 @@ Si OpenMed vous est utile dans vos recherches, merci de le citer :
 
 Si OpenMed vous est utile, une étoile aide les autres à le découvrir.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

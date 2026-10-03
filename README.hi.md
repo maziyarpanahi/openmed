@@ -322,7 +322,7 @@ print([(e.label, e.text) for e in result.entities])
 **REST सेवा**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -612,7 +612,7 @@ Request validation, shared pipeline preload और unified error envelopes व�
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -649,7 +649,7 @@ v1.8 में API-key/JWT auth, no-PHI request logging, tracing, gRPC, async jo
 request coalescing, rate और concurrency limits, `/livez`, `/readyz` और opt-in metrics भी शामिल हैं:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -750,7 +750,7 @@ OpenMed SDK का स्रोत [Apache-2.0 License](LICENSE) के अं�
 
 यदि OpenMed आपके लिए उपयोगी है, तो एक star दूसरों को इसे खोजने में मदद करता है।
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

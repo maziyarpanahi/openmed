@@ -34,6 +34,93 @@ PHI_SUBSTRINGS = (
 )
 
 
+@pytest.mark.parametrize("level", ["INFO", "off"])
+def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+    import urllib.error
+    import urllib.request
+
+    with socket.socket() as bound:
+        bound.bind(("127.0.0.1", 0))
+        port = bound.getsockname()[1]
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "OPENMED_SERVICE_LOG_LEVEL": level,
+            "OPENMED_PROFILE": "test",
+            "OPENMED_OFFLINE": "1",
+        }
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "openmed.service.logging",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    sentinel = "SYNTHETIC-QUERY-PATH-SENTINEL-0042"
+    targets = [
+        "/analyze?text=" + sentinel,
+        "/graphql?query=" + sentinel,
+        "/" + sentinel,
+    ]
+    try:
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/health", timeout=1
+                ):
+                    break
+            except OSError:
+                if time.monotonic() >= deadline or process.poll() is not None:
+                    raise AssertionError(
+                        "Reference service did not become ready"
+                    ) from None
+                time.sleep(0.05)
+        for target in targets:
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}{target}", timeout=2
+                ):
+                    pass
+            except urllib.error.HTTPError:
+                pass
+    finally:
+        process.terminate()
+        output, _ = process.communicate(timeout=15)
+    assert sentinel not in output
+    records = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
+    if level == "off":
+        assert records == []
+    else:
+        assert len(records) == 4
+        assert [record["route"] for record in records] == [
+            "/health",
+            "/analyze",
+            "/graphql",
+            "unknown",
+        ]
+        assert all(
+            {"method", "route", "status_code", "duration_ms", "request_id"}
+            <= record.keys()
+            for record in records
+        )
+        assert all("127.0.0.1" not in json.dumps(record) for record in records)
+
+
 class FakeLoader:
     """Minimal loader double for request logging tests."""
 
@@ -66,6 +153,10 @@ class FakeLoader:
 def service_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_SERVED_MODELS",
+        "disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1,test-pii-model",
+    )
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)

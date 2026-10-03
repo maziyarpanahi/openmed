@@ -7,20 +7,26 @@ application:
 
 ```bash
 pip install "openmed[service]"
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8000
+python -m openmed.service.logging --host 127.0.0.1 --port 8000
 ```
 
-The schema has three root queries:
+The schema has four root queries:
 
 - `analyze` runs clinical entity analysis.
 - `deidentify` returns redacted text, entities, canonical spans, the selected
   policy profile, and aggregate risk facets.
 - `entityTypes` lists canonical labels and their policy categories without
   loading a model.
+- `journeyResources` provides policy-filtered Journey metadata.
 
-There are no mutations or subscriptions. Authentication is not part of this
-endpoint yet, so place it behind a trusted application boundary until GraphQL
-auth middleware is available.
+There are no mutations or subscriptions. When REST authentication is enabled,
+GraphQL uses the same principal and authorizes the entire document before
+running any resolver: `analyze` requires `analyze:write`, `deidentify` requires
+`pii:write`, and `journeyResources` requires `journey:read`. `entityTypes` has
+no additional field scope. Aliases, fragment spreads, and mixed-field requests
+cannot bypass this check. A denied document returns `data: null` and the
+value-free `OPENMED_FORBIDDEN` extension code, without partial results.
+Authentication-disabled local development behavior is unchanged.
 
 ## Select only the fields you need
 

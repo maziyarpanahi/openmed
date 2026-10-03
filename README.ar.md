@@ -194,7 +194,7 @@ analyze_text(
 **خدمة REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -372,7 +372,7 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -470,7 +470,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 </div>
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
