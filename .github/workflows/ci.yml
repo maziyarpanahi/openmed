@@ -284,6 +284,76 @@ jobs:
         name: codecov-umbrella
         fail_ci_if_error: false
 
+  sdk-compatibility:
+    # Bounded core contracts and installed artifacts on every advertised lane.
+    # Model/runtime qualification remains separate; no weights are downloaded.
+    needs: repo-policy
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: ${{ matrix.python-version }}
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Prepare frozen test and package dependencies
+      shell: bash
+      run: |
+        uv sync --frozen --extra dev --python "${{ matrix.python-version }}"
+        uv export --frozen --no-hashes --no-emit-project --extra cli --extra service --extra mcp --output-file "$RUNNER_TEMP/compat-constraints.txt"
+    - name: Core privacy and platform contracts
+      run: >-
+        uv run --frozen pytest -q --timeout=120 --timeout-method=thread
+        tests/unit/install/test_smoke_check.py
+        tests/unit/release/test_release_budget_workflow.py
+        tests/unit/service/test_brief_surfaces.py
+        tests/unit/ner/test_infer.py
+        tests/unit/test_no_raw_text_logging.py
+    - name: Build wheel and source distribution
+      shell: bash
+      run: uv build --out-dir "$RUNNER_TEMP/compat-dist"
+    - name: Verify clean core and adapter installs plus missing-resource controls
+      shell: bash
+      run: >-
+        python scripts/install/smoke_check.py
+        --artifacts "$RUNNER_TEMP/compat-dist"
+        --constraints "$RUNNER_TEMP/compat-constraints.txt"
+        --report sdk-compatibility.json
+    - name: Upload value-free compatibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: sdk-compatibility-${{ matrix.os }}-${{ matrix.python-version }}
+        path: sdk-compatibility.json
+        if-no-files-found: warn
+
+  sdk-compatibility-gate:
+    # Stable required-check name; a missing/cancelled matrix is not success.
+    needs: sdk-compatibility
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require every advertised combination
+      env:
+        MATRIX_RESULT: ${{ needs.sdk-compatibility.result }}
+      run: test "$MATRIX_RESULT" = success
+
   security:
     needs: repo-policy
     runs-on: ubuntu-latest
@@ -496,6 +566,7 @@ jobs:
     - yasbd-integration
     - i18n-cjk-indic
     - browser-extension
+    - sdk-compatibility-gate
     if: >-
       always() &&
       needs.repo-policy.result == 'success' &&
@@ -505,6 +576,7 @@ jobs:
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
       needs.browser-extension.result == 'success' &&
+      needs.sdk-compatibility-gate.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
