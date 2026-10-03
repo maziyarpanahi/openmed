@@ -26,6 +26,11 @@ from .warm_pool import (
 )
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
+SERVICE_SERVED_MODELS_ENV_VAR = "OPENMED_SERVICE_SERVED_MODELS"
+DEFAULT_SERVED_MODELS = (
+    "disease_detection_superclinical",
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+)
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
@@ -705,6 +710,25 @@ def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
     return tuple(models)
 
 
+class ModelNotServedError(ValueError):
+    """A network request selected a model outside the operator's served set."""
+
+    def __init__(self) -> None:
+        super().__init__("model_not_served")
+
+
+def _is_served_identifier(value: str) -> bool:
+    # Deliberately pure: never expand a home directory or probe the filesystem.
+    return (
+        bool(
+            re.fullmatch(
+                r"[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)?", value
+            )
+        )
+        and ".." not in value
+    )
+
+
 @dataclass
 class ServiceRuntime:
     """Shared runtime state for the REST service."""
@@ -712,6 +736,7 @@ class ServiceRuntime:
     profile: str
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
+    served_models: Optional[Tuple[str, ...]] = None
     max_resident_models: Optional[int] = None
     model_memory_budget_bytes: Optional[int] = None
     default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
@@ -738,6 +763,14 @@ class ServiceRuntime:
     )
 
     metrics: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        if self.served_models is not None and any(
+            not _is_served_identifier(item) for item in self.served_models
+        ):
+            raise ValueError(
+                "Served model configuration must contain public identifiers only"
+            )
 
     @classmethod
     def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
@@ -767,6 +800,15 @@ class ServiceRuntime:
             profile=profile,
             config=config,
             preload_models=preload_models,
+            served_models=(
+                tuple(
+                    item.strip()
+                    for item in os.environ[SERVICE_SERVED_MODELS_ENV_VAR].split(",")
+                    if item.strip()
+                )
+                if SERVICE_SERVED_MODELS_ENV_VAR in os.environ
+                else None
+            ),
             max_resident_models=max_resident_models,
             model_memory_budget_bytes=memory_budget_bytes,
             default_model_footprint_bytes=default_model_footprint_bytes,
@@ -949,6 +991,7 @@ class ServiceRuntime:
 
     def unload_model(self, model_name: str) -> Dict[str, Any]:
         """Unload one inactive model from the shared loader cache."""
+        self.validate_served_model(model_name)
         return self.get_loader().unload_model(model_name)
 
     def unload_all_models(self) -> Dict[str, Any]:
@@ -958,7 +1001,7 @@ class ServiceRuntime:
     def loaded_models(self) -> Dict[str, Any]:
         """Return cache and keep-alive status for the service runtime."""
         if self._warm_pool is None and self._loader is None:
-            return {
+            result = {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
                 "memory_budget_bytes": self.model_memory_budget_bytes,
@@ -968,7 +1011,40 @@ class ServiceRuntime:
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
-        return self.get_loader().loaded_models()
+        else:
+            result = dict(self.get_loader().loaded_models())
+        result["served_models"] = list(self.served_model_ids())
+        result["model_policy"] = self.model_policy_report()
+        return result
+
+    def served_model_ids(self) -> tuple[str, ...]:
+        """Return the operator-selected public ids without filesystem inspection."""
+        candidates = self.served_models
+        if candidates is None:
+            candidates = (*DEFAULT_SERVED_MODELS, *self.preload_models)
+            if self.config.pii_model:
+                candidates += (self.config.pii_model,)
+        return tuple(
+            sorted({item for item in candidates if _is_served_identifier(item)})
+        )
+
+    def validate_served_model(self, model_name: str) -> str:
+        """Reject undeclared identifiers before logging, loading, or path probing."""
+        if (
+            not _is_served_identifier(model_name)
+            or model_name not in self.served_model_ids()
+        ):
+            raise ModelNotServedError()
+        return model_name
+
+    def model_policy_report(self) -> dict[str, Any]:
+        """Expose value-free production findings for deployment self-checks."""
+        return {
+            "explicit": self.served_models is not None,
+            "findings": ["served_models_not_explicit"]
+            if self.profile == "prod" and self.served_models is None
+            else [],
+        }
 
     def get_workflow_store(self) -> Any:
         """Return the in-process MCP workflow state store."""
@@ -994,7 +1070,7 @@ class ServiceRuntime:
         return parse_keep_alive(keep_alive)
 
     def _resolve_model_name(self, model_name: str) -> str:
-        validated = validate_model_name(model_name)
+        validated = self.validate_served_model(model_name)
         loader = self.get_model_loader()
         resolver = getattr(loader, "resolve_model_name", None)
         if callable(resolver):

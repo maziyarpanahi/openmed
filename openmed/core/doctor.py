@@ -92,6 +92,7 @@ def run_diagnostics() -> list[dict[str, Any]]:
     _check_low_resource_envelope(checks)
     _check_optional_dependencies(checks)
     _check_hf_token(checks)
+    _check_persisted_credentials(checks)
     _check_network_environment(checks)
     _check_offline_mode(checks)
     _check_manifest(checks)
@@ -232,6 +233,33 @@ def _check_hf_token(checks: list[dict[str, Any]]) -> None:
     )
     check["present"] = token_present
     checks.append(check)
+
+
+def _check_persisted_credentials(checks: list[dict[str, Any]]) -> None:
+    """Report legacy config secrets without returning their contents or paths."""
+    import warnings
+
+    from .config import PROFILES_DIR, _load_toml, resolve_config_path
+
+    paths = [resolve_config_path(), *PROFILES_DIR.glob("*.toml")]
+    present = False
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            for path in paths:
+                if path.is_file() and _load_toml(path).get("hf_token"):
+                    present = True
+    except (OSError, ValueError):
+        checks.append(_check("persisted_credentials", "WARN", "config_unreadable"))
+        return
+    checks.append(
+        _check(
+            "persisted_credentials",
+            "WARN" if present else "PASS",
+            "persisted_credential" if present else "no_persisted_credentials",
+            "Remove stored hf_token values and use HF_TOKEN." if present else None,
+        )
+    )
 
 
 def _check_network_environment(checks: list[dict[str, Any]]) -> None:

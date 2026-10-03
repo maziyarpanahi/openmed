@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from threading import Event
 from typing import Any
 
@@ -28,6 +29,107 @@ from .smart_backend import (
     SMARTBackendError,
     SMARTBackendIngestionSummary,
 )
+
+
+class BulkPathError(ValueError):
+    """Controlled rejection of untrusted service-side filesystem authority."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+@dataclass(frozen=True)
+class BulkStoragePolicy:
+    """Operator-owned local roots; request paths never grant filesystem access."""
+
+    input_roots: tuple[Path, ...] = ()
+    output_root: Path | None = None
+
+    @classmethod
+    def from_env(cls) -> "BulkStoragePolicy":
+        """Read trusted root configuration once, before handling requests."""
+        roots = tuple(
+            Path(item.strip()).expanduser().resolve()
+            for item in os.getenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", "").split(",")
+            if item.strip()
+        )
+        output = os.getenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT")
+        return cls(roots, Path(output).expanduser().resolve() if output else None)
+
+    def prepare(
+        self,
+        *,
+        input_dir: str | None,
+        output_dir: str,
+        checkpoint_path: str | None,
+        job_id: str,
+    ) -> tuple[Path | None, Path, Path]:
+        """Validate all inputs, then reserve a new private job-owned output."""
+        if self.output_root is None or (input_dir is not None and not self.input_roots):
+            raise BulkPathError("bulk_paths_disabled")
+        if checkpoint_path is not None:
+            raise BulkPathError("path_invalid")
+        output_parts = _relative_path_parts(output_dir)
+        input_parts = _relative_path_parts(input_dir) if input_dir is not None else None
+        source = None
+        if input_parts is not None:
+            for root in self.input_roots:
+                candidate = _confined_path(root, input_parts)
+                if candidate.is_dir():
+                    source = candidate
+                    break
+            if source is None:
+                raise BulkPathError("path_invalid")
+            # BulkDataGateway walks recursively: reject sibling file and directory
+            # links too, not just a link in the submitted directory itself.
+            if any(path.is_symlink() for path in source.rglob("*")):
+                raise BulkPathError("path_outside_root")
+        destination = _confined_path(self.output_root, output_parts)
+        if destination.exists():
+            raise BulkPathError("path_exists")
+        if not destination.parent.is_dir():
+            raise BulkPathError("path_invalid")
+        try:
+            destination.mkdir(mode=0o700, exist_ok=False)
+        except FileExistsError:
+            raise BulkPathError("path_exists") from None
+        except OSError:
+            raise BulkPathError("path_invalid") from None
+        return source, destination, destination / f".checkpoint-{job_id}.json"
+
+
+def _relative_path_parts(value: str) -> tuple[str, ...]:
+    if (
+        not value
+        or value != value.strip()
+        or "\\" in value
+        or "~" in value
+        or "\x00" in value
+    ):
+        raise BulkPathError("path_invalid")
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        posix.is_absolute()
+        or windows.drive
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+    ):
+        raise BulkPathError("path_invalid")
+    return posix.parts
+
+
+def _confined_path(root: Path, parts: tuple[str, ...]) -> Path:
+    current = root
+    for part in parts:
+        current = current / part
+        if current.is_symlink():
+            raise BulkPathError("path_outside_root")
+    try:
+        current.resolve().relative_to(root)
+    except (ValueError, OSError, RuntimeError):
+        raise BulkPathError("path_outside_root") from None
+    return current
 
 
 @dataclass(frozen=True)

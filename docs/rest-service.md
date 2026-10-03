@@ -56,12 +56,41 @@ uv pip install -e ".[hf,service]"
 Start the API server:
 
 ```bash
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Keep this loopback bind for local use. Before exposing the service on a network,
 configure [authentication](serving/authentication.md), TLS at the ingress or
 reverse proxy, and an exact trusted-host allowlist.
+
+The reference launcher configures `StructuredJsonLogFormatter` for
+`openmed.service.access` and disables `uvicorn.access`. It emits exactly one
+structured record per request (method, route template, status, duration,
+request id), with no raw target/query string or client address.
+`OPENMED_SERVICE_LOG_LEVEL=off` suppresses those records too. Custom ASGI
+launchers must disable raw access logs (Uvicorn: `--no-access-log`) and configure
+the structured logger explicitly; otherwise rejected URLs may expose PHI.
+Request-ID validation is separate: do not put sensitive values into
+`X-Request-ID`, and have a trusted ingress replace caller-provided request ids
+with opaque values before exposing this launch configuration publicly.
+
+### Served-model policy
+
+Set `OPENMED_SERVICE_SERVED_MODELS` to the comma-separated model ids or registry
+keys that network clients may select. Requests cannot select filesystem paths,
+home-relative names or undeclared Hub ids. Rejection occurs before loader/path
+inspection and returns `422 model_not_served` without echoing the value. REST,
+GraphQL, gRPC, async jobs, bulk/SMART and the privacy gateway use this shared
+runtime policy; Python-library and CLI model selection remain unchanged.
+
+Without an explicit set, the served ids are the documented defaults
+`disease_detection_superclinical` and
+`OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`, configured public preload ids,
+and the profile's public PII model id. `/models/loaded` includes `served_models`
+and a value-free `model_policy` self-check input. Production without an explicit
+set reports `served_models_not_explicit`; declare the intended set before
+deployment. This selection boundary does not authorize model acquisition:
+operators must separately provision the approved models and network policy.
 
 ## Postman Collection
 
@@ -151,7 +180,7 @@ export.
 Optional profile selection (defaults to `prod`):
 
 ```bash
-OPENMED_PROFILE=dev uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_PROFILE=dev python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 ## Browser and Host Allowlists
@@ -174,7 +203,7 @@ Example browser front-end configuration:
 ```bash
 OPENMED_SERVICE_CORS_ORIGINS=http://localhost:5173 \
 OPENMED_SERVICE_TRUSTED_HOSTS=127.0.0.1,localhost \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 For a reverse proxy in front of the service, configure the public browser
@@ -183,14 +212,14 @@ origin and the host header forwarded to Uvicorn:
 ```bash
 OPENMED_SERVICE_CORS_ORIGINS=https://clinic-ui.example.com \
 OPENMED_SERVICE_TRUSTED_HOSTS=api.example.com \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Optional shared model preload at startup:
 
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_PRELOAD_MODELS` is a comma-separated list of registry aliases or full Hugging Face ids. Empty entries are ignored and duplicates are removed.
@@ -200,7 +229,7 @@ Optional warm-pool resident model limit:
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
 OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MAX_RESIDENT_MODELS` bounds how many models remain resident in the shared warm-pool. When the limit is exceeded, the least-recently-used idle model is unloaded. Omit it for unbounded resident model caching.
@@ -208,7 +237,7 @@ uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 Optional default model keep-alive:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_KEEP_ALIVE` accepts seconds as a number or duration strings such as `30s`, `5m`, `1h30m`, or `1d`. Omit it for indefinite caching, use `0` for unload-after-request behavior, or use request-level `keep_alive` to override the default for one call.
@@ -216,7 +245,7 @@ OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 127.0.0.1 
 Optional request text cap:
 
 ```bash
-OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
@@ -230,7 +259,7 @@ Optional privacy-gateway egress endpoint:
 
 ```bash
 OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT=https://llm-proxy.example.com/complete \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `POST /privacy-gateway/complete` refuses to call an external LLM unless
@@ -250,7 +279,7 @@ OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
 OPENMED_SERVICE_BATCH_HIGH_WATERMARK=256 \
 OPENMED_SERVICE_BATCH_LOW_WATERMARK=128 \
 OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS=1000 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Dynamic batching is off by default. When enabled, `/pii/extract` groups
@@ -270,7 +299,7 @@ Optional request coalescing:
 
 ```bash
 OPENMED_SERVICE_COALESCING_ENABLED=true \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Request coalescing is off by default. When enabled, identical concurrent
@@ -286,7 +315,7 @@ OPENMED_SERVICE_RETRY_MAX_ATTEMPTS=3 \
 OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS=0.05 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS=30 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Model load and inference work is retried with bounded exponential backoff and
@@ -298,7 +327,7 @@ with error code `circuit_breaker_open` and a `Retry-After` header. See
 Optional graceful-shutdown drain timeout:
 
 ```bash
-OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
@@ -310,7 +339,7 @@ and the service waits up to this timeout for in-flight `/analyze`,
 Optional pull-only Prometheus metrics endpoint:
 
 ```bash
-OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+OPENMED_SERVICE_METRICS_ENABLED=true python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `GET /metrics` is disabled by default and returns `404` unless
@@ -332,7 +361,7 @@ OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET=512MiB \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS=128 \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS=512 \
 OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN=65536 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET` is disabled when unset. It accepts
@@ -354,7 +383,7 @@ Optional OpenTelemetry tracing:
 
 ```bash
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Tracing is disabled by default and the OTLP exporter is created only when
