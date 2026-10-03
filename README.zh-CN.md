@@ -726,7 +726,7 @@ OpenMed SDK 源代码基于 [Apache-2.0 License](LICENSE) 发布。第三方资�
 
 如果 OpenMed 对你有帮助，点个 star 能帮助更多人发现它。
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
