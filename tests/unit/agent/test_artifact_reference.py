@@ -25,6 +25,13 @@ OTHER_ARTIFACT_ID = "art_" + "2" * 32
 SHA256 = "a" * 64
 
 
+def _deeply_nested_json_value(value: Any, depth: int = 70) -> Any:
+    nested = value
+    for _ in range(depth):
+        nested = [nested]
+    return nested
+
+
 def _payload(**updates: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "artifact_id": ARTIFACT_ID,
@@ -212,9 +219,20 @@ def test_deeply_nested_json_fails_with_a_value_free_contract_error() -> None:
     with pytest.raises(ArtifactReferenceError) as caught:
         ArtifactReference.from_json(payload)
 
-    assert caught.value.code == "malformed_json"
+    assert caught.value.code == "json_too_deep"
     assert marker not in "".join(traceback.format_exception(caught.value))
     assert caught.value.__context__ is None
+
+
+def test_bounded_nested_json_returns_typed_depth_error_without_values() -> None:
+    marker = "SYNTHETIC_PRIVATE_ARTIFACT_SENTINEL"
+    payload = json.dumps(_payload(artifact_id=_deeply_nested_json_value(marker)))
+
+    with pytest.raises(ArtifactReferenceError) as caught:
+        ArtifactReference.from_json(payload)
+
+    assert caught.value.code == "json_too_deep"
+    assert marker not in "".join(traceback.format_exception(caught.value))
 
 
 def test_oversized_json_integer_fails_with_a_contract_error() -> None:

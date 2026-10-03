@@ -17,6 +17,7 @@ from typing import Any, Final
 from .artifact_reference import (
     ArtifactReference,
     ArtifactReferenceError,
+    _json_exceeds_max_depth,
     validate_artifact_references,
 )
 from .correlation import CorrelationIdError, RunId
@@ -228,6 +229,8 @@ class ReviewerHandoffPacket:
         except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
             pass
         else:
+            if _json_exceeds_max_depth(data):
+                raise ReviewerHandoffError("json_too_deep")
             try:
                 return cls.from_dict(data, now=now)
             except ReviewerHandoffError:

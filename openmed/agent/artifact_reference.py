@@ -34,6 +34,7 @@ _ORDERED_FIELDS = (
     "sha256",
     "byte_size",
 )
+_MAX_JSON_DEPTH: Final = 64
 
 
 class ArtifactKind(str, Enum):
@@ -147,6 +148,8 @@ class ArtifactReference:
         ):
             pass
         else:
+            if _json_exceeds_max_depth(data):
+                raise ArtifactReferenceError("json_too_deep")
             return cls.from_dict(data)
         raise ArtifactReferenceError("malformed_json")
 
@@ -221,6 +224,19 @@ def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise ArtifactReferenceError("duplicate_field")
         result[key] = value
     return result
+
+
+def _json_exceeds_max_depth(value: Any, max_depth: int = _MAX_JSON_DEPTH) -> bool:
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    while stack:
+        current, depth = stack.pop()
+        if depth > max_depth:
+            return True
+        if isinstance(current, Mapping):
+            stack.extend((item, depth + 1) for item in current.values())
+        elif isinstance(current, list):
+            stack.extend((item, depth + 1) for item in current)
+    return False
 
 
 __all__ = [

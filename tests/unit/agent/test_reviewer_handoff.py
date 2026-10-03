@@ -23,6 +23,24 @@ from openmed.agent.reviewer_handoff import REVIEWER_HANDOFF_SCHEMA_VERSION
 NOW = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
 
 
+def _deeply_nested_json_value(value: Any, depth: int = 70) -> Any:
+    nested = value
+    for _ in range(depth):
+        nested = [nested]
+    return nested
+
+
+def test_handoff_json_depth_failure_is_typed_and_value_free() -> None:
+    marker = "SYNTHETIC_PRIVATE_HANDOFF_SENTINEL"
+    payload = _payload(evidence_references=_deeply_nested_json_value(marker))
+
+    with pytest.raises(ReviewerHandoffError) as caught:
+        ReviewerHandoffPacket.from_json(json.dumps(payload), now=NOW)
+
+    assert caught.value.code == "json_too_deep"
+    assert marker not in "".join(traceback.format_exception(caught.value))
+
+
 def _reference(index: int = 1, **updates: Any) -> dict[str, Any]:
     reference: dict[str, Any] = {
         "artifact_id": "art_" + f"{index:032x}",

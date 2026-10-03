@@ -19,6 +19,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final, Protocol, TypeVar, cast
 
+from openmed.agent.artifact_reference import _json_exceeds_max_depth
+
 APPROVAL_TOKEN_SCHEMA_VERSION: Final = "openmed.agent.approval_token.v1"
 APPROVAL_RECEIPT_SCHEMA_VERSION: Final = "openmed.agent.approval_receipt.v1"
 APPROVAL_TOKEN_SIGNATURE_ALGORITHM: Final = "hmac-sha256"
@@ -502,6 +504,8 @@ def _parse_json(
         raise
     except BaseException:
         raise ApprovalTokenValidationError("invalid_json", location) from None
+    if _json_exceeds_max_depth(decoded):
+        raise ApprovalTokenValidationError("json_too_deep", location)
     if not isinstance(decoded, Mapping):
         raise ApprovalTokenValidationError("not_a_mapping", location)
     return decoded

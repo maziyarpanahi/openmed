@@ -43,6 +43,27 @@ APPROVAL_RECEIPT_DIGEST = "sha256:" + "b" * 64
 COMMIT_DIGESTS = tuple("sha256:" + digit * 64 for digit in ("4", "5", "6"))
 
 
+def _deeply_nested_json_value(value: Any, depth: int = 70) -> Any:
+    nested = value
+    for _ in range(depth):
+        nested = [nested]
+    return nested
+
+
+def test_checkpoint_json_depth_failure_is_typed_and_value_free() -> None:
+    marker = "SYNTHETIC_PRIVATE_RECOVERY_SENTINEL"
+    payload_data = _checkpoint().to_dict()
+    payload_data["sequence"] = _deeply_nested_json_value(marker)
+    payload = json.dumps(payload_data)
+
+    with pytest.raises(RecoveryError) as caught:
+        RecoveryCheckpoint.from_json(payload)
+
+    assert caught.value.code == "json_too_deep"
+    assert caught.value.field_name == "checkpoint"
+    assert marker not in "".join(traceback.format_exception(caught.value))
+
+
 def _action(index: int) -> ActionId:
     return ActionId(f"act_{index:032x}")
 
