@@ -1,7 +1,10 @@
 """CI build and release-budget wiring tests."""
 
+import json
 import shlex
+import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -68,6 +71,121 @@ def test_build_job_enforces_and_uploads_release_budgets():
     assert "python scripts/release/check_import_budget.py" in workflow
     assert "size-budget-report.json" in workflow
     assert "--gate-file" not in workflow
+
+
+def test_budget_refresh_is_verified_against_the_frozen_pr_base():
+    job = _load_ci()["jobs"]["build"]
+    steps = job["steps"]
+    step = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify refreshed wheel-size baseline"
+    )
+    assert step["if"] == "github.event_name == 'pull_request'"
+    assert step["shell"] == "bash"
+    assert step["env"] == {"BASE_SHA": "${{ github.event.pull_request.base.sha }}"}
+    assert step.get("continue-on-error", "false") == "false"
+    assert 'git fetch --no-tags --depth=1 origin "$BASE_SHA"' in step["run"]
+    assert (
+        'git diff --quiet "$BASE_SHA" HEAD -- gates/release_budgets.json' in step["run"]
+    )
+    assert 'if [ "$diff_status" -ne 1 ]; then\n    exit "$diff_status"' in step["run"]
+    assert 'git archive "$BASE_SHA" | tar -x -C "$baseline_source"' in step["run"]
+    assert (
+        'uv build --out-dir "$RUNNER_TEMP/openmed-baseline-dist" "$baseline_source"'
+        in step["run"]
+    )
+    assert "|| true" not in step["run"]
+    assert step["id"] == "wheel_baseline"
+    assert 'echo "measured=true" >> "$GITHUB_OUTPUT"' in step["run"]
+    upload = next(
+        step for step in steps if step.get("name") == "Upload wheel baseline evidence"
+    )
+    assert upload["with"]["path"] == "${{ runner.temp }}/openmed-baseline-dist/"
+    assert upload["if"] == "always() && steps.wheel_baseline.outputs.measured == 'true'"
+    artifacts = next(
+        step for step in steps if step.get("name") == "Upload build artifacts"
+    )
+    assert artifacts["with"]["path"].splitlines() == [
+        "dist/",
+        "size-budget-report.json",
+    ]
+    size_step = next(
+        step
+        for step in steps
+        if step.get("name")
+        == "Enforce wheel size budget and record language-extra footprints"
+    )
+    assert steps.index(step) < steps.index(size_step)
+
+
+@pytest.mark.parametrize("delta", [0, -1, 1])
+def test_budget_refresh_comparison_requires_the_exact_measured_size(
+    tmp_path, monkeypatch, delta
+):
+    steps = _load_ci()["jobs"]["build"]["steps"]
+    step = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify refreshed wheel-size baseline"
+    )
+    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    wheel_dir = tmp_path / "dist"
+    wheel_dir.mkdir()
+    wheel = wheel_dir / "openmed-test-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("openmed-test.dist-info/WHEEL", "Generator: hatchling test\n")
+    measured = wheel.stat().st_size
+    expected = measured + delta
+    gates = tmp_path / "gates"
+    gates.mkdir()
+    (gates / "release_budgets.json").write_text(
+        json.dumps(
+            {
+                "entries": {
+                    "package::openmed::wheel": {
+                        "metrics": {
+                            "baseline_bytes": expected,
+                        }
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["-", str(wheel_dir)])
+    monkeypatch.setenv("BASE_SHA", "a" * 40)
+    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "uv test\n")
+    if measured == expected:
+        exec(compile(code, "<baseline-verification>", "exec"), {})
+    else:
+        with pytest.raises(SystemExit, match="Wheel baseline mismatch"):
+            exec(compile(code, "<baseline-verification>", "exec"), {})
+    receipt = json.loads((wheel_dir / "baseline-receipt.json").read_text())
+    assert receipt["base_sha"] == "a" * 40
+    assert receipt["measured_bytes"] == measured
+    assert receipt["proposed_baseline_bytes"] == expected
+    assert receipt["uv"] == "uv test"
+    assert receipt["wheel_metadata"] == "Generator: hatchling test\n"
+    assert receipt["matches"] is (delta == 0)
+
+
+@pytest.mark.parametrize("wheel_count", [0, 2])
+def test_budget_refresh_rejects_missing_or_ambiguous_wheels(
+    tmp_path, monkeypatch, wheel_count
+):
+    steps = _load_ci()["jobs"]["build"]["steps"]
+    step = next(
+        step
+        for step in steps
+        if step.get("name") == "Verify refreshed wheel-size baseline"
+    )
+    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    for index in range(wheel_count):
+        (tmp_path / f"openmed-{index}-py3-none-any.whl").write_bytes(b"x")
+    monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
+    with pytest.raises(SystemExit, match="Expected exactly one frozen-base wheel"):
+        exec(compile(code, "<baseline-verification>", "exec"), {})
 
 
 def test_sdk_compatibility_matches_advertised_python_and_os_support():

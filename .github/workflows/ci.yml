@@ -618,6 +618,65 @@ jobs:
       run: |
         uv build
 
+    - name: Verify refreshed wheel-size baseline
+      id: wheel_baseline
+      shell: bash
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        git fetch --no-tags --depth=1 origin "$BASE_SHA"
+        if git diff --quiet "$BASE_SHA" HEAD -- gates/release_budgets.json; then
+          echo "Release budgets unchanged; no baseline refresh to verify."
+          exit 0
+        else
+          diff_status=$?
+          if [ "$diff_status" -ne 1 ]; then
+            exit "$diff_status"
+          fi
+        fi
+        baseline_source="$(mktemp -d)"
+        git archive "$BASE_SHA" | tar -x -C "$baseline_source"
+        uv build --out-dir "$RUNNER_TEMP/openmed-baseline-dist" "$baseline_source"
+        echo "measured=true" >> "$GITHUB_OUTPUT"
+        python - "$RUNNER_TEMP/openmed-baseline-dist" <<'PY'
+        import hashlib
+        import json
+        import os
+        import platform
+        import subprocess
+        import sys
+        import zipfile
+        from pathlib import Path
+
+        wheels = list(Path(sys.argv[1]).glob("openmed-*.whl"))
+        if len(wheels) != 1:
+            raise SystemExit("Expected exactly one frozen-base wheel")
+        wheel = wheels[0]
+        measured = wheel.stat().st_size
+        budget = json.loads(Path("gates/release_budgets.json").read_text())
+        expected = budget["entries"]["package::openmed::wheel"]["metrics"]["baseline_bytes"]
+        with zipfile.ZipFile(wheel) as archive:
+            metadata_paths = [name for name in archive.namelist() if name.endswith(".dist-info/WHEEL")]
+            if len(metadata_paths) != 1:
+                raise SystemExit("Expected exactly one wheel metadata record")
+            wheel_metadata = archive.read(metadata_paths[0]).decode("utf-8")
+        receipt = {
+            "base_sha": os.environ["BASE_SHA"],
+            "python": platform.python_version(),
+            "uv": subprocess.check_output(["uv", "--version"], text=True).strip(),
+            "wheel_metadata": wheel_metadata,
+            "measured_bytes": measured,
+            "proposed_baseline_bytes": expected,
+            "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+            "matches": measured == expected,
+        }
+        (wheel.parent / "baseline-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+        print(f"Frozen-base wheel: {measured} bytes, sha256={hashlib.sha256(wheel.read_bytes()).hexdigest()}")
+        if measured != expected:
+            raise SystemExit(f"Wheel baseline mismatch: measured {measured}, proposed {expected}")
+        PY
+
     - name: Enforce wheel size budget and record language-extra footprints
       run: |
         python scripts/release/check_size_budget.py \
@@ -656,3 +715,10 @@ jobs:
           dist/
           size-budget-report.json
       if: always()
+
+    - name: Upload wheel baseline evidence
+      if: always() && steps.wheel_baseline.outputs.measured == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: wheel-size-baseline
+        path: ${{ runner.temp }}/openmed-baseline-dist/
