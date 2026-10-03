@@ -1,7 +1,9 @@
 """CI build and release-budget wiring tests."""
 
+import shlex
 from pathlib import Path
 
+import pytest
 import yaml
 
 try:
@@ -118,3 +120,94 @@ def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
     gate = jobs["sdk-compatibility-gate"]
     assert gate["needs"] == "sdk-compatibility" and gate["if"] == "always()"
     assert 'test "$MATRIX_RESULT" = success' in gate["steps"][0]["run"]
+
+
+def _assert_full_suite_diagnostics(lane):
+    assert lane.get("continue-on-error", "false") == "false"
+    steps = lane["steps"]
+    test_step = next(step for step in steps if step.get("name") == "Test with pytest")
+    assert test_step["timeout-minutes"] == "45"
+    assert test_step.get("continue-on-error", "false") == "false"
+    assert "if" not in test_step
+    # Exact argv retains default full-suite discovery and rejects selection,
+    # early-stop flags, shell success overrides, and changes to coverage.
+    assert shlex.split(test_step["run"]) == [
+        "uv",
+        "run",
+        "--frozen",
+        "pytest",
+        "--cov=openmed",
+        "--cov-report=xml",
+        "--cov-report=term-missing",
+        "--tb=line",
+        "--show-capture=no",
+        "--color=no",
+        "--code-highlight=no",
+        "-ra",
+        "--junitxml=pytest-results.xml",
+    ]
+    artifact = next(
+        step for step in steps if step.get("name") == "Upload test diagnostics"
+    )
+    assert artifact["if"] == "always()"
+    assert artifact["uses"] == (
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    )
+    assert artifact["with"]["name"] == (
+        "pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.run_attempt }}"
+    )
+    assert artifact["with"]["path"].splitlines() == [
+        "pytest-results.xml",
+        "coverage.xml",
+    ]
+    assert artifact["with"]["if-no-files-found"] == "warn"
+    assert steps.index(test_step) < steps.index(artifact)
+
+
+def test_full_suite_diagnostics_preserve_discovery_and_failure_semantics():
+    _assert_full_suite_diagnostics(_load_ci()["jobs"]["test"])
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    options = project["tool"]["pytest"]["ini_options"]
+    assert options["testpaths"] == ["tests"]
+    assert not options.get("addopts")
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    ["-k smoke", "-m 'not slow'", "-x", "--maxfail=1", "--ignore=tests", "|| true"],
+)
+def test_full_suite_diagnostics_contract_rejects_reduced_or_masked_runs(suffix):
+    lane = _load_ci()["jobs"]["test"]
+    step = next(
+        step for step in lane["steps"] if step.get("name") == "Test with pytest"
+    )
+    step["run"] += " " + suffix
+    with pytest.raises(AssertionError):
+        _assert_full_suite_diagnostics(lane)
+
+
+@pytest.mark.parametrize(
+    ("step_name", "field", "value"),
+    [
+        ("Test with pytest", "timeout-minutes", "360"),
+        ("Test with pytest", "continue-on-error", "true"),
+        ("Test with pytest", "if", "false"),
+        ("Upload test diagnostics", "if", "success()"),
+        ("Upload test diagnostics", "uses", "actions/upload-artifact@v7"),
+    ],
+)
+def test_full_suite_diagnostics_contract_rejects_unbounded_or_optional_steps(
+    step_name, field, value
+):
+    lane = _load_ci()["jobs"]["test"]
+    step = next(step for step in lane["steps"] if step.get("name") == step_name)
+    step[field] = value
+    with pytest.raises(AssertionError):
+        _assert_full_suite_diagnostics(lane)
+
+
+def test_full_suite_diagnostics_contract_rejects_job_failure_override():
+    lane = _load_ci()["jobs"]["test"]
+    lane["continue-on-error"] = "true"
+    with pytest.raises(AssertionError):
+        _assert_full_suite_diagnostics(lane)
