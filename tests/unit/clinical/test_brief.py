@@ -35,22 +35,21 @@ SENTENCES = (
 )
 
 
-def fixture_context():
-    text = " ".join(SENTENCES)
+def fixture_context(
+    sentences=SENTENCES,
+    fields=("admission_reason", "discharge_diagnoses", "hospital_course"),
+):
+    text = " ".join(sentences)
     result = DeidentificationResult(text, text, [], "mask", datetime(2026, 1, 1))
     facts = [
         BriefFact(
             "synthetic:ref-" + str(i), field, "affirmed", "certain", "recent", "patient"
         )
-        for i, field in enumerate(
-            ("admission_reason", "discharge_diagnoses", "hospital_course")
-        )
+        for i, field in enumerate(fields)
     ]
     policy = brief_policy_fingerprint(text, tuple(facts))
     rows = []
-    for i, (sentence, field) in enumerate(
-        zip(SENTENCES, ("admission_reason", "discharge_diagnoses", "hospital_course"))
-    ):
+    for i, (sentence, field) in enumerate(zip(sentences, fields)):
         ref = "synthetic:ref-" + str(i)
         start = text.index(sentence)
         row = dict(
@@ -127,6 +126,82 @@ def test_review_is_never_invented():
     brief = build_clinical_brief(result, model="extractive")
     assert brief.refusal_reason is BriefRefusal.REVIEW_REQUIRED
     assert brief.summary == ""
+
+
+def test_budget_classifies_longer_reviewed_fields_and_binds_estimate():
+    sentences = (
+        "The admission problem was dehydration after several days of illness.",
+        "The discharge diagnosis remained dehydration without complications.",
+        "Symptoms improved after oral fluids during the hospital course.",
+    )
+    value, context = fixture_context(sentences)
+    assert sum(map(len, sentences)) > 160
+    brief = build_clinical_brief(value, model="extractive", context=context)
+    assert brief.refusal_reason is None
+    assert brief.to_dict()["status"] == "needs_review"
+    evidence = brief.metrics["length_budget"]
+    assert evidence["mapping_id"] == "brief-profile-evidence-classes-v1"
+    assert evidence["estimator_id"] == "utf8-byte-upper-bound-v1"
+    assert not any(sentence in json.dumps(evidence) for sentence in sentences)
+    audit = brief.to_dict()
+    audit.pop("digest")
+    assert _digest(audit) == brief.digest
+    audit["metrics"]["length_budget"]["estimator_id"] = "changed"
+    assert _digest(audit) != brief.digest
+
+
+def test_budget_mapping_covers_every_declared_field_and_is_immutable():
+    from openmed.clinical.brief import _PROFILE_EVIDENCE_CLASSES
+    from openmed.clinical.summary_profiles import SUMMARY_FIELD_NAMES
+
+    assert set(_PROFILE_EVIDENCE_CLASSES) == set(SUMMARY_FIELD_NAMES)
+    with pytest.raises(TypeError):
+        _PROFILE_EVIDENCE_CLASSES["admission_reason"] = "key_findings"
+
+
+def test_real_class_overflow_has_a_distinct_value_free_refusal():
+    value, context = fixture_context(("A" * 193 + ".", *SENTENCES[1:]))
+    brief = build_clinical_brief(
+        value, context=context, model=lambda _: pytest.fail("generation")
+    )
+    assert brief.refusal_reason is BriefRefusal.LENGTH_BUDGET_EXCEEDED
+    assert brief.to_dict()["stages"][-1] == "length_budget"
+    assert brief.summary == ""
+    assert "A" * 193 not in json.dumps(brief.to_dict())
+
+
+def test_budget_rejects_unmapped_reviewed_field():
+    value, context = fixture_context(
+        fields=("private-field", "discharge_diagnoses", "hospital_course")
+    )
+    brief = build_clinical_brief(value, model="extractive", context=context)
+    assert brief.refusal_reason is BriefRefusal.INVALID_EVIDENCE
+    assert brief.to_dict()["stages"][-1] == "length_budget"
+    assert "private-field" not in json.dumps(brief.to_dict())
+
+
+@pytest.mark.parametrize(
+    "reason", ["unregistered_alias", "artifact_not_cached", "runtime_unavailable"]
+)
+def test_unavailable_backend_is_typed_without_private_details(reason):
+    from openmed.clinical.summarize_backends import LocalSummarizerError
+
+    value, context = fixture_context()
+
+    def unavailable(_):
+        raise LocalSummarizerError("PRIVATE_BACKEND_PATH", reason=reason)
+
+    brief = build_clinical_brief(value, context=context, model=unavailable)
+    assert brief.refusal_reason is BriefRefusal.MODEL_UNAVAILABLE
+    assert brief.summary == ""
+    assert "PRIVATE_BACKEND_PATH" not in json.dumps(brief.to_response())
+
+
+def test_unregistered_alias_refuses_before_generation():
+    value, context = fixture_context()
+    brief = build_clinical_brief(value, context=context, model="not-a-local-model")
+    assert brief.refusal_reason is BriefRefusal.MODEL_UNAVAILABLE
+    assert brief.to_dict()["stages"] == ["deidentification"]
 
 
 @pytest.mark.parametrize("label", ["contradiction", "neutral"])

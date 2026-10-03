@@ -674,6 +674,13 @@
         ]
 
         private var container: ModelContainer?
+        private var modelDirectoryURL: URL?
+
+        /// Internal dependency injection for runtime lifecycle contract tests.
+        init(container: ModelContainer?, modelDirectoryURL: URL? = nil) {
+            self.container = container
+            self.modelDirectoryURL = modelDirectoryURL
+        }
 
         public init(modelDirectoryURL: URL) async throws {
             let missing = Self.missingRequiredFiles(in: modelDirectoryURL)
@@ -699,6 +706,7 @@
                 from: modelDirectoryURL,
                 using: OpenMedMapleTokenizerLoader()
             )
+            self.modelDirectoryURL = modelDirectoryURL
         }
 
         /// Returns whether all files needed for exact-head inference exist.
@@ -781,6 +789,10 @@
             evaluate: @Sendable (String, String) async throws -> Data,
             privacyCheck: @Sendable (String) throws -> Bool
         ) async throws -> ClinicalBrief {
+            guard container != nil,
+                let modelDirectoryURL,
+                Self.isModelDirectoryReady(modelDirectoryURL)
+            else { throw ClinicalBriefError.modelUnavailable }
             guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024 else {
                 throw ClinicalBriefError.invalidPacket
             }

@@ -40,6 +40,18 @@ hf download OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 --cache-dir ~/.cache/
 Missing dependencies raise
 `MissingOptionalDependencyError`; missing weights, context overflow, insufficient
 estimated memory, and malformed responses fail closed with content-free errors.
+`LocalSummarizerError.reason` is a controlled code: `unsupported_mode`,
+`unregistered_alias`, `artifact_not_cached`, `invalid_configuration`,
+`capability_unsupported`, `invalid_memory_budget`, `memory_budget_exceeded`,
+`input_limit_exceeded`, `context_exceeded`, `invalid_output`,
+`output_limit_exceeded`, `deidentification_unavailable`, `runtime_unavailable`,
+`invalid_backend`, or `execution_failed`. Remote aliases raise the compatible
+subclass `RemoteSummarizerError` with `reason="remote_backend"`. Reasons and
+messages never include the model alias, filesystem path, note, or underlying
+exception. Custom backend errors are reconstructed without their exception chain;
+existing `except LocalSummarizerError` handlers keep working. Both error types,
+`resolve_summarizer_backend`, `ExtractiveSummarizerBackend`, and
+`MLXSummarizerBackend` are exported from `openmed.clinical`.
 The adapter runs the shared `summarize` Maple task, template digest, offline
 capability probe and conservative memory preflight before model construction.
 The default memory estimate is capped at 16 GiB; applications can pass an
@@ -57,3 +69,13 @@ Migration: callers relying on the former implicit sentence-picker must now use
 `model="extractive"`. Maple is a general model, not a released clinical SLM or
 clinically validated summarizer. Summaries require qualified clinical review;
 the source-token leakage check cannot prove that every identifier was detected.
+
+The explicit extractive baseline uses OpenMed's local, script-aware
+`segment_text()` and returns at most the first three sentences in source order.
+CJK terminators and Indic danda are recognized, while ordinary abbreviations
+and decimals are preserved. Selected sentences keep their exact source text
+(only surrounding whitespace is trimmed); one space separates selections.
+The algorithm identity is `extractive-script-aware-first-three-v2`, bound into
+`template_digest`. This is sentence selection, not fact-coverage or model
+qualification. An overlarge custom output produces `output_limit_exceeded`,
+distinct from a non-string `invalid_output` result.
