@@ -33,11 +33,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 from .documents_pdf import (
     _annotation_entities,
     _prepare_annotation_source,
+    _snapshot_pdf_source,
     project_text_spans,
 )
 from .exceptions import MissingDependencyError
@@ -336,8 +337,9 @@ def render_redacted_pdf(
     if annotation_detector is not None and not callable(annotation_detector):
         raise ValueError("annotation_detector_required")
     try:
+        content = _snapshot_pdf_source(source_path)
         prepared = _prepare_annotation_source(
-            source_path, include_annotations=annotation_detector is not None
+            BytesIO(content), include_annotations=annotation_detector is not None
         )
     except MissingDependencyError:
         raise
@@ -369,7 +371,7 @@ def render_redacted_pdf(
     output_pdf = pikepdf.Pdf.new()
     try:
         try:
-            _reject_type3_fonts(source_path, pikepdf)
+            _reject_type3_fonts(BytesIO(content), pikepdf)
             with pdfplumber.open(BytesIO(prepared.content)) as source_pdf:
                 pages = tuple(getattr(source_pdf, "pages", ()))
                 if not pages:
@@ -1033,7 +1035,7 @@ def _validate_page_budget(
             )
 
 
-def _reject_type3_fonts(source: Path, pikepdf: Any) -> None:
+def _reject_type3_fonts(source: BinaryIO, pikepdf: Any) -> None:
     with pikepdf.open(source) as pdf:
         for obj in pdf.objects:
             try:

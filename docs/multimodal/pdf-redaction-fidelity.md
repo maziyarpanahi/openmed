@@ -85,6 +85,13 @@ them. Annotation removal happens in memory without modifying the source or
 writing an intermediate source PDF. Default layout verification compares with
 that annotation-free source, so omitted appearances are not fidelity failures.
 
+Owned multi-phase operations capture one immutable in-memory source before
+extraction, detection, mapping and rendering. Updating the input path or stream
+during a detector callback cannot switch the document that is rendered. A
+seekable caller-owned binary stream stays open, and its name is never opened as
+a replacement path. Caller-supplied `document=` values or regions calculated in
+a separate call must still be matched to the source by the caller.
+
 `result.to_dict()["annotations"]` contains one entry per page with `page`,
 `annotation_count`, `omitted_annotation_count`, and a `subtypes` count mapping.
 Subtype names come from a closed vocabulary; other values become `Other`.

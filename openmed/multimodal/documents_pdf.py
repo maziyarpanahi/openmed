@@ -73,8 +73,22 @@ def _import_pdfplumber() -> Any:
         ) from exc
 
 
+def _snapshot_pdf_source(source: str | Path | BinaryIO) -> bytes:
+    """Read one immutable input without closing a caller-owned binary stream."""
+    try:
+        if isinstance(source, (str, Path)):
+            return Path(source).read_bytes()
+        source.seek(0)
+        content = source.read()
+        if not isinstance(content, bytes):
+            raise TypeError
+        return bytes(content)
+    except Exception:
+        raise ValueError("pdf_source_unreadable") from None
+
+
 def extract_pdf(
-    path: str | Path,
+    path: str | Path | BinaryIO,
     *,
     reading_order: PdfReadingOrder = "auto",
     preserve_lines: bool = False,
@@ -90,7 +104,8 @@ def extract_pdf(
     indexes and pdfplumber bounding boxes in PDF coordinate units.
 
     Args:
-        path: Local PDF path. Document bytes are never sent elsewhere.
+        path: Local PDF path or seekable binary stream. Document bytes are
+            never sent elsewhere; caller-owned streams remain open.
         reading_order: ``"auto"`` for conservative multi-column reconstruction
             or ``"source"`` for the original pdfplumber text-flow order.
         preserve_lines: Replace inter-word spaces with newlines at visual line
@@ -114,10 +129,15 @@ def extract_pdf(
     if type(include_annotations) is not bool:
         raise ValueError("include_annotations must be a boolean")
     if include_annotations:
-        prepared = _prepare_annotation_source(path, include_annotations=True)
-        _rewind(path)
+        try:
+            content = _snapshot_pdf_source(path)
+        except ValueError:
+            raise ValueError("annotation_appearance_unmappable") from None
+        prepared = _prepare_annotation_source(
+            BytesIO(content), include_annotations=True
+        )
         document = extract_pdf(
-            path, reading_order=reading_order, preserve_lines=preserve_lines
+            BytesIO(content), reading_order=reading_order, preserve_lines=preserve_lines
         )
         separator = "\n" if document.text and prepared.document.text else ""
         offset = len(document.text) + len(separator)
@@ -761,14 +781,15 @@ def _pdf_handler(
         raise ValueError("include_annotations must be a boolean")
     if include_annotations and _resolve_detector(models) is None:
         raise ValueError("annotation_detector_required")
-    _rewind(path)
-    document = extract_pdf(path, include_annotations=bool(include_annotations))
+    content = _snapshot_pdf_source(path)
+    document = extract_pdf(
+        BytesIO(content), include_annotations=bool(include_annotations)
+    )
     # Keep this bbox-preserving extraction as the canonical text/offset map
     # while adding structured boxes for table cells and caption lines.
     from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
-    _rewind(path)
-    regions = extract_pdf_regions(path, document=document)
+    regions = extract_pdf_regions(BytesIO(content), document=document)
     entities = (
         _annotation_entities(document, models, lang)
         if include_annotations
@@ -825,7 +846,7 @@ def _pdf_handler(
     if output_path is not None or bool(_policy_value(policy, "return_bytes")):
         annotation_report: list[Mapping[str, Any]] = []
         redacted_pdf = _render_redacted_pdf(
-            path,
+            BytesIO(content),
             rectangles,
             include_annotations=bool(include_annotations),
             annotation_report=annotation_report,

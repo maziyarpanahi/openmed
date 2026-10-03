@@ -239,6 +239,142 @@ def test_document_opt_in_requires_detector_and_projects_annotations(tmp_path):
     assert "SYNTHETIC_" not in json.dumps(document.metadata["annotations"])
 
 
+@pytest.mark.parametrize("include_annotations", [False, True])
+@pytest.mark.parametrize("source_kind", ["path", "named_stream"])
+def test_document_render_uses_the_detected_source_snapshot(
+    tmp_path, include_annotations, source_kind
+):
+    from openmed.multimodal.documents_pdf import _pdf_handler
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    replacement = fx.clean_redaction_pdf_bytes()
+    if source_kind == "path":
+        source = tmp_path / "source.pdf"
+        source.write_bytes(original)
+
+        def replace_source():
+            source.write_bytes(replacement)
+
+    else:
+        source = BytesIO(original)
+        source.name = "routing-only-nonexistent.pdf"
+        source.seek(17)
+
+        def replace_source():
+            source.seek(0)
+            source.write(replacement)
+            source.truncate()
+
+    policy = {"return_bytes": True, "include_annotations": include_annotations}
+
+    def detect_name(text, **kwargs):
+        start = text.index("John")
+        return [(start, start + len("John Doe"))]
+
+    expected = _pdf_handler(BytesIO(original), policy=policy, models=detect_name)
+
+    def detector(text, **kwargs):
+        assert text == expected.text
+        replace_source()
+        return detect_name(text)
+
+    actual = _pdf_handler(source, policy=policy, models=detector)
+    assert actual.text == expected.text
+    assert _annotation_pixels(
+        BytesIO(actual.metadata["redacted_pdf_bytes"]), (0, 0, 612, 792)
+    ) == _annotation_pixels(
+        BytesIO(expected.metadata["redacted_pdf_bytes"]), (0, 0, 612, 792)
+    )
+    if source_kind == "named_stream":
+        assert not source.closed
+        assert source.getvalue() == replacement
+
+
+@pytest.mark.parametrize("source_kind", ["path", "named_stream"])
+def test_annotation_extraction_uses_one_source_snapshot(
+    tmp_path, monkeypatch, source_kind
+):
+    from openmed.multimodal import documents_pdf
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    replacement = fx.clean_redaction_pdf_bytes()
+    if source_kind == "path":
+        source = tmp_path / "source.pdf"
+        source.write_bytes(original)
+    else:
+        source = BytesIO(original)
+        source.name = "routing-only-nonexistent.pdf"
+        source.seek(17)
+    expected = extract_pdf(BytesIO(original), include_annotations=True)
+    prepare = documents_pdf._prepare_annotation_source
+
+    def prepare_then_update(*args, **kwargs):
+        result = prepare(*args, **kwargs)
+        if source_kind == "path":
+            source.write_bytes(replacement)
+        else:
+            source.seek(0)
+            source.write(replacement)
+            source.truncate()
+        return result
+
+    monkeypatch.setattr(
+        documents_pdf, "_prepare_annotation_source", prepare_then_update
+    )
+    assert extract_pdf(source, include_annotations=True) == expected
+    if source_kind == "named_stream":
+        assert not source.closed
+
+
+def test_verified_renderer_font_check_uses_original_snapshot(tmp_path):
+    import pikepdf
+
+    fx = _load_fixture_builder()
+    original = fx.annotated_pdf_bytes()
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "clean.pdf"
+    with pikepdf.open(BytesIO(original)) as pdf:
+        pdf.Root.SyntheticFont = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name("/Font"), Subtype=pikepdf.Name("/Type3")
+            )
+        )
+        pdf.save(source)
+
+    def detector(text):
+        source.write_bytes(original)
+        start = text.index("SYNTHETIC_AP_3726")
+        return [(start, start + len("SYNTHETIC_AP_3726"))]
+
+    with pytest.raises(ValueError, match="Type 3 fonts"):
+        render_redacted_pdf(source, output, (), annotation_detector=detector)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("entry_point", ["extract_pdf_regions", "extract_pdf_tables"])
+def test_structured_extraction_uses_one_source_snapshot(
+    tmp_path, monkeypatch, entry_point
+):
+    from openmed.multimodal import documents_pdf_tables
+
+    source = tmp_path / "source.pdf"
+    fixture = Path(__file__).parent / "fixtures" / "synthetic_phi_table.pdf"
+    source.write_bytes(fixture.read_bytes())
+    extract = getattr(documents_pdf_tables, entry_point)
+    expected = extract(source)
+    extract_flat = documents_pdf_tables.extract_pdf
+
+    def extract_then_update(*args, **kwargs):
+        result = extract_flat(*args, **kwargs)
+        source.write_bytes(_load_fixture_builder().original_pdf_bytes())
+        return result
+
+    monkeypatch.setattr(documents_pdf_tables, "extract_pdf", extract_then_update)
+    assert extract(source) == expected
+
+
 def test_document_structured_boxes_cannot_replace_annotation_extent(
     tmp_path, monkeypatch
 ):
