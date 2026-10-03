@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Include ranked grounding alternatives in MedMentions top-k accuracy without
+  crediting withheld selections or turning abstentions into predictions (#3569).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
