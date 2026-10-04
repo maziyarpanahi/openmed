@@ -86,7 +86,7 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             except OSError:
                 pass
         raise CliError("Brief request or output failed.", code="brief_failed")
-    emit(
+    return emit(
         args,
         {
             "status": response["status"],
@@ -95,5 +95,5 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             "digest": response["digest"],
         },
         human="Clinical brief outputs written; human review is required.",
+        outcome="refused" if response["status"] == "refused" else "completed",
     )
-    return 1 if response["status"] == "refused" else 0

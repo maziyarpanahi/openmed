@@ -30,6 +30,11 @@ def test_contract_fixture_set_covers_required_outcomes() -> None:
         "validation",
         "offline",
         "privacy_policy",
+        "brief_needs_review",
+        "brief_refused",
+        "brief_failed",
+        "doctor_check_failed",
+        "fhir_check_failed",
     ]
 
 
@@ -43,18 +48,121 @@ def test_contract_fixture_has_stable_envelope_and_exit_code(fixture) -> None:
 
     assert result.exit_code == fixture.expected_exit_code
     assert result.payload == fixture.expected_payload
-    assert set(result.payload) == {"ok", "command", "data"} or set(result.payload) == {
+    assert set(result.payload) - {"outcome"} == {"ok", "command", "data"} or set(
+        result.payload
+    ) - {"outcome"} == {
         "ok",
         "command",
         "error",
     }
 
-    if fixture.expected_exit_code == 0:
+    if fixture.data is not None:
         assert result.payload["ok"] is True
-        assert set(result.payload["data"]) == {"count", "models"}
+        if fixture.name == "success":
+            assert set(result.payload["data"]) == {"count", "models"}
     else:
         assert result.payload["ok"] is False
         assert set(result.payload["error"]) == {"code", "message"}
+
+
+def test_negative_completed_outcomes_and_legacy_shape_are_pinned():
+    results = {
+        fixture.name: render_contract_fixture(fixture) for fixture in CONTRACT_FIXTURES
+    }
+    assert "outcome" not in results["success"].payload
+    for name, code, outcome, ok in (
+        ("brief_needs_review", 0, "completed", True),
+        ("brief_refused", 1, "refused", True),
+        ("brief_failed", 1, "failed", False),
+        ("doctor_check_failed", 1, "check_failed", True),
+        ("fhir_check_failed", 1, "check_failed", True),
+    ):
+        assert results[name].exit_code == code
+        assert results[name].payload["outcome"] == outcome
+        assert results[name].payload["ok"] is ok
+
+
+@pytest.mark.parametrize("status", ["needs_review", "refused", "failed"])
+def test_real_brief_handler_matches_outcome_fixture(
+    monkeypatch, tmp_path, capsys, status
+):
+    from openmed.cli import brief
+
+    fixture_name = {
+        "needs_review": "brief_needs_review",
+        "refused": "brief_refused",
+        "failed": "brief_failed",
+    }[status]
+    fixture = next(item for item in CONTRACT_FIXTURES if item.name == fixture_name)
+
+    def response(*args, **kwargs):
+        if status == "failed":
+            raise RuntimeError("SYNTHETIC_PRIVATE_EXCEPTION")
+        return {**fixture.data, "summary": ""}
+
+    monkeypatch.setattr(brief, "brief_response", response)
+    source = tmp_path / "source.txt"
+    source.write_text("Synthetic note", encoding="utf-8")
+    code = cli_main(
+        [
+            "brief",
+            str(source),
+            "--model",
+            "extractive",
+            "--summary-output",
+            str(tmp_path / "summary.txt"),
+            "--review-output",
+            str(tmp_path / "review.json"),
+            "--json",
+        ]
+    )
+    stdout = capsys.readouterr().out
+    assert code == fixture.expected_exit_code
+    assert json.loads(stdout) == fixture.expected_payload
+    assert "SYNTHETIC_PRIVATE_EXCEPTION" not in stdout
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_doctor_envelope_matches_exit_status(monkeypatch, capsys, failed):
+    import openmed.core.doctor as doctor
+
+    monkeypatch.setattr(
+        doctor,
+        "run_diagnostics",
+        lambda: [
+            {
+                "name": "synthetic_check",
+                "status": "FAIL" if failed else "PASS",
+                "details": "synthetic",
+            }
+        ],
+    )
+    assert cli_main(["doctor", "--json"]) == int(failed)
+    assert json.loads(capsys.readouterr().out)["outcome"] == (
+        "check_failed" if failed else "completed"
+    )
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_fhir_envelope_matches_exit_status(monkeypatch, capsys, tmp_path, failed):
+    from openmed.clinical.exporters import fhir
+
+    monkeypatch.setattr(
+        fhir,
+        "validate_exchange",
+        lambda *args, **kwargs: {
+            "resourceType": "OperationOutcome",
+            "issue": [{"severity": "error"}] if failed else [],
+        },
+    )
+    source = tmp_path / "synthetic.json"
+    source.write_text("{}", encoding="utf-8")
+    assert cli_main(["fhir", "validate", "--input", str(source), "--json"]) == int(
+        failed
+    )
+    assert json.loads(capsys.readouterr().out)["outcome"] == (
+        "check_failed" if failed else "completed"
+    )
 
 
 def test_failure_categories_and_exit_codes_are_pinned() -> None:

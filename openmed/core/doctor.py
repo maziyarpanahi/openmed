@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
+import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -95,8 +98,133 @@ def run_diagnostics() -> list[dict[str, Any]]:
     _check_network_environment(checks)
     _check_offline_mode(checks)
     _check_manifest(checks)
+    checks.extend(clinical_brief_readiness())
 
     return checks
+
+
+def clinical_brief_readiness() -> list[dict[str, Any]]:
+    """Inspect local brief prerequisites without importing runtimes or loading models.
+
+    Returns:
+        Value-free PASS/WARN checks with controlled codes and remediation hints.
+        Cache presence is not inference, calibration, review or clinical approval.
+        The raw-note check covers the default English PII artifact only; callers
+        selecting another language/model must provision that artifact separately.
+    """
+    from .model_registry import (
+        get_default_nli_model,
+        get_default_pii_model,
+        resolve_summarizer_model,
+    )
+
+    def check(name: str, available: bool, ready: str, missing: str, hint: str):
+        code = ready if available else missing
+        result = _check(
+            name, "PASS" if available else "WARN", code, None if available else hint
+        )
+        result["code"] = code
+        return result
+
+    platform_ready = platform.system() == "Darwin" and platform.machine() in {
+        "arm64",
+        "aarch64",
+    }
+    runtime_ready = all(
+        _brief_module_present(name) for name in ("mlx", "mlx_lm", "huggingface_hub")
+    )
+    summarizer, revision = resolve_summarizer_model("mlx")
+    pii = get_default_pii_model("en")
+    nli = get_default_nli_model()
+    return [
+        check(
+            "brief_extractive",
+            True,
+            "extractive_available",
+            "extractive_unavailable",
+            "",
+        ),
+        check(
+            "brief_mlx_platform",
+            platform_ready,
+            "mlx_platform_supported",
+            "mlx_platform_unsupported",
+            "Use Apple silicon for the MLX alias, or explicitly choose extractive/local caller-supplied generation.",
+        ),
+        check(
+            "brief_mlx_runtime",
+            runtime_ready,
+            "mlx_runtime_present",
+            "mlx_runtime_missing",
+            "Install the mlx extra before provisioning local inference.",
+        ),
+        check(
+            "brief_summarizer_cache",
+            _brief_cached_artifact(summarizer, revision),
+            "pinned_summarizer_cached",
+            "pinned_summarizer_missing",
+            "Provision the registered pinned Maple revision before offline use.",
+        ),
+        check(
+            "brief_raw_note_pii_cache",
+            pii is not None and _brief_cached_artifact(pii, "main"),
+            "default_pii_cached",
+            "default_pii_missing",
+            "Provision the default English PII artifact, or supply an already de-identified artifact and reviewed context.",
+        ),
+        check(
+            "brief_nli_provider",
+            nli is not None,
+            "released_nli_registered",
+            "caller_nli_provider_required",
+            "Supply a calibrated local NLI provider; training a new checkpoint is not required to use the SDK.",
+        ),
+    ]
+
+
+def _brief_module_present(name: str) -> bool:
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError, OSError):
+        return False
+
+
+def _brief_cached_artifact(model_id: str, revision: str) -> bool:
+    """Read only cache metadata/stat results; never download or construct a model."""
+    try:
+        cache, _ = _hf_cache_location()
+        repository = cache / ("models--" + model_id.replace("/", "--"))
+        if revision == "main":
+            with (repository / "refs" / "main").open(encoding="ascii") as handle:
+                revision = handle.read(42).strip()
+        if re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None:
+            return False
+        snapshot = repository / "snapshots" / revision
+
+        def present(name: str) -> bool:
+            path = snapshot / name
+            return path.is_file() and path.stat().st_size > 0
+
+        if not all(present(name) for name in ("config.json", "tokenizer.json")):
+            return False
+        if any(present(name) for name in ("model.safetensors", "pytorch_model.bin")):
+            return True
+        index = snapshot / "model.safetensors.index.json"
+        if index.stat().st_size > 1_048_576:
+            return False
+        data = json.loads(index.read_text(encoding="utf-8"))
+        mapping = data.get("weight_map")
+        if not isinstance(mapping, dict) or not mapping or len(mapping) > 100_000:
+            return False
+        weights = set(mapping.values())
+        return len(weights) <= 256 and all(
+            type(name) is str
+            and re.fullmatch(r"[A-Za-z0-9_-]+\.safetensors", name) is not None
+            and present(name)
+            for name in weights
+        )
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def _check_low_resource_envelope(checks: list[dict[str, Any]]) -> None:

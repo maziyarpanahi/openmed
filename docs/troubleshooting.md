@@ -31,6 +31,36 @@ see the [Quick Start](getting-started.md) and
 
 ---
 
+## Clinical brief readiness
+
+`openmed doctor --json` includes the same checks returned by
+`openmed.core.doctor.clinical_brief_readiness()`. This reusable function inspects
+platform metadata, package specs and local cache metadata only: it does not
+import MLX, construct models, download artifacts or call an inference backend.
+Every new check has a controlled `code`, a `PASS`/`WARN` status and a remediation
+hint when needed. These checks do not include private paths, filenames or tokens.
+
+- `brief_extractive`: explicit deterministic extractive mode is available without MLX.
+- `brief_mlx_platform`: the built-in MLX alias requires Apple silicon on macOS.
+- `brief_mlx_runtime`: the MLX, MLX-LM and Hub packages are discoverable.
+- `brief_summarizer_cache`: the registered pinned Maple revision has non-empty
+  config/tokenizer files and weights (all indexed shards when sharded).
+- `brief_raw_note_pii_cache`: the default English PII artifact is cached. Its
+  local `main` reference must resolve to a complete snapshot; this is not an
+  immutable pin or verification of another language/model chosen by the caller.
+- `brief_nli_provider`: a released NLI checkpoint is registered, or the controlled
+  warning `caller_nli_provider_required` explains the caller-supplied option.
+
+`PASS` means the named prerequisite was observed, not that inference succeeded
+or that a model is clinically qualified. The checks do not validate cache contents
+as model code, calibration quality, a review packet, or sufficient device memory.
+Supply a reviewed context and a calibrated local NLI provider to compose a brief;
+training a new model is optional and is not a release requirement.
+
+Warnings alone keep the doctor exit code at zero. A failed diagnostic emits
+`outcome: "check_failed"` and exits 1; see the
+[machine contract](cli/machine-contract.md) for scripting semantics.
+
 ## Install / Extras
 
 OpenMed ships a small permissive core and keeps heavy or platform-specific stacks behind
