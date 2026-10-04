@@ -171,6 +171,52 @@ report schema is `pipeline_migration_report.schema.json`. Reports contain a
 source digest and controlled stage classifications, not a copy of the source
 description.
 
+## Doccano JSONL
+
+Doccano relation extraction exports one JSON object per document with `text`,
+`entities`, and `relations` members. `openmed.eval.annotation.doccano_io` maps
+that dialect onto the versioned envelope without copying the source text.
+
+Import a single document and keep only offsets and HMAC bound surface hashes:
+
+```python
+from openmed.clinical.journey_contracts import sha256_digest
+from openmed.eval.annotation import import_doccano
+
+imported = import_doccano(
+    line,
+    text_digest=sha256_digest(text),
+    doc_id="doc_synthetic01",
+    hash_secret=key,
+)
+assert imported.report.state.value in {"success", "partial"}
+```
+
+The import verifies that the caller supplied the de-identification digest of the
+text in the line, so a rewritten or substituted document fails closed. The
+envelope never contains the source text: entities become offset records with a
+lowercase controlled label and a `sha256:` surface hash, relations become
+endpoint records, and any field or annotation type the envelope cannot express
+is reported as a declared loss instead of being silently dropped. Doccano
+relation types such as `foundedAt` are normalized to controlled codes and
+recorded as `doccano_relation_type_normalized`.
+
+Export the other direction with the same digest requirement:
+
+```python
+exported = export_doccano(
+    envelope,
+    text=text,
+    text_digest=sha256_digest(text),
+    document_id="doc_synthetic01",
+)
+```
+
+`export_doccano` refuses text whose digest does not match, refuses a relation
+whose endpoints were not exported, and declares review states, embeddings, and
+unexpressible annotation types as loss. An explicit `document_id` is required
+for a multi-document envelope.
+
 ## CLI
 
 Import canonical TSV to persisted JSON:
@@ -180,6 +226,29 @@ openmed annotation import \
   --input annotations.tsv \
   --output annotations.json
 ```
+
+Import a Doccano document, and export one, by selecting the format:
+
+```console
+openmed annotation import \
+  --format doccano \
+  --input document.jsonl \
+  --output annotations.json \
+  --doc-id doc_synthetic01 \
+  --text-digest sha256:... \
+  --key "$OPENMED_ANNOTATION_KEY"
+
+openmed annotation export \
+  --format doccano \
+  --input annotations.json \
+  --output document.jsonl \
+  --text deidentified.txt \
+  --text-digest sha256:... \
+  --document-id doc_synthetic01
+```
+
+Doccano import and export require the de-identification digest of the text. The
+HMAC key comes from `--key` or `OPENMED_ANNOTATION_KEY`.
 
 Export JSON to canonical TSV and record declared loss:
 
