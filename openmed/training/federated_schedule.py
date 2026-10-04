@@ -194,7 +194,11 @@ class FederatedRoundSchedule:
             raise FederatedScheduleError("invalid federated schedule JSON")
         try:
             decoded = json.loads(payload, object_pairs_hook=_strict_json_object)
-        except (json.JSONDecodeError, FederatedScheduleError, TypeError):
+        except (ValueError, RecursionError, TypeError):
+            # ``json.JSONDecodeError`` is a ``ValueError``, duplicate keys raise
+            # through the strict hook, oversized integer literals raise
+            # ``ValueError`` from the digit limit, and hostile nesting raises
+            # ``RecursionError`` before any schema check can run.
             raise FederatedScheduleError("invalid federated schedule JSON") from None
         if not isinstance(decoded, Mapping):
             raise FederatedScheduleError("invalid federated schedule payload")

@@ -199,7 +199,11 @@ class FederatedRoundLifecycle:
 
         try:
             decoded = json.loads(payload, object_pairs_hook=_strict_json_object)
-        except (json.JSONDecodeError, FederatedRoundStateError, TypeError):
+        except (ValueError, RecursionError, TypeError):
+            # ``json.JSONDecodeError`` is a ``ValueError``, duplicate keys raise
+            # through the strict hook, oversized integer literals raise
+            # ``ValueError`` from the digit limit, and hostile nesting raises
+            # ``RecursionError`` before any schema check can run.
             raise FederatedRoundStateError(
                 "invalid federated round lifecycle JSON"
             ) from None
