@@ -494,7 +494,7 @@ def test_missing_component_fails_closed(tmp_path: Path) -> None:
     report = json.loads(stdout)["data"]
     assert exit_code == 1
     assert report["verdict"] == "fail"
-    assert "component_unreadable" in report["reason_codes"]
+    assert "component_missing_on_disk" in report["reason_codes"]
 
 
 @requires_secure_reads
