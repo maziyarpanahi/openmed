@@ -305,6 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trailing comments (#3502).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
+- Preserve tokenizer-provided subword offsets from any standard `Mapping`
+  output when projecting token labels, keeping the absent-offset fallback (#3561).
 - Key GLiNER model cache entries by requested device so a cached instance is not
   moved under a later caller (#3501).
 
