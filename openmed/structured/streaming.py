@@ -29,6 +29,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -231,49 +232,75 @@ class _ProcessMemoryGuard:
             )
 
 
+def _build_windows_rss_reader() -> Callable[[], int | None]:
+    """Bind the ctypes plumbing that reads this process's working set.
+
+    The structure, the library handles, and the function prototypes must be
+    bound once per process. Rebuilding them inside each measurement retained
+    several kilobytes per call, so a bounded-memory stream grew with the number
+    of guard checks instead of with the number of distinct classes.
+    """
+
+    import ctypes
+    from ctypes import wintypes
+
+    class ProcessMemoryCounters(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            ("PeakWorkingSetSize", ctypes.c_size_t),
+            ("WorkingSetSize", ctypes.c_size_t),
+            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+            ("PagefileUsage", ctypes.c_size_t),
+            ("PeakPagefileUsage", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    get_current_process = kernel32.GetCurrentProcess
+    get_current_process.argtypes = []
+    get_current_process.restype = wintypes.HANDLE
+    get_process_memory_info = psapi.GetProcessMemoryInfo
+    get_process_memory_info.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(ProcessMemoryCounters),
+        wintypes.DWORD,
+    ]
+    get_process_memory_info.restype = wintypes.BOOL
+
+    def read_working_set() -> int | None:
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        try:
+            measured = get_process_memory_info(
+                get_current_process(), ctypes.byref(counters), counters.cb
+            )
+        except (ctypes.ArgumentError, OSError):
+            return None
+        return int(counters.WorkingSetSize) if measured else None
+
+    return read_working_set
+
+
+@lru_cache(maxsize=1)
+def _windows_rss_reader() -> Callable[[], int | None] | None:
+    """Return a one-time reader for this process's Windows working set."""
+
+    try:
+        return _build_windows_rss_reader()
+    except (AttributeError, ImportError, OSError):
+        return None
+
+
 def _process_rss_bytes() -> int | None:
     """Return current process resident memory in bytes when measurable."""
 
     if os.name == "nt":  # pragma: no cover - exercised by hosted Windows CI
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            class _ProcessMemoryCounters(ctypes.Structure):
-                _fields_ = [
-                    ("cb", wintypes.DWORD),
-                    ("PageFaultCount", wintypes.DWORD),
-                    ("PeakWorkingSetSize", ctypes.c_size_t),
-                    ("WorkingSetSize", ctypes.c_size_t),
-                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                    ("PagefileUsage", ctypes.c_size_t),
-                    ("PeakPagefileUsage", ctypes.c_size_t),
-                ]
-
-            counters = _ProcessMemoryCounters()
-            counters.cb = ctypes.sizeof(counters)
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            psapi = ctypes.WinDLL("psapi", use_last_error=True)
-            get_current_process = kernel32.GetCurrentProcess
-            get_current_process.argtypes = []
-            get_current_process.restype = wintypes.HANDLE
-            get_process_memory_info = psapi.GetProcessMemoryInfo
-            get_process_memory_info.argtypes = [
-                wintypes.HANDLE,
-                ctypes.POINTER(_ProcessMemoryCounters),
-                wintypes.DWORD,
-            ]
-            get_process_memory_info.restype = wintypes.BOOL
-            if get_process_memory_info(
-                get_current_process(), ctypes.byref(counters), counters.cb
-            ):
-                return int(counters.WorkingSetSize)
-        except (AttributeError, ctypes.ArgumentError, OSError):
-            return None
-        return None
+        reader = _windows_rss_reader()
+        return None if reader is None else reader()
 
     if sys.platform.startswith("linux"):
         try:

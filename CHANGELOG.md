@@ -317,6 +317,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
+- Read process memory through one-time ctypes bindings so the additional-RSS
+  ceiling of bounded-memory table streaming no longer grows with the number of
+  guard checks on Windows.
 
 ## [2.5.0] - 2026-09-14
 

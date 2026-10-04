@@ -6,6 +6,7 @@ import csv
 import json
 import subprocess
 import sys
+import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -210,6 +211,39 @@ def test_linux_rss_reader_uses_current_resident_pages(
     )
 
     assert streaming._process_rss_bytes() == 7 * 4_096
+
+
+def test_rss_measurement_does_not_retain_allocations() -> None:
+    """Repeated RSS measurements must not grow the process allocator."""
+
+    # One warm-up call binds any one-time platform plumbing.
+    streaming._process_rss_bytes()
+
+    tracemalloc.start()
+    try:
+        before = tracemalloc.take_snapshot()
+        for _ in range(256):
+            streaming._process_rss_bytes()
+        growth = sum(
+            stat.size_diff
+            for stat in tracemalloc.take_snapshot().compare_to(before, "filename")
+        )
+    finally:
+        tracemalloc.stop()
+
+    assert growth < 64 * 1024, f"RSS measurement retained {growth} bytes"
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="requires the Windows working-set reader"
+)
+def test_windows_rss_reader_binds_its_plumbing_once() -> None:
+    """The Windows reader is built once and reused across measurements."""
+
+    reader = streaming._windows_rss_reader()
+    assert reader is not None
+    assert streaming._windows_rss_reader() is reader
+    assert isinstance(reader(), int)
 
 
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(
