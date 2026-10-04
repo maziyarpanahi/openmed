@@ -1,5 +1,7 @@
 # Changelog
 
+- Add typed Python service-client grounding, profiling and cohort resolution,
+  with explicit OpenAPI path coverage and documented operational exclusions.
 - Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
   explicit fixture-provider disclaimers and a recording script.
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,

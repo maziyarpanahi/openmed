@@ -121,6 +121,55 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     loaded = client.loaded_models()
 ```
 
+The client also exposes `ground()`, `profile()` and `resolve_cohort()` using
+the committed REST request fields. Grounding stays offline by default; the
+operator must provision the selected vocabulary snapshots. Profiling and
+cohort resolution send supplied JSONL content, never a server-side filename.
+
+```python
+from openmed.service.client import ConceptAncestorRequest, OpenMedClient
+
+
+def review_synthetic_batch(records_jsonl, reviewed_phenotype):
+    # The caller supplies a validated phenotype mapping and synthetic JSONL.
+    with OpenMedClient("http://127.0.0.1:8080") as client:
+        grounded = client.ground(
+            "type 2 diabetes", systems=["icd10cm"], top_k=3, offline=True
+        )
+        quality = client.profile(
+            records_jsonl, completeness_floor=0.9, required_fields=["condition"]
+        )
+        cohort = client.resolve_cohort(
+            reviewed_phenotype,
+            records_jsonl,
+            concept_ancestors=[ConceptAncestorRequest(201826, 443238)],
+            required_fields=["condition"],
+        )
+    return grounded, quality, cohort
+```
+
+All three calls accept an opaque `request_id` and use the same
+`OpenMedAPIError` handling as the existing methods. The request dataclasses
+`GroundRequest`, `ProfileRequest`, `CohortResolveRequest` and
+`ConceptAncestorRequest` describe their typed wire payloads. Treat returned
+grounded content as protected and cohort matches as review aids, not clinical
+actions; do not log patient text or records.
+
+Python OpenAPI coverage is explicit: every committed path must have a method
+or an entry in `CLIENT_OPENAPI_EXCLUSIONS`. The deliberately excluded paths are:
+
+- `/health`, `/livez`, `/readyz`: operator-owned deployment probes.
+- `/omop/load`: explicit direct REST bulk-loading workflow.
+- `/pii/deidentify/stream`: no sync de-identification-stream wrapper yet.
+- `/jobs`, `/jobs/{job_id}`: no sync asynchronous-job lifecycle wrapper yet.
+- `/fhir/smart-backend/ingestions`,
+  `/fhir/smart-backend/ingestions/{job_id}` and
+  `/fhir/smart-backend/ingestions/{job_id}/summary`: operator-managed SMART
+  ingestion workflows.
+
+The coverage test rejects a newly added OpenAPI path until it is implemented
+or deliberately documented in this list and the exclusion map.
+
 Non-2xx responses raise `OpenMedAPIError` with the service error `code`,
 `message`, optional `details`, HTTP status, and any `X-Request-ID` returned by
 the service or proxy:
