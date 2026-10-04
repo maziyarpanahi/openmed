@@ -353,6 +353,7 @@ classification:
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md
+    - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
