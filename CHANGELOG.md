@@ -1,5 +1,8 @@
 # Changelog
 
+- Add the offline streaming-ASR provider contract with declared provenance and
+  limits, typed audio chunks, partial hypotheses, finalized segments, bounded
+  buffering, terminal cancellation and counts-only session reports.
 - Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
   explicit fixture-provider disclaimers and a recording script.
 - Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
@@ -21,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
+- Added the offline streaming-ASR provider contract with declared provenance,
+  languages, sample rates and buffering limits, typed audio chunks, partial
+  hypotheses, finalized segments, token times, language confidence, terminal
+  cancellation and counts-only session reports (#2812).
 
 ### Added
 
