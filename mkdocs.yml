@@ -256,6 +256,7 @@ nav:
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
+      - Privacy Budget Policies: training/dp-budget-policies.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
