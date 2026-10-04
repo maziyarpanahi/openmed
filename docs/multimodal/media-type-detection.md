@@ -9,6 +9,9 @@ Supported signatures:
 - PDF
 - PNG and JPEG
 - little-endian and big-endian TIFF
+- GIF (GIF87a and GIF89a)
+- WebP with `RIFF` and `WEBP` markers
+- BMP
 - DICOM Part 10 with the `DICM` marker at byte offset 128
 - WAV with `RIFF` and `WAVE` markers
 
