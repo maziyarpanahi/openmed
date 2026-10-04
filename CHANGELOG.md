@@ -312,6 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Respect explicitly empty gold annotations (#3511).
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
+- Validate calibration targets as booleans or numeric zero/one, including
+  aliases, instead of treating non-empty strings as positive labels (#3568).
 - Reject non-integer sharding counts before reading documents.
 - Reject overlapping sibling items at nested list levels.
 - Require strict decoder validation before auto-detecting ISCII, preserving
