@@ -1,0 +1,165 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/service_webhook_payload.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completed_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    },
+    "document_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "documents": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "length": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "length",
+          "text_hash"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "event": {
+      "enum": [
+        "job.done",
+        "job.failed"
+      ],
+      "type": "string"
+    },
+    "failed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "job_id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "label_histogram": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "processed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "progress_percent": {
+      "maximum": 100,
+      "minimum": 0,
+      "type": "number"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "spans": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "document_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "end": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "start",
+          "end",
+          "label",
+          "text_hash",
+          "confidence"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "done",
+        "failed"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "event",
+    "job_id",
+    "status",
+    "progress_percent",
+    "document_count",
+    "processed_count",
+    "failed_count",
+    "label_histogram",
+    "spans",
+    "documents",
+    "error",
+    "completed_at"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedServiceWebhookPayload",
+  "type": "object"
+}
