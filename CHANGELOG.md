@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Deterministic Draft 2020-12 JSON Schema export for committed differential-privacy
+  budget policies, with finite numeric bounds, closed composition and schema-version
+  fields, and offline drift tests (#3121).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
