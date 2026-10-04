@@ -14,6 +14,136 @@ const ONNX_MODEL_FILENAMES = {
   fp16: "model_fp16",
 } as const;
 
+const RUNTIME_ENVIRONMENT_KEYS = ["allowLocalModels", "allowRemoteModels"] as const;
+
+type RuntimeEnvironment = NonNullable<RawTransformersRuntime["env"]>;
+type RuntimeEnvironmentKey = (typeof RUNTIME_ENVIRONMENT_KEYS)[number];
+type RuntimeEnvironmentValues = Partial<Record<RuntimeEnvironmentKey, boolean>>;
+
+interface EnvironmentSnapshot {
+  key: RuntimeEnvironmentKey;
+  present: boolean;
+  value: boolean | undefined;
+}
+
+interface EnvironmentWindow {
+  signature: string;
+  members: number;
+  snapshot: EnvironmentSnapshot[];
+}
+
+interface RuntimeEnvironmentCoordinator {
+  window: EnvironmentWindow | null;
+  waiting: Array<() => void>;
+}
+
+const runtimeEnvironmentCoordinators = new WeakMap<
+  object,
+  RuntimeEnvironmentCoordinator
+>();
+
+function environmentSignature(values: RuntimeEnvironmentValues): string {
+  return RUNTIME_ENVIRONMENT_KEYS.map((key) => `${key}=${values[key]}`).join("&");
+}
+
+function environmentSnapshot(env: RuntimeEnvironment): EnvironmentSnapshot[] {
+  return RUNTIME_ENVIRONMENT_KEYS.map((key) => ({
+    key,
+    present: Object.prototype.hasOwnProperty.call(env, key),
+    value: env[key],
+  }));
+}
+
+function applyEnvironmentValues(
+  env: RuntimeEnvironment,
+  values: RuntimeEnvironmentValues,
+): void {
+  for (const key of RUNTIME_ENVIRONMENT_KEYS) {
+    const value = values[key];
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+}
+
+function restoreEnvironment(
+  env: RuntimeEnvironment,
+  snapshot: EnvironmentSnapshot[],
+): void {
+  for (const { key, present, value } of snapshot) {
+    if (present) {
+      Reflect.set(env, key, value);
+    } else {
+      Reflect.deleteProperty(env, key);
+    }
+  }
+}
+
+function runtimeEnvironmentCoordinator(
+  env: RuntimeEnvironment,
+): RuntimeEnvironmentCoordinator {
+  const existing = runtimeEnvironmentCoordinators.get(env);
+  if (existing) {
+    return existing;
+  }
+  const coordinator: RuntimeEnvironmentCoordinator = { window: null, waiting: [] };
+  runtimeEnvironmentCoordinators.set(env, coordinator);
+  return coordinator;
+}
+
+/**
+ * Open a runtime environment window, or join the one already open.
+ *
+ * Transformers.js keeps `allowLocalModels` and `allowRemoteModels` on a module
+ * object shared by every caller, so a load that mutates them must not overlap a
+ * load that requests different settings. Callers that request the same settings
+ * share one window and stay concurrent; callers that request different settings
+ * wait for the open window to close. Once the last member finishes, the exact
+ * previous state is restored, including keys that were absent.
+ */
+async function acquireRuntimeEnvironment(
+  env: RuntimeEnvironment,
+  values: RuntimeEnvironmentValues,
+): Promise<() => void> {
+  const coordinator = runtimeEnvironmentCoordinator(env);
+  const signature = environmentSignature(values);
+  while (coordinator.window && coordinator.window.signature !== signature) {
+    await new Promise<void>((resolve) => {
+      coordinator.waiting.push(resolve);
+    });
+  }
+  if (!coordinator.window) {
+    const opened: EnvironmentWindow = {
+      signature,
+      members: 0,
+      snapshot: environmentSnapshot(env),
+    };
+    coordinator.window = opened;
+    applyEnvironmentValues(env, values);
+  }
+  const window: EnvironmentWindow = coordinator.window;
+  window.members += 1;
+  return () => releaseRuntimeEnvironment(env, coordinator, window);
+}
+
+function releaseRuntimeEnvironment(
+  env: RuntimeEnvironment,
+  coordinator: RuntimeEnvironmentCoordinator,
+  window: EnvironmentWindow,
+): void {
+  window.members -= 1;
+  if (window.members > 0) {
+    return;
+  }
+  restoreEnvironment(env, window.snapshot);
+  coordinator.window = null;
+  const waiting = coordinator.waiting;
+  coordinator.waiting = [];
+  for (const resume of waiting) {
+    resume();
+  }
+}
+
 export async function loadOnnxModel(
   model: string,
   options: LoadOnnxModelOptions = {},
@@ -38,13 +168,12 @@ export async function loadTokenClassificationPipeline(
   const localReference = isLocalModelReference(model);
   const localFilesOnly = options.localFilesOnly ?? localReference;
   const allowRemoteModels = options.allowRemoteModels ?? !localFilesOnly;
-  const previousAllowRemote = runtime.env?.allowRemoteModels;
-  const previousAllowLocal = runtime.env?.allowLocalModels;
-
-  if (runtime.env) {
-    runtime.env.allowLocalModels = true;
-    runtime.env.allowRemoteModels = allowRemoteModels;
-  }
+  const releaseEnvironment = runtime.env
+    ? await acquireRuntimeEnvironment(runtime.env, {
+        allowLocalModels: true,
+        allowRemoteModels,
+      })
+    : null;
 
   try {
     const pipelineOptions: Record<string, unknown> = {
@@ -80,18 +209,7 @@ export async function loadTokenClassificationPipeline(
       },
     }) as TokenClassificationPipeline;
   } finally {
-    if (runtime.env) {
-      if (previousAllowRemote === undefined) {
-        delete runtime.env.allowRemoteModels;
-      } else {
-        runtime.env.allowRemoteModels = previousAllowRemote;
-      }
-      if (previousAllowLocal === undefined) {
-        delete runtime.env.allowLocalModels;
-      } else {
-        runtime.env.allowLocalModels = previousAllowLocal;
-      }
-    }
+    releaseEnvironment?.();
   }
 }
 

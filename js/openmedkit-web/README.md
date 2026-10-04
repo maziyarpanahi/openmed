@@ -69,6 +69,18 @@ retain required numeric offsets. Use the additive `RawTokenClassificationEntity`
 offset-less runtimes. Model loaders and `alignTokenOffsets()` return aligned
 entities, preserving the v2.2 typed-consumer contract.
 
+### Shared runtime environment
+
+Transformers.js keeps `allowLocalModels` and `allowRemoteModels` on the module
+object shared by every caller, so `loadTokenClassificationPipeline()` and
+`loadOnnxModel()` change that environment only while a pipeline is created and
+then put the previous state back, including deleting keys the host never set.
+Overlapping loads that request the same settings share one window; a load that
+requests different settings waits for the open window to close, so a local-only
+load never observes `allowRemoteModels: true` during creation. Injected runtimes
+are coordinated per environment object, and pipeline-creation errors propagate
+unchanged with the environment restored.
+
 ## Local Browser Runtime
 
 The lower-level ONNX Runtime Web loader keeps model and runtime assets on local
