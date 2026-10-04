@@ -325,6 +325,17 @@ untrusted networks. Metric labels are limited to static route templates and
 HTTP status codes; text, model outputs, entities, client identity, document
 content, and PHI are never used as label values.
 
+Timeouts end the client wait, not the underlying threadpool work. REST inference
+calls using request timeouts, GraphQL resolver calls, and batch submissions
+retain their concurrency permits and shutdown-drain tokens until work finishes
+or fails.
+While that work occupies the configured bound, new work returns `503
+service_busy`. Parallel GraphQL resolvers require separate model slots under
+the same bound. The existing REST `504 timeout` response is unchanged.
+`openmed_service_orphaned_work` counts admitted requests with outstanding work
+after their HTTP wait ends, without labels or input values; it returns to zero
+when that work settles. Timing out does not forcibly terminate model threads.
+
 Optional MLX-LM paged KV-cache budget for long-note generation:
 
 ```bash

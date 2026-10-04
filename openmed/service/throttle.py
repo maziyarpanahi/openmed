@@ -6,8 +6,9 @@ import asyncio
 import math
 import time
 from collections.abc import Awaitable, Callable, Collection
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import Request
 from starlette.responses import Response
@@ -160,6 +161,107 @@ class ConcurrencyGate:
         return True
 
 
+class ServiceBusyError(RuntimeError):
+    """Reject additional model work when the request's gate is full."""
+
+    def __init__(self, gate: ConcurrencyGate, key_by: str) -> None:
+        super().__init__("Service is busy; retry later")
+        self.max_concurrency = gate.max_concurrency
+        self.wait_seconds = gate.wait_seconds
+        self.key_by = key_by
+
+
+class RequestWork:
+    """Keep worker permits and drain tokens until accepted work actually settles.
+
+    All methods and completion callbacks run on the request's event loop.
+    The first threadpool worker inherits the request's admission permit;
+    parallel workers acquire their own. Each releases its permit on completion,
+    allowing waiting fields to progress even before the response finishes.
+    Batch submissions retain admission until removal or dispatch completion.
+    """
+
+    def __init__(
+        self,
+        permit: Optional[_ConcurrencyPermit],
+        gate: ConcurrencyGate,
+        key: str,
+        key_by: str,
+        metrics: Optional[Any],
+    ) -> None:
+        self._permit = permit
+        self._gate = gate
+        self._key = key
+        self._key_by = key_by
+        self._metrics = metrics
+        self._tasks: set[asyncio.Future[Any]] = set()
+        self._callbacks: list[Callable[[], None]] = []
+        self._primary_claimed = False
+        self._closed = False
+        self._finished = False
+        self._orphaned = False
+
+    async def acquire_model_slot(self) -> Optional[Callable[[], None]]:
+        """Use the request's slot, or admit an additional parallel resolver."""
+        if self._permit is None:
+            return None
+        if not self._primary_claimed:
+            self._primary_claimed = True
+            return self._permit.release
+        permit = await self._gate.acquire(self._key)
+        if permit is None:
+            raise ServiceBusyError(self._gate, self._key_by)
+        return permit.release
+
+    def track(self, task: asyncio.Future[Any]) -> None:
+        """Retain ownership of one asynchronous operation through completion."""
+        self._tasks.add(task)
+
+        def completed(future: asyncio.Future[Any]) -> None:
+            self._tasks.discard(future)
+            self._finish_if_idle()
+
+        task.add_done_callback(completed)
+
+    def on_finished(self, callback: Callable[[], None]) -> None:
+        """Release a lifecycle token only after the response and work finish."""
+        if self._finished:
+            callback()
+        else:
+            self._callbacks.append(callback)
+
+    def close(self) -> None:
+        """Detach the HTTP wait while retaining any outstanding work."""
+        self._closed = True
+        if any(not task.done() for task in self._tasks):
+            self._orphaned = True
+            if self._metrics is not None:
+                self._metrics.orphaned_work_started()
+        self._finish_if_idle()
+
+    def _finish_if_idle(self) -> None:
+        if not self._closed or self._tasks or self._finished:
+            return
+        self._finished = True
+        if self._permit is not None:
+            self._permit.release()
+        if self._orphaned and self._metrics is not None:
+            self._metrics.orphaned_work_finished()
+        callbacks, self._callbacks = self._callbacks, []
+        for callback in callbacks:
+            callback()
+
+
+_REQUEST_WORK: ContextVar[Optional[RequestWork]] = ContextVar(
+    "openmed_request_work", default=None
+)
+
+
+def current_request_work() -> Optional[RequestWork]:
+    """Return admission ownership inherited by this request's async work."""
+    return _REQUEST_WORK.get()
+
+
 class ServiceThrottle:
     """FastAPI middleware dispatcher for service request throttling."""
 
@@ -193,7 +295,7 @@ class ServiceThrottle:
 
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         """Apply rate and concurrency gates around one HTTP request."""
-        if not self.enabled or not self._should_throttle(request.url.path):
+        if not self._should_throttle(request.url.path):
             return await call_next(request)
 
         key = client_identity(request, self.config.key_by)
@@ -248,11 +350,19 @@ class ServiceThrottle:
                 },
             )
 
+        work = RequestWork(
+            permit,
+            self.concurrency_gate,
+            key,
+            self.config.key_by,
+            getattr(request.app.state, "metrics", None),
+        )
+        token = _REQUEST_WORK.set(work)
         try:
             return await call_next(request)
         finally:
-            if permit is not None:
-                permit.release()
+            _REQUEST_WORK.reset(token)
+            work.close()
 
     def _should_throttle(self, path: str) -> bool:
         if path in self._exempt_paths:

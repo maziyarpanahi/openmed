@@ -299,6 +299,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publishing permissions are limited to the publish job.
 
 ### Fixed
+- Retain service concurrency permits and drain tokens until timed-out model
+  work actually finishes, including GraphQL and batched requests. Add a
+  value-free orphaned-work gauge and bound parallel GraphQL resolver work
+  without changing REST timeout envelopes (#3902).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping

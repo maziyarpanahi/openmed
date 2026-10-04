@@ -132,7 +132,12 @@ from .security_headers import (
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
-from .throttle import ServiceThrottle, format_retry_after
+from .throttle import (
+    ServiceBusyError,
+    ServiceThrottle,
+    current_request_work,
+    format_retry_after,
+)
 from .tracing import (
     OpenTelemetryMiddleware,
     operational_trace_attributes,
@@ -186,6 +191,9 @@ class _AnalyzeBatchJob:
 @dataclass(frozen=True)
 class _PIIExtractBatchJob:
     payload: PIIExtractRequest
+
+
+_SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 
 
 class ServiceTimeoutError(RuntimeError):
@@ -602,32 +610,90 @@ async def _run_with_timeout(
     operation: Any,
 ) -> Any:
     """Run blocking service work in a threadpool under the profile timeout."""
-    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
-    if timeout_seconds <= 0:
-        return await run_in_threadpool(operation)
+    work = current_request_work()
 
-    try:
-        return await asyncio.wait_for(
-            run_in_threadpool(operation),
-            timeout=float(timeout_seconds),
-        )
-    except asyncio.TimeoutError as exc:
-        raise ServiceTimeoutError(timeout_seconds) from exc
+    async def model_work() -> Any:
+        release_slot = await work.acquire_model_slot() if work is not None else None
+        try:
+            return await run_in_threadpool(operation)
+        finally:
+            if release_slot is not None:
+                release_slot()
+
+    return await _await_with_timeout(runtime, model_work())
+
+
+def _track_service_work(awaitable: Any) -> asyncio.Future[Any]:
+    """Keep a strong reference and consume late failures without logging input."""
+    task = asyncio.ensure_future(awaitable)
+    _SERVICE_WORK_TASKS.add(task)
+
+    def completed(future: asyncio.Future[Any]) -> None:
+        _SERVICE_WORK_TASKS.discard(future)
+        if not future.cancelled():
+            future.exception()
+
+    task.add_done_callback(completed)
+    work = current_request_work()
+    if work is not None:
+        work.track(task)
+    return task
 
 
 async def _await_with_timeout(
     runtime: ServiceRuntime,
     awaitable: Any,
+    *,
+    cancel_on_timeout: bool = False,
 ) -> Any:
-    """Await async service work under the profile timeout."""
+    """Bound the client wait without cancelling work that still owns capacity."""
+    task = _track_service_work(awaitable)
     timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    wait = task if cancel_on_timeout else asyncio.shield(task)
     if timeout_seconds <= 0:
-        return await awaitable
+        return await wait
 
     try:
-        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+        return await asyncio.wait_for(wait, timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
         raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+async def _submit_with_timeout(
+    runtime: ServiceRuntime,
+    batcher: DynamicBatcher,
+    item: Any,
+    *,
+    priority: str,
+    priority_handle: BatchPriorityHandle,
+) -> Any:
+    """Cancel abandoned queued jobs while retaining ownership of dispatches."""
+    work_done = asyncio.get_running_loop().create_future()
+    _track_service_work(work_done)
+    started = False
+
+    async def submit() -> Any:
+        nonlocal started
+        started = True
+        return await batcher.submit(
+            item,
+            priority=priority,
+            priority_handle=priority_handle,
+            work_done=work_done,
+        )
+
+    task = asyncio.create_task(submit())
+
+    def completed_before_start(future: asyncio.Future[Any]) -> None:
+        if not started and not work_done.done():
+            work_done.set_result(None)
+
+    task.add_done_callback(completed_before_start)
+    return await _await_with_timeout(
+        runtime,
+        task,
+        cancel_on_timeout=True,
+    )
 
 
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
@@ -703,11 +769,15 @@ async def _run_maybe_coalesced(
             "openmed.coalescing.enabled": True,
         },
     ):
-        return await coalescer.run(
-            coalescing_key(endpoint, payload),
-            operation,
-            priority=priority,
-            on_priority_upgrade=on_priority_upgrade,
+        return await asyncio.shield(
+            _track_service_work(
+                coalescer.run(
+                    coalescing_key(endpoint, payload),
+                    operation,
+                    priority=priority,
+                    on_priority_upgrade=on_priority_upgrade,
+                )
+            )
         )
 
 
@@ -868,7 +938,15 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             try:
                 return await call_next(request)
             finally:
-                state.inflight = getattr(state, "inflight", 0) - 1
+
+                def release_inflight() -> None:
+                    state.inflight = getattr(state, "inflight", 0) - 1
+
+                work = current_request_work()
+                if work is None:
+                    release_inflight()
+                else:
+                    work.on_finished(release_inflight)
         return await call_next(request)
 
     if app.state.metrics is not None:
@@ -955,6 +1033,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         exc: BackpressureError,
     ) -> JSONResponse:
         return _backpressure_response(exc)
+
+    @app.exception_handler(ServiceBusyError)
+    async def _service_busy_handler(_: Request, exc: ServiceBusyError) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "max_concurrency": exc.max_concurrency,
+                "wait_seconds": exc.wait_seconds,
+                "key": exc.key_by,
+            },
+        )
 
     @app.exception_handler(PrivacyGatewayConfigurationError)
     async def _privacy_gateway_config_handler(
@@ -1283,13 +1374,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_analyze_batcher(request).submit(
-                        _AnalyzeBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_analyze_batcher(request),
+                    _AnalyzeBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1329,13 +1419,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_pii_extract_batcher(request).submit(
-                        _PIIExtractBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_pii_extract_batcher(request),
+                    _PIIExtractBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
