@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_brief_audit.schema.json",
+  "title": "OpenMed clinical brief audit record",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "backend_id", "citations", "digest", "envelope", "metrics", "profile_digest",
+    "provenance", "refusal_reason", "review_packet", "schema_version", "stages",
+    "status", "summary_characters", "summary_digest", "verdicts"
+  ],
+  "properties": {
+    "backend_id": {"type": ["string", "null"]},
+    "citations": {"type": "array", "items": {"$ref": "#/$defs/citation"}},
+    "digest": {"$ref": "#/$defs/digest"},
+    "envelope": {"$ref": "#/$defs/envelope"},
+    "metrics": {"$ref": "#/$defs/metrics"},
+    "profile_digest": {"type": ["string", "null"]},
+    "provenance": {"type": "object"},
+    "refusal_reason": {
+      "anyOf": [{"$ref": "#/$defs/refusal_reason"}, {"type": "null"}]
+    },
+    "review_packet": {"$ref": "#/$defs/review_packet"},
+    "schema_version": {"const": 1, "type": "integer"},
+    "stages": {"type": "array", "items": {"type": "string"}},
+    "status": {"enum": ["needs_review", "refused"]},
+    "summary_characters": {"type": "integer", "minimum": 0},
+    "summary_digest": {"$ref": "#/$defs/digest"},
+    "verdicts": {"type": "array", "items": {"$ref": "#/$defs/verdict"}}
+  },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_index", "output_end", "output_start", "source_end", "source_start"
+      ],
+      "properties": {
+        "claim_index": {"type": "integer", "minimum": 0},
+        "output_end": {"type": "integer", "minimum": 0},
+        "output_start": {"type": "integer", "minimum": 0},
+        "source_end": {"type": "integer", "minimum": 0},
+        "source_start": {"type": "integer", "minimum": 0}
+      }
+    },
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requires_human_review"],
+      "properties": {
+        "disclaimer": {"type": "string"},
+        "human_review_mode": {"type": "boolean"},
+        "is_diagnostic": {"const": false},
+        "provenance": {"type": "object"},
+        "refusal_reasons": {"type": "array", "items": {"type": "string"}},
+        "requires_human_review": {"const": true},
+        "schema_version": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["ready", "refused"]},
+        "summary": {
+          "anyOf": [{"$ref": "#/$defs/envelope_summary"}, {"type": "null"}]
+        }
+      }
+    },
+    "envelope_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary_digest"],
+      "properties": {"summary_digest": {"$ref": "#/$defs/digest"}}
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "citation_support": {"type": "object"},
+        "coverage": {"type": "object"},
+        "demographics": {"type": "object"},
+        "leakage": {"type": "object"},
+        "temporal_order": {"type": "object"},
+        "unsupported_claims": {"type": "object"}
+      }
+    },
+    "refusal_reason": {
+      "enum": [
+        "empty_evidence", "invalid_evidence", "invalid_input", "nli_rejected",
+        "nli_unavailable", "privacy", "review_required", "stage_failed",
+        "unsupported_claim"
+      ]
+    },
+    "review_citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["citation_id", "source"],
+      "properties": {
+        "citation_id": {"type": "string", "minLength": 1},
+        "locator": {"type": "string"},
+        "metadata": {"type": "object"},
+        "protected_text_available": {"const": true},
+        "published": {"type": "string"},
+        "relevance": {"type": "number"},
+        "source": {"type": "string", "minLength": 1},
+        "source_hash": {"type": "string"},
+        "title": {"type": "string"}
+      }
+    },
+    "review_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "label", "status"],
+      "properties": {
+        "attributes": {"type": "object"},
+        "citation_ids": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "number"},
+        "finding_id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "protected_text_available": {"const": true},
+        "source_hash": {"type": "string"},
+        "source_offset": {"$ref": "#/$defs/source_offset"},
+        "status": {"type": "string", "minLength": 1},
+        "uncertainty": {"type": "number"}
+      }
+    },
+    "review_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocking", "gate_id", "passed", "reason", "severity"],
+      "properties": {
+        "blocking": {"type": "boolean"},
+        "citation_ids": {"type": "array", "items": {"type": "string"}},
+        "details": {"type": "object"},
+        "gate_id": {"type": "string", "minLength": 1},
+        "passed": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "reason_hash": {"type": "string"},
+        "severity": {"type": "string", "minLength": 1}
+      }
+    },
+    "review_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory", "citations", "findings", "gate_results", "packet_id",
+        "privacy", "review_status", "schema_version", "summary"
+      ],
+      "properties": {
+        "advisory": {"type": "string", "minLength": 1},
+        "citations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/review_citation"}
+        },
+        "findings": {"type": "array", "items": {"$ref": "#/$defs/review_finding"}},
+        "gate_results": {"type": "array", "items": {"$ref": "#/$defs/review_gate"}},
+        "packet_id": {"type": "string", "minLength": 1},
+        "privacy": {"$ref": "#/$defs/review_privacy"},
+        "review_status": {"type": "string", "minLength": 1},
+        "schema_version": {"const": "openmed.clinical.review_packet.v1"},
+        "summary": {"$ref": "#/$defs/review_summary"}
+      }
+    },
+    "review_privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protected_text_available", "protected_text_included",
+        "protected_text_policy"
+      ],
+      "properties": {
+        "protected_text_available": {"type": "boolean"},
+        "protected_text_included": {"const": false},
+        "protected_text_policy": {"const": "explicit_local_opt_in"}
+      }
+    },
+    "review_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_count", "failed_gate_count", "finding_count", "gate_count",
+        "review_required"
+      ],
+      "properties": {
+        "citation_count": {"type": "integer", "minimum": 0},
+        "failed_gate_count": {"type": "integer", "minimum": 0},
+        "finding_count": {"type": "integer", "minimum": 0},
+        "gate_count": {"type": "integer", "minimum": 0},
+        "review_required": {"const": true}
+      }
+    },
+    "source_offset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["end", "start"],
+      "properties": {
+        "end": {"type": "integer", "minimum": 0},
+        "start": {"type": "integer", "minimum": 0}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_index", "label"],
+      "properties": {
+        "claim_index": {"type": "integer", "minimum": 0},
+        "label": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
