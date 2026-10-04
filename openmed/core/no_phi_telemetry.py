@@ -56,6 +56,9 @@ class CounterName(str, Enum):
     PIPELINE_FAILURES = "openmed_pipeline_failures_total"
     PIPELINE_REJECTIONS = "openmed_pipeline_rejections_total"
     PIPELINE_ENTITIES = "openmed_pipeline_entities_total"
+    FEDERATED_PHASE_TRANSITIONS = "openmed_federated_phase_transitions_total"
+    FEDERATED_PHASE_REJECTIONS = "openmed_federated_phase_rejections_total"
+    FEDERATED_PHASE_UPDATES = "openmed_federated_phase_updates_total"
 
 
 class DimensionName(str, Enum):
@@ -65,9 +68,17 @@ class DimensionName(str, Enum):
     STATUS = "status"
     METHOD = "method"
     EXCEPTION_CATEGORY = "exception_category"
+    PHASE = "phase"
+    REASON_CODE = "reason_code"
+    UPDATE_BAND = "update_band"
 
 
 PIPELINE_LATENCY_NAME = "openmed_pipeline_latency_seconds"
+FEDERATED_PHASE_LATENCY_NAME = "openmed_federated_phase_latency_seconds"
+LATENCY_METRIC_NAMES: tuple[str, ...] = (
+    PIPELINE_LATENCY_NAME,
+    FEDERATED_PHASE_LATENCY_NAME,
+)
 
 PIPELINE_STAGE_VALUES: tuple[str, ...] = (
     "normalize",
@@ -111,6 +122,36 @@ EXCEPTION_CATEGORY_VALUES: tuple[str, ...] = (
     "validation",
     UNKNOWN_EXCEPTION_CATEGORY,
 )
+FEDERATED_PHASE_VALUES: tuple[str, ...] = (
+    "planned",
+    "preflight",
+    "collecting",
+    "aggregating",
+    "evaluating",
+    "held",
+    "promoted",
+    "aborted",
+    OTHER_DIMENSION_VALUE,
+)
+FEDERATED_REASON_CODE_VALUES: tuple[str, ...] = (
+    "privacy_review_required",
+    "quality_review_required",
+    "policy_review_required",
+    "quorum_not_met",
+    "privacy_gate_failed",
+    "quality_gate_failed",
+    "policy_gate_failed",
+    "operator_cancelled",
+    "round_error",
+    OTHER_DIMENSION_VALUE,
+)
+FEDERATED_UPDATE_BAND_VALUES: tuple[str, ...] = (
+    "suppressed",
+    "minimum_to_under_double",
+    "double_to_under_fourfold",
+    "fourfold_or_more",
+    OTHER_DIMENSION_VALUE,
+)
 
 _DIMENSION_NAMES = frozenset(item.value for item in DimensionName)
 _DIMENSION_VALUES = {
@@ -118,8 +159,28 @@ _DIMENSION_VALUES = {
     DimensionName.STATUS.value: frozenset(PIPELINE_STATUS_VALUES),
     DimensionName.METHOD.value: frozenset(METHOD_VALUES),
     DimensionName.EXCEPTION_CATEGORY.value: frozenset(EXCEPTION_CATEGORY_VALUES),
+    DimensionName.PHASE.value: frozenset(FEDERATED_PHASE_VALUES),
+    DimensionName.REASON_CODE.value: frozenset(FEDERATED_REASON_CODE_VALUES),
+    DimensionName.UPDATE_BAND.value: frozenset(FEDERATED_UPDATE_BAND_VALUES),
 }
 _FAILURE_STATUSES = frozenset({"error", "cancelled", "rejected"})
+_COUNTER_HELP: Mapping[CounterName, str] = {
+    CounterName.PIPELINE_RUNS: "Aggregate OpenMed pipeline runs.",
+    CounterName.PIPELINE_FAILURES: "Aggregate OpenMed pipeline failures.",
+    CounterName.PIPELINE_REJECTIONS: "Aggregate OpenMed pipeline rejections.",
+    CounterName.PIPELINE_ENTITIES: "Aggregate OpenMed pipeline entities.",
+    CounterName.FEDERATED_PHASE_TRANSITIONS: (
+        "Aggregate federated round phase transitions."
+    ),
+    CounterName.FEDERATED_PHASE_REJECTIONS: (
+        "Aggregate federated round rejection reasons."
+    ),
+    CounterName.FEDERATED_PHASE_UPDATES: "Aggregate federated round update bands.",
+}
+_LATENCY_HELP: Mapping[str, str] = {
+    PIPELINE_LATENCY_NAME: "Pipeline latency.",
+    FEDERATED_PHASE_LATENCY_NAME: "Federated round phase latency.",
+}
 _EVENT_KEYS = frozenset(
     {
         "amount",
@@ -263,7 +324,7 @@ class LatencySample:
     dimensions: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
-        if type(self.name) is not str or self.name != PIPELINE_LATENCY_NAME:
+        if type(self.name) is not str or self.name not in LATENCY_METRIC_NAMES:
             raise TelemetrySchemaError("latency sample name is not approved")
         count = _coerce_positive_int(self.count, "latency sample count")
         sum_seconds = _coerce_bounded_float(
@@ -318,7 +379,9 @@ class TelemetrySnapshot:
         counter_keys = tuple(
             (sample.name.value, sample.dimensions) for sample in self.counters
         )
-        latency_keys = tuple(sample.dimensions for sample in self.latencies)
+        latency_keys = tuple(
+            (sample.name, sample.dimensions) for sample in self.latencies
+        )
         if counter_keys != tuple(sorted(set(counter_keys))):
             raise TelemetrySchemaError("telemetry snapshot counters are not canonical")
         if latency_keys != tuple(sorted(set(latency_keys))):
@@ -372,7 +435,9 @@ class NoPHITelemetryExporter:
     ) -> None:
         self._latency_buckets = _coerce_latency_buckets(latency_buckets_seconds)
         self._counters: dict[tuple[CounterName, tuple[tuple[str, str], ...]], int] = {}
-        self._latencies: dict[tuple[tuple[str, str], ...], _LatencyAggregate] = {}
+        self._latencies: dict[
+            tuple[str, tuple[tuple[str, str], ...]], _LatencyAggregate
+        ] = {}
         self._lock = threading.RLock()
 
     @property
@@ -404,15 +469,21 @@ class NoPHITelemetryExporter:
         seconds: Real,
         *,
         dimensions: Mapping[str, object] | None = None,
+        name: str = PIPELINE_LATENCY_NAME,
     ) -> None:
-        """Record one finite, non-negative pipeline latency in seconds."""
+        """Record one finite, non-negative latency observation in seconds.
 
+        ``name`` selects one of the approved histogram families.  It defaults
+        to the pipeline histogram so existing callers are unaffected.
+        """
+
+        safe_name = _coerce_latency_name(name)
         observed = _coerce_duration(seconds, "latency")
         safe_dimensions = _normalize_dimensions(dimensions)
         with self._lock:
             self._record_batch_locked(
                 counter_updates=(),
-                latency_updates=((observed, safe_dimensions),),
+                latency_updates=((safe_name, observed, safe_dimensions),),
             )
 
     def observe_latency_ms(
@@ -420,11 +491,16 @@ class NoPHITelemetryExporter:
         milliseconds: Real,
         *,
         dimensions: Mapping[str, object] | None = None,
+        name: str = PIPELINE_LATENCY_NAME,
     ) -> None:
-        """Record one finite, non-negative pipeline latency in milliseconds."""
+        """Record one finite, non-negative latency observation in milliseconds."""
 
         observed = _coerce_duration_ms(milliseconds, "latency")
-        self.observe_latency_seconds(observed, dimensions=dimensions)
+        self.observe_latency_seconds(
+            observed,
+            dimensions=dimensions,
+            name=name,
+        )
 
     def record_pipeline(
         self,
@@ -495,7 +571,7 @@ class NoPHITelemetryExporter:
         latency_updates = (
             ()
             if safe_latency_seconds is None
-            else ((safe_latency_seconds, safe_dimensions),)
+            else ((PIPELINE_LATENCY_NAME, safe_latency_seconds, safe_dimensions),)
         )
         with self._lock:
             self._record_batch_locked(
@@ -588,14 +664,17 @@ class NoPHITelemetryExporter:
             )
 
         latency_updates = [
-            (duration, dimensions_for(stage)) for stage, duration in safe_durations
+            (PIPELINE_LATENCY_NAME, duration, dimensions_for(stage))
+            for stage, duration in safe_durations
         ]
         if safe_durations:
             total_seconds = _coerce_duration(
                 math.fsum(duration for _, duration in safe_durations),
                 "pipeline latency",
             )
-            latency_updates.append((total_seconds, pipeline_dimensions))
+            latency_updates.append(
+                (PIPELINE_LATENCY_NAME, total_seconds, pipeline_dimensions)
+            )
 
         with self._lock:
             self._record_batch_locked(
@@ -639,7 +718,7 @@ class NoPHITelemetryExporter:
             raise TelemetrySchemaError("telemetry amount requires a counter")
 
         counter_updates: list[tuple[CounterName, tuple[tuple[str, str], ...], int]] = []
-        latency_updates: list[tuple[float, tuple[tuple[str, str], ...]]] = []
+        latency_updates: list[tuple[str, float, tuple[tuple[str, str], ...]]] = []
 
         if counter is not None:
             counter_updates.append(
@@ -651,11 +730,19 @@ class NoPHITelemetryExporter:
             )
         if latency_ms is not None:
             latency_updates.append(
-                (_coerce_duration_ms(latency_ms, "latency"), dimensions)
+                (
+                    PIPELINE_LATENCY_NAME,
+                    _coerce_duration_ms(latency_ms, "latency"),
+                    dimensions,
+                )
             )
         if latency_seconds is not None:
             latency_updates.append(
-                (_coerce_duration(latency_seconds, "latency"), dimensions)
+                (
+                    PIPELINE_LATENCY_NAME,
+                    _coerce_duration(latency_seconds, "latency"),
+                    dimensions,
+                )
             )
 
         if "entity_count" in values:
@@ -696,14 +783,14 @@ class NoPHITelemetryExporter:
                 )
             )
             latencies: list[LatencySample] = []
-            for dimensions, aggregate in sorted(self._latencies.items()):
+            for (name, dimensions), aggregate in sorted(self._latencies.items()):
                 bucket_values = tuple(
                     (str(boundary), aggregate.bucket_counts[index])
                     for index, boundary in enumerate(self._latency_buckets)
                 ) + (("+Inf", aggregate.bucket_counts[-1]),)
                 latencies.append(
                     LatencySample(
-                        name=PIPELINE_LATENCY_NAME,
+                        name=name,
                         count=aggregate.count,
                         sum_seconds=float(aggregate.sum_seconds),
                         buckets=bucket_values,
@@ -738,37 +825,30 @@ class NoPHITelemetryExporter:
         rendered_counter_families: set[CounterName] = set()
         for counter in snapshot.counters:
             if counter.name not in rendered_counter_families:
-                if counter.name is CounterName.PIPELINE_RUNS:
-                    help_text = "Aggregate OpenMed pipeline runs."
-                elif counter.name is CounterName.PIPELINE_FAILURES:
-                    help_text = "Aggregate OpenMed pipeline failures."
-                elif counter.name is CounterName.PIPELINE_REJECTIONS:
-                    help_text = "Aggregate OpenMed pipeline rejections."
-                else:
-                    help_text = "Aggregate OpenMed pipeline entities."
-                lines.append(f"# HELP {counter.name.value} {help_text}")
+                lines.append(
+                    f"# HELP {counter.name.value} {_COUNTER_HELP[counter.name]}"
+                )
                 lines.append(f"# TYPE {counter.name.value} counter")
                 rendered_counter_families.add(counter.name)
             labels = _label_suffix(dict(counter.dimensions))
             lines.append(f"{counter.name.value}{labels} {counter.value}")
 
-        if snapshot.latencies:
-            lines.append(f"# HELP {PIPELINE_LATENCY_NAME} Pipeline latency.")
-            lines.append(f"# TYPE {PIPELINE_LATENCY_NAME} histogram")
-            for latency in snapshot.latencies:
-                base_labels = dict(latency.dimensions)
-                for boundary, value in latency.buckets:
-                    labels = dict(base_labels)
-                    labels["le"] = boundary
-                    lines.append(
-                        f"{PIPELINE_LATENCY_NAME}_bucket{_label_suffix(labels)} {value}"
-                    )
-                labels = _label_suffix(base_labels)
-                lines.append(f"{PIPELINE_LATENCY_NAME}_count{labels} {latency.count}")
-                lines.append(
-                    f"{PIPELINE_LATENCY_NAME}_sum{labels} "
-                    f"{_format_float(latency.sum_seconds)}"
-                )
+        rendered_latency_families: set[str] = set()
+        for latency in snapshot.latencies:
+            if latency.name not in rendered_latency_families:
+                lines.append(f"# HELP {latency.name} {_LATENCY_HELP[latency.name]}")
+                lines.append(f"# TYPE {latency.name} histogram")
+                rendered_latency_families.add(latency.name)
+            base_labels = dict(latency.dimensions)
+            for boundary, value in latency.buckets:
+                labels = dict(base_labels)
+                labels["le"] = boundary
+                lines.append(f"{latency.name}_bucket{_label_suffix(labels)} {value}")
+            labels = _label_suffix(base_labels)
+            lines.append(f"{latency.name}_count{labels} {latency.count}")
+            lines.append(
+                f"{latency.name}_sum{labels} {_format_float(latency.sum_seconds)}"
+            )
 
         return "\n".join(lines) + ("\n" if lines else "")
 
@@ -778,7 +858,7 @@ class NoPHITelemetryExporter:
         counter_updates: tuple[
             tuple[CounterName, tuple[tuple[str, str], ...], int], ...
         ],
-        latency_updates: tuple[tuple[float, tuple[tuple[str, str], ...]], ...],
+        latency_updates: tuple[tuple[str, float, tuple[tuple[str, str], ...]], ...],
     ) -> None:
         """Validate and apply one all-or-nothing telemetry update batch."""
 
@@ -790,16 +870,18 @@ class NoPHITelemetryExporter:
                 raise TelemetrySchemaError("telemetry counter exceeds the safe limit")
             counter_deltas[key] = delta
 
-        latency_groups: dict[tuple[tuple[str, str], ...], list[float]] = {}
-        for observed, dimensions in latency_updates:
-            latency_groups.setdefault(dimensions, []).append(observed)
+        latency_groups: dict[tuple[str, tuple[tuple[str, str], ...]], list[float]] = {}
+        for name, observed, dimensions in latency_updates:
+            latency_groups.setdefault((name, dimensions), []).append(observed)
 
         for key, delta in counter_deltas.items():
             if self._counters.get(key, 0) > MAX_COUNTER_VALUE - delta:
                 raise TelemetrySchemaError("telemetry counter exceeds the safe limit")
-        projected_latency_sums: dict[tuple[tuple[str, str], ...], Decimal] = {}
-        for dimensions, observations in latency_groups.items():
-            aggregate = self._latencies.get(dimensions)
+        projected_latency_sums: dict[
+            tuple[str, tuple[tuple[str, str], ...]], Decimal
+        ] = {}
+        for key, observations in latency_groups.items():
+            aggregate = self._latencies.get(key)
             current_count = 0 if aggregate is None else aggregate.count
             if current_count > MAX_COUNTER_VALUE - len(observations):
                 raise TelemetrySchemaError(
@@ -814,26 +896,32 @@ class NoPHITelemetryExporter:
                 raise TelemetrySchemaError(
                     "telemetry latency sum exceeds the safe limit"
                 )
-            projected_latency_sums[dimensions] = projected_sum
+            projected_latency_sums[key] = projected_sum
 
         for key, delta in counter_deltas.items():
             self._counters[key] = self._counters.get(key, 0) + delta
-        for dimensions, observations in latency_groups.items():
-            aggregate = self._latencies.get(dimensions)
+        for key, observations in latency_groups.items():
+            aggregate = self._latencies.get(key)
             if aggregate is None:
                 aggregate = _LatencyAggregate(
                     count=0,
                     sum_seconds=Decimal(0),
                     bucket_counts=[0] * (len(self._latency_buckets) + 1),
                 )
-                self._latencies[dimensions] = aggregate
+                self._latencies[key] = aggregate
             aggregate.count += len(observations)
-            aggregate.sum_seconds = projected_latency_sums[dimensions]
+            aggregate.sum_seconds = projected_latency_sums[key]
             for observed in observations:
                 for index, boundary in enumerate(self._latency_buckets):
                     if observed <= boundary:
                         aggregate.bucket_counts[index] += 1
                 aggregate.bucket_counts[-1] += 1
+
+
+def _coerce_latency_name(value: object) -> str:
+    if type(value) is str and value in LATENCY_METRIC_NAMES:
+        return value
+    raise TelemetrySchemaError("latency sample name is not approved")
 
 
 def _coerce_latency_buckets(
@@ -1118,6 +1206,11 @@ __all__ = [
     "DEFAULT_LATENCY_BUCKETS_SECONDS",
     "DimensionName",
     "EXCEPTION_CATEGORY_VALUES",
+    "FEDERATED_PHASE_LATENCY_NAME",
+    "FEDERATED_PHASE_VALUES",
+    "FEDERATED_REASON_CODE_VALUES",
+    "FEDERATED_UPDATE_BAND_VALUES",
+    "LATENCY_METRIC_NAMES",
     "LatencySample",
     "MAX_AGGREGATE_LATENCY_SECONDS",
     "MAX_COUNTER_VALUE",

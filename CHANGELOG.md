@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added value-free telemetry for federated round phases: closed phase, status,
+  and reason-code vocabularies, banded update counts that refuse exact releases
+  below the minimum group size, and a federated phase-latency histogram on the
+  no-PHI exporter (#3883).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.

@@ -8,10 +8,13 @@ from dataclasses import dataclass
 import pytest
 
 from openmed.core.no_phi_telemetry import (
+    FEDERATED_PHASE_LATENCY_NAME,
+    LATENCY_METRIC_NAMES,
     MAX_COUNTER_VALUE,
     MAX_ENTITY_COUNT,
     MAX_LATENCY_SECONDS,
     MAX_RESULT_STAGE_DURATIONS,
+    PIPELINE_LATENCY_NAME,
     CounterName,
     CounterSample,
     LatencySample,
@@ -370,3 +373,31 @@ def test_duplicate_exception_sources_are_rejected_before_mutation() -> None:
             }
         )
     assert exporter.export()["counters"] == []
+
+
+def test_latency_metrics_are_limited_to_the_approved_names() -> None:
+    exporter = NoPHITelemetryExporter()
+
+    with pytest.raises(
+        TelemetrySchemaError, match="name is not approved"
+    ) as name_error:
+        exporter.observe_latency_seconds(0.5, name="SYNTHETIC-SECRET")
+    assert "SYNTHETIC-SECRET" not in str(name_error.value)
+    with pytest.raises(TelemetrySchemaError, match="name is not approved"):
+        exporter.observe_latency_ms(500.0, name="openmed_pipeline_latency_millis")
+
+    assert exporter.export()["latencies"] == []
+    assert LATENCY_METRIC_NAMES == (PIPELINE_LATENCY_NAME, FEDERATED_PHASE_LATENCY_NAME)
+
+    exporter.observe_latency_seconds(0.5, name=FEDERATED_PHASE_LATENCY_NAME)
+    exporter.observe_latency_seconds(0.25)
+
+    latencies = exporter.export()["latencies"]
+    assert [item["name"] for item in latencies] == [
+        FEDERATED_PHASE_LATENCY_NAME,
+        PIPELINE_LATENCY_NAME,
+    ]
+    assert [item["count"] for item in latencies] == [1, 1]
+    rendered = exporter.render_prometheus()
+    assert "# TYPE openmed_federated_phase_latency_seconds histogram" in rendered
+    assert "# TYPE openmed_pipeline_latency_seconds histogram" in rendered
