@@ -62,6 +62,48 @@ collector. It does not configure or contact a collector itself. This utility
 provides an aggregate telemetry contract; it is not a compliance
 certification or a clinical decision guarantee.
 
+## Federated round telemetry
+
+`openmed.core.federated_telemetry.FederatedRoundTelemetry` records federated
+round phases on the same exporter. Every dimension value must come from a closed
+vocabulary, so a client pseudonym, a filesystem path, a digest, or any other
+free-form string is refused with `UnapprovedFederatedValueError` instead of
+becoming a new label. The error names the field only and never echoes the
+rejected value.
+
+```python
+from openmed.core.federated_telemetry import FederatedRoundTelemetry
+
+telemetry = FederatedRoundTelemetry()
+telemetry.record_phase_transition(phase="preflight")
+telemetry.record_rejection(reason_code="quorum_not_met", phase="held")
+telemetry.record_update_count(count=7, phase="aggregating")
+telemetry.record_update_count(count=40, phase="aggregating", exact=True)
+telemetry.observe_phase_latency(phase="aggregating", milliseconds=850.0)
+```
+
+Counters are `openmed_federated_phase_transitions_total{phase,status}`,
+`openmed_federated_phase_rejections_total{phase,reason_code}`, and
+`openmed_federated_phase_updates_total`. Phase and status values mirror
+`FederatedRoundState` and the pipeline status vocabulary, and `reason_code`
+mirrors `FederatedRoundReasonCode`. Phase latency is exported as
+`openmed_federated_phase_latency_seconds{phase,status}` with the exporter's
+fixed buckets.
+
+Update counts stay banded. The default call advances the counter by one and
+labels the sample with `update_band`, using the shared `suppressed`,
+`minimum_to_under_double`, `double_to_under_fourfold`, and `fourfold_or_more`
+bands relative to the minimum group size of 5. An exact aggregate is only
+released with `exact=True`, which advances the counter by the count and omits
+the band label; a count below the minimum group size raises
+`UnapprovedFederatedValueError` rather than being rounded. A zero count records
+nothing. `band_update_count()` exposes the same banding for callers that only
+need the label.
+
+The recorder owns no transport, endpoint, or background thread; its constructor
+takes only an optional exporter and minimum group size. Exports remain local
+formatting operations.
+
 ## Service-wide operational events
 
 `openmed.service.operational.OperationalEvent` is the shared contract for
