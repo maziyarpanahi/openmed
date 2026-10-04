@@ -47,6 +47,19 @@ class CircuitBreakerOpenError(RuntimeError):
         super().__init__("Model backend is temporarily unavailable")
 
 
+@dataclass(frozen=True)
+class _Admission:
+    """One granted call slot, tagged with the order it was admitted in.
+
+    Overlapping calls can finish out of order. A completion is only applied
+    while no completion from a newer admission has been recorded, so a call
+    admitted earlier cannot overwrite the health evidence a later call produced.
+    """
+
+    sequence: int
+    probe_token: object | None = None
+
+
 @dataclass
 class _CircuitBreaker:
     config: ServiceResilienceConfig
@@ -55,10 +68,12 @@ class _CircuitBreaker:
     failures: int = 0
     opened_at: Optional[float] = None
     half_open_probe_active: bool = False
+    admitted_sequence: int = 0
+    applied_sequence: int = 0
     _probe_token: object | None = field(default=None, repr=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
-    def before_call(self) -> object | None:
+    def before_call(self) -> _Admission:
         with self._lock:
             now = self.clock()
             if self.state == CIRCUIT_OPEN:
@@ -72,20 +87,26 @@ class _CircuitBreaker:
                 if self.half_open_probe_active:
                     raise CircuitBreakerOpenError(1)
                 self.half_open_probe_active = True
+                self.admitted_sequence += 1
                 self._probe_token = object()
-                return self._probe_token
-            return None
+                return _Admission(self.admitted_sequence, self._probe_token)
+            self.admitted_sequence += 1
+            return _Admission(self.admitted_sequence)
 
-    def record_success(self) -> None:
+    def record_success(self, admission: _Admission | None = None) -> None:
         with self._lock:
+            if not self._apply(admission):
+                return
             self.state = CIRCUIT_CLOSED
             self.failures = 0
             self.opened_at = None
             self.half_open_probe_active = False
             self._probe_token = None
 
-    def record_failure(self) -> None:
+    def record_failure(self, admission: _Admission | None = None) -> None:
         with self._lock:
+            if not self._apply(admission):
+                return
             self.half_open_probe_active = False
             self._probe_token = None
             if self.state == CIRCUIT_HALF_OPEN:
@@ -102,6 +123,22 @@ class _CircuitBreaker:
             if probe_token is not None and self._probe_token is probe_token:
                 self.half_open_probe_active = False
                 self._probe_token = None
+
+    def _apply(self, admission: _Admission | None) -> bool:
+        """Claim the right to record a completion in admission order.
+
+        Returns ``True`` while this completion is at least as new as the newest
+        one already recorded. A late completion from an older admission is
+        dropped so it cannot erase newer health evidence, including a failure
+        that has not yet reached the open threshold.
+        """
+        if admission is None:
+            self.applied_sequence = max(self.applied_sequence, self.admitted_sequence)
+            return True
+        if admission.sequence < self.applied_sequence:
+            return False
+        self.applied_sequence = admission.sequence
+        return True
 
     def snapshot(self) -> CircuitBreakerSnapshot:
         with self._lock:
@@ -156,26 +193,30 @@ class ResilienceManager:
 
         Base exceptions outside ``Exception`` propagate without retrying or
         changing health evidence, while releasing an interrupted recovery probe.
+        A completion is only applied while it is at least as new as the newest
+        completion already recorded, so a call admitted earlier that finishes
+        late cannot reopen or close a circuit that newer evidence already
+        settled.
         """
         if not self.config.enabled:
             return operation()
 
         breaker = self._breaker_for(key)
-        probe_token = breaker.before_call()
+        admission = breaker.before_call()
         try:
             result = self._run_with_retry(operation)
         except Exception as exc:
             if _is_retryable_exception(exc):
-                breaker.record_failure()
+                breaker.record_failure(admission)
             else:
-                breaker.record_success()
+                breaker.record_success(admission)
             raise
         except BaseException:
             # Cancellation and process interruption are not retryable backend
             # failures, but must not permanently reserve a half-open probe.
-            breaker.record_aborted(probe_token)
+            breaker.record_aborted(admission.probe_token)
             raise
-        breaker.record_success()
+        breaker.record_success(admission)
         return result
 
     def check_available(self, key: str) -> None:

@@ -254,3 +254,124 @@ def test_service_resilience_config_reads_env(monkeypatch: pytest.MonkeyPatch) ->
     assert config.backoff_jitter_seconds == 0.05
     assert config.failure_threshold == 7
     assert config.recovery_timeout_seconds == 12.0
+
+
+def _resilience_manager(
+    clock: FakeClock,
+    failure_threshold: int = 1,
+) -> ResilienceManager:
+    return ResilienceManager(
+        config=ServiceResilienceConfig(
+            max_attempts=1,
+            failure_threshold=failure_threshold,
+            recovery_timeout_seconds=30.0,
+        ),
+        clock=clock,
+        sleep=lambda _: None,
+    )
+
+
+def _failing_backend() -> None:
+    raise RuntimeError("synthetic backend failure")
+
+
+def test_late_success_cannot_close_a_newer_open_circuit() -> None:
+    """A completion admitted before the breaker opened must not revive it."""
+    clock = FakeClock()
+    manager = _resilience_manager(clock)
+
+    def older_call() -> str:
+        with pytest.raises(RuntimeError):
+            manager.execute("synthetic", _failing_backend)
+        clock.advance(5.0)
+        return "older success"
+
+    manager.execute("synthetic", older_call)
+
+    snapshot = manager.snapshots()["synthetic"]
+    assert snapshot.state == CIRCUIT_OPEN
+    assert snapshot.retry_after_seconds == 25
+
+
+def test_late_success_cannot_consume_a_newer_half_open_probe_window() -> None:
+    """The stale completion must leave the recovery window to the newer state."""
+    clock = FakeClock()
+    manager = _resilience_manager(clock)
+
+    def older_call() -> str:
+        with pytest.raises(RuntimeError):
+            manager.execute("synthetic", _failing_backend)
+        clock.advance(31.0)
+        return "older success"
+
+    manager.execute("synthetic", older_call)
+
+    assert manager.snapshots()["synthetic"].state == CIRCUIT_HALF_OPEN
+
+
+def test_late_failure_cannot_overwrite_a_newer_success() -> None:
+    clock = FakeClock()
+    manager = _resilience_manager(clock)
+
+    def newer_success_then_failure() -> None:
+        manager.execute("synthetic", lambda: "newer success")
+        raise RuntimeError("synthetic backend failure")
+
+    with pytest.raises(RuntimeError):
+        manager.execute("synthetic", newer_success_then_failure)
+
+    snapshot = manager.snapshots()["synthetic"]
+    assert snapshot.state == CIRCUIT_CLOSED
+    assert snapshot.failures == 0
+
+
+def test_below_threshold_failure_survives_an_older_completion() -> None:
+    """A newer sub-threshold failure must not be erased by a late older call."""
+    clock = FakeClock()
+    manager = _resilience_manager(clock, failure_threshold=2)
+
+    def older_call() -> str:
+        with pytest.raises(RuntimeError):
+            manager.execute("synthetic", _failing_backend)
+        return "older success"
+
+    manager.execute("synthetic", older_call)
+
+    snapshot = manager.snapshots()["synthetic"]
+    assert snapshot.state == CIRCUIT_CLOSED
+    assert snapshot.failures == 1
+
+
+def test_newer_failure_still_counts_after_an_older_success() -> None:
+    """Admission order, not completion order, decides which outcome applies."""
+    clock = FakeClock()
+    manager = _resilience_manager(clock, failure_threshold=2)
+
+    def older_call() -> str:
+        manager.execute("synthetic", lambda: "newer success")
+        with pytest.raises(RuntimeError):
+            manager.execute("synthetic", _failing_backend)
+        return "older success"
+
+    manager.execute("synthetic", older_call)
+
+    snapshot = manager.snapshots()["synthetic"]
+    assert snapshot.state == CIRCUIT_CLOSED
+    assert snapshot.failures == 1
+
+
+def test_newer_success_still_clears_a_below_threshold_failure() -> None:
+    """Newer evidence keeps overriding older evidence once admitted later."""
+    clock = FakeClock()
+    manager = _resilience_manager(clock, failure_threshold=2)
+
+    def older_call() -> str:
+        with pytest.raises(RuntimeError):
+            manager.execute("synthetic", _failing_backend)
+        return manager.execute("synthetic", lambda: "newer success")
+
+    assert manager.execute("synthetic", older_call) == "newer success"
+
+    snapshot = manager.snapshots()["synthetic"]
+    assert snapshot.state == CIRCUIT_CLOSED
+    assert snapshot.failures == 0
