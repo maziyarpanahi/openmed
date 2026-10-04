@@ -317,6 +317,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
+- Return the typed metadata errors for federated round and schedule JSON that is
+  deeply nested or carries an oversized integer literal, instead of leaking
+  `RecursionError` and the interpreter's integer digit limit (#3880).
 
 ## [2.5.0] - 2026-09-14
 
