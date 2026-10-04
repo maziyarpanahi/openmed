@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added the offline `openmed models slm-verify` command, which verifies a local
+  clinical SLM package, probes explicitly requested capabilities against the
+  declared metadata, and runs the memory preflight for an explicit device
+  budget, with a value-free JSON report, stable CLI error codes, and no runtime
+  import or network access (#3805).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
