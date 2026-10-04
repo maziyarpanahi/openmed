@@ -39,6 +39,7 @@ nav:
       - Tool Argument Classification: agent/tool-argument-classification.md
       - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
       - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+      - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
       - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
       - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
       - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
