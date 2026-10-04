@@ -161,6 +161,94 @@
     ],
     "schema_version": 1
   },
+  "service_error_envelope": {
+    "fingerprint": "sha256:044ca6a83cc8fa74082c171c58e3b20fccd4f43b88d94c63ea8d14a22c74e114",
+    "properties": [
+      "error",
+      "schema_version"
+    ],
+    "required": [
+      "error"
+    ],
+    "schema_version": 1
+  },
+  "service_job_record": {
+    "fingerprint": "sha256:ff385791e6002f68300e657d6d9ea00732f6bead986a5f8646cc1e6e7e16c241",
+    "properties": [
+      "completed_at",
+      "created_at",
+      "document_count",
+      "documents",
+      "error",
+      "expires_at",
+      "failed_count",
+      "id",
+      "label_histogram",
+      "processed_count",
+      "progress_percent",
+      "schema_version",
+      "spans",
+      "started_at",
+      "status",
+      "status_url",
+      "updated_at",
+      "webhook",
+      "webhook_delivery"
+    ],
+    "required": [
+      "completed_at",
+      "created_at",
+      "document_count",
+      "documents",
+      "error",
+      "expires_at",
+      "failed_count",
+      "id",
+      "label_histogram",
+      "processed_count",
+      "progress_percent",
+      "spans",
+      "started_at",
+      "status",
+      "updated_at",
+      "webhook",
+      "webhook_delivery"
+    ],
+    "schema_version": 1
+  },
+  "service_webhook_payload": {
+    "fingerprint": "sha256:2251e9de44ad8d7d2469926ee7ef87edddbe7d512fc214804ba02c7d25759350",
+    "properties": [
+      "completed_at",
+      "document_count",
+      "documents",
+      "error",
+      "event",
+      "failed_count",
+      "job_id",
+      "label_histogram",
+      "processed_count",
+      "progress_percent",
+      "schema_version",
+      "spans",
+      "status"
+    ],
+    "required": [
+      "completed_at",
+      "document_count",
+      "documents",
+      "error",
+      "event",
+      "failed_count",
+      "job_id",
+      "label_histogram",
+      "processed_count",
+      "progress_percent",
+      "spans",
+      "status"
+    ],
+    "schema_version": 1
+  },
   "span": {
     "fingerprint": "sha256:c996e49b36c73a3f694cf307b8447535234331ff34624a1019f4f62ce0b056f2",
     "properties": [

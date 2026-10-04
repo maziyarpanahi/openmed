@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added versioned JSON Schemas for the async job record, the terminal webhook
+  payload, and the REST error envelope, registered in the bundled schema
+  fingerprint snapshot, with drift tests that fail when a required field is
+  removed or an undeclared field appears (#3925).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.

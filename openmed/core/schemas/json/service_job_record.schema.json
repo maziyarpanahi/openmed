@@ -1,0 +1,258 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/service_job_record.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "completed_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "created_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    },
+    "document_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "documents": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "length": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "length",
+          "text_hash"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "expires_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    },
+    "failed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "label_histogram": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "type": "object"
+    },
+    "processed_count": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "progress_percent": {
+      "maximum": 100,
+      "minimum": 0,
+      "type": "number"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "spans": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "document_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "end": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "label": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "start": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "text_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "start",
+          "end",
+          "label",
+          "text_hash",
+          "confidence"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "started_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "enum": [
+        "queued",
+        "running",
+        "done",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "status_url": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "updated_at": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    },
+    "webhook": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff_seconds": {
+          "maximum": 60,
+          "minimum": 0,
+          "type": "number"
+        },
+        "configured": {
+          "const": true,
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "url_hash": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "configured",
+        "url_hash",
+        "max_attempts",
+        "backoff_seconds"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "webhook_delivery": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success",
+        "attempts",
+        "status_code",
+        "error"
+      ],
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "status",
+    "progress_percent",
+    "document_count",
+    "processed_count",
+    "failed_count",
+    "label_histogram",
+    "spans",
+    "documents",
+    "error",
+    "webhook",
+    "webhook_delivery",
+    "created_at",
+    "updated_at",
+    "started_at",
+    "completed_at",
+    "expires_at"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedServiceJobRecord",
+  "type": "object"
+}

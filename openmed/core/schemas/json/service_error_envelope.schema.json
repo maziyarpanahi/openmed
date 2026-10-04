@@ -1,0 +1,49 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/service_error_envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "details": {
+          "type": [
+            "array",
+            "boolean",
+            "null",
+            "number",
+            "object",
+            "string"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "details"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedServiceErrorEnvelope",
+  "type": "object"
+}
