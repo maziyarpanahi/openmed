@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Select explicit extractive brief sentences by unique reviewed fact coverage,
+  independent omission rules and existing length allocations. Preserve ordered
+  citations and expose insufficient-budget/resource-limit diagnostics without
+  partial output; retain the first-three-sentence comparison baseline (#3653).
+  Recomputed synthetic summary reports retain missing-adjudication failures.
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic

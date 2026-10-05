@@ -193,6 +193,7 @@ def build_clinical_brief(
         A review-required brief, or a typed refusal with no source values.
         Missing stages, models, evidence or failed checks always fail closed.
     """
+    from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.review_packet_privacy import ReviewPacketPrivacyBlocked
     from openmed.clinical.summarize import SummarizationLeakageError
     from openmed.core.offline import network_blocked_if_offline
@@ -204,6 +205,13 @@ def build_clinical_brief(
             return _compose(note_or_deid_result, model, profile, context, completed)
     except _Stop as error:
         reason = error.reason
+    except ExtractiveSelectionError as error:
+        return _result(
+            "",
+            BriefRefusal.UNSUPPORTED_CLAIM,
+            completed,
+            metrics={"extractive_selection": error.result.to_dict()},
+        )
     except (SummarizationLeakageError, ReviewPacketPrivacyBlocked):
         reason = BriefRefusal.PRIVACY
     except Exception:
@@ -267,7 +275,10 @@ def _compose(value, model, profile_name, context, completed):
     from openmed.clinical.review_packet_privacy import enforce_review_packet_privacy
     from openmed.clinical.sections import detect_sections
     from openmed.clinical.summarize import _build_leakage_check
-    from openmed.clinical.summarize_backends import resolve_summarizer_backend
+    from openmed.clinical.summarize_backends import (
+        ExtractiveSummarizerBackend,
+        resolve_summarizer_backend,
+    )
     from openmed.clinical.summary_citations import compute_summary_citation_metrics
     from openmed.clinical.summary_claim_segments import segment_summary_claims
     from openmed.clinical.summary_demographic_minimizer import (
@@ -378,7 +389,10 @@ def _compose(value, model, profile_name, context, completed):
     budget = build_summary_length_budget(
         2048, {"key_findings": sum(r.end - r.start for r in refs)}
     )
-    if budget.deferred_evidence_classes:
+    if (
+        budget.deferred_evidence_classes
+        and type(backend) is not ExtractiveSummarizerBackend
+    ):
         raise _Stop(BriefRefusal.INVALID_INPUT)
     stage("profile")
     profile = get_summary_profile(profile_name)
@@ -393,6 +407,28 @@ def _compose(value, model, profile_name, context, completed):
     from dataclasses import replace
 
     admitted = " ".join(text[r.start : r.end] for r in refs)
+    if type(backend) is ExtractiveSummarizerBackend and model != "extractive-baseline":
+        from openmed.clinical.extractive_selection import ExtractiveFact
+        from openmed.clinical.summary_omission_budget import ImportanceClassPolicy
+
+        # Reviewed facts remain mandatory. Offsets are rebased only for the
+        # admitted artifact; final citations continue to bind original offsets.
+        class_id = _digest("extractive-mandatory-reviewed-facts-v1")
+        selection_facts = []
+        start = 0
+        for r in refs:
+            end = start + r.end - r.start
+            selection_facts.append(
+                ExtractiveFact(_digest(r.reference_id), class_id, start, end)
+            )
+            start = end + 1
+        backend = ExtractiveSummarizerBackend(
+            evidence=tuple(selection_facts),
+            importance_classes=(ImportanceClassPolicy(class_id, 1, mandatory=True),),
+            length_budget=build_summary_length_budget(
+                budget.max_tokens, {"key_findings": len(admitted.encode("utf-8"))}
+            ),
+        )
     generated = summarize_deidentified(
         replace(value, deidentified_text=admitted, audit_report=None), model=backend
     )
