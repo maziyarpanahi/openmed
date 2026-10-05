@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added injected runtime clinical-agent authority revocation checks before
+  sensitive reads, effects and recovery, with monotonic grant/ticket generations,
+  descendant and approval invalidation, and content-free offline tests (#3664).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
