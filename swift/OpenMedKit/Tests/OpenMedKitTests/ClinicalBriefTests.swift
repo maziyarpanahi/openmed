@@ -93,6 +93,9 @@ final class ClinicalBriefTests: XCTestCase {
     func testSharedParaphraseBindingsRetainNativeGuards() throws {
         let (source, generation, evidence, packet) = try boundFixture()
         let summary = generation.claims.map(\.text).joined(separator: " ")
+        XCTAssertFalse(String(describing: generation).contains("Dehydration"))
+        XCTAssertFalse(String(reflecting: generation).contains("Dehydration"))
+        XCTAssertFalse(String(reflecting: generation.claims[0]).contains("Dehydration"))
         let brief = try ClinicalBrief.validate(
             evaluationJSON: packet, source: source, generatedSummary: summary,
             originalIdentifiers: [], boundGeneration: generation, reviewedEvidence: evidence,

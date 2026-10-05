@@ -42,9 +42,12 @@ public struct ClinicalBriefVerdict: Codable, Sendable, Equatable {
 }
 
 /// Protected atomic output from an injected on-device generator.
-public struct ClinicalBriefGeneratedClaim: Codable, Sendable {
+public struct ClinicalBriefGeneratedClaim: Codable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public let text: String
     public let referenceIDs: [String]
+
+    public var description: String { "ClinicalBriefGeneratedClaim(references: \(referenceIDs.count))" }
+    public var debugDescription: String { description }
 
     public init(text: String, referenceIDs: [String]) {
         self.text = text
@@ -58,9 +61,12 @@ public struct ClinicalBriefGeneratedClaim: Codable, Sendable {
 }
 
 /// Versioned opt-in generation contract. Plain-string generation is unchanged.
-public struct ClinicalBriefGeneration: Codable, Sendable {
+public struct ClinicalBriefGeneration: Codable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public let claims: [ClinicalBriefGeneratedClaim]
     public let schemaVersion: Int
+
+    public var description: String { "ClinicalBriefGeneration(version: \(schemaVersion), claims: \(claims.count))" }
+    public var debugDescription: String { description }
 
     public init(claims: [ClinicalBriefGeneratedClaim], schemaVersion: Int = 1) {
         self.claims = claims
