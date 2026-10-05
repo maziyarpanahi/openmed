@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Normalize SMART v1 read/write/all permissions, wildcard resources, granular
+  queries and non-clinical identity/launch/session scopes in offline scope
+  audits. Compare constraints conservatively and report malformed input without
+  echoing values; granular audit evidence contains only constraint digests (#3767).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
