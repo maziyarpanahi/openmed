@@ -73,6 +73,20 @@ from .brief import (
     brief_policy_fingerprint,
     build_clinical_brief,
 )
+from .brief_context import (
+    BriefContextBinding,
+    BriefContextCode,
+    BriefContextError,
+    BriefContextOutcome,
+    BriefContextPlan,
+    BriefContextSpan,
+    BriefExtraction,
+    BriefExtractionProvider,
+    BriefFactMapping,
+    BriefReviewVerifier,
+    LocalBriefContextProvider,
+    plan_brief_context,
+)
 from .cancer_staging import (
     TNM_STAGING_ADVISORY,
     TnmBasis,
@@ -1855,6 +1869,18 @@ from .vital_signs import (
 )
 
 __all__ = [
+    "BriefContextBinding",
+    "BriefContextCode",
+    "BriefContextError",
+    "BriefContextOutcome",
+    "BriefContextPlan",
+    "BriefContextSpan",
+    "BriefExtraction",
+    "BriefExtractionProvider",
+    "BriefFactMapping",
+    "BriefReviewVerifier",
+    "LocalBriefContextProvider",
+    "plan_brief_context",
     "BriefContext",
     "BriefFact",
     "BriefRefusal",
