@@ -333,6 +333,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validate calibration targets as booleans or numeric zero/one, including
   aliases, instead of treating non-empty strings as positive labels (#3568).
 - Reject non-integer sharding counts before reading documents.
+- Include ranked grounding alternatives in MedMentions top-k accuracy without
+  crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
