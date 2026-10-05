@@ -463,6 +463,7 @@ def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
     monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "0.01")
     monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
     release = threading.Event()
+    started = threading.Event()
     lock = threading.Lock()
     state = {"active": 0, "peak": 0, "calls": 0}
 
@@ -471,6 +472,8 @@ def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
             state["calls"] += 1
             state["active"] += 1
             state["peak"] = max(state["peak"], state["active"])
+            if state["active"] == limit:
+                started.set()
         try:
             assert release.wait(5)
             return _prediction_result(text)
@@ -483,13 +486,13 @@ def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
 
     async def scenario():
         async with app.router.lifespan_context(app):
-            app.state.runtime.config.timeout = 0.1
+            app.state.runtime.config.timeout = 0
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport, base_url=LOOPBACK_BASE_URL
             ) as client:
-                try:
-                    response = await client.post(
+                request = asyncio.create_task(
+                    client.post(
                         "/graphql",
                         json={
                             "query": """query($input: AnalyzeInput!) {
@@ -499,19 +502,26 @@ def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
                             "variables": {"input": {"text": "synthetic"}},
                         },
                     )
-                    assert response.status_code == 200
-                    assert "errors" in response.json()
-                    assert all(
-                        e["extensions"]["code"] == "OPENMED_RESOLVER_ERROR"
-                        for e in response.json()["errors"]
-                    )
+                )
+                try:
+                    assert await asyncio.to_thread(started.wait, 2)
                     assert state["calls"] == limit
                     assert state["peak"] == limit
                     busy = await client.post("/analyze", json={"text": "synthetic"})
                     _assert_error_payload(busy, 503, "service_busy")
                 finally:
                     release.set()
+                    response = await asyncio.wait_for(request, 2)
                     await _wait_for_work_to_finish(app)
+                assert response.status_code == 200
+                if limit == 1:
+                    assert len(response.json()["errors"]) == 1
+                    assert (
+                        response.json()["errors"][0]["extensions"]["code"]
+                        == "OPENMED_RESOLVER_ERROR"
+                    )
+                else:
+                    assert "errors" not in response.json()
 
     asyncio.run(scenario())
     assert state["active"] == 0
