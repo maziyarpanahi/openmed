@@ -55,6 +55,16 @@ not an exception for other packages. Prefer operator-selected, pinned, trusted
 artifacts and safetensors where available, but do not treat those controls as a
 substitute for dependency updates or a general guarantee about native parsers.
 
+The scanned root and published multi-architecture service containers use the
+same digest-pinned runtime bases and library/tooling repairs. Their build context
+copies only the Python package, required package metadata, retained registry
+files and bundled synthetic red-team fixture, not unrelated desktop source
+trees. Dependencies are checked before the installer is removed from the final
+runtime. Add optional packages by rebuilding the image; the production image is
+not an interactive package-installation environment. Scan the actual final
+image, including vendored dependencies, rather than assuming the installed
+top-level versions or the repository lock describe all of its contents.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency

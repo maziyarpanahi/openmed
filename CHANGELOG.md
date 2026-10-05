@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extractive/MLX benchmark evidence. Failed reports remain failed and do not
   qualify models; training and model publication are optional, separate from
   the library/SDK release.
+- Aligned the published and scanned service-container runtime repairs, omitted
+  unrelated desktop source trees, checked installed dependency consistency and
+  removed the installer from the final runtime; no vulnerability waiver added.
 - Guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
   local review lookup, separate protected/audit CLI files and content-free logs.
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
