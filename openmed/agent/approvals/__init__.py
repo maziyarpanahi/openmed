@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .nonce_store import SQLiteApprovalNonceStore
 from .tokens import (
     APPROVAL_NONCE_BYTES,
     APPROVAL_RECEIPT_SCHEMA_VERSION,
@@ -43,5 +44,6 @@ __all__ = [
     "ApprovalTokenValidationError",
     "ApprovalTokenVerifier",
     "InMemoryApprovalNonceStore",
+    "SQLiteApprovalNonceStore",
     "dispatch_with_approval_token",
 ]

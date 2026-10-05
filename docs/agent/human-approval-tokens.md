@@ -79,13 +79,64 @@ Every verifier requires an `ApprovalNonceStore`. Its `claim()` operation must
 be atomic for every process that can execute the protected action.
 `InMemoryApprovalNonceStore` is thread-safe but process-local, so it is suitable
 for one-process local workflows and tests. Multi-process or restarted services
-must inject an application-owned durable local store with the same atomic
-claim semantics. Store only the nonce digest supplied to `claim()`, not the
-serialized bearer token.
+can inject `SQLiteApprovalNonceStore` using the same application-owned private
+local database file for every consumer:
+
+```python
+from openmed.agent.approvals import SQLiteApprovalNonceStore
+
+store = SQLiteApprovalNonceStore("approval-nonces.sqlite3", timeout=5)
+verifier = ApprovalTokenVerifier(key, store)
+```
+
+Provision the parent directory privately before constructing the store; do not
+use a network filesystem or allow other users to replace the database. The
+store creates its file with mode `0600` and enforces owner-only permissions on
+POSIX. On Windows, provision an owner-only directory ACL. Each claim opens a
+connection, takes an exclusive transaction, purges entries whose integer expiry
+is at or before `now`, and inserts the nonce digest under a unique key. The
+rollback journal and `synchronous=EXTRA` make successful commits durable within
+SQLite's local filesystem guarantees. No connections need closing by callers.
+Only nonce digests and integer expiries are stored; tokens, signatures, keys,
+action digests, and reviewer roles are never persisted.
+
+Reopening the same database preserves unexpired claims. Lock timeouts,
+corruption (including empty or truncated existing files), missing files during
+claims, invalid schemas, and unknown schema versions raise
+`ApprovalNonceStoreError` with controlled codes. Never recover by deleting or
+resetting a database while approvals remain valid: that discards replay
+protection. Keep the database through every outstanding token's expiry and
+deny dispatch when storage fails. The trusted clock must be consistent across
+consumers; moving it forward may purge entries that another consumer still
+considers unexpired.
+
+### MCP consent receipt adapter
+
+`ConsentReceiptVerifier` keeps its existing process-local default. To protect
+receipts across MCP processes and restarts, inject the same claim protocol:
+
+```python
+from openmed.mcp.consent_receipts import ConsentReceiptVerifier
+
+consent_verifier = ConsentReceiptVerifier(
+    key_provider, consumption_store=store,
+)
+```
+
+The adapter hashes a domain-separated receipt ID and rounds fractional expiry
+up to integer seconds (current time is rounded down). This keeps a receipt
+claimed throughout its exclusive lifetime. Binding failures do not consume
+receipts, preserving the existing behavior. Store failures raise
+`ConsentReceiptStoreError`, also an `ApprovalNonceStoreError`, and
+`verify_result()` returns `nonce_store_unavailable`; the policy denies dispatch.
+`is_consumed()` and `consumed_receipt_ids` remain local diagnostic snapshots of
+this verifier's successful consumption, not queries of the shared database.
+Issuance, token formats, and signing keys are unchanged.
 
 The HMAC key is also application-owned and stays local. OpenMed performs no
-network request, key lookup, telemetry, notification, or persistence. HMAC is
-a shared-key primitive: any component that can verify with the key can also
+network request, key lookup, telemetry, or notification. Persistence is opt-in
+through the injected store. HMAC is a shared-key primitive: any component that
+can verify with the key can also
 issue a token, so keep signing in the component that authenticates reviewers.
 
 ## Value-free receipts and errors
@@ -112,5 +163,5 @@ are deterministic when `now` and the nonce are supplied explicitly.
 Run the focused offline tests with:
 
 ```text
-.venv/bin/python -m pytest tests/unit/agent/approvals/test_tokens.py -q
+.venv/bin/python -m pytest tests/unit/agent/approvals/ tests/unit/mcp/test_consent_receipts.py tests/integration/test_durable_approval_nonces.py -q
 ```
