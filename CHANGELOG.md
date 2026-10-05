@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add offline qualification of caller-supplied clinical NLI artifacts,
+  separate development/held-out evaluation, digest-bound receipts and a
+  drift-checked BriefContext callback; synthetic data never establishes
+  clinical qualification (#3656).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.

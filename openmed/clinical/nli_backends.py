@@ -25,6 +25,10 @@ class LocalNLIError(RuntimeError):
     """A value-free failure to resolve, load, or run local NLI."""
 
 
+class NLIContextLimitError(LocalNLIError):
+    """A local pair cannot be scored without truncation."""
+
+
 class RemoteNLIBackendError(LocalNLIError):
     """A remote NLI backend was requested at the clinical boundary."""
 
@@ -93,8 +97,12 @@ class EncoderNLIBackend:
             self._artifact = artifact
         return self._artifact
 
-    def predict(self, premise: str, hypothesis: str) -> dict[str, str | float]:
-        """Return a four-state, calibrated decision with no input text."""
+    def predict_scores(self, premise: str, hypothesis: str) -> dict[str, float]:
+        """Return local three-class probabilities before threshold selection.
+
+        These scores alone do not establish calibration or qualification. A
+        pair exceeding the context limit fails closed instead of being clipped.
+        """
 
         if not isinstance(premise, str) or not premise.strip():
             raise LocalNLIError("NLI premise is required")
@@ -121,11 +129,7 @@ class EncoderNLIBackend:
                 if type(limit) is int and limit > 0:
                     limits.append(limit)
             if len(encoded["input_ids"][0]) > min(limits):
-                return {
-                    "label": "abstention",
-                    "score": 0.0,
-                    "backend_id": self.backend_id,
-                }
+                raise NLIContextLimitError("NLI pair exceeds local context limit")
             if self.runtime == "torch":
                 logits = model(**encoded).logits[0].tolist()
             else:
@@ -142,18 +146,28 @@ class EncoderNLIBackend:
             }
             if set(scores) != _CANONICAL_SCORES:
                 raise ValueError("invalid class mapping")
-            gate = evaluate_nli(
-                scores,
-                EvidenceLink(
-                    source_id="nli-source",
-                    claim_id="nli-claim",
-                    source_hash=hash_text(premise),
-                    claim_hash=hash_text(hypothesis),
-                ),
-                thresholds=self.thresholds,
-            )
+        except NLIContextLimitError:
+            raise
         except Exception:
             raise LocalNLIError("local NLI inference failed") from None
+        return scores
+
+    def predict(self, premise: str, hypothesis: str) -> dict[str, str | float]:
+        """Return a four-state, calibrated decision with no input text."""
+        try:
+            scores = self.predict_scores(premise, hypothesis)
+        except NLIContextLimitError:
+            return {"label": "abstention", "score": 0.0, "backend_id": self.backend_id}
+        gate = evaluate_nli(
+            scores,
+            EvidenceLink(
+                source_id="nli-source",
+                claim_id="nli-claim",
+                source_hash=hash_text(premise),
+                claim_hash=hash_text(hypothesis),
+            ),
+            thresholds=self.thresholds,
+        )
         return {
             "label": "abstention" if gate.outcome == "abstain" else gate.outcome,
             "score": gate.selected_probability,
