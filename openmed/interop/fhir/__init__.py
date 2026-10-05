@@ -91,6 +91,15 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .transactions import (
+    ApprovedWriteEntry,
+    AssembledTransaction,
+    TransactionApproval,
+    TransactionAssemblyError,
+    TransactionLimits,
+    TransactionReviewerRole,
+    assemble_transaction,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -172,6 +181,13 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
 )
 
 __all__ = [
+    "ApprovedWriteEntry",
+    "AssembledTransaction",
+    "TransactionApproval",
+    "TransactionAssemblyError",
+    "TransactionLimits",
+    "TransactionReviewerRole",
+    "assemble_transaction",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
