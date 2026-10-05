@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add the separately versioned reviewed-local clinical evidence contract and
+  opt-in Python/OpenMedKit brief admission, with current source/review custody,
+  digest-bound expiring receipts, typed refusals and synthetic offline fixtures
+  (#3651). Existing evidence packets remain synthetic-only.
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
