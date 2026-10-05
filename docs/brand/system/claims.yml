@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-02",
+  "generated_at": "2026-10-03",
   "generation": {
     "command": "python scripts/brand/update_claims.py --write",
     "network": "forbidden",
@@ -24,15 +24,15 @@
     },
     "github_stars_snapshot": {
       "status": "verified",
-      "value": 5445,
+      "value": 5444,
       "display": "5,400+ GitHub stars",
       "definition": "Exact stargazers_count from the committed GitHub API evidence; public display is conservatively floored to the preceding 100-star quantum.",
       "source": "docs/brand/system/evidence/github-repository.json",
-      "as_of": "2026-10-02",
+      "as_of": "2026-10-03",
       "owner": "repository-owner",
       "public_wording": "5,400+ GitHub stars",
-      "qualification": "Dated offline snapshot, not a live counter; the exact raw value was 5,445 when captured.",
-      "review_by": "2026-11-02",
+      "qualification": "Dated offline snapshot, not a live counter; the exact raw value was 5,444 when captured.",
+      "review_by": "2026-11-03",
       "follow_up_by": null
     },
     "repository_model_snapshot": {
