@@ -29,11 +29,67 @@ review-state API only for work actually reviewed. Changed content or annotations
 require a new review. The current evidence-packet contract is **synthetic-only**;
 this implementation does not widen that boundary to real patient data.
 
-The initial alignment policy is deliberately strict: each atomic generated claim
-must exactly equal one unique reviewed source span. Paraphrases, ambiguous spans,
+Plain-string generation retains the strict extraction path: each atomic claim
+must exactly equal one unique reviewed source span. An opt-in structured path
+also accepts paraphrases through explicit bindings (below). Ambiguous spans,
 missing profile fields, demographic evidence, contradictions and NLI abstentions
-are refused. This is not a general paraphrase-grounding system. Clinical axes come
-from reviewed evidence, never inferred from a generated answer.
+are refused. Clinical axes come from reviewed evidence, never from generation.
+
+## Explicit paraphrase bindings (v1)
+
+A trusted local backend may implement `generate_brief(evidence, *, mode)` instead
+of `summarize(text, *, mode)`. It receives a tuple of `BriefGenerationEvidence`
+records containing only reviewed de-identified spans, opaque `reference_id`s and
+original half-open Unicode-scalar source offsets. It returns
+`BriefGenerationResult(claims, schema_version=1)` from
+`openmed.clinical.summarize_backends`:
+
+For example, when the supplied synthetic evidence contains only the reviewed
+span `Symptoms improved after fluids.`, a deterministic test generator can
+propose the following paraphrase. A complete brief must also satisfy its profile.
+
+```python
+from openmed.clinical.summarize_backends import (
+    BriefGeneratedClaim,
+    BriefGenerationResult,
+)
+
+class SyntheticGenerator:
+    def generate_brief(self, evidence, *, mode):
+        # Contract illustration only; not a model or a clinical verifier.
+        return BriefGenerationResult((
+            BriefGeneratedClaim(
+                "Symptoms improved following fluid treatment.",
+                (evidence[0].reference_id,),
+            ),
+        ))
+```
+
+The result admits 1–64 atomic claims and at most 8,192 UTF-8 output bytes.
+Each claim requires exactly one reviewed reference. Empty, invented, repeated or
+multiple references, overlapping reviewed spans, compound claims, unknown schema
+versions and free-form structured results refuse. There is no similarity search
+or confidence-based evidence inference. Multi-reference synthesis needs a future
+version that defines how reviewed clinical axes combine; v1 does not guess.
+
+Claim text is joined with one space; the composer computes output offsets and
+maps the selected reference to original source offsets. Explicit bindings grant
+only alignment: every claim still passes the assertion, temporal, experiencer,
+calibrated NLI, citation and privacy gates. No threshold changes. Successful
+audits add `generation_contract` and `claim_bindings` with reference digests;
+legacy exact-match packets remain unchanged. Original identifiers are checked
+against generated text, and the complete response is privacy-scanned.
+
+OpenMedKit's `ClinicalBriefGeneration` and `ClinicalBriefGeneratedClaim` use the
+same v1 wire fields (`schema_version`, `claims`, `text`, `reference_ids`). Supply
+`boundGeneration` and caller-authorized `reviewedEvidence` to
+`ClinicalBrief.validate` alongside the packet from the trusted on-device
+evidence/NLI evaluator. Native checks independently bind reference digests and
+source/output offsets and require entailment verdicts. The caller must validate
+atomicity and all reviewed clinical axes through that evaluator; model output
+cannot authorize evidence. With no explicit bindings, native validation keeps
+exact extraction. Built-in model adapters continue their existing contracts;
+this change adds no trained artifact, cloud fallback or clinical-validation claim.
 
 ## Fixed execution and failure behavior
 

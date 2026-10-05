@@ -1,8 +1,8 @@
 """Fixed-order clinical briefs over explicitly reviewed local evidence.
 
 No review is minted by this module. Raw input without an approved evidence
-context is de-identified, then refused. The initial composer deliberately accepts
-only exact, atomic source claims; paraphrases need a future alignment adapter.
+context is de-identified, then refused. Atomic claims use either unique exact
+extraction or versioned explicit bindings; binding never establishes support.
 """
 
 from __future__ import annotations
@@ -267,7 +267,12 @@ def _compose(value, model, profile_name, context, completed):
     from openmed.clinical.review_packet_privacy import enforce_review_packet_privacy
     from openmed.clinical.sections import detect_sections
     from openmed.clinical.summarize import _build_leakage_check
-    from openmed.clinical.summarize_backends import resolve_summarizer_backend
+    from openmed.clinical.summarize_backends import (
+        BriefGenerationEvidence,
+        BriefGenerationResult,
+        LocalSummarizerError,
+        resolve_summarizer_backend,
+    )
     from openmed.clinical.summary_citations import compute_summary_citation_metrics
     from openmed.clinical.summary_claim_segments import segment_summary_claims
     from openmed.clinical.summary_demographic_minimizer import (
@@ -393,8 +398,33 @@ def _compose(value, model, profile_name, context, completed):
     from dataclasses import replace
 
     admitted = " ".join(text[r.start : r.end] for r in refs)
+    bound = None
+    generation_backend = backend
+    if callable(getattr(backend, "generate_brief", None)):
+
+        def generate_bound(_text, *, mode):
+            nonlocal bound
+            candidate = backend.generate_brief(
+                tuple(
+                    BriefGenerationEvidence(
+                        r.reference_id, text[r.start : r.end], r.start, r.end
+                    )
+                    for r in refs
+                ),
+                mode=mode,
+            )
+            if type(candidate) is not BriefGenerationResult:
+                raise LocalSummarizerError("invalid brief generation result")
+            rendered = candidate.render()
+            if any(c.reference_ids[0] not in facts for c in candidate.claims):
+                raise LocalSummarizerError("unknown brief evidence reference")
+            bound = candidate
+            return rendered
+
+        generation_backend = generate_bound
     generated = summarize_deidentified(
-        replace(value, deidentified_text=admitted, audit_report=None), model=backend
+        replace(value, deidentified_text=admitted, audit_report=None),
+        model=generation_backend,
     )
     summary = generated.summary
     stage("envelope")
@@ -413,8 +443,25 @@ def _compose(value, model, profile_name, context, completed):
     if not segments or any(s.review_required for s in segments):
         raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
     aligned = []
+    if bound is not None and len(segments) != len(bound.claims):
+        raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
     for index, segment in enumerate(segments):
-        matches = [r for r in refs if text[r.start : r.end] == segment.text]
+        if bound is None:
+            matches = [r for r in refs if text[r.start : r.end] == segment.text]
+        else:
+            claim = bound.claims[index]
+            if segment.text != claim.text:
+                raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
+            matches = [r for r in refs if r.reference_id == claim.reference_ids[0]]
+            # Coincident/overlapping reviewed spans remain ambiguous, even if
+            # the generator selected an identifier for one of them.
+            if len(matches) == 1 and any(
+                r.reference_id != matches[0].reference_id
+                and r.start < matches[0].end
+                and matches[0].start < r.end
+                for r in refs
+            ):
+                raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
         if len(matches) != 1:
             raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
         aligned.append(
@@ -615,6 +662,17 @@ def _compose(value, model, profile_name, context, completed):
         model_id=generated.metadata["backend_id"],
         review_status="queued",
     )
+    binding_metadata = (
+        {
+            "generation_contract": {"kind": "explicit_evidence", "schema_version": 1},
+            "claim_bindings": [
+                {"claim_index": i, "reference_digest": _digest(r.reference_id)}
+                for i, (_, _, r, _) in enumerate(aligned)
+            ],
+        }
+        if bound is not None
+        else {}
+    )
     result = _result(
         summary,
         None,
@@ -643,6 +701,7 @@ def _compose(value, model, profile_name, context, completed):
         envelope=envelope.to_dict(),
         backend_id=generated.metadata["backend_id"],
         review_packet=review.to_dict(),
+        **binding_metadata,
     )
     # Scan the assembled protected response, including labels and metadata, not
     # only generation. There is no export or persistence before this check.

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from openmed.core.capabilities import MissingOptionalDependencyError
 from openmed.core.model_registry import resolve_summarizer_model
@@ -30,6 +31,89 @@ class LocalSummarizerError(RuntimeError):
 
 class RemoteSummarizerError(LocalSummarizerError):
     """A network provider or URL was supplied to a local-only task."""
+
+
+@dataclass(frozen=True)
+class BriefGenerationEvidence:
+    """Protected reviewed span exposed only to an injected local generator."""
+
+    reference_id: str
+    text: str = field(repr=False)
+    start: int
+    end: int
+
+
+@dataclass(frozen=True, repr=False)
+class BriefGeneratedClaim:
+    """Atomic protected output with exactly one explicit evidence binding.
+
+    The v1 contract refuses multiple references rather than guessing which
+    reviewed clinical axes apply to the generated claim.
+    """
+
+    text: str
+    reference_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, repr=False)
+class BriefGenerationResult:
+    """Opt-in v1 brief output; legacy string summarization is unchanged.
+
+    Claims are joined with one space, so no unbound prose can enter the output.
+    Validation happens at the composer boundary, even for injected providers.
+    """
+
+    claims: tuple[BriefGeneratedClaim, ...]
+    schema_version: int = 1
+
+    def render(self) -> str:
+        """Validate bounded atomic claims and return their protected text.
+
+        Raises:
+            LocalSummarizerError: For unknown versions or malformed bindings.
+        """
+        from openmed.clinical.summary_claim_segments import segment_summary_claims
+
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != 1
+            or type(self.claims) is not tuple
+            or not 0 < len(self.claims) <= 64
+        ):
+            raise LocalSummarizerError("invalid brief generation contract")
+        total = 0
+        for claim in self.claims:
+            if (
+                type(claim) is not BriefGeneratedClaim
+                or type(claim.text) is not str
+                or not claim.text
+                or claim.text != claim.text.strip()
+                or type(claim.reference_ids) is not tuple
+                or len(claim.reference_ids) != 1
+                or type(claim.reference_ids[0]) is not str
+                or not 0 < len(claim.reference_ids[0].encode()) <= 256
+            ):
+                raise LocalSummarizerError("invalid brief claim binding")
+            total += len(claim.text.encode())
+            if total + len(self.claims) - 1 > MAX_OUTPUT_BYTES:
+                raise LocalSummarizerError("brief output limit exceeded")
+            segments = segment_summary_claims(claim.text).segments
+            if (
+                len(segments) != 1
+                or segments[0].review_required
+                or segments[0].text != claim.text
+            ):
+                raise LocalSummarizerError("non-atomic brief claim")
+        return " ".join(claim.text for claim in self.claims)
+
+
+class BoundBriefGenerator(Protocol):
+    """Optional caller-owned local generator; no default model claims support."""
+
+    def generate_brief(
+        self, evidence: tuple[BriefGenerationEvidence, ...], *, mode: str
+    ) -> BriefGenerationResult:
+        """Return v1 claims referencing only the supplied reviewed evidence."""
 
 
 class ExtractiveSummarizerBackend:
@@ -240,6 +324,10 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
         }:
             raise RemoteSummarizerError("remote summarizer backends are prohibited")
         return MLXSummarizerBackend(model)
-    if callable(model) or callable(getattr(model, "summarize", None)):
+    if (
+        callable(model)
+        or callable(getattr(model, "summarize", None))
+        or callable(getattr(model, "generate_brief", None))
+    ):
         return model
     raise LocalSummarizerError("invalid local summarizer backend")
