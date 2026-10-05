@@ -304,6 +304,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Empty explicit keys are rejected; redaction labels and offsets are unchanged.
 - GitHub Actions are pinned to immutable commits, enforced by CI, and container
   publishing permissions are limited to the publish job.
+- Require Torch 2.13.0 or newer in optional model extras and current runtime
+  recipes to address checkpoint/native-operation vulnerabilities. Torch remains
+  absent from the base SDK; deployments must requalify platform and converter
+  compatibility. Separate optional dependency findings are not waived.
 
 ### Fixed
 - Require patched PyJWT versions in the locked dependency graph and bound CI

@@ -186,6 +186,8 @@ def test_budget_refresh_rejects_missing_or_ambiguous_wheels(
     monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
     with pytest.raises(SystemExit, match="Expected exactly one frozen-base wheel"):
         exec(compile(code, "<baseline-verification>", "exec"), {})
+
+
 def test_sdk_compatibility_matches_advertised_python_and_os_support():
     jobs = _load_ci()["jobs"]
     lane = jobs["sdk-compatibility"]
