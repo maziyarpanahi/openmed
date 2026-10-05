@@ -33,12 +33,14 @@ a dependency also declared in another extra.
 | `apache-beam` | `beam` | `Apache-2.0` |
 | `auto-gptq` | `gptq` | `MIT` |
 | `autoawq` | `awq` | `MIT` |
+| `banks` | `agents, llamaindex` | `MIT` |
 | `click` | `spacy` | `BSD-3-Clause` |
 | `confluent-kafka` | `kafka` | `Apache-2.0` |
 | `coremltools` | `coreml` | `BSD-3-Clause` |
 | `cryptography` | `integrity` | `Apache-2.0 OR BSD-3-Clause` |
 | `dagster` | `dagster` | `Apache-2.0` |
 | `dask` | `dask` | `BSD-3-Clause` |
+| `datasets` | `awq, gptq` | `Apache-2.0` |
 | `duckdb` | `duckdb` | `MIT` |
 | `easyocr` | `multimodal` | `Apache-2.0` |
 | `extract-msg` | `email-msg-gpl` | `GPL-3.0-only` |
@@ -50,6 +52,7 @@ a dependency also declared in another extra.
 | `gliner` | `gliner` | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
+| `h2` | `beam, prefect` | `MIT` |
 | `hanlp` | `zh-hanlp` | `Apache-2.0` |
 | `haystack-ai` | `haystack` | `Apache-2.0` |
 | `hnswlib` | `grounding` | `Apache-2.0` |
@@ -76,6 +79,7 @@ a dependency also declared in another extra.
 | `nbformat` | `notebook` | `BSD-3-Clause` |
 | `nncf` | `openvino` | `Apache-2.0` |
 | `numpy` | `duckdb, grounding, multimodal, onnx-runtime` | `BSD-3-Clause` |
+| `oauthlib` | `cloud, prefect` | `BSD-3-Clause` |
 | `onnx` | `multimodal, onnx` | `Apache-2.0` |
 | `onnxruntime` | `onnx, onnx-runtime, openvino` | `MIT` |
 | `onnxscript` | `onnx` | `MIT` |
@@ -126,7 +130,7 @@ a dependency also declared in another extra.
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `tomli` | `default (Python < 3.11)` | `MIT` |
-| `torch` | `coreml, gliner, onnx` | `BSD-3-Clause` |
+| `torch` | `awq, coreml, gliner, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |

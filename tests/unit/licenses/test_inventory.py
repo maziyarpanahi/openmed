@@ -48,7 +48,7 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 104
+    assert len(entries) == 108
     assert len(records) == len(entries)
     assert {
         record.name
@@ -56,6 +56,16 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
         if record.classification == inventory.LicenseClass.RESTRICTED
     } == {"extract-msg"}
     assert not inventory.gate_failures(records)
+    reviewed = {record.name: record for record in records}
+    assert {
+        name: (reviewed[name].entry.scope, reviewed[name].license_expression)
+        for name in ("banks", "datasets", "h2", "oauthlib")
+    } == {
+        "banks": ("agents, llamaindex", "MIT"),
+        "datasets": ("awq, gptq", "Apache-2.0"),
+        "h2": ("beam, prefect", "MIT"),
+        "oauthlib": ("cloud, prefect", "BSD-3-Clause"),
+    }
     assert {record.name for record in records} >= {
         "faker",
         "jieba",
