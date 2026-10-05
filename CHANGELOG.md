@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added fail-closed purpose-ticket authorization for complete typed tool-result
+  batches, with independent patient/encounter/namespace/snapshot scope checks,
+  strict nested field projections, original evidence identity and content-free
+  quarantine diagnostics. Privacy scanning remains a separate boundary (#3671).
+
+### Added
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
