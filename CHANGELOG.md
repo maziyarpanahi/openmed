@@ -308,6 +308,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recipes to address checkpoint/native-operation vulnerabilities. Torch remains
   absent from the base SDK; deployments must requalify platform and converter
   compatibility. Separate optional dependency findings are not waived.
+- Make the Swift clinical-document GLiNER characterization explicitly opt-in
+  through `OPENMED_GLINER_SPAN_ARTIFACT`, matching other local model smoke tests.
+  SDK tests no longer silently select an unrelated home-cache model; clinical
+  coverage assertions and thresholds remain unchanged.
 
 ### Fixed
 - Require patched PyJWT versions in the locked dependency graph and bound CI
