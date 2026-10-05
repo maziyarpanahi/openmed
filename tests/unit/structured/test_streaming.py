@@ -212,6 +212,104 @@ def test_linux_rss_reader_uses_current_resident_pages(
     assert streaming._process_rss_bytes() == 7 * 4_096
 
 
+@pytest.fixture
+def windows_memory_api(monkeypatch: pytest.MonkeyPatch):
+    """Expose mutable Windows API readings without requiring a Windows host."""
+
+    import ctypes
+
+    class ApiFunction:
+        def __init__(self, callback):
+            self.callback = callback
+
+        def __call__(self, *args):
+            return self.callback(*args)
+
+    state = SimpleNamespace(
+        rss=10_000,
+        success=True,
+        error=None,
+        library_calls=[],
+    )
+
+    def sample(_handle, counters, size):
+        assert counters._obj.cb == size == ctypes.sizeof(counters._obj)
+        if state.error is not None:
+            raise state.error
+        counters._obj.WorkingSetSize = state.rss
+        return state.success
+
+    state.memory_info = ApiFunction(sample)
+    kernel = SimpleNamespace(GetCurrentProcess=ApiFunction(lambda: 123))
+    api = SimpleNamespace(GetProcessMemoryInfo=state.memory_info)
+
+    def load_library(name, *, use_last_error):
+        assert use_last_error is True
+        state.library_calls.append(name)
+        return kernel if name == "kernel32" else api
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library, raising=False)
+    monkeypatch.setattr(streaming, "os", SimpleNamespace(name="nt"))
+    reader_factory = streaming._windows_process_rss_reader
+    reader_factory.cache_clear()
+    try:
+        yield state
+    finally:
+        reader_factory.cache_clear()
+
+
+def test_windows_rss_reader_reuses_ffi_types_and_reads_current_memory(
+    windows_memory_api,
+) -> None:
+    """Sampling must not retain a fresh ctypes pointer type on every call."""
+
+    assert streaming._process_rss_bytes() == 10_000
+    counter_pointer = windows_memory_api.memory_info.argtypes[1]
+    for index in range(1_000):
+        windows_memory_api.rss = 20_000 + index
+        assert streaming._process_rss_bytes() == 20_000 + index
+        assert windows_memory_api.memory_info.argtypes[1] is counter_pointer
+    assert windows_memory_api.library_calls == ["kernel32", "psapi"]
+
+
+@pytest.mark.parametrize("failure", ["false", "os_error", "argument_error"])
+def test_windows_rss_reader_preserves_failure_and_recovery_behavior(
+    windows_memory_api,
+    failure: str,
+) -> None:
+    """API failure is unavailable, not zero RSS or a stale successful sample."""
+
+    import ctypes
+
+    assert streaming._process_rss_bytes() == 10_000
+    if failure == "false":
+        windows_memory_api.success = False
+    elif failure == "os_error":
+        windows_memory_api.error = OSError("synthetic API failure")
+    else:
+        windows_memory_api.error = ctypes.ArgumentError("synthetic argument failure")
+    assert streaming._process_rss_bytes() is None
+
+    windows_memory_api.success = True
+    windows_memory_api.error = None
+    windows_memory_api.rss = 30_000
+    assert streaming._process_rss_bytes() == 30_000
+
+
+def test_windows_rss_guard_still_rejects_one_byte_above_ceiling(
+    windows_memory_api,
+) -> None:
+    """Reusing API setup must not alter the additional-RSS safety boundary."""
+
+    guard = streaming._ProcessMemoryGuard(2_048)
+    windows_memory_api.rss += 2_048
+    guard.check(stage="synthetic boundary")
+    assert guard.peak_delta_bytes == 2_048
+    windows_memory_api.rss += 1
+    with pytest.raises(MemoryCeilingError, match="observed 2049 bytes"):
+        guard.check(stage="synthetic overflow")
+
+
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     tmp_path: Path,
 ) -> None:

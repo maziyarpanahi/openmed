@@ -321,6 +321,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Reuse Windows process-memory API types and bindings during streaming-table
+  RSS sampling so the sampler does not retain a new ctypes pointer type per
+  batch. Actual current-memory readings and unchanged overflow limits remain
+  enforced, including the 16 MiB large-file regression.
 - Require patched PyJWT versions in the locked dependency graph and bound CI
   tests with per-test timeout diagnostics rather than six-hour silent hangs.
 - Continue optional dependency diagnostics when a module raises during import,
