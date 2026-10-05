@@ -21,6 +21,40 @@ an active ignore fail CI so exceptions stay visible. Each ignore must include:
 Expired ignores fail CI. Remove an ignore as soon as the dependency can be
 upgraded.
 
+## Optional model runtimes
+
+Torch-backed extras require `torch>=2.13.0`, including extras that bring Torch
+transitively through model, quantization, or OCR packages. The same floor applies
+to current container, standalone, model-smoke, and conversion recipes. Torch
+remains optional: the base SDK, CLI, MCP, and minimal ONNX Runtime profiles do
+not install it. The SDK still supports Python 3.10 and newer.
+
+This floor includes the fixes for the
+[weights-only checkpoint advisory](https://github.com/pytorch/pytorch/security/advisories/GHSA-63cw-57p8-fm3p),
+[TorchScript advisory](https://github.com/advisories/GHSA-rrmf-rvhw-rf47), and
+[LSTM-cell advisory](https://github.com/advisories/GHSA-qfhq-4f3w-5fph).
+It is a dependency boundary, not a claim that every model artifact or converter
+has been qualified. Do not enable remote model code or relax artifact-integrity
+controls to work around an incompatible model.
+
+Torch 2.13 publishes Python 3.10 wheels for Linux aarch64/x86_64, Windows AMD64,
+and macOS 14+ Apple Silicon. It does not provide an Intel macOS wheel. A failed
+optional runtime installation on an unsupported platform must not downgrade to
+a vulnerable release or raise the base SDK's Python minimum. Use a supported
+runtime/platform or an independently validated non-Torch path.
+The PyPI Linux Torch 2.13 distribution depends on CUDA 13 packages; recheck GPU
+architecture and driver compatibility before deployment. The reference Docker
+recipe selects the upstream CPU wheel index instead. macOS CPU/CoreML smoke
+tests do not qualify CUDA, AWQ, or GPTQ execution on a production GPU.
+
+Audit the exact optional profile used by a deployment, not only the CI `dev`
+environment. For example, after a frozen `dev,hf,service` sync, run the same
+dependency gate without changing that environment. Advisory IDs without usable
+fixes still require the explicit, time-boxed process above; a Torch upgrade is
+not an exception for other packages. Prefer operator-selected, pinned, trusted
+artifacts and safetensors where available, but do not treat those controls as a
+substitute for dependency updates or a general guarantee about native parsers.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency

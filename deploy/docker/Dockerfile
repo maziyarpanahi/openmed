@@ -16,7 +16,7 @@ WORKDIR /app
 COPY . /app
 
 RUN python -m pip install --upgrade pip \
-    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.1,<3" \
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0,<3" \
     && pip install --no-cache-dir ".[hf,journey,mcp,service]"
 
 EXPOSE 8080

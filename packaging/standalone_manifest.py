@@ -65,7 +65,7 @@ _OPTIONAL_BOUNDARY: Final = {
     "huggingface-hub": ("huggingface-hub>=0.30", "Apache-2.0", True),
     "presidio-analyzer": ("presidio-analyzer>=2.2.354,<3", "MIT", False),
     "spacy": ("spacy>=3.8.9", "MIT", False),
-    "torch": ("torch>=2.0", "BSD-3-Clause", False),
+    "torch": ("torch>=2.13.0", "BSD-3-Clause", False),
     "transformers": ("transformers>=4.50", "Apache-2.0", True),
 }
 _RESTRICTED_DEPENDENCY_BOUNDARY: Final = {
@@ -806,7 +806,7 @@ _OPTIONAL_DEPENDENCIES: Final = (
     ),
     DependencySpec(
         name="torch",
-        requirement="torch>=2.0",
+        requirement="torch>=2.13.0",
         license="BSD-3-Clause",
         purpose="Optional local inference backend; never installed by the default bundle.",
     ),
