@@ -785,10 +785,12 @@ class SMARTBackendJobManager:
             record.status.updated_at = time.time()
 
 
-def build_client_assertion(config: SMARTBackendConfig) -> str:
-    """Build a signed SMART Backend Services JWT client assertion."""
+def build_client_assertion(
+    config: SMARTBackendConfig, *, clock: Callable[[], float] = time.time
+) -> str:
+    """Build a signed SMART Backend Services JWT using an injectable clock."""
 
-    now = int(time.time())
+    now = int(clock())
     header: dict[str, Any] = {"alg": "RS384", "typ": "JWT"}
     if config.key_id:
         header["kid"] = config.key_id

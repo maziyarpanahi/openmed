@@ -495,6 +495,7 @@ nav:
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
       - SMART Scope Audit Examples: interop/smart-scope-audit.md
+      - SMART Credential Refresh: interop/smart-credential-refresh.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md

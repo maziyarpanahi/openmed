@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added opt-in SMART credential refresh and backend-services acquisition through
+  injected custody, transport and clock contracts, with atomic token rotation,
+  value-free scope narrowing, dispatch checks and fail-closed revocation (#3773).
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
