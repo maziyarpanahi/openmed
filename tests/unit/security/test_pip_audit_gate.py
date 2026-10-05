@@ -267,3 +267,51 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
     assert torch.marker.evaluate({"sys_platform": "linux"})
     assert not torch.marker.evaluate({"sys_platform": "darwin"})
     assert not torch.marker.evaluate({"sys_platform": "win32"})
+
+
+@pytest.mark.parametrize(
+    ("package", "unsafe", "fixed", "extras"),
+    [
+        ("banks", "2.4.4", "2.4.5", ("agents", "llamaindex")),
+        ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
+        ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
+        ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
+    ],
+)
+def test_fixable_optional_dependency_floors_are_published_and_locked(
+    package: str, unsafe: str, fixed: str, extras: tuple[str, ...]
+) -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == package]
+    assert resolved
+    assert all(Version(item["version"]) >= Version(fixed) for item in resolved)
+    for extra in extras:
+        requirements = [
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+        ]
+        floor = next(item for item in requirements if item.name == package)
+        assert unsafe not in floor.specifier, (package, extra)
+        assert fixed in floor.specifier, (package, extra)
+    constraints = [
+        Requirement(value) for value in project["tool"]["uv"]["constraint-dependencies"]
+    ]
+    floor = next(item for item in constraints if item.name == package)
+    assert unsafe not in floor.specifier
+    assert fixed in floor.specifier
+    assert package not in {
+        Requirement(value).name for value in project["project"]["dependencies"]
+    }
+
+
+def test_awq_dataset_floor_retains_linux_only_installation() -> None:
+    project, _ = _model_dependency_metadata()
+    floor = next(
+        Requirement(value)
+        for value in project["project"]["optional-dependencies"]["awq"]
+        if value.startswith("datasets")
+    )
+    assert floor.marker is not None
+    assert floor.marker.evaluate({"sys_platform": "linux"})
+    assert not floor.marker.evaluate({"sys_platform": "darwin"})
+    assert not floor.marker.evaluate({"sys_platform": "win32"})

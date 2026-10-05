@@ -237,12 +237,14 @@ zh-hanlp = [
 
 awq = [
   "autoawq==0.2.9; sys_platform == 'linux'",
+  "datasets>=5.0.1; sys_platform == 'linux'",
   "torch>=2.13.0; sys_platform == 'linux'",
   "transformers==5.12.1; sys_platform == 'linux'",
 ]
 
 gptq = [
   "auto-gptq>=0.7.1",
+  "datasets>=5.0.1",
   "torch>=2.13.0",
 ]
 
@@ -266,16 +268,19 @@ haystack = [
 
 llamaindex = [
   "llama-index-core>=0.10,<1",
+  "banks>=2.4.5",
 ]
 
 agents = [
   "langchain-core>=0.2,<2",
   "langgraph>=0.2,<2",
   "llama-index-core>=0.10,<1",
+  "banks>=2.4.5",
 ]
 
 beam = [
   "apache-beam>=2.73,<3",
+  "h2>=4.4.1",
 ]
 
 airflow = [
@@ -293,6 +298,8 @@ kafka = [
 
 prefect = [
   "prefect>=3.7,<4",
+  "h2>=4.4.1",
+  "oauthlib>=4.0.0",
 ]
 
 cloud = [
@@ -300,6 +307,7 @@ cloud = [
   "s3fs>=2025.9.0",
   "gcsfs>=2025.9.0",
   "adlfs>=2025.8.0",
+  "oauthlib>=4.0.0",
 ]
 
 journey = [
@@ -442,6 +450,10 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "banks>=2.4.5",
+  "datasets>=5.0.1",
+  "h2>=4.4.1",
+  "oauthlib>=4.0.0",
   # Keep transitive optional model backends above the checkpoint/native-op fixes.
   "torch>=2.13.0",
   "tornado>=6.5.9",

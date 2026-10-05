@@ -312,6 +312,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through `OPENMED_GLINER_SPAN_ARTIFACT`, matching other local model smoke tests.
   SDK tests no longer silently select an unrelated home-cache model; clinical
   coverage assertions and thresholds remain unchanged.
+- Require patched Banks, Datasets, HTTP/2 and OAuthlib dependencies only in the
+  affected optional integrations, with matching lock constraints and regression
+  checks; the base dependency set is unchanged. OAuthlib 4 removes deprecated
+  JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
 - Require patched PyJWT versions in the locked dependency graph and bound CI
