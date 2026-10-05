@@ -215,7 +215,7 @@ def test_linux_rss_reader_uses_current_resident_pages(
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     tmp_path: Path,
 ) -> None:
-    """A file larger than the ceiling succeeds when its live working set fits."""
+    """Measure the streaming working set independently of the pytest process."""
 
     source = tmp_path / "larger_than_ceiling.csv"
     output = tmp_path / "larger_than_ceiling_out.csv"
@@ -227,19 +227,48 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     ceiling = 16 * 1024 * 1024
     assert source.stat().st_size > ceiling
 
-    report = stream_deidentify_table(
-        source,
-        output,
-        quasi_identifiers=["age", "zip"],
-        target_k=2,
-        chunk_size=32,
-        memory_ceiling=ceiling,
-        overwrite=True,
+    # Other tests and coverage instrumentation can allocate in the parent
+    # process while RSS is sampled. A fresh interpreter isolates this workload
+    # without increasing its ceiling or replacing the production RSS guard.
+    script = """
+import json
+from pathlib import Path
+import sys
+
+from openmed.structured.streaming import stream_deidentify_table
+
+report = stream_deidentify_table(
+    Path(sys.argv[1]),
+    Path(sys.argv[2]),
+    quasi_identifiers=["age", "zip"],
+    target_k=2,
+    chunk_size=32,
+    memory_ceiling=int(sys.argv[3]),
+    overwrite=True,
+)
+print(json.dumps({
+    "record_count": report["decision"]["record_count"],
+    "rss_guard_available": report["memory"]["rss_guard_available"],
+    "peak_rss_delta_bytes": report["memory"]["peak_rss_delta_bytes"],
+}, sort_keys=True))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source), str(output), str(ceiling)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
     )
 
-    assert report["decision"]["record_count"] == 100_000
-    assert report["memory"]["rss_guard_available"] is True
-    assert report["memory"]["peak_rss_delta_bytes"] <= ceiling
+    assert result.returncode == 0, (
+        f"memory guard subprocess failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    report = json.loads(result.stdout)
+    assert report["record_count"] == 100_000
+    assert report["rss_guard_available"] is True
+    assert report["peak_rss_delta_bytes"] <= ceiling
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        assert sum(1 for _row in csv.DictReader(handle)) == 100_000
 
 
 # ---------------------------------------------------------------------------
