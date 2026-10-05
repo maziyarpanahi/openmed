@@ -14,6 +14,7 @@ from openmed.agent.approvals.tokens import (
     APPROVAL_TOKEN_SCHEMA_VERSION,
     ApprovalActionMismatchError,
     ApprovalExpiredError,
+    ApprovalLifetimeError,
     ApprovalNonceStoreError,
     ApprovalReceipt,
     ApprovalReplayError,
@@ -45,7 +46,7 @@ def _token(**overrides: Any) -> ApprovalToken:
         "nonce": NONCE,
     }
     values.update(overrides)
-    return ApprovalTokenSigner(KEY).issue(**values)
+    return ApprovalTokenSigner(KEY, clock=lambda: NOW).issue(**values)
 
 
 def _verifier() -> ApprovalTokenVerifier:
@@ -66,7 +67,7 @@ def test_token_is_canonical_signed_and_deterministic_for_exact_claims() -> None:
 
 
 def test_default_nonce_is_random_and_injectable_for_deterministic_tests() -> None:
-    signer = ApprovalTokenSigner(KEY)
+    signer = ApprovalTokenSigner(KEY, clock=lambda: NOW)
     first = signer.issue(
         action_digest=ACTION_DIGEST,
         reviewer_role=REVIEWER_ROLE,
@@ -110,9 +111,7 @@ def test_valid_token_is_consumed_before_dispatch_and_returns_safe_receipt() -> N
     assert result == "ok"
     assert events == ["consumed", "dispatched"]
     assert receipt.action_digest == ACTION_DIGEST
-    assert receipt.reviewer_role == REVIEWER_ROLE
-    assert receipt.consumed_at == NOW
-    assert receipt.expires_at == EXPIRES_AT
+    assert receipt.code == "approved"
     assert receipt.token_digest.startswith("sha256:")
     assert receipt.to_dict()["schema_version"] == APPROVAL_RECEIPT_SCHEMA_VERSION
     assert ApprovalReceipt.from_json(receipt.to_json()) == receipt
@@ -321,7 +320,7 @@ def test_unknown_duplicate_and_missing_fields_fail_closed() -> None:
         ("reviewer_role", "synthetic-reviewer-name", "invalid_reviewer_role"),
         ("expires_at", True, "invalid_timestamp"),
         ("nonce", "nonce_too-short", "invalid_nonce"),
-        ("schema_version", "openmed.agent.approval_token.v2", "unsupported"),
+        ("schema_version", "openmed.agent.approval_token.v999", "unsupported"),
     ],
 )
 def test_invalid_claims_use_value_free_errors(
@@ -350,7 +349,7 @@ def test_diagnostics_reprs_and_receipts_do_not_expose_bearer_values() -> None:
     assert token.signature not in repr(token)
     assert token.nonce not in receipt.to_json()
     assert token.signature not in receipt.to_json()
-    assert KEY.decode() not in repr(ApprovalTokenSigner(KEY))
+    assert KEY.decode() not in repr(ApprovalTokenSigner(KEY, clock=lambda: NOW))
     assert KEY.decode() not in repr(_verifier())
 
     sentinel = "synthetic-sensitive-review-value"
@@ -374,7 +373,7 @@ def test_invalid_key_nonce_source_store_and_dispatch_are_rejected() -> None:
     with pytest.raises(ApprovalTokenValidationError, match="invalid_key"):
         ApprovalTokenSigner(b"short")
     with pytest.raises(ApprovalTokenValidationError, match="invalid_nonce_source"):
-        ApprovalTokenSigner(KEY).issue(
+        ApprovalTokenSigner(KEY, clock=lambda: NOW).issue(
             action_digest=ACTION_DIGEST,
             reviewer_role=REVIEWER_ROLE,
             expires_at=EXPIRES_AT,
@@ -401,3 +400,377 @@ def test_contract_is_exported_from_approvals_package() -> None:
     assert approvals.ApprovalTokenSigner is ApprovalTokenSigner
     assert approvals.ApprovalTokenVerifier is ApprovalTokenVerifier
     assert approvals.InMemoryApprovalNonceStore is InMemoryApprovalNonceStore
+
+
+class RecordingStore(InMemoryApprovalNonceStore):
+    """Record claims to prove invalid tokens fail before replay mutation."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[tuple[str, int, int]] = []
+
+    def claim(self, nonce_digest: str, *, expires_at: int, now: int) -> bool:
+        self.calls.append((nonce_digest, expires_at, now))
+        return super().claim(nonce_digest, expires_at=expires_at, now=now)
+
+
+def _signed_payload(**changes: Any) -> dict[str, Any]:
+    """Simulate a remote signer with independently configured time policy."""
+    import hashlib
+    import hmac
+
+    payload = _token().to_dict()
+    payload.update(changes)
+    payload.pop("signature")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    payload["signature"] = (
+        "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
+    )
+    return payload
+
+
+def test_rotation_overlap_and_removal_fail_before_claim() -> None:
+    from openmed.agent.approvals import ApprovalKeyError, MappingApprovalKeyProvider
+
+    keys = {"retiring": KEY, "current": b"new-synthetic-approval-key-32-bytes"}
+    provider = MappingApprovalKeyProvider(keys)
+    token = ApprovalTokenSigner(provider, key_id="retiring", clock=lambda: NOW).issue(
+        action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, expires_at=EXPIRES_AT
+    )
+    store = RecordingStore()
+    verifier = ApprovalTokenVerifier(provider, store, clock=lambda: NOW)
+    assert verifier.consume(
+        token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE
+    )
+    del keys["retiring"]
+    with pytest.raises(ApprovalKeyError, match="unknown_key"):
+        verifier.consume(
+            token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE
+        )
+    assert len(store.calls) == 1
+    assert KEY.decode() not in token.key_id
+    assert KEY.decode() not in repr(provider)
+    current = ApprovalTokenSigner(provider, key_id="current", clock=lambda: NOW).issue(
+        action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, expires_at=EXPIRES_AT
+    )
+    assert verifier.consume(
+        current, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE
+    )
+
+
+@pytest.mark.parametrize("field,value", [("key_id", "other"), ("issued_at", NOW + 1)])
+def test_new_claim_tampering_invalidates_signature(field: str, value: Any) -> None:
+    from openmed.agent.approvals import MappingApprovalKeyProvider
+
+    store = RecordingStore()
+    verifier = ApprovalTokenVerifier(
+        MappingApprovalKeyProvider({"default": KEY, "other": KEY}), store
+    )
+    payload = _token().to_dict()
+    payload[field] = value
+    with pytest.raises(ApprovalSignatureError, match="invalid_signature"):
+        verifier.consume(
+            payload, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )
+    assert store.calls == []
+
+
+@pytest.mark.parametrize(
+    "changes,code",
+    [
+        ({"expires_at": NOW + 901}, "lifetime_exceeded"),
+        ({"expires_at": 4_000_000_000}, "lifetime_exceeded"),
+        ({"issued_at": NOW + 31}, "not_yet_valid"),
+        ({"issued_at": EXPIRES_AT}, "invalid_lifetime"),
+    ],
+)
+def test_remote_signed_policy_failures_precede_nonce_claim(
+    changes: dict, code: str
+) -> None:
+    from openmed.agent.approvals import ApprovalTokenError
+
+    store = RecordingStore()
+    verifier = ApprovalTokenVerifier(
+        KEY, store, clock=lambda: NOW, clock_skew_seconds=30
+    )
+    with pytest.raises(ApprovalTokenError) as caught:
+        verifier.consume(
+            _signed_payload(**changes),
+            action_digest=ACTION_DIGEST,
+            reviewer_role=REVIEWER_ROLE,
+        )
+    assert caught.value.code == code
+    assert store.calls == []
+
+
+@pytest.mark.parametrize(
+    "issued,expires,code",
+    [
+        (NOW, NOW + 901, "lifetime_exceeded"),
+        (NOW + 31, EXPIRES_AT, "not_yet_valid"),
+        (NOW, NOW, "invalid_lifetime"),
+        (NOW - 100, NOW - 30, "expired"),
+    ],
+)
+def test_issuance_enforces_window_before_nonce_generation(
+    issued: int, expires: int, code: str
+) -> None:
+    from openmed.agent.approvals import ApprovalTokenError
+
+    generated = []
+    signer = ApprovalTokenSigner(KEY, clock=lambda: NOW, clock_skew_seconds=30)
+    with pytest.raises(ApprovalTokenError) as caught:
+        signer.issue(
+            action_digest=ACTION_DIGEST,
+            reviewer_role=REVIEWER_ROLE,
+            issued_at=issued,
+            expires_at=expires,
+            nonce_source=lambda size: generated.append(size) or bytes(size),
+        )
+    assert caught.value.code == code
+    assert generated == []
+
+
+@pytest.mark.parametrize(
+    "now,accepted",
+    [
+        (NOW - 31, False),
+        (NOW - 30, True),
+        (EXPIRES_AT + 29, True),
+        (EXPIRES_AT + 30, False),
+    ],
+)
+def test_skew_edges_are_bounded_and_expiry_is_exclusive(
+    now: int, accepted: bool
+) -> None:
+    from openmed.agent.approvals import ApprovalTokenError
+
+    store = RecordingStore()
+    verifier = ApprovalTokenVerifier(KEY, store, clock_skew_seconds=30)
+    if accepted:
+        receipt = verifier.consume(
+            _token(), action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=now
+        )
+        assert receipt.code == "approved"
+        assert store.calls[0][1] == EXPIRES_AT + 30
+    else:
+        with pytest.raises(ApprovalTokenError) as caught:
+            verifier.consume(
+                _token(),
+                action_digest=ACTION_DIGEST,
+                reviewer_role=REVIEWER_ROLE,
+                now=now,
+            )
+        assert caught.value.code == ("not_yet_valid" if now < NOW else "expired")
+        assert store.calls == []
+
+
+def test_nonce_is_retained_through_expiry_skew_window() -> None:
+    verifier = ApprovalTokenVerifier(
+        KEY, InMemoryApprovalNonceStore(), clock_skew_seconds=30
+    )
+    token = _token()
+    verifier.consume(
+        token,
+        action_digest=ACTION_DIGEST,
+        reviewer_role=REVIEWER_ROLE,
+        now=EXPIRES_AT - 1,
+    )
+    for now in (EXPIRES_AT, EXPIRES_AT + 29):
+        with pytest.raises(ApprovalReplayError):
+            verifier.consume(
+                token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=now
+            )
+
+
+@pytest.mark.parametrize("representation", ["dict", "json", "object"])
+def test_v1_requires_explicit_compatibility_and_exact_legacy_signature(
+    representation: str,
+) -> None:
+    from openmed.agent.approvals import LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
+
+    payload = _signed_payload(schema_version=LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION)
+    payload.pop("key_id")
+    payload.pop("issued_at")
+    # Sign the actual historical five-claim representation, not a v2 projection.
+    import hashlib
+    import hmac
+
+    payload.pop("signature")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    payload["signature"] = (
+        "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
+    )
+    candidate = payload
+    if representation == "json":
+        candidate = json.dumps(payload)
+    elif representation == "object":
+        candidate = ApprovalToken.from_dict(payload, allow_v1=True)
+    store = RecordingStore()
+    with pytest.raises(ApprovalTokenValidationError, match="legacy_token_disabled"):
+        ApprovalTokenVerifier(KEY, store).consume(
+            candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )
+    assert store.calls == []
+    verifier = ApprovalTokenVerifier(KEY, store, allow_v1=True)
+    receipt = verifier.consume(
+        candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+    )
+    assert set(receipt.to_dict()) == {
+        "schema_version",
+        "code",
+        "action_digest",
+        "token_digest",
+    }
+    with pytest.raises(ApprovalReplayError):
+        verifier.consume(
+            candidate, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )
+    with pytest.raises(ApprovalTokenValidationError, match="legacy_token_disabled"):
+        ApprovalToken.from_json(json.dumps(payload))
+    assert (
+        ApprovalToken.from_json(json.dumps(payload), allow_v1=True).to_dict() == payload
+    )
+    store = RecordingStore()
+    with pytest.raises(ApprovalLifetimeError, match="lifetime_exceeded"):
+        ApprovalTokenVerifier(KEY, store, allow_v1=True).consume(
+            candidate,
+            action_digest=ACTION_DIGEST,
+            reviewer_role=REVIEWER_ROLE,
+            now=NOW - 901,
+        )
+    assert store.calls == []
+
+
+@pytest.mark.parametrize(
+    "setting,value",
+    [
+        ("clock_skew_seconds", -1),
+        ("clock_skew_seconds", 301),
+        ("clock_skew_seconds", True),
+        ("max_lifetime_seconds", 0),
+        ("max_lifetime_seconds", 86401),
+        ("max_lifetime_seconds", 1.5),
+    ],
+)
+def test_policy_settings_fail_closed(setting: str, value: Any) -> None:
+    for constructor, args in [
+        (ApprovalTokenSigner, (KEY,)),
+        (ApprovalTokenVerifier, (KEY, InMemoryApprovalNonceStore())),
+    ]:
+        with pytest.raises(ApprovalTokenValidationError):
+            constructor(*args, **{setting: value})
+
+
+def test_provider_and_clock_failures_never_expose_source_values() -> None:
+    from openmed.agent.approvals import ApprovalTokenError
+
+    sentinel = "synthetic-private-key-or-clinical-text"
+
+    class BrokenProvider:
+        def get_key(self, key_id: str) -> bytes:
+            raise RuntimeError(sentinel)
+
+    def broken_clock() -> int:
+        raise RuntimeError(sentinel)
+
+    for provider, clock, code in [
+        (BrokenProvider(), lambda: NOW, "key_provider_unavailable"),
+        (KEY, broken_clock, "clock_unavailable"),
+    ]:
+        store = RecordingStore()
+        with pytest.raises(ApprovalTokenError) as caught:
+            ApprovalTokenVerifier(provider, store, clock=clock).consume(
+                _token(), action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE
+            )
+        rendered = "".join(
+            traceback.format_exception(caught.type, caught.value, caught.tb)
+        )
+        assert sentinel not in rendered
+        assert caught.value.code == code
+        assert store.calls == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("issued_at", True),
+        ("issued_at", -1),
+        ("issued_at", 1.5),
+        ("issued_at", "synthetic-private-text"),
+        ("key_id", "synthetic/private/path"),
+        ("key_id", 12),
+    ],
+)
+def test_v2_malformed_metadata_is_value_free_and_unclaimed(
+    field: str, value: Any
+) -> None:
+    store = RecordingStore()
+    with pytest.raises(ApprovalTokenValidationError) as caught:
+        ApprovalTokenVerifier(KEY, store).consume(
+            _signed_payload(**{field: value}),
+            action_digest=ACTION_DIGEST,
+            reviewer_role=REVIEWER_ROLE,
+            now=NOW,
+        )
+    assert str(value) not in str(caught.value)
+    assert store.calls == []
+
+
+def test_configurable_lifetime_ceiling_is_inclusive() -> None:
+    signer = ApprovalTokenSigner(KEY, clock=lambda: NOW, max_lifetime_seconds=1000)
+    token = signer.issue(
+        action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, expires_at=NOW + 1000
+    )
+    assert token.issued_at == NOW
+    assert ApprovalTokenVerifier(
+        KEY, InMemoryApprovalNonceStore(), max_lifetime_seconds=1000
+    ).consume(token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW)
+    with pytest.raises(ApprovalLifetimeError, match="lifetime_exceeded"):
+        _verifier().consume(
+            token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )
+
+
+def test_skew_expiry_overflow_cannot_allow_nonce_replays() -> None:
+    store = RecordingStore()
+    now = 2**63 - 10
+    payload = _signed_payload(issued_at=now, expires_at=2**63 - 1)
+    with pytest.raises(ApprovalTokenValidationError, match="invalid_timestamp"):
+        ApprovalTokenVerifier(KEY, store, clock_skew_seconds=30).consume(
+            payload, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=now
+        )
+    assert store.calls == []
+
+
+def test_legacy_provider_uses_only_explicit_selected_key() -> None:
+    import hashlib
+    import hmac
+
+    from openmed.agent.approvals import (
+        LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION,
+        MappingApprovalKeyProvider,
+    )
+
+    payload = {
+        k: v
+        for k, v in _token().signing_payload().items()
+        if k not in {"key_id", "issued_at"}
+    }
+    payload["schema_version"] = LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    payload["signature"] = (
+        "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
+    )
+    provider = MappingApprovalKeyProvider({"retiring": KEY})
+    verifier = ApprovalTokenVerifier(
+        provider, InMemoryApprovalNonceStore(), allow_v1=True, legacy_key_id="retiring"
+    )
+    assert verifier.consume(
+        payload, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+    )
+    payload["issued_at"] = NOW
+    with pytest.raises(ApprovalTokenValidationError, match="unknown_field"):
+        verifier.consume(
+            payload, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )

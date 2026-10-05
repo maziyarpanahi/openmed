@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
