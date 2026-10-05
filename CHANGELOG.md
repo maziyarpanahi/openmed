@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added guarded dispatch on the existing workflow executor, enforcing signed
+  grants, purpose tickets, minimum-data projections, pinned tool identity and
+  exact single-use approval, with content-free cancellation and uncertain-effect
+  recovery outcomes through injected local providers (#3661).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
