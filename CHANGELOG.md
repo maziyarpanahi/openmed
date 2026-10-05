@@ -329,6 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
+- Keep zero-length spans empty when converting legacy encoding offsets (#3507).
 
 ## [2.5.0] - 2026-09-14
 
