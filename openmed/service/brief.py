@@ -1,5 +1,6 @@
 """Shared, bounded brief transport and application-owned review lookup."""
 
+import asyncio
 import re
 from typing import Any, Callable
 
@@ -8,6 +9,12 @@ from openmed.clinical.brief import (
     BriefRefusal,
     _result,
     build_clinical_brief,
+)
+from openmed.clinical.brief_cancellation import (
+    BriefCancellation,
+    BriefInterrupted,
+    call_with_cancellation,
+    check_cancellation,
 )
 from openmed.core.pii import DeidentificationResult
 
@@ -28,6 +35,42 @@ def brief_response(
     profile: str = "bhc",
     review_id: str | None = None,
     context_provider: Callable | None = None,
+    cancellation: BriefCancellation | None = None,
+) -> dict[str, Any]:
+    """Map caller, CLI and service interruption to the same value-free result.
+
+    The application may pass a started budget context; no remote provider or
+    wire-supplied review approval is admitted. Cancelled calls discard output.
+    """
+    try:
+        check_cancellation(cancellation)
+        result = _brief_response(
+            text,
+            model=model,
+            profile=profile,
+            review_id=review_id,
+            context_provider=context_provider,
+            cancellation=cancellation,
+        )
+        check_cancellation(cancellation)
+        return result
+    except BriefInterrupted as error:
+        reason = BriefRefusal(error.reason)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        if cancellation is not None:
+            cancellation.cancel()
+        reason = BriefRefusal.CANCELLED
+    return _result("", reason, []).to_response()
+
+
+def _brief_response(
+    text: str,
+    *,
+    model: str = "mlx",
+    profile: str = "bhc",
+    review_id: str | None = None,
+    context_provider: Callable | None = None,
+    cancellation: BriefCancellation | None = None,
 ) -> dict[str, Any]:
     """Run the shared contract without accepting network backends or approvals.
 
@@ -49,19 +92,23 @@ def brief_response(
             return _result("", BriefRefusal.REVIEW_REQUIRED, []).to_response()
         failed = False
         try:
-            value, context = context_provider(text, review_id)
+            value, context = call_with_cancellation(
+                context_provider, text, review_id, cancellation=cancellation
+            )
             if (
                 type(value) is not DeidentificationResult
                 or type(context) is not BriefContext
                 or value.original_text != text
             ):
                 failed = True
+        except BriefInterrupted:
+            raise
         except Exception:
             failed = True
         if failed:
             return _result("", BriefRefusal.INVALID_EVIDENCE, []).to_response()
     return build_clinical_brief(
-        value, model=model, profile=profile, context=context
+        value, model=model, profile=profile, context=context, cancellation=cancellation
     ).to_response()
 
 

@@ -7,12 +7,19 @@ only exact, atomic source claims; paraphrases need a future alignment adapter.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
+from openmed.clinical.brief_cancellation import (
+    BriefCancellation,
+    BriefInterrupted,
+    call_with_cancellation,
+    check_cancellation,
+)
 from openmed.clinical.evidence_packet import EvidencePacket, validate_evidence_packet
 from openmed.clinical.nli_gate import NLIThresholds
 from openmed.core.pii import DeidentificationResult
@@ -59,6 +66,8 @@ class BriefRefusal(str, Enum):
     NLI_REJECTED = "nli_rejected"
     PRIVACY = "privacy"
     STAGE_FAILED = "stage_failed"
+    CANCELLED = "cancelled"
+    DEADLINE_EXCEEDED = "deadline_exceeded"
 
 
 def _digest(value: Any) -> str:
@@ -180,6 +189,7 @@ def build_clinical_brief(
     model: object = None,
     profile: str = "bhc",
     context: BriefContext | None = None,
+    cancellation: BriefCancellation | None = None,
 ) -> ClinicalBrief:
     """Compose the fixed guarded pipeline; never approve unreviewed evidence.
 
@@ -188,6 +198,7 @@ def build_clinical_brief(
         model: Registered local summarizer alias or trusted local callback.
         profile: Built-in versioned summary profile.
         context: Explicit reviewed evidence and calibrated local NLI callback.
+        cancellation: Optional caller cancellation and existing budget clock.
 
     Returns:
         A review-required brief, or a typed refusal with no source values.
@@ -201,13 +212,27 @@ def build_clinical_brief(
     reason = BriefRefusal.STAGE_FAILED
     try:
         with network_blocked_if_offline(local_only=True):
-            return _compose(note_or_deid_result, model, profile, context, completed)
+            result = _compose(
+                note_or_deid_result, model, profile, context, completed, cancellation
+            )
+            check_cancellation(cancellation)
+            return result
+    except BriefInterrupted as error:
+        reason = BriefRefusal(error.reason)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        if cancellation is not None:
+            cancellation.cancel()
+        reason = BriefRefusal.CANCELLED
     except _Stop as error:
         reason = error.reason
     except (SummarizationLeakageError, ReviewPacketPrivacyBlocked):
         reason = BriefRefusal.PRIVACY
     except Exception:
         pass
+    try:
+        check_cancellation(cancellation)
+    except BriefInterrupted as error:
+        reason = BriefRefusal(error.reason)
     # Outside the handler: third-party exception contexts can contain source text.
     return _result("", reason, completed)
 
@@ -251,7 +276,7 @@ def _result(summary, reason, completed, **values):
     )
 
 
-def _compose(value, model, profile_name, context, completed):
+def _compose(value, model, profile_name, context, completed, cancellation=None):
     from openmed.clinical import summarize_deidentified
     from openmed.clinical.citation_boundaries import (
         build_deidentification_offset_map,
@@ -295,6 +320,7 @@ def _compose(value, model, profile_name, context, completed):
     from openmed.eval.summary_unsupported_claims import score_summary_claims
 
     def stage(name):
+        check_cancellation(cancellation)
         if len(completed) >= len(STAGES) or STAGES[len(completed)] != name:
             raise _Stop(BriefRefusal.STAGE_FAILED)
         completed.append(name)
@@ -394,7 +420,9 @@ def _compose(value, model, profile_name, context, completed):
 
     admitted = " ".join(text[r.start : r.end] for r in refs)
     generated = summarize_deidentified(
-        replace(value, deidentified_text=admitted, audit_report=None), model=backend
+        replace(value, deidentified_text=admitted, audit_report=None),
+        model=backend,
+        cancellation=cancellation,
     )
     summary = generated.summary
     stage("envelope")
@@ -466,7 +494,12 @@ def _compose(value, model, profile_name, context, completed):
         raise _Stop(BriefRefusal.NLI_UNAVAILABLE)
     verdicts = []
     for claim_id, segment, ref, _ in aligned:
-        scores = context.nli_predict(text[ref.start : ref.end], segment.text)
+        scores = call_with_cancellation(
+            context.nli_predict,
+            text[ref.start : ref.end],
+            segment.text,
+            cancellation=cancellation,
+        )
         if (
             not isinstance(scores, dict)
             or scores.get("calibration_id") != context.thresholds.calibration_id
@@ -582,7 +615,12 @@ def _compose(value, model, profile_name, context, completed):
     leakage = _build_leakage_check(value, summary)
     if not leakage.passed:
         raise _Stop(BriefRefusal.PRIVACY)
-    enforce_review_packet_privacy(summary, context.privacy_detector)
+    enforce_review_packet_privacy(
+        summary,
+        lambda text: call_with_cancellation(
+            context.privacy_detector, text, cancellation=cancellation
+        ),
+    )
     stage("review")
     review = build_review_packet(
         findings=[
@@ -647,6 +685,9 @@ def _compose(value, model, profile_name, context, completed):
     # Scan the assembled protected response, including labels and metadata, not
     # only generation. There is no export or persistence before this check.
     enforce_review_packet_privacy(
-        json.dumps(result.to_response(), sort_keys=True), context.privacy_detector
+        json.dumps(result.to_response(), sort_keys=True),
+        lambda text: call_with_cancellation(
+            context.privacy_detector, text, cancellation=cancellation
+        ),
     )
     return result

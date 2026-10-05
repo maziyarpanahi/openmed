@@ -16,6 +16,83 @@ final class ClinicalBriefTests: XCTestCase {
         )
     }
 
+    private final class CheckpointClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var remaining: Int
+        init(_ remaining: Int) { self.remaining = remaining }
+        func expired() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            remaining -= 1
+            return remaining <= 0
+        }
+    }
+
+    func testDeadlineAtEveryNativeBoundaryRejectsLateOutput() async throws {
+        let (source, summary, data) = try fixture()
+        // generation, verification, packet validation, rendering and final publication.
+        for boundary in 1...6 {
+            let clock = CheckpointClock(boundary)
+            let cancellation = ClinicalBriefCancellation(deadlineExpired: { clock.expired() })
+            do {
+                _ = try await ClinicalBrief.compose(
+                    source: source, originalIdentifiers: [], cancellation: cancellation,
+                    generate: { _ in summary }, evaluate: { _, _ in data },
+                    privacyCheck: { _ in true })
+                XCTFail("Expected deadline refusal")
+            } catch {
+                XCTAssertEqual(error as? ClinicalBriefError, .deadlineExceeded)
+            }
+        }
+    }
+
+    func testUncancelledNativeCompositionPreservesPacket() async throws {
+        let (source, summary, data) = try fixture()
+        let result = try await ClinicalBrief.compose(
+            source: source, originalIdentifiers: [], generate: { _ in summary },
+            evaluate: { _, _ in data }, privacyCheck: { _ in true })
+        XCTAssertEqual(result.responseJSON(), data)
+    }
+
+    func testNativeTaskCancellationHasControlledOutcome() async throws {
+        let (source, summary, data) = try fixture()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await ClinicalBrief.compose(
+                source: source, originalIdentifiers: [],
+                generate: { _ in summary }, evaluate: { _, _ in data },
+                privacyCheck: { _ in true })
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertEqual(error as? ClinicalBriefError, .cancelled)
+        }
+    }
+
+    func testNativeLateGenerationDoesNotReachEvaluator() async throws {
+        let (source, summary, _) = try fixture()
+        let task = Task {
+            try await ClinicalBrief.compose(
+                source: source, originalIdentifiers: [],
+                generate: { _ in
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    return summary
+                },
+                evaluate: { _, _ in
+                    XCTFail("Cancelled generation reached evaluation")
+                    return Data()
+                }, privacyCheck: { _ in true })
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertEqual(error as? ClinicalBriefError, .cancelled)
+        }
+    }
+
     func testSharedPythonPacketIsByteIdenticalAfterNativeGuards() throws {
         let (source, summary, data) = try fixture()
         let brief = try ClinicalBrief.validate(

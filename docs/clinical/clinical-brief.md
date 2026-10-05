@@ -92,3 +92,69 @@ lowercase hexadecimal characters. Configure REST with
 Missing review configuration returns a typed refusal, not an unguarded summary.
 REST access logs add only bounded outcome vocabulary and counts to the normal
 request duration. Never log the response: `summary` is protected content.
+
+## Cancellation and deadlines
+
+`build_clinical_brief(..., cancellation=...)` accepts an optional caller-owned
+`BriefCancellation`, exported from `openmed.clinical`. Existing calls without a
+context preserve their result and digest. For a whole-request deadline, start the
+existing extraction budget clock before review lookup:
+
+```python
+from openmed.clinical import BriefCancellation, build_clinical_brief
+from openmed.core.budget import RequestBudget
+
+cancellation = BriefCancellation(RequestBudget(max_wall_time=10).start())
+# An application thread may call cancellation.cancel() at any time.
+brief = build_clinical_brief(
+    deidentified, model="extractive", context=reviewed_context,
+    cancellation=cancellation,
+)
+```
+
+All fixed pipeline stages check the context before entering. Generation, each NLI
+call, both privacy scans and the final publication boundary also check after work.
+A trusted local summarizer, NLI callback, privacy detector or review lookup can
+explicitly accept the keyword `cancellation` and call `cancellation.check()` inside
+its own work. Legacy signatures receive no extra keyword. No stage can be removed
+or reordered by the context. The clock uses the existing `BudgetClock` wall-time
+semantics (elapsed time greater than the allowance); no second extraction budget
+or wire-supplied evidence policy is introduced.
+
+Caller cancellation and `KeyboardInterrupt`/`asyncio.CancelledError` produce
+`refusal_reason="cancelled"`. Expiry produces `"deadline_exceeded"`; ordinary
+backend failures retain `"stage_failed"`. Explicit cancellation wins when both
+are observed at the same checkpoint. Observed expiry stays terminal. Interrupted
+results are refused with an empty summary, citations, verdicts, metrics and
+provenance. Only entered stage names and fixed diagnostics survive; no partial
+protected output is returned as success.
+
+`brief_response(..., cancellation=...)` covers application-owned review lookup
+as well as composition. The REST route cancels its context when its awaiting task
+is cancelled. A disconnected client may be unable to receive the refusal. This
+is not a general job scheduler or HTTP disconnect monitor. The CLI accepts
+`--timeout-seconds`, maps interruption to the same empty response in its JSON
+`data` envelope and exits 1. It creates no output files for an interrupted request
+and removes files it reserved if interrupted during output writing.
+
+### Provider cooperation and resource ownership
+
+A synchronous provider, including the current Python MLX `generate` call, may not
+cooperate while blocked or generating. Cancellation cannot kill that call or
+promise immediate memory reclamation. Its returned output or exception is checked
+before any next stage or publication; late output is discarded. The REST worker
+may finish later but cannot publish its result through the cancelled request.
+The Python MLX adapter drops the model and tokenizer references it owns on every
+terminal path after loading. Caller-owned providers, native loaded model actors
+and runtime-wide caches remain application-owned; no global cache flush is used.
+Providers must release their own transient resources with `finally`/`defer`. They
+must not persist, log or externally publish intermediate output themselves.
+
+OpenMedKit uses `ClinicalBriefCancellation`: native task cancellation maps to
+`ClinicalBriefError.cancelled`; an application-supplied, thread-safe
+`deadlineExpired` closure (using its existing local clock) maps to
+`.deadlineExceeded`. `ClinicalBrief.compose` and the Maple `brief` adapter guard
+generation, local evaluation, rendered-packet verification and publication.
+Evaluators may capture the context for checks inside their own evidence/NLI
+stages. No mobile lifecycle policy or Apple Foundation Models cloud fallback is
+added. All successful briefs still require qualified human review.

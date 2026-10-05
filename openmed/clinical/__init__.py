@@ -73,6 +73,7 @@ from .brief import (
     brief_policy_fingerprint,
     build_clinical_brief,
 )
+from .brief_cancellation import BriefCancellation, BriefInterrupted
 from .cancer_staging import (
     TNM_STAGING_ADVISORY,
     TnmBasis,
@@ -1861,6 +1862,8 @@ __all__ = [
     "ClinicalBrief",
     "brief_policy_fingerprint",
     "build_clinical_brief",
+    "BriefCancellation",
+    "BriefInterrupted",
     "OFFICIAL_TRIAL_API_URL",
     "TRIAL_COMPATIBILITY_POLICY",
     "TRIAL_CRITERIA_COMPATIBILITY_POLICY",
