@@ -308,6 +308,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Require patched PyJWT versions in the locked dependency graph and bound CI
   tests with per-test timeout diagnostics rather than six-hour silent hangs.
+- Continue optional dependency diagnostics when a module raises during import,
+  recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping
