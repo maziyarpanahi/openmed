@@ -244,6 +244,7 @@ class RequestWork:
             return
         self._finished = True
         if self._permit is not None:
+            # A worker may already have released this permit; release() is idempotent.
             self._permit.release()
         if self._orphaned and self._metrics is not None:
             self._metrics.orphaned_work_finished()
