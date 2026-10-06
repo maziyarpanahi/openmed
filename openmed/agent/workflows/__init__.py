@@ -72,6 +72,11 @@ from .evidence_query import (
     make_query_access_decision,
     plan_evidence_query,
 )
+from .journey_abstraction import (
+    AbstractionFieldBinding,
+    AbstractionReviewReceipt,
+    build_journey_abstraction_evidence,
+)
 from .prior_auth_completeness import (
     PRIOR_AUTH_COMPLETENESS_SCHEMA,
     MissingEvidenceCode,
@@ -140,6 +145,9 @@ from .trial_eligibility_review import (
 )
 
 __all__ = [
+    "AbstractionFieldBinding",
+    "AbstractionReviewReceipt",
+    "build_journey_abstraction_evidence",
     "COHORT_EXPLANATION_SCHEMA_VERSION",
     "CohortMembershipExplanation",
     "explain_cohort_membership",

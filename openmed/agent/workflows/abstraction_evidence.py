@@ -30,6 +30,14 @@ _ISSUE_CODES: Final = frozenset(
         "missing_field_evidence",
         "missing_source_evidence",
         "review_not_approved",
+        "missing_locator_evidence",
+        "non_text_locator_evidence",
+        "missing_artifact_evidence",
+        "conflicting_facts",
+        "derived_only_evidence",
+        "source_kind_undeclared",
+        "subject_mismatch",
+        "review_receipt_mismatch",
     }
 )
 
@@ -328,26 +336,54 @@ class FinalizedAbstractionEvidence:
 
 @dataclass(frozen=True, slots=True, init=False)
 class ChartAbstractionEvidence:
-    """A unique, deterministically ordered set of field evidence chains."""
+    """A unique, deterministically ordered set of field evidence chains.
+
+    Args:
+        chains: Unique field chains, normalized into deterministic order.
+        blocking_issues: Producer coverage failures retained through evaluation
+            and finalization, even when other evidence and approval are present.
+    """
 
     chains: tuple[AbstractionEvidenceChain, ...] = field(repr=False)
+    blocking_issues: tuple[AbstractionEvidenceIssue, ...]
 
-    def __init__(self, chains: Iterable[AbstractionEvidenceChain]) -> None:
+    def __init__(
+        self,
+        chains: Iterable[AbstractionEvidenceChain],
+        *,
+        blocking_issues: Iterable[AbstractionEvidenceIssue] = (),
+    ) -> None:
         normalized = _normalize_chains(chains)
+        issues = _bounded_tuple(
+            blocking_issues, field_name="blocking_issues", maximum=_MAX_CHAINS
+        )
+        if any(type(issue) is not AbstractionEvidenceIssue for issue in issues):
+            raise AbstractionEvidenceError("invalid_issues", "blocking_issues")
         object.__setattr__(self, "chains", normalized)
+        object.__setattr__(self, "blocking_issues", tuple(sorted(set(issues))))
 
     @property
     def evidence_digest(self) -> str:
         """Return a stable digest over all ordered field chains."""
 
-        return _digest([chain.chain_digest for chain in self.chains])
+        chain_digests = [chain.chain_digest for chain in self.chains]
+        if self.blocking_issues:
+            return _digest(
+                {
+                    "chains": chain_digests,
+                    "blocking_issues": [
+                        issue.to_dict() for issue in self.blocking_issues
+                    ],
+                }
+            )
+        return _digest(chain_digests)
 
     def evaluate(self, required_fields: Iterable[str]) -> AbstractionEvidenceReport:
         """Evaluate source and review coverage for required field identifiers."""
 
         required = _normalize_required_fields(required_fields)
         chain_by_field = {chain.field_id: chain for chain in self.chains}
-        issues: list[AbstractionEvidenceIssue] = []
+        issues = list(self.blocking_issues)
 
         for field_id in required:
             if field_id not in chain_by_field:
@@ -369,7 +405,7 @@ class ChartAbstractionEvidence:
                     AbstractionEvidenceIssue("review_not_approved", chain.field_id)
                 )
 
-        normalized_issues = tuple(sorted(issues))
+        normalized_issues = tuple(sorted(set(issues)))
         required_fields_digest = _digest(list(required))
         report_fields = {
             "approved_field_count": sum(
