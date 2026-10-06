@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add offline qualification of caller-supplied local planners against synthetic
+  grant, schema, minimum-data, review-stop and hostile-result scenarios, with
+  counts-only reports and non-compensable critical gates (#3790).
+
 ### Added
 
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
