@@ -1,0 +1,40 @@
+{
+  "Metadata": [{"dqdVersion": "2.9.0", "cdmSourceName": "SYNTHETIC_SOURCE_SENTINEL"}],
+  "Overview": [{"notes": "SYNTHETIC_OVERVIEW_SENTINEL"}],
+  "CheckResults": [
+    {
+      "checkId": "SYNTHETIC_CHECK_ID_SENTINEL",
+      "category": "Conformance", "cdmTableName": "PERSON",
+      "failed": 0, "passed": 1, "isError": 0, "notApplicable": 0,
+      "numViolatedRows": 0,
+      "queryText": "SYNTHETIC_QUERY_SENTINEL",
+      "checkDescription": "SYNTHETIC_DESCRIPTION_SENTINEL",
+      "notesValue": "SYNTHETIC_NOTES_SENTINEL"
+    },
+    {
+      "category": "Completeness", "cdmTableName": "VISIT_OCCURRENCE",
+      "failed": 1, "passed": 0, "isError": 0, "notApplicable": 0,
+      "numViolatedRows": 3,
+      "notes": "SYNTHETIC_NOTES_SENTINEL"
+    },
+    {
+      "category": "Plausibility", "cdmTableName": "MEASUREMENT",
+      "failed": 0, "passed": 1, "isError": 0, "notApplicable": 1,
+      "numViolatedRows": null,
+      "notApplicableReason": "SYNTHETIC_REASON_SENTINEL"
+    },
+    {
+      "category": "Conformance", "cdmTableName": "OBSERVATION",
+      "failed": 0, "passed": 1, "isError": 1, "notApplicable": 0,
+      "numViolatedRows": null,
+      "error": "SYNTHETIC_ERROR_SENTINEL"
+    },
+    {
+      "category": "Completeness", "cdmTableName": "NOTE",
+      "failed": 0, "passed": 1, "isError": 0, "notApplicable": 0,
+      "numViolatedRows": 2,
+      "thresholdValue": 10,
+      "queryText": "SYNTHETIC_QUERY_SENTINEL"
+    }
+  ]
+}

@@ -138,6 +138,8 @@ _QUALITY_EXPORTS = frozenset(
     }
 )
 
+_DQD_EXPORTS = frozenset({"DQD_SUPPORTED_VERSIONS", "normalize_dqd_results_file"})
+
 
 def __getattr__(name: str) -> Any:
     """Load newer OMOP contracts without widening import cycles."""
@@ -146,6 +148,8 @@ def __getattr__(name: str) -> Any:
         module_name = ".fact_projection"
     elif name in _QUALITY_EXPORTS:
         module_name = ".quality"
+    elif name in _DQD_EXPORTS:
+        module_name = ".dqd"
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module = import_module(module_name, __name__)
@@ -155,6 +159,7 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "DQD_SUPPORTED_VERSIONS",
     "OMOP_DATASET_SPLITS",
     "OMOP_DOMAIN_TABLES",
     "OMOP_FACT_PROJECTION_CDM_VERSION",
@@ -254,6 +259,7 @@ __all__ = [
     "load_omop_fact_projection_schema",
     "load_omop_quality_report_schema",
     "normalize_omop_quality_output",
+    "normalize_dqd_results_file",
     "project_clinical_facts_to_omop",
     "projection_quality_checks",
     "reconcile_omop_aggregates",

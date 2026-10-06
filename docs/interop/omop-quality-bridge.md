@@ -115,6 +115,87 @@ Use `build_omop_quality_tool_output()` in an adapter to calculate the exact
 canonical output digest. Any mismatched input or output digest returns a typed
 `conflict` with no accepted report.
 
+## Normalize a caller-supplied DataQualityDashboard file
+
+The Python-only reference adapter reads the JSON produced by OHDSI
+[DataQualityDashboard 2.9.0](https://github.com/OHDSI/DataQualityDashboard/tree/v2.9.0).
+Its format is pinned to the upstream
+[result writer](https://github.com/OHDSI/DataQualityDashboard/blob/v2.9.0/R/writeResultsTo.R),
+[metadata and check envelope](https://github.com/OHDSI/DataQualityDashboard/blob/v2.9.0/R/executeDqChecks.R),
+and [status flags](https://github.com/OHDSI/DataQualityDashboard/blob/v2.9.0/R/evaluateThresholds.R).
+It does not run DQD, R, SQL or any database operation. Supply an existing local
+results file and a custody manifest for that run:
+
+```python
+from openmed.interop.omop import normalize_dqd_results_file
+
+output = normalize_dqd_results_file(
+    "results.json",
+    quality_input=quality_input,
+)
+# Pass output to normalize_omop_quality_output with reconciliation and signing_key.
+```
+
+The file must have a `Metadata` array containing one record with
+`dqdVersion="2.9.0"`, and a `CheckResults` array. Missing or unknown versions,
+unknown categories and tables outside the Journey projection's nine
+`OMOP_FACT_TABLES` raise `OmopQualityUnsupportedError`. This deliberately does
+not claim compatibility with other DQD releases or the entire OMOP table set.
+Malformed JSON, duplicate keys, missing check fields, invalid flags/counts and
+unreadable files raise `OmopQualityProtocolError` with controlled diagnostics.
+
+Each record maps `category` case-insensitively to conformance, completeness or
+plausibility, `cdmTableName` to an allowlisted lowercase table, and
+`numViolatedRows` to an exact nonnegative integer `affected_rows` (at most
+2^53 - 1). Check IDs are generated from zero-based result offsets. Array order
+is part of the output digest. Source check IDs, descriptions, query text,
+notes, error messages, field/concept values, metadata and all other fields are
+discarded; changing them leaves the normalized digest unchanged.
+
+| DQD flags/counts | Bridge status |
+| --- | --- |
+| `isError=1` or `notApplicable=1`, including with `passed=1` | `unknown` |
+| Any null status flag, or both/neither `failed` and `passed` set | `unknown` |
+| `failed=1`, `passed=0`, error/not-applicable flags zero | `fail` |
+| `passed=1`, other flags zero, zero violated rows | `pass` |
+| Otherwise passing, but count is null or positive | `unknown` |
+
+Null counts become zero only as an unavailable-count placeholder; they cannot
+establish a pass. DQD threshold passes may tolerate violated rows, while the
+bridge requires a pass to have zero affected rows. Those checks retain their
+counts with `dqd_threshold_pass_requires_review`. Errors and not-applicable
+checks always require review. Empty results produce an unknown verdict through
+the existing bridge; no check is silently omitted.
+
+Use the module command directly with the existing subprocess runner:
+
+```python
+import sys
+from openmed.interop.omop import run_omop_quality_subprocess
+
+result = run_omop_quality_subprocess(
+    quality_input,
+    command=(sys.executable, "-m", "openmed.interop.omop.dqd", "results.json"),
+    reconciliation=reconciliation,
+    signing_key=signing_key,
+)
+```
+
+The command reads the bridge request from stdin, validates its version and
+input digest, and emits only canonical tool-output JSON on stdout. On rejection
+it exits with status 2 and writes a controlled `state`/`code` diagnostic to
+stderr, without payloads, paths or tracebacks. The existing runner discards
+stderr and maps a nonzero adapter exit to `quality_adapter_failed`; the direct
+Python API retains typed unsupported/protocol errors. Neither mode changes
+signing, reconciliation or verdict logic.
+
+Input files are bounded to 64 MiB, command requests to 64 KiB and normalized
+outputs to the bridge's 1 MB limit. Oversized output is rejected in full;
+select a suitably scoped DQD run upstream instead of truncating checks.
+The entirely synthetic `tests/fixtures/interop/omop/dqd_results_2_9_0.json`
+includes pass, fail, error, not-applicable and threshold-pass controls with
+free-text leakage sentinels. No DQD code, runtime or vocabulary is bundled.
+
 ## Run an explicitly configured remote job
 
 OpenMed includes no default HTTP client for this bridge. A remote execution is
