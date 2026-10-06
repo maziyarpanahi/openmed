@@ -114,3 +114,119 @@ Run the focused offline tests with:
 ```text
 .venv/bin/python -m pytest tests/unit/agent/approvals/test_tokens.py -q
 ```
+
+## Distinct-role approval quorums
+
+`ApprovalQuorumEvaluator` evaluates existing, successfully consumed
+`ApprovalReceipt` objects against an `ApprovalQuorumPolicy` keyed by a controlled
+`action_class`. This Python receipt-policy slice leaves token issuance, handoff
+leases and dispatcher wiring unchanged; it introduces no Swift token verifier
+or autonomous clinical action.
+
+```python
+from openmed.agent.approvals import (
+    ApprovalQuorumEvaluator,
+    ApprovalQuorumPolicy,
+    SQLiteApprovalQuorumStore,
+)
+
+clinician = "role:org.example/clinician@1.0.0"
+pharmacist = "role:org.example/pharmacist@1.0.0"
+requester = "role:org.example/trainee@1.0.0"
+policy = ApprovalQuorumPolicy(
+    action_class="high-impact-write",
+    required_count=2,
+    allowed_reviewer_roles=(clinician, pharmacist),
+    distinct_roles=True,
+    excluded_requester_roles=(requester,),
+)
+evaluator = ApprovalQuorumEvaluator([policy])
+decision = evaluator.evaluate(
+    action_class="high-impact-write",
+    action_digest="sha256:" + "a" * 64,
+    requester_role=requester,
+    receipts=(),  # Supply trusted receipts from successful token consumption.
+    now=20,
+)
+assert decision.approved_count == 0
+assert not decision.satisfied
+```
+
+Classes are developer-authored lower-case labels such as `high-impact-write`;
+unknown classes and duplicate policies fail closed. Counts must be positive.
+Policies can require distinct roles or count multiple unique receipts from one
+role. The actual requester role is **always** excluded; the policy's
+`excluded_requester_roles` additionally excludes designated requester-category
+roles even when they differ from the current requester. Impossible distinct-role
+policies are rejected at construction. An otherwise feasible policy may remain
+unsatisfied when the actual requester is one of its eligible roles.
+
+Evaluation excludes different action digests, disallowed roles, requester roles,
+future consumption timestamps and receipts at or beyond their exclusive expiry.
+Repeated token digests within a supplied set exclude **all** copies, including
+copies with conflicting roles. `replayed_receipt_digests` accepts token digests
+already used elsewhere. A stateless evaluator cannot detect cross-call replay;
+use durable collection for incremental approvals. Receipt schema validation does
+not authenticate receipt provenance: never accept caller-edited receipt JSON as
+verified evidence. Roles do not identify people; hosts must authenticate reviewers
+and enforce person independence before issuing tokens.
+
+Decisions serialize only `action_digest`, `policy_digest`, `requester_role`,
+`reviewer_roles`, `receipt_digests`, `required_count` and `approved_count`.
+`receipt_digests` are the existing receipts' token commitments, not bearer tokens.
+`satisfied` is a derived property, not an extra serialized field. Decisions contain
+no action class, source values, timestamps, reviewer identities or free text.
+The policy digest commits to all policy rules; role ordering does not change it.
+
+### Durable partial approvals
+
+Create `SQLiteApprovalQuorumStore` with an application-owned, protected, dedicated
+local database path. Call `collect` with the evaluator arguments above plus a
+`progress_digest`: a stable opaque commitment to one logical action slot. Use
+separate slots for independent actions and reuse the slot when editing that
+action. Do not derive slots from lone sensitive identifiers.
+
+```python
+# The application supplies the protected path and new verified receipts.
+def collect_partial_approvals(database_path, verified_receipts):
+    return SQLiteApprovalQuorumStore(database_path).collect(
+        progress_digest="sha256:" + "c" * 64,
+        evaluator=evaluator,
+        action_class="high-impact-write",
+        action_digest="sha256:" + "a" * 64,
+        requester_role=requester,
+        receipts=verified_receipts,
+        now=20,
+    )
+```
+
+Collection atomically preserves partial approvals across independent connections
+and restarts. A changed action digest, policy digest or requester role resets
+that slot's receipts. Global token-digest replay tombstones survive these resets,
+so reverting to an old action does not restore its approvals. Re-submission adds
+nothing; a previously collected receipt may still count as existing progress.
+Every submitted token digest is claimed, including ineligible submissions.
+Multiple eligible receipts for one role are retained for expiry renewal but count
+once under a distinct-role policy. Every read rechecks expiry; a database-wide
+clock watermark rejects rollback so expired approvals cannot revive.
+
+SQLite transactions serialize collection and reset operations. Callers must
+supply the authoritative current action and serialize edits to the same logical
+slot; a stale caller must not restore an older action binding. This store does not
+replace revisioned handoff leases. Its decision is advisory and can be read
+repeatedly: hosts remain responsible for single-use effect authorization,
+revalidation at dispatch, reviewer authentication, database integrity and access
+control. Token issuance and existing single-token dispatch behavior are unchanged.
+No network calls, model outputs or restricted assets are added.
+
+Storage contains only validated receipt metadata, roles, digests and timestamps;
+errors use controlled codes such as `store_unavailable` and `clock_rollback` and
+omit the private path. Replay tombstones are retained without automatic pruning;
+hosts own database lifecycle and storage capacity. Never log token credentials or
+source action payloads. Malformed receipt data and storage failures fail closed.
+
+Run the synthetic offline policy and persistence controls with:
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/approvals/test_quorum.py tests/integration/agent/test_approval_quorum.py -q
+```

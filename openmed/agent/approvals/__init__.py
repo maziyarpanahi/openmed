@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from .quorum import (
+    ApprovalQuorumDecision,
+    ApprovalQuorumError,
+    ApprovalQuorumEvaluator,
+    ApprovalQuorumPolicy,
+    SQLiteApprovalQuorumStore,
+)
 from .tokens import (
     APPROVAL_NONCE_BYTES,
     APPROVAL_RECEIPT_SCHEMA_VERSION,
@@ -33,6 +40,10 @@ __all__ = [
     "ApprovalExpiredError",
     "ApprovalNonceStore",
     "ApprovalNonceStoreError",
+    "ApprovalQuorumDecision",
+    "ApprovalQuorumError",
+    "ApprovalQuorumEvaluator",
+    "ApprovalQuorumPolicy",
     "ApprovalReceipt",
     "ApprovalReplayError",
     "ApprovalReviewerRoleMismatchError",
@@ -43,5 +54,6 @@ __all__ = [
     "ApprovalTokenValidationError",
     "ApprovalTokenVerifier",
     "InMemoryApprovalNonceStore",
+    "SQLiteApprovalQuorumStore",
     "dispatch_with_approval_token",
 ]
