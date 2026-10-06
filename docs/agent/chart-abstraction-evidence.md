@@ -52,6 +52,104 @@ organization-derived values. Fact digests bind values held within the trusted
 local abstraction boundary; they are not a substitute for encrypted clinical
 storage.
 
+## Produce chains from Journey records
+
+`build_journey_abstraction_evidence()` is a Python producer over existing
+`JourneySnapshot`, `ClinicalFact`, `EvidenceLocator`, `ClinicalArtifact`, and
+`ConflictSet` contracts. Supply immutable records read at the snapshot revision,
+including every relevant conflict. The producer performs no storage reads,
+extraction, clinical inference, or network calls. This issue's producer boundary
+is scoped to the existing Python Journey and abstraction contracts.
+
+```python
+from openmed.agent.workflows import (
+    AbstractionFieldBinding,
+    AbstractionReviewReceipt,
+    ReviewerState,
+    SourceKind,
+    TransformationKind,
+    build_journey_abstraction_evidence,
+)
+
+# These records come from the application's trusted local snapshot read.
+inputs = dict(
+    snapshot=snapshot,
+    fields=(AbstractionFieldBinding(
+        "registry.primary_diagnosis", (fact.fact_id,), TransformationKind.MODEL
+    ),),
+    facts=(fact,),
+    locators=(locator,),
+    artifacts=(artifact,),
+    conflicts=conflicts,
+    source_kinds={artifact.artifact_id: SourceKind.CLINICAL_RECORD},
+)
+pending = build_journey_abstraction_evidence(**inputs)
+
+# Only after explicit human approval inside the trusted review application:
+review = AbstractionReviewReceipt(
+    "registry.primary_diagnosis",
+    pending.chains[0].chain_digest,
+    ReviewerState.APPROVED,
+)
+reviewed = build_journey_abstraction_evidence(**inputs, review_receipts=(review,))
+receipt = reviewed.finalize(("registry.primary_diagnosis",))
+```
+
+The caller declares source origin and rule/model kind; arbitrary artifact types,
+fact statuses and Journey review labels cannot prove either origin or approval.
+Unknown origin blocks instead of defaulting to a clinical record. Mark generated
+artifacts with `SourceKind.GENERATED_TEXT`. A generated-only chain cannot finalize.
+Parent facts are not recursively treated as clinical source evidence; a derived
+fact must retain its own direct clinical text locators.
+
+The normalized-fact digest commits to the complete immutable fact record, without
+copying its value into output. The transformation digest commits to the snapshot,
+fact derivation hash and ordered digests of the locator/artifact metadata, including
+locator transformations and artifact derivation metadata. Character offsets are
+copied exactly from half-open `text_span` locators. No byte-to-character conversion
+or text reconstruction is attempted. The caller must ensure those offsets refer
+to the canonical artifact identified by its content hash. Missing confidence maps
+to uncertainty 1.0; otherwise uncertainty is `1 - confidence`.
+
+Review receipts bind the **pending** chain digest, so changes to facts, snapshot,
+offsets, source origin, derivations or transformations invalidate earlier approval.
+Receipts carry explicit pending/approved/rejected decisions. They are an adapter
+input from the trusted local review boundary, not authenticated credentials or
+review UI. The producer does not manufacture approval or infer it from fact status.
+The application must authenticate review decisions and prevent stale or revoked
+receipts from being supplied.
+
+Coverage blockers persist on the returned `ChartAbstractionEvidence`; calling its
+`finalize()` directly cannot discard a failed producer check. Reports use the
+existing field/count/digest contract with these distinct codes:
+
+| Code | Trigger |
+| --- | --- |
+| `missing_field_evidence` | Required field has no chain, binding has no candidates, or a mapped fact is absent |
+| `missing_locator_evidence` | Any evidence ID of a mapped fact is unresolved |
+| `non_text_locator_evidence` | Any locator is not a text span, even if another span is valid |
+| `missing_artifact_evidence` | Text locator's artifact is absent |
+| `conflicting_facts` | Multiple candidate facts for one field or a mapped fact in an open conflict |
+| `derived_only_evidence` | Parent-derived fact has no direct clinical source span |
+| `source_kind_undeclared` | Artifact origin has no explicit declaration |
+| `subject_mismatch` | Fact or source artifact belongs to a different subject |
+| `review_receipt_mismatch` | Receipt does not bind the current pending chain |
+
+Existing `missing_source_evidence`, `generated_only_evidence`, and
+`review_not_approved` gates still apply. Multiple candidates are conservatively
+treated as conflicting even if their values agree; callers must resolve the
+candidate selection explicitly. Duplicate input IDs are rejected with value-free
+errors; repeated locators for an identical source span are checked individually
+and deduplicated in the chain. All blockers apply to represented fields, including
+fields outside the required set.
+
+Chains, receipts, reports and their representations retain only digests, offsets,
+developer-authored field IDs, controlled codes/states/kinds and counts or scores.
+They retain no values, raw artifact IDs, source text, locator payloads, paths,
+attributes or extensions. Synthetic fixtures prove contract behavior, not
+clinical accuracy or release readiness. Extraction, review UI and registry/FHIR
+export remain separate work.
+
 ## Finalization gates
 
 `evaluate()` returns a deterministic metadata-only report. `finalize()` returns
