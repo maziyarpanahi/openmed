@@ -383,6 +383,7 @@ classification:
     - evaluation/nli-negation-challenge.md
     - evaluation/relation-review-yield.md
     - evaluation/governed-agent-fixtures.md
+    - evaluation/planner-qualification.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
