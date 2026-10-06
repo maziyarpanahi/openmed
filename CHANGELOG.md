@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a local-key-provider adapter from native measure runs to signed,
+  aggregate-only quality-measure evidence packets, with offline comparator
+  parity controls and explicit period/count mapping limits (#3789).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
