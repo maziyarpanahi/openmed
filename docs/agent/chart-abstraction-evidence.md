@@ -76,3 +76,21 @@ stable field names and codes and never echo rejected input.
 
 This evidence contract does not certify an abstraction, authorize an
 autonomous clinical decision, or replace local policy and reviewer controls.
+
+## Runnable synthetic example
+
+Run the [offline example](https://github.com/maziyarpanahi/openmed/blob/master/examples/chart_abstraction_evidence.py)
+from the repository root after installing OpenMed:
+
+```bash
+python -m examples.chart_abstraction_evidence
+```
+
+An approved clinical-source chain finalizes; the same chain pending review is rejected
+with the finding `review_not_approved`.
+The fail-closed case prints the stable reason code `evidence_not_finalizable`.
+Each run finishes in a few seconds and prints one deterministic JSON report
+containing only synthetic digests, developer-authored IDs and closed codes.
+Source payloads, dates, counts, offsets, uncertainty scores and key material
+are excluded from printed output. No model downloads, credentials, network
+connections or clinical actions are required.
