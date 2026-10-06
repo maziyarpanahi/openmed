@@ -157,6 +157,7 @@ TELEMETRY_ENV_FRAGMENTS = (
 # additionally pinned by
 # ``test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default``.
 TELEMETRY_SDK_ALLOWLIST: dict[str, str] = {
+    "agent/telemetry.py": "opentelemetry",
     "core/telemetry.py": "opentelemetry",
     "service/tracing.py": "opentelemetry",
 }
@@ -321,13 +322,14 @@ def test_openmed_package_has_no_telemetry_indicators():
 
 
 def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
-    """Both reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
+    """Reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
+    agent_source = (PACKAGE_ROOT / "agent" / "telemetry.py").read_text(encoding="utf-8")
     core_telemetry = PACKAGE_ROOT / "core" / "telemetry.py"
     core_source = core_telemetry.read_text(encoding="utf-8")
     tracing = PACKAGE_ROOT / "service" / "tracing.py"
     source = tracing.read_text(encoding="utf-8")
 
-    # OpenTelemetry usage is confined to the two reviewed modules.
+    # OpenTelemetry usage is confined to these reviewed modules.
     users = [
         _rel(path)
         for path in _package_files()
@@ -338,9 +340,23 @@ def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
             )
         )
     ]
-    assert users == ["core/telemetry.py", "service/tracing.py"], (
+    assert users == ["agent/telemetry.py", "core/telemetry.py", "service/tracing.py"], (
         f"opentelemetry imported outside the reviewed carve-out: {users!r}"
     )
+
+    # The agent bridge shares the exporter-free, lazy, explicit opt-in boundary.
+    assert "enabled: bool = False" in agent_source
+    assert 'import_module("opentelemetry.trace")' in agent_source
+    assert 'import_module("opentelemetry.metrics")' in agent_source
+    assert "record_exception=False" in agent_source
+    assert "set_status_on_exception=False" in agent_source
+    assert not any(
+        dotted.startswith("opentelemetry.sdk")
+        or dotted.startswith("opentelemetry.exporter")
+        for dotted in _telemetry_sdk_imports(agent_source)
+    )
+    assert _telemetry_host_hits(agent_source) == []
+    assert _telemetry_optout_envs(agent_source) == []
 
     # Core telemetry is lazy, off by default, and has no exporter configuration.
     assert "enabled: bool = False" in core_source
