@@ -318,6 +318,7 @@ nav:
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md

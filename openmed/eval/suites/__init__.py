@@ -104,6 +104,16 @@ from openmed.eval.suites.cblue_coverage import (
     run_cblue_task_coverage,
     run_synthetic_cblue_task_coverage_smoke,
 )
+from openmed.eval.suites.chart_abstraction import (
+    AbstractionFieldType,
+    AbstractionMetric,
+    AbstractionScores,
+    ChartAbstractionBenchmarkReport,
+    ChartAbstractionGoldField,
+    ChartAbstractionPrediction,
+    run_chart_abstraction_benchmark,
+    synthetic_chart_abstraction_gold,
+)
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     CHINESE_CLINICAL_NER_MODEL_DIR_ENV,
@@ -685,6 +695,14 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "AbstractionFieldType",
+    "AbstractionMetric",
+    "AbstractionScores",
+    "ChartAbstractionBenchmarkReport",
+    "ChartAbstractionGoldField",
+    "ChartAbstractionPrediction",
+    "run_chart_abstraction_benchmark",
+    "synthetic_chart_abstraction_gold",
     "DRUG_SAFETY_SUITE_VERSION",
     "DrugSafetyBenchmarkCase",
     "DrugSafetyBenchmarkReport",
