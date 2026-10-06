@@ -89,3 +89,21 @@ approval, denial, or coverage recommendation.
 Reports contain requirement identifiers, counts, the score, closed codes, and
 digests. They exclude evidence and citation digests from serialized output,
 except for aggregate metadata digests, and never include raw packet values.
+
+## Runnable synthetic example
+
+Run the [offline example](https://github.com/maziyarpanahi/openmed/blob/master/examples/prior_auth_completeness.py)
+from the repository root after installing OpenMed:
+
+```bash
+python -m examples.prior_auth_completeness
+```
+
+A complete cited packet passes; an otherwise identical packet bound to a different
+requirement-schema version is rejected. Completeness never decides coverage.
+The fail-closed case prints the stable reason code `schema_version_mismatch`.
+Each run finishes in a few seconds and prints one deterministic JSON report
+containing only synthetic digests, developer-authored IDs and closed codes.
+Source payloads, dates, counts, offsets, uncertainty scores and key material
+are excluded from printed output. No model downloads, credentials, network
+connections or clinical actions are required.

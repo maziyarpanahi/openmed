@@ -113,3 +113,21 @@ Integrations should route review through the separately governed reviewer
 handoff contract and require the separately governed single-use approval
 contract before any high-impact operational action. This module deliberately
 does not issue either contract or perform that action.
+
+## Runnable synthetic example
+
+Run the [offline example](https://github.com/maziyarpanahi/openmed/blob/master/examples/cohort_explanations.py)
+from the repository root after installing OpenMed:
+
+```bash
+python -m examples.cohort_explanations
+```
+
+Matching inclusion and exclusion evidence produces an eligible explanation; a changed
+time-window digest is rejected. Eligibility never authorizes enrollment or contact.
+The fail-closed case prints the stable reason code `time_window_mismatch`.
+Each run finishes in a few seconds and prints one deterministic JSON report
+containing only synthetic digests, developer-authored IDs and closed codes.
+Source payloads, dates, counts, offsets, uncertainty scores and key material
+are excluded from printed output. No model downloads, credentials, network
+connections or clinical actions are required.

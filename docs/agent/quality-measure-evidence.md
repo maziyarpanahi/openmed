@@ -114,3 +114,22 @@ key before treating the report as evidence.
 This packet is reproducibility and review evidence. It is not a compliance
 certification, a correctness proof, or authorization for an autonomous
 clinical decision or downstream action.
+
+## Runnable synthetic example
+
+Run the [offline example](https://github.com/maziyarpanahi/openmed/blob/master/examples/quality_measure_evidence.py)
+from the repository root after installing OpenMed:
+
+```bash
+python -m examples.quality_measure_evidence
+```
+
+A locally signed synthetic packet round-trips and verifies; changing its numerator
+without signing again is rejected. The fixed public demonstration key must never be used
+in deployments.
+The fail-closed case prints the stable reason code `signature_mismatch`.
+Each run finishes in a few seconds and prints one deterministic JSON report
+containing only synthetic digests, developer-authored IDs and closed codes.
+Source payloads, dates, counts, offsets, uncertainty scores and key material
+are excluded from printed output. No model downloads, credentials, network
+connections or clinical actions are required.
