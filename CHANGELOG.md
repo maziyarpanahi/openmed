@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added action-class approval quorum policies over trusted receipts, distinct-role
+  and requester exclusions, value-free decisions, and durable local partial
+  approvals with expiry, replay protection and action-change resets (#3781).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
