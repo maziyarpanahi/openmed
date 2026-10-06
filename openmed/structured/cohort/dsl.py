@@ -3,7 +3,8 @@
 The schema intentionally models a small, auditable subset of cohort queries:
 concept sets, occurrence thresholds, assertion filters, temporal windows, and
 recursive boolean composition.  It is not an OHDSI ATLAS/Circe compatibility
-layer and never contains executable SQL.
+layer and never contains executable SQL. The separate :mod:`.circe` mapper
+supports a declared external subset with explicit semantic loss reports.
 """
 
 from __future__ import annotations
