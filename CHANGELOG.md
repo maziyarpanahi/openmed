@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add versioned synthetic multilingual full-pipeline clinical-brief regressions
+  for Latin, RTL, Indic and code-switched evidence, public surface/native packet
+  parity, protected-span offset round trips and governed conflict refusals.
+  Reports separate contract parity from unsupported language capabilities and
+  unevaluated model quality. Accept unset optional replacement aliases without
+  weakening populated-alias consistency checks (#3659).
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
