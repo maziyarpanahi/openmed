@@ -8,22 +8,27 @@ approval tokens, or automatically compensate a committed clinical effect.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 import re
 import stat
+import sys
 import tempfile
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, Final, cast
 
 from openmed.agent.correlation import ActionId, CorrelationIdError, RunId
 from openmed.agent.identifiers import GovernanceIdError, ToolId, WorkflowId
+from openmed.agent.run_summary import RunSummary
 
 RECOVERY_CHECKPOINT_SCHEMA_VERSION: Final = "openmed.agent.recovery_checkpoint.v1"
 RECOVERY_EVIDENCE_SCHEMA_VERSION: Final = "openmed.agent.recovery_evidence.v1"
+RETIRED_JOURNAL_SCHEMA_VERSION: Final = "openmed.agent.retired_journal.v1"
 MAX_CHECKPOINT_BYTES: Final = 1 << 20
 _WINDOWS: Final = os.name == "nt"
 
@@ -121,6 +126,7 @@ class CompensationLimit(str, Enum):
 class RecoveryDisposition(str, Enum):
     """A deterministic recovery outcome."""
 
+    RETIRED = "retired"
     RESUME = "resume"
     COMPLETE = "complete"
     REVIEW_REQUIRED = "review_required"
@@ -129,6 +135,7 @@ class RecoveryDisposition(str, Enum):
 class RecoveryReason(str, Enum):
     """Closed reason codes for recovery decisions."""
 
+    JOURNAL_RETIRED = "journal_retired"
     SAFE_TO_RESUME = "safe_to_resume"
     EFFECTS_RECONCILED = "effects_reconciled"
     ALREADY_COMPLETE = "already_complete"
@@ -546,6 +553,212 @@ class RecoveryDecision:
         return _canonical_json(self.to_dict())
 
 
+@dataclass(frozen=True, slots=True)
+class JournalRetentionPolicy:
+    """Explicit minimum terminal age in seconds; no automatic deletion default."""
+
+    minimum_age_seconds: int
+
+    def __post_init__(self) -> None:
+        _require_non_negative_int(self.minimum_age_seconds, "minimum_age_seconds")
+
+
+@dataclass(frozen=True, slots=True)
+class RetiredJournalRecord:
+    """Sealed, value-free terminal evidence replacing a resumable lineage.
+
+    The seal detects corruption. Authenticity requires a previously exported
+    digest anchor or trusted local storage, just as for recovery checkpoints.
+    """
+
+    final_checkpoint_digest: str
+    recovery_evidence_digest: str
+    checkpoint_recovery_evidence_digest: str | None
+    phase: RecoveryPhase
+    checkpoint_count: int
+    effect_count: int
+    committed_effect_count: int
+    record_digest: str
+    schema_version: str = RETIRED_JOURNAL_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != RETIRED_JOURNAL_SCHEMA_VERSION:
+            raise RecoveryError("unsupported_retired_version", "schema_version")
+        if not isinstance(self.phase, RecoveryPhase) or self.phase not in {
+            RecoveryPhase.COMPLETED,
+            RecoveryPhase.ABORTED,
+        }:
+            raise RecoveryError("nonterminal_record", "record")
+        _require_digest(self.final_checkpoint_digest, "final_checkpoint_digest")
+        _require_digest(self.recovery_evidence_digest, "recovery_evidence_digest")
+        if self.checkpoint_recovery_evidence_digest is not None:
+            _require_digest(
+                self.checkpoint_recovery_evidence_digest,
+                "checkpoint_recovery_evidence_digest",
+            )
+        for field in ("checkpoint_count", "effect_count", "committed_effect_count"):
+            _require_non_negative_int(getattr(self, field), field)
+        if (
+            self.checkpoint_count == 0
+            or self.effect_count != self.committed_effect_count
+        ):
+            raise RecoveryError("ambiguous_terminal_record", "record")
+        _require_digest(self.record_digest, "record_digest")
+        if self.record_digest != _digest(self._unsigned_dict()):
+            raise RecoveryError("retired_digest_mismatch", "record")
+
+    def _unsigned_dict(self) -> dict[str, Any]:
+        values = asdict(self)
+        values.pop("record_digest")
+        values["phase"] = self.phase.value
+        return values
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return only controlled codes, counts and digest anchors."""
+
+        return {**self._unsigned_dict(), "record_digest": self.record_digest}
+
+    def to_json(self) -> str:
+        """Serialize the sealed record deterministically."""
+
+        return _canonical_json(self.to_dict())
+
+    @classmethod
+    def from_json(cls, serialized: str | bytes | bytearray) -> RetiredJournalRecord:
+        """Validate exact fields, terminal state and the seal from strict JSON."""
+
+        values = _read_exact_mapping(
+            _parse_json(serialized, "record"),
+            frozenset(cls.__dataclass_fields__),
+            "record",
+        )
+        try:
+            values["phase"] = RecoveryPhase(values["phase"])
+            return cls(**values)
+        except RecoveryError:
+            raise
+        except (ValueError, TypeError):
+            raise RecoveryError("invalid_retired_record", "record") from None
+
+    def verifies_summary(self, summary: RunSummary) -> bool:
+        """Check preserved final-checkpoint and terminal-decision summary anchors.
+
+        This checks artifact references, not the authenticity of an untrusted
+        summary, its clinical outcome, or its complete event history.
+        """
+
+        if type(summary) is not RunSummary:
+            raise RecoveryError("invalid_summary", "summary")
+        anchors = {self.final_checkpoint_digest, self.recovery_evidence_digest}
+        if self.checkpoint_recovery_evidence_digest is not None:
+            anchors.add(self.checkpoint_recovery_evidence_digest)
+        return anchors.issubset(summary.artifact_digests)
+
+
+@dataclass(frozen=True, slots=True)
+class JournalRetirementPlan:
+    """Immutable dry-run bound to one journal, policy, age and terminal record."""
+
+    record: RetiredJournalRecord
+    policy: JournalRetentionPolicy
+    terminal_mtime_ns: int
+    checkpoint_digests: tuple[str, ...]
+    planned_at: int
+    journal_binding: str
+    plan_digest: str
+
+    def __post_init__(self) -> None:
+        if type(self.record) is not RetiredJournalRecord:
+            raise RecoveryError("invalid_retired_record", "plan")
+        if type(self.policy) is not JournalRetentionPolicy:
+            raise RecoveryError("invalid_retention_policy", "plan")
+        if (
+            type(self.checkpoint_digests) is not tuple
+            or len(self.checkpoint_digests) != self.record.checkpoint_count
+            or self.checkpoint_digests[-1] != self.record.final_checkpoint_digest
+        ):
+            raise RecoveryError("invalid_checkpoint_manifest", "plan")
+        for digest in self.checkpoint_digests:
+            _require_digest(digest, "checkpoint_digests")
+        _require_non_negative_int(self.terminal_mtime_ns, "terminal_mtime_ns")
+        _require_non_negative_int(self.planned_at, "planned_at")
+        _require_digest(self.journal_binding, "journal_binding")
+        _require_digest(self.plan_digest, "plan_digest")
+        if self.plan_digest != _digest(self._unsigned_dict()):
+            raise RecoveryError("retirement_plan_digest_mismatch", "plan")
+
+    @property
+    def dry_run(self) -> bool:
+        """Planning never deletes files."""
+
+        return True
+
+    @property
+    def confirmation_token(self) -> str:
+        """Return the exact explicit confirmation required for this plan."""
+
+        return f"confirm:{self.plan_digest}"
+
+    def _unsigned_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": "openmed.agent.journal_retirement_plan.v1",
+            "record": self.record.to_dict(),
+            "minimum_age_seconds": self.policy.minimum_age_seconds,
+            "terminal_mtime_ns": self.terminal_mtime_ns,
+            "checkpoint_digests": list(self.checkpoint_digests),
+            "planned_at": self.planned_at,
+            "journal_binding": self.journal_binding,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a value-free dry-run report without private paths."""
+
+        return {
+            **self._unsigned_dict(),
+            "plan_digest": self.plan_digest,
+            "dry_run": True,
+        }
+
+    def to_json(self) -> str:
+        """Serialize the dry-run report deterministically."""
+
+        return _canonical_json(self.to_dict())
+
+    @classmethod
+    def from_json(cls, serialized: str | bytes | bytearray) -> JournalRetirementPlan:
+        """Restore a reviewed dry-run plan for confirmed cleanup after restart."""
+
+        expected = frozenset(
+            {
+                "schema_version",
+                "record",
+                "minimum_age_seconds",
+                "terminal_mtime_ns",
+                "checkpoint_digests",
+                "planned_at",
+                "journal_binding",
+                "plan_digest",
+                "dry_run",
+            }
+        )
+        values = _read_exact_mapping(_parse_json(serialized, "plan"), expected, "plan")
+        if (
+            values["schema_version"] != "openmed.agent.journal_retirement_plan.v1"
+            or values["dry_run"] is not True
+            or type(values["checkpoint_digests"]) is not list
+        ):
+            raise RecoveryError("invalid_retirement_plan", "plan")
+        return cls(
+            record=RetiredJournalRecord.from_json(_canonical_json(values["record"])),
+            policy=JournalRetentionPolicy(values["minimum_age_seconds"]),
+            terminal_mtime_ns=values["terminal_mtime_ns"],
+            checkpoint_digests=tuple(values["checkpoint_digests"]),
+            planned_at=values["planned_at"],
+            journal_binding=values["journal_binding"],
+            plan_digest=values["plan_digest"],
+        )
+
+
 class CheckpointJournal:
     """Durable append-only checkpoint storage in a caller-owned directory."""
 
@@ -561,9 +774,13 @@ class CheckpointJournal:
         if not stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
             raise RecoveryError("unsafe_journal", "journal")
 
-    def load(self) -> tuple[RecoveryCheckpoint, ...]:
-        """Load and validate the complete checkpoint lineage."""
+    def load(self) -> tuple[RecoveryCheckpoint, ...] | RetiredJournalRecord:
+        """Load a complete lineage or its authoritative sealed retired record."""
 
+        with self._locked():
+            return self._load()
+
+    def _load(self) -> tuple[RecoveryCheckpoint, ...] | RetiredJournalRecord:
         try:
             entries = tuple(self._directory.iterdir())
         except (KeyboardInterrupt, SystemExit):
@@ -571,11 +788,17 @@ class CheckpointJournal:
         except BaseException:
             raise RecoveryError("journal_unreadable", "journal") from None
 
+        terminal = self._directory / "retired.json"
+        if terminal in entries:
+            return self._read_retired()
+
         numbered: list[tuple[int, Path]] = []
         for entry in entries:
             match = _CHECKPOINT_FILE_RE.fullmatch(entry.name)
             if match is None:
-                if entry.name.startswith(".checkpoint-"):
+                if entry.name == ".journal-lock" or entry.name.startswith(
+                    ".checkpoint-"
+                ):
                     continue
                 raise RecoveryError("unexpected_journal_entry", "journal")
             numbered.append((int(match.group(1)), entry))
@@ -591,9 +814,15 @@ class CheckpointJournal:
     def append(self, checkpoint: RecoveryCheckpoint) -> RecoveryCheckpoint:
         """Atomically append one checkpoint, accepting an identical retry."""
 
+        with self._locked():
+            return self._append(checkpoint)
+
+    def _append(self, checkpoint: RecoveryCheckpoint) -> RecoveryCheckpoint:
         if type(checkpoint) is not RecoveryCheckpoint:
             raise RecoveryError("invalid_checkpoint", "checkpoint")
-        current = self.load()
+        current = self._load()
+        if isinstance(current, RetiredJournalRecord):
+            raise RecoveryError("journal_retired", "journal")
         if checkpoint.sequence < len(current):
             if current[checkpoint.sequence] == checkpoint:
                 return checkpoint
@@ -642,6 +871,212 @@ class CheckpointJournal:
                 except OSError:
                     pass
         return checkpoint
+
+    def plan_retirement(
+        self, policy: JournalRetentionPolicy, *, now: int
+    ) -> JournalRetirementPlan | None:
+        """Inspect without deletion; return None for young or nonterminal runs.
+
+        Args:
+            policy: Explicit minimum terminal age.
+            now: Injected Unix clock in seconds. Age uses the terminal file mtime.
+
+        Returns:
+            An exact confirmation-bound plan, or None for ineligible runs.
+            Invalid journals raise a controlled RecoveryError without deletion.
+        """
+
+        try:
+            with self._locked():
+                return self._plan_retirement(policy, now=now)
+        except OSError:
+            raise RecoveryError("retirement_io_failed", "journal") from None
+
+    def _plan_retirement(
+        self, policy: JournalRetentionPolicy, *, now: int
+    ) -> JournalRetirementPlan | None:
+        if type(policy) is not JournalRetentionPolicy:
+            raise RecoveryError("invalid_retention_policy", "policy")
+        _require_non_negative_int(now, "now")
+        lineage = self._load()
+        if isinstance(lineage, RetiredJournalRecord) or not lineage:
+            return None
+        final = lineage[-1]
+        if final.phase not in {RecoveryPhase.COMPLETED, RecoveryPhase.ABORTED}:
+            return None
+        if any(effect.state is not EffectState.COMMITTED for effect in final.effects):
+            return None  # An aborted pending dispatch still needs reconciliation.
+        metadata = (self._directory / _checkpoint_filename(final.sequence)).lstat()
+        if now * 1_000_000_000 - metadata.st_mtime_ns <= (
+            policy.minimum_age_seconds * 1_000_000_000
+        ):
+            return None
+        decision = recover_workflow(lineage, (), now=now)
+        fields: dict[str, Any] = {
+            "schema_version": RETIRED_JOURNAL_SCHEMA_VERSION,
+            "final_checkpoint_digest": final.checkpoint_digest,
+            "recovery_evidence_digest": decision.evidence_digest,
+            "checkpoint_recovery_evidence_digest": final.recovery_evidence_digest,
+            "phase": final.phase,
+            "checkpoint_count": len(lineage),
+            "effect_count": len(final.effects),
+            "committed_effect_count": len(final.effects),
+        }
+        record = RetiredJournalRecord(record_digest=_digest(fields), **fields)
+        directory_metadata = self._directory.lstat()
+        values: dict[str, Any] = {
+            "record": record,
+            "policy": policy,
+            "terminal_mtime_ns": metadata.st_mtime_ns,
+            "checkpoint_digests": tuple(c.checkpoint_digest for c in lineage),
+            "planned_at": now,
+            "journal_binding": _digest(
+                {
+                    "device": directory_metadata.st_dev,
+                    "inode": directory_metadata.st_ino,
+                }
+            ),
+        }
+        unsigned = {
+            "schema_version": "openmed.agent.journal_retirement_plan.v1",
+            "record": record.to_dict(),
+            "minimum_age_seconds": policy.minimum_age_seconds,
+            **{k: v for k, v in values.items() if k not in {"record", "policy"}},
+        }
+        unsigned["checkpoint_digests"] = list(values["checkpoint_digests"])
+        return JournalRetirementPlan(plan_digest=_digest(unsigned), **values)
+
+    def retire(
+        self, plan: JournalRetirementPlan, *, confirmation: str, now: int
+    ) -> RetiredJournalRecord:
+        """Publish a sealed terminal record before confirmed checkpoint cleanup.
+
+        A restart after publication loads only the record, even if deletion was
+        interrupted. Repeating the same confirmed plan finishes cleanup safely.
+        """
+
+        if type(plan) is not JournalRetirementPlan:
+            raise RecoveryError("invalid_retirement_plan", "plan")
+        if (
+            type(confirmation) is not str
+            or not confirmation.isascii()
+            or not hmac.compare_digest(confirmation, plan.confirmation_token)
+        ):
+            raise RecoveryError("confirmation_required", "plan")
+        _require_non_negative_int(now, "now")
+        if now < plan.planned_at:
+            raise RecoveryError("clock_moved_backwards", "now")
+        try:
+            with self._locked():
+                current = self._load()
+                if isinstance(current, RetiredJournalRecord):
+                    if (
+                        current != plan.record
+                        or self._binding() != plan.journal_binding
+                    ):
+                        raise RecoveryError("retirement_plan_stale", "plan")
+                else:
+                    refreshed = self._plan_retirement(plan.policy, now=plan.planned_at)
+                    if refreshed != plan:
+                        raise RecoveryError("retirement_plan_stale", "plan")
+                    # Commit authority atomically, and sync it before any unlink.
+                    self._publish_retired(plan.record)
+                # Never delete an unknown file or follow a supplied symlink.
+                paths = []
+                for entry in self._directory.iterdir():
+                    if _CHECKPOINT_FILE_RE.fullmatch(entry.name):
+                        checkpoint = self._read_checkpoint(entry)
+                        if checkpoint.sequence >= plan.record.checkpoint_count:
+                            raise RecoveryError("unexpected_journal_entry", "journal")
+                        if (
+                            checkpoint.checkpoint_digest
+                            != plan.checkpoint_digests[checkpoint.sequence]
+                        ):
+                            raise RecoveryError("retirement_plan_stale", "plan")
+                        paths.append(entry)
+                    elif entry.name not in {"retired.json", ".journal-lock"}:
+                        if not entry.name.startswith(".checkpoint-"):
+                            raise RecoveryError("unexpected_journal_entry", "journal")
+                # Also sync the committed record on retry before cleanup. A prior
+                # attempt may have failed during the publication directory sync.
+                _fsync_directory(self._directory)
+                for path in sorted(paths):
+                    path.unlink()
+                _fsync_directory(self._directory)
+                return plan.record
+        except RecoveryError:
+            raise
+        except OSError:
+            raise RecoveryError("retirement_io_failed", "journal") from None
+
+    def _binding(self) -> str:
+        metadata = self._directory.lstat()
+        return _digest({"device": metadata.st_dev, "inode": metadata.st_ino})
+
+    def _publish_retired(self, record: RetiredJournalRecord) -> None:
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=".checkpoint-", dir=self._directory
+        )
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(record.to_json().encode("ascii"))
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self._directory / "retired.json")
+            _fsync_directory(self._directory)
+        finally:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+
+    def _read_retired(self) -> RetiredJournalRecord:
+        path = self._directory / "retired.json"
+        try:
+            metadata = path.lstat()
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                raise RecoveryError("unsafe_retired_file", "journal")
+            if metadata.st_size > MAX_CHECKPOINT_BYTES:
+                raise RecoveryError("retired_record_too_large", "journal")
+            return RetiredJournalRecord.from_json(path.read_bytes())
+        except OSError:
+            raise RecoveryError("retired_read_failed", "journal") from None
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        # A permanent private lock serializes append, reads and retirement across
+        # instances/processes. Never unlink it: doing so creates two lock domains.
+        descriptor = None
+        try:
+            mode = self._directory.lstat().st_mode
+            if not stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
+                raise RecoveryError("unsafe_journal", "journal")
+            flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(self._directory / ".journal-lock", flags, 0o600)
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise RecoveryError("unsafe_journal_lock", "journal")
+            if sys.platform == "win32":
+                import msvcrt
+
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"0")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+        except (OSError, RecoveryError, KeyboardInterrupt, SystemExit) as error:
+            if descriptor is not None:
+                os.close(descriptor)
+            if not isinstance(error, OSError):
+                raise
+            raise RecoveryError("journal_lock_failed", "journal") from None
+        try:
+            yield
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
     def _read_checkpoint(self, path: Path) -> RecoveryCheckpoint:
         try:
@@ -728,7 +1163,7 @@ def validate_checkpoint_lineage(
 
 
 def recover_workflow(
-    checkpoints: Iterable[RecoveryCheckpoint],
+    checkpoints: Iterable[RecoveryCheckpoint] | RetiredJournalRecord,
     observations: Iterable[EffectObservation],
     *,
     now: int,
@@ -739,9 +1174,15 @@ def recover_workflow(
     calling this function. No callback or network access occurs here.
     """
 
+    _require_non_negative_int(now, "now")
+    if isinstance(checkpoints, RetiredJournalRecord):
+        return RecoveryDecision.create(
+            disposition=RecoveryDisposition.RETIRED,
+            reason=RecoveryReason.JOURNAL_RETIRED,
+            source_checkpoint_digest=checkpoints.final_checkpoint_digest,
+        )
     lineage = validate_checkpoint_lineage(checkpoints)
     current = lineage[-1]
-    _require_non_negative_int(now, "now")
     if current.phase is RecoveryPhase.COMPLETED:
         return RecoveryDecision.create(
             disposition=RecoveryDisposition.COMPLETE,
@@ -779,7 +1220,10 @@ def recover_workflow(
                 ambiguous = True
             else:
                 committed.append(
-                    (effect.action_id.serialize(), effect.commit_evidence_digest)
+                    (
+                        effect.action_id.serialize(),
+                        cast(str, effect.commit_evidence_digest),
+                    )
                 )
             continue
         if observation.state is ObservationState.COMMITTED:
@@ -863,6 +1307,8 @@ def advance_checkpoint(
         raise RecoveryError("invalid_checkpoint", "checkpoint")
     if type(decision) is not RecoveryDecision:
         raise RecoveryError("invalid_decision", "decision")
+    if decision.disposition is RecoveryDisposition.RETIRED:
+        raise RecoveryError("journal_retired", "decision")
     if decision.source_checkpoint_digest != checkpoint.checkpoint_digest:
         raise RecoveryError("decision_checkpoint_mismatch", "decision")
     if checkpoint.phase is RecoveryPhase.COMPLETED:
@@ -1145,6 +1591,14 @@ def _validate_decision_sequences(decision: RecoveryDecision) -> None:
             or decision.compensation_effect_ids
         ):
             raise RecoveryError("invalid_complete_decision", "decision")
+    elif decision.disposition is RecoveryDisposition.RETIRED:
+        if (
+            decision.reason is not RecoveryReason.JOURNAL_RETIRED
+            or decision.retry_effect_ids
+            or decision.compensation_effect_ids
+            or decision.committed_effects
+        ):
+            raise RecoveryError("invalid_retired_decision", "decision")
     elif (
         decision.reason
         not in {
