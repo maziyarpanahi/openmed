@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline exact-source v3.1 agent candidate manifest runner,
+  `openmed gates agent-release` and a release script with deterministic
+  HMAC-signed, content-free gate decisions and fail-closed source checks (#3776).
+
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
