@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from .access_events import (
+    ACCESS_EVENT_SCHEMA_VERSION,
+    AccessEvent,
+    AccessEventError,
+    AccessEventSink,
+    LocalAccessEventSink,
+    MemoryAccessEventSink,
+)
 from .access_tickets import (
     ACCESS_TICKET_DENIAL_SCHEMA_VERSION,
     ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM,
@@ -69,6 +77,12 @@ from .grants import (
 )
 
 __all__ = [
+    "ACCESS_EVENT_SCHEMA_VERSION",
+    "AccessEvent",
+    "AccessEventError",
+    "AccessEventSink",
+    "LocalAccessEventSink",
+    "MemoryAccessEventSink",
     "ACCESS_TICKET_DENIAL_SCHEMA_VERSION",
     "ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM",
     "CAPABILITY_GRANT_SCHEMA_VERSION",
