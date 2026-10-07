@@ -292,7 +292,9 @@ def test_nix_dev_shell_exposes_secured_reference_template_dependencies() -> None
     assert "packageOverrides = final: prev:" in shell
     assert "fsspec = prev.fsspec.overridePythonAttrs" in shell
     assert 'version = "2026.6.0";' in shell
-    assert "sha256-9brBRTEP4w4W4Ucb1oQLLZkNYJ6HIlHX5nQkGCKr8Bo=" in shell
+    assert "src = pkgs.fetchurl" in shell
+    assert "filesystem_spec/archive/refs/tags/2026.6.0.tar.gz" in shell
+    assert "sha256-Ir9N9QJDvHsfck5q3zgx9vfHky6XXpgsAJA6uhoHrgE=" in shell
     packages = shell.split("devPythonPackages =", 1)[1].split("pythonPath =", 1)[0]
     assert "\n              jinja2\n" in packages
     assert "\n              fsspec\n" in packages

@@ -70,12 +70,16 @@
             packageOverrides = final: prev: {
               fsspec = prev.fsspec.overridePythonAttrs (old: {
                 version = "2026.6.0";
-                src = pkgs.fetchPypi {
-                  pname = "fsspec";
-                  version = "2026.6.0";
-                  hash = "sha256-9brBRTEP4w4W4Ucb1oQLLZkNYJ6HIlHX5nQkGCKr8Bo=";
+                # PyPI omits runnable tests; retain the upstream release
+                # archive so the inherited pytest check still exercises them.
+                src = pkgs.fetchurl {
+                  url = "https://github.com/fsspec/filesystem_spec/archive/refs/tags/2026.6.0.tar.gz";
+                  hash = "sha256-Ir9N9QJDvHsfck5q3zgx9vfHky6XXpgsAJA6uhoHrgE=";
                 };
                 nativeCheckInputs = old.nativeCheckInputs ++ [ final.jinja2 ];
+                meta = old.meta // {
+                  changelog = "https://github.com/fsspec/filesystem_spec/blob/2026.6.0/docs/source/changelog.rst";
+                };
               });
             };
           };
