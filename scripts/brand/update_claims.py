@@ -99,6 +99,19 @@ def _read_version() -> str:
     return match.group(1)
 
 
+def _read_version_date(version: str) -> dt.date:
+    """Date the source-version claim from its candidate changelog entry."""
+    source = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    match = re.search(
+        rf"^## \[{re.escape(version)}\] - ([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})$",
+        source,
+        re.MULTILINE,
+    )
+    if not match:
+        raise RuntimeError("package version has no dated changelog entry")
+    return dt.date.fromisoformat(match.group(1))
+
+
 def _read_entity_types() -> list[str]:
     source = (REPO_ROOT / "openmed/core/model_registry.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -203,6 +216,7 @@ def build_registry() -> dict[str, Any]:
     manifest = _read_model_manifest()
     entity_types = _read_entity_types()
     version = _read_version()
+    version_date = _read_version_date(version)
     github = _read_github_evidence()
 
     claims = {
@@ -214,6 +228,8 @@ def build_registry() -> dict[str, Any]:
             source="openmed/__about__.py",
             public_wording=f"OpenMed SDK {version}",
             qualification="Package version, not proof of PyPI publication.",
+            as_of=version_date.isoformat(),
+            review_by=(version_date + dt.timedelta(days=92)).isoformat(),
         ),
         "github_stars_snapshot": _claim(
             status="verified",
@@ -623,7 +639,9 @@ def build_registry() -> dict[str, Any]:
 
     return {
         "schema_version": 2,
-        "generated_at": max(MODEL_MANIFEST_AS_OF, github["captured_at"][:10]),
+        "generated_at": max(
+            MODEL_MANIFEST_AS_OF, github["captured_at"][:10], version_date.isoformat()
+        ),
         "generation": {
             "command": "python scripts/brand/update_claims.py --write",
             "network": "forbidden",

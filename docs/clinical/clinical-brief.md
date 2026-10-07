@@ -19,8 +19,12 @@ history or assumes that de-identification is evidence approval.
 `BriefContext` contains the existing `EvidencePacket`, its content digest, one
 `BriefFact` per reference, a calibrated local three-class NLI callback with its
 `NLIThresholds`, and a local privacy detector. The callback must identify the
-same calibration as its thresholds. A trained default NLI artifact is a separate
-release prerequisite; this API does not invent one or fall back to a heuristic.
+same calibration as its thresholds. Existing, independently qualified local
+checkpoints or caller-supplied calibrated providers can satisfy this contract;
+training or publishing a new OpenMed model is not a feature or SDK-release
+prerequisite. This API does not invent a default artifact, manufacture calibrated
+scores, or fall back to a heuristic. Missing evidence or providers still produce
+typed refusal rather than unsafe output.
 
 Before reviewing references, calculate `brief_policy_fingerprint(text, facts,
 profile)`. This binds the review history to the exact de-identified text,

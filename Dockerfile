@@ -33,15 +33,20 @@ RUN apt-get update \
 
 COPY --from=python-runtime /usr/local /usr/local
 
-COPY . /app
+COPY LICENSE NOTICE README.md pyproject.toml uv.lock models.jsonl /app/
+COPY openmed /app/openmed
+COPY gates/baseline.json gates/registry_state.json /app/gates/
+COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/
 
 RUN python -m pip install --no-cache-dir --upgrade \
-        "pip==26.1.2" \
+        "pip==26.2.0" \
         "setuptools==83.0.0" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
-    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
-    && pip install --no-cache-dir ".[hf,journey,mcp,service]"
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0,<3" \
+    && pip install --no-cache-dir ".[hf,journey,mcp,service]" \
+    && python -m pip check \
+    && python -m pip uninstall --yes pip
 
 EXPOSE 8080
 
