@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now requires MongoDB Server 4.4 or newer; the base SDK remains unaffected.
 - Refresh the identical service-container UUID library pin to the available
   Debian revision without relaxing package verification or image scan gates.
+- Align the Nix development shell with secured reference-template dependencies
+  while retaining the upstream release archive's runnable tests.
+- Reduce static API extraction work for private and unexported definitions,
+  preserving public signatures and fingerprints, import-free operation and
+  the existing performance gate.
 
 ### Added
 
