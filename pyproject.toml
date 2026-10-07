@@ -58,6 +58,7 @@ dev = [
   "pytest-timeout>=2.3",
   "huggingface-hub>=0.30",
   "jsonschema>=4.0",
+  "jinja2>=3.1.6",
   "mcp>=1.27,<2",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
@@ -75,7 +76,7 @@ dev = [
   "polars>=0.20",
   "python-dateutil>=2.8",
   "hypothesis>=6.100",
-  "fsspec>=2025.9.0",
+  "fsspec>=2026.6.0",
   "fonttools[woff]==4.61.1",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
@@ -148,10 +149,14 @@ columnar = [
 ]
 
 dask = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "dask[dataframe]>=2024.8",
 ]
 
 dagster = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "dagster>=1.8,<2",
 ]
 
@@ -199,6 +204,9 @@ email-msg-gpl = [
 ]
 
 multimodal = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "torch>=2.13.0",
   "numpy>=1.26",
   "openpyxl>=3.1,<4",
   "onnx>=1.21",
@@ -231,15 +239,26 @@ zh-pkuseg = [
 
 zh-hanlp = [
   "hanlp>=2.1,<3",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "torch>=2.13.0",
 ]
 
 awq = [
+  "fsspec>=2026.6.0; sys_platform == 'linux'",
+  "jinja2>=3.1.6; sys_platform == 'linux'",
   "autoawq==0.2.9; sys_platform == 'linux'",
+  "datasets>=5.0.1; sys_platform == 'linux'",
+  "torch>=2.13.0; sys_platform == 'linux'",
   "transformers==5.12.1; sys_platform == 'linux'",
 ]
 
 gptq = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "auto-gptq>=0.7.1",
+  "datasets>=5.0.1",
+  "torch>=2.13.0",
 ]
 
 grounding = [
@@ -254,6 +273,7 @@ langchain = [
 
 langgraph = [
   "langgraph>=0.2,<2",
+  "langgraph-sdk>=0.4.4",
 ]
 
 haystack = [
@@ -261,20 +281,31 @@ haystack = [
 ]
 
 llamaindex = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "llama-index-core>=0.10,<1",
+  "banks>=2.4.5",
 ]
 
 agents = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "langchain-core>=0.2,<2",
   "langgraph>=0.2,<2",
+  "langgraph-sdk>=0.4.4",
   "llama-index-core>=0.10,<1",
+  "banks>=2.4.5",
 ]
 
 beam = [
   "apache-beam>=2.73,<3",
+  "pymongo>=4.18.2",
+  "h2>=4.4.1",
 ]
 
 airflow = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "apache-airflow>=3.2.2,<4",
 ]
 
@@ -288,22 +319,31 @@ kafka = [
 ]
 
 prefect = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "prefect>=3.7,<4",
+  "h2>=4.4.1",
+  "oauthlib>=4.0.0",
 ]
 
 cloud = [
-  "fsspec>=2025.9.0",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "s3fs>=2025.9.0",
   "gcsfs>=2025.9.0",
   "adlfs>=2025.8.0",
+  "oauthlib>=4.0.0",
 ]
 
 journey = [
-  "fsspec>=2025.9.0",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "pg8000>=1.31.5,<2",
 ]
 
 ray = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "ray[data]>=2.30,<3",
 ]
 
@@ -318,6 +358,9 @@ snowflake = [
 ]
 
 hf = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "torch>=2.13.0",
   "transformers>=4.50",
   "huggingface-hub>=0.30",
   "accelerate>=0.29",
@@ -346,6 +389,8 @@ service = [
 
 # Client libraries only. OpenMed never installs Triton or KServe servers.
 triton = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "grpcio>=1.64",
   "httpx>=0.27",
   "numpy>=1.26",
@@ -358,11 +403,15 @@ operator = [
 ]
 
 gliner = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "gliner[tokenizers]>=0.2.0",
-  "torch>=2.0"
+  "torch>=2.13.0"
 ]
 
 mlx = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
@@ -374,21 +423,27 @@ mlx = [
 ]
 
 coreml = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "coremltools>=8.0",
   "huggingface-hub>=0.30",
-  "torch>=2.0",
+  "torch>=2.13.0",
   "transformers>=4.50",
 ]
 
 onnx = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "onnx>=1.21",
   "onnxruntime>=1.16",
   "onnxscript>=0.1.0",
-  "torch>=2.0",
+  "torch>=2.13.0",
   "transformers>=4.50",
 ]
 
 onnx-runtime = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "huggingface-hub>=0.30",
   "numpy>=1.26",
   "onnxruntime>=1.16",
@@ -399,12 +454,16 @@ onnx-runtime = [
 # graph-building, Torch, and Transformers dependencies; use onnx-runtime when
 # the application also needs OpenMed's Hub download path.
 edge-sbc = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "numpy>=1.26",
   "onnxruntime>=1.16",
   "tokenizers>=0.15",
 ]
 
 openvino = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
   "openvino>=2024.0",
   "nncf>=2.10",
   "onnxruntime>=1.16",
@@ -437,6 +496,16 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "banks>=2.4.5",
+  "langgraph-sdk>=0.4.4",
+  "pymongo>=4.18.2",
+  "datasets>=5.0.1",
+  "h2>=4.4.1",
+  "oauthlib>=4.0.0",
+  # Keep transitive optional model backends above the checkpoint/native-op fixes.
+  "torch>=2.13.0",
   "tornado>=6.5.9",
   "urllib3>=2.8.0",
   "virtualenv>=21.7.13",
