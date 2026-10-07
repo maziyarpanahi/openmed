@@ -286,6 +286,19 @@ def test_reference_templates_reject_private_attribute_access(
         fsspec.filesystem("reference", fo=spec, simple_templates=False)
 
 
+def test_nix_dev_shell_exposes_secured_reference_template_dependencies() -> None:
+    source = (ROOT / "flake.nix").read_text(encoding="utf-8")
+    shell = source.split("devShells = forAllSystems", 1)[1]
+    assert "packageOverrides = final: prev:" in shell
+    assert "fsspec = prev.fsspec.overridePythonAttrs" in shell
+    assert 'version = "2026.6.0";' in shell
+    assert "sha256-9brBRTEP4w4W4Ucb1oQLLZkNYJ6HIlHX5nQkGCKr8Bo=" in shell
+    packages = shell.split("devPythonPackages =", 1)[1].split("pythonPath =", 1)[0]
+    assert "\n              jinja2\n" in packages
+    assert "\n              fsspec\n" in packages
+    assert "nativeCheckInputs = old.nativeCheckInputs ++ [ final.jinja2 ];" in shell
+
+
 def test_reference_generator_retains_safe_variable_interpolation() -> None:
     import fsspec
 
