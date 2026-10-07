@@ -76,6 +76,13 @@ def test_runtime_images_omit_unrelated_sources_and_remove_installer() -> None:
         )
 
 
+def test_runtime_uuid_pin_uses_available_repository_revision() -> None:
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        assert '"libuuid1=2.42.4-1"' in source
+        assert "libuuid1=2.42.3-1" not in source
+
+
 def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():
     content = WORKFLOW.read_text(encoding="utf-8")
 

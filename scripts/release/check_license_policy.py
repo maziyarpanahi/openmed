@@ -106,6 +106,7 @@ REVIEWED_LICENSES = {
     "httpx": "BSD-3-Clause",
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
+    "jinja2": "BSD-3-Clause",
     "kopf": "MIT",
     "langchain-core": "MIT",
     "langgraph": "MIT",

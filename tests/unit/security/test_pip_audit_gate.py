@@ -169,13 +169,13 @@ def _model_dependency_metadata() -> tuple[dict, dict]:
     return project, lock
 
 
-def _torch_extras(lock: dict) -> set[str]:
+def _dependency_extras(lock: dict, dependency: str) -> set[str]:
     """Follow selected extra edges, including every locked platform variant."""
     packages: dict[str, list[dict]] = {}
     for package in lock["package"]:
         packages.setdefault(package["name"], []).append(package)
     root = packages["openmed"][0]
-    torch_extras = set()
+    dependency_extras = set()
     for extra, requirements in root["optional-dependencies"].items():
         pending = list(requirements)
         seen: set[tuple[str, tuple[str, ...]]] = set()
@@ -187,15 +187,126 @@ def _torch_extras(lock: dict) -> set[str]:
             if key in seen:
                 continue
             seen.add(key)
-            if name == "torch":
-                torch_extras.add(extra)
+            if name == dependency:
+                dependency_extras.add(extra)
                 break
             for package in packages.get(name, []):
                 pending.extend(package.get("dependencies", []))
                 optional = package.get("optional-dependencies", {})
                 for selected in selected_extras:
                     pending.extend(optional.get(selected, []))
-    return torch_extras
+    return dependency_extras
+
+
+def _torch_extras(lock: dict) -> set[str]:
+    return _dependency_extras(lock, "torch")
+
+
+def test_optional_fsspec_dependency_closure_has_safe_floor() -> None:
+    project, lock = _model_dependency_metadata()
+    extras = _dependency_extras(lock, "fsspec")
+    assert {"dev", "cloud", "journey", "edge-sbc", "onnx-runtime"} <= extras
+    for extra in extras:
+        floors = [
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+            if Requirement(value).name == "fsspec"
+        ]
+        assert len(floors) == 1, extra
+        assert "2026.4.0" not in floors[0].specifier, extra
+        assert "2026.6.0" in floors[0].specifier, extra
+        if extra == "awq":
+            assert floors[0].marker is not None
+            assert floors[0].marker.evaluate({"sys_platform": "linux"})
+            assert not floors[0].marker.evaluate({"sys_platform": "darwin"})
+            assert not floors[0].marker.evaluate({"sys_platform": "win32"})
+
+
+def test_fsspec_profiles_require_patched_jinja_sandbox() -> None:
+    project, lock = _model_dependency_metadata()
+    for extra in _dependency_extras(lock, "fsspec"):
+        floors = {
+            requirement.name: requirement
+            for value in project["project"]["optional-dependencies"][extra]
+            for requirement in [Requirement(value)]
+        }
+        jinja = floors["jinja2"]
+        assert "3.1.5" not in jinja.specifier, extra
+        assert "3.1.6" in jinja.specifier, extra
+        assert jinja.marker == floors["fsspec"].marker, extra
+    resolved = [item for item in lock["package"] if item["name"] == "jinja2"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("3.1.6") for item in resolved)
+    constraints = {
+        requirement.name: requirement
+        for value in project["tool"]["uv"]["constraint-dependencies"]
+        for requirement in [Requirement(value)]
+    }
+    assert "3.1.5" not in constraints["jinja2"].specifier
+    assert "3.1.6" in constraints["jinja2"].specifier
+    assert not {"fsspec", "jinja2"} & {
+        Requirement(value).name for value in project["project"]["dependencies"]
+    }
+
+
+@pytest.mark.parametrize("sink", ["refs", "templates", "gen"])
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "range.__class__.__mro__",
+        "''.__class__.__mro__",
+        '("{0.__class__.__mro__}"|attr("format"))("")',
+    ],
+)
+def test_reference_templates_reject_private_attribute_access(
+    sink: str, expression: str
+) -> None:
+    import fsspec
+    from jinja2.exceptions import SecurityError
+
+    template = "{{ " + expression + " }}"
+    spec: dict = {"version": 1, "refs": {}}
+    if sink == "refs":
+        spec["templates"] = {"root": "memory://"}
+        spec["refs"] = {"chunk": [template]}
+    elif sink == "templates":
+        spec["templates"] = {"target": template}
+        spec["refs"] = {"chunk": ["{{ target }}"]}
+    else:
+        spec["gen"] = [
+            {
+                "key": template,
+                "url": "memory://chunk/{{ i }}",
+                "offset": "0",
+                "length": "1",
+                "dimensions": {"i": [0]},
+            }
+        ]
+    with pytest.raises(SecurityError):
+        fsspec.filesystem("reference", fo=spec, simple_templates=False)
+
+
+def test_reference_generator_retains_safe_variable_interpolation() -> None:
+    import fsspec
+
+    spec = {
+        "version": 1,
+        "refs": {},
+        "gen": [
+            {
+                "key": "chunk/{{ i }}",
+                "url": "memory://chunk/{{ i }}",
+                "offset": "0",
+                "length": "1",
+                "dimensions": {"i": [0, 1]},
+            }
+        ],
+    }
+    fs = fsspec.filesystem("reference", fo=spec, simple_templates=False)
+    assert fs.references == {
+        "chunk/0": ["memory://chunk/0", 0, 1],
+        "chunk/1": ["memory://chunk/1", 0, 1],
+    }
 
 
 def test_optional_torch_dependency_closure_has_safe_floor() -> None:
@@ -274,6 +385,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
     [
         ("banks", "2.4.4", "2.4.5", ("agents", "llamaindex")),
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
+        ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
     ],

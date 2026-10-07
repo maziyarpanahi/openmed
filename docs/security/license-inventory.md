@@ -46,7 +46,8 @@ a dependency also declared in another extra.
 | `extract-msg` | `email-msg-gpl` | `GPL-3.0-only` |
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
-| `fsspec` | `cloud` | `BSD-3-Clause` |
+| `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
+| `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
 | `gitpython` | `docs` | `BSD-3-Clause` |
 | `gliner` | `gliner` | `Apache-2.0` |

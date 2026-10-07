@@ -21,6 +21,26 @@ an active ignore fail CI so exceptions stay visible. Each ignore must include:
 Expired ignores fail CI. Remove an ignore as soon as the dependency can be
 upgraded.
 
+## Optional storage dependencies
+
+Every optional profile that resolves `fsspec` requires `fsspec>=2026.6.0` in
+published package metadata as well as the frozen dependency graph. The same
+profiles require `jinja2>=3.1.6`, since an older sandbox can still admit
+[private traversal through the attr/format filter](https://github.com/pallets/jinja/security/advisories/GHSA-cpwx-vrp4-4pq7).
+This includes
+model and orchestration profiles that reach filesystem support transitively;
+the base SDK still does not install it. The AWQ floor retains its Linux-only
+marker. The frozen cloud profile pairs fsspec 2026.6.0 with s3fs 2026.6.0 to
+respect the datasets and S3 adapter version bounds.
+
+The floor addresses
+[reference-template code execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc).
+Synthetic regressions cover all three reference-template paths, rejecting
+private attribute traversal and indirect format access while retaining ordinary
+variable interpolation.
+Filesystem initialization happens before downstream protocol checks, so those
+checks are not a substitute for installing the patched dependency.
+
 ## Optional model runtimes
 
 Torch-backed extras require `torch>=2.13.0`, including extras that bring Torch

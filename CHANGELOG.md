@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.0] - 2026-10-05
 
+### Security and build fixes
+
+- Require patched fsspec reference-template handling across affected optional
+  profiles, align the frozen S3 adapter without overriding upstream bounds, and
+  retain safe template interpolation with synthetic security regressions.
+- Refresh the identical service-container UUID library pin to the available
+  Debian revision without relaxing package verification or image scan gates.
+
 ### Added
 
 - Offline synthetic clinical-brief walkthrough, golden pipeline test, explicit
