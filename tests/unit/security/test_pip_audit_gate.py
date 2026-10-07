@@ -387,7 +387,9 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
+        ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
+        ("pymongo", "4.18.1", "4.18.2", ("beam",)),
     ],
 )
 def test_fixable_optional_dependency_floors_are_published_and_locked(
@@ -427,3 +429,25 @@ def test_awq_dataset_floor_retains_linux_only_installation() -> None:
     assert floor.marker.evaluate({"sys_platform": "linux"})
     assert not floor.marker.evaluate({"sys_platform": "darwin"})
     assert not floor.marker.evaluate({"sys_platform": "win32"})
+
+
+@pytest.mark.parametrize(
+    ("package", "unsafe", "fixed"),
+    [("langgraph-sdk", "0.4.3", "0.4.4"), ("pymongo", "4.18.1", "4.18.2")],
+)
+def test_optional_auth_and_database_closures_require_patched_versions(
+    package: str, unsafe: str, fixed: str
+) -> None:
+    project, lock = _model_dependency_metadata()
+    extras = _dependency_extras(lock, package)
+    assert extras
+    assert "dev" not in extras
+    for extra in extras:
+        floors = [
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+            if Requirement(value).name == package
+        ]
+        assert len(floors) == 1, (package, extra)
+        assert unsafe not in floors[0].specifier, (package, extra)
+        assert fixed in floors[0].specifier, (package, extra)

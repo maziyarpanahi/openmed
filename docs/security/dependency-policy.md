@@ -41,6 +41,20 @@ variable interpolation.
 Filesystem initialization happens before downstream protocol checks, so those
 checks are not a substitute for installing the patched dependency.
 
+## Optional graph and Beam dependencies
+
+The `langgraph` and `agents` profiles require `langgraph-sdk>=0.4.4` to address
+[resource-scoped authorization action handling](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-fvww-7h3r-vfhp).
+The `beam` profile requires `pymongo>=4.18.2` for the upstream URI host-parsing
+and BSON buffer-size fixes. Both floors are published and mirrored in the frozen
+resolver constraints without overriding parent dependency bounds. Neither
+package is added to the base or development-only environment.
+
+PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
+storage API, but callers using upstream Beam MongoDB IO must account for that
+[driver compatibility change](https://www.mongodb.com/docs/languages/python/pymongo-driver/current/reference/upgrade/).
+No scanner threshold or vulnerability exception is changed by these upgrades.
+
 ## Optional model runtimes
 
 Torch-backed extras require `torch>=2.13.0`, including extras that bring Torch

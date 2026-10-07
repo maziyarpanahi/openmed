@@ -48,6 +48,8 @@ a dependency also declared in another extra.
 | `fastapi` | `service` | `MIT` |
 | `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
 | `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
+| `langgraph-sdk` | `agents, langgraph` | `MIT` |
+| `pymongo` | `beam` | `Apache-2.0` |
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
 | `gitpython` | `docs` | `BSD-3-Clause` |
 | `gliner` | `gliner` | `Apache-2.0` |

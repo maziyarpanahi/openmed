@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Require patched fsspec reference-template handling across affected optional
   profiles, align the frozen S3 adapter without overriding upstream bounds, and
   retain safe template interpolation with synthetic security regressions.
+- Raise optional graph authorization and Beam MongoDB driver floors to their
+  patched releases without overriding parent bounds. Upstream Beam MongoDB IO
+  now requires MongoDB Server 4.4 or newer; the base SDK remains unaffected.
 - Refresh the identical service-container UUID library pin to the available
   Debian revision without relaxing package verification or image scan gates.
 

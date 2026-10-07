@@ -273,6 +273,7 @@ langchain = [
 
 langgraph = [
   "langgraph>=0.2,<2",
+  "langgraph-sdk>=0.4.4",
 ]
 
 haystack = [
@@ -291,12 +292,14 @@ agents = [
   "jinja2>=3.1.6",
   "langchain-core>=0.2,<2",
   "langgraph>=0.2,<2",
+  "langgraph-sdk>=0.4.4",
   "llama-index-core>=0.10,<1",
   "banks>=2.4.5",
 ]
 
 beam = [
   "apache-beam>=2.73,<3",
+  "pymongo>=4.18.2",
   "h2>=4.4.1",
 ]
 
@@ -496,6 +499,8 @@ constraint-dependencies = [
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "banks>=2.4.5",
+  "langgraph-sdk>=0.4.4",
+  "pymongo>=4.18.2",
   "datasets>=5.0.1",
   "h2>=4.4.1",
   "oauthlib>=4.0.0",
