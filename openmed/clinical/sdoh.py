@@ -28,6 +28,11 @@ from .context import (
     resolve_negation,
     resolve_temporality,
 )
+from .sdoh_completeness import (
+    SDOHCategoryResult,
+    SDOHCategoryState,
+    audit_sdoh_completeness,
+)
 from .status_vocab import (
     normalize_employment_status,
     normalize_living_status,
@@ -93,6 +98,7 @@ _DOUBLE_NEGATED_UNEMPLOYMENT_RE = re.compile(
 )
 
 SpanOffset = tuple[int, int]
+_LANGUAGE_RE = re.compile(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*")
 
 
 @dataclass(frozen=True)
@@ -187,6 +193,7 @@ class DeterminantExtractorRegistry:
 
     def __init__(self) -> None:
         self._extractors: dict[str, DeterminantExtractor] = {}
+        self._languages: dict[str, tuple[str, ...]] = {}
 
     def register(
         self,
@@ -194,6 +201,7 @@ class DeterminantExtractorRegistry:
         extractor: DeterminantExtractor,
         *,
         replace: bool = False,
+        languages: Sequence[str] | None = None,
     ) -> None:
         """Register a callable for one determinant.
 
@@ -201,6 +209,9 @@ class DeterminantExtractorRegistry:
             determinant: Stable non-empty registry key.
             extractor: Callable satisfying :class:`DeterminantExtractor`.
             replace: Replace an existing extractor when true.
+            languages: Explicit supported language tags for the language-aware
+                entry point. Omission leaves support undeclared; the legacy
+                dispatcher still runs the extractor as before.
 
         Raises:
             TypeError: If ``extractor`` is not callable.
@@ -212,12 +223,16 @@ class DeterminantExtractorRegistry:
             raise TypeError("determinant extractor must be callable")
         if not replace and key in self._extractors:
             raise ValueError(f"determinant extractor already registered for {key!r}")
+        declared = _declared_sdoh_languages(languages)
         self._extractors[key] = extractor
+        self._languages[key] = declared
 
     def unregister(self, determinant: str) -> None:
         """Remove the extractor registered for ``determinant``."""
 
-        del self._extractors[_required_text(determinant, "determinant")]
+        key = _required_text(determinant, "determinant")
+        del self._extractors[key]
+        del self._languages[key]
 
     def available(self) -> tuple[str, ...]:
         """Return registered determinant keys in deterministic order."""
@@ -228,6 +243,15 @@ class DeterminantExtractorRegistry:
         """Return a stable snapshot of registered extractors."""
 
         return tuple((key, self._extractors[key]) for key in sorted(self._extractors))
+
+    def language_items(
+        self,
+    ) -> tuple[tuple[str, DeterminantExtractor, tuple[str, ...]], ...]:
+        """Return extractors and their explicit language declarations together."""
+        return tuple(
+            (key, self._extractors[key], self._languages[key])
+            for key in sorted(self._extractors)
+        )
 
     def __len__(self) -> int:
         return len(self._extractors)
@@ -241,10 +265,21 @@ def register_determinant_extractor(
     extractor: DeterminantExtractor,
     *,
     replace: bool = False,
+    languages: Sequence[str] | None = None,
 ) -> None:
-    """Register a process-wide determinant extractor."""
+    """Register a process-wide determinant extractor.
 
-    _DETERMINANT_EXTRACTORS.register(determinant, extractor, replace=replace)
+    Args:
+        determinant: Stable registry category.
+        extractor: Trusted local callback that emits findings.
+        replace: Replace an existing extractor when true.
+        languages: Explicit supported tags; omitted support is undeclared for
+            :func:`extract_sdoh_with_language` only.
+    """
+
+    _DETERMINANT_EXTRACTORS.register(
+        determinant, extractor, replace=replace, languages=languages
+    )
 
 
 def unregister_determinant_extractor(determinant: str) -> None:
@@ -257,6 +292,256 @@ def available_determinant_extractors() -> tuple[str, ...]:
     """Return process-wide determinant keys in deterministic order."""
 
     return _DETERMINANT_EXTRACTORS.available()
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class SDOHExtractionResult:
+    """Protected findings plus value-free language-processing category results.
+
+    Args:
+        findings: Original typed findings for caller-owned downstream handling.
+            Finding values and extents may be sensitive; do not log them.
+        category_results: One processing result per configured determinant.
+    """
+
+    findings: tuple[SDOHFinding, ...]
+    category_results: tuple[SDOHCategoryResult, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.findings) is not tuple or any(
+            type(item) is not SDOHFinding for item in self.findings
+        ):
+            raise ValueError("invalid_sdoh_findings")
+        if type(self.category_results) is not tuple or any(
+            type(item) is not SDOHCategoryResult for item in self.category_results
+        ):
+            raise ValueError("invalid_sdoh_category_results")
+        audit = audit_sdoh_completeness(
+            (item.category for item in self.category_results), self.category_results
+        )
+        counts: dict[str, int] = {}
+        for finding in self.findings:
+            counts[finding.category] = counts.get(finding.category, 0) + 1
+        if set(counts) - {item.category for item in audit.categories} or any(
+            counts.get(item.category, 0) != item.finding_count
+            for item in audit.categories
+        ):
+            raise ValueError("invalid_sdoh_finding_counts")
+        object.__setattr__(self, "category_results", audit.categories)
+
+    def __repr__(self) -> str:
+        return (
+            f"SDOHExtractionResult(findings={len(self.findings)}, "
+            f"categories={len(self.category_results)})"
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return categories, processing states, counts and source offsets only."""
+        return {
+            "schema_version": 1,
+            "finding_count": len(self.findings),
+            "categories": [item.to_dict() for item in self.category_results],
+            "findings": [
+                {"category": item.category, "span": list(item.span)}
+                for item in self.findings
+            ],
+        }
+
+
+def extract_sdoh_with_language(
+    text: str,
+    spans: Iterable[Any] = (),
+    sections: Iterable[Mapping[str, Any] | object] | None = None,
+    *,
+    language: str | None,
+) -> SDOHExtractionResult:
+    """Extract only explicitly supported categories and report every outcome.
+
+    Args:
+        text: Caller-owned clinical text, never copied into the audit output.
+        spans: Upstream candidate spans with character offsets.
+        sections: Optional canonical Social History section boundaries.
+        language: Explicit language tag or caller-provided ``None``. No language
+            detection runs; missing support yields ``unsupported``. A declared
+            base tag covers its regional tags, for example ``en``/``en-US``.
+
+    Returns:
+        Original findings plus category processing records suitable for
+        :func:`audit_sdoh_completeness`. A processed zero is unmentioned, not
+        negative. Failed categories never return their partial findings.
+
+    Raises:
+        ValueError: For malformed language tags or category metadata; submitted
+            values are never included in the error.
+        TypeError: If text is not a string. Invalid section/candidate inputs
+            produce value-free ``failed`` category records.
+    """
+    _validate_extractor_text(text)
+    requested = _sdoh_language(language)
+    records = []
+    selected = []
+    for category, extractor, declared in _DETERMINANT_EXTRACTORS.language_items():
+        # Validate category codes before any trusted callback is entered.
+        SDOHCategoryResult(category, SDOHCategoryState.PROCESSED)
+        reason = None
+        failed = False
+        if requested is None or not declared:
+            reason = "language_undeclared"
+        elif not _supports_sdoh_language(declared, requested):
+            reason = "unsupported_language"
+        else:
+            try:
+                cue_languages = _builtin_cue_languages(extractor)
+            except Exception:
+                failed = True
+                cue_languages = None
+            if failed:
+                reason = "cue_language_invalid"
+            elif cue_languages is not None and not cue_languages:
+                reason = "cue_language_undeclared"
+            elif cue_languages is not None and not _supports_sdoh_language(
+                cue_languages, requested
+            ):
+                reason = "unsupported_language"
+        if reason is not None:
+            records.append(
+                SDOHCategoryResult(
+                    category,
+                    SDOHCategoryState.FAILED
+                    if failed
+                    else SDOHCategoryState.UNSUPPORTED,
+                    reason_code=reason,
+                )
+            )
+        else:
+            selected.append((category, extractor))
+    if not selected:
+        return SDOHExtractionResult((), tuple(records))
+
+    scope_failed = False
+    try:
+        candidate_spans = tuple(spans)
+        allowed_ranges = (
+            None if sections is None else _social_history_ranges(text, sections)
+        )
+        if allowed_ranges is not None:
+            candidate_spans = tuple(
+                span
+                for span in candidate_spans
+                if _item_within_ranges(span, allowed_ranges)
+            )
+    except Exception:
+        scope_failed = True
+    if scope_failed:
+        records.extend(
+            SDOHCategoryResult(
+                category, SDOHCategoryState.FAILED, reason_code="scope_invalid"
+            )
+            for category, _ in selected
+        )
+        return SDOHExtractionResult((), tuple(records))
+    if allowed_ranges is not None:
+        if not allowed_ranges:
+            records.extend(
+                SDOHCategoryResult(
+                    category,
+                    SDOHCategoryState.SKIPPED,
+                    reason_code="section_not_selected",
+                )
+                for category, _ in selected
+            )
+            return SDOHExtractionResult((), tuple(records))
+    findings = []
+    for category, extractor in selected:
+        category_findings = []
+        failed = False
+        try:
+            emitted = extractor(text, candidate_spans)
+            for finding in emitted:
+                if (
+                    type(finding) is not SDOHFinding
+                    or finding.category != category
+                    or not 0 <= finding.span[0] < finding.span[1] <= len(text)
+                ):
+                    raise ValueError("invalid_sdoh_finding")
+                if _non_assertive_clause(text, finding.span):
+                    continue
+                if allowed_ranges is None or _offset_within_ranges(
+                    finding.span, allowed_ranges
+                ):
+                    category_findings.append(finding)
+        except Exception:
+            failed = True
+        if failed:
+            records.append(
+                SDOHCategoryResult(
+                    category, SDOHCategoryState.FAILED, reason_code="extractor_failed"
+                )
+            )
+        else:
+            findings.extend(category_findings)
+            records.append(
+                SDOHCategoryResult(
+                    category, SDOHCategoryState.PROCESSED, len(category_findings)
+                )
+            )
+    return SDOHExtractionResult(tuple(findings), tuple(records))
+
+
+def _sdoh_language(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str or len(value) > 63:
+        raise ValueError("invalid_sdoh_language")
+    if not value:
+        return None
+    tag = value.lower().replace("_", "-")
+    if _LANGUAGE_RE.fullmatch(tag) is None:
+        raise ValueError("invalid_sdoh_language")
+    return tag
+
+
+def _declared_sdoh_languages(values: Sequence[str] | None) -> tuple[str, ...]:
+    if values is None:
+        return ()
+    if (
+        not isinstance(values, Sequence)
+        or isinstance(values, str | bytes)
+        or len(values) > 64
+    ):
+        raise ValueError("invalid_sdoh_language_declaration")
+    declared = tuple(_sdoh_language(value) for value in values)
+    if None in declared or len(set(declared)) != len(declared):
+        raise ValueError("invalid_sdoh_language_declaration")
+    return tuple(sorted(declared))
+
+
+def _supports_sdoh_language(declared: tuple[str, ...], requested: str) -> bool:
+    return requested in declared or requested.split("-", 1)[0] in declared
+
+
+def _builtin_cue_languages(extractor: DeterminantExtractor) -> tuple[str, ...] | None:
+    if any(
+        extractor is builtin
+        for builtin in (
+            extract_employment_findings,
+            extract_food_insecurity_findings,
+            extract_living_status_findings,
+        )
+    ):
+        return _declared_sdoh_languages(
+            _load_default_sdoh_social_cues().get("languages")
+        )
+    if any(
+        extractor is builtin
+        for builtin in (_extract_tobacco, _extract_alcohol, _extract_drug)
+    ):
+        resource = resources.files(_SUBSTANCE_CUES_PACKAGE).joinpath(
+            SDOH_SUBSTANCE_CUES_RESOURCE
+        )
+        payload = yaml.safe_load(resource.read_text(encoding="utf-8"))
+        return _declared_sdoh_languages(payload.get("languages"))
+    return None
 
 
 def extract_sdoh(
@@ -1152,23 +1437,32 @@ def _offset_within_ranges(
     )
 
 
-register_determinant_extractor("employment", extract_employment_findings)
-register_determinant_extractor("food_insecurity", extract_food_insecurity_findings)
-register_determinant_extractor("living_status", extract_living_status_findings)
+register_determinant_extractor(
+    "employment", extract_employment_findings, languages=("en",)
+)
+register_determinant_extractor(
+    "food_insecurity", extract_food_insecurity_findings, languages=("en",)
+)
+register_determinant_extractor(
+    "living_status", extract_living_status_findings, languages=("en",)
+)
 
 register_determinant_extractor(
     "tobacco",
     _extract_tobacco,
+    languages=("en",),
 )
 
 register_determinant_extractor(
     "alcohol",
     _extract_alcohol,
+    languages=("en",),
 )
 
 register_determinant_extractor(
     "drug",
     _extract_drug,
+    languages=("en",),
 )
 
 
@@ -1180,11 +1474,13 @@ __all__ = [
     "DeterminantExtractor",
     "DeterminantExtractorRegistry",
     "SDOHFinding",
+    "SDOHExtractionResult",
     "available_determinant_extractors",
     "extract_employment_findings",
     "extract_food_insecurity_findings",
     "extract_living_status_findings",
     "extract_sdoh",
+    "extract_sdoh_with_language",
     "load_sdoh_social_cues",
     "register_determinant_extractor",
     "unregister_determinant_extractor",
