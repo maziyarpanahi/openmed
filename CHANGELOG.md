@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
+- Added a strict, fail-closed synthetic dataset license and lineage manifest
+  validator that binds source class, SPDX license expression, generator digest,
+  model provenance, bounded dependencies and the redistribution decision, and
+  renders canonical reason-code-only reports (#3099).
 
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
