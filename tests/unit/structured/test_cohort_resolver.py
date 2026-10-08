@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from openmed.interop.duckdb_udf import cohort_resolve
@@ -14,6 +15,7 @@ from openmed.interop.omop import (
 )
 from openmed.structured.cohort import (
     COHORT_ADVISORY,
+    CohortResolver,
     ConceptSet,
     Criterion,
     Expression,
@@ -21,6 +23,14 @@ from openmed.structured.cohort import (
     TemporalWindow,
     load_athena_hierarchy,
     resolve_phenotype,
+)
+
+DOMAIN_CONCEPTS = (
+    ("condition_occurrence", "condition_concept_id"),
+    ("drug_exposure", "drug_concept_id"),
+    ("measurement", "measurement_concept_id"),
+    ("procedure_occurrence", "procedure_concept_id"),
+    ("observation", "observation_concept_id"),
 )
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "cohort"
@@ -35,6 +45,170 @@ def _patient_id(source_value: str) -> int:
 
 def _tables():
     return load_grounded_jsonl(GROUNDING)
+
+
+def test_empty_source_and_unmatched_concepts_are_distinct() -> None:
+    connection = write_omop_duckdb(_tables())
+    definition = PhenotypeDefinition.load(PHENOTYPES / "diabetes_on_metformin.json")
+    try:
+        source_count = connection.execute("SELECT COUNT(*) FROM person").fetchone()[0]
+        for table, _ in DOMAIN_CONCEPTS:
+            connection.execute(f"DELETE FROM {table}")
+        unmatched = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+        assert unmatched.patient_ids == ()
+        assert unmatched.coverage.source_patient_count == source_count > 0
+        assert unmatched.coverage.unmapped_source_count == 0
+        assert all(item.matched_count == 0 for item in unmatched.coverage.concept_sets)
+        assert unmatched.review_required is True
+        assert unmatched.warnings[0].sub_reasons == ("concept_set_unmatched",)
+        connection.close()
+        tables = _tables()
+        connection = write_omop_duckdb(
+            replace(
+                tables,
+                tables={
+                    name: rows if name == "concept" else ()
+                    for name, rows in tables.tables.items()
+                },
+            )
+        )
+        empty = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+        assert empty.coverage.source_patient_count == 0
+        assert empty.warnings[0].sub_reasons == (
+            "concept_set_unmatched",
+            "no_source_patients",
+        )
+    finally:
+        connection.close()
+
+
+def test_unmapped_sources_are_counted_without_values_or_patient_keys() -> None:
+    connection = write_omop_duckdb(_tables())
+    definition = PhenotypeDefinition.load(PHENOTYPES / "diabetes_on_metformin.json")
+    try:
+        event_count = sum(
+            connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            for table, _ in DOMAIN_CONCEPTS
+        )
+        for table, concept in DOMAIN_CONCEPTS:
+            connection.execute(f"UPDATE {table} SET {concept} = 0")
+        result = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+        assert result.patient_ids == ()
+        assert result.coverage.unmapped_source_count == event_count > 0
+        assert result.warnings[0].sub_reasons == (
+            "concept_set_unmatched",
+            "unmapped_sources_present",
+        )
+        diagnostic = json.dumps(
+            {
+                "coverage": result.coverage.to_dict(),
+                "warnings": [warning.to_dict() for warning in result.warnings],
+            }
+        )
+        assert "raw-person" not in diagnostic
+        assert "diabetes" not in diagnostic
+        assert "metformin" not in diagnostic
+        assert "source_value" not in diagnostic
+    finally:
+        connection.close()
+
+
+def test_coverage_counts_source_concepts_even_when_eligibility_is_empty() -> None:
+    definition = PhenotypeDefinition(
+        id="empty-window",
+        name="Synthetic empty window",
+        concept_sets=(ConceptSet("metformin", "OMOP", (1503297,)),),
+        expression=Expression.leaf(
+            Criterion(
+                id="empty-window",
+                concept_set="metformin",
+                temporal=TemporalWindow(start_date="1900-01-01", end_date="1900-01-02"),
+            )
+        ),
+    )
+    connection = write_omop_duckdb(_tables())
+    try:
+        result = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+    finally:
+        connection.close()
+    assert result.patient_ids == ()
+    assert result.coverage.concept_sets[0].matched_count == 1
+    assert "concept_set_unmatched" not in result.warnings[0].sub_reasons
+    assert result.provenance.concept_sets[0].matched_members == ()
+
+
+def test_unavailable_coverage_stays_unknown_and_preserves_matches(caplog) -> None:
+    connection = write_omop_duckdb(_tables())
+    definition = PhenotypeDefinition.load(PHENOTYPES / "diabetes_on_metformin.json")
+
+    class UnavailableCoverage:
+        def execute(self, sql, parameters=()):
+            if sql.startswith("WITH source_events") or sql.startswith(
+                "SELECT COUNT(DISTINCT"
+            ):
+                raise RuntimeError("synthetic-private-source-sentinel")
+            return connection.execute(sql, parameters)
+
+    try:
+        expected = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+        result = CohortResolver(
+            UnavailableCoverage(), hierarchy=load_athena_hierarchy(ATHENA)
+        ).resolve(definition)
+        for table, _ in DOMAIN_CONCEPTS:
+            connection.execute(f"DELETE FROM {table}")
+        empty = CohortResolver(
+            UnavailableCoverage(), hierarchy=load_athena_hierarchy(ATHENA)
+        ).resolve(definition)
+    finally:
+        connection.close()
+    assert result.patient_ids == expected.patient_ids
+    assert result.evidence == expected.evidence
+    assert result.coverage.source_patient_count is None
+    assert result.coverage.unmapped_source_count is None
+    assert all(
+        item.matched_count is None and item.expanded_count > 0
+        for item in result.coverage.concept_sets
+    )
+    assert result.review_required is False
+    assert empty.review_required is True
+    assert empty.warnings[0].sub_reasons == ("coverage_unknown",)
+    assert caplog.records == []
+    assert "synthetic-private-source-sentinel" not in json.dumps(empty.to_dict())
+
+
+def test_empty_parquet_snapshot_has_the_same_coverage_as_duckdb(tmp_path) -> None:
+    tables = _tables()
+    empty_tables = replace(
+        tables,
+        tables={
+            name: (() if name in dict(DOMAIN_CONCEPTS) else rows)
+            for name, rows in tables.tables.items()
+        },
+    )
+    write_omop_parquet(empty_tables, tmp_path)
+    definition = PhenotypeDefinition.load(PHENOTYPES / "diabetes_on_metformin.json")
+    connection = write_omop_duckdb(empty_tables)
+    try:
+        direct = resolve_phenotype(
+            definition, connection, hierarchy=load_athena_hierarchy(ATHENA)
+        )
+    finally:
+        connection.close()
+    parquet = resolve_phenotype(
+        definition, parquet_directory=tmp_path, hierarchy=load_athena_hierarchy(ATHENA)
+    )
+    assert parquet.to_dict() == direct.to_dict()
+    assert parquet.review_required is True
 
 
 def test_fixture_coverage_descendants_negation_and_phi_free_provenance(

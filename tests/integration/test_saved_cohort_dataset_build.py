@@ -143,7 +143,7 @@ def test_saved_cohort_selects_only_resolved_members_into_governed_snapshot() -> 
     assert built.value.manifest.snapshot.record_count == 1
     assert "synthetic-condition" not in built.value.files["records.jsonl"].decode()
     assert built.value.manifest.manifest_digest == (
-        "sha256:03bd9f5834cf1fc609cb44b0d34aa3ab25c6efeb7076a7ee6fd22bf2d050749b"
+        "sha256:2ac2a726c1980c6008d11bf1a82106a70cc5bb6fb335d64ee75db747709f5261"
     )
 
     blocked_record = DatasetRecord(

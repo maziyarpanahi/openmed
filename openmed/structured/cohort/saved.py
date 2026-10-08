@@ -35,8 +35,9 @@ from openmed.structured.store import (
 
 from .dsl import Expression, PhenotypeDefinition
 from .exchange import CohortSourceSnapshot
+from .resolver import CohortCoverage, EmptyPopulationWarning, empty_population_warnings
 
-SAVED_COHORT_SCHEMA_VERSION: Final = "1.0.0"
+SAVED_COHORT_SCHEMA_VERSION: Final = "1.1.0"
 SAVED_COHORT_COMPATIBILITY_POLICY: Final = "same_major"
 SAVED_COHORT_SCHEMA_NAME: Final = "saved_cohort"
 SAVED_COHORT_SCHEMA_PACKAGE: Final = "openmed.core.schemas.json"
@@ -504,9 +505,17 @@ class CohortExecution:
     memberships: tuple[CohortMembership, ...]
     schema_version: str = SAVED_COHORT_SCHEMA_VERSION
     compatibility_policy: str = SAVED_COHORT_COMPATIBILITY_POLICY
+    coverage: CohortCoverage = field(default_factory=CohortCoverage)
+    _legacy_storage: bytes | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         _contract_version(self.schema_version, self.compatibility_policy)
+        if self.schema_version.split(".")[1] == "0":
+            object.__setattr__(self, "schema_version", SAVED_COHORT_SCHEMA_VERSION)
+        if not isinstance(self.coverage, CohortCoverage):
+            raise TypeError("coverage must be CohortCoverage")
         if not isinstance(self.manifest, CohortExecutionManifest):
             raise TypeError("manifest must be CohortExecutionManifest")
         if any(not isinstance(item, CohortMembership) for item in self.memberships):
@@ -531,6 +540,11 @@ class CohortExecution:
                     "membership state differs from definition expression"
                 )
         object.__setattr__(self, "memberships", memberships)
+        if (
+            self.coverage.source_patient_count is not None
+            and self.coverage.source_patient_count < len(memberships)
+        ):
+            raise SavedCohortConflictError("coverage patient count differs")
 
     @property
     def membership_digest(self) -> str:
@@ -546,6 +560,8 @@ class CohortExecution:
             {
                 "manifest": self.manifest.to_dict(),
                 "membership_digest": self.membership_digest,
+                "coverage": self.coverage.to_dict(),
+                "schema_version": self.schema_version,
             }
         )
 
@@ -553,7 +569,21 @@ class CohortExecution:
     def review_required(self) -> bool:
         """Return whether the run contains any unknown or conflicting record."""
 
-        return any(item.review_required for item in self.memberships)
+        return bool(self.warnings) or any(
+            item.review_required for item in self.memberships
+        )
+
+    @property
+    def member_count(self) -> int:
+        """Return the number of members meeting the complete expression."""
+
+        return sum(item.state is MembershipState.MET for item in self.memberships)
+
+    @property
+    def warnings(self) -> tuple[EmptyPopulationWarning, ...]:
+        """Return a review warning when no evaluated patient meets the cohort."""
+
+        return empty_population_warnings(self.member_count, self.coverage)
 
     def membership_for(self, patient_key: str) -> CohortMembership | None:
         """Return one opaque-key membership without exposing any source value."""
@@ -573,6 +603,7 @@ class CohortExecution:
         return {
             "advisory": SAVED_COHORT_ADVISORY,
             "compatibility_policy": self.compatibility_policy,
+            "coverage": self.coverage.to_dict(),
             "execution_digest": self.execution_digest,
             "manifest": self.manifest.to_dict(),
             "membership_counts": counts,
@@ -580,6 +611,7 @@ class CohortExecution:
             "memberships": [item.to_dict() for item in self.memberships],
             "review_required": self.review_required,
             "schema_version": self.schema_version,
+            "warnings": [item.to_dict() for item in self.warnings],
         }
 
     def to_json(self) -> str:
@@ -592,11 +624,19 @@ class CohortExecution:
 
         return self.to_json().encode("utf-8")
 
+    def _storage_json_bytes(self) -> bytes:
+        # A migrated public view never overwrites an immutable legacy record.
+        return self._legacy_storage or self.to_json_bytes()
+
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "CohortExecution":
         """Parse and verify one saved execution."""
 
         data = _mapping(value, "cohort execution")
+        version = _text(data.get("schema_version"), "schema_version")
+        policy = _text(data.get("compatibility_policy"), "compatibility_policy")
+        _contract_version(version, policy)
+        legacy = version.split(".")[1] == "0"
         _exact_keys(
             data,
             {
@@ -609,7 +649,8 @@ class CohortExecution:
                 "memberships",
                 "review_required",
                 "schema_version",
-            },
+            }
+            | (set() if legacy else {"coverage", "warnings"}),
             "cohort execution",
         )
         if data["advisory"] != SAVED_COHORT_ADVISORY:
@@ -622,10 +663,13 @@ class CohortExecution:
                 CohortMembership.from_dict(_mapping(item, "cohort membership"))
                 for item in _sequence(data["memberships"], "memberships")
             ),
-            schema_version=_text(data["schema_version"], "schema_version"),
+            schema_version=SAVED_COHORT_SCHEMA_VERSION if legacy else version,
             compatibility_policy=_text(
                 data["compatibility_policy"], "compatibility_policy"
             ),
+            coverage=CohortCoverage()
+            if legacy
+            else CohortCoverage.from_dict(_mapping(data["coverage"], "coverage")),
         )
         expected_counts = {state.value: 0 for state in MembershipState}
         for item in result.memberships:
@@ -634,17 +678,44 @@ class CohortExecution:
             raise SavedCohortConflictError("persisted membership counts differ")
         if data["membership_digest"] != result.membership_digest:
             raise SavedCohortConflictError("membership digest differs")
-        if data["execution_digest"] != result.execution_digest:
+        expected_digest = (
+            canonical_digest(
+                {
+                    "manifest": result.manifest.to_dict(),
+                    "membership_digest": result.membership_digest,
+                }
+            )
+            if legacy
+            else result.execution_digest
+        )
+        if data["execution_digest"] != expected_digest:
             raise SavedCohortConflictError("execution digest differs")
-        if data["review_required"] is not result.review_required:
+        expected_review = (
+            any(item.review_required for item in result.memberships)
+            if legacy
+            else result.review_required
+        )
+        if data["review_required"] is not expected_review:
             raise SavedCohortConflictError("execution review state differs")
+        if not legacy and data["warnings"] != [
+            item.to_dict() for item in result.warnings
+        ]:
+            raise SavedCohortConflictError("execution warnings differ")
+        if legacy:
+            object.__setattr__(
+                result, "_legacy_storage", canonical_json(dict(data)).encode("utf-8")
+            )
         return result
 
     @classmethod
     def from_json(cls, value: str | bytes | bytearray) -> "CohortExecution":
         """Parse canonical or human-formatted JSON."""
 
-        return cls.from_dict(_json_object(value, "cohort execution"))
+        result = cls.from_dict(_json_object(value, "cohort execution"))
+        if result._legacy_storage is not None:
+            original = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+            object.__setattr__(result, "_legacy_storage", original)
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -674,6 +745,7 @@ def build_cohort_execution(
     policy_digest: str,
     evaluator_version: str,
     memberships: Sequence[CohortMembership],
+    coverage: CohortCoverage | None = None,
 ) -> StoreResult[CohortExecution]:
     """Build an execution with typed invalid, unsupported, and conflict states."""
 
@@ -690,7 +762,11 @@ def build_cohort_execution(
             policy_digest=policy_digest,
             evaluator_version=evaluator_version,
         )
-        execution = CohortExecution(manifest=manifest, memberships=tuple(memberships))
+        execution = CohortExecution(
+            manifest=manifest,
+            memberships=tuple(memberships),
+            coverage=CohortCoverage() if coverage is None else coverage,
+        )
     except SavedCohortUnsupportedError:
         return StoreResult.outcome(StoreState.UNSUPPORTED, "cohort_version_unsupported")
     except SavedCohortConflictError:
@@ -782,7 +858,7 @@ class LocalSavedCohortStore:
                 StoreState.CONFLICT, "definition_digest_conflict"
             )
         target = self._execution_path(execution.manifest.execution_id or "")
-        return self._put(target, execution.to_json_bytes(), execution)
+        return self._put(target, execution._storage_json_bytes(), execution)
 
     def get_execution(self, execution_id: str) -> StoreResult[CohortExecution]:
         """Load and integrity-check one immutable execution."""
@@ -856,6 +932,9 @@ class LocalSavedCohortStore:
             rerun = CohortExecution(
                 manifest=previous.value.manifest,
                 memberships=tuple(memberships),
+                coverage=previous.value.coverage,
+                schema_version=previous.value.schema_version,
+                compatibility_policy=previous.value.compatibility_policy,
             )
         except SavedCohortUnsupportedError:
             return StoreResult.outcome(
@@ -873,6 +952,7 @@ class LocalSavedCohortStore:
                 "cohort_rerun_digest_mismatch",
                 value=rerun,
             )
+        object.__setattr__(rerun, "_legacy_storage", previous.value._legacy_storage)
         return StoreResult.success(rerun, created=False)
 
     def _prepare(self) -> None:
@@ -1015,7 +1095,10 @@ def evaluate_membership_expression(
 
 
 def _contract_version(schema_version: str, compatibility_policy: str) -> None:
-    if schema_version != SAVED_COHORT_SCHEMA_VERSION:
+    if (
+        not isinstance(schema_version, str)
+        or re.fullmatch(r"1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", schema_version) is None
+    ):
         raise SavedCohortUnsupportedError("saved cohort schema version is unsupported")
     if compatibility_policy != SAVED_COHORT_COMPATIBILITY_POLICY:
         raise SavedCohortUnsupportedError(
@@ -1025,10 +1108,29 @@ def _contract_version(schema_version: str, compatibility_policy: str) -> None:
 
 def _json_object(value: str | bytes | bytearray, name: str) -> Mapping[str, Any]:
     try:
-        data = json.loads(value)
+        data = json.loads(
+            value,
+            object_pairs_hook=_unique_json_fields,
+            parse_constant=_reject_json_constant,
+        )
     except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
         raise SavedCohortError(f"{name} is not valid JSON") from None
     return _mapping(data, name)
+
+
+def _unique_json_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise SavedCohortError(
+                "saved cohort JSON contains duplicate fields"
+            ) from None
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> Any:
+    raise SavedCohortError("saved cohort JSON contains non-finite numbers") from None
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:

@@ -12,16 +12,23 @@ from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema.validators import validator_for
 
+from openmed.clinical.journey_contracts import canonical_digest
 from openmed.structured.cohort import (
+    CohortCoverage,
+    CohortDefinitionVersion,
     CohortExecution,
+    CohortExecutionManifest,
     CohortMembership,
     CohortSourceSnapshot,
+    ConceptSetCoverage,
     CriterionMembership,
     LocalSavedCohortStore,
     MembershipEvidence,
     MembershipState,
     PhenotypeDefinition,
     SavedCohortConflictError,
+    SavedCohortError,
+    SavedCohortUnsupportedError,
     build_cohort_execution,
     load_saved_cohort_schema,
     save_cohort_definition,
@@ -133,6 +140,179 @@ def test_versions_and_executions_are_byte_stable_and_schema_valid() -> None:
     validator.check_schema(schema)
     assert not tuple(validator(schema).iter_errors(version.to_dict()))
     assert not tuple(validator(schema).iter_errors(execution.to_dict()))
+
+
+def test_empty_execution_warns_with_unknown_coverage() -> None:
+    execution = replace(_execution(), memberships=())
+    assert execution.member_count == 0
+    assert execution.review_required is True
+    assert execution.warnings[0].sub_reasons == ("coverage_unknown",)
+    assert execution.coverage.to_dict() == {
+        "source_patient_count": None,
+        "concept_sets": None,
+        "unmapped_source_count": None,
+    }
+    assert CohortExecution.from_json(execution.to_json_bytes()) == execution
+    schema = load_saved_cohort_schema()
+    assert not list(validator_for(schema)(schema).iter_errors(execution.to_dict()))
+
+
+def test_all_not_met_is_an_empty_population_and_nonempty_remains_unwarned() -> None:
+    empty = _execution((_membership(first=MembershipState.NOT_MET),))
+    assert empty.member_count == 0
+    assert empty.review_required is True
+    assert empty.warnings[0].to_dict()["code"] == "empty_population"
+    nonempty = _execution()
+    assert nonempty.member_count == 1
+    assert nonempty.review_required is False
+    assert nonempty.warnings == ()
+
+
+def test_measured_coverage_is_bound_to_digest_and_warning_is_verified() -> None:
+    context = CohortCoverage(
+        source_patient_count=4,
+        unmapped_source_count=2,
+        concept_sets=(
+            ConceptSetCoverage.for_concept_set(
+                "synthetic-private-concept",
+                expanded_count=3,
+                matched_count=0,
+            ),
+        ),
+    )
+    execution = replace(_execution(), memberships=(), coverage=context)
+    assert execution.warnings[0].sub_reasons == (
+        "concept_set_unmatched",
+        "unmapped_sources_present",
+    )
+    diagnostic = json.dumps(execution.coverage.to_dict())
+    assert "synthetic-private-concept" not in diagnostic
+    changed = replace(execution, coverage=replace(context, source_patient_count=5))
+    assert execution.execution_digest != changed.execution_digest
+    tampered = execution.to_dict()
+    tampered["coverage"]["source_patient_count"] = 5
+    with pytest.raises(SavedCohortConflictError, match="execution digest differs"):
+        CohortExecution.from_dict(tampered)
+    tampered = execution.to_dict()
+    tampered["warnings"] = []
+    with pytest.raises(SavedCohortConflictError, match="execution warnings differ"):
+        CohortExecution.from_dict(tampered)
+    tampered = execution.to_dict()
+    tampered["review_required"] = False
+    with pytest.raises(
+        SavedCohortConflictError, match="execution review state differs"
+    ):
+        CohortExecution.from_dict(tampered)
+
+
+@pytest.mark.parametrize("invalid", [-1, True, 1.2, "synthetic-private-count"])
+def test_coverage_rejects_invalid_counts_without_echoing_values(invalid) -> None:
+    with pytest.raises(ValueError) as caught:
+        CohortCoverage(source_patient_count=invalid)
+    assert "synthetic-private-count" not in str(caught.value)
+
+
+def test_coverage_rejects_unknown_fields_duplicate_sets_and_false_zero() -> None:
+    with pytest.raises(ValueError, match="fields are invalid"):
+        CohortCoverage.from_dict(
+            {**CohortCoverage().to_dict(), "patient_key": "sentinel"}
+        )
+    item = ConceptSetCoverage("sha256:" + "a" * 64, 1, 0)
+    with pytest.raises(ValueError, match="unique"):
+        CohortCoverage(concept_sets=(item, item))
+    with pytest.raises(ValueError, match="exceeds"):
+        replace(item, matched_count=2)
+    with pytest.raises(
+        SavedCohortConflictError, match="coverage patient count differs"
+    ):
+        replace(_execution(), coverage=CohortCoverage(source_patient_count=0))
+
+
+def _legacy_execution(memberships):
+    version = CohortDefinitionVersion(_definition(), schema_version="1.0.0")
+    manifest = CohortExecutionManifest(
+        definition_version_id=version.version_id,
+        definition_digest=version.definition_digest,
+        criterion_ids=version.criterion_ids,
+        expression=version.definition.expression,
+        source_snapshot=_snapshot(),
+        vocabulary_digest="sha256:" + "b" * 64,
+        policy_digest="sha256:" + "c" * 64,
+        evaluator_version="cohort-evaluator-1.0",
+        schema_version="1.0.0",
+    )
+    current = CohortExecution(manifest, memberships)
+    payload = current.to_dict()
+    del payload["coverage"], payload["warnings"]
+    payload["schema_version"] = "1.0.0"
+    payload["review_required"] = any(item.review_required for item in memberships)
+    payload["execution_digest"] = canonical_digest(
+        {
+            "manifest": manifest.to_dict(),
+            "membership_digest": current.membership_digest,
+        }
+    )
+    return version, payload
+
+
+@pytest.mark.parametrize(
+    "memberships", [(), (_membership(),), (_membership(first=MembershipState.UNKNOWN),)]
+)
+def test_legacy_execution_parses_into_current_view_without_rewriting_store(
+    tmp_path, memberships
+) -> None:
+    version, payload = _legacy_execution(memberships)
+    original = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+    schema = load_saved_cohort_schema()
+    assert not list(validator_for(schema)(schema).iter_errors(payload))
+    loaded = CohortExecution.from_json(original)
+    assert loaded.schema_version == "1.1.0"
+    assert loaded.manifest.schema_version == "1.0.0"
+    assert loaded.manifest.execution_id == payload["manifest"]["execution_id"]
+    assert loaded.coverage.source_patient_count is None
+    assert loaded.review_required is (
+        not memberships or any(item.review_required for item in memberships)
+    )
+    assert loaded.execution_digest != payload["execution_digest"]
+    assert CohortExecution.from_json(loaded.to_json_bytes()) == loaded
+    assert not list(validator_for(schema)(schema).iter_errors(loaded.to_dict()))
+    store = LocalSavedCohortStore(tmp_path)
+    assert store.put_definition(version).ok
+    path = tmp_path / "executions" / f"{loaded.manifest.execution_id}.json"
+    path.write_bytes(original)
+    result = store.get_execution(loaded.manifest.execution_id)
+    assert result.ok
+    repeated = store.put_execution(result.value)
+    assert repeated.ok and repeated.created is False
+    assert path.read_bytes() == original
+    rerun = store.rerun(loaded.manifest.execution_id, lambda _context: memberships)
+    assert rerun.ok and rerun.value == result.value
+    assert store.put_execution(rerun.value).ok
+    assert path.read_bytes() == original
+    changed = replace(result.value, coverage=CohortCoverage(source_patient_count=10))
+    assert store.put_execution(changed).state is StoreState.CONFLICT
+    assert path.read_bytes() == original
+
+
+def test_legacy_integrity_and_same_major_policy_are_retained() -> None:
+    _, payload = _legacy_execution(())
+    tampered = {**payload, "review_required": True}
+    with pytest.raises(SavedCohortConflictError, match="review state differs"):
+        CohortExecution.from_dict(tampered)
+    with pytest.raises(SavedCohortUnsupportedError):
+        CohortExecution.from_dict({**payload, "schema_version": "2.0.0"})
+    future = replace(_execution(), schema_version="1.2.0")
+    assert CohortExecution.from_dict(future.to_dict()) == future
+
+
+@pytest.mark.parametrize("hidden", ['"synthetic-private-sentinel"', "NaN"])
+def test_legacy_byte_retention_rejects_ambiguous_json(hidden) -> None:
+    _, payload = _legacy_execution(())
+    original = json.dumps(payload)
+    ambiguous = original.replace("{", '{"review_required": ' + hidden + ", ", 1)
+    with pytest.raises(SavedCohortError) as caught:
+        CohortExecution.from_json(ambiguous)
+    assert "synthetic-private-sentinel" not in str(caught.value)
 
 
 @given(st.permutations(("p", "q", "r")))
