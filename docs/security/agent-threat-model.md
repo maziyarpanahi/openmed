@@ -45,6 +45,12 @@ cases pass when the verdict is `deny`, the reason matches the suite's expected
 stable code, and dispatch count remains zero. The control passes only when the
 verdict is `allow` and dispatch count is exactly one.
 
+This boundary sketch requires the application authority checks and boundary
+controls. It is an integration fragment; an offline documentation check cannot
+establish that those application controls are implemented correctly.
+
+<!-- openmed-docs-fragment: application-adversarial-boundary -->
+
 ```python
 from openmed.agent.security import (
     AdversarialReasonCode,
