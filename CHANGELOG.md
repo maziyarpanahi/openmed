@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security fixes
+
+- Confine OpenMedKit MLX manifest paths during download, cache inspection and
+  local loading. Reject traversal and escaping symlinks with value-free errors,
+  remove stale ready markers and confined partial writes on rejection, and retain
+  root and nested tokenizer layouts (#3728).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

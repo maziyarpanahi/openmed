@@ -330,6 +330,24 @@ Behavior:
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
 
+The model store validates every manifest path before requesting artifact files,
+including all weight candidates and segmenter resources. Paths must be relative
+to the snapshot, with no empty, `.` or `..` components, backslashes or escaping
+symlinks. The exact tokenizer directory `"."` remains supported as the root
+layout used by the OpenMed exporter; tokenizer filenames still require valid
+relative paths. Nested directories such as `tokenizer/tokenizer.json` work.
+
+Cache inspection and local artifact loading use the same boundary, including
+standard tokenizer files discovered implicitly (config and chat templates). A declared
+label map must exist before the snapshot becomes ready. Path rejection throws
+`OpenMedModelStoreError.invalidManifestPath` with a controlled reason code and a
+fixed message containing no input path, URL or repository content. Rejection
+removes a stale ready marker and files newly written by that download where
+their parents remain confined; it never follows an escaping link during cleanup.
+The downloader repeats the check after each response and before writing. This
+does not provide synchronization against another process concurrently replacing
+filesystem entries; applications should keep their cache private to the app.
+
 ## Offline Tokenizer Assets
 
 For MLX artifacts, tokenizer assets travel with the converted model directory, so Swift can load them locally without going back to the Hub.
