@@ -55,6 +55,12 @@ The summary and the assembled protected response both pass the configured privac
 detector. Python outbound sockets are blocked; trusted callbacks are not isolated
 plugins and must not invoke external processes/services themselves.
 
+The shared [source-surface leakage guard](summarization.md) runs before the
+caller-supplied detector. It checks supported Unicode variants, unspaced script
+surfaces and recognized Hangul suffixes. A match refuses with `privacy`, without
+returning a partial summary. Inflected names outside those rules still require
+the separate detector and human review.
+
 `refusal_reason` is a `BriefRefusal` enum. Refusals contain no partial summary.
 Exceptions from backends are not copied into reports or chained into public
 errors. The `stages` trace records entered stages; on refusal the last stage

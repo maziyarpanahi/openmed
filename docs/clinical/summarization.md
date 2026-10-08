@@ -20,6 +20,22 @@ de-identification result. A backend that re-emits a source identifier is
 rejected before a result is returned. The check exposes counts and digests,
 not plaintext identifiers.
 
+Comparison removes the detector's supported zero-width controls, decomposes
+canonical variants before its width, confusable and combining-mark defenses,
+then recomposes the result for script matching. Case matching retains the prior
+Unicode case-insensitive equivalents.
+Source hashes and counts retain their existing meaning; normalized source text is
+never included in a `LeakageCheck` or exception. The complete source surface and
+each whitespace-separated part are compared. Latin and other spaced scripts
+retain word boundaries. Han, Kana, Thai, Lao, Khmer and Myanmar surfaces use
+substring matching; Hangul surfaces also allow a bounded inventory of trailing
+particles and common honorifics, with a word boundary after the suffix.
+
+This is a source-surface guard, not a morphological analyzer. Inflected forms
+such as Cyrillic case endings and unrecognized Korean suffixes remain a residual
+risk. The guard also depends on the original detector finding the source spans;
+keep the separate privacy detector and qualified review in the brief workflow.
+
 Pipeline code that already performed de-identification may call
 `summarize_deidentified()` with its `DeidentificationResult`. Passing a plain
 string to that guarded stage raises an ordering error.

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security fixes
+
+- Align Python and OpenMedKit summary leakage guards for Unicode variants,
+  unspaced scripts, short identifiers and recognized Hangul suffixes. Reuse
+  detector normalization, retain value-free counts and source digests, and add
+  shared synthetic brief/refusal parity controls (#3729).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

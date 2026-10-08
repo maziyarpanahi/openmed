@@ -1,5 +1,639 @@
 {
   "evaluation_json": "{\"backend_id\":\"deterministic-extractive\",\"citations\":[{\"claim_index\":0,\"output_end\":38,\"output_start\":0,\"source_end\":38,\"source_start\":0},{\"claim_index\":1,\"output_end\":79,\"output_start\":39,\"source_end\":79,\"source_start\":39},{\"claim_index\":2,\"output_end\":111,\"output_start\":80,\"source_end\":111,\"source_start\":80}],\"digest\":\"sha256:59af59f651aed13e80818042f1e5f9da9af715a1b2a20d9a92c0606d5f9244f2\",\"envelope\":{\"disclaimer\":\"This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.\",\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"artifact_id\":\"deidentified-327bfe7dfef071a87cd19062\",\"content_hash\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"deidentification_method\":\"mask\",\"source_hash\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"verification_method\":\"deidentification_result\",\"verified\":true},\"refusal_reasons\":[],\"requires_human_review\":true,\"schema_version\":1,\"status\":\"ready\",\"summary\":{\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\"}},\"metrics\":{\"citation_support\":{\"citation_count\":3,\"citation_precision\":null,\"claim_count\":3,\"clinician_adjudication\":{\"adjudicated_citation_count\":0,\"adjudicated_claim_count\":0,\"adjudication_coverage\":0.0,\"available\":false,\"citation_precision\":null,\"conflicting_adjudication_count\":0,\"contradicting_citation_count\":0,\"irrelevant_citation_count\":0,\"label_counts\":{\"contradicts\":0,\"irrelevant\":0,\"supports\":0,\"unclear\":0},\"status\":\"not_available\",\"support_recall\":null,\"supported_claim_count\":0,\"supporting_citation_count\":0,\"unadjudicated_citation_count\":3,\"unadjudicated_claim_count\":3,\"unclear_citation_count\":0,\"unmatched_adjudication_count\":0},\"deterministic_span_checks\":{\"citation_count\":3,\"citation_span_validity\":1.0,\"claim_span_count\":3,\"claim_span_validity\":1.0,\"duplicate_citation_count\":0,\"evidence_span_count\":3,\"evidence_span_validity\":1.0,\"invalid_citation_count\":0,\"invalid_citation_reasons\":{},\"invalid_claim_span_count\":0,\"invalid_evidence_span_count\":0,\"missing_claim_span_count\":0,\"missing_evidence_span_count\":0,\"passed\":true,\"valid_citation_count\":3,\"valid_claim_span_count\":3,\"valid_evidence_span_count\":3},\"disclaimer\":\"Claim-level citation metrics are evaluation evidence only; they are not a clinical decision, compliance certification, or guarantee of clinical truth. Qualified human review remains required before clinical use.\",\"evidence_count\":3,\"human_review_required\":true,\"orphan_claim_count\":0,\"orphan_claim_rate\":0.0,\"provenance\":{\"adjudication_digest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"claim_digest\":\"sha256:6076808fa3ee335284201983ae43346c4dcf67647ae9fb70a2207264006de701\",\"evidence_digest\":\"sha256:1f1ef7209ba222d7c0ec78bdc5d6b272500c1bcf8d6e09e631c9f72bd59a4376\",\"input_digest\":\"sha256:9e463f87ee1a6bf3114f9803060eb4006e7f2ee88150c5b7727af19ccc46e70f\"},\"schema_version\":1,\"suite\":\"citation_support_metrics\",\"support_recall\":null,\"unused_evidence_count\":0,\"unused_evidence_rate\":0.0},\"coverage\":{\"cited_fact_count\":3,\"duplicate_source_fact_count\":0,\"fail_closed\":false,\"failure_reasons\":[],\"invalid_citation_count\":0,\"invalid_source_fact_count\":0,\"missing_citation_count\":0,\"omission_count\":0,\"omissions\":0,\"passed\":true,\"recall\":1.0,\"schema_version\":1,\"source_evidence_available\":true,\"source_evidence_count\":3,\"source_fact_count\":3,\"summary_fact_count\":3,\"unsupported_fact_count\":0,\"unsupported_facts\":0},\"demographics\":{\"allowed_count\":0,\"input_count\":0,\"purpose_id\":\"sha256:43978a756136cfa102c35d4f21116cf1d870996ee664074bf18e3626944b6f66\",\"removed_classes\":[],\"removed_count\":0,\"schema_version\":1},\"leakage\":{\"checked_token_count\":0,\"leaked_token_count\":0,\"leaked_token_hashes\":[],\"passed\":true},\"temporal_order\":{\"advisory\":\"Temporal-order validation is a deterministic review aid. Invalid or ambiguous ordering requires review and does not rewrite the clinical claim.\",\"findings\":[{\"code\":\"unknown_event\",\"reference_indexes\":[0,1]},{\"code\":\"unknown_event\",\"reference_indexes\":[0,2]},{\"code\":\"unknown_event\",\"reference_indexes\":[1,2]}],\"reference_count\":3,\"review_required\":true,\"schema_version\":1,\"status\":\"review_required\"},\"unsupported_claims\":{\"alpha\":0.05,\"approved_evidence_count\":3,\"assessments\":[{\"approved_evidence_count\":1,\"cited_evidence_count\":1,\"claim_class\":\"finding\",\"matching_evidence_count\":1,\"review_required\":false,\"state\":\"supported\"},{\"approved_evidence_count\":1,\"cited_evidence_count\":1,\"claim_class\":\"finding\",\"matching_evidence_count\":1,\"review_required\":false,\"state\":\"supported\"},{\"approved_evidence_count\":1,\"cited_evidence_count\":1,\"claim_class\":\"finding\",\"matching_evidence_count\":1,\"review_required\":false,\"state\":\"supported\"}],\"by_claim_class\":{\"finding\":{\"bootstrap_ci\":{\"alpha\":0.05,\"degenerate\":false,\"lower\":0.0,\"n_resamples\":1000,\"point\":0.0,\"upper\":0.0},\"claim_class\":\"finding\",\"claim_count\":3,\"contradicted_count\":0,\"counts\":{\"contradicted\":0,\"supported\":3,\"uncited\":0,\"unresolved\":0},\"supported_count\":3,\"uncited_count\":0,\"unresolved_count\":0,\"unsupported_count\":0,\"unsupported_rate\":0.0}},\"claim_count\":3,\"disclaimer\":\"Unsupported-claim rates are evaluation evidence only; they are not a clinical decision, compliance certification, or faithfulness guarantee.\",\"evidence_count\":3,\"evidence_digest\":\"sha256:9ba7d8a60dd2ebc4b25513af4e66a2fd738677324a5d2dc9ddd1d0cd99ca5a84\",\"human_review_required\":true,\"n_resamples\":1000,\"overall\":{\"bootstrap_ci\":{\"alpha\":0.05,\"degenerate\":false,\"lower\":0.0,\"n_resamples\":1000,\"point\":0.0,\"upper\":0.0},\"claim_class\":\"overall\",\"claim_count\":3,\"contradicted_count\":0,\"counts\":{\"contradicted\":0,\"supported\":3,\"uncited\":0,\"unresolved\":0},\"supported_count\":3,\"uncited_count\":0,\"unresolved_count\":0,\"unsupported_count\":0,\"unsupported_rate\":0.0},\"review_required_count\":0,\"schema_version\":1,\"seed\":0,\"suite\":\"summary_unsupported_claims\",\"unsupported_count\":0,\"unsupported_rate\":0.0}},\"profile_digest\":\"sha256:1c83deede37096d6628dea8b9526982d84dfe8c2eb765077d57cbf164dc9e547\",\"provenance\":{\"disclaimer\":\"Guarded clinical-output provenance is value-free assistive metadata for human review; it is not a clinical decision, compliance certification, diagnosis, or treatment recommendation.\",\"evidence\":[{\"evidence_hash\":\"sha256:6ecb0fbdc64461e148b2e5bc297c0e7508876b5cb5d70dbdc805687a8f074dc4\",\"evidence_id\":\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"kind\":\"source_span\",\"source_offsets\":{\"end\":38,\"start\":0}},{\"evidence_hash\":\"sha256:8ecef0e2f54bf28c5341e088c76cc47abe72f90608c8cbed78530b7906b0b045\",\"evidence_id\":\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"kind\":\"source_span\",\"source_offsets\":{\"end\":79,\"start\":39}},{\"evidence_hash\":\"sha256:d97bf778ec8ff6880a73615a920cf62ea9dcfb37ca1915af61b56bcd3394edb0\",\"evidence_id\":\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\",\"kind\":\"source_span\",\"source_offsets\":{\"end\":111,\"start\":80}}],\"evidence_ids\":[\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\"],\"input_hash\":\"sha256:3fa0da736b69fdc6112dbacbed2dce8ac9f5c77673c2d979193bedc500e1d4c4\",\"integrity\":{\"changed_evidence_count\":0,\"changed_evidence_ids\":[],\"input_changed\":false,\"input_checked\":false,\"input_present\":true,\"manifest_hash_valid\":true,\"missing_evidence_count\":0,\"missing_evidence_ids\":[],\"model_present\":true,\"output_changed\":false,\"output_checked\":false,\"output_present\":true,\"policy_present\":true,\"reason_codes\":[],\"record_hash_valid\":true},\"model\":{\"model_fingerprint\":\"sha256:f8b428859e362eefbbb748e33c184104d2e47bfc188137eddff0b12b3f92883c\",\"model_id\":\"sha256:892917b3f4c3acef2326eb319dd8e67d8e9a86a3552c2656797eece278e46292\",\"revision\":null,\"tokenizer_fingerprint\":null,\"tokenizer_id\":null},\"output_hash\":\"sha256:52c7d234f3e0a1bda211b9a979759fdced45211ee60a8c0fdbfb8a962b404952\",\"output_kind\":\"clinical_output\",\"policy_fingerprint\":\"sha256:36a7ce819265851c3bc9ae7642860fa05a11717d81116c0eac37343775d6163b\",\"record_hash\":\"sha256:42ffc95e460e02f59a21ba9786d1b3e5ae126bc20c9062ef0efefe8b75864e41\",\"record_id\":\"sha256:510d32cbfc0d685a07b19549faf819f212914e5a4ac90c6d6986cdf09334ebd4\",\"record_type\":\"openmed.clinical.guarded_output_provenance\",\"review\":{\"required\":true,\"status\":\"queued\",\"transitions\":[]},\"review_required\":true,\"review_status\":\"queued\",\"review_transitions\":[],\"schema_version\":1},\"refusal_reason\":null,\"review_packet\":{\"advisory\":\"Human-review packets are assistive evidence summaries, not clinical decisions, release approvals, or compliance certifications.\",\"citations\":[{\"citation_id\":\"sha256:2bec3c5753d257f93813bfa71a34171ab407d85ee2e86e15bdd82b39311b784a\",\"source\":\"label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d\"},{\"citation_id\":\"sha256:6354a2295d11d5268f254ef8d55a4109a39914f5e5449bf0cbfcb717aacdbd95\",\"source\":\"label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d\"},{\"citation_id\":\"sha256:9e6a790c47a472b7bd4a8e20907e277a15eaea55fb1711587bf14716e3140958\",\"source\":\"label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d\"}],\"findings\":[{\"citation_ids\":[\"sha256:2bec3c5753d257f93813bfa71a34171ab407d85ee2e86e15bdd82b39311b784a\"],\"finding_id\":\"identifier:sha256:448444379404e09e7957468e9977664563a8495fc4214b5fd28fed745e212273\",\"label\":\"label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b\",\"status\":\"needs_review\"},{\"citation_ids\":[\"sha256:6354a2295d11d5268f254ef8d55a4109a39914f5e5449bf0cbfcb717aacdbd95\"],\"finding_id\":\"identifier:sha256:cde1052b94339187485185d6e505d0e1ce49f7f7192805495b99d54a62f0e9fa\",\"label\":\"label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b\",\"status\":\"needs_review\"},{\"citation_ids\":[\"sha256:9e6a790c47a472b7bd4a8e20907e277a15eaea55fb1711587bf14716e3140958\"],\"finding_id\":\"identifier:sha256:f5747093554f8ed652ac918d185bd4e7a758da640928d9c845e75701bb5da20e\",\"label\":\"label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b\",\"status\":\"needs_review\"}],\"gate_results\":[{\"blocking\":false,\"gate_id\":\"identifier:sha256:92d4e6c8ed22722a3071a26569a0a192ace2bf389edf9518f82f7987f0b3d7ea\",\"passed\":false,\"reason\":\"provided\",\"reason_hash\":\"sha256:0e7f4723a26cced927abb64ae839a1b829e847e7a772213c43202eebc93bb8dc\",\"severity\":\"info\"}],\"packet_id\":\"sha256:cd996219bdd8530ddedec073864e6c6a66245a231937d975ff23b26aa618f65f\",\"privacy\":{\"protected_text_available\":false,\"protected_text_included\":false,\"protected_text_policy\":\"explicit_local_opt_in\"},\"review_status\":\"review_required\",\"schema_version\":\"openmed.clinical.review_packet.v1\",\"summary\":{\"citation_count\":3,\"failed_gate_count\":1,\"finding_count\":3,\"gate_count\":1,\"review_required\":true}},\"schema_version\":1,\"stages\":[\"deidentification\",\"sections\",\"evidence\",\"summary_input\",\"section_plan\",\"length_budget\",\"profile\",\"generation\",\"envelope\",\"demographics\",\"claims\",\"assertion\",\"temporality\",\"experiencer\",\"nli\",\"citations\",\"boundaries\",\"minimality\",\"temporal_order\",\"unsupported_claims\",\"coverage\",\"citation_support\",\"empty_evidence\",\"privacy\",\"review\",\"provenance\"],\"status\":\"needs_review\",\"summary\":\"The admission problem was dehydration. The discharge diagnosis was dehydration. Symptoms improved after fluids.\",\"summary_characters\":111,\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"},{\"claim_index\":1,\"label\":\"entailment\"},{\"claim_index\":2,\"label\":\"entailment\"}]}",
   "generator_output": "The admission problem was dehydration. The discharge diagnosis was dehydration. Symptoms improved after fluids.",
-  "source": "The admission problem was dehydration. The discharge diagnosis was dehydration. Symptoms improved after fluids."
+  "source": "The admission problem was dehydration. The discharge diagnosis was dehydration. Symptoms improved after fluids.",
+  "leakage_cases": [
+    {
+      "id": "han_two_char",
+      "surface": "\u9648\u79be",
+      "candidate": "\u60a3\u8005\u9648\u79be\u9700\u590d\u67e5\u3002",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":8,\"output_start\":0,\"source_end\":8,\"source_start\":0}],\"digest\":\"sha256:5d2deb0c3f76c0c36513e66f0e849ddfa9d8e08d474ed43c45da0b8e32ff0cad\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:888782c1e1d97a2d9ba0fe46d232a56cb6ce6a3ee936b4e9ceb0d1f038fea100\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u60a3\\u8005\\u9648\\u79be\\u9700\\u590d\\u67e5\\u3002\",\"summary_characters\":8,\"summary_digest\":\"sha256:cb63efb6d54232121cd337b042fba274dd9e475533743420b2b8796012c7431f\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "kana",
+      "surface": "\u3042\u304a\u308a",
+      "candidate": "\u3042\u304a\u308a\u3055\u3093\u8981\u78ba\u8a8d\u3002",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":9,\"output_start\":0,\"source_end\":9,\"source_start\":0}],\"digest\":\"sha256:59ae7b93515476bda3aa68173877cb49c8f4f5e9b391f5cae3a14060c81449aa\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:a9a69aa41252cb38f6d872995281c4305cd550f0e0c6faad4cb277d71113ace3\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u3042\\u304a\\u308a\\u3055\\u3093\\u8981\\u78ba\\u8a8d\\u3002\",\"summary_characters\":9,\"summary_digest\":\"sha256:94a837ce172e8e7a14259cc37814dc937ddaba26a9bed79063dc552046aa22e5\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "katakana",
+      "surface": "\u30a2\u30aa\u30e9",
+      "candidate": "\u30a2\u30aa\u30e9\u3055\u3093\u8981\u78ba\u8a8d\u3002",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":9,\"output_start\":0,\"source_end\":9,\"source_start\":0}],\"digest\":\"sha256:685f279329e72effebcfaef1239e0ef21f022fc785a2482ccf8a99ccd8fc46b5\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:0edd90d0d84e50a23ff3e296057d04f615adad96041431dd142c0d101942e854\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u30a2\\u30aa\\u30e9\\u3055\\u3093\\u8981\\u78ba\\u8a8d\\u3002\",\"summary_characters\":9,\"summary_digest\":\"sha256:a5fd706aba8ddebcee680bb83f6efe50809d875d46c10b3739b6bb210a552a3a\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "thai",
+      "surface": "\u0e19\u0e32\u0e27\u0e34\u0e19",
+      "candidate": "\u0e19\u0e32\u0e27\u0e34\u0e19\u0e01\u0e25\u0e31\u0e1a\u0e1a\u0e49\u0e32\u0e19",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":13,\"output_start\":0,\"source_end\":13,\"source_start\":0}],\"digest\":\"sha256:6f41329b4d83e42b673689f1a322e8f2fea60fb5d32ebef98af4bcc7d03dd574\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:286e3a369d52d6973d2add7b9f8f7c252211510e1cafad639cc7599b393ceb36\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u0e19\\u0e32\\u0e27\\u0e34\\u0e19\\u0e01\\u0e25\\u0e31\\u0e1a\\u0e1a\\u0e49\\u0e32\\u0e19\",\"summary_characters\":13,\"summary_digest\":\"sha256:929730a9bc080fd599e286fe0665a59d8de7066641f30bb497a8dcb47cfbcd4b\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "lao",
+      "surface": "\u0e99\u0eb2\u0ea7\u0eb2",
+      "candidate": "\u0e99\u0eb2\u0ea7\u0eb2\u0e81\u0eb1\u0e9a\u0e9a\u0ec9\u0eb2\u0e99",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":11,\"output_start\":0,\"source_end\":11,\"source_start\":0}],\"digest\":\"sha256:78c0696f501c58e215d40b8ff2595924730f9eac809d9bb347b24f531a152c77\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:05c2b131ff2abda48e8b1c830e4f6607268445acfd13f2470d17708aa649b4f8\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u0e99\\u0eb2\\u0ea7\\u0eb2\\u0e81\\u0eb1\\u0e9a\\u0e9a\\u0ec9\\u0eb2\\u0e99\",\"summary_characters\":11,\"summary_digest\":\"sha256:39fce8bf9cb232e8640f8509429c13c503d39f02db377f4cfbb203ecbf915c29\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "khmer",
+      "surface": "\u1793\u17b6\u179c\u17b6",
+      "candidate": "\u1793\u17b6\u179c\u17b6\u178f\u17d2\u179a\u17a1\u1794\u17cb\u1795\u17d2\u1791\u17c7",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:96d0fdb720973a78933b47d29d7c06946590a4a91ff84a0f54e8802321bf57f8\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:bc1afc03453a3f046cec58d25dc82ebdf9d20b612af4bcc7ad0ceeb81349d62d\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u1793\\u17b6\\u179c\\u17b6\\u178f\\u17d2\\u179a\\u17a1\\u1794\\u17cb\\u1795\\u17d2\\u1791\\u17c7\",\"summary_characters\":14,\"summary_digest\":\"sha256:c03a913544f16b051dd2d2227ca2811d0642b717b76e6a6a26389cf70d314d3a\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "myanmar",
+      "surface": "\u1014\u102c\u101d\u102b",
+      "candidate": "\u1014\u102c\u101d\u102b\u1015\u103c\u1014\u103a\u101c\u102c",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":10,\"output_start\":0,\"source_end\":10,\"source_start\":0}],\"digest\":\"sha256:735ae1a2b817b4cbbc47d7704542ddc6b0617bc8ae5fcce7a0d93f77b3182d27\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:3622313a8abd6a61e532b160f8b07e5270e941f359a961df4d383c222bbc2d8a\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u1014\\u102c\\u101d\\u102b\\u1015\\u103c\\u1014\\u103a\\u101c\\u102c\",\"summary_characters\":10,\"summary_digest\":\"sha256:d3c6f74d510214de415a2bc7afcc09855a2ac9a21183f20e48c317b09b556817\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_particle",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c\uc740 \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":12,\"output_start\":0,\"source_end\":12,\"source_start\":0}],\"digest\":\"sha256:5278669db6038488b2c8dfa965b4b6531f5024a79b850806920b3e50d4bffb51\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1d745b42c152a0f10163ef1179fd39cdfd34aa91c3ed90a1b5d2886f4b3c80bc\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c\\uc740 \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":12,\"summary_digest\":\"sha256:e61a09770483fad0f3505cc52e4e4f58f7eb8daa6898d74e9276308d942be5d4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_compound_particle",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c\uc5d0\uac8c\ub294 \uc548\ub0b4\ud588\uc2b5\ub2c8\ub2e4.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:8c2422658e62eb6d52c241f3308bbe7b5deff0fd62cdeb0c20471f5658ca8a67\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:157367fe68126cc0bafd4c6c81cf78c701e0f31fd5590364b3670c1121bcbb55\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c\\uc5d0\\uac8c\\ub294 \\uc548\\ub0b4\\ud588\\uc2b5\\ub2c8\\ub2e4.\",\"summary_characters\":14,\"summary_digest\":\"sha256:674a8352f2582c67b5ced3a39e98ca03ee4f1e46ed934cb3fedc44c6589f1949\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_exact",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":11,\"output_start\":0,\"source_end\":11,\"source_start\":0}],\"digest\":\"sha256:7f2916e25dc16dfe8025d12eeb326fc064090fc0f08fbdf9e1f85c3bc47aef66\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:9d6990c84657a0f7a01668e8a6e5db03570452d5a391c1cfe364b091224a4586\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":11,\"summary_digest\":\"sha256:7c2299c74cf9ba45099f6cf80c3fa7684e2257e1b46044e023deefcef772b2cf\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_longer_word",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c\uc740\ud61c\ub97c \ud655\uc778\ud588\uc2b5\ub2c8\ub2e4.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:fea69240b02942da7d2e3a5980cc823789e861cc1563b77adb0082ca2a2a6732\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:6152e7faf17f78d2d1d2a4e1373d2c6c014e2624c499e591858b1c3de4cf6ca5\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c\\uc740\\ud61c\\ub97c \\ud655\\uc778\\ud588\\uc2b5\\ub2c8\\ub2e4.\",\"summary_characters\":14,\"summary_digest\":\"sha256:9bb617af05e365b9c5abc5e8e3433979f27759fb482d8bb3a701136a35470ca4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_prefix",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ube5b\ud64d\uc544\ub78c\uc740 \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":13,\"output_start\":0,\"source_end\":13,\"source_start\":0}],\"digest\":\"sha256:c1fc6e2f41e24e919a0f14aeb78f0811c2059e7fe571f977e2731f9f1e792966\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:80a5ea9f435669117c3e1a7e8bbae277a86d01e5fda0a86340068db2451e4bcc\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ube5b\\ud64d\\uc544\\ub78c\\uc740 \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":13,\"summary_digest\":\"sha256:8fec94488dc15d5af1b6566da87dbd61b7670a4259ba78cb375ddaefc60b20c3\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_width",
+      "surface": "Casey",
+      "candidate": "\uff23\uff41\uff53\uff45\uff59 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:a6b15f6aed698fe55afe332b88d934ea81fecec0524119d9350cb9b7885118fe\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:2c45b3e257486532f9b09b01416b95a41f32b3b44df4e466190b88431c514e54\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\uff23\\uff41\\uff53\\uff45\\uff59 improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:597ec401ed5a94fabcb31e79829aa88b07f640c7d2218b388ba2da12e55db001\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "source_width",
+      "surface": "\uff23\uff41\uff53\uff45\uff59",
+      "candidate": "Casey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:a9811c5508101647f1f539adc6d597dd94ca03d1de47e93fbcd6cbd6c433d0b4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1da9013e4fdb23de461d01f480cdd8801053fecccc10887121b07f599bd938a4\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:ab87856e87f4fde4dd4bd2ef5f273380aac4bff9ce2a6523a62d86bedb5a006e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_greek",
+      "surface": "Casey",
+      "candidate": "C\u03b1s\u03b5y improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:815887b2c29c6d902b0d2f3897b5d7e9ceed157b11c69c72cec4407a0f3aca11\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:a188d6be6593b73cc426b9833c82200fba20d7376955788217c6abb35b7cd3a1\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"C\\u03b1s\\u03b5y improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:26450b8344171aa9bf539a7edf475639a2b7408a2cb4ef17eb222087413cbaf4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_cyrillic",
+      "surface": "Casey",
+      "candidate": "\u0421\u0430sey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:8485a4101015407589a56bb5eec52f7df74781d77d31ba2b64829109e4673510\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:371db1eb0d78ddc5a0fbb615824c41541a8a43b026b1ec02463669660c629466\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u0421\\u0430sey improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:50d9363bb59f6c8d4fb6d56f7526733082dcc9caa9c9a6fb89228e36b2551965\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_case",
+      "surface": "Casey",
+      "candidate": "cAsEy improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:cabedaae4344651c6c014e0ba90fcbfa55e3dd5dc4bcaaa6e4f05b74dc89f365\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:3253293fca2c4020b240907670b16e3636f735cb70d6f6a71312a89776a0f1a6\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"cAsEy improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:dd1dddb57f9fdd34fcd4ca4db13ef357b2f8e2b07e008a36864920e2def83072\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "nfd",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:ac536022202e9611a3190e270af6b6f8fc73ffa8135eea7a94dfa28e59e2b1e8\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:62a23b70ce5e4ba6eeda7c6647e5af6c3d0e137874adbe8ce59c23f0c502cf45\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\u0301 improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:86112f90947bc107ca3221666d991790242fe2433408056b65c76a1b7a7528a8\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "nfd_source",
+      "surface": "Rene\u0301",
+      "candidate": "Ren\u00e9 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:baf958cfdb9e522d33ecfdab11fce7fbee61f90cf6dc6d0634cc6af6d47b8ab4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:d972d6bcf020bf7af4467b381d4d824c0e373bdddd7d81b047eea41b0d949f65\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ren\\u00e9 improved.\",\"summary_characters\":14,\"summary_digest\":\"sha256:25be8d4623af4581eba2671ff736643256bbe8603789e64d4d211a5bf092a2f2\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "kana_nfd",
+      "surface": "\u3042\u304a\u3060",
+      "candidate": "\u3042\u304a\u305f\u3099\u3055\u3093\u8981\u78ba\u8a8d\u3002",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":10,\"output_start\":0,\"source_end\":10,\"source_start\":0}],\"digest\":\"sha256:b82d8f55e37a33fd6dd01eb6edde4817d14c2b0c33e4e6b2c1271fb0a9b416d3\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:8161ac56b6110db92d91e5b65923acf7c44fa6112c2ea311061a917e0c9d1f45\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u3042\\u304a\\u305f\\u3099\\u3055\\u3093\\u8981\\u78ba\\u8a8d\\u3002\",\"summary_characters\":10,\"summary_digest\":\"sha256:ae364b060212344a85db4c3c70e2c2e2a99ee53c812e73f47f52e9e2d477cfad\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_nfd",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\u1112\u1169\u11bc\u110b\u1161\u1105\u1161\u11b7\u110b\u1173\u11ab \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":19,\"output_start\":0,\"source_end\":19,\"source_start\":0}],\"digest\":\"sha256:fe7ed7a194c5ccde3705e483862bdf31112d7413428e3959fe585ab0d5dae5e3\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:fa68c9fb64ec1dee335415c9730dff10a30de573284eb332a05a56aedf6723df\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u1112\\u1169\\u11bc\\u110b\\u1161\\u1105\\u1161\\u11b7\\u110b\\u1173\\u11ab \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":19,\"summary_digest\":\"sha256:99f566aacd1c2871b34be4aea1d49fde4e3e4a24145db244a6b7afdc23766d07\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "short_latin",
+      "surface": "Al",
+      "candidate": "Al improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":12,\"output_start\":0,\"source_end\":12,\"source_start\":0}],\"digest\":\"sha256:21acafb560cf55dc1bd107767ae1f42a6ebd69cd25045e52426d82da5877d1c4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:6f451a6b99fe0a94d181e03298002d3c9a1ea6f2da391e781565b3b661bbf015\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Al improved.\",\"summary_characters\":12,\"summary_digest\":\"sha256:665c3d37aa11d042c4b1b50996085dbfeb26182f283ccb46a2c8085a1c6e3cdb\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "short_id",
+      "surface": "73",
+      "candidate": "Record 73 reviewed.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":19,\"output_start\":0,\"source_end\":19,\"source_start\":0}],\"digest\":\"sha256:50a388b76f7e57f5432a5c76ebfc84c98a1fcc1f56414189286113b5903e55d1\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:5364b9f67205a032f92a6c8cc8cf10fa499143e1bcc6eb46a239dc3aecf34780\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Record 73 reviewed.\",\"summary_characters\":19,\"summary_digest\":\"sha256:9fd983a3528dd8ad1c168a454fe9bf30aa78bd6822a2c462bd336c2b8f31c5a4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_longer",
+      "surface": "Casey",
+      "candidate": "Caseyville improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":20,\"output_start\":0,\"source_end\":20,\"source_start\":0}],\"digest\":\"sha256:f75e3fc47de6688ce570411ee2ffbb0f4188782d109f6732ba2a26627d086609\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:448cd3a38a16a1c8488130720a34b32d246c93cb502f0567345ced65e6e68f65\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Caseyville improved.\",\"summary_characters\":20,\"summary_digest\":\"sha256:9bfde255d26c53e8af2cf548ee2ccf0e7a4377f29fa8732913bfce787512bdf4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_prefix",
+      "surface": "Casey",
+      "candidate": "XCasey improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:80c82651c0467241f7e58097c40cb8a926b26293dbea4c0da8b55fff544b8a8b\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:4123f9a54d813bc0850e0012693ca960bb5f01c0eb2d3fa2122f7f1575c65baf\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"XCasey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:6ea1d0401a5b01af25b74e4e05eebe7b043a2250f869f73eb7b1e99dfd95a140\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_digit_suffix",
+      "surface": "Casey",
+      "candidate": "Casey2 improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:55bf305616d5d8bcf56dfd3951f67101a09257f707e589c57b66f07e3a5372bb\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:871ff1b5f733b352c37e7bda837bb44efa5202c0c0cb8835cb520b584383431c\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey2 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:b1f30a2db39bf8a4081f1b7437e33c9daf766dad612810a7ab101ffb213e111c\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "latin_underscore",
+      "surface": "Casey",
+      "candidate": "Casey_2 improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":17,\"output_start\":0,\"source_end\":17,\"source_start\":0}],\"digest\":\"sha256:f50a65cb0271e096f769e826401c9866ddc57fec1fbd95a358fbacf853633fd6\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:a6051e12dc4e9940d2ca12cc4da07cd9e2839a12cb9a1a0733319c5da6958d0b\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey_2 improved.\",\"summary_characters\":17,\"summary_digest\":\"sha256:7ca3c0d39d20a2ac57761e3f2ff5715d1e53b69d0a70d57fecd7b5e722081165\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "partial_name",
+      "surface": "Casey Example",
+      "candidate": "Casey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:a9811c5508101647f1f539adc6d597dd94ca03d1de47e93fbcd6cbd6c433d0b4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1da9013e4fdb23de461d01f480cdd8801053fecccc10887121b07f599bd938a4\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:ab87856e87f4fde4dd4bd2ef5f273380aac4bff9ce2a6523a62d86bedb5a006e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "multipart_space",
+      "surface": "Casey Example",
+      "candidate": "Casey\nExample improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":23,\"output_start\":0,\"source_end\":23,\"source_start\":0}],\"digest\":\"sha256:1fb8f291fc2dbfa7575986744df175400c2e31115ce3964acc3273b0a1e2c5ea\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:343b4d88da7343044444442f295169a9c2b184ddf3458876b0b4d0e269ac1949\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey\\nExample improved.\",\"summary_characters\":23,\"summary_digest\":\"sha256:f099da7e511dc1bd27bef4c5e5a2b23d66905e3bd7bb56d74bfeb028075ad193\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "partial_longer",
+      "surface": "Casey Example",
+      "candidate": "Exampleton improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":20,\"output_start\":0,\"source_end\":20,\"source_start\":0}],\"digest\":\"sha256:0a69428513a60cf809ea4ac442800323cc5ba59eeeedb1fd65dac5426f92cbc7\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:3a1b8642ade80783d7df6a7ec68628513cd9e23c50c10910271ec88cedcc7af1\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Exampleton improved.\",\"summary_characters\":20,\"summary_digest\":\"sha256:b21437020cb28bf2fd66e114a7954faf0e6cc158fc72677623f616793339394a\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "punctuated_id",
+      "surface": "FX-73",
+      "candidate": "FX-73 reviewed.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:937e35212a5088b23808bd2702fbd5252be4513704f722bd3e30d7fdfb8ef3ac\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:ff1f3955eb8ae0f1ffb906dd096a39e81841351b1b362b8357e10208622b821e\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"FX-73 reviewed.\",\"summary_characters\":15,\"summary_digest\":\"sha256:8a4f033a1822fe3bfecb83654d85772b582e7d59c806e847d4c01ed00ac60f51\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "punctuated_id_partial",
+      "surface": "Casey-73",
+      "candidate": "Casey improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:a9811c5508101647f1f539adc6d597dd94ca03d1de47e93fbcd6cbd6c433d0b4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1da9013e4fdb23de461d01f480cdd8801053fecccc10887121b07f599bd938a4\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:ab87856e87f4fde4dd4bd2ef5f273380aac4bff9ce2a6523a62d86bedb5a006e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}",
+      "native_leaked": true
+    },
+    {
+      "id": "cyrillic_inflection",
+      "surface": "\u0418\u0440\u0438\u043d\u0430",
+      "candidate": "\u0418\u0440\u0438\u043d\u044b \u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435 \u0443\u043b\u0443\u0447\u0448\u0438\u043b\u043e\u0441\u044c.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":27,\"output_start\":0,\"source_end\":27,\"source_start\":0}],\"digest\":\"sha256:8f1fe23cf86acd8a384cabf2cd0edbf8d9ea845d7d86c787608ac7243a81635c\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:ebf9c44057c9fc07f039385fe10171723d9272b916b527581a4c14bc7a61567b\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u0418\\u0440\\u0438\\u043d\\u044b \\u0441\\u043e\\u0441\\u0442\\u043e\\u044f\\u043d\\u0438\\u0435 \\u0443\\u043b\\u0443\\u0447\\u0448\\u0438\\u043b\\u043e\\u0441\\u044c.\",\"summary_characters\":27,\"summary_digest\":\"sha256:aef083ca9ad86cd9c119a2baf22c5ecf96b0bedca0979dc7919fc6af3068d33e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "masked",
+      "surface": "Casey",
+      "candidate": "[NAME] improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:f3f669883c14bfb10f1a64bced121e2c7ecb05cf5a9a6a258ff671f7694e6f46\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:eed7e9ec6b8ccde34ab91ff32db1b520ae7eed310159069f355daaada0f538a2\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"[NAME] improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:ef20b8edaa69c6004bf22b8ca44f418d39c7dc7a0c29e31261a867f6f08d265e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "different_han",
+      "surface": "\u9648\u79be",
+      "candidate": "\u6797\u67da\u9700\u590d\u67e5\u3002",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":6,\"output_start\":0,\"source_end\":6,\"source_start\":0}],\"digest\":\"sha256:7e28d8b834e8393be489fbeac5d1638b6de277ab17dc960a129d739ffc7b3d95\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:a32956e4911fa47703c64f6897a9b99eed78bdc155ffc50b1afb8f3fac21533d\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\u6797\\u67da\\u9700\\u590d\\u67e5\\u3002\",\"summary_characters\":6,\"summary_digest\":\"sha256:ec305b6cedeaa4cdc2233ba8bc73f9c93e54c6b4c22f33eb94c7dd707d581a03\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "different_hangul",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\uae40\uc18c\ub77c \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":11,\"output_start\":0,\"source_end\":11,\"source_start\":0}],\"digest\":\"sha256:e8679068206e794c46eae55f68ac86fab63232eb745e09d1d43b22fbbc9c631e\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:d5e305a9c91aa0fa5b81021de326998fea65eea96fde097f4b6255dbf0a296cc\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\uae40\\uc18c\\ub77c \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":11,\"summary_digest\":\"sha256:57b4a851fdd50087e9c04000e0163ec386080de9af8395328393d06642ae28e3\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "empty",
+      "surface": "  ",
+      "candidate": "Synthetic evidence improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":28,\"output_start\":0,\"source_end\":28,\"source_start\":0}],\"digest\":\"sha256:4a0264cc1f5fe08d9dced6a3a5b86d33f5dfca13d68ebeeb420cfdd325e57c2d\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:71723f03a7b2763ec85490256e645b3d9cea9bfec489a8d582aa3c9d941654ef\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Synthetic evidence improved.\",\"summary_characters\":28,\"summary_digest\":\"sha256:81aefc3ee3d110c980da5a9ae9082ecad044c458e005cb8639b3a6c4b8c02a2b\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "invisible_0",
+      "surface": "Casey",
+      "candidate": "Ca\u200bsey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:de84f48c88c74595926cb45089956e9c5bb04b34e5f3f1fcad02d8d0b8dd9e4a\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:40441e4eb1cdc7064a76ecffaf4aff86cace3f3f446b19e1e07c0b91e71e7cf6\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ca\\u200bsey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:71f4af870a0babb7e954061c5abc6d654475fe79a5f95eb7aae054f8215b8dc7\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "interrupted_nfd_0",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\u200b\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:1dcd3b8425bdf7a016c7fa5994998d3efa583e1e75dc0f270d9aae9acf6fdbc5\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:ea580341aa6c7594a0ddd0a2ecd206d9d20f71b8a629d26891d83e683d92bd4b\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\u200b\\u0301 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:cf5ba774c0919a04b016a6018e72d2a20b245a6672e16d37a860db22ff92eaeb\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "invisible_1",
+      "surface": "Casey",
+      "candidate": "Ca\u200csey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:0bdd9c180010278ea9938b358de44c4ef31be07dc91ef1fc7275a6724d4bef2e\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:f66831bdd571794c536d26a4fd15eed808ac72811eabfe28db215059db25bbf1\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ca\\u200csey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:d996d6c27fcbca7188a881727402de5b75c4ce0457c4c3b002d617d15ced21e5\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "interrupted_nfd_1",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\u200c\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:70c2acc0a5eb946dd8f08d9ad97f892c2cafea522dc6148d8e6102f5ac658d7d\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:86910f3e7ea4f820a34025f34a9d754b0a8ea4805e44c4c1d7cfc6bf71dff940\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\u200c\\u0301 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:8dbfea6bc2a8a68554be84ff0ec932763ffff0f6b763022e7a483f725830ac2d\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "invisible_2",
+      "surface": "Casey",
+      "candidate": "Ca\u200dsey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:8784ae292cb33b8c8fa581bafff77fbfb867935ed0a8c322aa0f2bc2ee708757\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:d7f4217195a9c01a400517e09ff58fb2987fb6fb180355258291dc4317292243\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ca\\u200dsey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:1c4231d65f2a93c3d797289fb98896ecd9c7eac5bc86d6cefe1e25a22e32c39e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "interrupted_nfd_2",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\u200d\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:8c480eaaa8ef419ae703c07395541f7b8265992810e78bd524ad61dba87d235a\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:6d1ed9c020cecc8bfc2b36e3006346c0dc2d70d2e29639b299345d09bc021924\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\u200d\\u0301 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:467695a9f33879196668be90b40eee4685e1f99e49ddb4bfc6c3f815a765f08e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "invisible_3",
+      "surface": "Casey",
+      "candidate": "Ca\u2060sey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:4a920efbbc487ef261761ddfb0bd3ea8a86023b9590ca1e19be90ca05fd941b5\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:25411006b75b05467e77afc96d42d7e7e3d31f7acd31317527a3d0ae962a6bd7\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ca\\u2060sey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:1e0fd61d1e985ce44cc1a3b71855d476fc569ae0cfc720b4af7f167896c512c2\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "interrupted_nfd_3",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\u2060\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:352cb6a7296fbd9031634f4a169ee5d9cd9318c378365904677a7c4fe6c84dcb\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1ce0f839549e669d7b516cb3777a3eeb151723638d8b71fa75f0e9cb7b873c21\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\u2060\\u0301 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:e829e73e82b8e3427d4c11ea984e1860f122d70df8ac31112352dc53435957eb\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "invisible_4",
+      "surface": "Casey",
+      "candidate": "Ca\ufeffsey improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:f153ecfbb146de80bd3cc2710aaecdb9bb5a7ec16d46229e30ab9d573fe0ee11\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:2787ecf3341997099a36012444a7008a05abf5a0b987b088b99594f0f161d85b\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Ca\\ufeffsey improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:b31783f23bc63f93db760c892e36202233d8f22430c79e4626adef3d1486679b\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "interrupted_nfd_4",
+      "surface": "Ren\u00e9",
+      "candidate": "Rene\ufeff\u0301 improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:3f60aaa366167cefa1f83c043a2a03e2a5803c4e958bb022d4ec1ccade1b5462\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:4a01ed643dabb1be06b802414d5200472e199220aa0360f2e78321fbc7e835aa\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Rene\\ufeff\\u0301 improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:0ba3e3f49bac2a721f5b92b17dd53c3ac5522498d7d9a9ba1fe5723178acb725\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_ambiguous_suffix",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\uc774\ub098\ud61c",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":164,\"output_start\":0,\"source_end\":164,\"source_start\":0}],\"digest\":\"sha256:815505cb62a5598a03a4fed39383b55e983ab9171402e2c0462d27443662c9f5\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:31b7d36921e617546dcf15c24d2c7cbd9b1214cef5260eded25ee3ddf9a202b5\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\uc774\\ub098\\ud61c\",\"summary_characters\":164,\"summary_digest\":\"sha256:489f97a44534b913a6304e1489806581718043345202cb51af793418ace80062\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hangul_honorific_particles",
+      "surface": "\ud64d\uc544\ub78c",
+      "candidate": "\ud64d\uc544\ub78c\ub2d8\uaed8\uc11c\ub294 \ud68c\ubcf5\uc911\uc785\ub2c8\ub2e4.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:5ac76c87ec2543fc6f89ebefe554c9c7e01b6209a38c32281c0488453cb2fb05\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:0d361a6bae90ce798603cc0124850a5a5c2abd9a9cf3b983f432009d5d3c2c2e\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"\\ud64d\\uc544\\ub78c\\ub2d8\\uaed8\\uc11c\\ub294 \\ud68c\\ubcf5\\uc911\\uc785\\ub2c8\\ub2e4.\",\"summary_characters\":15,\"summary_digest\":\"sha256:4da348611a2332b3b2d89215303fdabe41389e90c506e89828acb6413b91b20c\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "composing_mark_ascii",
+      "surface": "Casey",
+      "candidate": "Case\u0301y improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:e494908a109266fbde45afcfcd14e27727d02879a343485881a9b2eda07c0ce4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:448341e5bc3b8caac77ad9c901990b4204cd0208ef284005ca542efbf71c7040\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Case\\u0301y improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:9ab4b255cbd06d9a16d202ec3105099d2c5866faccc195e86259e0e2bfd8d881\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "noncomposing_mark_ascii",
+      "surface": "Casey",
+      "candidate": "Case\u0305y improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":16,\"output_start\":0,\"source_end\":16,\"source_start\":0}],\"digest\":\"sha256:73baf32682677d0b93849a0c2f1f87ef8d4b12d83a03223c77a95218a0598f33\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:32987192c143aee16c2868c1b2c5228ef57de575ddb2a390e3d3bb3908cb30cd\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Case\\u0305y improved.\",\"summary_characters\":16,\"summary_digest\":\"sha256:73b7c9bdd39d606a1874615809df2002d4878998dfb6deb316f0c4fc7a1636e5\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "dotless_i",
+      "surface": "Miri",
+      "candidate": "M\u0131ri improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:41956c6f67ca92934d28790e5e0dc1023839190340dc226bf357007bca8d53ef\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:fe8aa64585d4e963a3344e276da46f65fd08c313a8162e9b6249ff473cda0d9f\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"M\\u0131ri improved.\",\"summary_characters\":14,\"summary_digest\":\"sha256:e0a81b313ba0abaebf5d3f35dd95e6aae93506c1f31b87be566baf4183c81b3d\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "dotless_i_source",
+      "surface": "M\u0131ri",
+      "candidate": "Miri improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:b36a2dbbb8c930f18d679b09f929edc72df0b5fd068e059d3d6408e9eb7f1769\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:63d50eddef34481fed023703812a2f0b2cadb46cdcb61195cd34550509b96119\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Miri improved.\",\"summary_characters\":14,\"summary_digest\":\"sha256:991081ce1b97e05c93026b20ae4f7f28ec80c69f220634ea6e03aa861841f0f4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "dotted_i",
+      "surface": "Miri",
+      "candidate": "M\u0130ri improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:347c3bca007590e126380ef20df74eb6783023018de0e7b8c1a7abe9cad6d0f9\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:989bda6397e143f0f948da28aa247f78372414a611c5156215ee6bb25aed64a2\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"M\\u0130ri improved.\",\"summary_characters\":14,\"summary_digest\":\"sha256:0ede31663b081a0de79051136a68f2beb5a71b9ee79ef0181a523447f0705f6c\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "dotted_i_source",
+      "surface": "M\u0130ri",
+      "candidate": "Miri improved.",
+      "leaked": true,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":14,\"output_start\":0,\"source_end\":14,\"source_start\":0}],\"digest\":\"sha256:b36a2dbbb8c930f18d679b09f929edc72df0b5fd068e059d3d6408e9eb7f1769\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:63d50eddef34481fed023703812a2f0b2cadb46cdcb61195cd34550509b96119\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Miri improved.\",\"summary_characters\":14,\"summary_digest\":\"sha256:991081ce1b97e05c93026b20ae4f7f28ec80c69f220634ea6e03aa861841f0f4\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}"
+    },
+    {
+      "id": "hyphenated_surname_component",
+      "surface": "Casey-Riley",
+      "candidate": "Riley improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:896c48abe8a0b58a1e2736ea4cf2ad4e04e463e22ff82080449600d6f357cc92\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:00b24cb9d7d9e95897726d4b6605318ca6eee72385291d2831af61aec4cb488e\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Riley improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:543dbd5dadf50ebd75581edcedfd67536847c7cf0eb1ad53caac8f5ccfa3a00b\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}",
+      "native_leaked": true
+    },
+    {
+      "id": "apostrophe_name_component",
+      "surface": "O'Casey",
+      "candidate": "Casey improved.",
+      "leaked": false,
+      "evaluation_json": "{\"citations\":[{\"claim_index\":0,\"output_end\":15,\"output_start\":0,\"source_end\":15,\"source_start\":0}],\"digest\":\"sha256:a9811c5508101647f1f539adc6d597dd94ca03d1de47e93fbcd6cbd6c433d0b4\",\"envelope\":{\"human_review_mode\":true,\"is_diagnostic\":false,\"provenance\":{\"content_hash\":\"sha256:1da9013e4fdb23de461d01f480cdd8801053fecccc10887121b07f599bd938a4\"},\"requires_human_review\":true,\"status\":\"ready\"},\"refusal_reason\":null,\"schema_version\":1,\"status\":\"needs_review\",\"summary\":\"Casey improved.\",\"summary_characters\":15,\"summary_digest\":\"sha256:ab87856e87f4fde4dd4bd2ef5f273380aac4bff9ce2a6523a62d86bedb5a006e\",\"verdicts\":[{\"claim_index\":0,\"label\":\"entailment\"}]}",
+      "native_leaked": true
+    }
+  ],
+  "normalization_cases": [
+    {
+      "input": "x\u0391y",
+      "normalized": "xay"
+    },
+    {
+      "input": "x\u0392y",
+      "normalized": "xby"
+    },
+    {
+      "input": "x\u0395y",
+      "normalized": "xey"
+    },
+    {
+      "input": "x\u0397y",
+      "normalized": "xhy"
+    },
+    {
+      "input": "x\u0399y",
+      "normalized": "xiy"
+    },
+    {
+      "input": "x\u039ay",
+      "normalized": "xky"
+    },
+    {
+      "input": "x\u039cy",
+      "normalized": "xmy"
+    },
+    {
+      "input": "x\u039dy",
+      "normalized": "xny"
+    },
+    {
+      "input": "x\u039fy",
+      "normalized": "xoy"
+    },
+    {
+      "input": "x\u03a1y",
+      "normalized": "xpy"
+    },
+    {
+      "input": "x\u03a4y",
+      "normalized": "xty"
+    },
+    {
+      "input": "x\u03a7y",
+      "normalized": "xxy"
+    },
+    {
+      "input": "x\u03b1y",
+      "normalized": "xay"
+    },
+    {
+      "input": "x\u03b5y",
+      "normalized": "xey"
+    },
+    {
+      "input": "x\u03b7y",
+      "normalized": "xny"
+    },
+    {
+      "input": "x\u03b9y",
+      "normalized": "xiy"
+    },
+    {
+      "input": "x\u03bay",
+      "normalized": "xky"
+    },
+    {
+      "input": "x\u03bcy",
+      "normalized": "xuy"
+    },
+    {
+      "input": "x\u03bfy",
+      "normalized": "xoy"
+    },
+    {
+      "input": "x\u03c1y",
+      "normalized": "xpy"
+    },
+    {
+      "input": "x\u03c4y",
+      "normalized": "xty"
+    },
+    {
+      "input": "x\u03c5y",
+      "normalized": "xuy"
+    },
+    {
+      "input": "x\u03c7y",
+      "normalized": "xxy"
+    },
+    {
+      "input": "x\u0410y",
+      "normalized": "xay"
+    },
+    {
+      "input": "x\u0412y",
+      "normalized": "xby"
+    },
+    {
+      "input": "x\u0415y",
+      "normalized": "xey"
+    },
+    {
+      "input": "x\u041ay",
+      "normalized": "xky"
+    },
+    {
+      "input": "x\u041cy",
+      "normalized": "xmy"
+    },
+    {
+      "input": "x\u041dy",
+      "normalized": "xhy"
+    },
+    {
+      "input": "x\u041ey",
+      "normalized": "xoy"
+    },
+    {
+      "input": "x\u0420y",
+      "normalized": "xpy"
+    },
+    {
+      "input": "x\u0421y",
+      "normalized": "xcy"
+    },
+    {
+      "input": "x\u0422y",
+      "normalized": "xty"
+    },
+    {
+      "input": "x\u0425y",
+      "normalized": "xxy"
+    },
+    {
+      "input": "x\u0430y",
+      "normalized": "xay"
+    },
+    {
+      "input": "x\u0435y",
+      "normalized": "xey"
+    },
+    {
+      "input": "x\u043ey",
+      "normalized": "xoy"
+    },
+    {
+      "input": "x\u0440y",
+      "normalized": "xpy"
+    },
+    {
+      "input": "x\u0441y",
+      "normalized": "xcy"
+    },
+    {
+      "input": "x\u0445y",
+      "normalized": "xxy"
+    },
+    {
+      "input": "x\u0456y",
+      "normalized": "xiy"
+    },
+    {
+      "input": "x\u3007y",
+      "normalized": "xoy"
+    },
+    {
+      "input": "\uff32\uff45\uff4e\u00e9",
+      "normalized": "rene"
+    },
+    {
+      "input": "Rene\u200b\u0301",
+      "normalized": "rene"
+    },
+    {
+      "input": "\ud64d\uc544\ub78c\uc740",
+      "normalized": "\ud64d\uc544\ub78c\uc740"
+    },
+    {
+      "input": "\u3042\u304a\u305f\u200b\u3099",
+      "normalized": "\u3042\u304a\u305f"
+    },
+    {
+      "input": "\u0905\u0928\u0941",
+      "normalized": "\u0905\u0928\u0941"
+    },
+    {
+      "input": "\u09e7\u09e8\u09e9",
+      "normalized": "123"
+    },
+    {
+      "input": "\u1218\u135d",
+      "normalized": "\u1218\u135d"
+    },
+    {
+      "input": "x\u0301",
+      "normalized": "x"
+    },
+    {
+      "input": "Casey\u2060",
+      "normalized": "casey"
+    },
+    {
+      "input": "Stra\u00dfe",
+      "normalized": "strasse"
+    },
+    {
+      "input": "\u0130",
+      "normalized": "i"
+    },
+    {
+      "input": "Case\u0301y",
+      "normalized": "casey"
+    },
+    {
+      "input": "Case\u0305y",
+      "normalized": "casey"
+    },
+    {
+      "input": "M\u0131ri",
+      "normalized": "miri"
+    },
+    {
+      "input": "M\u0130ri",
+      "normalized": "miri"
+    }
+  ]
 }

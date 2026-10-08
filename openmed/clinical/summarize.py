@@ -15,11 +15,17 @@ from __future__ import annotations
 import hashlib
 import inspect
 import re
+import unicodedata
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from openmed.core.pii import DeidentificationResult, deidentify
+from openmed.core.script_detect import (
+    ZERO_WIDTH_CHARS,
+    normalize_for_pii_detection,
+    segment_by_script,
+)
 
 DEFAULT_SUMMARIZATION_MODE = "bhc"
 SUMMARIZATION_ADVISORY = (
@@ -29,6 +35,55 @@ SUMMARIZATION_ADVISORY = (
 )
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\n{2,}")
+
+# Bounded suffixes, not morphological inference. Keep a boundary after the
+# suffix so a longer Hangul word does not become a source-name match.
+_HANGUL_PARTICLES = (
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "의",
+    "에",
+    "에서",
+    "에게",
+    "에게서",
+    "께",
+    "께서",
+    "한테",
+    "한테서",
+    "와",
+    "과",
+    "랑",
+    "이랑",
+    "하고",
+    "도",
+    "만",
+    "부터",
+    "까지",
+    "보다",
+    "처럼",
+    "으로",
+    "로",
+    "으로서",
+    "로서",
+    "으로써",
+    "로써",
+    "이라고",
+    "라고",
+    "이나",
+    "나",
+    "든지",
+    "이든지",
+    "조차",
+    "마저",
+    "밖에",
+    "뿐",
+    "님",
+    "씨",
+)
 
 __all__ = [
     "DEFAULT_SUMMARIZATION_MODE",
@@ -433,10 +488,18 @@ def _source_phi_surfaces(deidentified: Any) -> tuple[str, ...]:
 
 def _build_leakage_check(deidentified: Any, candidate: str) -> LeakageCheck:
     surfaces = _source_phi_surfaces(deidentified)
+    normalized_candidate = _normalize_leakage_text(candidate)
     leaked_hashes: list[str] = []
     for surface in surfaces:
         pattern = _surface_pattern(surface)
-        if pattern is not None and pattern.search(candidate):
+        if pattern is not None and any(
+            all(
+                _hangul_suffix_is_allowed(suffix)
+                for suffix in match.groupdict().values()
+                if suffix is not None
+            )
+            for match in pattern.finditer(normalized_candidate)
+        ):
             leaked_hashes.append(_surface_hash(surface))
     return LeakageCheck(
         passed=not leaked_hashes,
@@ -447,19 +510,63 @@ def _build_leakage_check(deidentified: Any, candidate: str) -> LeakageCheck:
 
 
 def _surface_pattern(surface: str) -> re.Pattern[str] | None:
-    parts = surface.split()
-    if not parts:
+    alternatives = set()
+    for index, raw_part in enumerate(dict.fromkeys((surface, *surface.split()))):
+        normalized = _normalize_leakage_text(raw_part)
+        words = normalized.split()
+        if not words:
+            continue
+        literal = r"\s+".join(re.escape(word) for word in words)
+        scripts = {script for _, _, script in segment_by_script(raw_part)}
+        unspaced = bool(scripts & {"Han", "Hiragana/Katakana", "Thai"}) or any(
+            0x0E80 <= ord(char) <= 0x0EFF  # Lao
+            or 0x1780 <= ord(char) <= 0x17FF  # Khmer
+            or 0x1000 <= ord(char) <= 0x109F  # Myanmar
+            or 0xA9E0 <= ord(char) <= 0xA9FF
+            or 0xAA60 <= ord(char) <= 0xAA7F
+            for char in raw_part
+        )
+        if unspaced:
+            alternatives.add(literal)
+        elif "Hangul" in scripts:
+            # Capture a bounded-script run, then segment known suffixes with DP.
+            # Repeated overlapping regex alternatives can otherwise backtrack
+            # exponentially on an adversarial longer word.
+            suffix = (
+                rf"(?P<hangul_suffix_{index}>"
+                r"[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f"
+                r"\uac00-\ud7af\ud7b0-\ud7ff]*)"
+            )
+            alternatives.add(r"(?<!\w)" + literal + suffix + r"(?!\w)")
+        else:
+            alternatives.add(r"(?<!\w)" + literal + r"(?!\w)")
+    if not alternatives:
         return None
+    return re.compile("(?:" + "|".join(sorted(alternatives)) + ")", re.IGNORECASE)
 
-    alternatives = {
-        r"\s+".join(re.escape(part) for part in parts),
-        *(re.escape(part) for part in parts),
-    }
-    ordered_alternatives = sorted(alternatives, key=len, reverse=True)
-    return re.compile(
-        r"(?<!\w)(?:" + "|".join(ordered_alternatives) + r")(?!\w)",
-        re.IGNORECASE,
-    )
+
+def _hangul_suffix_is_allowed(suffix: str) -> bool:
+    reachable = [False] * (len(suffix) + 1)
+    reachable[0] = True
+    for index in range(len(suffix)):
+        if reachable[index]:
+            for particle in _HANGUL_PARTICLES:
+                if suffix.startswith(particle, index):
+                    reachable[index + len(particle)] = True
+    return reachable[-1]
+
+
+def _normalize_leakage_text(text: str) -> str:
+    # Expose combining marks before the detector's mark-stripping defense.
+    # Recompose after it, so Hangul particle matching still sees syllables.
+    # Remove supported invisible controls first; normalize comparisons only.
+    visible = "".join(char for char in text if char not in ZERO_WIDTH_CHARS)
+    decomposed = unicodedata.normalize("NFD", visible)
+    defended = normalize_for_pii_detection(decomposed).text
+    folded = unicodedata.normalize("NFC", defended).casefold()
+    # Preserve the prior Python IGNORECASE equivalence for the i-family in
+    # the native comparison too. This is separate from the confusable map.
+    return folded.replace("\u0131", "i")
 
 
 def _surface_hash(surface: str) -> str:
