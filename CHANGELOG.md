@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report exact package/version exposure for the core install and each optional
+  extra in the vulnerability gate, with offline uv exports, value-free scanner
+  diagnostics and a static import guard for reviewed extra-only packages.
+  Exposure informs review without changing severity thresholds or CVE waivers.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
