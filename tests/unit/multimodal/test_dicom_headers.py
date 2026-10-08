@@ -174,3 +174,222 @@ def _interval_days(left: str, right: str) -> int:
     first = datetime.strptime(left, "%Y%m%d")
     second = datetime.strptime(right, "%Y%m%d")
     return (second - first).days
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("pixel_api", [False, True])
+def test_dicom_carriers_are_removed_at_every_depth(tmp_path, nested, pixel_api):
+    from openmed.multimodal import redact_dicom_pixels
+
+    source = _write_synthetic_dicom(tmp_path / "carriers.dcm")
+    dataset = pydicom.dcmread(source)
+    carrier = Dataset() if nested else dataset
+    sentinel = b"SYNTHETIC_CARRIER_SENTINEL"
+    for group in (0x5000, 0x5002, 0x6000, 0x6002):
+        carrier.add_new((group, 0x3000), "OW", sentinel)
+        carrier.add_new((group, 0x0022), "LO", sentinel.decode())
+    icon = Dataset()
+    icon.add_new((0x7FE0, 0x0010), "OB", sentinel)
+    carrier.IconImageSequence = Sequence([icon])
+    if nested:
+        dataset.ReferencedStudySequence = Sequence([carrier])
+    dataset.save_as(source, enforce_file_format=True)
+    output = tmp_path / "clean.dcm"
+    if pixel_api:
+        result = redact_dicom_pixels(source, output_path=output)
+        actions = result.to_audit_report()["carrier_actions"]
+    else:
+        result = deidentify_dicom_headers(source, policy={"output_path": output})
+        actions = result.to_audit_report()["actions"]
+    assert sentinel not in output.read_bytes()
+    removed = [a for a in actions if a["tag"].startswith(("(500", "(600", "(0088,"))]
+    assert len(removed) == 9
+    assert all(a["action"] == "remove" and a["ps315_action"] == "X" for a in removed)
+    assert all("value_sha256" not in a and "value_length" not in a for a in removed)
+    assert sentinel.decode() not in json.dumps(result.to_audit_report())
+    assert pydicom.dcmread(output).SOPClassUID == CTImageStorage
+
+
+@pytest.mark.parametrize("flag", ["YES", None, "UNKNOWN"])
+def test_header_only_pixels_have_typed_unclean_outcome(tmp_path, flag):
+    from openmed.multimodal import DicomPixelStatus
+
+    source = _write_synthetic_dicom(tmp_path / "pixels.dcm")
+    dataset = pydicom.dcmread(source)
+    dataset.add_new((0x7FE0, 0x0010), "OB", b"unchanged image bytes")
+    dataset.PatientIdentityRemoved = "YES"
+    dataset.DeidentificationMethodCodeSequence = Sequence([Dataset()])
+    if flag is not None:
+        dataset.BurnedInAnnotation = flag
+    dataset.save_as(source, enforce_file_format=True)
+    original_pixels = pydicom.dcmread(source).PixelData
+    result = deidentify_dicom_headers(source)
+    cleaned = pydicom.dcmread(source)
+    assert result.pixel_status is DicomPixelStatus.NOT_CLEANED
+    assert result.to_audit_report()["pixel_status"] == "pixels_not_cleaned"
+    assert cleaned.PatientIdentityRemoved == "NO"
+    assert "pixels not cleaned" in cleaned.DeidentificationMethod
+    assert "DeidentificationMethodCodeSequence" not in cleaned
+    assert cleaned.PixelData == original_pixels
+
+
+def test_header_unclean_fail_closed_preserves_existing_files(tmp_path):
+    from openmed.multimodal import DicomDeidentificationError
+
+    source = _write_synthetic_dicom(tmp_path / "pixels.dcm")
+    dataset = pydicom.dcmread(source)
+    dataset.add_new((0x7FE0, 0x0010), "OB", b"not cleaned pixels")
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+    output = tmp_path / "existing.dcm"
+    output.write_bytes(b"existing destination")
+    with pytest.raises(DicomDeidentificationError) as exc:
+        deidentify_dicom_headers(
+            source, policy={"output_path": output, "fail_on_unclean_pixels": True}
+        )
+    assert exc.value.reason_code == "pixels_not_cleaned"
+    assert source.read_bytes() == original
+    assert output.read_bytes() == b"existing destination"
+
+
+@pytest.mark.parametrize("pixel_api", [False, True])
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("in_place", [False, True])
+def test_encapsulated_payload_refusal_never_copies_source(
+    tmp_path, pixel_api, nested, in_place
+):
+    from openmed.multimodal import DicomDeidentificationError, redact_dicom_pixels
+
+    source = _write_synthetic_dicom(tmp_path / "encapsulated.dcm")
+    dataset = pydicom.dcmread(source)
+    carrier = Dataset() if nested else dataset
+    carrier.EncapsulatedDocument = b"%PDF-SYNTHETIC_SECRET_PAYLOAD"
+    carrier.MIMETypeOfEncapsulatedDocument = "application/pdf"
+    if nested:
+        dataset.ReferencedStudySequence = Sequence([carrier])
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+    output = source if in_place else tmp_path / "existing.dcm"
+    if not in_place:
+        output.write_bytes(b"existing destination")
+    with pytest.raises(DicomDeidentificationError) as exc:
+        if pixel_api:
+            redact_dicom_pixels(source, output_path=output)
+        else:
+            deidentify_dicom_headers(source, policy={"output_path": output})
+    assert exc.value.reason_code == "encapsulated_document_requires_redaction"
+    assert str(exc.value) == "encapsulated_document_requires_redaction"
+    assert source.read_bytes() == original
+    if not in_place:
+        assert output.read_bytes() == b"existing destination"
+
+
+@pytest.mark.parametrize("pixel_api", [False, True])
+def test_encapsulated_redaction_uses_registered_handler_in_memory(
+    monkeypatch, tmp_path, pixel_api
+):
+    from openmed.multimodal import (
+        ExtractedDocument,
+        base,
+        redact_dicom_pixels,
+        register_handler,
+    )
+
+    source = _write_synthetic_dicom(tmp_path / "encapsulated.dcm")
+    dataset = pydicom.dcmread(source)
+    dataset.EncapsulatedDocument = b"%PDF-SYNTHETIC_PAYLOAD_SENTINEL"
+    dataset.MIMETypeOfEncapsulatedDocument = "application/pdf"
+    dataset.save_as(source, enforce_file_format=True)
+    calls = []
+
+    def redact(stream, *, policy, models, lang):
+        assert stream.read().startswith(b"%PDF-SYNTHETIC_PAYLOAD_SENTINEL")
+        assert policy == {"return_bytes": True}
+        assert callable(models)
+        calls.append(stream.name)
+        return ExtractedDocument(
+            text="", metadata={"redacted_document_bytes": b"%PDF-CLEAN"}
+        )
+
+    monkeypatch.setitem(base._HANDLERS, ".pdf", [])
+    register_handler(".pdf", redact, requires_multimodal=False)
+    output = tmp_path / "clean.dcm"
+    policy = {
+        "output_path": output,
+        "redact_encapsulated_documents": True,
+        "document_policy": {"output_path": tmp_path / "must-not-write.pdf"},
+        "document_models": lambda _: [],
+    }
+    result = (
+        redact_dicom_pixels(source, policy=policy)
+        if pixel_api
+        else deidentify_dicom_headers(source, policy=policy)
+    )
+    cleaned = pydicom.dcmread(output)
+    assert cleaned.EncapsulatedDocument == b"%PDF-CLEAN"
+    assert cleaned.EncapsulatedDocumentLength == 10
+    assert b"SYNTHETIC_PAYLOAD_SENTINEL" not in output.read_bytes()
+    assert not (tmp_path / "must-not-write.pdf").exists()
+    assert calls == ["encapsulated.pdf"]
+    actions = result.to_audit_report()["carrier_actions" if pixel_api else "actions"]
+    action = next(a for a in actions if a["tag"] == "(0042,0011)")
+    assert action["action"] == "replace" and action["ps315_action"] == "D"
+    assert "value_sha256" not in action
+
+
+@pytest.mark.parametrize(
+    "failure", ["no_bytes", "unchanged", "exception", "no_detector"]
+)
+def test_encapsulated_handler_must_prove_byte_replacement(
+    monkeypatch, tmp_path, failure
+):
+    from openmed.multimodal import (
+        DicomDeidentificationError,
+        ExtractedDocument,
+        base,
+        register_handler,
+    )
+
+    source = _write_synthetic_dicom(tmp_path / "encapsulated.dcm")
+    dataset = pydicom.dcmread(source)
+    dataset.EncapsulatedDocument = b"%PDF-SYNTHETIC_PAYLOAD"
+    dataset.MIMETypeOfEncapsulatedDocument = "application/pdf"
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+
+    def handler(stream, **kwargs):
+        if failure == "exception":
+            raise ValueError("SYNTHETIC_PAYLOAD private handler details")
+        payload = stream.read()
+        return ExtractedDocument(
+            text="",
+            metadata={} if failure == "no_bytes" else {"redacted_pdf_bytes": payload},
+        )
+
+    monkeypatch.setitem(base._HANDLERS, ".pdf", [])
+    register_handler(".pdf", handler, requires_multimodal=False)
+    with pytest.raises(DicomDeidentificationError) as exc:
+        deidentify_dicom_headers(
+            source,
+            policy={
+                "redact_encapsulated_documents": True,
+                "document_models": None if failure == "no_detector" else lambda _: [],
+            },
+        )
+    assert str(exc.value) == "encapsulated_document_redaction_failed"
+    assert source.read_bytes() == original
+
+
+def test_external_pixel_provider_cannot_attest_header_only_deidentification(tmp_path):
+    from openmed.multimodal import DicomDeidentificationError
+
+    source = _write_synthetic_dicom(tmp_path / "external.dcm")
+    dataset = pydicom.dcmread(source)
+    dataset.PixelDataProviderURL = "https://example.invalid/synthetic-private"
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+    with pytest.raises(
+        DicomDeidentificationError, match="external_pixel_data_unsupported"
+    ):
+        deidentify_dicom_headers(source)
+    assert source.read_bytes() == original

@@ -357,6 +357,10 @@ def _deidentified_copy(
         date_shift_secret=resolved.date_shift_secret,
         uid_salt=resolved.uid_salt,
         keep_year=resolved.keep_year,
+        fail_on_unclean_pixels=resolved.fail_on_unclean_pixels,
+        redact_encapsulated_documents=resolved.redact_encapsulated_documents,
+        document_policy=resolved.document_policy,
+        document_models=resolved.document_models,
     )
     try:
         result = deidentify_dicom_headers(source, policy=header_policy)

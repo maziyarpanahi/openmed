@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
+  encapsulated documents, expose truthful pixel-cleaning outcomes, and stage
+  combined header/pixel processing before writing its final artifact (#3725).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
