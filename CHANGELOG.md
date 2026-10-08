@@ -52,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and aggregate report comparison with missing-evidence and regression verdicts
   (#286).
 
+### Added
+
+- Added a bounded, content-free federated update batch preflight that reuses the
+  per-envelope update contract, groups accepted schemas, suppresses groups below
+  the shared federated floor, withholds update digests unless disclosure is
+  explicitly permitted, and renders byte-stable JSON reports with offline golden
+  tests (#3056).
+
 - Added a Polish (`pl`) PII language pack with native locale surrogates,
   validated PESEL handling, date, phone, address, and postcode patterns, and
   synthetic offset and zero-leakage regression fixtures (#294).
