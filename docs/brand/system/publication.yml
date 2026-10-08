@@ -325,12 +325,13 @@ classification:
     - document-adapter-provenance.md
     - reference/chat-schema.md
     - reference/training-schemas.md
+    - private-learning/index.md
     - training/federated-round-lifecycle.md
-    - training/federated-metrics.md
-    - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
     - training/federated-schema-fingerprints.md
+    - training/federated-metrics.md
+    - training/federated-round-status.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
