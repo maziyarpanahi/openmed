@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Registered MLX summarizers now require a provisioned, symlink-free package
+  with a trusted manifest pin before model construction. Admission verifies
+  every file, refuses undeclared members, and derives task support, context
+  limits and quantization from digest-bound metadata. Package failures expose
+  controlled reason codes; unprovisioned aliases fail closed without fallback.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

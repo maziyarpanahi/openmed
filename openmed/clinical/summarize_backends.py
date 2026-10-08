@@ -1,16 +1,31 @@
-"""Bounded, cache-only summarizer resolution and runtime admission."""
+"""Bounded, provisioned local summarizer resolution and runtime admission."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
 from typing import Any
 
 from openmed.core.capabilities import MissingOptionalDependencyError
-from openmed.core.model_registry import resolve_summarizer_model
+from openmed.core.model_registry import (
+    resolve_summarizer_model,
+    resolve_summarizer_package,
+)
 from openmed.core.offline import network_blocked_if_offline
 from openmed.models.clinical_slm_capabilities import probe_clinical_slm_capabilities
+from openmed.models.clinical_slm_manifest import (
+    ClinicalSLMArtifactDigestMismatchError,
+    ClinicalSLMArtifactError,
+    ClinicalSLMArtifactManifest,
+    ClinicalSLMArtifactMissingError,
+    ClinicalSLMManifestError,
+    ClinicalSLMValidationError,
+    _open_local_file,
+    load_clinical_slm_manifest,
+    verify_clinical_slm_package,
+)
 from openmed.models.clinical_slm_memory import (
     ClinicalSLMRuntimeProfile,
     preflight_clinical_slm_memory,
@@ -30,6 +45,49 @@ class LocalSummarizerError(RuntimeError):
 
 class RemoteSummarizerError(LocalSummarizerError):
     """A network provider or URL was supplied to a local-only task."""
+
+
+_PACKAGE_REASON_CODES = frozenset(
+    {
+        "package_unpinned",
+        "package_invalid",
+        "platform_unsupported",
+        "manifest_missing",
+        "manifest_unreadable",
+        "manifest_digest_required",
+        "manifest_digest_mismatch",
+        "model_identity_mismatch",
+        "component_missing_on_disk",
+        "component_unreadable",
+        "unsafe_component_path",
+        "component_size_mismatch",
+        "component_digest_mismatch",
+        "component_mutated",
+        "undeclared_component",
+        "task_unsupported",
+        "capability_unsupported",
+        "context_metadata_missing",
+        "runtime_metadata_missing",
+        "configuration_mismatch",
+        "template_mismatch",
+    }
+)
+
+
+class LocalSummarizerPackageError(LocalSummarizerError):
+    """Refuse local package admission with one controlled reason code.
+
+    Attributes:
+        code: Stable reason code; no path, model identity or source payload.
+    """
+
+    def __init__(self, code: str) -> None:
+        self.code = (
+            code
+            if type(code) is str and code in _PACKAGE_REASON_CODES
+            else "package_invalid"
+        )
+        super().__init__(self.code)
 
 
 class ExtractiveSummarizerBackend:
@@ -54,24 +112,41 @@ def _validate_input(text: str, mode: str) -> None:
 
 
 def _require_runtime() -> None:
-    for package in ("mlx", "mlx_lm", "huggingface_hub"):
+    for package in ("mlx", "mlx_lm"):
         if importlib.util.find_spec(package) is None:
             raise MissingOptionalDependencyError(
                 package=package, feature="local summarization", extra="mlx"
             )
 
 
-def _cached_artifact(model_id: str, revision: str) -> Path:
-    from huggingface_hub import snapshot_download
-
-    return Path(
-        snapshot_download(
-            repo_id=model_id,
-            revision=revision,
-            local_files_only=True,
-            repo_type="model",
-        )
+def _read_package_json(
+    root: Path, manifest: ClinicalSLMArtifactManifest, name: str, role: str
+) -> Any:
+    artifact = next(
+        (
+            item
+            for item in manifest.components
+            if item.path == name and item.component == role
+        ),
+        None,
     )
+    if artifact is None or artifact.size_bytes > 1_048_576:
+        raise LocalSummarizerPackageError("configuration_mismatch")
+    with _open_local_file(root, name) as handle:
+        payload = handle.read(1_048_577)
+    if (
+        len(payload) != artifact.size_bytes
+        or "sha256:" + hashlib.sha256(payload).hexdigest() != artifact.sha256
+    ):
+        raise LocalSummarizerPackageError("component_digest_mismatch")
+    invalid = False
+    try:
+        result = json.loads(payload)
+    except (ValueError, UnicodeError, RecursionError):
+        invalid = True
+    if invalid:
+        raise LocalSummarizerPackageError("configuration_mismatch")
+    return result
 
 
 def _load_model(path: Path) -> Any:
@@ -81,7 +156,7 @@ def _load_model(path: Path) -> Any:
 
 
 class MLXSummarizerBackend:
-    """Generate locally with pinned cached weights and admission before loading.
+    """Generate locally with provisioned pinned weights and admission before loading.
 
     Args:
         model: Reviewed registry alias. Arbitrary paths and remote providers
@@ -121,11 +196,30 @@ class MLXSummarizerBackend:
         _require_runtime()
         result: str | None = None
         failed = False
+        package_code = None
         try:
             with network_blocked_if_offline(local_only=True):
                 result = self._generate(text)
+        except LocalSummarizerPackageError as error:
+            if type(error) is LocalSummarizerPackageError:
+                package_code = error.code
+            else:
+                failed = True
+        except ClinicalSLMManifestError as error:
+            if type(error) in {
+                ClinicalSLMManifestError,
+                ClinicalSLMValidationError,
+                ClinicalSLMArtifactError,
+                ClinicalSLMArtifactMissingError,
+                ClinicalSLMArtifactDigestMismatchError,
+            }:
+                package_code = error.code
+            else:
+                failed = True
         except Exception:
             failed = True
+        if package_code is not None:
+            raise LocalSummarizerPackageError(package_code)
         if failed:
             # Raise outside the handler: upstream exceptions can contain PHI.
             raise LocalSummarizerError("local summarizer admission or inference failed")
@@ -138,35 +232,62 @@ class MLXSummarizerBackend:
             parse_maple_task_response,
         )
 
-        path = _cached_artifact(self._model_id, self._revision)
-        config_path = path / "config.json"
-        if config_path.stat().st_size > 1_048_576:
-            raise LocalSummarizerError("invalid model configuration")
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        bits = config.get("quantization", {}).get("bits")
-        if type(bits) is not int or bits not in {2, 3, 4, 8}:
-            raise LocalSummarizerError("unsupported model quantization")
-        native_context = config.get("max_position_embeddings", MAX_CONTEXT_TOKENS)
-        if type(native_context) is not int or native_context <= MAX_OUTPUT_TOKENS:
-            raise LocalSummarizerError("invalid model context")
-        context = min(native_context, MAX_CONTEXT_TOKENS)
+        binding = resolve_summarizer_package(self._model_id)
+        if binding is None:
+            raise LocalSummarizerPackageError("package_unpinned")
+        path, expected_digest = binding
+        verify_clinical_slm_package(
+            path, expected_manifest_digest=expected_digest, reject_undeclared_files=True
+        )
+        manifest = load_clinical_slm_manifest(path)
+        if manifest.manifest_digest != expected_digest:
+            raise LocalSummarizerPackageError("manifest_digest_mismatch")
+        if (manifest.model_id, manifest.revision) != (self._model_id, self._revision):
+            raise LocalSummarizerPackageError("model_identity_mismatch")
+        if "clinical-summarization" not in manifest.supported_tasks:
+            raise LocalSummarizerPackageError("task_unsupported")
+        if manifest.context_limits is None:
+            raise LocalSummarizerPackageError("context_metadata_missing")
+        if (
+            not manifest.required_runtime_features
+            or "mlx" not in manifest.required_runtime_features
+        ):
+            raise LocalSummarizerPackageError("runtime_metadata_missing")
+        config = _read_package_json(path, manifest, "config.json", "quantization")
+        if not isinstance(config, dict):
+            raise LocalSummarizerPackageError("configuration_mismatch")
+        quantization = config.get("quantization")
+        if not isinstance(quantization, dict):
+            raise LocalSummarizerPackageError("configuration_mismatch")
+        bits = quantization.get("bits")
+        native_context = config.get("max_position_embeddings")
+        if (
+            type(bits) is not int
+            or bits not in {2, 3, 4, 8}
+            or bits != manifest.quantization.bits
+            or manifest.quantization.scheme != f"int{bits}"
+            or type(native_context) is not int
+            or manifest.context_limits["max_context_tokens"] > native_context
+        ):
+            raise LocalSummarizerPackageError("configuration_mismatch")
+        template = _read_package_json(path, manifest, "templates.json", "templates")
+        if template != build_maple_task_messages("summarize", "{source}"):
+            raise LocalSummarizerPackageError("template_mismatch")
+        context = min(manifest.context_limits["max_context_tokens"], MAX_CONTEXT_TOKENS)
+        output_tokens = min(
+            manifest.context_limits["max_output_tokens"], MAX_OUTPUT_TOKENS
+        )
         messages = build_maple_task_messages("summarize", text)
         # UTF-8 byte count conservatively bounds byte-tokenizer input before load.
         prompt_bound = sum(len(m["content"].encode("utf-8")) for m in messages) + 256
-        if prompt_bound + MAX_OUTPUT_TOKENS > context:
+        if (
+            prompt_bound > manifest.context_limits["max_input_tokens"]
+            or prompt_bound + output_tokens > context
+        ):
             raise LocalSummarizerError("summarizer input context exceeded")
         capability = probe_clinical_slm_capabilities(
             {
-                "supported_tasks": ["clinical-summarization"],
-                "context_limits": {
-                    "max_context_tokens": context,
-                    "max_input_tokens": context - MAX_OUTPUT_TOKENS,
-                    "max_output_tokens": MAX_OUTPUT_TOKENS,
-                },
-                "required_runtime_features": ["mlx"],
-                "quantization": {"scheme": f"int{bits}", "bits": bits},
-                "offline": True,
-                "human_review_required": True,
+                **manifest.to_dict(),
                 "cloud_fallback": False,
             },
             required_tasks=["clinical-summarization"],
@@ -174,11 +295,11 @@ class MLXSummarizerBackend:
             min_context_tokens=prompt_bound,
         )
         if not capability.supported:
-            raise LocalSummarizerError("unsupported summarizer capability")
-        weights = sorted(path.glob("model*.safetensors"))
+            raise LocalSummarizerPackageError("capability_unsupported")
+        weights = manifest.weights
         if not weights or len(weights) > 256:
             raise LocalSummarizerError("missing or unbounded model weights")
-        weights_bytes = sum(p.stat().st_size for p in weights)
+        weights_bytes = sum(item.size_bytes for item in weights)
         if weights_bytes <= 0:
             raise LocalSummarizerError("empty model weights")
         memory = preflight_clinical_slm_memory(
@@ -186,7 +307,7 @@ class MLXSummarizerBackend:
             ClinicalSLMRuntimeProfile(
                 memory_budget_bytes=self._budget,
                 headroom_bytes=max(self._budget // 10, 1),
-                context_tokens=prompt_bound + MAX_OUTPUT_TOKENS,
+                context_tokens=prompt_bound + output_tokens,
                 # Conservative cache/workspace assumptions, not a measured SLO.
                 cache_bytes_per_token=1024**2,
                 context_bytes_per_token=65_536,
@@ -198,11 +319,14 @@ class MLXSummarizerBackend:
         runner = _load_model(path)
         prompt = runner.format_chat_prompt(messages)
         tokens = runner.tokenizer.encode(prompt)
-        if len(tokens) + MAX_OUTPUT_TOKENS > context:
+        if (
+            len(tokens) > manifest.context_limits["max_input_tokens"]
+            or len(tokens) + output_tokens > context
+        ):
             raise LocalSummarizerError("summarizer token budget exceeded")
         output = runner.generate(
             prompt=prompt,
-            max_tokens=MAX_OUTPUT_TOKENS,
+            max_tokens=output_tokens,
             temp=0.0,
             verbose=False,
             speculative=False,

@@ -318,21 +318,33 @@ def _require_deidentification_result(value: object) -> DeidentificationResult:
 def _invoke_backend(model: object | None, text: str, mode: str) -> str:
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
+        LocalSummarizerPackageError,
         MLXSummarizerBackend,
     )
     from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
     failed = False
+    package_code = None
     try:
         with network_blocked_if_offline(local_only=True):
             return _call_backend(model, text, mode)
+    except LocalSummarizerPackageError as error:
+        if (
+            type(model) is MLXSummarizerBackend
+            and type(error) is LocalSummarizerPackageError
+        ):
+            package_code = error.code
+        else:
+            failed = True
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
         failed = True
     except Exception:
         failed = True
+    if package_code is not None:
+        raise LocalSummarizerPackageError(package_code)
     if failed:
         raise LocalSummarizerError("local summarizer execution failed")
     raise AssertionError("unreachable summarizer state")

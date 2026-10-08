@@ -129,3 +129,93 @@ immutable through verification **and subsequent runtime loading**: this gate
 does not lock files against another process or verify a later runtime's reads.
 A self-digest detects inconsistency, not authenticity; pin the expected manifest
 digest through a trusted distribution channel. Hashes are not anonymization.
+
+## Provisioning the registered MLX summarizer
+
+The registered `mlx`, `maple` and `maple-preview` aliases now require an
+explicitly provisioned package and a trusted manifest digest. They select the
+same pinned Maple model and revision. OpenMed does not ship a reviewed package
+digest for this artifact: an unprovisioned alias raises
+`LocalSummarizerPackageError` with `code="package_unpinned"`. A cached Hub
+snapshot or its immutable revision alone cannot satisfy package admission.
+The deterministic `extractive` backend and caller-owned local callables keep
+their existing behavior.
+
+Provisioning belongs to the deploying application:
+
+1. Prepare a dedicated package directory from the reviewed, pinned model
+   revision. Copy files into regular files; do not pass a default Hugging Face
+   snapshot containing symlinks into a blob store. Keep the package read-only
+   to the runtime account, and immutable throughout verification and loading.
+2. Declare every file consumed by the MLX runtime in the manifest, including
+   all weights, tokenizer assets, indices and runtime configuration. Include
+   `config.json` as a `quantization` component and `templates.json` as a
+   `templates` component. The latter is the JSON serialization of
+   `build_maple_task_messages("summarize", "{source}")`. Include other files
+   only as declared, licensed components. The manifest file is the only
+   automatically allowed file; undeclared files, extra directories and all
+   symlinks are refused.
+3. Bind the manifest's `model_id` and `revision` to
+   `resolve_summarizer_model(alias)`. Declare `clinical-summarization`, explicit
+   `context_limits`, and `required_runtime_features=["mlx"]`. Quantization
+   must match the content-addressed model configuration. Obtain and review
+   the canonical manifest digest through a trusted distribution channel;
+   reading a self-digest from an untrusted package does not establish trust.
+4. Register the package and trusted pin at application startup, before using
+   the summarizer. Aliases for the same model and revision share this binding.
+   Registration is process-local and performs no file access or network call.
+
+For a caller's reviewed deployment metadata:
+
+```python
+from openmed.core.model_registry import register_summarizer_package
+from openmed.clinical.summarize import summarize_deidentified
+
+register_summarizer_package(
+    "mlx",
+    package_root=provisioned_package_directory,
+    manifest_digest=trusted_deployment_manifest_digest,
+)
+result = summarize_deidentified(safe_note, model="mlx")
+```
+
+The manifest's additional runtime metadata is digest-bound:
+
+```python
+context_limits = {
+    "max_context_tokens": 8192,
+    "max_input_tokens": 6144,
+    "max_output_tokens": 2048,
+}
+required_runtime_features = ("mlx",)
+```
+
+These fields are optional for generic legacy manifests. Omission preserves
+their original JSON and digest. Registered summarizer admission requires both
+fields and uses their verified values for the capability probe, input budget
+and output reservation; it does not assert task support on the model's behalf.
+The manifest's context cannot exceed the model configuration's native context,
+and OpenMed still caps runtime context at 8,192 tokens and generation at 2,048
+tokens. Input is bounded before construction and again after tokenization.
+
+Before `_load_model()`, admission calls `verify_clinical_slm_package()` with
+the independently pinned `expected_manifest_digest` and
+`reject_undeclared_files=True`. This verifies every declared component and the
+complete package inventory, with bounded no-follow traversal. Configuration
+and template reads additionally check their declared digest on the bytes
+actually read. POSIX `O_NOFOLLOW`, directory descriptors and no-follow stat
+and directory enumeration APIs are required; other platforms fail closed with
+`platform_unsupported` before reading package contents or constructing a model.
+There is no cache lookup, download, remote inference or automatic fallback.
+
+Package refusal messages contain only the controlled `code`, without paths,
+artifact contents, credentials or upstream exception context. Common codes
+include `package_unpinned`, `manifest_missing`, `manifest_digest_mismatch`,
+`component_digest_mismatch`, `component_missing_on_disk`,
+`undeclared_component`, `unsafe_component_path`, `model_identity_mismatch`,
+`task_unsupported`, `context_metadata_missing`, `runtime_metadata_missing`,
+`configuration_mismatch`, `template_mismatch` and `platform_unsupported`.
+Existing optional-runtime and inference errors retain their separate contracts.
+Use `clear_summarizer_package(alias)` to remove a binding without modifying
+package files. This admission gate is integrity evidence, not clinical
+validation, and it does not lock files against external changes after checking.
