@@ -782,6 +782,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         "softwareVersion": version,
         "url": "https://openmed.life/",
         "isAccessibleForFree": True,
+        "creator": {
+            "@type": "Person",
+            "name": "Maziyar Panahi",
+            "url": "https://maziyarpanahi.com",
+        },
     }
     faq_items = [
         (
@@ -912,9 +917,10 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         <p class="mono-label">Model downloads · all-time</p>
         <p class="community-number">340<span>M</span></p>
         <p>
-            One person on lunch breaks in July 2025; the largest open
-            medical-AI collection by July 2026. Founded by
-            <span class="accent-text">Maziyar Panahi</span>.
+            One person, after work, in July 2025; the largest open
+            medical-AI collection by July 2026. Created by
+            <span class="accent-text">Maziyar Panahi</span> and built in
+            the open with its contributors.
             <a href="https://github.com/maziyarpanahi/openmed">
                 Join on GitHub <span aria-hidden="true">↗</span>
             </a>
@@ -1056,7 +1062,6 @@ def _sync_website(
             "https://x.com/OpenMed_AI",
             "https://www.linkedin.com/company/openmed-ai/",
         ],
-        "founder": {"@type": "Person", "name": "Maziyar Panahi"},
     }
     errors: list[str] = []
     if organization != required_organization:

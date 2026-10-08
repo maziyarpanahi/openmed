@@ -1284,7 +1284,7 @@ def _validate_claims(errors: list[str]) -> None:
     if (
         organization.get("url") != "https://openmed.life/"
         or organization.get("sameAs") != expected_identity_links
-        or organization.get("founder") != {"@type": "Person", "name": "Maziyar Panahi"}
+        or "founder" in organization
     ):
         errors.append("website Organization JSON-LD identity graph is not canonical")
     software = by_type.get("SoftwareSourceCode", {})
@@ -1292,6 +1292,7 @@ def _validate_claims(errors: list[str]) -> None:
         software.get("softwareVersion") != claims["package_version"]["value"]
         or software.get("license") != "https://www.apache.org/licenses/LICENSE-2.0"
         or software.get("codeRepository") != "https://github.com/maziyarpanahi/openmed"
+        or software.get("creator", {}).get("name") != "Maziyar Panahi"
     ):
         errors.append("website software JSON-LD disagrees with governed claims")
     _validate_faq_parity(website, by_type.get("FAQPage", {}), errors)
