@@ -32,6 +32,102 @@ from tests.fixtures.journey_release import (
 SIGNING_KEY = "synthetic-release-signing-key-32-bytes-minimum"
 
 
+def test_v1_legacy_reports_parse_without_inventing_consistency_proof(
+    tmp_path: Path,
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    manifest["schema_version"] = "1.0.0"
+    for report in manifest["gate_reports"]:
+        report["schema_version"] = "1.0.0"
+    legacy = gate_report(manifest, "privacy")
+    for field in (
+        "date_shift_inconsistency_count",
+        "surrogate_inconsistency_count",
+        "consistency_checked_format_count",
+        "consistency_unsupported_format_count",
+    ):
+        legacy["metrics"].pop(field)
+    Draft202012Validator(load_journey_release_manifest_schema()).validate(manifest)
+    path = root / "legacy-manifest.json"
+    path.write_text(json.dumps(manifest))
+    loaded = load_journey_release_manifest(path)
+    packet = evaluate_journey_release(loaded, repo_root=root, signing_key=SIGNING_KEY)
+    privacy = next(item for item in packet.gates if item.gate == "privacy")
+    assert packet.schema_version == "1.1.0"
+    assert packet.decision == JOURNEY_RELEASE_NOT_READY
+    assert packet.verify(SIGNING_KEY)
+    assert privacy.metrics == legacy["metrics"]
+    assert "missing:date_shift_inconsistency_count" in privacy.blocking_codes
+    assert "missing:surrogate_inconsistency_count" in privacy.blocking_codes
+    assert "missing:consistency_checked_format_count" in privacy.blocking_codes
+    assert "missing:consistency_unsupported_format_count" in privacy.blocking_codes
+    Draft202012Validator(load_journey_release_packet_schema()).validate(
+        packet.to_dict()
+    )
+
+
+@pytest.mark.parametrize("version", ["1.0.0", "1.1.0"])
+def test_same_major_packet_signatures_remain_verifiable(
+    tmp_path: Path, version: str
+) -> None:
+    from dataclasses import replace
+
+    root, _commit, manifest = make_release_repository(tmp_path)
+    packet = evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    historical = replace(packet, schema_version=version).sign(
+        SIGNING_KEY, key_id="historical"
+    )
+    restored = JourneyReleasePacket.from_dict(historical.to_dict())
+    assert restored.verify(SIGNING_KEY)
+    assert not restored.verify("different-synthetic-key-at-least-32-bytes")
+
+
+@pytest.mark.parametrize("version", ["1.2.0", "2.0.0", "private-version", [], True])
+def test_unknown_or_malformed_release_versions_are_not_silently_accepted(
+    tmp_path: Path, version
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    manifest["schema_version"] = version
+    with pytest.raises(
+        JourneyReleaseError, match="unsupported Journey release schema_version"
+    ):
+        evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+
+
+@pytest.mark.parametrize(
+    "checked,unsupported", [(0, 0), (1, 0), (4, 0), (6, 0), (5, 1)]
+)
+def test_privacy_coverage_cannot_pass_with_empty_partial_or_extra_formats(
+    tmp_path: Path, checked: int, unsupported: int
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    metrics = gate_report(manifest, "privacy")["metrics"]
+    metrics["consistency_checked_format_count"] = checked
+    metrics["consistency_unsupported_format_count"] = unsupported
+    packet = evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    privacy = next(item for item in packet.gates if item.gate == "privacy")
+    assert packet.decision == JOURNEY_RELEASE_NOT_READY
+    assert "consistency_coverage_incomplete" in privacy.blocking_codes
+
+
+@pytest.mark.parametrize("version,mutation", [("1.1.0", "missing"), ("1.0.0", "extra")])
+def test_report_version_controls_the_exact_privacy_metric_contract(
+    tmp_path: Path, version: str, mutation: str
+) -> None:
+    root, _commit, manifest = make_release_repository(tmp_path)
+    report = gate_report(manifest, "privacy")
+    report["schema_version"] = version
+    if mutation == "missing":
+        report["metrics"].pop("date_shift_inconsistency_count")
+    assert list(
+        Draft202012Validator(load_journey_release_manifest_schema()).iter_errors(
+            manifest
+        )
+    )
+    with pytest.raises(JourneyReleaseError, match="privacy.metrics"):
+        evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+
+
 def test_complete_tagged_evidence_produces_verifiable_ready_packet(
     tmp_path: Path,
 ) -> None:
@@ -85,6 +181,9 @@ def test_manifest_and_packet_satisfy_bundled_strict_schemas(tmp_path: Path) -> N
         ("clinical_nlp", "abstention_failure_count"),
         ("privacy", "critical_leakage_count"),
         ("privacy", "raw_value_finding_count"),
+        ("privacy", "date_shift_inconsistency_count"),
+        ("privacy", "surrogate_inconsistency_count"),
+        ("privacy", "consistency_unsupported_format_count"),
         ("interoperability", "conformance_failure_count"),
         ("interoperability", "roundtrip_loss_without_disclosure_count"),
         ("application", "failed_test_count"),
