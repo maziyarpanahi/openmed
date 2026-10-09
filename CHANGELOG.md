@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Project governed FHIR create/update attempts and refusals into deterministic,
+  value-free R4 AuditEvents with injected clocks, opaque references, controlled
+  reviewer categories and receipt digests. Preserve unknown commit state for recovery.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
