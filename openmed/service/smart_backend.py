@@ -13,12 +13,15 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import os
 import re
 import secrets
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -37,7 +40,14 @@ from openmed.interop.fhir.bulk import (
     _safe_resource_type,
     deidentify_ndjson_async,
 )
+from openmed.interop.fhir.smart_refresh import (
+    SMARTTokenResponse,
+    SMARTTokenValidationError,
+    _clock_now,
+    validate_smart_token_response,
+)
 from openmed.interop.fhir_operations import Deidentifier
+from openmed.interop.smart_scope_audit import _granted_scope_tokens
 
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 DEFAULT_BACKEND_SERVICES_SCOPE = "system/*.read"
@@ -51,12 +61,44 @@ DEFAULT_METHOD = "replace"
 ClientAssertionBuilder = Callable[["SMARTBackendConfig"], str]
 SleepCallable = Callable[[float], Awaitable[None]]
 
+_TOKEN_HTTP_ACTIVE: ContextVar[bool] = ContextVar(
+    "openmed_token_http_active", default=False
+)
+
+
+class _TokenHTTPLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not _TOKEN_HTTP_ACTIVE.get()
+
+
+@contextmanager
+def _token_http_log_guard():
+    # HTTPX INFO and HTTPcore DEBUG include endpoint/connection values. Suppress
+    # only this task's token exchange; concurrent unrelated requests still log.
+    for name in (
+        "httpx",
+        "httpcore",
+        "httpcore.connection",
+        "httpcore.http11",
+        "httpcore.http2",
+        "httpcore.proxy",
+        "httpcore.socks",
+    ):
+        logger = logging.getLogger(name)
+        if not any(isinstance(item, _TokenHTTPLogFilter) for item in logger.filters):
+            logger.addFilter(_TokenHTTPLogFilter())
+    marker = _TOKEN_HTTP_ACTIVE.set(True)
+    try:
+        yield
+    finally:
+        _TOKEN_HTTP_ACTIVE.reset(marker)
+
 
 class SMARTBackendError(RuntimeError):
     """Raised when backend-services ingestion cannot proceed safely."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class SMARTBackendConfig:
     """Configuration for one SMART backend-services bulk ingestion run."""
 
@@ -330,11 +372,15 @@ class SMARTBackendBulkIngestor:
         client_assertion_builder: ClientAssertionBuilder | None = None,
         sleep: SleepCallable = asyncio.sleep,
         deidentifier: Deidentifier | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         self.config = config
         self._transport = transport
-        self._client_assertion_builder = (
-            client_assertion_builder or build_client_assertion
+        self._clock = clock
+        self._token_expires_at = 0
+        self._token_issued_at = 0
+        self._client_assertion_builder = client_assertion_builder or (
+            lambda config: build_client_assertion(config, clock=clock)
         )
         self._sleep = sleep
         self._deidentifier = deidentifier
@@ -388,34 +434,54 @@ class SMARTBackendBulkIngestor:
         )
 
     async def _fetch_access_token(self, client: httpx.AsyncClient) -> str:
+        self._token_expires_at = 0
         self._assert_allowed_url(self.config.token_url)
         try:
+            issued_at = _clock_now(self._clock)
+            requested = _granted_scope_tokens(self.config.scope.split(" "))
             assertion = self._client_assertion_builder(self.config)
-            response = await client.post(
-                self.config.token_url,
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                data={
-                    "grant_type": "client_credentials",
-                    "scope": self.config.scope,
-                    "client_assertion_type": CLIENT_ASSERTION_TYPE,
-                    "client_assertion": assertion,
-                },
-            )
+            with _token_http_log_guard():
+                response = await client.post(
+                    self.config.token_url,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    data={
+                        "grant_type": "client_credentials",
+                        "scope": self.config.scope,
+                        "client_assertion_type": CLIENT_ASSERTION_TYPE,
+                        "client_assertion": assertion,
+                    },
+                )
         except asyncio.CancelledError:
-            raise
-        except SMARTBackendError:
             raise
         except Exception:
             raise SMARTBackendError("token endpoint unavailable") from None
-        _raise_for_status(response, "token endpoint")
-        payload = _json_response(response, "token endpoint")
-        token = payload.get("access_token")
-        if not isinstance(token, str) or not token:
-            raise SMARTBackendError("token endpoint did not return an access token")
-        return token
+        try:
+            credential, audit = validate_smart_token_response(
+                SMARTTokenResponse(response.status_code, response.content),
+                requested_scopes=requested,
+                issued_at=issued_at,
+            )
+            if audit.narrowed:
+                raise SMARTBackendError("token scope narrowed and insufficient")
+        except SMARTTokenValidationError:
+            raise SMARTBackendError("token response invalid") from None
+        self._token_expires_at = credential.expires_at
+        self._token_issued_at = issued_at
+        self._assert_token_current()
+        return credential.access_token
+
+    def _assert_token_current(self) -> None:
+        try:
+            now = _clock_now(self._clock)
+        except ValueError:
+            self._token_expires_at = 0
+            raise SMARTBackendError("token clock invalid") from None
+        if now < self._token_issued_at or now >= self._token_expires_at:
+            self._token_expires_at = 0
+            raise SMARTBackendError("token expired")
 
     async def _kickoff_export(
         self,
@@ -424,6 +490,7 @@ class SMARTBackendBulkIngestor:
     ) -> str:
         export_url = self._export_url()
         self._assert_allowed_url(export_url)
+        self._assert_token_current()
         try:
             response = await client.get(
                 export_url,
@@ -462,6 +529,7 @@ class SMARTBackendBulkIngestor:
     ) -> BulkExportManifest:
         while True:
             self._assert_allowed_url(status_url)
+            self._assert_token_current()
             try:
                 response = await client.get(
                     status_url,
@@ -544,6 +612,7 @@ class SMARTBackendBulkIngestor:
 
         await self._enter_download()
         try:
+            self._assert_token_current()
             async with client.stream(
                 "GET",
                 descriptor.url,
@@ -785,10 +854,17 @@ class SMARTBackendJobManager:
             record.status.updated_at = time.time()
 
 
-def build_client_assertion(config: SMARTBackendConfig) -> str:
+def build_client_assertion(
+    config: SMARTBackendConfig,
+    *,
+    clock: Callable[[], float] = time.time,
+) -> str:
     """Build a signed SMART Backend Services JWT client assertion."""
 
-    now = int(time.time())
+    try:
+        now = _clock_now(clock)
+    except ValueError:
+        raise SMARTBackendError("client assertion clock invalid") from None
     header: dict[str, Any] = {"alg": "RS384", "typ": "JWT"}
     if config.key_id:
         header["kid"] = config.key_id

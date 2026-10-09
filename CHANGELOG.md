@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
