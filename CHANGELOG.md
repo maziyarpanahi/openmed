@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added offline benchmark suite listing and description, explicit task metadata,
   and aggregate report comparison with missing-evidence and regression verdicts
   (#286).
+- Added deterministic synthetic malformed PDF and DICOM header fixtures with
+  recorded pre-decode boundaries, expected reason codes and payload digests,
+  plus offline regression tests (#3094).
 
 - Added a Polish (`pl`) PII language pack with native locale surrogates,
   validated PESEL handling, date, phone, address, and postcode patterns, and
