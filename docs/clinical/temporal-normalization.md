@@ -1,5 +1,8 @@
 # Temporal Normalization
 
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for public normalization calls and a state-only projection that omits date values.
+
 Clinical notes mix absolute dates with expressions such as `3 weeks ago`,
 `since last March`, `POD 2`, and `q6h x5 days`. The temporal normalizer converts
 caller-supplied spans into deterministic TIMEX3-style `DATE`, `TIME`,
