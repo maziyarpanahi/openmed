@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an offline Draft 2020-12 catalog for closed agent outcome, correlation,
   timing, and run-summary JSON records, with local references, bounded fields,
   version and enum drift tests, and deterministic schema exports (#3043).
+- Bundle seven metadata-only agent run-summary golden vectors with strict,
+  offline validation of canonical JSON, Markdown digests and commitments (#3044).
 
 ## [3.0.0] - 2026-10-05
 

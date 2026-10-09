@@ -309,6 +309,7 @@ nav:
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
