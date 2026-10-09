@@ -56,7 +56,7 @@ class MultimodalContractParityTest {
     fun sharedVectorsRoundTripByteIdentically() {
         assertEquals(1, fixture.getValue("version").jsonPrimitive.int)
         assertTrue(fixture.getValue("synthetic").jsonPrimitive.boolean)
-        assertEquals(81, vectors.size)
+        assertEquals(106, vectors.size)
         for (vector in vectors) {
             val expected = payload(vector)
             assertContentEquals(expected.toByteArray(Charsets.UTF_8), parse(kind(vector), expected).toByteArray(Charsets.UTF_8))
@@ -79,6 +79,8 @@ class MultimodalContractParityTest {
             if (key != null) {
                 rejected(kind, fields + (key to JsonPrimitive("unknown-version")))
                 rejected(kind, fields + (key to JsonPrimitive(2)))
+            } else {
+                rejected(kind, fields + ("schema_version" to JsonPrimitive(2)))
             }
         }
         for (value in listOf("/private/a", "C:\\private\\a", "https://invalid.test", "SYNTH PRIVATE TEXT", "~/a")) {
@@ -92,7 +94,7 @@ class MultimodalContractParityTest {
 
     @Test
     fun unknownReasonsAndInvalidCombinationsFailClosed() {
-        rejected("preflight_finding", first("preflight_finding") + ("reason_code" to JsonPrimitive("unknown")))
+        rejected("preflight_finding", first("preflight_finding") + ("reason_code" to JsonPrimitive("unsupported_reason")))
         rejected("abstention_record", first("abstention_record") + ("reason" to JsonPrimitive("unknown")))
         val provider = Json.parseToJsonElement(payload(vectors.first {
             kind(it) == "provider_result" && payload(it).contains("\"outcome\":\"abstention\"")

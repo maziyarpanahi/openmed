@@ -325,6 +325,106 @@
     {
       "kind": "provider_result",
       "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":1.2345678901234567,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":7.120236347223045e-307,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":7.291122019556398e-304,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":8.209073602596753e-289,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.641232424577593e-278,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.858190679279809e-244,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":7.678447687145631e-239,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.142758149716505e-238,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.290184345309701e-235,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.940911144672375e-213,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.083493012144512e-210,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.225680706521042e-200,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.351097043477547e-197,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.426657103235053e-166,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.966672584960166e-154,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":4.887898181599368e-150,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.256509672447191e-148,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.075883674631299e-116,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.653062250012736e-111,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":7.854549544476363e-90,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":7.174648137343064e-43,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.310887241768095e-30,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":6.617444900424222e-24,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.684341886080802e-14,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-rounding\",\"byte_size\":1,\"duration_seconds\":5.960464477539063e-08,\"media_type\":\"audio/wav\",\"sha256\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff\",\"version\":1}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"duration_seconds\",\"limit\":6.189700196426902e+26,\"observed\":6.189700196426902e+26}"
     }
   ]
 }

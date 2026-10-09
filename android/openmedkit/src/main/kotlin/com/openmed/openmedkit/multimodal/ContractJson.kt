@@ -88,9 +88,18 @@ internal object ContractJson {
     private fun pythonFloat(value: Double): String {
         if (value == 0.0) return if (value.toRawBits() < 0) "-0.0" else "0.0"
         val exact = BigDecimal(value)
-        val shortest = (1..17).asSequence().map {
-            exact.round(MathContext(it, RoundingMode.HALF_EVEN)).stripTrailingZeros()
-        }.first { it.toDouble().toRawBits() == value.toRawBits() }
+        val exactExponent = exact.precision() - exact.scale() - 1
+        val shortest = (1..17).asSequence().mapNotNull { precision ->
+            val nearest = exact.round(MathContext(precision, RoundingMode.HALF_EVEN))
+            val step = BigDecimal.ONE.scaleByPowerOfTen(exactExponent - precision + 1)
+            // At a power of two the rounding interval is asymmetric. The nearest
+            // decimal can miss that interval while its neighbour still fits.
+            listOf(nearest, nearest.add(step), nearest.subtract(step))
+                .filter { it.toDouble().toRawBits() == value.toRawBits() }
+                .minWithOrNull(compareBy<BigDecimal> { it.subtract(exact).abs() }
+                    .thenBy { it.unscaledValue().abs().testBit(0) })
+                ?.stripTrailingZeros()
+        }.first()
         val exponent = shortest.precision() - shortest.scale() - 1
         if (exponent in -4..15) {
             val plain = shortest.toPlainString()
