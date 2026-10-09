@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Fail-closed finalized transcript language routing in Python and OpenMedKit,
+  with installed-pack detectors, token-boundary code-switch splits, exact source
+  offsets, content-free evidence and explicit review before release or drafts
+  (#3819).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
