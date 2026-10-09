@@ -231,3 +231,27 @@ def test_printer_setting_nodes_and_relationships_are_removed():
     with zipfile.ZipFile(io.BytesIO(safe)) as archive:
         assert b"printerSettings" not in archive.read("word/settings.xml")
         assert b"printerSettings" not in archive.read("word/_rels/settings.xml.rels")
+
+
+def test_reused_output_stream_has_no_old_prefix_or_trailing_payload():
+    from openmed.multimodal.ooxml_residual import _publish
+
+    stream = io.BytesIO((SENTINEL * 10000).encode())
+    stream.seek(5)
+    _publish(package({"docProps/core.xml": "<properties/>"}), stream, {})
+    assert SENTINEL.encode() not in stream.getvalue()
+    verify_ooxml(stream.getvalue())
+
+
+def test_nonseekable_output_stream_is_refused_before_writing():
+    from openmed.multimodal.ooxml_residual import _publish
+
+    class Sink:
+        def seekable(self):
+            return False
+
+        def write(self, data):
+            pytest.fail("must refuse before writing")
+
+    with pytest.raises(OoxmlResidualError, match="invalid_destination"):
+        _publish(package({"docProps/core.xml": "<properties/>"}), Sink(), {})

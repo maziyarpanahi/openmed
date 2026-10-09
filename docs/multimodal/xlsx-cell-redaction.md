@@ -107,7 +107,9 @@ is an internal child-address map built from the actual run/cell write paths;
 callers must not invent coverage to qualify a file.
 
 Office bytes are staged in memory and verified before an atomic disk replacement
-or the first write to a caller-supplied stream. Refusal preserves sources and
+or the first write to a caller-supplied stream. Streams must be seekable and
+writable; successful writes replace their contents and truncate any old trailing
+bytes. Unsupported streams receive an `invalid_destination` refusal. Refusal preserves sources and
 existing destinations. The XLSX API still disallows in-place writes; DOCX/PPTX
 allow verified in-place writes. No unverified Office package is written to a
 temporary file. Package verification refuses more than 4,096 entries or 128 MiB

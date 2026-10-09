@@ -455,7 +455,22 @@ def _publish(
     safe_data = _sanitize(data)
     verify_ooxml(safe_data, covered_text=coverage)
     if hasattr(destination, "write"):
+        # A reused stream must represent exactly the verified ZIP, with no
+        # unverified prefix or old trailing payload. Refuse non-seekable sinks.
+        try:
+            if not destination.seekable() or not destination.writable():
+                raise ValueError
+            position = destination.tell()
+            destination.seek(position)
+            if not callable(destination.truncate):
+                raise ValueError
+        except (AttributeError, OSError, ValueError):
+            raise OoxmlResidualError(
+                (_finding("invalid_destination", safe_data),)
+            ) from None
+        destination.seek(0)
         destination.write(safe_data)
+        destination.truncate(len(safe_data))
         return
     target = Path(destination)
     temporary: Path | None = None
