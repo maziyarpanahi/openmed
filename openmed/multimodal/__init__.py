@@ -281,6 +281,14 @@ from .page_rotation import (
     transform_point,
     transform_source_spans,
 )
+from .pdf_inventory import (
+    PDF_ANNOTATION_SUBTYPES,
+    PDF_CONTENT_REASON_CODES,
+    PdfContentInventory,
+    PdfContentProfile,
+    PdfInventoryReport,
+    read_pdf_inventory,
+)
 from .pptx import (
     PptxRedaction,
     PptxRunRange,
@@ -289,6 +297,7 @@ from .pptx import (
     write_redacted_pptx,
 )
 from .preflight import (
+    PDF_PREFLIGHT_CHECKS,
     PREFLIGHT_CHECKS,
     PREFLIGHT_SCHEMA_VERSION,
     PreflightError,
@@ -296,6 +305,7 @@ from .preflight import (
     PreflightReport,
     PreflightStatus,
     preflight_asset,
+    preflight_pdf_asset,
 )
 from .processing_diff import (
     PROCESSING_DIFF_SCHEMA_VERSION,
@@ -421,6 +431,14 @@ __all__ = [
     "evaluate_asset_limits",
     "PREFLIGHT_CHECKS",
     "PREFLIGHT_SCHEMA_VERSION",
+    "PDF_ANNOTATION_SUBTYPES",
+    "PDF_CONTENT_REASON_CODES",
+    "PDF_PREFLIGHT_CHECKS",
+    "PdfContentInventory",
+    "PdfContentProfile",
+    "PdfInventoryReport",
+    "read_pdf_inventory",
+    "preflight_pdf_asset",
     "PreflightError",
     "PreflightFinding",
     "PreflightReport",

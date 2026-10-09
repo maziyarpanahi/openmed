@@ -93,3 +93,93 @@ compact JSON with sorted keys and the schema identifier
 
 Rendering, OCR, password recovery, repairing damaged files, and full PDF
 conformance validation.
+
+## Hidden-content inventory
+
+`openmed.multimodal.pdf_inventory.read_pdf_inventory()` uses the same bounded,
+dependency-free parser to inventory content outside the page text layer. This
+Python parser slice does not render, extract attachments, redact form values,
+or introduce a Swift PDF parser. Existing geometry results remain unchanged.
+
+```python
+from openmed.multimodal import PdfContentProfile, read_pdf_inventory
+
+report = read_pdf_inventory(pdf_bytes, profile=PdfContentProfile.STRICT)
+print(report.status.value, report.reason_codes)
+if report.inventory is not None:
+    print(report.inventory.field_value_count, report.inventory.revision_count)
+```
+
+The default `strict` profile rejects embedded attachments, JavaScript, Launch
+and **any** OpenAction declaration, including a destination-only OpenAction.
+The `review` profile reports these categories for explicit caller review.
+Other hidden content requires review under both profiles. Nothing executes
+scripts or actions, and neither profile authorizes downstream processing or
+clinical decisions. Callers must resolve review findings before consequential
+use; this reader does not implement reviewer approval or redaction.
+
+| Code | Inventory evidence |
+| --- | --- |
+| `pdf_annotations` | Annotation definitions, with counts in closed subtype buckets. |
+| `pdf_form_values` | Explicit non-null field `/V` or `/DV` declarations. |
+| `pdf_embedded_files` | Embedded streams, `/EF` targets, file-attachment annotations or name trees. |
+| `pdf_xfa` | XFA stream declarations or packet-array pairs. |
+| `pdf_optional_content` | Optional-content groups or layer declarations. |
+| `pdf_javascript` | JavaScript actions, `/JS` or JavaScript name trees. |
+| `pdf_open_action` | OpenAction declarations. |
+| `pdf_launch_action` | Launch actions, including nested additional actions. |
+| `pdf_incremental_revisions` | Multiple top-level `startxref`/EOF pairs. |
+| `pdf_inventory_invalid` | Malformed inventory structures, unresolved references or cyclic field/name trees. |
+
+All geometry reason codes and ceilings apply. Unsupported or corrupt object
+streams reject the inventory even if the current page tree can be read from
+direct objects. Uncompressed object-stream payloads also consume the expansion
+budget. Inventory failures return no counts; strict policy rejection retains
+successfully read counts. Strings and stream payloads cannot introduce fake
+revision markers or trailers into the inventory.
+
+Counts describe parsed **definitions**, including superseded and unreferenced
+indirect objects, rather than only the latest visible state. A field redefined
+once with a different value contributes two field/value definitions and two
+revisions. Fields count AcroForm-tree dictionaries and dictionaries with field
+keys; a field with both `/V` and `/DV` contributes one value count. Attachments
+count distinct embedded stream/target dictionaries, not attachment filenames.
+XFA counts packet pairs or single declarations. Layer counts count `/OCG`
+definitions; a layer declaration may still flag review with zero groups. Empty
+name-tree declarations are conservatively flagged. Missing revision markers
+use a baseline count of one, not a conformance assertion. Hybrid xref streams
+and classic trailers in one revision do not create an additional revision.
+
+Annotation subtype keys come from `PDF_ANNOTATION_SUBTYPES`; unrecognized names
+become `other`. Reports and ordinary diagnostic representations contain counts
+and controlled codes only: no field names/values, attachment names, scripts,
+source paths, or source payloads. Strings are skipped rather than retained.
+Serialization uses `openmed.multimodal.pdf_inventory.v1` with fixed fields.
+
+### Asset preflight and abstention
+
+`preflight_pdf_asset(manifest, source, content_profile=PdfContentProfile.STRICT)`
+combines the existing manifest/type/resource/digest checks with inventory
+findings under the additional `pdf_content` check. Input is read into memory
+once, bounded by the minimum of the declared byte size, the resource profile
+and 64 MiB, with at most one probe byte. Seekable streams are restored;
+nonseekable streams are consumed once. The actual page tree is bounded by the
+resource profile's page ceiling. A failed byte/digest/type check prevents
+inventory evaluation.
+
+The standalone inventory maps review to preflight `phi_uncertainty`, strict
+policy rejection to `unsupported_media`, parser failure to `malformed_media`
+and exhausted budgets to `resource_limit`. The asset preflight preserves any
+earlier abstention reason and appends inventory codes after existing findings,
+as described by `PDF_PREFLIGHT_CHECKS`.
+
+The existing PDF manifest cannot express raster pixel budgets, so generic PDF
+asset preflight currently reports `insufficient_metadata` for pixel rules.
+These resource findings remain abstentions, including for plain PDFs; inventory
+does not turn absent render-budget evidence into acceptance. `preflight_asset`
+keeps its existing behavior and does not automatically inventory PDFs. Use the
+standalone inventory when only the structural three-way verdict is needed.
+
+A `readable` inventory means no supported hidden-content categories were found
+within these parser bounds. It does not establish PHI absence, successful
+redaction, full PDF conformance, model qualification or clinical validation.

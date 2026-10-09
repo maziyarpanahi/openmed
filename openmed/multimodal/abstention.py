@@ -56,6 +56,8 @@ _ALLOWED_REASONS: Final = {
     AbstentionStage.PREFLIGHT: frozenset(
         {
             AbstentionReason.UNSUPPORTED_MEDIA,
+            AbstentionReason.PHI_UNCERTAINTY,
+            AbstentionReason.MALFORMED_MEDIA,
             AbstentionReason.RESOURCE_LIMIT,
             AbstentionReason.PROVIDER_UNAVAILABLE,
         }

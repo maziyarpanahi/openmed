@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dependency-free, counts-only PDF hidden-content inventory for annotations,
+  form values, embedded files, XFA, layers, JavaScript, OpenAction, Launch and
+  incremental revisions, including superseded definitions. Strict/review
+  policies and explicit PDF asset preflight expose controlled findings without
+  overriding existing raster-budget abstentions (#3824).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

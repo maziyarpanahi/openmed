@@ -208,6 +208,24 @@ def read_pdf_geometry(
         PdfGeometryError: If a limit is not a positive integer or ``source`` is
             neither bytes-like nor a binary stream.
     """
+    return _read_pdf_document(
+        source,
+        max_bytes=max_bytes,
+        max_pages=max_pages,
+        max_objects=max_objects,
+        max_decompressed_bytes=max_decompressed_bytes,
+    )[0]
+
+
+def _read_pdf_document(
+    source: bytes | bytearray | memoryview | BinaryIO,
+    *,
+    max_bytes: int = DEFAULT_MAX_PDF_BYTES,
+    max_pages: int = DEFAULT_MAX_PDF_PAGES,
+    max_objects: int = DEFAULT_MAX_PDF_OBJECTS,
+    max_decompressed_bytes: int = DEFAULT_MAX_PDF_DECOMPRESSED_BYTES,
+) -> tuple[PdfGeometryReport, _Document | None]:
+    """Share a single bounded parse between geometry and hidden inventory."""
     for category, limit in (
         ("max_bytes_invalid", max_bytes),
         ("max_pages_invalid", max_pages),
@@ -219,18 +237,18 @@ def read_pdf_geometry(
 
     data = _load(source, max_bytes)
     if data is None:
-        return _rejected("pdf_size_limit")
+        return _rejected("pdf_size_limit"), None
     header = _HEADER_RE.search(data, 0, _HEADER_SEARCH_BYTES + 8)
     if header is None or header.start() > _HEADER_SEARCH_BYTES:
-        return _rejected("pdf_header_missing")
+        return _rejected("pdf_header_missing"), None
     major, minor = int(header.group(1)), int(header.group(2))
 
     document = _Document(data, max_objects, max_decompressed_bytes)
     failure = document.scan()
     if failure is not None:
-        return _rejected(failure, major, minor)
+        return _rejected(failure, major, minor), None
     if any("Encrypt" in trailer for trailer in document.trailers):
-        return _rejected("pdf_encrypted", major, minor)
+        return _rejected("pdf_encrypted", major, minor), None
 
     catalog = None
     for trailer in reversed(document.trailers):
@@ -240,7 +258,7 @@ def read_pdf_geometry(
     if not isinstance(catalog, dict):
         return _rejected(
             document.structure_failure("pdf_catalog_missing"), major, minor
-        )
+        ), None
 
     version = catalog.get("Version")
     if isinstance(version, _Name):
@@ -255,10 +273,10 @@ def read_pdf_geometry(
     if not isinstance(root, dict):
         return _rejected(
             document.structure_failure("pdf_page_tree_invalid"), major, minor
-        )
+        ), None
     walked = _walk_page_tree(document, catalog.get("Pages"), max_pages)
     if isinstance(walked, str):
-        return _rejected(document.structure_failure(walked), major, minor)
+        return _rejected(document.structure_failure(walked), major, minor), None
 
     reasons: set[str] = set()
     declared = document.resolve(root.get("Count"))
@@ -281,7 +299,7 @@ def read_pdf_geometry(
         page_count=len(pages),
         declared_page_count=declared_count,
         pages=pages,
-    )
+    ), document
 
 
 def _rejected(
@@ -310,8 +328,9 @@ def _load(source: Any, max_bytes: int) -> bytes | None:
     total = 0
     try:
         while total <= max_bytes:
-            chunk = read(min(1 << 20, max_bytes + 1 - total))
-            if not isinstance(chunk, (bytes, bytearray)):
+            request = min(1 << 20, max_bytes + 1 - total)
+            chunk = read(request)
+            if not isinstance(chunk, (bytes, bytearray)) or len(chunk) > request:
                 raise PdfGeometryError("source_invalid")
             if not chunk:
                 break
@@ -475,6 +494,8 @@ class _Parser:
 
     def _number_or_reference(self, match: re.Match[bytes]) -> tuple[Any, int]:
         text = match.group(0)
+        if len(text) > 64:
+            raise _SyntaxFailure
         end = match.end()
         if b"." not in text:
             value = int(text)
@@ -499,6 +520,8 @@ class _Document:
         self.trailers: list[dict[str, Any]] = []
         self.object_stream_failed = False
         self.syntax_failed = False
+        self.inventory_values: list[Any] = []
+        self.revision_count = 1
 
     def scan(self) -> str | None:
         """Index indirect objects, trailers, and object streams."""
@@ -508,6 +531,7 @@ class _Document:
         object_streams: list[tuple[dict[str, Any], bytes]] = []
         count = 0
         position = 0
+        object_ranges: list[tuple[int, int]] = []
         while True:
             match = _OBJECT_RE.search(data, position)
             if match is None:
@@ -525,22 +549,55 @@ class _Document:
             after = self.parser.skip_space(end)
             if isinstance(value, dict) and data.startswith(b"stream", after):
                 stream, end = self._stream(value, after + len(b"stream"))
+            self.inventory_values.append(value)
+            object_ranges.append((match.start(), max(end, match.end())))
             direct[int(match.group(1))] = value
             if isinstance(value, dict):
                 kind = value.get("Type")
                 if kind == "XRef":
                     located.append((match.start(), value))
-                elif kind == "ObjStm" and stream is not None:
-                    object_streams.append((value, stream))
+                elif kind == "ObjStm":
+                    if stream is None:
+                        self.object_stream_failed = True
+                    else:
+                        object_streams.append((value, stream))
             position = max(end, match.end())
 
+        range_index = 0
         for trailer in _TRAILER_RE.finditer(data):
+            while (
+                range_index < len(object_ranges)
+                and object_ranges[range_index][1] <= trailer.start()
+            ):
+                range_index += 1
+            if (
+                range_index < len(object_ranges)
+                and object_ranges[range_index][0] <= trailer.start()
+            ):
+                continue
             try:
                 value, _ = self.parser.parse(trailer.end())
             except _SyntaxFailure:
                 continue
             if isinstance(value, dict):
                 located.append((trailer.start(), value))
+        range_index = 0
+        revision_count = 0
+        for revision in re.finditer(
+            rb"(?m)^startxref[\x00\t\n\x0c\r ]+\d+[\x00\t\n\x0c\r ]+%%EOF", data
+        ):
+            while (
+                range_index < len(object_ranges)
+                and object_ranges[range_index][1] <= revision.start()
+            ):
+                range_index += 1
+            if (
+                range_index < len(object_ranges)
+                and object_ranges[range_index][0] <= revision.start()
+            ):
+                continue
+            revision_count += 1
+        self.revision_count = max(1, revision_count)
         located.sort(key=lambda item: item[0])
         self.trailers = [value for _, value in located]
 
@@ -590,9 +647,14 @@ class _Document:
                 return None
             if len(payload) > self.decompression_budget:
                 return "pdf_decompression_limit"
+            if not decompressor.eof or decompressor.unused_data:
+                self.object_stream_failed = True
+                return None
         else:
             self.object_stream_failed = True
             return None
+        if len(payload) > self.decompression_budget:
+            return "pdf_decompression_limit"
         self.decompression_budget -= len(payload)
 
         count, first = header.get("N"), header.get("First")
@@ -617,10 +679,12 @@ class _Document:
                     raise _SyntaxFailure
                 offsets.append((number, offset))
             for number, offset in offsets:
-                if number in direct:
-                    continue
                 value, _ = parser.parse(first + offset)
-                self.objects[number] = value
+                self.inventory_values.append(value)
+                if len(self.inventory_values) > self.max_objects:
+                    return "pdf_object_limit"
+                if number not in direct:
+                    self.objects[number] = value
         except _SyntaxFailure:
             self.object_stream_failed = True
         return None
