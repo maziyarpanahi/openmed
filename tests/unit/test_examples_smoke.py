@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import ast
 import importlib
+import json
 import os
 import re
+import runpy
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,9 +25,208 @@ from examples import (
     gradio_deid_app,
     onboarding_china_mirrors,
     onboarding_india_dpdp,
+    v30_sdoh_timeline,
 )
 
 deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
+
+
+def _assert_sdoh_timeline_demo_output(output: str) -> None:
+    records = [json.loads(line) for line in output.splitlines()]
+    assert len(records) == 12
+    assert records[0] == {
+        "record": "demonstration",
+        "data": "synthetic",
+        "clinical_validation": "not_validated",
+        "review": "required",
+    }
+    assert records[1:4] == [
+        {
+            "record": "sdoh",
+            "category": "employment",
+            "status": "unemployed",
+            "span": [45, 55],
+        },
+        {
+            "record": "sdoh",
+            "category": "food_insecurity",
+            "status": "current",
+            "span": [70, 85],
+        },
+        {
+            "record": "sdoh",
+            "category": "living_status",
+            "status": "lives_alone",
+            "span": [57, 68],
+        },
+    ]
+    assert records[4:8] == [
+        {"record": "temporal", "kind": "DATE", "span": [121, 131], "state": "anchored"},
+        {"record": "temporal", "kind": "DATE", "span": [139, 144], "state": "anchored"},
+        {
+            "record": "temporal",
+            "kind": "DATE",
+            "span": [160, 170],
+            "state": "ambiguous",
+        },
+        {"record": "temporal", "kind": "DATE", "span": [197, 206], "state": "anchored"},
+    ]
+    assert [
+        (
+            row["kind"],
+            row["span"],
+            row["temporality"],
+            row["certainty"],
+            row["time_state"],
+        )
+        for row in records[8:]
+    ] == [
+        ("symptom", [115, 120], "historical", "certain", "anchored"),
+        ("symptom", [133, 138], "recent", "certain", "anchored"),
+        ("symptom", [146, 153], "recent", "uncertain", "relative_or_unknown"),
+        ("event", [187, 196], "hypothetical", "uncertain", "anchored"),
+    ]
+    for row in records[8:]:
+        assert set(row) == {
+            "record",
+            "kind",
+            "span",
+            "temporality",
+            "certainty",
+            "negation",
+            "experiencer",
+            "time_state",
+            "review",
+        }
+        assert row["record"] == "timeline"
+        assert row["negation"] == "affirmed"
+        assert row["experiencer"] == "patient"
+        assert row["review"] == "required"
+    for surface in (
+        v30_sdoh_timeline.SYNTHETIC_NOTE,
+        "retired teacher",
+        "fever",
+        "cough",
+        "fatigue",
+        "follow-up",
+        "03/04/2026",
+        "2026-06-12",
+        "2026-06-15",
+        "2026-06-17",
+        "3 days ago",
+        "in 2 days",
+    ):
+        assert surface not in output
+
+
+@pytest.fixture
+def forbid_sdoh_timeline_model_loading(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("synthetic example attempted model loading")
+
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+    monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
+
+
+def test_sdoh_timeline_example_is_import_safe(
+    capsys, forbid_sdoh_timeline_model_loading
+):
+    namespace = runpy.run_path(v30_sdoh_timeline.__file__, run_name="example_import")
+    assert callable(namespace["build_demo_records"])
+    assert capsys.readouterr() == ("", "")
+
+
+def test_sdoh_timeline_example_runs_real_public_calls_offline(
+    capsys, forbid_sdoh_timeline_model_loading
+):
+    first = v30_sdoh_timeline.build_demo_records()
+    assert v30_sdoh_timeline.build_demo_records() == first
+    assert v30_sdoh_timeline.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    _assert_sdoh_timeline_demo_output(captured.out)
+
+
+def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "examples.v30_sdoh_timeline"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(root),
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+        },
+        input="EXTERNAL_NOTE_MUST_NOT_BE_READ\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert result.stderr == ""
+    assert "EXTERNAL_NOTE_MUST_NOT_BE_READ" not in result.stdout
+    _assert_sdoh_timeline_demo_output(result.stdout)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [["PRIVATE_ARGUMENT_SENTINEL"], ["--note", "PRIVATE_ARGUMENT_SENTINEL"]],
+)
+def test_sdoh_timeline_example_refuses_arguments_without_echo(
+    arguments, monkeypatch, capsys
+):
+    def fail():
+        pytest.fail("argument refusal ran extraction")
+
+    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", fail)
+    assert v30_sdoh_timeline.main(arguments) == 2
+    assert capsys.readouterr() == ("", "synthetic_example_accepts_no_arguments\n")
+
+
+@pytest.mark.parametrize(
+    "public_call",
+    ["detect_sections", "extract_sdoh", "normalize_temporal", "build_timeline"],
+)
+def test_sdoh_timeline_example_reports_api_failure_without_partial_output(
+    public_call, monkeypatch, capsys
+):
+    def fail(*args, **kwargs):
+        raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+    monkeypatch.setattr(v30_sdoh_timeline, public_call, fail)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_sdoh_timeline_example_detects_section_scope_drift(monkeypatch, capsys):
+    monkeypatch.setattr(v30_sdoh_timeline, "detect_sections", lambda _: [])
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_sdoh_timeline_example_detects_normalization_drift(monkeypatch, capsys):
+    normalize = v30_sdoh_timeline.normalize_temporal
+
+    def changed(*args, **kwargs):
+        from dataclasses import replace
+
+        values = list(normalize(*args, **kwargs))
+        values[0] = replace(values[0], value="1900-01-01")
+        return tuple(values)
+
+    monkeypatch.setattr(v30_sdoh_timeline, "normalize_temporal", changed)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
+def test_sdoh_timeline_output_check_rejects_unprojected_temporal_values():
+    records = v30_sdoh_timeline.build_demo_records()
+    records[4]["value"] = "2026-06-12"
+    with pytest.raises(AssertionError):
+        _assert_sdoh_timeline_demo_output("\n".join(json.dumps(row) for row in records))
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():

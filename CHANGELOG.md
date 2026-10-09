@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an offline synthetic SDOH/temporal/timeline example with explicit reference
+  time, authored event axes and controlled labels/offsets/states-only output;
+  smoke tests reject API drift, external arguments and source/date output (#3760).
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic

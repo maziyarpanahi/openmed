@@ -1,5 +1,8 @@
 # Social-determinant evidence contract
 
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for section-scoped extraction and a labels/offsets/states-only output projection.
+
 `openmed.clinical.sdoh_evidence` provides a small, deterministic envelope for
 social-determinant extraction results. It preserves provenance and uncertainty
 boundaries so an SDOH signal cannot be mistaken for a diagnosis or an

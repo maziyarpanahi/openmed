@@ -43,6 +43,7 @@ using the same workflow with real data.
 | Use when you want to... | Script |
 | --- | --- |
 | Build a cited synthetic brief offline with explicitly labelled fixture NER/NLI providers | [`examples/v30_clinical_brief.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_clinical_brief.py) |
+| Run section-scoped SDOH extraction and an explicitly anchored synthetic timeline with labels/offsets/states-only output | [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) |
 | Compare clinical and biomedical NER families | [`examples/clinical_ner_families.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/clinical_ner_families.py) |
 | Redact, extract, and build a FHIR Bundle | [`examples/first_five_minutes_redact_extract_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/first_five_minutes_redact_extract_fhir.py) |
 | Export grounded spans for FHIR and OMOP workflows | [`examples/interop_fhir_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/interop_fhir_export.py) |
