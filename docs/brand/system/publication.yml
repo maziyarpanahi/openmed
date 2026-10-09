@@ -332,6 +332,7 @@ classification:
     - training/federated-update-metadata.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
+    - training/synthetic/speech-rendering.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
