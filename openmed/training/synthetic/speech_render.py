@@ -189,7 +189,10 @@ def _validate_turn(turn: ScriptedTurn) -> None:
     if not isinstance(turn, ScriptedTurn):
         raise SpeechRenderError("speech_script_invalid")
     if any(
-        type(value) is not str or not value
+        type(value) is not str
+        or not value
+        or len(value) > 100_000
+        or any(0xD800 <= ord(char) <= 0xDFFF for char in value)
         for value in (turn.text, turn.language, turn.speaker_role)
     ):
         raise SpeechRenderError("speech_script_invalid")

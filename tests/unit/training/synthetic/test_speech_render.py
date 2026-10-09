@@ -433,3 +433,15 @@ def test_provider_word_alignments_are_used_without_proportional_estimates():
         (word["start_sample"], word["end_sample"])
         for word in manifest["turns"][0]["words"]
     ] == [(0, 1), (2, 9)]
+
+
+@pytest.mark.parametrize("field", ["text", "language", "speaker_role"])
+def test_unencodable_source_is_rejected_before_synthesis(field):
+    class NeverCalled(ModelFreeSynthesizer):
+        def synthesize(self, *args, **kwargs):
+            pytest.fail("Unencodable source was synthesized")
+
+    turn = replace(scripts()[0], **{field: "synthetic\ud800"})
+    with pytest.raises(SpeechRenderError, match="speech_script_invalid") as caught:
+        render((turn,), NeverCalled())
+    assert caught.value.__context__ is None
