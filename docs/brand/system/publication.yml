@@ -339,6 +339,7 @@ classification:
     - multimodal/webp-header-preflight.md
     - multimodal/image-orientation-preflight.md
     - multimodal/tiff-preflight.md
+    - multimodal/physiological-waveforms.md
     - multimodal/audio-format-summaries.md
     - multimodal/frame-sampling-manifests.md
     - multimodal/audio-resampling-plans.md

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add aligned offline Python and OpenMedKit non-ECG waveform acquisition
+  contracts for PPG, respiration, pressure and capnography, with controlled
+  quality states, content-free reports and explicit reviewer confirmation.
+  These engineering checks expose no derived vital signs or alarms (#3840).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
