@@ -162,3 +162,95 @@ Scanned or image-only source PDFs are outside this API's text-removal proof:
 their redaction rectangles must come from the OCR pipeline, and residual text
 must be verified by re-OCR. PDF redaction is an assistive privacy control, not a
 diagnostic or clinical decision system.
+
+## Identifier-bearing barcodes and 2D codes
+
+`redact_image`, `redact_dicom_pixels`, `render_redacted_pdf` and
+`render_redacted_raster_pages` scan each source frame/page for codes independently
+of OCR. Every located code is treated as an identifier-bearing redaction region,
+including a symbol with an unreadable payload. Code boxes join the existing OCR
+or caller-selected boxes; PDF pixel boxes are converted to page points before
+text exclusion and layout verification. Image-only code regions keep their
+measured zero source-word counts and set `source_text_required: false`; ordinary
+text regions still require measurable source text. Residual verification scans the redacted
+pixels again and rejects any remaining detectable code before writing output.
+
+The issue's implementation surface is Python. OpenMedKit currently has no image,
+PDF or DICOM pixel-redaction API to extend; this change adds no cloud bridge or
+Apple Foundation Models fallback.
+
+### Local providers and availability policy
+
+All four entry points accept `code_detector` and `code_detection_policy`. The
+policy defaults to `"coverage_incomplete"`: a missing or failing detector produces
+an explicit `coverage_incomplete: true` in the code coverage report, rather than
+claiming codes were absent. Select `"fail_closed"` to reject unavailable detection
+before output publication. Malformed boxes and exhausted region limits always
+fail closed. A residual-pass outage follows the same policy and is recorded in
+its separate coverage report. Existing OCR/pixel `clean` or `passed` flags describe
+those checks; callers must inspect both code coverage reports for completeness.
+Disabling image/DICOM residual verification does not disable the source code scan.
+
+The default adapter is `ZXingCodeRegionDetector`. Install its optional local
+backend separately; no dependency, weights, downloads or network transport are
+added to the core SDK:
+
+```bash
+pip install "zxing-cpp==2.3.0"
+```
+
+The [ZXing Python binding](https://github.com/zxing-cpp/zxing-cpp/tree/v2.3.0/wrappers/python)
+and [license](https://github.com/zxing-cpp/zxing-cpp/blob/v2.3.0/LICENSE) are
+Apache-2.0. The adapter supports linear, QR and DataMatrix classes (other detected
+symbologies are still redacted). It requests located decoding failures as well
+as valid codes and never reads the backend's decoded text, bytes or error detail.
+This is detection support, not measured clinical qualification: distorted,
+partially hidden or unsupported codes can still be missed. Synthetic tests and
+generated sentinel codes do not establish real-world recall.
+
+```python
+from openmed.multimodal import ZXingCodeRegionDetector, redact_image
+
+result = redact_image(
+    "synthetic-label.png",
+    models=local_pii_models,
+    code_detector=ZXingCodeRegionDetector(),
+    code_detection_policy="fail_closed",
+)
+coverage = result.code_coverage.to_dict()
+residual = result.residual_report.code_coverage.to_dict()
+```
+
+DICOM accepts these options directly or in `DicomPixelRedactionPolicy`.
+Code findings have null text and model-confidence fields, rather than invented
+text evidence or confidence scores. For
+`redact_document` image dispatch, inject `models["code_detector"]` and put
+`"code_detection_policy"` in the policy mapping alongside the output destination.
+
+### Provider and report contract
+
+`CodeRegionDetector.detect(image)` receives an in-memory Pillow image or uint8
+array and returns `CodeRegion(symbology, bbox)` values. Boxes use a top-left origin
+and exclusive right/bottom pixel edges. The caller assigns the zero-based page or
+frame index. Provider geometry must be finite, non-empty and within image bounds.
+`FakeCodeRegionDetector` returns fixed synthetic boxes for offline tests; use a
+pixel-aware fake or independent verification provider when testing residuals.
+
+Reports expose only controlled symbology classes (`linear`, `qr`, `datamatrix`,
+`other`), counts, boxes and coverage status. If an injected provider returns a
+mapping with `payload`, `text` or `bytes`, the boundary reduces that value to an
+opaque SHA-256 digest in the in-memory region; neither the payload nor its digest
+is included in the coverage report. Backend exception messages are suppressed.
+Providers must themselves avoid logging decoded content. Code-free images keep
+the same encoded output bytes as the existing redaction path; metadata stripping
+and existing OCR redaction continue to apply. No source-byte identity is claimed
+for metadata-bearing or re-encoded source images.
+
+Example safe report:
+
+```json
+{"count": 1, "boxes": [{"symbology": "qr", "bbox": [10, 10, 60, 60], "page": 0}], "coverage_incomplete": false}
+```
+
+No regional coverage audit, mask-lineage implementation, autonomous clinical
+action or release qualification is added by this detector integration.

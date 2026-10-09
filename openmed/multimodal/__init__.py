@@ -98,6 +98,16 @@ from .chw_forms import (
     parse_xform_path,
     redact_chw_form,
 )
+from .code_regions import (
+    CodeCoverageReport,
+    CodeDetectionError,
+    CodeDetectionPolicy,
+    CodeRegion,
+    CodeRegionDetector,
+    FakeCodeRegionDetector,
+    ZXingCodeRegionDetector,
+    detect_code_regions,
+)
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomHeaderAction,
@@ -390,6 +400,14 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "CodeCoverageReport",
+    "CodeDetectionError",
+    "CodeDetectionPolicy",
+    "CodeRegion",
+    "CodeRegionDetector",
+    "FakeCodeRegionDetector",
+    "ZXingCodeRegionDetector",
+    "detect_code_regions",
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
     "AbstentionRecord",

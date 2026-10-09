@@ -233,3 +233,88 @@ def _write_pixel_dicom(path: Path, pixels) -> Path:
     dataset.PixelData = np.ascontiguousarray(pixels).tobytes()
     dataset.save_as(path, enforce_file_format=True)
     return path
+
+
+class _SyntheticCodeDetector:
+    def __init__(self, symbology="qr", persistent=False):
+        self.symbology = symbology
+        self.persistent = persistent
+
+    def detect(self, image):
+        if self.persistent or np.asarray(image)[8:20, 8:58].max(initial=0) > 0:
+            return [
+                {
+                    "symbology": self.symbology,
+                    "bbox": (8, 8, 58, 20),
+                    "payload": "SYNTHETIC-ACCESSION-3816",
+                }
+            ]
+        return []
+
+
+@pytest.mark.parametrize("symbology", ["linear", "qr", "datamatrix"])
+@pytest.mark.parametrize("multiframe", [False, True])
+def test_dicom_identifier_codes_are_blacked_out_without_ocr(
+    tmp_path, symbology, multiframe
+):
+    from openmed.multimodal.ocr import FakeOcrEngine
+
+    pixels = _single_frame_pixels()
+    if multiframe:
+        pixels = np.stack([pixels, pixels])
+    source = _write_pixel_dicom(tmp_path / "codes.dcm", pixels)
+    output = tmp_path / "safe.dcm"
+    result = redact_dicom_pixels(
+        source,
+        output_path=output,
+        ocr_engine=FakeOcrEngine(()),
+        code_detector=_SyntheticCodeDetector(symbology),
+        code_detection_policy="fail_closed",
+    )
+    assert pydicom.dcmread(output).pixel_array.max() == 0
+    assert result.redaction_count == (2 if multiframe else 1)
+    assert result.residual_report.code_coverage.clean
+    assert {r.symbology for r in result.code_coverage.regions} == {symbology}
+    report = json.dumps(result.to_audit_report())
+    assert "SYNTHETIC-ACCESSION-3816" not in report
+    assert "payload_sha256" not in report
+
+
+def test_dicom_residual_codes_fail_before_writing(tmp_path):
+    from openmed.multimodal import CodeDetectionError
+    from openmed.multimodal.ocr import FakeOcrEngine
+
+    source = _write_pixel_dicom(tmp_path / "codes.dcm", _single_frame_pixels())
+    original = source.read_bytes()
+    with pytest.raises(CodeDetectionError, match="residual"):
+        redact_dicom_pixels(
+            source,
+            ocr_engine=FakeOcrEngine(()),
+            code_detector=_SyntheticCodeDetector(persistent=True),
+        )
+    assert source.read_bytes() == original
+
+
+def test_dicom_missing_code_detector_honors_policy(tmp_path, monkeypatch):
+    from openmed.multimodal import CodeDetectionError, code_regions
+    from openmed.multimodal.ocr import FakeOcrEngine
+
+    def unavailable(self, image):
+        raise RuntimeError("SYNTHETIC-ACCESSION-3816")
+
+    monkeypatch.setattr(code_regions.ZXingCodeRegionDetector, "detect", unavailable)
+    source = _write_pixel_dicom(tmp_path / "codes.dcm", _single_frame_pixels())
+    target = tmp_path / "output.dcm"
+    result = redact_dicom_pixels(
+        source, output_path=target, ocr_engine=FakeOcrEngine(())
+    )
+    assert result.code_coverage.coverage_incomplete
+    target.unlink()
+    with pytest.raises(CodeDetectionError, match="unavailable"):
+        redact_dicom_pixels(
+            source,
+            output_path=target,
+            ocr_engine=FakeOcrEngine(()),
+            policy={"code_detection_policy": "fail_closed"},
+        )
+    assert not target.exists()
