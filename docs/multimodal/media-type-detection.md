@@ -11,6 +11,13 @@ Supported signatures:
 - little-endian and big-endian TIFF
 - DICOM Part 10 with the `DICM` marker at byte offset 128
 - WAV with `RIFF` and `WAVE` markers
+- HEIF/HEIC and M4A with a complete bounded first `ftyp` box (including
+  extended sizes); image sequence brands are distinguished
+
+M4A maps to `audio/mp4`. HEIF maps to `image/heif` or `image/heic`, with
+`-sequence` for sequence brands. Generic MP4, ambiguous image/audio brands,
+AVIF and file-type boxes extending beyond the prefix are unknown. See
+[HEIF/M4A header preflight](iso-bmff-preflight.md) for declared metadata and limits.
 
 ```python
 from openmed.multimodal.media_type import (

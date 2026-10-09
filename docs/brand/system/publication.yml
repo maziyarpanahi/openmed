@@ -337,6 +337,7 @@ classification:
     - multimodal/gif-header-preflight.md
     - multimodal/image-header-preflight.md
     - multimodal/webp-header-preflight.md
+    - multimodal/iso-bmff-preflight.md
     - multimodal/image-orientation-preflight.md
     - multimodal/tiff-preflight.md
     - multimodal/audio-format-summaries.md

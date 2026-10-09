@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bounded HEIF/M4A header preflight in Python and OpenMedKit, with primary image
+  geometry, item-role and EXIF/XMP presence inventory, declared audio metadata,
+  decoder-required results, value-free refusals and shared synthetic fixtures
+  (#3841). No media decoding or metadata-value extraction is performed.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

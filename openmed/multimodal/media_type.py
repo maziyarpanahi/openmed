@@ -51,7 +51,36 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         return "application/dicom"
     if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WAVE":
         return "audio/wav"
-    return None
+    return _detect_bmff_type(bounded)
+
+
+def _detect_bmff_type(prefix: bytes) -> str | None:
+    """Recognize only a complete, bounded first file-type box."""
+    if len(prefix) < 16 or prefix[4:8] != b"ftyp":
+        return None
+    size = int.from_bytes(prefix[:4], "big")
+    header = 8
+    if size == 1:
+        size = int.from_bytes(prefix[8:16], "big")
+        header = 16
+    if size < header + 8 or size > len(prefix) or (size - header) % 4:
+        return None
+    brands = {prefix[header : header + 4]}
+    brands.update(prefix[i : i + 4] for i in range(header + 8, size, 4))
+    # AVIF shares the structural mif1 brand; do not mistake it for HEIC.
+    if brands & {b"avif", b"avis"}:
+        return None
+    image = None
+    if brands & {b"hevc", b"hevx"}:
+        image = "image/heic-sequence"
+    elif b"msf1" in brands:
+        image = "image/heif-sequence"
+    elif brands & {b"heic", b"heix", b"heim", b"heis"}:
+        image = "image/heic"
+    elif b"mif1" in brands:
+        image = "image/heif"
+    audio = "audio/mp4" if b"M4A " in brands else None
+    return None if image and audio else image or audio
 
 
 def validate_media_type(
