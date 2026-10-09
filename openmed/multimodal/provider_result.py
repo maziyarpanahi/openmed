@@ -59,7 +59,7 @@ _REQUIRED_FIELDS: Final = frozenset(
     }
 )
 _OPTIONAL_FIELDS: Final = frozenset(
-    {"output_digest", "abstention_code", "count_metadata"}
+    {"output_digest", "abstention_code", "count_metadata", "guard_metadata"}
 )
 
 
@@ -102,6 +102,7 @@ class ProviderResultEnvelope:
         output_digest: Required only for a successful result.
         abstention_code: Required only for an abstention result.
         schema_version: Exact supported envelope schema identifier.
+        guard_metadata: Optional closed generated-text release decision and digests.
     """
 
     provider_id: str
@@ -113,6 +114,7 @@ class ProviderResultEnvelope:
     output_digest: str | None = None
     abstention_code: ProviderAbstentionCode | None = None
     schema_version: str = PROVIDER_RESULT_SCHEMA_VERSION
+    guard_metadata: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if (
@@ -129,6 +131,7 @@ class ProviderResultEnvelope:
         count_metadata = _counts(self.count_metadata)
         output_digest = _digest(self.output_digest, required=False)
         abstention_code = _abstention_code(self.abstention_code)
+        guard_metadata = _guard_metadata(self.guard_metadata)
 
         if outcome is ProviderResultOutcome.SUCCESS:
             if output_digest is None:
@@ -142,6 +145,16 @@ class ProviderResultEnvelope:
         elif abstention_code is not None:
             raise ProviderResultError("abstention code is invalid for result outcome")
 
+        if guard_metadata:
+            released = guard_metadata["decision"] in {"pass", "redact"}
+            if released and outcome is not ProviderResultOutcome.SUCCESS:
+                raise ProviderResultError("guard decision conflicts with outcome")
+            if not released and (
+                outcome is not ProviderResultOutcome.ABSTENTION
+                or abstention_code is not ProviderAbstentionCode.PHI_UNCERTAINTY
+            ):
+                raise ProviderResultError("guard decision conflicts with outcome")
+
         object.__setattr__(self, "provider_id", provider_id)
         object.__setattr__(self, "model_id", model_id)
         object.__setattr__(self, "input_digest", input_digest)
@@ -150,11 +163,12 @@ class ProviderResultEnvelope:
         object.__setattr__(self, "count_metadata", count_metadata)
         object.__setattr__(self, "output_digest", output_digest)
         object.__setattr__(self, "abstention_code", abstention_code)
+        object.__setattr__(self, "guard_metadata", guard_metadata)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a fresh, fixed-shape dictionary containing safe metadata."""
 
-        return {
+        result: dict[str, Any] = {
             "schema_version": self.schema_version,
             "provider_id": self.provider_id,
             "model_id": self.model_id,
@@ -167,6 +181,9 @@ class ProviderResultEnvelope:
             "duration_ms": self.duration_ms,
             "count_metadata": dict(self.count_metadata),
         }
+        if self.guard_metadata:
+            result["guard_metadata"] = dict(self.guard_metadata)
+        return result
 
     def to_json(self) -> str:
         """Serialize to deterministic compact JSON."""
@@ -200,6 +217,7 @@ class ProviderResultEnvelope:
             abstention_code=payload.get("abstention_code"),
             duration_ms=payload["duration_ms"],
             count_metadata=payload.get("count_metadata", {}),
+            guard_metadata=payload.get("guard_metadata", {}),
         )
 
     @classmethod
@@ -231,6 +249,30 @@ def _identifier(value: object, kind: str) -> str:
     if parts & _FORBIDDEN_IDENTIFIER_PARTS:
         raise ProviderResultError(f"{kind} identifier is invalid")
     return value
+
+
+def _guard_metadata(value: object) -> Mapping[str, str]:
+    if type(value) is not dict and not isinstance(value, MappingProxyType):
+        raise ProviderResultError("guard metadata is invalid")
+    if not value:
+        return MappingProxyType({})
+    if set(value) != {
+        "decision",
+        "detector_version_digest",
+        "policy_digest",
+        "report_digest",
+    }:
+        raise ProviderResultError("guard metadata fields are invalid")
+    if type(value["decision"]) is not str or value["decision"] not in {
+        "pass",
+        "redact",
+        "withhold",
+        "abstain",
+    }:
+        raise ProviderResultError("guard decision is invalid")
+    for name in ("detector_version_digest", "policy_digest", "report_digest"):
+        _digest(value[name], required=True)
+    return MappingProxyType(dict(sorted(value.items())))
 
 
 def _digest(value: object, *, required: bool) -> str | None:

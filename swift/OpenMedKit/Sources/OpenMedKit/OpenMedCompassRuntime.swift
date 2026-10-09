@@ -7,13 +7,17 @@
     import Tokenizers
 
     /// Generation result returned by ``OpenMedVisionLanguageModel``.
-    public struct OpenMedVisionLanguageGeneration: Sendable {
+    public struct OpenMedVisionLanguageGeneration: Sendable, CustomStringConvertible {
+        public var description: String {
+            "OpenMedVisionLanguageGeneration(\(releaseEnvelope?.guardReport.decision ?? "unavailable"))"
+        }
         public let text: String
         public let tokenIDs: [Int]
         public let promptTokenCount: Int
         public let generationTokenCount: Int
         public let promptTime: TimeInterval
         public let generationTime: TimeInterval
+        public let releaseEnvelope: GeneratedTextProviderEnvelope?
 
         public init(
             text: String,
@@ -21,7 +25,8 @@
             promptTokenCount: Int,
             generationTokenCount: Int,
             promptTime: TimeInterval,
-            generationTime: TimeInterval
+            generationTime: TimeInterval,
+            releaseEnvelope: GeneratedTextProviderEnvelope? = nil
         ) {
             self.text = text
             self.tokenIDs = tokenIDs
@@ -29,6 +34,7 @@
             self.generationTokenCount = generationTokenCount
             self.promptTime = promptTime
             self.generationTime = generationTime
+            self.releaseEnvelope = releaseEnvelope
         }
     }
 
@@ -80,13 +86,19 @@
         public func generate(
             _ prompt: String,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -95,13 +107,19 @@
             _ prompt: String,
             imageURL: URL,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.url(imageURL)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -110,13 +128,19 @@
             _ prompt: String,
             image: CIImage,
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             try await generate(
                 prompt,
                 images: [.ciImage(image)],
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
@@ -125,7 +149,10 @@
             _ prompt: String,
             images: [UserInput.Image],
             maxTokens: Int = 256,
-            temperature: Float = 0
+            temperature: Float = 0,
+            releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil,
+            identifiers: [GeneratedIdentifierDigest] = []
         ) async throws -> OpenMedVisionLanguageGeneration {
             guard maxTokens > 0 else {
                 throw OpenMedCompassError.invalidGenerationLimit(maxTokens)
@@ -135,14 +162,20 @@
             return try await generate(
                 prepared: prepared,
                 maxTokens: maxTokens,
-                temperature: temperature
+                temperature: temperature,
+                releaseGuard: releaseGuard,
+                assetDigest: assetDigest,
+                identifiers: identifiers
             )
         }
 
         private func generate(
             prepared: consuming sending LMInput,
             maxTokens: Int,
-            temperature: Float
+            temperature: Float,
+            releaseGuard: GeneratedTextGuard?,
+            assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest]
         ) async throws -> OpenMedVisionLanguageGeneration {
             let parameters = GenerateParameters(
                 maxTokens: maxTokens,
@@ -171,13 +204,20 @@
                 }
             }
             let text = await container.decode(tokenIds: tokenIDs)
+            let guardInstance = assetDigest == nil ? nil : releaseGuard
+            let guarded = (guardInstance ?? GeneratedTextGuard(detector: nil)).release(
+                text.trimmingCharacters(in: .whitespacesAndNewlines),
+                assetDigest: assetDigest ?? String(repeating: "0", count: 64),
+                identifiers: identifiers
+            )
             return OpenMedVisionLanguageGeneration(
-                text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                tokenIDs: tokenIDs,
+                text: guarded.text ?? "",
+                tokenIDs: [],
                 promptTokenCount: completion?.promptTokenCount ?? 0,
                 generationTokenCount: completion?.generationTokenCount ?? 0,
                 promptTime: completion?.promptTime ?? 0,
-                generationTime: completion?.generateTime ?? 0
+                generationTime: completion?.generateTime ?? 0,
+                releaseEnvelope: guarded.envelope
             )
         }
 
