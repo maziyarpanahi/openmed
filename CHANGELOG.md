@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Expose value-free governed workflow preflight, preview, status and human
+  review-request MCP tools over injected local custody. Require server-held,
+  single-use consent for handoffs; reject inline authority and preserve the
+  human approval channel. Add real offline MCP session and adversarial controls.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic

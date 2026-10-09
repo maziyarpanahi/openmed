@@ -8,6 +8,7 @@ import os
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, replace
+from datetime import datetime
 from inspect import Signature
 from typing import Annotated, Any, Callable, Dict, Optional
 
@@ -43,6 +44,7 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import OpenMedSpan
+from openmed.mcp.authorization_conformance import validate_governed_tool_registration
 from openmed.mcp.clinical_workflow import (
     clinical_workflow_resource_document,
     load_golden_agent_run,
@@ -57,6 +59,14 @@ from openmed.mcp.consent_receipts import (
     ConsentReceiptRequiredError,
     ConsentReceiptVerificationError,
     ConsentReceiptVerifier,
+)
+from openmed.mcp.governed_workflows import (
+    GOVERNED_MCP_OPERATIONS,
+    GovernedConsentProvider,
+    GovernedMCPError,
+    GovernedMCPService,
+    build_governed_mcp_handlers,
+    default_governed_consent_policy,
 )
 from openmed.mcp.tool_registry import (
     CLINICAL_WORKFLOW_SPEC,
@@ -254,6 +264,14 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
 
     if isinstance(error, PromptInjectionDetected):
         return {"error": error.to_dict(), "is_error": True}
+    if isinstance(error, GovernedMCPError):
+        return {
+            "error": {
+                "code": error.code,
+                "message": "Governed workflow request refused.",
+            },
+            "is_error": True,
+        }
     if isinstance(error, OpenMedError):
         return mcp_error_payload(error)
     error_module = error.__class__.__module__
@@ -1835,6 +1853,10 @@ def build_mcp_tool_handlers(
     decision_calibration_profiles: Optional[
         Mapping[str, DecisionCalibrationProfile]
     ] = None,
+    governance_service: Optional[GovernedMCPService] = None,
+    governance_consent_policy: Optional[ConsentReceiptPolicy] = None,
+    governance_consent_receipt_provider: Optional[GovernedConsentProvider] = None,
+    governance_clock: Optional[Callable[[], datetime]] = None,
 ) -> dict[str, Callable[..., Dict[str, Any]]]:
     """Return the MCP tool-name -> handler mapping bound to a runtime provider.
 
@@ -1914,6 +1936,18 @@ def build_mcp_tool_handlers(
         }
     )
     handlers.update(TOOL_REGISTRY.registered_handlers())
+    handlers.update(
+        build_governed_mcp_handlers(
+            governance_service,
+            consent_policy=(
+                governance_consent_policy
+                if governance_consent_policy is not None
+                else default_governed_consent_policy()
+            ),
+            receipt_provider=governance_consent_receipt_provider,
+            clock=governance_clock,
+        )
+    )
     return handlers
 
 
@@ -1955,7 +1989,17 @@ def _register_tools(
     decision_calibration_profiles: Optional[
         Mapping[str, DecisionCalibrationProfile]
     ] = None,
+    governance_service: Optional[GovernedMCPService] = None,
+    governance_consent_policy: Optional[ConsentReceiptPolicy] = None,
+    governance_consent_receipt_provider: Optional[GovernedConsentProvider] = None,
+    governance_clock: Optional[Callable[[], datetime]] = None,
 ) -> None:
+    governed_policy = (
+        governance_consent_policy
+        if governance_consent_policy is not None
+        else default_governed_consent_policy()
+    )
+    validate_governed_tool_registration(TOOL_REGISTRY.latest_specs(), governed_policy)
     handlers = build_mcp_tool_handlers(
         runtime_provider,
         journey_catalog_provider=journey_catalog_provider,
@@ -1963,11 +2007,17 @@ def _register_tools(
         decision_backend=decision_backend,
         decision_access_policy=decision_access_policy,
         decision_calibration_profiles=decision_calibration_profiles,
+        governance_service=governance_service,
+        governance_consent_policy=governed_policy,
+        governance_consent_receipt_provider=governance_consent_receipt_provider,
+        governance_clock=governance_clock,
     )
     for spec in TOOL_REGISTRY.latest_specs():
         registered_spec = (
             _consented_tool_spec(spec)
-            if consent_policy is not None and not spec.read_only_hint
+            if consent_policy is not None
+            and not spec.read_only_hint
+            and spec.name not in GOVERNED_MCP_OPERATIONS
             else spec
         )
         server.tool(
@@ -1981,7 +2031,9 @@ def _register_tools(
                 registered_spec,
                 handlers[spec.name],
                 injection_guard,
-                consent_policy=consent_policy,
+                consent_policy=(
+                    None if spec.name in GOVERNED_MCP_OPERATIONS else consent_policy
+                ),
                 authorization_spec=spec,
             )
         )
@@ -2129,6 +2181,10 @@ def create_mcp_server(
     decision_calibration_profiles: Optional[
         Mapping[str, DecisionCalibrationProfile]
     ] = None,
+    governance_service: Optional[GovernedMCPService] = None,
+    governance_consent_policy: Optional[ConsentReceiptPolicy] = None,
+    governance_consent_receipt_provider: Optional[GovernedConsentProvider] = None,
+    governance_clock: Optional[Callable[[], datetime]] = None,
 ) -> Any:
     """Create a FastMCP server exposing OpenMed tools, resources, and prompts."""
     if consent_policy is not None and consent_verifier is not None:
@@ -2236,6 +2292,10 @@ def create_mcp_server(
         decision_backend=decision_backend,
         decision_access_policy=decision_access_policy,
         decision_calibration_profiles=decision_calibration_profiles,
+        governance_service=governance_service,
+        governance_consent_policy=governance_consent_policy,
+        governance_consent_receipt_provider=governance_consent_receipt_provider,
+        governance_clock=governance_clock,
     )
     _register_resources(server, runtime_provider)
     _register_prompts(server)

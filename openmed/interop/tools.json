@@ -8640,6 +8640,794 @@
       },
       "stability": "stable",
       "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Preflight"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 256,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_preflight",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Preview"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 256,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_preview",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Governed Workflow Request Review"
+      },
+      "authorization": {
+        "consent_receipt_required": true,
+        "state_changing": true
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. Request a human handoff with server-held, single-use consent; this does not approve or execute an action.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 256,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_request_review",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Status"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 256,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_status",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 256,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
     }
   ],
   "workflows": [

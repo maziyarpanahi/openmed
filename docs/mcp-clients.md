@@ -208,6 +208,93 @@ State-changing tools continue through the signed, single-use consent-receipt
 verification path; the read-only Journey tools never accept a receipt as a
 substitute for access policy.
 
+## Governed workflow observations and review
+
+Four tools reference an action already held by a caller-injected local
+`GovernedMCPService`. They are registered from the canonical tool registry:
+
+| Tool | Behavior | Read-only | Destructive |
+| --- | --- | --- | --- |
+| `openmed_workflow_preflight` | Observe capability-grant, purpose-ticket and minimum-data projection decisions | Yes | No |
+| `openmed_workflow_preview` | Inspect proposed effect counts without clinical values or targets | Yes | No |
+| `openmed_workflow_status` | Poll run phase and action-bound receipt-verification observations | Yes | No |
+| `openmed_workflow_request_review` | Create a human reviewer handoff after server-held consent | No | No |
+
+Each tool accepts only `request`, an object with exactly these five fields:
+
+```json
+{
+  "schema_version": "openmed.mcp.governance_request.v1",
+  "run_id": "run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "workflow_id": "workflow:org.example/synthetic@1.0.0",
+  "action_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_state_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
+```
+
+The three read tools may use `null` for `expected_state_digest`. Review requests
+require the exact current state digest. Run IDs must be opaque, and workflow IDs
+must be developer-owned names; neither may encode patient information. The
+service resolves the existing action, policy and purpose from its own custody.
+MCP callers cannot upload a grant, purpose ticket, approval token, consent
+receipt, reviewer identity, role claim or credential. Unknown fields, including
+inline authority, return `invalid_arguments` without echoing their values.
+
+Results use `openmed.mcp.governance_result.v1` and contain only bound run/workflow
+references, action/state digests, phase/outcome codes, closed decisions for
+`grant`, `purpose_ticket` and `projection`, bounded proposed/committed effect
+counts, a receipt observation, and an optional review-request digest. Receipt
+observations are `absent`, `unverified`, `verified`, `expired` or `conflict`; a
+`verified` observation reports the service's durable check for this action and
+does not enable execution. The three authority decisions are `allowed`,
+`denied` or `unavailable`. No decision field transmits authority.
+
+Configure `create_mcp_server(governance_service=...)` with trusted local custody.
+No governance adapter is loaded from environment variables or downloaded; an
+unconfigured tool returns `governance_unavailable`. Review requests additionally
+need `governance_consent_policy` (a receipt-required `ConsentReceiptPolicy`) and
+`governance_consent_receipt_provider`, a trusted local callback retrieving a
+human-issued, single-use consent receipt bound to the exact review tool and
+request. These are server configuration, not MCP arguments. The default policy
+has no keys and requires a receipt, so review is denied by default. A permissive
+legacy policy cannot weaken this boundary. Registration rejects missing or
+disabled governance consent enforcement, incorrect behavioral annotations and
+substituted governance schema versions or contracts.
+
+A review request first checks the run/action/state and terminal or denied
+outcomes, then verifies human-channel consent, then delegates one atomic handoff
+creation. The service must repeat the state comparison at dispatch. Its
+`ReviewerHandoffPacket` must bind the same run/workflow and contain an evidence
+reference with schema `openmed.agent.action.v1` and the exact action SHA-256.
+MCP returns only the packet digest. No tool approves, resumes, cancels or executes
+an action, or mutates a FHIR/OMOP target. The service retains the packet for the
+human channel; clinical values, receipt signatures and reviewer identities
+never enter an MCP result.
+
+Stale state or mismatched run/action responses return `governance_conflict`;
+refused state returns `governance_denied`. Missing consent returns
+`consent_required`, failed verification returns the existing consent error,
+untyped/malformed acknowledgements return `governance_invalid_result`, and
+unexpected adapter failures return `governance_failed`. Diagnostic messages are
+fixed. Adapter standard output/error is suppressed, but adapters are trusted
+code and must keep their own logging value-free; this is not a sandbox.
+
+A failed, expired or malformed acknowledgement after handoff creation can have
+unknown commit state. Reconcile with status and service custody; never retry
+automatically or treat the failure as proof that nothing was created. Consent
+is consumed before handoff dispatch. Services own durable idempotency and action
+authority checks, independently of MCP transport authentication.
+
+The [offline authorization matrix](security/mcp-authorization-matrix.md) includes
+these tools. Synthetic real SDK sessions verify preflight, preview, review and
+polling without network access. The default adversarial corpus attempts inline
+instructions, hostile tool results, catalog substitution, delegation scope
+amplification and other forbidden fields through the actual dispatcher, under
+both strict and allow injection-guard modes; malformed authority still fails
+schema validation in allow mode. Its benign proposal is registered in service
+custody and referenced only by digest. These bounded controls do not establish
+universal prompt-injection resistance or clinical validation.
+
 ## Fixed-option decisions
 
 `openmed_decide` scores bounded caller-supplied options, preserves caller

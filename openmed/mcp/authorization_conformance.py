@@ -19,6 +19,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from openmed.mcp.consent_receipts import ConsentReceiptPolicy
+from openmed.mcp.governed_workflows import (
+    GOVERNED_MCP_OPERATIONS,
+    GOVERNED_MCP_REQUEST_SCHEMA,
+    GOVERNED_MCP_RESULT_SCHEMA,
+)
+
 __all__ = [
     "AUTHORIZATION_CONFORMANCE_SCHEMA_VERSION",
     "DEFAULT_FIXTURE_PATH",
@@ -39,6 +46,7 @@ __all__ = [
     "run_authorization_conformance",
     "run_conformance",
     "validate_case_coverage",
+    "validate_governed_tool_registration",
     "write_conformance_matrix",
 ]
 
@@ -120,6 +128,49 @@ class ConformanceViolation(ValueError):
         self.category = category
         self.boundary = boundary
         super().__init__(f"authorization conformance failure: {category}")
+
+
+def validate_governed_tool_registration(
+    specs: Sequence[Any], consent_policy: ConsentReceiptPolicy | None
+) -> None:
+    """Reject governance annotation drift or a missing receipt-required policy.
+
+    This check is used by actual server registration, in addition to the
+    synthetic matrix. A transport-level permission flag is not a substitute
+    for a single-use consent receipt bound to the review-request arguments.
+    """
+    seen = set()
+    for spec in specs:
+        if spec.name not in GOVERNED_MCP_OPERATIONS:
+            continue
+        seen.add(spec.name)
+        readonly = GOVERNED_MCP_OPERATIONS[spec.name] != "request_review"
+        expected_input = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"request": GOVERNED_MCP_REQUEST_SCHEMA},
+            "required": ["request"],
+        }
+        if (
+            spec.read_only_hint is not readonly
+            or spec.destructive_hint
+            or spec.open_world_hint
+            or spec.idempotent_hint is not readonly
+            or spec.version != "1.0.0"
+            or spec.input_schema != expected_input
+            or spec.output_schema != GOVERNED_MCP_RESULT_SCHEMA
+            or tuple(p.name for p in spec.parameters) != ("request",)
+            or not spec.parameters[0].required
+            or spec.parameters[0].schema != GOVERNED_MCP_REQUEST_SCHEMA
+        ):
+            raise ConformanceViolation("unapproved_state_change", "state_change_policy")
+        if spec.state_changing and (
+            type(consent_policy) is not ConsentReceiptPolicy
+            or not consent_policy.require_receipt
+        ):
+            raise ConformanceViolation("unapproved_state_change", "state_change_policy")
+    if seen != set(GOVERNED_MCP_OPERATIONS):
+        raise ConformanceViolation("unapproved_state_change", "state_change_policy")
 
 
 def _schema_error(path: str) -> ConformanceFixtureError:
