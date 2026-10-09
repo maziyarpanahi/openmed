@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Multimodal and ambient STRIDE threat model mapping media, artifacts, capture,
+  retention, provenance and review/export threats to enforcing code/tests or
+  tracked gaps, with offline dangling-reference and publication regression gates.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
