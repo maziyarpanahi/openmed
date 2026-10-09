@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -120,6 +120,7 @@ def load_json_rows(
     *,
     dataset: str,
     authority: str,
+    object_pairs_hook: Callable[[list[tuple[str, Any]]], dict[str, Any]] | None = None,
 ) -> list[Mapping[str, Any]]:
     """Load JSON or JSONL rows without writing or caching source content."""
 
@@ -131,7 +132,7 @@ def load_json_rows(
             if not line.strip():
                 continue
             try:
-                payload = json.loads(line)
+                payload = json.loads(line, object_pairs_hook=object_pairs_hook)
             except json.JSONDecodeError as exc:
                 raise ValueError(
                     f"{dataset} JSONL row {line_number} is invalid: {exc.msg}"
@@ -140,7 +141,9 @@ def load_json_rows(
         return rows
 
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=object_pairs_hook
+        )
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid {dataset} JSON: {exc.msg}") from exc
     rows = _mapping_rows(payload, dataset=dataset)

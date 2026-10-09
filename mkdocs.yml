@@ -180,6 +180,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
