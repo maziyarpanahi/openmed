@@ -1,5 +1,8 @@
 # Relation evidence binding
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+for endpoint/linking-cue bindings and a value-free output projection.
+
 Higher-risk relation aids must be independently reviewable. Before a relation
 enters a summary or review workflow, bind it to:
 
