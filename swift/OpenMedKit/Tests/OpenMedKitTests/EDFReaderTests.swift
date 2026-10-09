@@ -187,6 +187,7 @@ final class EDFReaderTests: XCTestCase {
 
     func testMalformedAnnotations() {
         let tals: [[UInt8]] = [
+            Array("+0\n\u{14}\u{14}\0".utf8), Array("+0 \u{14}\u{14}\0".utf8),
             Array("+0\u{14}secret\u{14}\0".utf8), Array("+0\u{15}0.1\u{14}\u{14}\0".utf8),
             Array("0\u{14}\u{14}\0".utf8), Array("+0\u{14}\u{14}\0\0x".utf8),
             Array("+0\u{14}\u{14}\0+0\u{14}".utf8) + [255, 20, 0],

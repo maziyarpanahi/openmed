@@ -139,7 +139,7 @@ public enum EDFReader {
         let reader = ByteReader(limit: limits.maxBytes) { size in
             var buffer = [UInt8](repeating: 0, count: size)
             let count = stream.read(&buffer, maxLength: size)
-            guard count >= 0 else { throw EDFError("edf_stream_read_error") }
+            guard count >= 0 && count <= size else { throw EDFError("edf_stream_read_error") }
             return Array(buffer.prefix(count))
         }
         return try parse(reader, startSeconds: startSeconds, endSeconds: endSeconds, limits: limits)
@@ -190,7 +190,7 @@ public enum EDFReader {
     }
 
     private static func matches(_ text: String, _ pattern: String) -> Bool {
-        text.range(of: "^(?:" + pattern + ")$", options: .regularExpression) != nil
+        text.range(of: "\\A(?:" + pattern + ")\\z", options: .regularExpression) != nil
     }
     private static func text(_ bytes: [UInt8]) -> String {
         String(bytes: bytes, encoding: .ascii)?.trimmingCharacters(in: CharacterSet(charactersIn: " ")) ?? ""
@@ -200,8 +200,8 @@ public enum EDFReader {
         guard matches(value, "-?[0-9]+"), let number = Int(value) else { throw EDFError("edf_header_invalid") }
         return number
     }
-    private static func number(_ bytes: [UInt8], pattern: String = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[Ee][+-]?[0-9]+)?") throws -> Decimal {
-        let value = pattern == "[+-][0-9]+(?:\\.[0-9]+)?" || pattern == "[0-9]+(?:\\.[0-9]+)?" ? (String(bytes: bytes, encoding: .ascii) ?? "") : text(bytes)
+    private static func number(_ bytes: [UInt8], pattern: String = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[Ee][+-]?[0-9]+)?", padding: Bool = true) throws -> Decimal {
+        let value = padding ? text(bytes) : (String(bytes: bytes, encoding: .ascii) ?? "")
         guard value.count <= 28, matches(value, pattern) else { throw EDFError("edf_numeric_invalid") }
         if let marker = value.lowercased().firstIndex(of: "e") {
             guard let exponent = Int(value[value.index(after: marker)...]), (-12...12).contains(exponent) else { throw EDFError("edf_numeric_invalid") }
@@ -241,8 +241,8 @@ public enum EDFReader {
             guard parts.count >= 3, parts.last!.isEmpty else { throw EDFError("edf_annotation_invalid") }
             let timing = parts[0].split(separator: 21, omittingEmptySubsequences: false)
             guard timing.count <= 2 else { throw EDFError("edf_annotation_invalid") }
-            let onset = try number(Array(timing[0]), pattern: "[+-][0-9]+(?:\\.[0-9]+)?")
-            let duration = timing.count == 2 ? try number(Array(timing[1]), pattern: "[0-9]+(?:\\.[0-9]+)?") : nil
+            let onset = try number(Array(timing[0]), pattern: "[+-][0-9]+(?:\\.[0-9]+)?", padding: false)
+            let duration = timing.count == 2 ? try number(Array(timing[1]), pattern: "[0-9]+(?:\\.[0-9]+)?", padding: false) : nil
             guard abs(onset) <= Decimal(maxDuration), (duration ?? 0) <= Decimal(maxDuration) else { throw EDFError("edf_duration_limit") }
             var count = 0
             for annotation in parts.dropFirst().dropLast() {
