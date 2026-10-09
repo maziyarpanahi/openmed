@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Define an offline edge-VLM provider contract with bounded image/prompt inputs,
+  source-linked evidence, model/preprocessing digests, shared abstentions,
+  content-free reports and explicit human review for non-diagnostic drafts (#2791).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
