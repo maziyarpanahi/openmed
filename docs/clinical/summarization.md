@@ -57,3 +57,34 @@ Migration: callers relying on the former implicit sentence-picker must now use
 `model="extractive"`. Maple is a general model, not a released clinical SLM or
 clinically validated summarizer. Summaries require qualified clinical review;
 the source-token leakage check cannot prove that every identifier was detected.
+
+## Guarded local CLI
+
+`openmed summarize` uses the same post-de-identification API and leakage guard.
+The CLI accepts only `--model mlx` (default) or explicit `--model extractive`,
+and only `--mode bhc`. Provision the required cached PII/runtime artifacts
+separately, including for the extractive baseline. Remote names and URLs are
+rejected; the command never downloads models or changes its backend on failure.
+
+```bash
+openmed summarize synthetic-note.txt --model extractive \
+  --summary-output protected-summary.txt --metadata-output summary-metadata.json --json
+```
+
+Input must be a nonempty, regular UTF-8 file of at most 16 KiB. Final symlinks
+and special files are refused. The two output destinations must be distinct,
+new files with existing parent directories. Both are created with permissions
+`0600`; existing files and final symlinks are never overwritten. Ordinary
+reservation or write failures remove files created by this invocation. This
+two-file operation is not crash-atomic: a process kill or power loss can leave
+partial files for the operator to remove.
+
+Only the protected summary file contains generated text, bounded to 8 KiB.
+The separate metadata file uses the shared CLI JSON envelope with leakage
+counts, backend ID, template digest, summary length and a human-review flag.
+`--json` prints that same value-free envelope. Human output is a fixed review
+advisory. Neither console stream nor metadata includes note or summary text,
+input/output paths, detected identifiers, or backend exception messages. The
+guard covers detected source identifiers; qualified clinical review remains
+required. See the [machine contract](../cli/machine-contract.md#guarded-summary-and-nli-commands)
+for limits, exit codes and stable failure codes.
