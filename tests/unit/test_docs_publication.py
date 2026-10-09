@@ -6,6 +6,7 @@ import importlib.util
 import json
 import posixpath
 import re
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -178,6 +179,119 @@ def test_publication_classifies_every_default_markdown_page_exactly_once() -> No
         "website/**",
         "demo/web/README.md",
     ]
+
+
+def _assert_multimodal_section(
+    nav: list[dict[str, Any]], navigated: list[str], pages: set[str]
+) -> None:
+    sections = [group["Multimodal"] for group in nav if "Multimodal" in group]
+    assert len(sections) == 1
+    section = sections[0]
+    assert section[0] == {"Overview": "multimodal/index.md"}
+    paths = _nav_paths(section)
+    assert Counter(paths) == Counter({page: 1 for page in pages})
+    assert Counter(path for path in _nav_paths(nav) if path in pages) == Counter(paths)
+    start = navigated.index("multimodal/index.md")
+    assert navigated[start : start + len(paths)] == paths
+    assert Counter(path for path in navigated if path.startswith("multimodal/")) == (
+        Counter(paths)
+    )
+
+
+def test_multimodal_pages_have_one_ordered_section_and_manifest_block() -> None:
+    config = _load_yaml(MKDOCS, base=True)
+    publication = _load_yaml(PUBLICATION)
+    pages = {
+        path.relative_to(DOCS).as_posix()
+        for path in (DOCS / "multimodal").rglob("*.md")
+    }
+
+    _assert_multimodal_section(
+        config["nav"], publication["classification"]["navigated"], pages
+    )
+    assert "docs/multimodal/index.html" in publication["expected_routes"]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["missing", "duplicate", "outside_section", "manifest_duplicate", "manifest_order"],
+)
+def test_multimodal_publication_rejects_broken_grouping(fault: str) -> None:
+    # Synthetic navigation controls exercise omissions, duplicate ownership and
+    # publication drift without modifying repository files.
+    overview = "multimodal/index.md"
+    guide = "multimodal/synthetic.md"
+    nav = [{"Multimodal": [{"Overview": overview}, {"Intake": [{"Guide": guide}]}]}]
+    navigated = [overview, guide]
+    if fault == "missing":
+        nav[0]["Multimodal"].pop()
+    elif fault == "duplicate":
+        nav[0]["Multimodal"].append({"Duplicate": guide})
+    elif fault == "outside_section":
+        nav.append({"Core Guides": [{"Misplaced": guide}]})
+    elif fault == "manifest_duplicate":
+        navigated.append(guide)
+    elif fault == "manifest_order":
+        navigated.reverse()
+
+    with pytest.raises(AssertionError):
+        _assert_multimodal_section(nav, navigated, {overview, guide})
+
+
+@pytest.mark.integration
+def test_multimodal_navigation_keeps_mkdocs_routes_and_overview_links(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("mkdocs")
+    from mkdocs.config import load_config
+    from mkdocs.structure.files import File, Files
+    from mkdocs.structure.nav import get_navigation
+
+    raw = _load_yaml(MKDOCS, base=True)
+    section = next(group for group in raw["nav"] if "Multimodal" in group)
+    paths = _nav_paths(section)
+    # Use the real MkDocs route/nav machinery with no provider or build plugins.
+    config = load_config(
+        config_file=None,
+        site_name="Synthetic route check",
+        docs_dir=str(DOCS),
+        site_dir=str(tmp_path / "site"),
+        nav=[section],
+        plugins=[],
+    )
+    files = Files([File(path, str(DOCS), config.site_dir, True) for path in paths])
+    navigation = get_navigation(files, config)
+    assert [page.file.src_uri for page in navigation.pages] == paths
+    for page in navigation.pages:
+        source = page.file.src_uri
+        expected = (
+            "multimodal/"
+            if source == "multimodal/index.md"
+            else source.removesuffix(".md") + "/"
+        )
+        assert page.url == expected
+        assert (DOCS / source).is_file()
+
+    publication = _load_yaml(PUBLICATION)["classification"]
+    published = set(publication["navigated"]) | set(publication["link_only"])
+    overview = "multimodal/index.md"
+    markdown = (DOCS / overview).read_text(encoding="utf-8")
+    hrefs = re.findall(r"\[[^\]]*\]\(([^)\s]+)", markdown)
+    assert hrefs
+    for href in hrefs:
+        assert _resolve_docs_link(overview, href, published=published) is not None
+    assert (
+        _resolve_docs_link(overview, "missing-synthetic-page.md", published=published)
+        is None
+    )
+    # Check existing inbound references as well as the new overview's links.
+    for source in sorted(published):
+        content = (DOCS / source).read_text(encoding="utf-8")
+        for href in re.findall(r"\[[^\]]*\]\(([^)\s]+)", content):
+            if "multimodal/" in href and not urlsplit(href).netloc:
+                assert _resolve_docs_link(source, href, published=published) in set(
+                    paths
+                )
 
 
 def test_docs_build_excludes_local_demo_payloads() -> None:
