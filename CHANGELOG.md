@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
+  parser fuzz coverage, with required-resource checks and a zero-skip gate.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
