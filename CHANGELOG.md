@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
+  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
+  printer settings and presentation template text; refuse unsupported hidden
+  carriers with category/count/digest evidence and preserve destinations.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

@@ -90,9 +90,11 @@ redaction provenance without writing a presentation.
 
 - Text in slide shapes, grouped text shapes, table cells, and speaker notes is
   supported.
-- Embedded images are not inspected; use the image/OCR redaction pipeline for
-  image-based PHI.
+- Embedded images and opaque media are refused during write-back; use a separate
+  image/OCR pipeline for image-based PHI.
 - Write-back preserves the deck structure and unaffected run formatting, but
   exact layout fidelity after replacement is not guaranteed.
-- SmartArt, charts, OLE objects, comments, masters, and layout-template text are
-  outside this adapter's scope.
+- SmartArt, charts, OLE objects and comments are refused. Master/layout text,
+  properties, alt text and printer settings are cleared before publication.
+- All Office writers use the mandatory [package verification policy](xlsx-cell-redaction.md#office-package-verification),
+  including typed refusals and destination-preserving staged verification.

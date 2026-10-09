@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from typing import Any, BinaryIO
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
+from .ooxml_residual import _check_source, _publish, _run_coverage
 
 _PPTX_HINT = 'Install with: pip install "openmed[multimodal]".'
 _BLOCK_SEPARATOR = "\n"
@@ -435,6 +437,7 @@ def _write_pptx_redactions(
     pptx = _import_pptx()
     presentation = pptx.Presentation(source_path)
     runs = _collect_runs(presentation)
+    _check_source(source_path, _pptx_coverage(presentation))
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 
     for redaction in _non_overlapping_redactions(redactions):
@@ -459,7 +462,19 @@ def _write_pptx_redactions(
             text = text[: edit.start] + edit.replacement + text[edit.end :]
         run.text = text
 
-    presentation.save(output_path)
+    buffer = io.BytesIO()
+    presentation.save(buffer)
+    _publish(buffer.getvalue(), output_path, _pptx_coverage(presentation))
+
+
+def _pptx_coverage(presentation: Any) -> dict[str, set[tuple[int, ...]]]:
+    parts: dict[str, list[Any]] = defaultdict(list)
+    for slide_index, slide in enumerate(presentation.slides):
+        for context in _iter_slide_text_frames(slide, slide_index):
+            part = slide.notes_slide.part if context.part == "notes" else slide.part
+            for paragraph in context.text_frame.paragraphs:
+                parts[str(part.partname)].extend(run._r for run in paragraph.runs)
+    return _run_coverage(parts)
 
 
 def _collect_runs(presentation: Any) -> dict[int, Any]:
