@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in experimental single-asset REST preflight with in-memory binary intake,
+  core report byte parity, bounded manifests and bodies, and content-free errors
+  and access logs (#3835).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

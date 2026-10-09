@@ -47,20 +47,22 @@ class BoundedRequestBodyMiddleware:
             await self.app(scope, receive, send)
             return
 
+        async def reject(status_code: int, code: str) -> None:
+            scope["openmed.preflight_reason_codes"] = (code,)
+            await _limit_response(status_code, code)(scope, receive, send)
+
         content_length = Headers(scope=scope).get("content-length")
         if content_length is not None:
             try:
                 declared = int(content_length)
             except ValueError:
-                await _limit_response(400, "request_size_invalid")(scope, receive, send)
+                await reject(400, "request_size_invalid")
                 return
             if declared < 0:
-                await _limit_response(400, "request_size_invalid")(scope, receive, send)
+                await reject(400, "request_size_invalid")
                 return
             if declared > self.limits.max_request_bytes:
-                await _limit_response(413, "request_size_exceeded")(
-                    scope, receive, send
-                )
+                await reject(413, "request_size_exceeded")
                 return
 
         messages: deque[Message] = deque()
@@ -74,9 +76,7 @@ class BoundedRequestBodyMiddleware:
                 continue
             received += len(message.get("body", b""))
             if received > self.limits.max_request_bytes:
-                await _limit_response(413, "request_size_exceeded")(
-                    scope, receive, send
-                )
+                await reject(413, "request_size_exceeded")
                 return
             if not message.get("more_body", False):
                 break

@@ -150,6 +150,10 @@ _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
+_MULTIMODAL_PREFLIGHT_PATH = "/experimental/multimodal/preflight"
+_MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
+_MANIFEST_HEADER = "X-OpenMed-Manifest"
+_MAX_MANIFEST_HEADER_BYTES = 8192
 _MODEL_BACKED_PATHS = frozenset(
     {
         "/graphql",
@@ -228,6 +232,7 @@ class _BoundedRequestBodyMiddleware:
             try:
                 declared_length = int(content_length)
             except ValueError:
+                scope["openmed.preflight_reason_codes"] = ("bad_request",)
                 await _error_response(
                     400,
                     "bad_request",
@@ -235,6 +240,7 @@ class _BoundedRequestBodyMiddleware:
                 )(scope, receive, send)
                 return
             if declared_length < 0:
+                scope["openmed.preflight_reason_codes"] = ("bad_request",)
                 await _error_response(
                     400,
                     "bad_request",
@@ -242,6 +248,7 @@ class _BoundedRequestBodyMiddleware:
                 )(scope, receive, send)
                 return
             if declared_length > self.max_bytes:
+                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
                 await _error_response(
                     413,
                     "payload_too_large",
@@ -260,6 +267,7 @@ class _BoundedRequestBodyMiddleware:
                 continue
             received_bytes += len(message.get("body", b""))
             if received_bytes > self.max_bytes:
+                scope["openmed.preflight_reason_codes"] = ("payload_too_large",)
                 await _error_response(
                     413,
                     "payload_too_large",
@@ -748,8 +756,28 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
-    """Create and configure the OpenMed REST FastAPI app."""
+def create_app(
+    *,
+    max_request_body_bytes: Optional[int] = None,
+    experimental_multimodal_preflight: Optional[bool] = None,
+) -> FastAPI:
+    """Create the REST app, optionally enabling single-asset preflight.
+
+    Args:
+        max_request_body_bytes: Override the route-specific body ceiling.
+        experimental_multimodal_preflight: Explicit experimental opt-in. When
+            omitted, read OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT;
+            unset or false keeps the route absent.
+
+    Returns:
+        The configured local service application.
+    """
+
+    if experimental_multimodal_preflight is None:
+        flag = os.getenv(_MULTIMODAL_PREFLIGHT_ENV, "0").strip().lower()
+        if flag not in {"", "0", "false", "1", "true"}:
+            raise ValueError("Experimental multimodal preflight flag is invalid")
+        experimental_multimodal_preflight = flag in {"1", "true"}
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
 
@@ -851,6 +879,88 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
+
+    if experimental_multimodal_preflight:
+
+        @app.post(
+            _MULTIMODAL_PREFLIGHT_PATH,
+            tags=["Experimental"],
+            summary="Experimental single-asset multimodal preflight",
+            description=(
+                "Disabled by default. Supply a strict AssetManifest JSON object "
+                "in X-OpenMed-Manifest (at most 8192 bytes) and raw asset bytes "
+                "as application/octet-stream. Returns the unchanged core "
+                "PreflightReport JSON using desktop-v1 limits. No decoding, "
+                "inference or clinical action is performed."
+            ),
+            openapi_extra={
+                "x-experimental": True,
+                "x-enabled-by-default": False,
+                "parameters": [
+                    {
+                        "name": _MANIFEST_HEADER,
+                        "in": "header",
+                        "required": True,
+                        "schema": {"type": "string", "maxLength": 8192},
+                        "description": "Strict AssetManifest JSON; opaque references only",
+                    }
+                ],
+                "requestBody": {
+                    "required": True,
+                    "content": {
+                        "application/octet-stream": {
+                            "schema": {"type": "string", "format": "binary"}
+                        }
+                    },
+                },
+            },
+            responses={
+                200: {"description": "Byte-stable core PreflightReport JSON"},
+                413: {"description": "Request body exceeds the configured ceiling"},
+                415: {"description": "unsupported_media_type error envelope"},
+                422: {"description": "malformed_manifest or digest mismatch envelope"},
+            },
+        )
+        async def multimodal_preflight(request: Request) -> Response:
+            """Validate one in-memory asset using the existing preflight contract."""
+            from openmed.multimodal.asset_manifest import (
+                AssetManifest,
+                AssetManifestError,
+            )
+            from openmed.multimodal.preflight import preflight_asset
+
+            def reject(status: int, code: str) -> JSONResponse:
+                request.scope["openmed.preflight_outcome"] = "rejected"
+                request.scope["openmed.preflight_reason_codes"] = (code,)
+                return _error_response(status, code, "Multimodal preflight rejected")
+
+            if (
+                request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                != "application/octet-stream"
+            ):
+                return reject(415, "unsupported_media_type")
+            headers = request.headers.getlist(_MANIFEST_HEADER)
+            if (
+                len(headers) != 1
+                or len(headers[0].encode("utf-8")) > _MAX_MANIFEST_HEADER_BYTES
+            ):
+                return reject(422, "malformed_manifest")
+            try:
+                manifest = AssetManifest.from_json(headers[0])
+            except (AssetManifestError, RecursionError):
+                return reject(422, "malformed_manifest")
+            report = await run_in_threadpool(
+                preflight_asset, manifest, await request.body()
+            )
+            reasons = tuple(finding.reason_code for finding in report.findings)
+            # Do not echo even a syntactically valid caller reference when
+            # source integrity fails. Other abstentions preserve core parity.
+            for code in ("byte_count_mismatch", "sha256_mismatch"):
+                if code in reasons:
+                    return reject(422, code)
+            request.scope["openmed.preflight_outcome"] = report.status.value
+            request.scope["openmed.preflight_reason_codes"] = reasons
+            return Response(content=report.to_json(), media_type="application/json")
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -1807,15 +1917,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     app.add_middleware(
         _BoundedRequestBodyMiddleware,
         max_bytes=body_limit,
-        limited_paths=_MODEL_BACKED_PATHS,
-    )
-    app.add_middleware(
-        CorrelationIdMiddleware,
-        log_config=service_log_config_from_env(),
+        limited_paths=_MODEL_BACKED_PATHS
+        | (
+            {_MULTIMODAL_PREFLIGHT_PATH} if experimental_multimodal_preflight else set()
+        ),
     )
     app.add_middleware(
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
+    )
+    app.add_middleware(
+        CorrelationIdMiddleware,
+        log_config=service_log_config_from_env(),
+        minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
     return app
 
