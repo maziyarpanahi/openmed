@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add offline `clinical sdoh`, `clinical relations` and `clinical timeline`
+  commands over validated analyzed spans. Emit value-free review records,
+  require explicit temporal references and links, and reserve new private
+  output files without loading NER models or downloading artifacts.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic

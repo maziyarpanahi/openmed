@@ -594,8 +594,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
     from .brief import add_brief_command
+    from .clinical import add_clinical_command
 
     add_brief_command(subparsers)
+    add_clinical_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -3250,7 +3252,9 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    from .clinical import parse_clinical_args
+
+    args = parse_clinical_args(parser, argv)
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
