@@ -39,6 +39,8 @@ class DicomHeaderDeidPolicy:
     date_shift_secret: str | bytes | None = None
     uid_salt: str | bytes = _DEFAULT_UID_SALT
     keep_year: bool = False
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,8 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -191,6 +195,8 @@ class DicomPixelRedactionResult:
     frames_processed: int
     findings: tuple[DicomPixelFinding, ...]
     residual_report: DicomResidualTextReport
+    residual_verified: bool = False
+    pixel_sha256: str | None = None
 
     @property
     def redaction_count(self) -> int:
@@ -217,6 +223,8 @@ class DicomPixelRedactionResult:
             },
             "findings": [finding.to_dict() for finding in self.findings],
             "residual_report": self.residual_report.to_dict(),
+            "residual_verified": self.residual_verified,
+            "pixel_sha256": self.pixel_sha256,
         }
 
 
@@ -340,6 +348,7 @@ def deidentify_dicom_headers(
     path: str | Path,
     *,
     policy: Any | None = None,
+    slide_pixel_redaction: DicomPixelRedactionResult | None = None,
 ) -> DicomHeaderDeidResult:
     """De-identify DICOM headers and write a de-identified DICOM file.
 
@@ -366,6 +375,7 @@ def deidentify_dicom_headers(
     )
 
     dataset = pydicom.dcmread(source, force=True)
+    _guard_slide_headers(dataset, resolved_policy, slide_pixel_redaction)
     seeded_phi_terms = _seeded_phi_scrub_terms(dataset)
     _deidentify_dataset(dataset, context, location="Dataset")
     _clear_seeded_phi_copies(
@@ -433,6 +443,16 @@ def redact_dicom_pixels(
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     dataset = pydicom.dcmread(source, force=True)
+    associated_slide = _slide_instance_role(dataset) in {"label", "overview"}
+    if associated_slide and not (
+        resolved_policy.keep_slide_associated_images is True
+        and resolved_policy.reviewer_confirmed is True
+        and resolved_policy.verify_residual
+        and resolved_policy.fail_on_residual
+        and resolved_policy.ocr_engine is not None
+        and "PixelData" in dataset
+    ):
+        raise ValueError("dicom_slide_associated_image_refused")
     header_recognizer = _header_seed_recognizer(dataset)
     model = _resolve_pixel_model_name(models, resolved_policy.model_name)
 
@@ -491,7 +511,53 @@ def redact_dicom_pixels(
         frames_processed=len(frame_views),
         findings=tuple(findings),
         residual_report=residual_report,
+        residual_verified=resolved_policy.verify_residual,
+        pixel_sha256=hashlib.sha256(dataset.PixelData).hexdigest(),
     )
+
+
+def _slide_instance_role(dataset: Any) -> str | None:
+    if str(getattr(dataset, "SOPClassUID", "")) != "1.2.840.10008.5.1.4.1.1.77.1.6":
+        return None
+    image_type = getattr(dataset, "ImageType", ())
+    if isinstance(image_type, str):
+        image_type = image_type.split("\\")
+    if len(image_type) < 3 or str(image_type[2]) not in {
+        "VOLUME",
+        "THUMBNAIL",
+        "LABEL",
+        "OVERVIEW",
+    }:
+        raise ValueError("dicom_slide_image_type_unknown")
+    role = str(image_type[2]).lower()
+    # A mislabeled volume with an explicit specimen label is not safe to retain.
+    if (
+        role in {"volume", "thumbnail"}
+        and str(getattr(dataset, "SpecimenLabelInImage", "NO")) != "NO"
+    ):
+        raise ValueError("dicom_slide_image_type_unknown")
+    return role
+
+
+def _guard_slide_headers(
+    dataset: Any,
+    policy: DicomHeaderDeidPolicy,
+    pixels: DicomPixelRedactionResult | None,
+) -> None:
+    if _slide_instance_role(dataset) not in {"label", "overview"}:
+        return
+    if not (
+        policy.keep_slide_associated_images is True
+        and policy.reviewer_confirmed is True
+        and pixels is not None
+        and pixels.frames_processed > 0
+        and pixels.residual_verified
+        and pixels.residual_report.passed
+        and pixels.residual_report.frame_count == pixels.frames_processed
+        and "PixelData" in dataset
+        and pixels.pixel_sha256 == hashlib.sha256(dataset.PixelData).hexdigest()
+    ):
+        raise ValueError("dicom_slide_associated_image_refused")
 
 
 def _import_pydicom() -> Any:
@@ -533,6 +599,9 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
             verify_residual=bool(policy.get("verify_residual", True)),
             fail_on_residual=bool(policy.get("fail_on_residual", True)),
             custom_recognizer=policy.get("custom_recognizer"),
+            keep_slide_associated_images=policy.get("keep_slide_associated_images")
+            is True,
+            reviewer_confirmed=policy.get("reviewer_confirmed") is True,
         )
     return DicomPixelRedactionPolicy(
         output_path=getattr(
@@ -553,6 +622,11 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
         verify_residual=bool(getattr(policy, "verify_residual", True)),
         fail_on_residual=bool(getattr(policy, "fail_on_residual", True)),
         custom_recognizer=getattr(policy, "custom_recognizer", None),
+        keep_slide_associated_images=getattr(
+            policy, "keep_slide_associated_images", False
+        )
+        is True,
+        reviewer_confirmed=getattr(policy, "reviewer_confirmed", False) is True,
     )
 
 
@@ -590,6 +664,8 @@ def _override_pixel_policy(
             if fail_on_residual is not None
             else policy.fail_on_residual
         ),
+        keep_slide_associated_images=policy.keep_slide_associated_images,
+        reviewer_confirmed=policy.reviewer_confirmed,
         custom_recognizer=(
             custom_recognizer
             if custom_recognizer is not None
@@ -612,6 +688,9 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
             date_shift_secret=policy.get("date_shift_secret"),
             uid_salt=policy.get("uid_salt", _DEFAULT_UID_SALT),
             keep_year=bool(policy.get("keep_year", False)),
+            keep_slide_associated_images=policy.get("keep_slide_associated_images")
+            is True,
+            reviewer_confirmed=policy.get("reviewer_confirmed") is True,
         )
     return DicomHeaderDeidPolicy(
         output_path=getattr(policy, "output_path", None),
@@ -621,6 +700,11 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
         date_shift_secret=getattr(policy, "date_shift_secret", None),
         uid_salt=getattr(policy, "uid_salt", _DEFAULT_UID_SALT),
         keep_year=bool(getattr(policy, "keep_year", False)),
+        keep_slide_associated_images=getattr(
+            policy, "keep_slide_associated_images", False
+        )
+        is True,
+        reviewer_confirmed=getattr(policy, "reviewer_confirmed", False) is True,
     )
 
 
@@ -1477,8 +1561,14 @@ def _dicom_handler(
         date_shift_secret=header_policy.date_shift_secret,
         uid_salt=header_policy.uid_salt,
         keep_year=header_policy.keep_year,
+        keep_slide_associated_images=header_policy.keep_slide_associated_images,
+        reviewer_confirmed=header_policy.reviewer_confirmed,
     )
-    result = deidentify_dicom_headers(pixel_result.output_path, policy=header_policy)
+    result = deidentify_dicom_headers(
+        pixel_result.output_path,
+        policy=header_policy,
+        slide_pixel_redaction=pixel_result,
+    )
     return ExtractedDocument(
         text="",
         metadata={
