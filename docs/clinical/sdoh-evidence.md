@@ -1,5 +1,8 @@
 # Social-determinant evidence contract
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `openmed.clinical.sdoh_evidence` provides a small, deterministic envelope for
 social-determinant extraction results. It preserves provenance and uncertainty
 boundaries so an SDOH signal cannot be mistaken for a diagnosis or an

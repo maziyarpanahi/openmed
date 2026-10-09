@@ -1,5 +1,8 @@
 # SDOH Evidence Deduplication
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `deduplicate_sdoh_evidence()` prevents copied-forward social-history text from
 inflating an evidence count. It clusters observations by category, status,
 temporality, and normalized protected text while retaining every document-local

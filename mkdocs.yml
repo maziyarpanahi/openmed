@@ -168,6 +168,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md

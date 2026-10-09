@@ -238,6 +238,7 @@ classification:
     - clinical/nli-cascade.md
     - clinical/nli-abstention.md
     - models/clinical-nli.md
+    - clinical/sdoh-extraction.md
     - clinical/sdoh-temporal-qualifiers.md
     - clinical/sdoh-section-scope.md
     - clinical/sdoh-evidence-deduplication.md
