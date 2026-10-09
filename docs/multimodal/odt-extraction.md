@@ -41,3 +41,8 @@ print(document.text_for(span))
 The extractor accepts OpenDocument Text only. ODS spreadsheets, ODP
 presentations, encrypted archives, unsafe XML declarations, and writing
 redactions back into ODT files are outside its supported surface.
+
+
+ZIP input admission enforces entry, size, ratio and path limits before parsing.
+See [ZIP document admission](asset-limits.md#zip-document-admission) for defaults,
+configurable tighter limits, content-free errors and allocation-test scope.

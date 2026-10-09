@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
 
@@ -113,7 +116,9 @@ def _import_pptx() -> Any:
         ) from exc
 
 
-def extract_pptx(path: str | Path) -> ExtractedDocument:
+def extract_pptx(
+    path: str | Path, *, archive_policy: ArchiveSafetyPolicy | None = None
+) -> ExtractedDocument:
     """Extract slide, table, and speaker-notes text with offset provenance.
 
     Paragraphs are separated with newlines. Each non-empty PowerPoint run
@@ -121,13 +126,19 @@ def extract_pptx(path: str | Path) -> ExtractedDocument:
     span metadata records both document-wide and per-slide character offsets.
 
     Args:
-        path: Source PowerPoint presentation.
+        path: Local package path or seekable binary stream.
+        archive_policy: Optional tighter ZIP admission policy.
 
     Returns:
         Normalized text, source spans, and per-slide offset metadata.
+
+    Raises:
+        ArchiveDocumentError: If container admission fails, with codes/counts only.
     """
-    pptx = _import_pptx()
-    presentation = pptx.Presentation(path)
+    with admitted_zip(path, archive_policy) as archive:
+        pptx = _import_pptx()
+        archive.fp.seek(0)
+        presentation = pptx.Presentation(archive.fp)
     state = _ExtractionState()
     slide_offsets: list[dict[str, int]] = []
 
@@ -432,8 +443,10 @@ def _write_pptx_redactions(
     output_path: str | Path,
     redactions: Sequence[PptxRedaction],
 ) -> None:
-    pptx = _import_pptx()
-    presentation = pptx.Presentation(source_path)
+    with admitted_zip(source_path) as archive:
+        pptx = _import_pptx()
+        archive.fp.seek(0)
+        presentation = pptx.Presentation(archive.fp)
     runs = _collect_runs(presentation)
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 

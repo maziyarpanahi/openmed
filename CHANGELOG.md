@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

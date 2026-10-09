@@ -19,8 +19,11 @@ from typing import Any
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
-from .exceptions import UnsupportedDocumentError
+from .exceptions import ArchiveDocumentError, UnsupportedDocumentError
 
 _CONTAINER_PATH = "META-INF/container.xml"
 _SUPPORTED_CONTENT_TYPES = frozenset({"application/xhtml+xml", "text/html"})
@@ -90,11 +93,14 @@ class _ParsedXhtml:
     spans: tuple[SourceSpan, ...]
 
 
-def extract_epub(path: str | Path) -> ExtractedDocument:
+def extract_epub(
+    path: str | Path, *, archive_policy: ArchiveSafetyPolicy | None = None
+) -> ExtractedDocument:
     """Extract EPUB spine text and source-offset metadata.
 
     Args:
         path: EPUB file path.
+        archive_policy: Optional tighter ZIP admission policy.
 
     Returns:
         An :class:`ExtractedDocument` with normalized text in spine reading
@@ -107,7 +113,7 @@ def extract_epub(path: str | Path) -> ExtractedDocument:
     """
     source_path = Path(path)
     try:
-        with zipfile.ZipFile(source_path) as archive:
+        with admitted_zip(source_path, archive_policy) as archive:
             _ensure_supported_archive(archive)
             package = _read_package(archive)
             return _extract_spine_text(archive, package, source_path)
@@ -116,13 +122,8 @@ def extract_epub(path: str | Path) -> ExtractedDocument:
 
 
 def _ensure_supported_archive(archive: zipfile.ZipFile) -> None:
-    for info in archive.infolist():
-        if info.flag_bits & 0x1:
-            raise UnsupportedDocumentError(
-                "Encrypted EPUB ZIP entries are not supported"
-            )
     if any(name.lower() == "meta-inf/encryption.xml" for name in archive.namelist()):
-        raise UnsupportedDocumentError("DRM-protected EPUB files are not supported")
+        raise ArchiveDocumentError("archive_encrypted")
 
 
 def _read_package(archive: zipfile.ZipFile) -> _ParsedPackage:
@@ -402,10 +403,8 @@ def _line_offsets(text: str) -> tuple[int, ...]:
 def _read_required(archive: zipfile.ZipFile, path: str) -> bytes:
     try:
         return archive.read(path)
-    except KeyError as exc:
-        raise UnsupportedDocumentError(f"EPUB archive is missing {path}") from exc
-    except (NotImplementedError, zlib.error) as exc:
-        raise UnsupportedDocumentError("EPUB must be a valid ZIP archive") from exc
+    except KeyError:
+        raise ArchiveDocumentError("archive_member_missing") from None
 
 
 def _decode_text(data: bytes) -> str:

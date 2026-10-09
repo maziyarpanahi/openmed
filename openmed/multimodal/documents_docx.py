@@ -18,6 +18,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
+
+from .archive import admitted_zip
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
 
@@ -126,15 +129,26 @@ def _import_docx_types() -> tuple[Any, Any, Any, Any]:
     return CT_P, CT_Tbl, Paragraph, Table
 
 
-def extract_docx(path: str | Path) -> ExtractedDocument:
+def extract_docx(
+    path: str | Path, *, archive_policy: ArchiveSafetyPolicy | None = None
+) -> ExtractedDocument:
     """Extract normalized DOCX text plus char-offset source spans.
 
     Paragraphs are separated with newlines. Each non-empty Word run becomes a
     :class:`SourceSpan` whose metadata includes the document-wide run index and
     paragraph/table/header/footer location needed for write-back.
+
+    Args:
+        path: Local package path or seekable binary stream.
+        archive_policy: Optional tighter ZIP admission policy.
+
+    Raises:
+        ArchiveDocumentError: If container admission fails, with codes/counts only.
     """
-    docx = _import_docx()
-    word_document = docx.Document(path)
+    with admitted_zip(path, archive_policy) as archive:
+        docx = _import_docx()
+        archive.fp.seek(0)
+        word_document = docx.Document(archive.fp)
     state = _ExtractionState()
 
     for context in _iter_docx_paragraphs(word_document):
@@ -466,8 +480,10 @@ def _write_docx_redactions(
     output_path: str | Path,
     redactions: Sequence[DocxRedaction],
 ) -> None:
-    docx = _import_docx()
-    word_document = docx.Document(source_path)
+    with admitted_zip(source_path) as archive:
+        docx = _import_docx()
+        archive.fp.seek(0)
+        word_document = docx.Document(archive.fp)
     runs = _collect_runs(word_document)
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 
