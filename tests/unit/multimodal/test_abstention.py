@@ -13,6 +13,8 @@ from openmed.multimodal.abstention import (
 )
 
 VALID_RECORDS = (
+    (AbstentionStage.PREFLIGHT, AbstentionReason.PHI_UNCERTAINTY),
+    (AbstentionStage.PREFLIGHT, AbstentionReason.MALFORMED_MEDIA),
     (AbstentionStage.PREFLIGHT, AbstentionReason.UNSUPPORTED_MEDIA),
     (AbstentionStage.PREFLIGHT, AbstentionReason.RESOURCE_LIMIT),
     (AbstentionStage.PREFLIGHT, AbstentionReason.PROVIDER_UNAVAILABLE),
