@@ -128,6 +128,11 @@ print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 
 ### Python Vision-Language Quick Start
 
+Vision generations carry a mandatory [multimodal review notice](multimodal/notices.md).
+`generate()` returns notice plus text; when displaying `.text` from
+`generate_with_metadata()`, display `.notice` alongside it. Outputs are not
+diagnoses and require independent clinician review before consequential use.
+
 OpenMed includes a native Cohere Compass runtime for the North Micro Vision
 MLX family. It consumes data-only model artifacts directly:
 

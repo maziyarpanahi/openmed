@@ -238,6 +238,18 @@ from .metadata_scrub import (
     scrub_metadata,
     verify_metadata,
 )
+from .notices import (
+    NOTICE_CATALOG,
+    NOTICE_RESULT_TYPES,
+    DraftReviewResult,
+    MeasurementReviewResult,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
+    VisualDescriptionResult,
+    validate_notice_registry,
+)
 
 # Importing the OCR module registers remaining OCR-only image-format handlers
 # (BMP/GIF/WebP). PNG/JPEG/TIFF are registered by ``image`` above because they
@@ -390,6 +402,16 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "NOTICE_CATALOG",
+    "NOTICE_RESULT_TYPES",
+    "DraftReviewResult",
+    "MeasurementReviewResult",
+    "MultimodalNotice",
+    "MultimodalNoticeError",
+    "NoticeBoundOutput",
+    "NoticeKind",
+    "VisualDescriptionResult",
+    "validate_notice_registry",
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
     "AbstentionRecord",
