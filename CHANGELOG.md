@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and aggregate report comparison with missing-evidence and regression verdicts
   (#286).
 
+- Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
+  declared file-meta transfer syntaxes into closed native, optional-decoder,
+  review, and unsupported outcomes with stable reason codes, and reports no
+  patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
+  (#3089).
+
 - Added a Polish (`pl`) PII language pack with native locale surrogates,
   validated PESEL handling, date, phone, address, and postcode patterns, and
   synthetic offset and zero-leakage regression fixtures (#294).
