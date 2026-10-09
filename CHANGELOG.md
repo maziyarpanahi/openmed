@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
+  16, 212 and 80 with windowed integer outputs, streamed checksum verification,
+  value-safe metadata
+  and MIT annotation summaries, synthetic privacy fixtures and explicit human
+  review boundaries.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
