@@ -5,13 +5,14 @@ The DOCX ingester imports ``python-docx`` lazily so importing
 one source span per non-empty Word run, including paragraphs in headers,
 footers, and table cells. Redaction helpers project detected text spans back to
 the covered runs and can write a clean DOCX while preserving document structure.
-Tracked changes and comment redaction remain out of scope for this ingester.
+Unsupported residual content is refused before a redacted package is published.
 """
 
 from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -20,6 +21,7 @@ from typing import Any, BinaryIO
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .exceptions import MissingDependencyError
+from .ooxml_residual import _check_source, _publish, _run_coverage
 
 _DOCX_HINT = 'Install with: pip install "openmed[multimodal]".'
 _BLOCK_SEPARATOR = "\n"
@@ -469,6 +471,7 @@ def _write_docx_redactions(
     docx = _import_docx()
     word_document = docx.Document(source_path)
     runs = _collect_runs(word_document)
+    _check_source(source_path, _docx_coverage(word_document))
     edits_by_run: dict[int, list[_RunEdit]] = defaultdict(list)
 
     for redaction in _non_overlapping_redactions(redactions):
@@ -493,7 +496,17 @@ def _write_docx_redactions(
             text = text[: edit.start] + edit.replacement + text[edit.end :]
         run.text = text
 
-    word_document.save(output_path)
+    buffer = io.BytesIO()
+    word_document.save(buffer)
+    _publish(buffer.getvalue(), output_path, _docx_coverage(word_document))
+
+
+def _docx_coverage(word_document: Any) -> dict[str, set[tuple[int, ...]]]:
+    parts: dict[str, list[Any]] = defaultdict(list)
+    for context in _iter_docx_paragraphs(word_document):
+        for run in context.paragraph.runs:
+            parts[str(run.part.partname)].append(run._r)
+    return _run_coverage(parts)
 
 
 def _collect_runs(word_document: Any) -> dict[int, Any]:
