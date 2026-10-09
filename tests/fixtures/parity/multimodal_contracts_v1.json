@@ -1,0 +1,330 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "cases": [
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-001\",\"byte_size\":12,\"height\":3,\"media_type\":\"image/png\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1,\"width\":2}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-001\",\"byte_size\":12,\"media_type\":\"application/pdf\",\"pages\":2,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-001\",\"byte_size\":12,\"frames\":4,\"height\":3,\"media_type\":\"application/dicom\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1,\"width\":2}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-001\",\"byte_size\":12,\"duration_seconds\":1.25,\"media_type\":\"audio/wav\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-max\",\"byte_size\":9223372036854775807,\"duration_seconds\":2147483647,\"media_type\":\"audio/wav\",\"sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":1.0,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":0.0001,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":1e-07,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":1e-06,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":1.2345678901234567,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":5e-324,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "asset_manifest",
+      "canonical_json": "{\"asset_id\":\"synth-float\",\"byte_size\":1,\"duration_seconds\":2147483647.0,\"media_type\":\"audio/wav\",\"sha256\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"version\":1}"
+    },
+    {
+      "kind": "manifest_profile",
+      "canonical_json": "{\"modality\":\"image\",\"version\":\"1.0\"}"
+    },
+    {
+      "kind": "manifest_profile",
+      "canonical_json": "{\"modality\":\"pdf\",\"version\":\"1.0\"}"
+    },
+    {
+      "kind": "manifest_profile",
+      "canonical_json": "{\"modality\":\"dicom\",\"version\":\"1.0\"}"
+    },
+    {
+      "kind": "manifest_profile",
+      "canonical_json": "{\"modality\":\"audio\",\"version\":\"1.0\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"unsupported_media\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"resource_limit\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"provider_unavailable\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"malformed_media\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"resource_limit\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"low_quality\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"resource_limit\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"low_quality\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"phi_uncertainty\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"speaker_uncertainty\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"temporal_instability\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"provider_unavailable\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"resource_limit\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"low_quality\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"phi_uncertainty\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"speaker_uncertainty\"}"
+    },
+    {
+      "kind": "abstention_record",
+      "canonical_json": "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"temporal_instability\"}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"manifest\",\"reason_code\":\"malformed_manifest\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"media_type\",\"reason_code\":\"mismatch\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"media_type\",\"reason_code\":\"unknown\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"unsupported_modality\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"digest\",\"reason_code\":\"sha256_mismatch\",\"field_name\":\"sha256\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"digest\",\"reason_code\":\"not_evaluated\",\"field_name\":null,\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"inapplicable_present\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"invalid_boolean\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"invalid_type\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"invalid_zero\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"missing_required\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"non_finite_numeric\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"metadata\",\"reason_code\":\"out_of_range\",\"field_name\":\"width\",\"limit\":null,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"byte_size\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"byte_size\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"pages\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"pages\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"pixels\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"pixels\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"total_pixels\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"total_pixels\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"frames\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"frames\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"duration_seconds\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"insufficient_metadata\",\"field_name\":\"duration_seconds\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"digest\",\"reason_code\":\"byte_count_mismatch\",\"field_name\":\"byte_size\",\"limit\":10,\"observed\":null}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"digest\",\"reason_code\":\"byte_count_mismatch\",\"field_name\":\"byte_size\",\"limit\":10,\"observed\":11}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"digest\",\"reason_code\":\"byte_count_mismatch\",\"field_name\":\"byte_size\",\"limit\":1267650600228229401496703205376,\"observed\":1267650600228229401496703205377}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"total_pixels\",\"limit\":10.0,\"observed\":11.0}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"total_pixels\",\"limit\":9903520300447984150353281023,\"observed\":9903520300447984150353281023}"
+    },
+    {
+      "kind": "preflight_finding",
+      "canonical_json": "{\"check\":\"limits\",\"reason_code\":\"limit_exceeded\",\"field_name\":\"total_pixels\",\"limit\":1e+23,\"observed\":1e+24}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"low_quality\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"provider_unavailable\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"validation_failure\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"unsupported_media\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"malformed_media\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"resource_limit\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"low_quality\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"phi_uncertainty\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"speaker_uncertainty\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":\"temporal_instability\",\"count_metadata\":{},\"duration_ms\":1.25,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":-0.0,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":0.0,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":1e-07,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":5e-324,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":86400000.0,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    },
+    {
+      "kind": "provider_result",
+      "canonical_json": "{\"abstention_code\":null,\"count_metadata\":{\"detection_count\":9223372036854775807,\"frame_count\":9223372036854775807,\"input_bytes\":9223372036854775807,\"input_items\":9223372036854775807,\"output_items\":9223372036854775807,\"page_count\":9223372036854775807,\"sample_count\":9223372036854775807,\"segment_count\":9223372036854775807,\"token_count\":9223372036854775807},\"duration_ms\":1.2345678901234567,\"input_digest\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"model_id\":\"synth-model\",\"outcome\":\"success\",\"output_digest\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"provider_id\":\"synth-adapter\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+    }
+  ]
+}
