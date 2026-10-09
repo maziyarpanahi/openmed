@@ -1,0 +1,313 @@
+{
+  "draft": {
+    "schema_version": 1,
+    "draft_ref": "urn:uuid:10000000-0000-4000-8000-000000000001",
+    "evidence_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+    "sections": [
+      {
+        "code": "history",
+        "note": "Synthetic patient reports improvement <today> & says \"better\". Café.",
+        "evidence": [
+          {
+            "reference": "urn:uuid:20000000-0000-4000-8000-000000000001",
+            "speaker": "urn:uuid:30000000-0000-4000-8000-000000000001",
+            "start": 0,
+            "end": 12
+          },
+          {
+            "reference": "urn:uuid:20000000-0000-4000-8000-000000000002",
+            "speaker": "urn:uuid:30000000-0000-4000-8000-000000000002",
+            "start": 12,
+            "end": 27
+          }
+        ]
+      },
+      {
+        "code": "plan",
+        "note": "Clinician's reviewed plan: follow up locally.",
+        "evidence": [
+          {
+            "reference": "urn:uuid:20000000-0000-4000-8000-000000000002",
+            "speaker": "urn:uuid:30000000-0000-4000-8000-000000000002",
+            "start": 27,
+            "end": 40
+          }
+        ]
+      }
+    ],
+    "loss_counts": [
+      {
+        "category": "transcript_payload",
+        "count": 1
+      },
+      {
+        "category": "audio_payload",
+        "count": 1
+      },
+      {
+        "category": "review_history",
+        "count": 2
+      }
+    ],
+    "review": {
+      "digest": "2a4d93109464bda7618df8477db3868b80b03ccbb446d63d34485226891f82b9",
+      "reviewer": "urn:uuid:40000000-0000-4000-8000-000000000001"
+    },
+    "correction_pending": false
+  },
+  "digest": "2a4d93109464bda7618df8477db3868b80b03ccbb446d63d34485226891f82b9",
+  "final_document": {
+    "resourceType": "Bundle",
+    "type": "document",
+    "entry": [
+      {
+        "fullUrl": "urn:uuid:073ca7a5-e14e-58d0-9b31-76fea1bc2cd1",
+        "resource": {
+          "resourceType": "Composition",
+          "id": "ambient-note",
+          "identifier": {
+            "system": "https://openmed.dev/fhir/StructureDefinition/ambient-draft",
+            "value": "urn:uuid:10000000-0000-4000-8000-000000000001"
+          },
+          "status": "final",
+          "type": {
+            "coding": [
+              {
+                "system": "https://openmed.dev/fhir/CodeSystem/document-type",
+                "code": "ambient-note"
+              }
+            ]
+          },
+          "date": "2026-01-02T03:04:05Z",
+          "author": [
+            {
+              "identifier": {
+                "system": "https://openmed.dev/fhir/StructureDefinition/ambient-reviewer",
+                "value": "urn:uuid:40000000-0000-4000-8000-000000000001"
+              }
+            }
+          ],
+          "title": "Reviewed ambient note",
+          "text": {
+            "status": "additional",
+            "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Non-diagnostic ambient note. Explicit clinician confirmation is required before consequential use. This export performs no EHR write.</p></div>"
+          },
+          "extension": [
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-schema",
+              "valueUnsignedInt": 1
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-draft-digest",
+              "valueString": "2a4d93109464bda7618df8477db3868b80b03ccbb446d63d34485226891f82b9"
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-evidence-digest",
+              "valueString": "1111111111111111111111111111111111111111111111111111111111111111"
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-review-status",
+              "valueCode": "reviewed"
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-clinician-confirmed",
+              "valueBoolean": true
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-conversion-loss",
+              "extension": [
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-category",
+                  "valueCode": "transcript_payload"
+                },
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-count",
+                  "valueUnsignedInt": 1
+                }
+              ]
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-conversion-loss",
+              "extension": [
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-category",
+                  "valueCode": "audio_payload"
+                },
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-count",
+                  "valueUnsignedInt": 1
+                }
+              ]
+            },
+            {
+              "url": "https://openmed.dev/fhir/StructureDefinition/ambient-conversion-loss",
+              "extension": [
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-category",
+                  "valueCode": "review_history"
+                },
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-count",
+                  "valueUnsignedInt": 2
+                }
+              ]
+            }
+          ],
+          "section": [
+            {
+              "code": {
+                "coding": [
+                  {
+                    "system": "https://openmed.dev/fhir/CodeSystem/ambient-section",
+                    "code": "history"
+                  }
+                ]
+              },
+              "text": {
+                "status": "additional",
+                "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Synthetic patient reports improvement &lt;today&gt; &amp; says &quot;better&quot;. Café.</p></div>"
+              },
+              "extension": [
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-evidence",
+                  "extension": [
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-reference",
+                      "valueUri": "urn:uuid:20000000-0000-4000-8000-000000000001"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-speaker",
+                      "valueUri": "urn:uuid:30000000-0000-4000-8000-000000000001"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-start",
+                      "valueUnsignedInt": 0
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-end",
+                      "valueUnsignedInt": 12
+                    }
+                  ]
+                },
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-evidence",
+                  "extension": [
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-reference",
+                      "valueUri": "urn:uuid:20000000-0000-4000-8000-000000000002"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-speaker",
+                      "valueUri": "urn:uuid:30000000-0000-4000-8000-000000000002"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-start",
+                      "valueUnsignedInt": 12
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-end",
+                      "valueUnsignedInt": 27
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "code": {
+                "coding": [
+                  {
+                    "system": "https://openmed.dev/fhir/CodeSystem/ambient-section",
+                    "code": "plan"
+                  }
+                ]
+              },
+              "text": {
+                "status": "additional",
+                "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Clinician&#x27;s reviewed plan: follow up locally.</p></div>"
+              },
+              "extension": [
+                {
+                  "url": "https://openmed.dev/fhir/StructureDefinition/ambient-evidence",
+                  "extension": [
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-reference",
+                      "valueUri": "urn:uuid:20000000-0000-4000-8000-000000000002"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-speaker",
+                      "valueUri": "urn:uuid:30000000-0000-4000-8000-000000000002"
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-start",
+                      "valueUnsignedInt": 27
+                    },
+                    {
+                      "url": "https://openmed.dev/fhir/StructureDefinition/ambient-end",
+                      "valueUnsignedInt": 40
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "fullUrl": "urn:uuid:e9e1a7ca-322d-5817-badf-94b93f993b7b",
+        "resource": {
+          "resourceType": "Provenance",
+          "id": "ambient-provenance",
+          "target": [
+            {
+              "reference": "urn:uuid:073ca7a5-e14e-58d0-9b31-76fea1bc2cd1"
+            }
+          ],
+          "recorded": "2026-01-02T03:04:05Z",
+          "activity": {
+            "coding": [
+              {
+                "system": "https://openmed.dev/fhir/CodeSystem/ambient-activity",
+                "code": "reviewed-export"
+              }
+            ]
+          },
+          "agent": [
+            {
+              "who": {
+                "identifier": {
+                  "system": "https://openmed.dev/fhir/StructureDefinition/ambient-reviewer",
+                  "value": "urn:uuid:40000000-0000-4000-8000-000000000001"
+                }
+              }
+            }
+          ],
+          "entity": [
+            {
+              "role": "source",
+              "what": {
+                "identifier": {
+                  "system": "https://openmed.dev/fhir/StructureDefinition/ambient-transcript-evidence",
+                  "value": "urn:uuid:20000000-0000-4000-8000-000000000001"
+                }
+              }
+            },
+            {
+              "role": "source",
+              "what": {
+                "identifier": {
+                  "system": "https://openmed.dev/fhir/StructureDefinition/ambient-transcript-evidence",
+                  "value": "urn:uuid:20000000-0000-4000-8000-000000000002"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "identifier": {
+      "system": "https://openmed.dev/fhir/StructureDefinition/ambient-draft-digest",
+      "value": "2a4d93109464bda7618df8477db3868b80b03ccbb446d63d34485226891f82b9"
+    },
+    "timestamp": "2026-01-02T03:04:05Z"
+  }
+}

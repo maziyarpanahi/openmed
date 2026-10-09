@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
+  with digest-bound clinician confirmation, evidence/speaker references,
+  freshness and correction holds, and counts-only conversion-loss reports.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
