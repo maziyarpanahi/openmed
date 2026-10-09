@@ -250,6 +250,7 @@ classification:
     - clinical/sdoh-evidence.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
+    - evaluation/sdoh-extraction.md
     - clinical/medication-change-relations.md
     - clinical/laboratory-result-relations.md
     - clinical/procedure-indication-relations.md
