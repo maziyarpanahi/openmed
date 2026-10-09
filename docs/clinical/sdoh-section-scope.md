@@ -1,5 +1,8 @@
 # Strict SDOH section scope
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `openmed.clinical.sdoh_section_scope` is a deterministic, local-first guard for
 SDOH candidate evidence. It keeps a candidate only when its complete source
 span is contained by a configured clinical section. The default allow-list is

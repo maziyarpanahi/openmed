@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Document offline SDOH extraction, the built-in determinant/status vocabulary,
+  custom registration and cue-table loading with executable synthetic examples;
+  distinguish zero findings from negative evidence and retain eval-only SHAC
+  policy (#3757).
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic

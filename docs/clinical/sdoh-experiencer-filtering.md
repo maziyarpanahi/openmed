@@ -1,5 +1,8 @@
 # SDOH Experiencer Filtering
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 Social-history notes can describe the patient, a household member, or a family
 member in the same sentence. Treating every nearby SDOH finding as a patient
 finding can therefore put another person's information into the patient's
