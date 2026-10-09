@@ -574,6 +574,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
