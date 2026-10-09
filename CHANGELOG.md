@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bounded local speech endpoint adapters in Python and OpenMedKit, with injected
+  detectors, exact source sample boundaries, explicit uncertainty and gaps,
+  audio-free state, cancellation cleanup and non-diagnostic review notices (#3674).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

@@ -361,6 +361,7 @@ classification:
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/audio-windows.md
+    - multimodal/speech-endpoints.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
