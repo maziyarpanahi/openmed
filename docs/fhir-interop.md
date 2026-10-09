@@ -113,6 +113,92 @@ OpenMed emits R4 `issue.expression` for element paths. It accepts legacy
 `location` as input for adapter compatibility, but it never emits
 `issue.location` because that field is deprecated in FHIR R4.
 
+## Governed write AuditEvents
+
+`to_governed_write_audit_event()` projects already-classified create/update
+attempts from a `GovernedWriteAuditAttempt`. The projection is local: it returns
+an R4 AuditEvent for the caller to retain or submit through a separately
+reviewed governed path. It reads no clinical payload, resolves no credentials,
+contacts no server and installs no ledger storage or write adapter.
+
+| Controller outcome | Create / update action | R4 audit outcome | Controlled subtype |
+| --- | --- | --- | --- |
+| Success | `C` / `U` | `0` | `success` |
+| Server rejection | `C` / `U` | `4` | `server_rejected` |
+| Commit unknown | `C` / `U` | `8` | `commit_unknown` |
+| Policy denial | `C` / `U` | `4` | `policy_denied` |
+| Admission refusal | `C` / `U` | `4` | `admission_refused` |
+
+For `commit_unknown`, outcome `8` records the controller's failure to confirm
+the attempt. The subtype retains target-effect uncertainty. It is not proof
+that a clinical write failed or is absent: reconcile durable effects before
+any retry, using the [workflow recovery contract](agent/workflow-recovery.md).
+Admission and policy refusals can be recorded before review or materialization
+without inventing a reviewer, receipt or target reference.
+
+This runnable synthetic refusal has no approval or clinical input. Its fixed
+clock makes repeated projection deterministic and prints only audit codes:
+
+```python
+# Runnable: synthetic local audit projection; no request or clinical payload.
+from datetime import datetime, timezone
+
+from openmed.clinical.exporters.fhir import (
+    GovernedWriteAuditAttempt,
+    GovernedWriteOutcome,
+    to_governed_write_audit_event,
+)
+
+attempt = GovernedWriteAuditAttempt(
+    action="create",
+    outcome=GovernedWriteOutcome.POLICY_DENIED,
+    software_agent_ref="urn:uuid:00000000-0000-4000-8000-000000000001",
+)
+instant = datetime(2026, 1, 2, tzinfo=timezone.utc)
+event = to_governed_write_audit_event(attempt, clock=lambda: instant)
+assert event == to_governed_write_audit_event(attempt, clock=lambda: instant)
+print({"action": event["action"], "outcome": event["outcome"]})
+```
+
+Inputs are closed action/outcome enums, opaque references, an optional controlled
+reviewer category and a receipt digest. Reviewer categories are `reviewer`,
+`clinical_reviewer`, `privacy_reviewer`, `operations_reviewer` and
+`security_reviewer`. Trusted code explicitly maps its verified policy role to
+one category; that classification does not replace the policy role or identify
+a person. Role and digest must be supplied together. Success, server rejection
+and unknown commit require that pair and at least one target/proposal reference.
+The projection does not verify signatures, receipt freshness, permissions,
+reviewer identity or actual server effects. The application must derive those
+assertions from its governed controller and protected evidence.
+
+Software/target references accept canonical lowercase UUIDv4 URNs only. Direct
+clinical IDs, private URLs, free text, query strings, fragments and unsupported
+UUID shapes are refused. Target references are sorted and deduplicated, with a
+128-input limit. UUID syntax is not proof of opaque provenance, unlinkability
+or reference resolution: the caller owns the protected mapping, disclosure
+policy and resolution context. Treat even opaque audit metadata as controlled
+information. A receipt digest must have `sha256:` followed by 64 lowercase hex
+characters; it links to local evidence and creates no approval.
+
+The software Device appears as the initiating agent and source observer. A
+supplied reviewer category appears in a separate agent without a person
+reference or name. Resources contain controlled coding, technical recorded
+time, opaque references and optional receipt digests. There are no source
+payloads, narrative, diagnoses, diagnostics, credentials, endpoints, reviewer
+names or raw exceptions. Error messages contain only fixed projection codes.
+
+The injected clock is called once and must return an aware datetime. Recorded
+time is normalized to UTC with microsecond precision. Identical metadata and
+clock values produce identical resources and IDs; retain the original recorded
+instant when reproducing an event. These IDs bind the projection's metadata,
+not authority or durable commit proof. Each call returns a fresh resource.
+
+The [FHIR R4 AuditEvent structure](https://hl7.org/fhir/R4/auditevent.html),
+[action codes](https://hl7.org/fhir/R4/valueset-audit-event-action.html) and
+[outcome codes](https://hl7.org/fhir/R4/codesystem-audit-event-outcome.html)
+define the interoperability shape. Local structural and synthetic composition
+checks are engineering evidence, not target-server or clinical validation.
+
 ## Bundles
 
 Use `to_fhir()` when the inputs are grounded clinical spans. The facade routes
