@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Strict Python and TypeScript workflow clients with native evidence validation,
+  bounded inspection retries/polling, caller cancellation, fixed refusal
+  diagnostics and explicit single-attempt state changes (#3670).
 - Default-disabled, authenticated REST workflow inspection, receipt submission
   and cancellation intent over an injected custody service, with bounded
   governance schemas and content-free responses (#3668).

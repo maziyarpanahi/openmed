@@ -1,3 +1,6 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
 import {
   JOURNEY_WORKFLOW_RESOURCE_TYPES,
   type JourneyResourcePage,
@@ -132,8 +135,8 @@ export interface GovernedWorkflowReceipt {
   action_digest: string;
   reviewer_role: string;
   token_digest: string;
-  consumed_at: number;
-  expires_at: number;
+  consumed_at: number | bigint;
+  expires_at: number | bigint;
 }
 
 export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
@@ -622,6 +625,7 @@ export class OpenMedApiError extends Error {
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
 
   constructor(options: OpenMedClientOptions) {
     const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
@@ -637,6 +641,7 @@ export class OpenMedClient {
     this.baseUrl = baseUrl;
     this.fetchImpl =
       options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
@@ -647,26 +652,28 @@ export class OpenMedClient {
     return this.post("/ground", request);
   }
 
-  // These transport bindings do not verify custody, poll, retry or execute an
-  // effect. Dedicated governed clients own strict response/receipt parsing.
-  async workflowPreflight(request: GovernedWorkflowReference): Promise<JSONObject> {
-    return this.post("/v1/workflows/preflight", request);
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
   }
 
-  async workflowPreview(request: GovernedWorkflowReference): Promise<JSONObject> {
-    return this.post("/v1/workflows/preview", request);
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
   }
 
-  async workflowStatus(request: GovernedWorkflowReference): Promise<JSONObject> {
-    return this.post("/v1/workflows/status", request);
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
   }
 
-  async workflowSubmitReceipt(request: GovernedWorkflowReview): Promise<JSONObject> {
-    return this.post("/v1/workflows/review-receipts", request);
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
   }
 
-  async workflowCancel(request: GovernedWorkflowMutation): Promise<JSONObject> {
-    return this.post("/v1/workflows/cancel", request);
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
   }
 
   async brief(request: BriefRequest): Promise<BriefResponse> {
