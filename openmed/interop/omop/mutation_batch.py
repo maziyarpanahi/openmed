@@ -16,6 +16,7 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import islice
 from typing import Any, Protocol
 
 MUTATION_BATCH_SCHEMA = "openmed.interop.omop.mutation_batch.v1"
@@ -416,6 +417,7 @@ class OmopMutationPreview:
     issues: tuple[OmopReferenceIssue, ...]
     operation_counts: tuple[tuple[str, int], ...]
     schema: str = MUTATION_BATCH_SCHEMA
+    evidence_digests: tuple[str, ...] = ()
 
     @property
     def is_valid(self) -> bool:
@@ -426,7 +428,7 @@ class OmopMutationPreview:
     def to_dict(self) -> dict[str, Any]:
         """Return the deterministic value-free audit summary."""
 
-        return {
+        payload = {
             "batch_digest": self.batch_digest,
             "is_valid": self.is_valid,
             "issues": [issue.to_dict() for issue in self.issues],
@@ -437,6 +439,9 @@ class OmopMutationPreview:
             "reference_snapshot_digest": self.reference_snapshot_digest,
             "schema": self.schema,
         }
+        if self.evidence_digests:
+            payload["evidence_digests"] = list(self.evidence_digests)
+        return payload
 
     def to_json(self) -> str:
         """Serialize the audit summary with stable key ordering."""
@@ -505,8 +510,14 @@ class OmopMutationBatch:
     """Immutable ordered collection of proposed OMOP row mutations."""
 
     mutations: tuple[OmopMutation, ...]
+    evidence_digests: tuple[str, ...]
 
-    def __init__(self, mutations: Iterable[OmopMutation]) -> None:
+    def __init__(
+        self,
+        mutations: Iterable[OmopMutation],
+        *,
+        evidence_digests: Iterable[str] = (),
+    ) -> None:
         if isinstance(mutations, (str, bytes, bytearray, Mapping)):
             raise OmopMutationError("invalid_mutation_collection")
         try:
@@ -522,17 +533,29 @@ class OmopMutationBatch:
         if any(type(mutation) is not OmopMutation for mutation in normalized):
             raise OmopMutationError("invalid_mutation")
         object.__setattr__(self, "mutations", normalized)
+        if isinstance(evidence_digests, (str, bytes, bytearray, Mapping)):
+            raise OmopMutationError("invalid_evidence_collection")
+        try:
+            evidence = tuple(islice(evidence_digests, 17))
+        except Exception:
+            raise OmopMutationError("invalid_evidence_collection") from None
+        if len(evidence) > 16:
+            raise OmopMutationError("too_many_evidence_digests")
+        for digest in evidence:
+            _validate_digest(digest, "evidence_digests")
+        object.__setattr__(self, "evidence_digests", tuple(sorted(set(evidence))))
 
     @property
     def batch_digest(self) -> str:
         """Return a stable digest that preserves mutation order."""
 
-        return _digest(
-            {
-                "schema": MUTATION_BATCH_SCHEMA,
-                "row_digests": [mutation.row_digest for mutation in self.mutations],
-            }
-        )
+        payload = {
+            "schema": MUTATION_BATCH_SCHEMA,
+            "row_digests": [mutation.row_digest for mutation in self.mutations],
+        }
+        if self.evidence_digests:
+            payload["evidence_digests"] = list(self.evidence_digests)
+        return _digest(payload)
 
     def preview(
         self,
@@ -633,6 +656,7 @@ class OmopMutationBatch:
             mutations=tuple(summaries),
             issues=tuple(issues),
             operation_counts=operation_counts,
+            evidence_digests=self.evidence_digests,
         )
         return OmopMutationPreview(
             batch_digest=self.batch_digest,
@@ -641,6 +665,7 @@ class OmopMutationBatch:
             mutations=tuple(summaries),
             issues=tuple(issues),
             operation_counts=operation_counts,
+            evidence_digests=self.evidence_digests,
         )
 
     def bind_approval(
@@ -656,6 +681,8 @@ class OmopMutationBatch:
             raise OmopMutationError("invalid_preview", "preview")
         if preview.batch_digest != self.batch_digest:
             raise OmopMutationError("batch_changed", "preview")
+        if preview.evidence_digests != self.evidence_digests:
+            raise OmopMutationError("evidence_changed", "preview")
         if not preview.is_valid:
             raise OmopMutationError("reference_check_failed", "preview")
         try:
@@ -666,6 +693,7 @@ class OmopMutationBatch:
                     mutations=preview.mutations,
                     issues=preview.issues,
                     operation_counts=preview.operation_counts,
+                    evidence_digests=preview.evidence_digests,
                 )
             )
         except (KeyboardInterrupt, SystemExit):
@@ -828,8 +856,9 @@ def _preview_payload(
     mutations: tuple[OmopMutationSummary, ...],
     issues: tuple[OmopReferenceIssue, ...],
     operation_counts: tuple[tuple[str, int], ...],
+    evidence_digests: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "batch_digest": batch_digest,
         "is_valid": not issues,
         "issues": [issue.to_dict() for issue in issues],
@@ -839,6 +868,9 @@ def _preview_payload(
         "reference_snapshot_digest": reference_snapshot_digest,
         "schema": MUTATION_BATCH_SCHEMA,
     }
+    if evidence_digests:
+        payload["evidence_digests"] = list(evidence_digests)
+    return payload
 
 
 def _canonical_json(value: Any) -> str:

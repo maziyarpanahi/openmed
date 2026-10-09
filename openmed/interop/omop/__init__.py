@@ -138,6 +138,19 @@ _QUALITY_EXPORTS = frozenset(
     }
 )
 
+_NLP_STAGING_EXPORTS = frozenset(
+    {
+        "NLP_OMOP_STAGING_SCHEMA",
+        "NlpOmopLineageRecord",
+        "NlpOmopLineageReport",
+        "NlpOmopStagedBatch",
+        "NlpOmopStagedPreview",
+        "NlpOmopStagingError",
+        "NlpOmopWriteLineage",
+        "stage_nlp_omop_tables",
+    }
+)
+
 
 def __getattr__(name: str) -> Any:
     """Load newer OMOP contracts without widening import cycles."""
@@ -146,6 +159,8 @@ def __getattr__(name: str) -> Any:
         module_name = ".fact_projection"
     elif name in _QUALITY_EXPORTS:
         module_name = ".quality"
+    elif name in _NLP_STAGING_EXPORTS:
+        module_name = "..lineage.nlp_omop_writes"
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module = import_module(module_name, __name__)
@@ -155,6 +170,14 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "NLP_OMOP_STAGING_SCHEMA",
+    "NlpOmopLineageRecord",
+    "NlpOmopLineageReport",
+    "NlpOmopStagedBatch",
+    "NlpOmopStagedPreview",
+    "NlpOmopStagingError",
+    "NlpOmopWriteLineage",
+    "stage_nlp_omop_tables",
     "OMOP_DATASET_SPLITS",
     "OMOP_DOMAIN_TABLES",
     "OMOP_FACT_PROJECTION_CDM_VERSION",

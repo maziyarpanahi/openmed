@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
+  exact span lineage, vocabulary snapshot checks and rollback evidence.
+  Replacement proposals preserve prior pipeline digests and explicitly review
+  tombstones before inserts; row values remain in protected local memory.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
