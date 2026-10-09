@@ -1,0 +1,656 @@
+{
+  "version": "openphi-vision-v1",
+  "synthetic": true,
+  "contains_real_phi": false,
+  "font_sha256": "fe068226e163685a9f34b046dea8d049fc9802fdf54d3bdf9b1d3247860c7175",
+  "font_license": "OFL-1.1",
+  "cases": [
+    {
+      "case_id": "vision-v1-001",
+      "track": "documents",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT A",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                229,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-DOC-A01",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                380,
+                20
+              ],
+              "bbox": [
+                380,
+                20,
+                522,
+                33
+              ]
+            },
+            {
+              "text": "2099-01-02",
+              "label": "DATE",
+              "critical": false,
+              "region": "body",
+              "origin": [
+                20,
+                180
+              ],
+              "bbox": [
+                20,
+                180,
+                128,
+                193
+              ]
+            },
+            {
+              "text": "SYNTH-DOC-A01",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "footer",
+              "origin": [
+                380,
+                355
+              ],
+              "bbox": [
+                380,
+                355,
+                522,
+                368
+              ]
+            }
+          ],
+          "sha256": "58782383884f1ae8eadf880bc4cefa01880507a9556e4cc260f90a2902f5f380"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0
+        ]
+      ],
+      "sha256": "28e299b70cada5e62118981cbc3c503cbae032e4bd00fe815aea724365116847"
+    },
+    {
+      "case_id": "vision-v1-002",
+      "track": "documents",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "2099-02-03",
+              "label": "DATE",
+              "critical": false,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                128,
+                33
+              ]
+            },
+            {
+              "text": "SYNTHETIC SUBJECT B",
+              "label": "PERSON",
+              "critical": true,
+              "region": "footer",
+              "origin": [
+                20,
+                320
+              ],
+              "bbox": [
+                20,
+                320,
+                228,
+                333
+              ]
+            },
+            {
+              "text": "SYNTH-DOC-B02",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "footer",
+              "origin": [
+                380,
+                355
+              ],
+              "bbox": [
+                380,
+                355,
+                522,
+                368
+              ]
+            }
+          ],
+          "sha256": "71a98aa5c9f7aac1aaada5c56f66167a1ea857627a53b9808773f8640a4617fd"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0
+        ]
+      ],
+      "sha256": "88e93e296834c6716a9f2243ec96f639bdf8c6d96b2fa8eab552b8784e5eecde"
+    },
+    {
+      "case_id": "vision-v1-003",
+      "track": "documents",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT C",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                228,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-FORM-C03",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "form",
+              "origin": [
+                260,
+                100
+              ],
+              "bbox": [
+                260,
+                100,
+                413,
+                113
+              ]
+            },
+            {
+              "text": "2099-03-04",
+              "label": "DATE",
+              "critical": false,
+              "region": "form",
+              "origin": [
+                260,
+                180
+              ],
+              "bbox": [
+                260,
+                180,
+                369,
+                193
+              ]
+            },
+            {
+              "text": "SYNTH-FORM-C03",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "form",
+              "origin": [
+                260,
+                260
+              ],
+              "bbox": [
+                260,
+                260,
+                413,
+                273
+              ]
+            }
+          ],
+          "sha256": "f4f1362496e825e1bcae6d560992587332bea088858ba8df33871a0d8eb50570"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0
+        ]
+      ],
+      "sha256": "6247c7c642228fb687d4de99eb4f074ae49cf7b57ba34e4623dd674ce42684b6"
+    },
+    {
+      "case_id": "vision-v1-004",
+      "track": "slide_labels",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            320,
+            160
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT D",
+              "label": "PERSON",
+              "critical": true,
+              "region": "label",
+              "origin": [
+                12,
+                12
+              ],
+              "bbox": [
+                12,
+                12,
+                220,
+                25
+              ]
+            },
+            {
+              "text": "SYNTH-ACCESS-D04",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "accession_code",
+              "origin": [
+                12,
+                60
+              ],
+              "bbox": [
+                12,
+                60,
+                188,
+                73
+              ]
+            },
+            {
+              "text": "SYNTH-SLIDE-D04-01",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "specimen_code",
+              "origin": [
+                12,
+                110
+              ],
+              "bbox": [
+                12,
+                110,
+                209,
+                123
+              ]
+            }
+          ],
+          "sha256": "38c6651195e7175ad0019538f983f7c1c7c6d46f3458fae9d971612f4371ef08"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0
+        ]
+      ],
+      "sha256": "26eee63ecb71183820ff99e0461e51932cae35be134a6e58aabbe4786e0a34d8"
+    },
+    {
+      "case_id": "vision-v1-005",
+      "track": "mixed_script",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT E",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                228,
+                33
+              ]
+            },
+            {
+              "text": "СИНТЕТИКА Е",
+              "label": "PERSON",
+              "critical": true,
+              "region": "body",
+              "origin": [
+                20,
+                100
+              ],
+              "bbox": [
+                20,
+                100,
+                139,
+                113
+              ]
+            },
+            {
+              "text": "СИНТ-Е05",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "form",
+              "origin": [
+                300,
+                180
+              ],
+              "bbox": [
+                300,
+                180,
+                386,
+                193
+              ]
+            },
+            {
+              "text": "SYNTH-MIX-E05",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "footer",
+              "origin": [
+                20,
+                355
+              ],
+              "bbox": [
+                20,
+                355,
+                162,
+                368
+              ]
+            }
+          ],
+          "sha256": "b466509f00d4184e3dedf03b88be1d1b7b3cd6cb6ab2c48cf266de6493b0037f"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0
+        ]
+      ],
+      "sha256": "c7bd183b663319d662846e669621d2dddef5481cae9e7d82d21c7c1432abac83"
+    },
+    {
+      "case_id": "vision-v1-006",
+      "track": "packets",
+      "pages": [
+        {
+          "page_id": "page-001",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT A",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                229,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-PACKET-A06",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "body",
+              "origin": [
+                20,
+                160
+              ],
+              "bbox": [
+                20,
+                160,
+                195,
+                173
+              ]
+            },
+            {
+              "text": "2099-06-07",
+              "label": "DATE",
+              "critical": false,
+              "region": "footer",
+              "origin": [
+                20,
+                355
+              ],
+              "bbox": [
+                20,
+                355,
+                128,
+                368
+              ]
+            }
+          ],
+          "sha256": "93c7ae4a35336362e6a8f4fae908b30020f0fde7155e918559399f05a4422a05"
+        },
+        {
+          "page_id": "page-002",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT B",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                228,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-PACKET-B06",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "body",
+              "origin": [
+                20,
+                160
+              ],
+              "bbox": [
+                20,
+                160,
+                195,
+                173
+              ]
+            },
+            {
+              "text": "2099-06-07",
+              "label": "DATE",
+              "critical": false,
+              "region": "footer",
+              "origin": [
+                20,
+                355
+              ],
+              "bbox": [
+                20,
+                355,
+                128,
+                368
+              ]
+            }
+          ],
+          "sha256": "d9bb656c213d02a57c8cdc1def658ff45301261b482bd93069c5de9e0641ad38"
+        },
+        {
+          "page_id": "page-003",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT A",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                229,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-PACKET-A06",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "body",
+              "origin": [
+                20,
+                160
+              ],
+              "bbox": [
+                20,
+                160,
+                195,
+                173
+              ]
+            },
+            {
+              "text": "2099-06-07",
+              "label": "DATE",
+              "critical": false,
+              "region": "footer",
+              "origin": [
+                20,
+                355
+              ],
+              "bbox": [
+                20,
+                355,
+                128,
+                368
+              ]
+            }
+          ],
+          "sha256": "93c7ae4a35336362e6a8f4fae908b30020f0fde7155e918559399f05a4422a05"
+        },
+        {
+          "page_id": "page-004",
+          "size": [
+            640,
+            400
+          ],
+          "items": [
+            {
+              "text": "SYNTHETIC SUBJECT B",
+              "label": "PERSON",
+              "critical": true,
+              "region": "header",
+              "origin": [
+                20,
+                20
+              ],
+              "bbox": [
+                20,
+                20,
+                228,
+                33
+              ]
+            },
+            {
+              "text": "SYNTH-PACKET-B06",
+              "label": "ID_NUM",
+              "critical": true,
+              "region": "body",
+              "origin": [
+                20,
+                160
+              ],
+              "bbox": [
+                20,
+                160,
+                195,
+                173
+              ]
+            },
+            {
+              "text": "2099-06-07",
+              "label": "DATE",
+              "critical": false,
+              "region": "footer",
+              "origin": [
+                20,
+                355
+              ],
+              "bbox": [
+                20,
+                355,
+                128,
+                368
+              ]
+            }
+          ],
+          "sha256": "d9bb656c213d02a57c8cdc1def658ff45301261b482bd93069c5de9e0641ad38"
+        }
+      ],
+      "expected_packet_splits": [
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          3
+        ]
+      ],
+      "sha256": "4b293f30acf8fa215c73c6af76886789b9eb99b4246ee866928babb86a5fdec8"
+    }
+  ]
+}

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
+  two-patient packet fixtures with verified pixel/gold digests, critical flags,
+  packet splits and value-free loader representations (#3829).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
