@@ -261,10 +261,13 @@ def test_duplicate_time_and_nested_series_rejected():
     assert_rejected(ET.tostring(root), "unsupported_layout")
 
 
-def test_withheld_metadata_sweep_and_absent_presence_flags():
+@pytest.mark.parametrize("prefix", ["", "aecg"])
+def test_withheld_metadata_sweep_and_absent_presence_flags(prefix, monkeypatch):
     from xml.etree import ElementTree as ET
 
     ns = "{urn:hl7-org:v3}"
+    monkeypatch.setattr(ET, "_namespace_map", dict(ET._namespace_map))
+    ET.register_namespace(prefix, "urn:hl7-org:v3")
     root = ET.fromstring(xml())
     root.remove(root.find(ns + "componentOf"))
     series = next(root.iter(ns + "series"))
@@ -279,16 +282,11 @@ def test_withheld_metadata_sweep_and_absent_presence_flags():
         "06-12-34-56-78",
         "19000101",
     ):
-        mutated = data.replace(
-            b"<ns0:series>",
-            (
-                '<ns0:series><ns0:id extension="'
-                + sentinel
-                + '"/><ns0:text>'
-                + sentinel
-                + "</ns0:text>"
-            ).encode(),
-        )
+        mutated_root = ET.fromstring(data)
+        mutated_series = next(mutated_root.iter(ns + "series"))
+        ET.SubElement(mutated_series, ns + "id", {"extension": sentinel})
+        ET.SubElement(mutated_series, ns + "text").text = sentinel
+        mutated = ET.tostring(mutated_root)
         assert mutated != data
         result = read_aecg(mutated)
         assert result.rhythm == record.rhythm and result.derived == record.derived
