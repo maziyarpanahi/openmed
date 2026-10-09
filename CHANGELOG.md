@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
