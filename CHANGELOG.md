@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session-scoped opaque voice embedding handles in Python and OpenMedKit, with
+  same-session similarity, value-free evidence, retention erasure callbacks and
+  buffer destruction on pause, withdrawal, cancellation and finalization.
+  Serialization, persistence and cross-session comparison are refused.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
