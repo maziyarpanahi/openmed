@@ -354,6 +354,7 @@ classification:
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
+    - multimodal/inference-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md

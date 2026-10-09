@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Explicit offline document, transcription and ambient-draft CLI adapters over
+  injected session services, with separate protected/evidence outputs, consent
+  and review gates, interruption cleanup and synthetic examples (#3678).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

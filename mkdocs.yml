@@ -279,6 +279,7 @@ nav:
       - Multimodal Asset Limit Profiles: multimodal/asset-limits.md
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Offline Media Task CLI: multimodal/inference-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md

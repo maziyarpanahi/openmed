@@ -596,6 +596,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .brief import add_brief_command
 
     add_brief_command(subparsers)
+    from .multimodal_inference import add_multimodal_inference_commands
+
+    add_multimodal_inference_commands(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -3250,7 +3253,11 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    from .multimodal_inference import protect_multimodal_diagnostics
+
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    protect_multimodal_diagnostics(parser, arguments)
+    args = parser.parse_args(arguments)
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
