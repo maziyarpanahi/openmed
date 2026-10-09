@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Discover nested public multimodal packages in the API compatibility gate,
+  require committed baseline coverage, and document baseline updates as v3.2
+  packages land. Private packages and unavailable optional shims are skipped
+  without loading their runtimes during discovery (#3844).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

@@ -17,6 +17,13 @@ The supported public surface is exactly what the checker captures:
   `openmed.risk`, `openmed.interop`, `openmed.structured`, `openmed.mlx`,
   `openmed.multimodal`, `openmed.ner`, `openmed.zero_shot`, and
   `openmed.compliance`.
+- Every name exported from a nested `openmed.multimodal.*` package declaring
+  `__all__` in its `__init__.py`. Discovery walks the checkout in sorted order
+  without importing candidates. Any underscore-prefixed package component
+  excludes the entire private subtree. Plain `.py` modules and packages without
+  `__all__` are excluded; public children of an export-free namespace are still
+  discovered. Optional-dependency shims that cannot import are skipped during
+  capture, using the same partial-install behavior as the fixed package list.
 - For every public callable (function or class), its parameter names, order,
   and which parameters are optional.
 
@@ -94,6 +101,35 @@ python scripts/release/check_public_api.py --update
 Review the resulting diff to `scripts/release/public_api_baseline.json` in your
 PR: additions should look intentional, and any removals or signature changes
 must correspond to an `announced_breaks` allowlist entry.
+
+### Landing v3.2 multimodal subpackages
+
+When a streaming, vision, or other nested multimodal package lands, declare its
+supported exports in `__init__.py` (prefer a literal list or tuple). No addition
+to `PUBLIC_SUBPACKAGES` or top-level re-export is required. Keep optional runtime
+imports lazy so discovery and signature capture do not load models or require
+network access. A dynamic top-level `__all__` assignment is also supported via
+the imported package, while discovery itself remains import-free.
+
+Run `python scripts/release/check_public_api.py --update` from that updated
+checkout, review and commit the baseline diff with the package implementation,
+then run:
+
+```bash
+python scripts/release/check_public_api.py
+python -m pytest tests/unit/release/test_public_api_compat.py \
+  tests/integration/test_public_api_multimodal.py -q
+```
+
+The coverage test requires every captured nested public package, including one
+with an empty `__all__`, to appear in the committed baseline. Compatible
+additions still pass the checker itself; this test prevents a new package from
+remaining unprotected by an older baseline. Packages skipped for unavailable
+optional dependencies do not create false coverage failures. Use an environment
+with the relevant extra installed when intentionally baselining such a package;
+review partial-install updates to avoid dropping existing optional surfaces.
+Specific pending packages are added to the baseline when their implementations
+land, rather than recording speculative APIs.
 
 The checker is stdlib-only (`ast` / `inspect`). It reads each namespace's
 literal `__all__` from source, then imports available objects to inspect their
