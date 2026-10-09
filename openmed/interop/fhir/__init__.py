@@ -91,6 +91,17 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .subscription_notifications import (
+    SubscriptionContentMode,
+    SubscriptionEvent,
+    SubscriptionFindingCode,
+    SubscriptionNotification,
+    SubscriptionNotificationError,
+    SubscriptionNotificationFinding,
+    SubscriptionNotificationType,
+    SubscriptionNotificationVersion,
+    parse_subscription_notification,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -172,6 +183,15 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
 )
 
 __all__ = [
+    "SubscriptionContentMode",
+    "SubscriptionEvent",
+    "SubscriptionFindingCode",
+    "SubscriptionNotification",
+    "SubscriptionNotificationError",
+    "SubscriptionNotificationFinding",
+    "SubscriptionNotificationType",
+    "SubscriptionNotificationVersion",
+    "parse_subscription_notification",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
