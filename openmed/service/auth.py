@@ -45,13 +45,18 @@ DEFAULT_AUTH_EXEMPT_PATHS = frozenset(
         "/redoc",
     }
 )
-DEFAULT_ROUTE_SCOPES = {
+DEFAULT_ROUTE_SCOPES: dict[tuple[str, str], tuple[str, ...]] = {
     ("GET", "/models/loaded"): ("models:read",),
     ("POST", "/models/unload"): ("models:write",),
     ("POST", "/analyze"): ("analyze:write",),
     ("POST", "/pii/extract"): ("pii:read",),
     ("POST", "/pii/deidentify"): ("pii:write",),
     ("POST", "/pii/deidentify/stream"): ("pii:write",),
+    ("POST", "/v1/workflows/preflight"): ("workflow:read",),
+    ("POST", "/v1/workflows/preview"): ("workflow:read",),
+    ("POST", "/v1/workflows/status"): ("workflow:read",),
+    ("POST", "/v1/workflows/review-receipts"): ("workflow:review",),
+    ("POST", "/v1/workflows/cancel"): ("workflow:cancel",),
 }
 
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}

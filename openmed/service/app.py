@@ -54,6 +54,7 @@ from .batcher import (
 )
 from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
 from .coalesce import RequestCoalescer, coalescing_key
+from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -748,8 +749,24 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
-    """Create and configure the OpenMed REST FastAPI app."""
+def create_app(
+    *,
+    max_request_body_bytes: Optional[int] = None,
+    workflow_service: Optional[WorkflowGovernanceService] = None,
+    workflow_policy: Optional[WorkflowHTTPPolicy] = None,
+    workflow_clock: Optional[Callable[[], int]] = None,
+) -> FastAPI:
+    """Create and configure the OpenMed REST FastAPI app.
+
+    Args:
+        max_request_body_bytes: Optional model-route body limit.
+        workflow_service: Trusted local custody service for workflow routes.
+        workflow_policy: Server-owned workflow opt-ins; disabled by default.
+        workflow_clock: Integer Unix-seconds source for receipt validity checks.
+
+    Returns:
+        Configured application, without starting its lifespan or an effect executor.
+    """
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
 
@@ -1791,6 +1808,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         resource_getter=_get_journey_resource_catalog,
     )
 
+    from .workflow_routes import WorkflowBoundaryMiddleware, mount_workflow_routes
+
+    mount_workflow_routes(
+        app, service=workflow_service, policy=workflow_policy, clock=workflow_clock
+    )
+
     if app.state.tracing.enabled:
         app.add_middleware(
             OpenTelemetryMiddleware,
@@ -1817,6 +1840,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
     )
+    app.add_middleware(WorkflowBoundaryMiddleware)
     return app
 
 

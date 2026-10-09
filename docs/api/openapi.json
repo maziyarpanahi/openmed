@@ -683,6 +683,589 @@
         "title": "OpenMed Fixed-Option Decision Request",
         "type": "object"
       },
+      "GovernedWorkflowError": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "details": {
+                "anyOf": [
+                  {
+                    "items": {},
+                    "type": "array"
+                  },
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "details",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object",
+        "x-workflow-error-statuses": {
+          "workflow_authentication_required": 401,
+          "workflow_conflict": 409,
+          "workflow_disabled": 503,
+          "workflow_forbidden": 403,
+          "workflow_invalid_input": 422,
+          "workflow_invalid_result": 502,
+          "workflow_mutation_unknown": 503,
+          "workflow_receipt_expired": 409,
+          "workflow_receipt_future": 409,
+          "workflow_receipt_unverified": 403,
+          "workflow_request_too_large": 413,
+          "workflow_service_failed": 503,
+          "workflow_terminal": 409,
+          "workflow_unavailable": 503
+        }
+      },
+      "GovernedWorkflowMutation": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "expected_state_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "request_id": {
+            "pattern": "^(?:req_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "run_id": {
+            "pattern": "^(?:run_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.service.workflow_request.v1",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "pattern": "^(?:workflow:(?=[^/]{1,253}/)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/(?:[a-z][a-z0-9-]{0,63})(?:@(?:(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))?)$(?![\\s\\S])",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_digest",
+          "expected_state_digest",
+          "request_id",
+          "run_id",
+          "schema_version",
+          "workflow_id"
+        ],
+        "type": "object"
+      },
+      "GovernedWorkflowReference": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "expected_state_digest": {
+            "anyOf": [
+              {
+                "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "pattern": "^(?:req_[0-9a-f]{32})$(?![\\s\\S])",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^(?:run_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.service.workflow_request.v1",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "pattern": "^(?:workflow:(?=[^/]{1,253}/)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/(?:[a-z][a-z0-9-]{0,63})(?:@(?:(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))?)$(?![\\s\\S])",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_digest",
+          "expected_state_digest",
+          "request_id",
+          "run_id",
+          "schema_version",
+          "workflow_id"
+        ],
+        "type": "object"
+      },
+      "GovernedWorkflowReview": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "expected_state_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "receipt": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                "type": "string"
+              },
+              "consumed_at": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "expires_at": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "reviewer_role": {
+                "pattern": "^(?:role:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/[a-z][a-z0-9-]{0,63}(?:@(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*))?)$(?![\\s\\S])",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.agent.approval_receipt.v1",
+                "type": "string"
+              },
+              "token_digest": {
+                "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "consumed_at",
+              "expires_at",
+              "reviewer_role",
+              "schema_version",
+              "token_digest"
+            ],
+            "type": "object"
+          },
+          "request_id": {
+            "pattern": "^(?:req_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "run_id": {
+            "pattern": "^(?:run_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.service.workflow_request.v1",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "pattern": "^(?:workflow:(?=[^/]{1,253}/)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/(?:[a-z][a-z0-9-]{0,63})(?:@(?:(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))?)$(?![\\s\\S])",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_digest",
+          "expected_state_digest",
+          "receipt",
+          "request_id",
+          "run_id",
+          "schema_version",
+          "workflow_id"
+        ],
+        "type": "object"
+      },
+      "GovernedWorkflowView": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "completed"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "effects": {
+                  "items": {
+                    "properties": {
+                      "state": {
+                        "const": "committed"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "action_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "cancellation_requested": {
+            "type": "boolean"
+          },
+          "committed_effect_count": {
+            "maximum": 128,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "effects": {
+            "items": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "commit_evidence_digest": {
+                      "type": "null"
+                    },
+                    "state": {
+                      "const": "pending"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "commit_evidence_digest": {
+                      "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    "state": {
+                      "const": "committed"
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "action_id": {
+                  "pattern": "^(?:act_[0-9a-f]{32})$(?![\\s\\S])",
+                  "type": "string"
+                },
+                "approval_required": {
+                  "type": "boolean"
+                },
+                "commit_evidence_digest": {
+                  "anyOf": [
+                    {
+                      "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "compensation_limit": {
+                  "enum": [
+                    "none",
+                    "propose_only"
+                  ],
+                  "type": "string"
+                },
+                "idempotency_key": {
+                  "pattern": "^(?:idem_[0-9a-f]{64})$(?![\\s\\S])",
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "local_tool",
+                    "fhir_write",
+                    "omop_batch"
+                  ],
+                  "type": "string"
+                },
+                "operation_digest": {
+                  "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                  "type": "string"
+                },
+                "ordinal": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "state": {
+                  "enum": [
+                    "pending",
+                    "committed"
+                  ],
+                  "type": "string"
+                },
+                "tool_id": {
+                  "maxLength": 512,
+                  "pattern": "^(?:tool:(?=[^/]{1,253}/)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/(?:[a-z][a-z0-9-]{0,63})(?:@(?:(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))?)$(?![\\s\\S])",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "action_id",
+                "approval_required",
+                "commit_evidence_digest",
+                "compensation_limit",
+                "idempotency_key",
+                "kind",
+                "operation_digest",
+                "ordinal",
+                "state",
+                "tool_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 128,
+            "type": "array"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome_class": {
+                        "const": "success",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "enum": [
+                          "completed"
+                        ],
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "openmed.agent.outcome.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "outcome_class",
+                      "reason_code",
+                      "schema_version"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome_class": {
+                        "const": "abstained",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "enum": [
+                          "insufficient_evidence",
+                          "low_confidence",
+                          "out_of_scope"
+                        ],
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "openmed.agent.outcome.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "outcome_class",
+                      "reason_code",
+                      "schema_version"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome_class": {
+                        "const": "review_required",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "enum": [
+                          "conflicting_evidence",
+                          "human_gate",
+                          "safety_review"
+                        ],
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "openmed.agent.outcome.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "outcome_class",
+                      "reason_code",
+                      "schema_version"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome_class": {
+                        "const": "policy_denied",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "enum": [
+                          "consent_required",
+                          "phi_policy",
+                          "purpose_mismatch"
+                        ],
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "openmed.agent.outcome.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "outcome_class",
+                      "reason_code",
+                      "schema_version"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "outcome_class": {
+                        "const": "failed",
+                        "type": "string"
+                      },
+                      "reason_code": {
+                        "enum": [
+                          "invalid_input",
+                          "timeout",
+                          "tool_error"
+                        ],
+                        "type": "string"
+                      },
+                      "schema_version": {
+                        "const": "openmed.agent.outcome.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "outcome_class",
+                      "reason_code",
+                      "schema_version"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "preview_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 128,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_digest": {
+            "anyOf": [
+              {
+                "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^(?:run_[0-9a-f]{32})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.service.workflow_response.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^(?:sha256:[0-9a-f]{64})$(?![\\s\\S])",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "pattern": "^(?:workflow:(?=[^/]{1,253}/)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)/(?:[a-z][a-z0-9-]{0,63})(?:@(?:(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)))?)$(?![\\s\\S])",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_digest",
+          "cancellation_requested",
+          "committed_effect_count",
+          "effects",
+          "outcome",
+          "phase",
+          "preview_digest",
+          "proposed_effect_count",
+          "receipt_digest",
+          "run_id",
+          "schema_version",
+          "state_digest",
+          "workflow_id"
+        ],
+        "type": "object"
+      },
       "GroundCandidateResponse": {
         "additionalProperties": false,
         "description": "One coded terminology candidate in a grounding response.",
@@ -2547,6 +3130,17 @@
         "title": "ValidationError",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "WorkflowApiKey": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      },
+      "WorkflowBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -3842,6 +4436,561 @@
         "tags": [
           "journey"
         ]
+      }
+    },
+    "/v1/workflows/cancel": {
+      "post": {
+        "operationId": "workflow_cancel_v1_workflows_cancel_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedWorkflowMutation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowView"
+                }
+              }
+            },
+            "description": "Bounded custody snapshot; no effect execution."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          }
+        },
+        "security": [
+          {
+            "WorkflowApiKey": []
+          },
+          {
+            "WorkflowBearer": []
+          }
+        ],
+        "summary": "Workflow Cancel",
+        "tags": [
+          "Governed workflows"
+        ],
+        "x-max-request-bytes": 65536,
+        "x-required-scope": "workflow:cancel"
+      }
+    },
+    "/v1/workflows/preflight": {
+      "post": {
+        "operationId": "workflow_preflight_v1_workflows_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedWorkflowReference"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowView"
+                }
+              }
+            },
+            "description": "Bounded custody snapshot; no effect execution."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          }
+        },
+        "security": [
+          {
+            "WorkflowApiKey": []
+          },
+          {
+            "WorkflowBearer": []
+          }
+        ],
+        "summary": "Workflow Preflight",
+        "tags": [
+          "Governed workflows"
+        ],
+        "x-max-request-bytes": 65536,
+        "x-required-scope": "workflow:read"
+      }
+    },
+    "/v1/workflows/preview": {
+      "post": {
+        "operationId": "workflow_preview_v1_workflows_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedWorkflowReference"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowView"
+                }
+              }
+            },
+            "description": "Bounded custody snapshot; no effect execution."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          }
+        },
+        "security": [
+          {
+            "WorkflowApiKey": []
+          },
+          {
+            "WorkflowBearer": []
+          }
+        ],
+        "summary": "Workflow Preview",
+        "tags": [
+          "Governed workflows"
+        ],
+        "x-max-request-bytes": 65536,
+        "x-required-scope": "workflow:read"
+      }
+    },
+    "/v1/workflows/review-receipts": {
+      "post": {
+        "operationId": "workflow_review_receipts_v1_workflows_review_receipts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedWorkflowReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowView"
+                }
+              }
+            },
+            "description": "Bounded custody snapshot; no effect execution."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          }
+        },
+        "security": [
+          {
+            "WorkflowApiKey": []
+          },
+          {
+            "WorkflowBearer": []
+          }
+        ],
+        "summary": "Workflow Review Receipts",
+        "tags": [
+          "Governed workflows"
+        ],
+        "x-max-request-bytes": 65536,
+        "x-required-scope": "workflow:review"
+      }
+    },
+    "/v1/workflows/status": {
+      "post": {
+        "operationId": "workflow_status_v1_workflows_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GovernedWorkflowReference"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowView"
+                }
+              }
+            },
+            "description": "Bounded custody snapshot; no effect execution."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GovernedWorkflowError"
+                }
+              }
+            },
+            "description": "Fixed workflow or existing authentication diagnostic."
+          }
+        },
+        "security": [
+          {
+            "WorkflowApiKey": []
+          },
+          {
+            "WorkflowBearer": []
+          }
+        ],
+        "summary": "Workflow Status",
+        "tags": [
+          "Governed workflows"
+        ],
+        "x-max-request-bytes": 65536,
+        "x-required-scope": "workflow:read"
       }
     }
   }

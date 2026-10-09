@@ -28,6 +28,11 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /v1/decisions`
 - `POST /omop/load`
 - `POST /cohort/resolve`
+- `POST /v1/workflows/preflight`
+- `POST /v1/workflows/preview`
+- `POST /v1/workflows/status`
+- `POST /v1/workflows/review-receipts`
+- `POST /v1/workflows/cancel`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
 schema and returns `404` unless metrics are enabled.
@@ -393,6 +398,114 @@ names, counts, labels, lengths, and durations. See
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
 ## Endpoints
+
+### Governed workflows
+
+Five versioned `POST` routes inspect service-custodied actions and record
+review or cancellation metadata. Opaque references stay in JSON bodies rather
+than URLs. None of these routes dispatches, replays or compensates an effect.
+
+| Route | Required scope | Behavior |
+| --- | --- | --- |
+| `/v1/workflows/preflight` | `workflow:read` | Read permission and policy findings |
+| `/v1/workflows/preview` | `workflow:read` | Inspect the content-free effect plan |
+| `/v1/workflows/status` | `workflow:read` | Read lifecycle and effect evidence |
+| `/v1/workflows/review-receipts` | `workflow:review` | Submit a previously consumed approval receipt |
+| `/v1/workflows/cancel` | `workflow:cancel` | Record cancellation intent |
+
+The routes are disabled by default. A host application must configure
+[existing authentication](serving/authentication.md), inject a synchronous local
+`WorkflowGovernanceService`, and opt in with `WorkflowHTTPPolicy`. Passing a
+service alone does not enable the routes. Review submissions and cancellation
+have separate opt-ins. Every route requires an authenticated principal and its
+fixed scope, even if global route exemptions or scope overrides are configured.
+Disabling global authentication cannot make a workflow route public.
+
+```python
+from openmed.service.app import create_app
+from openmed.service.governed_workflows import WorkflowHTTPPolicy
+
+# custody_service is your trusted local governance implementation.
+app = create_app(
+    workflow_service=custody_service,
+    workflow_policy=WorkflowHTTPPolicy(
+        enabled=True,
+        allow_review_submissions=True,
+        allow_cancellation=True,
+        timeout_seconds=5.0,
+    ),
+)
+```
+
+All requests require exactly these six reference fields. The identifiers below
+are synthetic. Inspection may set `expected_state_digest` and `request_id` to
+`null`; mutations require both a state digest and a fresh random request ID.
+
+```json
+{
+  "schema_version": "openmed.service.workflow_request.v1",
+  "run_id": "run_11111111111111111111111111111111",
+  "workflow_id": "workflow:test.example/review@1.0.0",
+  "action_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_state_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "request_id": "req_22222222222222222222222222222222"
+}
+```
+
+Receipt submission additionally requires `receipt`, serialized with the existing
+`ApprovalReceipt.to_dict()` contract. The service must verify it against its
+trusted custody and recheck reviewer authority, run/caller isolation,
+purpose/projection policy, exact action/state binding, expiry and durable
+idempotency atomically at commit. A caller-supplied reviewer role, digest or
+well-formed receipt is insufficient authority. The adapter does not issue or
+consume approval tokens. It checks expiry again between custody verification
+and submission; the service still owns the final atomic check.
+
+The response uses `openmed.service.workflow_response.v1`, the existing
+`ActionPhase`, `WorkflowOutcome` and `EffectRecord` wire vocabularies, opaque
+identifiers, digests and effect counts. It contains no clinical payload,
+credential or protected preview text. `cancellation_requested: true` acknowledges
+recorded intent; it does not claim an in-flight operation has stopped or undo a
+committed effect. Production effect execution belongs to the host's separately
+enabled, permission-gated dispatcher.
+
+The trusted service owns compare-and-set state and durable duplicate handling.
+Identical repeated mutations must return the original acknowledgement; reuse of
+a request ID for different content must fail. The HTTP adapter has no mutation
+cache or automatic retry. A timeout or unexpected service exception during a
+mutation returns `workflow_mutation_unknown` because its worker may continue.
+Inspect status through the custody service before deciding whether to repeat
+the exact request with the same ID. Do not interpret a transport failure as proof
+that a mutation was rolled back.
+
+Requests require `application/json`, no query parameters, a body at most 64 KiB,
+at most 256 parsed nodes and depth eight. Duplicate keys, nonfinite numbers,
+unknown fields and unsupported versions are refused. Responses contain at most
+128 effect records and 256 KiB of serialized metadata. A service call deadline
+must be greater than zero and at most 30 seconds. Request bodies, receipts and
+responses never become access-log fields; arbitrary `X-Request-ID` values are
+replaced with random UUIDs before shared logging. Use opaque request IDs only.
+Successful workflow responses and adapter errors carry `Cache-Control: no-store`.
+
+The OpenAPI export derives exact fields, identifier grammars and enum/reason
+vocabularies from governance types. Native Python checks also enforce cross-field
+bindings, effect ordering, counts and custody, which JSON Schema cannot prove.
+Workflow errors use the existing `error` envelope with fixed messages and codes:
+
+| Status | Workflow codes |
+| --- | --- |
+| 401 | `workflow_authentication_required` |
+| 403 | `workflow_forbidden`, `workflow_receipt_unverified` |
+| 409 | `workflow_conflict`, `workflow_receipt_expired`, `workflow_receipt_future`, `workflow_terminal` |
+| 413 | `workflow_request_too_large` |
+| 422 | `workflow_invalid_input` |
+| 502 | `workflow_invalid_result` |
+| 503 | `workflow_disabled`, `workflow_unavailable`, `workflow_service_failed`, `workflow_mutation_unknown` |
+
+Existing authentication middleware may return its own controlled authentication
+codes before the adapter runs. These offline adapter tests use synthetic custody
+and establish HTTP behavior, not clinical validation or a production database's
+durability guarantee.
 
 ### `POST /v1/decisions`
 

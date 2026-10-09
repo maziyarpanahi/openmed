@@ -843,6 +843,202 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Governed workflows",
+      "description": "Default-disabled metadata-only routes. Configure existing authentication outside this collection and inject an explicitly enabled local custody service. These synthetic references are placeholders. The receipt example is deliberately expired and uncustodied: it is a refusal example, never reviewer approval. No route dispatches or compensates an effect.",
+      "item": [
+        {
+          "name": "Workflow preflight",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/workflows/preflight",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "workflows",
+                "preflight"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"openmed.service.workflow_request.v1\",\n  \"run_id\": \"run_11111111111111111111111111111111\",\n  \"workflow_id\": \"workflow:test.example/review\",\n  \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"expected_state_digest\": null,\n  \"request_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Synthetic metadata-only request. Replace opaque references with service-custodied values; never paste protected text or credentials into collection history. Receipt submission requires a real, independently verified receipt; this expired placeholder must be refused."
+          },
+          "response": []
+        },
+        {
+          "name": "Workflow preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/workflows/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "workflows",
+                "preview"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"openmed.service.workflow_request.v1\",\n  \"run_id\": \"run_11111111111111111111111111111111\",\n  \"workflow_id\": \"workflow:test.example/review\",\n  \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"expected_state_digest\": null,\n  \"request_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Synthetic metadata-only request. Replace opaque references with service-custodied values; never paste protected text or credentials into collection history. Receipt submission requires a real, independently verified receipt; this expired placeholder must be refused."
+          },
+          "response": []
+        },
+        {
+          "name": "Workflow status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/workflows/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "workflows",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"openmed.service.workflow_request.v1\",\n  \"run_id\": \"run_11111111111111111111111111111111\",\n  \"workflow_id\": \"workflow:test.example/review\",\n  \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"expected_state_digest\": null,\n  \"request_id\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Synthetic metadata-only request. Replace opaque references with service-custodied values; never paste protected text or credentials into collection history. Receipt submission requires a real, independently verified receipt; this expired placeholder must be refused."
+          },
+          "response": []
+        },
+        {
+          "name": "Workflow review-receipts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/workflows/review-receipts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "workflows",
+                "review-receipts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"openmed.service.workflow_request.v1\",\n  \"run_id\": \"run_11111111111111111111111111111111\",\n  \"workflow_id\": \"workflow:test.example/review\",\n  \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"expected_state_digest\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n  \"request_id\": \"req_22222222222222222222222222222222\",\n  \"receipt\": {\n    \"schema_version\": \"openmed.agent.approval_receipt.v1\",\n    \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n    \"reviewer_role\": \"role:test.example/reviewer\",\n    \"token_digest\": \"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\n    \"consumed_at\": 100,\n    \"expires_at\": 200\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Synthetic metadata-only request. Replace opaque references with service-custodied values; never paste protected text or credentials into collection history. Receipt submission requires a real, independently verified receipt; this expired placeholder must be refused."
+          },
+          "response": []
+        },
+        {
+          "name": "Workflow cancel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/workflows/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "workflows",
+                "cancel"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schema_version\": \"openmed.service.workflow_request.v1\",\n  \"run_id\": \"run_11111111111111111111111111111111\",\n  \"workflow_id\": \"workflow:test.example/review\",\n  \"action_digest\": \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n  \"expected_state_digest\": \"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\n  \"request_id\": \"req_22222222222222222222222222222222\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Synthetic metadata-only request. Replace opaque references with service-custodied values; never paste protected text or credentials into collection history. Receipt submission requires a real, independently verified receipt; this expired placeholder must be refused."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }

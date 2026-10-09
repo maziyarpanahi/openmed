@@ -6,6 +6,15 @@ Node runtimes and tests.
 
 ## Install
 
+Workflow transport methods (`workflowPreflight`, `workflowPreview`,
+`workflowStatus`, `workflowSubmitReceipt`, `workflowCancel`) accept opaque
+reference/receipt types and return metadata-only `JSONObject` responses. These
+bindings do not verify receipt custody, grant authority, poll or retry. The
+server's explicitly enabled custody service owns those decisions. Cancellation
+records intent and a transport failure may leave a mutation outcome unknown.
+Dedicated governed clients add strict workflow parsing and bounded polling
+separately; static TypeScript declarations are not response validation.
+
 From a checkout of this repository:
 
 ```bash
