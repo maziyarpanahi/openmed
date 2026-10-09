@@ -91,6 +91,17 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .server_validation import (
+    MAX_SERVER_VALIDATION_ISSUES,
+    MAX_SERVER_VALIDATION_RESOURCE_BYTES,
+    FHIRServerValidationIssue,
+    FHIRServerValidationReason,
+    FHIRServerValidationResult,
+    FHIRServerValidationStatus,
+    FHIRValidationResponse,
+    FHIRValidationTransport,
+    preflight_server_validation,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -172,6 +183,15 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
 )
 
 __all__ = [
+    "MAX_SERVER_VALIDATION_ISSUES",
+    "MAX_SERVER_VALIDATION_RESOURCE_BYTES",
+    "FHIRServerValidationIssue",
+    "FHIRServerValidationReason",
+    "FHIRServerValidationResult",
+    "FHIRServerValidationStatus",
+    "FHIRValidationResponse",
+    "FHIRValidationTransport",
+    "preflight_server_validation",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
