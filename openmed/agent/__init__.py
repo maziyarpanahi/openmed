@@ -159,6 +159,15 @@ from .schemas import (
     list_agent_schema_names,
     render_agent_schema,
 )
+from .self_check import (
+    AGENT_SELF_CHECK_VERSION,
+    AgentSelfCheckReport,
+    AgentSelfCheckResult,
+    SelfCheckName,
+    SelfCheckReason,
+    SelfCheckStatus,
+    run_agent_self_check,
+)
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 from .workflow_rollup import (
     WORKFLOW_ROLLUP_SCHEMA_VERSION,
@@ -206,6 +215,13 @@ from .workflows import (
 
 __all__ = [
     "AGENT_SCHEMA_DIALECT",
+    "AGENT_SELF_CHECK_VERSION",
+    "AgentSelfCheckReport",
+    "AgentSelfCheckResult",
+    "SelfCheckName",
+    "SelfCheckReason",
+    "SelfCheckStatus",
+    "run_agent_self_check",
     "ACTION_PHASE_TRANSITIONS",
     "ActionPhase",
     "ActionPhaseError",

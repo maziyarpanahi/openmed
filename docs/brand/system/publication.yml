@@ -134,6 +134,7 @@ classification:
     - agent/workflow-rollups.md
     - agent/schema-compatibility.md
     - agent/timing-metadata.md
+    - agent/self-check.md
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
     - agent/prior-auth-completeness.md

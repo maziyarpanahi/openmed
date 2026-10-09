@@ -59,6 +59,7 @@ nav:
       - Workflow Run Rollups: agent/workflow-rollups.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
+      - Offline Agent Governance Self-check: agent/self-check.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
       - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
