@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import posixpath
 import re
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -177,6 +178,69 @@ def test_publication_classifies_every_default_markdown_page_exactly_once() -> No
         "website/**",
         "demo/web/README.md",
     ]
+
+
+def _governance_navigation() -> set[str]:
+    config = _load_yaml(MKDOCS, base=True)
+    sections = [
+        item["Governed Agents"] for item in config["nav"] if "Governed Agents" in item
+    ]
+    assert len(sections) == 1
+    paths = _nav_paths(sections[0])
+    assert len(paths) == len(set(paths))
+    return set(paths)
+
+
+def _assert_governance_links_once(text: str, expected: set[str]) -> None:
+    counts = Counter(
+        _resolve_docs_link("agent/index.md", href, published=expected)
+        for href in re.findall(r"\[[^\]]+\]\(([^\s)]+)\)", text)
+    )
+    incorrect = {path: counts[path] for path in sorted(expected) if counts[path] != 1}
+    assert not incorrect, f"governance links: {incorrect}"
+
+
+def test_governance_overview_covers_each_existing_contract_once() -> None:
+    paths = _governance_navigation()
+    assert {
+        path.relative_to(DOCS).as_posix() for path in (DOCS / "agent").glob("*.md")
+    } <= paths
+    assert {
+        "interop/fhir-write-preflight.md",
+        "interop/smart-scope-audit.md",
+        "interop/omop-staged-mutations.md",
+        "interop/omop-vocabulary-write-gates.md",
+        "interop/fhir-omop-write-lineage.md",
+        "interop/omop-rollback-manifests.md",
+        "interop/omop-rollback-schema.md",
+        "interop/fhir-capability-fixtures.md",
+        "evaluation/governed-agent-fixtures.md",
+        "evaluation/sealed-workflow-manifests.md",
+        "evaluation/v3.1-agent-gates.md",
+        "security/agent-threat-model.md",
+        "compliance/v3.1-agent-assurance.md",
+    } <= paths
+    paths.remove("agent/index.md")
+    _assert_governance_links_once((DOCS / "agent/index.md").read_text(), paths)
+    publication = _load_yaml(PUBLICATION)
+    assert "docs/agent/index.html" in publication["expected_routes"]
+
+
+@pytest.mark.parametrize("mutation", ("missing", "duplicate", "anchor_duplicate"))
+def test_governance_overview_link_guard_rejects_missing_or_repeated_contracts(
+    mutation: str,
+) -> None:
+    paths = _governance_navigation() - {"agent/index.md"}
+    text = (DOCS / "agent/index.md").read_text()
+    if mutation == "missing":
+        text = re.sub(r"(?m)^- \[Signed capability grants\].*\n", "", text)
+    else:
+        target = "capability-grants.md" + (
+            "#verify" if mutation == "anchor_duplicate" else ""
+        )
+        text += f"\n[Repeated contract]({target})\n"
+    with pytest.raises(AssertionError, match="governance links"):
+        _assert_governance_links_once(text, paths)
 
 
 def test_docs_build_excludes_local_demo_payloads() -> None:
