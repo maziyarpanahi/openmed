@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an offline Draft 2020-12 catalog for closed agent outcome, correlation,
+  timing, and run-summary JSON records, with local references, bounded fields,
+  version and enum drift tests, and deterministic schema exports (#3043).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
