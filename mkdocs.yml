@@ -284,6 +284,7 @@ nav:
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
+      - Reviewed Ambient FHIR Documents: multimodal/ambient-fhir.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
