@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
+  integer/scaled samples, withheld identification/date/annotation text, explicit
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
