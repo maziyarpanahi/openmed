@@ -26,12 +26,13 @@ from typing import Any, BinaryIO, Final
 from .abstention import AbstentionReason, AbstentionRecord, AbstentionStage
 from .asset_limits import (
     DESKTOP_V1,
+    DESKTOP_V1_1,
     AssetLimitError,
     LimitFinding,
     LimitProfile,
     evaluate_asset_limits,
 )
-from .asset_manifest import AssetManifest, AssetManifestError
+from .asset_manifest import WAVEFORM_MEDIA_TYPES, AssetManifest, AssetManifestError
 from .digest import (
     AssetDigest,
     DigestLimitExceededError,
@@ -40,9 +41,11 @@ from .digest import (
 )
 from .manifest_profiles import (
     AUDIO_V1,
+    DICOM_NON_PIXEL_V1,
     DICOM_V1,
     IMAGE_V1,
     PDF_V1,
+    WAVEFORM_V1,
     ManifestProfile,
     ManifestProfileError,
     ValidationFinding,
@@ -79,7 +82,9 @@ _FIXED_FINDINGS: Final = {
     ("digest", "not_evaluated"): (None, False),
 }
 
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_MODALITIES: Final = frozenset(
+    {"image", "pdf", "dicom", "audio", "waveform", "dicom_non_pixel"}
+)
 _DETECTED_MEDIA_TYPES: Final = frozenset(
     {
         "application/pdf",
@@ -88,6 +93,7 @@ _DETECTED_MEDIA_TYPES: Final = frozenset(
         "image/tiff",
         "application/dicom",
         "audio/wav",
+        "application/edf",
     }
 )
 _METADATA_PROFILES: Final = {
@@ -95,6 +101,8 @@ _METADATA_PROFILES: Final = {
     "pdf": PDF_V1,
     "dicom": DICOM_V1,
     "audio": AUDIO_V1,
+    "waveform": WAVEFORM_V1,
+    "dicom_non_pixel": DICOM_NON_PIXEL_V1,
 }
 
 
@@ -245,12 +253,16 @@ class PreflightReport:
                 or self.media_type_status is not MediaTypeStatus.MATCH
             ):
                 raise PreflightError("an accepted report must have passed every check")
-            expected_modality = _modality_for(self.manifest.media_type)
+            expected_modality = _modality_for(self.manifest)
             expected_profile = _METADATA_PROFILES.get(expected_modality)
             if (
                 expected_profile is None
                 or self.modality != expected_modality
                 or self.metadata_profile != expected_profile
+                or (
+                    expected_modality == "waveform"
+                    and self.limit_profile.version != "1.1"
+                )
                 or self.detected_media_type != self.manifest.media_type
                 or self.digest.sha256 != self.manifest.sha256
                 or self.digest.byte_count != self.manifest.byte_size
@@ -312,7 +324,7 @@ def preflight_asset(
     manifest: Mapping[str, Any] | AssetManifest,
     source: bytes | bytearray | memoryview | BinaryIO,
     *,
-    limit_profile: LimitProfile = DESKTOP_V1,
+    limit_profile: LimitProfile | None = None,
 ) -> PreflightReport:
     """Run every preflight check over a manifest and its source bytes.
 
@@ -331,7 +343,7 @@ def preflight_asset(
     values are hashed in memory. Source failures raise :class:`PreflightError`
     with a stable category and no underlying detail.
     """
-    if not isinstance(limit_profile, LimitProfile):
+    if limit_profile is not None and not isinstance(limit_profile, LimitProfile):
         raise TypeError("limit_profile must be a LimitProfile")
     if not isinstance(manifest, (AssetManifest, Mapping)):
         raise TypeError("manifest must be a mapping or AssetManifest")
@@ -348,8 +360,15 @@ def preflight_asset(
         )
     except AssetManifestError:
         return _abstain(
-            [PreflightFinding("manifest", "malformed_manifest")], limit_profile
+            [PreflightFinding("manifest", "malformed_manifest")],
+            limit_profile or DESKTOP_V1,
         )
+
+    modality = _modality_for(validated)
+    if limit_profile is None:
+        limit_profile = DESKTOP_V1_1 if modality == "waveform" else DESKTOP_V1
+    if modality == "waveform" and limit_profile.version != "1.1":
+        raise PreflightError("waveform_limit_profile_required")
 
     reader = _Source(
         source,
@@ -380,7 +399,7 @@ def _run_checks(
         media_type_status = MediaTypeStatus.MISMATCH
         findings.append(PreflightFinding("media_type", "mismatch"))
 
-    modality = _modality_for(manifest.media_type)
+    modality = _modality_for(manifest)
     metadata_profile = None
     byte_size_passed = False
     if modality is None:
@@ -475,7 +494,12 @@ def _abstain(
     )
 
 
-def _modality_for(media_type: str) -> str | None:
+def _modality_for(manifest: AssetManifest) -> str | None:
+    media_type = manifest.media_type
+    if media_type in WAVEFORM_MEDIA_TYPES or manifest.dicom_subprofile == "waveform":
+        return "waveform"
+    if manifest.dicom_subprofile == "non_pixel":
+        return "dicom_non_pixel"
     if media_type == "application/pdf":
         return "pdf"
     if media_type == "application/dicom":

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, Final
 
 from .asset_manifest import (
@@ -16,19 +17,29 @@ from .asset_manifest import (
 __all__ = [
     "AUDIO_V1",
     "DICOM_V1",
+    "DICOM_NON_PIXEL_V1",
     "IMAGE_V1",
     "PDF_V1",
+    "WAVEFORM_V1",
     "ManifestProfile",
     "ManifestProfileError",
     "ValidationFinding",
     "validate_manifest_metadata",
 ]
 
-_MANIFEST_FIELDS: Final = frozenset(
+_LEGACY_FIELDS: Final = frozenset(
     {"pages", "width", "height", "frames", "duration_seconds"}
 )
-_INTEGER_FIELDS: Final = frozenset({"pages", "width", "height", "frames"})
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_WAVEFORM_FIELDS: Final = frozenset(
+    {"channel_count", "sample_rate_hz", "samples_per_channel"}
+)
+_MANIFEST_FIELDS: Final = _LEGACY_FIELDS | _WAVEFORM_FIELDS
+_INTEGER_FIELDS: Final = frozenset(
+    {"pages", "width", "height", "frames", "channel_count", "samples_per_channel"}
+)
+_MODALITIES: Final = frozenset(
+    {"image", "pdf", "dicom", "audio", "waveform", "dicom_non_pixel"}
+)
 _REASON_CODES: Final = frozenset(
     {
         "inapplicable_present",
@@ -38,6 +49,7 @@ _REASON_CODES: Final = frozenset(
         "missing_required",
         "non_finite_numeric",
         "out_of_range",
+        "sample_count_mismatch",
     }
 )
 
@@ -73,7 +85,9 @@ class ManifestProfile:
     def __post_init__(self) -> None:
         if type(self.modality) is not str or self.modality not in _MODALITIES:
             raise ManifestProfileError("profile modality is unsupported")
-        if type(self.version) is not str or self.version != "1.0":
+        if type(self.version) is not str or self.version not in {"1.0", "1.1"}:
+            raise ManifestProfileError("profile version is unsupported")
+        if self.modality in {"waveform", "dicom_non_pixel"} and self.version != "1.1":
             raise ManifestProfileError("profile version is unsupported")
         groups = (
             self.required_fields,
@@ -85,7 +99,8 @@ class ManifestProfile:
         declared = (
             self.required_fields | self.optional_fields | self.inapplicable_fields
         )
-        if declared != _MANIFEST_FIELDS:
+        expected = _LEGACY_FIELDS if self.version == "1.0" else _MANIFEST_FIELDS
+        if declared != expected:
             raise ManifestProfileError("profile must classify every manifest field")
         pairs = ((groups[0], groups[1]), (groups[0], groups[2]), (groups[1], groups[2]))
         if any(left & right for left, right in pairs):
@@ -120,6 +135,19 @@ AUDIO_V1 = ManifestProfile(
     inapplicable_fields=frozenset({"width", "height", "pages", "frames"}),
 )
 
+WAVEFORM_V1 = ManifestProfile(
+    modality="waveform",
+    version="1.1",
+    required_fields=_WAVEFORM_FIELDS | {"duration_seconds"},
+    inapplicable_fields=frozenset({"pages", "width", "height", "frames"}),
+)
+
+DICOM_NON_PIXEL_V1 = ManifestProfile(
+    modality="dicom_non_pixel",
+    version="1.1",
+    inapplicable_fields=_MANIFEST_FIELDS,
+)
+
 
 def validate_manifest_metadata(
     profile: ManifestProfile, manifest: Mapping[str, Any] | AssetManifest
@@ -128,7 +156,7 @@ def validate_manifest_metadata(
 
     The mapping is copied before validation. Unknown structural manifest fields
     are intentionally left to the asset-manifest validator; this function reads
-    only the five fixed, metadata-only profile fields.
+    only fixed, metadata-only profile fields.
     """
 
     if not isinstance(profile, ManifestProfile):
@@ -144,11 +172,11 @@ def validate_manifest_metadata(
             raise ManifestProfileError("manifest metadata could not be read") from None
 
     findings: list[ValidationFinding] = []
-    declared_fields = sorted(
-        profile.required_fields | profile.optional_fields | profile.inapplicable_fields
-    )
+    declared_fields = sorted(_MANIFEST_FIELDS)
     for field_name in declared_fields:
-        if field_name in profile.inapplicable_fields:
+        if field_name in profile.inapplicable_fields or (
+            profile.version == "1.0" and field_name in _WAVEFORM_FIELDS
+        ):
             if field_name in fields:
                 findings.append(ValidationFinding(field_name, "inapplicable_present"))
             continue
@@ -159,6 +187,21 @@ def validate_manifest_metadata(
         reason = _numeric_reason(field_name, fields[field_name])
         if reason is not None:
             findings.append(ValidationFinding(field_name, reason))
+    if (
+        profile.modality == "waveform"
+        and not findings
+        and {"duration_seconds", "sample_rate_hz", "samples_per_channel"}
+        <= fields.keys()
+    ):
+        expected_samples = Fraction(fields["duration_seconds"]) * Fraction(
+            fields["sample_rate_hz"]
+        )
+        # One sample of tolerance covers fractional endpoint conventions;
+        # larger differences cannot silently understate the declared workload.
+        if abs(Fraction(fields["samples_per_channel"]) - expected_samples) > 1:
+            findings.append(
+                ValidationFinding("samples_per_channel", "sample_count_mismatch")
+            )
     return findings
 
 
@@ -177,7 +220,7 @@ def _numeric_reason(field_name: str, value: Any) -> str | None:
         return None
     if type(value) not in (int, float):
         return "invalid_type"
-    if not math.isfinite(value):
+    if type(value) is float and not math.isfinite(value):
         return "non_finite_numeric"
     if value == 0:
         return "invalid_zero"

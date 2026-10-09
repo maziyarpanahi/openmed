@@ -364,7 +364,11 @@ def test_findings_cannot_be_constructed_outside_the_allowlists():
         LimitFinding("pages", "insufficient_metadata", 1, 5)
     with pytest.raises(AssetLimitError):
         LimitFinding("pages", "limit_exceeded", 1, True)
-    assert set(LIMIT_REASON_CODES) == {"limit_exceeded", "insufficient_metadata"}
+    assert set(LIMIT_REASON_CODES) == {
+        "limit_exceeded",
+        "insufficient_metadata",
+        "arithmetic_saturated",
+    }
 
 
 # --- checked arithmetic and content-free errors -----------------------------------

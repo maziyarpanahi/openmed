@@ -51,6 +51,10 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         return "application/dicom"
     if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WAVE":
         return "audio/wav"
+    # EDF/EDF+ fixed version marker; this is identification, not validation
+    # of recording headers, signal layout, or file conformance.
+    if len(bounded) >= 132 and bounded.startswith(b"0       "):
+        return "application/edf"
     return None
 
 

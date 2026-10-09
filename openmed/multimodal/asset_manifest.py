@@ -18,6 +18,7 @@ MANIFEST_VERSION = 1
 MAX_MANIFEST_BYTE_SIZE = (1 << 63) - 1
 MAX_MANIFEST_COUNT = (1 << 31) - 1
 MAX_MANIFEST_DURATION_SECONDS = float(MAX_MANIFEST_COUNT)
+WAVEFORM_MEDIA_TYPES = frozenset({"application/edf", "application/wfdb"})
 
 _ASSET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -35,6 +36,10 @@ _ALLOWED_FIELDS = {
     "height",
     "frames",
     "duration_seconds",
+    "channel_count",
+    "sample_rate_hz",
+    "samples_per_channel",
+    "dicom_subprofile",
 }
 
 _ORDERED_FIELDS = (
@@ -48,6 +53,10 @@ _ORDERED_FIELDS = (
     "height",
     "frames",
     "duration_seconds",
+    "channel_count",
+    "sample_rate_hz",
+    "samples_per_channel",
+    "dicom_subprofile",
 )
 
 _SUPPORTED_EXACT_MEDIA_TYPES = {
@@ -76,6 +85,10 @@ class AssetManifest:
     height: int | None = None
     frames: int | None = None
     duration_seconds: float | None = None
+    channel_count: int | None = None
+    sample_rate_hz: float | None = None
+    samples_per_channel: int | None = None
+    dicom_subprofile: str | None = None
 
     def __post_init__(self) -> None:
         _validate_version(self.version)
@@ -85,7 +98,14 @@ class AssetManifest:
         _validate_positive_int(
             "byte_size", self.byte_size, maximum=MAX_MANIFEST_BYTE_SIZE
         )
-        for field_name in ("pages", "width", "height", "frames"):
+        for field_name in (
+            "pages",
+            "width",
+            "height",
+            "frames",
+            "channel_count",
+            "samples_per_channel",
+        ):
             value = getattr(self, field_name)
             if value is not None:
                 _validate_positive_int(field_name, value, maximum=MAX_MANIFEST_COUNT)
@@ -95,6 +115,19 @@ class AssetManifest:
                 self.duration_seconds,
                 maximum=MAX_MANIFEST_DURATION_SECONDS,
             )
+        if self.sample_rate_hz is not None:
+            _validate_positive_number(
+                "sample_rate_hz",
+                self.sample_rate_hz,
+                maximum=MAX_MANIFEST_COUNT,
+            )
+        if self.dicom_subprofile is not None:
+            if (
+                type(self.dicom_subprofile) is not str
+                or self.dicom_subprofile not in {"waveform", "non_pixel"}
+                or self.media_type != "application/dicom"
+            ):
+                raise AssetManifestError("dicom_subprofile is unsupported")
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "AssetManifest":
@@ -127,6 +160,10 @@ class AssetManifest:
             height=fields.get("height"),
             frames=fields.get("frames"),
             duration_seconds=fields.get("duration_seconds"),
+            channel_count=fields.get("channel_count"),
+            sample_rate_hz=fields.get("sample_rate_hz"),
+            samples_per_channel=fields.get("samples_per_channel"),
+            dicom_subprofile=fields.get("dicom_subprofile"),
         )
 
     @classmethod
@@ -178,7 +215,7 @@ def _validate_media_type(value: Any) -> None:
         raise AssetManifestError("media_type has an invalid format")
     if _MEDIA_TYPE_RE.fullmatch(media_type) is None:
         raise AssetManifestError("media_type has an invalid format")
-    if media_type in _SUPPORTED_EXACT_MEDIA_TYPES:
+    if media_type in _SUPPORTED_EXACT_MEDIA_TYPES or media_type in WAVEFORM_MEDIA_TYPES:
         return
     if media_type.startswith(_SUPPORTED_MEDIA_PREFIXES):
         return
@@ -195,7 +232,7 @@ def _validate_positive_number(field_name: str, value: Any, *, maximum: float) ->
         raise AssetManifestError(
             f"{field_name} must be a bounded positive finite number"
         )
-    if not math.isfinite(value) or not 0 < value <= maximum:
+    if not 0 < value <= maximum or not math.isfinite(value):
         raise AssetManifestError(
             f"{field_name} must be a bounded positive finite number"
         )

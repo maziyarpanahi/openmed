@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Waveform manifest metadata and v1.1 profiles for EDF-, WFDB- and DICOM-ECG-shaped
+  inputs, explicit non-pixel DICOM admission, bounded waveform ceilings and
+  saturating decoded-memory plans. Legacy v1 serialization stays unchanged;
+  unknown WFDB source types still abstain. Resource admission is non-diagnostic
+  and does not qualify readers or clinical use (#3814).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

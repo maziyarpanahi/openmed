@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from fractions import Fraction
 from typing import Any, Final
 
 from .asset_manifest import (
@@ -29,17 +30,21 @@ from .asset_manifest import (
 
 __all__ = [
     "DESKTOP_V1",
+    "DESKTOP_V1_1",
     "LIMIT_FIELDS",
     "LIMIT_REASON_CODES",
     "MAX_PIXEL_PRODUCT",
     "MOBILE_V1",
+    "MOBILE_V1_1",
     "AssetLimitError",
     "LimitFinding",
     "LimitProfile",
     "evaluate_asset_limits",
 ]
 
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_MODALITIES: Final = frozenset(
+    {"image", "pdf", "dicom", "audio", "waveform", "dicom_non_pixel"}
+)
 
 # The documented, deterministic order of findings.
 LIMIT_FIELDS: Final = (
@@ -49,12 +54,22 @@ LIMIT_FIELDS: Final = (
     "total_pixels",
     "frames",
     "duration_seconds",
+    "channel_count",
+    "sample_rate_hz",
+    "samples_per_channel",
+    "total_samples",
 )
 _FIELD_ORDER: Final = {name: index for index, name in enumerate(LIMIT_FIELDS)}
 _FIELD_SET: Final = frozenset(LIMIT_FIELDS)
 
-LIMIT_REASON_CODES: Final = frozenset({"limit_exceeded", "insufficient_metadata"})
-_REASON_ORDER: Final = {"limit_exceeded": 0, "insufficient_metadata": 1}
+LIMIT_REASON_CODES: Final = frozenset(
+    {"limit_exceeded", "insufficient_metadata", "arithmetic_saturated"}
+)
+_REASON_ORDER: Final = {
+    "limit_exceeded": 0,
+    "insufficient_metadata": 1,
+    "arithmetic_saturated": 2,
+}
 
 # Which rules a modality can express. A rule that is applicable but whose
 # inputs are absent yields ``insufficient_metadata``; a rule that is not
@@ -65,9 +80,30 @@ _APPLICABLE_RULES: Final = {
     "pdf": frozenset({"byte_size", "pages", "pixels", "total_pixels"}),
     "dicom": frozenset({"byte_size", "pixels", "total_pixels", "frames"}),
     "audio": frozenset({"byte_size", "duration_seconds"}),
+    "waveform": frozenset(
+        {
+            "byte_size",
+            "duration_seconds",
+            "channel_count",
+            "sample_rate_hz",
+            "samples_per_channel",
+            "total_samples",
+        }
+    ),
+    "dicom_non_pixel": frozenset({"byte_size"}),
 }
 
-_INTEGER_INPUTS: Final = frozenset({"byte_size", "pages", "width", "height", "frames"})
+_INTEGER_INPUTS: Final = frozenset(
+    {
+        "byte_size",
+        "pages",
+        "width",
+        "height",
+        "frames",
+        "channel_count",
+        "samples_per_channel",
+    }
+)
 _MANIFEST_INPUTS: Final = (
     "byte_size",
     "pages",
@@ -75,6 +111,9 @@ _MANIFEST_INPUTS: Final = (
     "height",
     "frames",
     "duration_seconds",
+    "channel_count",
+    "sample_rate_hz",
+    "samples_per_channel",
 )
 
 # Checked arithmetic bound: three bounded counts multiplied. Python integers do
@@ -161,6 +200,10 @@ class LimitProfile:
     max_total_pixels: int
     max_frames: int
     max_duration_seconds: int | float
+    max_channel_count: int | None = None
+    max_sample_rate_hz: int | float | None = None
+    max_samples_per_channel: int | None = None
+    max_total_samples: int | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -172,7 +215,7 @@ class LimitProfile:
             or self.name != self.name.lower()
         ):
             raise AssetLimitError("profile name is invalid")
-        if type(self.version) is not str or self.version != "1.0":
+        if type(self.version) is not str or self.version not in {"1.0", "1.1"}:
             raise AssetLimitError("profile version is unsupported")
         _require_bounded_int(
             self.max_byte_size, "max_byte_size", MAX_MANIFEST_BYTE_SIZE
@@ -188,12 +231,39 @@ class LimitProfile:
             raise AssetLimitError("max_duration_seconds is out of range")
         if self.max_pixels > self.max_total_pixels:
             raise AssetLimitError("max_pixels cannot exceed max_total_pixels")
+        waveform_limits = (
+            self.max_channel_count,
+            self.max_sample_rate_hz,
+            self.max_samples_per_channel,
+            self.max_total_samples,
+        )
+        if self.version == "1.0":
+            if any(value is not None for value in waveform_limits):
+                raise AssetLimitError("waveform limits require profile version 1.1")
+        else:
+            _require_bounded_int(
+                self.max_channel_count, "max_channel_count", MAX_MANIFEST_COUNT
+            )
+            _require_positive_number(self.max_sample_rate_hz, "max_sample_rate_hz")
+            if self.max_sample_rate_hz > MAX_MANIFEST_COUNT:
+                raise AssetLimitError("max_sample_rate_hz is out of range")
+            _require_bounded_int(
+                self.max_samples_per_channel,
+                "max_samples_per_channel",
+                MAX_MANIFEST_COUNT,
+            )
+            _require_bounded_int(
+                self.max_total_samples, "max_total_samples", MAX_MANIFEST_BYTE_SIZE
+            )
 
     def limit_for(self, field_name: str) -> int | float:
         """Return the ceiling that applies to a limit field."""
         if type(field_name) is not str or field_name not in _FIELD_SET:
             raise AssetLimitError("limit field_name is unsupported")
-        return getattr(self, _LIMIT_ATTRIBUTES[field_name])
+        value = getattr(self, _LIMIT_ATTRIBUTES[field_name])
+        if value is None:
+            raise AssetLimitError("waveform limits require profile version 1.1")
+        return value
 
     def with_limits(self, **overrides: Any) -> LimitProfile:
         """Return a new, fully re-validated profile with some ceilings replaced."""
@@ -204,7 +274,7 @@ class LimitProfile:
 
     def to_dict(self) -> dict[str, Any]:
         """Return the profile as a JSON-ready mapping with a fixed key order."""
-        return {
+        data = {
             "name": self.name,
             "version": self.version,
             "max_byte_size": self.max_byte_size,
@@ -214,6 +284,16 @@ class LimitProfile:
             "max_frames": self.max_frames,
             "max_duration_seconds": self.max_duration_seconds,
         }
+        if self.version == "1.1":
+            data.update(
+                {
+                    "max_channel_count": self.max_channel_count,
+                    "max_sample_rate_hz": self.max_sample_rate_hz,
+                    "max_samples_per_channel": self.max_samples_per_channel,
+                    "max_total_samples": self.max_total_samples,
+                }
+            )
+        return data
 
 
 _LIMIT_ATTRIBUTES: Final = {
@@ -223,6 +303,10 @@ _LIMIT_ATTRIBUTES: Final = {
     "total_pixels": "max_total_pixels",
     "frames": "max_frames",
     "duration_seconds": "max_duration_seconds",
+    "channel_count": "max_channel_count",
+    "sample_rate_hz": "max_sample_rate_hz",
+    "samples_per_channel": "max_samples_per_channel",
+    "total_samples": "max_total_samples",
 }
 
 # Initial admission-policy defaults. These are explicit policy choices, not
@@ -249,6 +333,24 @@ DESKTOP_V1 = LimitProfile(
     max_total_pixels=100_000_000,
     max_frames=1_024,
     max_duration_seconds=1_800,
+)
+
+# Versioned, unbenchmarked policy ceilings, not device qualification.
+MOBILE_V1_1 = replace(
+    MOBILE_V1,
+    version="1.1",
+    max_channel_count=32,
+    max_sample_rate_hz=10_000,
+    max_samples_per_channel=3_000_000,
+    max_total_samples=16_000_000,
+)
+DESKTOP_V1_1 = replace(
+    DESKTOP_V1,
+    version="1.1",
+    max_channel_count=256,
+    max_sample_rate_hz=100_000,
+    max_samples_per_channel=180_000_000,
+    max_total_samples=64_000_000,
 )
 
 
@@ -298,11 +400,50 @@ def evaluate_asset_limits(
         check("frames", inputs.get("frames"))
     if "duration_seconds" in applicable:
         check("duration_seconds", inputs.get("duration_seconds"))
+    for field_name in ("channel_count", "sample_rate_hz", "samples_per_channel"):
+        if field_name in applicable:
+            check(field_name, inputs.get(field_name))
+    if "total_samples" in applicable:
+        total_samples, saturated = _total_samples(inputs)
+        if saturated:
+            findings.append(
+                LimitFinding(
+                    "total_samples",
+                    "arithmetic_saturated",
+                    profile.limit_for("total_samples"),
+                    total_samples,
+                )
+            )
+        else:
+            check("total_samples", total_samples)
 
     findings.sort(
         key=lambda f: (_FIELD_ORDER[f.field_name], _REASON_ORDER[f.reason_code])
     )
     return findings
+
+
+def _total_samples(inputs: Mapping[str, Any]) -> tuple[int | None, bool]:
+    required = (
+        "channel_count",
+        "samples_per_channel",
+        "duration_seconds",
+        "sample_rate_hz",
+    )
+    if any(name not in inputs for name in required):
+        return None, False
+    # Exact rational arithmetic avoids float overflow/rounding. Charge the
+    # larger of the stored sample count and duration/rate-derived count.
+    per_channel = max(
+        inputs["samples_per_channel"],
+        math.ceil(
+            Fraction(inputs["duration_seconds"]) * Fraction(inputs["sample_rate_hz"])
+        ),
+    )
+    channels = inputs["channel_count"]
+    if per_channel > MAX_MANIFEST_BYTE_SIZE // channels:
+        return MAX_MANIFEST_BYTE_SIZE, True
+    return per_channel * channels, False
 
 
 def _pixels(inputs: Mapping[str, Any], modality: str, *, total: bool) -> int | None:
