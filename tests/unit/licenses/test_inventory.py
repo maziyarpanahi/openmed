@@ -48,7 +48,7 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 111
+    assert len(entries) == 112
     assert len(records) == len(entries)
     assert {
         record.name
@@ -57,6 +57,10 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     } == {"extract-msg"}
     assert not inventory.gate_failures(records)
     reviewed = {record.name: record for record in records}
+    assert (
+        reviewed["jsonschema"].entry.scope,
+        reviewed["jsonschema"].license_expression,
+    ) == ("default", "MIT")
     assert {
         name: (reviewed[name].entry.scope, reviewed[name].license_expression)
         for name in ("banks", "datasets", "h2", "oauthlib")

@@ -63,6 +63,7 @@ a dependency also declared in another extra.
 | `huggingface-hub` | `coreml, hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `indic-nlp-library` | `indic` | `MIT` |
 | `jieba` | `default, zh` | `MIT` |
+| `jsonschema` | `default` | `MIT` |
 | `kopf` | `operator` | `MIT` |
 | `langchain-core` | `agents, langchain` | `MIT` |
 | `langgraph` | `agents, langgraph` | `MIT` |

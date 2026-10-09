@@ -62,6 +62,7 @@ from ._output import (
     wants_json,
 )
 from .active_learning import add_active_learning_command
+from .agent_self_check import add_agent_self_check_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
 from .benchmark import (
@@ -576,6 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    add_agent_self_check_command(subparsers)
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_batch_run_command(subparsers)

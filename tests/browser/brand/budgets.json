@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "artifact": {
-    "maximum_total_bytes": 92448657,
-    "maximum_unique_payload_bytes": 92084144,
+    "maximum_total_bytes": 93064646,
+    "maximum_unique_payload_bytes": 92700133,
     "maximum_duplicate_payload_bytes": 458752,
     "maximum_source_map_files": 0
   },
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The complete governance stack includes the actual schema and golden run-summary prerequisite pages plus the offline self-check guide. Its staged artifact measures 92949160 total bytes and 92584647 unique bytes; aggregate ceilings retain the existing 115486-byte allowance. Search measures 4418928 bytes within its unchanged ceiling; route, per-file, duplicate, source-map, and page-metric limits are unchanged.",
     "The reviewed synthetic brief walkthrough with native integration measures 92333171 total bytes, 91968658 unique bytes, and 4436916 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; all route, individual non-JSON, duplicate and source-map limits are unchanged.",
     "The reviewed Swift brief guide and summary-gate build measures 92112754 total bytes, 91748241 unique bytes, and 4433661 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; all route, individual non-JSON, duplicate and source-map limits are unchanged.",
     "The reviewed clinical brief guide and navigation build measures 92092293 total bytes, 91727780 unique bytes, and 4427501 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; route, individual non-JSON, duplicate and source-map limits are unchanged.",
