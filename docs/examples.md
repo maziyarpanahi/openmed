@@ -105,6 +105,7 @@ content-security policy blocks the optional inline styling.
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
 | `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
 | `examples/v3_golden_journey.py` | Executes the offline five-source v3 conformance Journey and prints a compact receipt derived from real library contracts. |
+| [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) | Runs explicit development NLI and a synthetic calibration double, then binds diagnosis/treatment and procedure/indication candidates to evidence and human-review queue bands. |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
@@ -143,6 +144,35 @@ provides a rendered no-download tour of both flows.
 
 For the full coverage map, see
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
+
+## Synthetic NLI and guarded relations
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_nli_relations
+```
+
+The script accepts no external input or arguments and loads no model. It calls
+`verify()` with the explicit **development-only heuristic** and an injected
+**synthetic calibration double** using authored probabilities and the public
+selective NLI gate. Neither is a qualified clinical model or empirical
+calibration result. The standalone `review_required` flag denotes abstention;
+a false flag or heuristic neutral label does not authorize clinical action.
+
+It generates diagnosis/treatment and procedure/indication candidates from
+explicit local cue language, binds endpoint/linking evidence with an uncertain
+assertion state, and assigns human-review queue bands. Candidate rule scores
+are not calibrated clinical probabilities. Review bands do not infer clinical
+urgency, treatment appropriateness or confirmation.
+
+Printed JSONL contains only controlled labels, scores, flags, offsets, evidence
+digests and priorities. It omits premise, claim, note and raw document identifiers.
+Hashes support correlation, not anonymization or authorization. The fixed
+demonstration requires human review and makes no clinical-validation claim.
+See [NLI verification](clinical/nli-verification.md),
+[relation evidence binding](clinical/relation-evidence-binding.md) and
+[review priority](clinical/relation-review-priority.md).
 
 ## v1.7 multimodal, interop, and browser recipes
 

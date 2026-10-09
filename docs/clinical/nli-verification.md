@@ -1,5 +1,8 @@
 # Clinical NLI verification
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+to inspect development verdicts, an injected calibration double and review flags.
+
 OpenMed exposes a small, backend-neutral natural-language-inference (NLI)
 stage for checking whether a generated or grounded claim is supported by a
 source span:
