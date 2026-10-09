@@ -1,0 +1,33 @@
+{
+  "abstention_records": [
+    "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"provider_unavailable\"}",
+    "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"resource_limit\"}",
+    "{\"schema_version\":1,\"stage\":\"preflight\",\"reason\":\"unsupported_media\"}",
+    "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"low_quality\"}",
+    "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"malformed_media\"}",
+    "{\"schema_version\":1,\"stage\":\"decode\",\"reason\":\"resource_limit\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"low_quality\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"phi_uncertainty\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"provider_unavailable\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"resource_limit\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"speaker_uncertainty\"}",
+    "{\"schema_version\":1,\"stage\":\"inference\",\"reason\":\"temporal_instability\"}",
+    "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"low_quality\"}",
+    "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"phi_uncertainty\"}",
+    "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"resource_limit\"}",
+    "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"speaker_uncertainty\"}",
+    "{\"schema_version\":1,\"stage\":\"post_process\",\"reason\":\"temporal_instability\"}"
+  ],
+  "provider_results": [
+    "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"success\",\"output_digest\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"unsupported_media\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"malformed_media\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"resource_limit\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"low_quality\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"phi_uncertainty\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"speaker_uncertainty\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":\"temporal_instability\",\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"abstention\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"provider_unavailable\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}",
+    "{\"abstention_code\":null,\"count_metadata\":{},\"duration_ms\":0.0,\"input_digest\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"model_id\":\"synthetic-model\",\"outcome\":\"validation_failure\",\"output_digest\":null,\"provider_id\":\"synthetic-provider\",\"schema_version\":\"openmed.multimodal.provider_result.v1\"}"
+  ]
+}

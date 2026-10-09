@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shared consent, capture interruption, language and policy abstention codes with
+  strict stage gates and code-specific v2 wire versions. Legacy abstention and
+  provider-result records retain byte-identical v1 serialization (#3834).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

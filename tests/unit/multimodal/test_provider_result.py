@@ -354,7 +354,8 @@ def test_schema_version_is_exact_and_errors_do_not_echo() -> None:
     with pytest.raises(ProviderResultError) as error:
         _result(schema_version=sentinel)
     assert sentinel not in str(error.value)
-    assert _result().schema_version == PROVIDER_RESULT_SCHEMA_VERSION
+    assert PROVIDER_RESULT_SCHEMA_VERSION == "openmed.multimodal.provider_result.v2"
+    assert _result().schema_version == "openmed.multimodal.provider_result.v1"
 
 
 def test_input_mapping_and_original_counts_are_not_mutated() -> None:
@@ -412,3 +413,71 @@ def test_malformed_json_does_not_retain_source_content():
         ProviderResultEnvelope.from_json('{"synthetic-private-note":')
     assert caught.value.__context__ is None
     assert caught.value.__cause__ is None
+
+
+NEW_CODES = (
+    "consent_unavailable",
+    "consent_withdrawn",
+    "capture_interrupted",
+    "language_unsupported",
+    "language_uncertain",
+    "policy_refused",
+)
+
+
+@pytest.mark.parametrize("code", list(ProviderAbstentionCode))
+def test_every_code_round_trips_with_its_required_version(code) -> None:
+    result = _result(outcome="abstention", output_digest=None, abstention_code=code)
+    version = 2 if code.value in NEW_CODES else 1
+    assert result.schema_version == f"openmed.multimodal.provider_result.v{version}"
+    assert (
+        ProviderResultEnvelope.from_json(result.to_json()).to_json() == result.to_json()
+    )
+    assert result.abstention_code.value == code.value
+
+
+@pytest.mark.parametrize("code", list(ProviderAbstentionCode))
+@pytest.mark.parametrize(
+    "version",
+    [
+        None,
+        True,
+        1,
+        "openmed.multimodal.provider_result.v1",
+        "openmed.multimodal.provider_result.v2",
+    ],
+)
+def test_provider_wire_versions_must_match_code(code, version) -> None:
+    result = _result(outcome="abstention", output_digest=None, abstention_code=code)
+    payload = result.to_dict() | {"schema_version": version}
+    if type(version) is str and version == result.schema_version:
+        assert ProviderResultEnvelope.from_dict(payload) == result
+    else:
+        with pytest.raises(ProviderResultError, match="schema is unsupported"):
+            ProviderResultEnvelope.from_dict(payload)
+
+
+@pytest.mark.parametrize("code", NEW_CODES)
+@pytest.mark.parametrize(
+    "outcome", ["success", "provider_unavailable", "validation_failure"]
+)
+def test_new_codes_require_abstention_outcome(code, outcome) -> None:
+    with pytest.raises(ProviderResultError, match="abstention code is invalid"):
+        _result(
+            outcome=outcome,
+            output_digest=OUTPUT_DIGEST if outcome == "success" else None,
+            abstention_code=code,
+        )
+
+
+@pytest.mark.parametrize("code", NEW_CODES)
+def test_new_provider_codes_reject_free_text(code) -> None:
+    payload = _result(
+        outcome="abstention", output_digest=None, abstention_code=code
+    ).to_dict()
+    for field in ("message", "consent", "language", "transcript"):
+        with pytest.raises(ProviderResultError) as caught:
+            ProviderResultEnvelope.from_dict(
+                payload | {field: "SYNTHETIC_PRIVATE_SENTINEL"}
+            )
+        assert "SYNTHETIC_PRIVATE_SENTINEL" not in str(caught.value)
