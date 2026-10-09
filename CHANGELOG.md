@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
+  separate rhythm and representative-beat signals, withheld identifying
+  metadata, controlled rejection codes and mandatory review notices.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
