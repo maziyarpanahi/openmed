@@ -132,6 +132,94 @@ It contains no fact values, source text, vault material, credentials, reviewer
 identity, or direct identifiers. `mark_registry_case_exported` records the
 exact export-manifest digest on the case event history.
 
+## Project a protected NAACCR XML file
+
+`write_naaccr_xml` projects cases in `export_ready` using the existing export
+authorization and envelope. It does not advance case state or submit records.
+Supply local UTF-8 dictionary bytes to `parse_naaccr_dictionary`, an explicit
+field map and a trusted local Journey fact resolver. OpenMed never retrieves the
+dictionary URI and bundles no NAACCR dictionary, value table or edits program.
+
+```python
+from openmed.structured.registry import (
+    NAACCRFieldMapping,
+    parse_naaccr_dictionary,
+    write_naaccr_xml,
+)
+
+# Caller-owned, access-controlled inputs from the existing registry workflow.
+dictionary = parse_naaccr_dictionary(dictionary_bytes)
+report = write_naaccr_xml(
+    cases,
+    version,
+    authorization=export_authorization,
+    export_envelope=export_envelope,
+    dictionary=dictionary,
+    field_map=(NAACCRFieldMapping("condition", "callerCondition", ("code",)),),
+    resolver=resolve_local_fact,  # (case, field_id, opaque_fact_id) -> ClinicalFact
+    output_path=protected_output_path,  # New file; never an existing file or stdout.
+    patient_key_item="callerPatientKey",
+    patient_key_secret=caller_hmac_key,  # At least 32 bytes; never persisted here.
+)
+safe_receipt = report.to_dict()
+```
+
+The item identifiers in this example are illustrative caller metadata, not
+standard NAACCR items. The dictionary must declare the reserved patient-key item
+at `Patient` level and every mapped item at `NaaccrData`, `Patient` or `Tumor`
+level. A static tuple path selects a scalar inside the complete bound Journey
+value. No coding conversion, padding, trimming or clinical code inference occurs.
+
+The projector rebuilds existing contracts, checks the exact approved policy and
+case envelope, then verifies each resolved fact's identifier, subject, type,
+status, complete evidence set, value digest and derivation digest. A stale or
+unready case refuses the entire batch before resolving values or creating a file.
+Unknown, conflicting, missing, unsupported and unmapped fields produce controlled
+losses and are omitted. Missing or substituted facts are also omitted. Distinct
+values for a shared patient-level or root-level item are omitted for all sources;
+the projector never chooses one. A report with losses can describe a partial file.
+
+Declared `digits`, `alpha` and `alphanumeric` types require exact length and ASCII
+characters. `numeric` accepts unsigned decimal scalars without separators or
+exponents. `date` accepts valid compact year/month/day precision within 1800–2099.
+`dateTime` requires XML specification 1.8 and accepts FHIR-style partial dates or
+full dates with seconds and a timezone; fractional seconds are refused. `text`
+uses the declared maximum length, counting characters. Empty or all-whitespace
+values, illegal XML characters and type/length violations raise a fixed
+`NAACCRValueError` with a controlled code and input indices before file creation.
+UTF-8 dictionaries must explicitly declare specification version 1.0–1.8;
+the legacy unlimited-text flag is allowed only before 1.6.
+
+Patient keys use a caller-owned, domain-separated HMAC secret and the declared
+item alphabet/width. Collisions within a batch refuse output. Keys and content
+digests are pseudonymous; this is not anonymization. Protect dictionary URIs,
+item identifiers and value-path names as trusted schema metadata without patient
+information. The resolver is trusted local code, not sandboxed code; its standard
+output and error are suppressed, but its side effects are the caller's concern.
+
+All values are validated in memory before writing a new file with mode `0600`.
+Existing files and final-component symlinks are refused. A failed write removes
+only the newly created inode. The receipt contains counts, digests and indexed
+losses, never XML, patient/fact identifiers, output paths or clinical values.
+Identical inputs and HMAC secret produce stable XML bytes without a wall-clock
+timestamp. The XML file itself contains protected clinical values and requires
+the caller's privacy controls.
+
+Operational bounds are 128 cases, 256 fields per case, 512 mappings, 4,096 resolver
+calls, 8,192 dictionary items and 4 MiB each for dictionary/case/XML payloads and
+the aggregate UTF-8 size of selected candidate values.
+Resolved fact JSON is limited to 1 MiB; dictionary nesting is limited to 32 levels.
+Patient-key widths are capped at 128 for fixed-width types and 64 for text/numeric
+types. Dictionary URIs accept bounded HTTP(S) or URN schema identifiers without
+credentials, query strings or fragments.
+
+This projection follows the hierarchy and item constraints described in the
+[NAACCR XML Data Exchange Standard 1.8](https://www.naaccr.org/wp-content/uploads/2024/05/Data-Exchange-Standards_1.8_20240517.pdf).
+It does not establish full registry conformance, evaluate clinical correctness,
+run external registry edits or grant submission authority. Run the appropriate
+caller-owned registry validation and edits after projection; receipts explicitly
+retain `edits_validated=False` and `submitted=False`.
+
 ## Compatibility and verification
 
 Registry artifacts declare schema version `1.0.0` with `same_major`

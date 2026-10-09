@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Project export-ready clinical registry cases to protected local NAACCR XML
+  files using a caller-supplied dictionary, field map and Journey fact resolver.
+  Verify exact export and fact custody, validate declared types and lengths,
+  report omitted fields, and use opaque patient keys without submitting records
+  or bundling registry dictionaries or edits (#3809).
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
