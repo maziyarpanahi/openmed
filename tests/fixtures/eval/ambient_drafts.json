@@ -1,0 +1,442 @@
+{
+  "synthetic": true,
+  "notice": "Hand-authored synthetic encounters; not clinical validation.",
+  "encounters": [
+    {
+      "case": "clean",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient takes synthetic-med A and denies cough.",
+      "blinded_case_id": "beaf9d669035590371cb6331fe6aae4a0985533a7eeaaf9062a6aec04fe59825",
+      "text_digest": "a68fd7cc169e1f6b48524464caf36bd8207c151c994670c1e610a8de8d33b834",
+      "truth": [
+        {
+          "fact_id": "a246614bc497bb17421f24c31ffaac0d8499b2ce4ce0171906cadb734b623ef6",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "466e99aa2b785aec859fb2b973e8dcf5c657ad9ed4353ac7dc14b21424f5fca0",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "8f99de22dc825f9deef53f124411153eb73bc8e89eed16758968a6a0361349d5",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "a246614bc497bb17421f24c31ffaac0d8499b2ce4ce0171906cadb734b623ef6"
+          ]
+        },
+        {
+          "fact_id": "1cbc075834a3b990e641ed48f2e2c05f6b771d8e11f4e25b5195ed20fb71329e",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": [
+            "466e99aa2b785aec859fb2b973e8dcf5c657ad9ed4353ac7dc14b21424f5fca0"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "omitted_medication",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient denies cough.",
+      "blinded_case_id": "28121fa1a29dcb28527e2b71b80b8992d1f4cd1dede69b868b16245442b44267",
+      "text_digest": "ac9b14d9dc752f224328ff2c6c0ece6a8a0bde11a5e16774e7cfe3a3fdde97e6",
+      "truth": [
+        {
+          "fact_id": "23c3c89303a8f970e764ca009b7c8ce78f97f4512e417fe92d5ac4affb13f2f7",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "ae1c670c7c4b3cd7a37fe60eb78bae4f1e9124c8b4155b0045e13c7b4e0b050d",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "d33be5cd8963a190658cc7a7c0df6922abd9aa4aca66b0b37472456ebc1875c6",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": [
+            "ae1c670c7c4b3cd7a37fe60eb78bae4f1e9124c8b4155b0045e13c7b4e0b050d"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "invented_statement",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient takes synthetic-med A, denies cough, and has a rash.",
+      "blinded_case_id": "61236dc5954b43ee3d1bd4563883b635c0028547c02b931412fd788410a6cdec",
+      "text_digest": "1b656130faa9c10e36f3fe1f9f4aaac9de2766a8d5f614bebe487f0ed8803149",
+      "truth": [
+        {
+          "fact_id": "e4980385442500b4cd925a45c317cc31e4c2a9793fc62881c4b20aa874b783d6",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "5dff995fe33f03fc0842bac9f17e25248770e47f2917432b60159c2c0ec19e99",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "f748e8afd982d9d472cfc886fd0c954038a33857488110bbe41db1df20e0db43",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "e4980385442500b4cd925a45c317cc31e4c2a9793fc62881c4b20aa874b783d6"
+          ]
+        },
+        {
+          "fact_id": "e3d572eaaa7a18e41f7b871bab07e6f1ccf70b0372b95b6ec46b238d3a4ac99f",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": [
+            "5dff995fe33f03fc0842bac9f17e25248770e47f2917432b60159c2c0ec19e99"
+          ]
+        },
+        {
+          "fact_id": "b8030b8b8edffce91e0aeddf5f4c4145450f87f342de6632bb3381b22b2c1406",
+          "proposition": "b3353c088a47830cfb48f8729afd68df0b077d01c24ac6a03650639fc781937a",
+          "section": "subjective",
+          "fact_class": "finding",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        }
+      ]
+    },
+    {
+      "case": "inverted_experiencer",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient takes synthetic-med A. Caregiver denies cough.",
+      "blinded_case_id": "ce004c0056dc78603730600951247958dfe1b837af242bb0c20bf59835db5ea2",
+      "text_digest": "92bf35d066b74e0f6410ead3cb418e3e36a81b960a21cf91e81c4cc57b463fbb",
+      "truth": [
+        {
+          "fact_id": "1e1bc3c7357cebedaff060c326b2a001ea33aa6ab8f7834a56070ebe73c47f54",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "bd48f1549dfcead704bab70cd1854066d98de511b0bd0b29e39f12d01dddceb8",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "5c1d066777eb39434431b59c05e62a69e749145638a10e11600365e1207aa5a5",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "1e1bc3c7357cebedaff060c326b2a001ea33aa6ab8f7834a56070ebe73c47f54"
+          ]
+        },
+        {
+          "fact_id": "adbf98e74348ea45ca130b4543df41dd5234ee249e945bdfa4843cd0ea3b3f51",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "caregiver",
+          "negated": true,
+          "required": true,
+          "citations": [
+            "bd48f1549dfcead704bab70cd1854066d98de511b0bd0b29e39f12d01dddceb8"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "negation_flip",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient takes synthetic-med A and has cough.",
+      "blinded_case_id": "481478f98f16a1b50901b53fd5e40ba9aef0246d8aeca6065029e1202f00048a",
+      "text_digest": "1a18a25fe7fc1d7ce38e57f53145e7491cb5c9d034702d37104635504d28fe9f",
+      "truth": [
+        {
+          "fact_id": "1e0f9a3925b205fcad53861fa6a5dc3d0c796e7aaef8205f4b3a581a04f612d1",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "d67ea29102f97ef5a84aaa3afdaf5bffc79bd5d377e17b4f0569dfe37193c304",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "5ae7a9794dda48837fa8d38ecc30a2307c62d1a77b5b9c7e16e5f798bd81028e",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "1e0f9a3925b205fcad53861fa6a5dc3d0c796e7aaef8205f4b3a581a04f612d1"
+          ]
+        },
+        {
+          "fact_id": "4c55700c38af439fbdb2bc54ecd50eb1db145f5e2133439465e896bbf7f08bff",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "d67ea29102f97ef5a84aaa3afdaf5bffc79bd5d377e17b4f0569dfe37193c304"
+          ]
+        }
+      ]
+    },
+    {
+      "case": "wrong_speaker",
+      "transcript": [
+        {
+          "role": "patient",
+          "text": "I take synthetic-med A. I do not have a cough."
+        },
+        {
+          "role": "clinician",
+          "text": "Thank you; these are synthetic facts."
+        }
+      ],
+      "roles": [
+        "patient",
+        "clinician",
+        "caregiver"
+      ],
+      "draft_text": "Patient takes synthetic-med A. Clinician denies cough.",
+      "blinded_case_id": "fd78be14f8f46780092320ad8faeb886200b46e1e2e09d083209d3c906a50558",
+      "text_digest": "ec47c5d94be0af23c6e5a2d06dc94335b1dc5c305f7184425ae9a63c836e5b27",
+      "truth": [
+        {
+          "fact_id": "ccce1e443a04c533eb0813882999fe532689308970da0850e451c0f04a96e6bb",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": []
+        },
+        {
+          "fact_id": "edb897ffe6a677d5dce793f6b05c9407aa494b56db289f15ae1a655ca4f517eb",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": []
+        }
+      ],
+      "statements": [
+        {
+          "fact_id": "a88ca3d8d3be9008415449f36462cd80b73a0f04afc7a1772370ae956378c036",
+          "proposition": "df6d9d627b81856c8d63da24d0c7420a15cf2a4837f3e52819a04c2743411723",
+          "section": "subjective",
+          "fact_class": "medication",
+          "speaker": "patient",
+          "experiencer": "patient",
+          "negated": false,
+          "required": true,
+          "citations": [
+            "ccce1e443a04c533eb0813882999fe532689308970da0850e451c0f04a96e6bb"
+          ]
+        },
+        {
+          "fact_id": "a1d06fe32e840b7d97c324f4a7927ffb8bf549b8df741d6d29d1c2650d5dd240",
+          "proposition": "446ca54dd71bc866eabf98774f22f957a7b7207d35837e0b288039ecb0f7a49d",
+          "section": "subjective",
+          "fact_class": "symptom",
+          "speaker": "clinician",
+          "experiencer": "patient",
+          "negated": true,
+          "required": true,
+          "citations": [
+            "edb897ffe6a677d5dce793f6b05c9407aa494b56db289f15ae1a655ca4f517eb"
+          ]
+        }
+      ]
+    }
+  ]
+}

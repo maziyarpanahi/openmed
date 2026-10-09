@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add local fixed ambient-draft evaluation with separate omissions, unsupported
+  claims, contradictions, speaker/experiencer attribution and negation rates,
+  conservative small-slice suppression, descriptive confidence intervals and
+  revision-bound blinded review imports. Bundle hand-authored synthetic encounters;
+  no clinical validation or autonomous action is implied (#3822).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
