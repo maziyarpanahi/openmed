@@ -221,6 +221,10 @@ jobs:
       run: |
         uv run ruff format --check .
 
+    - name: Check classified effects and legacy-writer boundaries
+      run: |
+        uv run python scripts/security/check_effect_paths.py --check
+
     - name: Enforce public API backwards-compatibility policy
       run: |
         uv run python scripts/release/check_public_api.py
