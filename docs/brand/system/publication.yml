@@ -394,6 +394,7 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/transcript-accuracy.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
     - clinical/language-matrix.md
