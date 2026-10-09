@@ -1,5 +1,78 @@
 # OpenMedKit (Swift Package)
 
+## Local agent review and receipt evidence
+
+OpenMedKit parses content-free agent metadata with strict, bounded JSON:
+
+| Swift value | Existing Python wire contract |
+| --- | --- |
+| `AgentArtifactReference` | `ArtifactReference`, envelope version `1` |
+| `AgentReviewerHandoff` | `openmed.agent.reviewer_handoff.v1` |
+| `AgentApprovalReceipt` | `openmed.agent.approval_receipt.v1` |
+| `AgentRunEvidence` | `openmed.agent.run_summary.v1` |
+| `AgentOMOPPreview` | `openmed.interop.omop.mutation_batch.v1` |
+| `AgentApprovalEvidenceResult` | `openmed.agent.approval_evidence.v1` |
+
+The handoff and artifact parsers retain Python's optional default version
+fields. Other envelopes require their exact version. Unknown fields, duplicate
+keys (including escaped duplicates), non-finite numbers, numeric booleans,
+fractional integer fields, unsupported versions and malformed identifiers fail
+with fixed `AgentGovernanceError` codes. No rejected values enter diagnostics.
+Receipt/report inputs are bounded to 64 KiB; other inputs to 1 MiB, with a
+depth limit of 16 and a 200,000-node limit. Handoffs have at most 64 unique
+evidence references and whole-second UTC timestamps with exclusive expiry.
+Run summaries use the existing Python count, duration and sorted/unique bounds.
+
+`canonicalJSON()` emits Python-compatible sorted compact ASCII JSON. The OMOP
+parser checks both the preview digest and the batch's ordered row-digest
+commitment. It exposes typed mutation/issue metadata, never staged row values.
+It cannot establish the provenance of a supplied snapshot or row digest. This
+version supports the native OMOP preview and opaque preview artifact references;
+it does not interpret other domain-specific preview envelopes or execute a
+mobile workflow.
+
+A parsed receipt or report is not approval authority. Configure a local custody
+lookup only after the application has authenticated a reviewer and consumed the
+original approval in its own trusted store:
+
+```swift
+// receiptJSON is previously consumed evidence from application-owned custody.
+// localCustody is the application's trusted set of canonical receipt digests.
+let receipt = try AgentApprovalReceipt.parse(receiptJSON)
+let verifier = AgentLocalApprovalEvidenceVerifier(authority: { digest in
+    localCustody.contains(digest) ? .recognized : .unrecognized
+})
+let observation = try verifier.verify(
+    receipt, actionDigest: currentlyReviewedActionDigest,
+    reviewerRole: expectedReviewerRole)
+// observation.reasonCode records a local evidence check for the review UI.
+// observation.authorizesClinicalAction always remains false.
+```
+
+Omitting the lookup returns `unsupported_authority`. An unrecognized digest,
+failed lookup, expired/future receipt, changed action/role, replay, failed clock
+or unavailable replay store remains a typed refusal. Time is checked again
+after custody lookup. Recognized presentations are atomically claimed before
+action/role comparison, so a changed-action presentation is burned and cannot
+be retried under the original action. The default replay store is thread-safe
+and process-local; applications sharing evidence across processes or launches
+must inject an atomic application-owned store. It supplements the original
+durable approval nonce custody and never replaces dispatch authorization.
+
+The Python counterpart is `openmed.agent.approval_evidence`; the strict native
+OMOP projection parser is `openmed.agent.review_previews`. These APIs contain
+no signing, receipt issuance, dispatch callback, EHR connection or cloud
+fallback. Serialized `verified` observations cannot authorize another caller.
+Descriptions contain only controlled codes/counts; explicit canonical JSON
+contains opaque references and digests and should remain in local custody.
+
+Both platforms consume versioned synthetic vectors at
+`tests/fixtures/agent/governance_parity/v1.json`. Python regenerates the receipts
+from test-only signed approval consumption and the other packets from their
+native producers. Native Swift tests compare canonical bytes/digests, strict
+refusals, changed-action/role burns, replay and expiry. These are offline wire
+and local-boundary checks, not clinical validation or a mobile execution claim.
+
 ## Guarded clinical briefs
 
 Maple has a structured `.brief` task. Use `OpenMedMaple.brief(source:
