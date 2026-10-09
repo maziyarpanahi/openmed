@@ -88,3 +88,69 @@ they are separate from the manifest-profile `ValidationFinding` and from the
 coarse abstention reason codes. The preflight report carries the coarse
 `RESOURCE_LIMIT` abstention alongside these detailed findings for exceeded or
 unevaluable limits.
+
+## Admission in Python redaction handlers
+
+`redact_image`, the image and PDF `redact_document` handlers, the PDF rasterizer,
+and `redact_dicom_pixels` now enforce resource admission before pixel decoding.
+They use `MOBILE_V1` by default. Set `asset_limit_profile` on the existing policy
+mapping or object to select `DESKTOP_V1` or a validated `LimitProfile.with_limits`
+override. There is no disable switch:
+
+```python
+from openmed.multimodal import MOBILE_V1, RedactionAdmissionError, redact_image
+
+policy = {"asset_limit_profile": MOBILE_V1.with_limits(max_frames=32)}
+try:
+    result = redact_image(source, policy=policy, models=local_models)
+except RedactionAdmissionError as error:
+    # These fields contain controlled codes and numbers, never source details.
+    finding = (error.reason_code, error.field_name, error.limit, error.observed)
+```
+
+Admission checks the byte ceiling and a bounded media signature first. PNG/JPEG
+geometry uses the existing header readers. PNG animation declarations, JPEG
+multi-picture indexes and classic TIFF directories are counted without decoding
+pixels; secondary JPEG frame geometry is checked too. TIFF strip/tile payloads
+are not read, and identifying tags are never interpreted or returned. Metadata
+reads are capped at 64 KiB,
+and PNG traversal at 4,096 chunk headers. Sparse TIFF directory offsets may
+span the admitted file but remain subject to the cumulative read budget.
+BigTIFF and unknown image signatures fail closed.
+
+PDF admission uses the bounded page-tree reader and its existing object and
+object-stream expansion bounds. Review/rejected geometry (including count
+mismatches) is refused. Raster budgets use the full media boxes and the actual
+rendering resolution, rounding each pixel dimension up; a small crop cannot
+hide the renderer's initial full-page allocation. This is a
+separate handler admission calculation; the manifest-only evaluator still
+does not infer PDF raster geometry. Page count and raster budgets are checked
+again before each rendering call, and page iteration is bounded during both
+text and table extraction in the redaction handler.
+
+DICOM admission uses pydicom in metadata-only mode over a transport that caps
+cumulative reads at 64 KiB, bounds offsets by file size, and refuses unbounded
+reads. Admission uses only numeric rows, columns and frame count. Deflated
+datasets requiring an unbounded read, malformed headers, unknown signatures,
+and missing pixel geometry fail closed. Metadata-only DICOM without pixels
+retains the existing header-only behavior. The actual decoded array shape is
+checked before copying or iterating, and excess frames are refused rather than
+silently truncated. This does not sandbox the decoder or bound its internal
+allocation when a malicious header under-declares the payload; decoder
+isolation remains a separate workstream.
+
+`RedactionAdmissionError` is a `ValueError` with `reason_code`, `field_name`,
+`limit`, and `observed` attributes. Limit refusals reuse `limit_exceeded` and
+`insufficient_metadata`; structural refusals retain bounded-reader categories
+such as `pdf_page_limit`, `page_count_mismatch` or
+`image_pixel_limit_exceeded`. Transport and profile failures use controlled
+categories such as `header_byte_limit`, `header_offset_invalid`,
+`preflight_source_read_error` and `limit_profile_invalid`. Exception messages
+contain only these codes, numbers and nulls. Seekable caller streams are
+restored after admission and are never closed. Refused admission creates no
+output file. Accepted media retains its existing redaction and OCR behavior.
+
+This change is scoped to the existing Python entry points named above; it does
+not introduce a Swift session API, batch orchestration, cloud provider, model
+qualification or clinical action. Resource admission is neither PHI-absence
+verification nor a guarantee that decoding fits a device's memory budget.

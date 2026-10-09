@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

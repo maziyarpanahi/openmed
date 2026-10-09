@@ -19,8 +19,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Sequence
 
+from .asset_limits import MOBILE_V1, LimitProfile
 from .base import ExtractedDocument, register_handler
 from .exceptions import MissingDependencyError
+from .redaction_admission import (
+    RedactionAdmissionError,
+    admit_dicom,
+    check_geometry,
+    redaction_limit_profile,
+)
 
 _DICOM_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
 _DEFAULT_UID_SALT = "openmed-dicom-uid-v1"
@@ -122,6 +129,7 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
+    asset_limit_profile: LimitProfile = MOBILE_V1
 
 
 @dataclass(frozen=True)
@@ -414,6 +422,8 @@ def redact_dicom_pixels(
 
     pydicom = _import_pydicom()
     source = Path(path)
+    limit_profile = redaction_limit_profile(policy)
+    admit_dicom(source, limit_profile, pydicom)
     resolved_policy = _override_pixel_policy(
         _coerce_pixel_policy(policy),
         output_path=output_path,
@@ -448,8 +458,8 @@ def redact_dicom_pixels(
         )
 
     _decompress_pixel_data(dataset)
-    pixel_array = _copy_pixel_array(dataset)
-    frame_views = tuple(_iter_pixel_frames(pixel_array, dataset))
+    pixel_array = _copy_pixel_array(dataset, limit_profile=limit_profile)
+    frame_views = _iter_pixel_frames(pixel_array, dataset, limit_profile=limit_profile)
     findings: list[DicomPixelFinding] = []
 
     for frame_index, frame in enumerate(frame_views):
@@ -670,9 +680,11 @@ def _resolve_pixel_model_name(models: Any, policy_model_name: str | None) -> str
     return None
 
 
-def _copy_pixel_array(dataset: Any) -> Any:
+def _copy_pixel_array(dataset: Any, *, limit_profile: LimitProfile = MOBILE_V1) -> Any:
     numpy = _import_numpy()
-    return numpy.array(dataset.pixel_array, copy=True)
+    pixels = dataset.pixel_array
+    _pixel_shape(pixels, dataset, limit_profile)
+    return numpy.array(pixels, copy=True)
 
 
 def _decompress_pixel_data(dataset: Any) -> None:
@@ -692,10 +704,26 @@ def _decompress_pixel_data(dataset: Any) -> None:
         ) from None
 
 
-def _iter_pixel_frames(pixel_array: Any, dataset: Any) -> Sequence[Any]:
-    number_of_frames = int(getattr(dataset, "NumberOfFrames", 1) or 1)
-    if number_of_frames > 1 and getattr(pixel_array, "ndim", 0) >= 3:
-        frame_count = min(number_of_frames, int(pixel_array.shape[0]))
+def _pixel_shape(pixel_array: Any, dataset: Any, profile: LimitProfile) -> int:
+    samples = int(getattr(dataset, "SamplesPerPixel", 1))
+    shape = pixel_array.shape
+    single_dimensions = 3 if samples > 1 else 2
+    if len(shape) not in {single_dimensions, single_dimensions + 1}:
+        raise RedactionAdmissionError("metadata_invalid")
+    frame_count = int(shape[0]) if len(shape) > single_dimensions else 1
+    height, width = (int(value) for value in shape[-single_dimensions:][:2])
+    check_geometry(profile, width, height, frames=frame_count)
+    declared = int(getattr(dataset, "NumberOfFrames", 1))
+    if frame_count != declared:
+        raise RedactionAdmissionError("frame_count_mismatch", observed=frame_count)
+    return frame_count
+
+
+def _iter_pixel_frames(
+    pixel_array: Any, dataset: Any, *, limit_profile: LimitProfile = MOBILE_V1
+) -> Sequence[Any]:
+    frame_count = _pixel_shape(pixel_array, dataset, limit_profile)
+    if frame_count > 1:
         return tuple(pixel_array[index] for index in range(frame_count))
     return (pixel_array,)
 

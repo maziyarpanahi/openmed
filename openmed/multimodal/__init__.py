@@ -321,6 +321,7 @@ from .processing_summary import (
     render_processing_summary_markdown,
     summarize_processing_run,
 )
+from .redaction_admission import RedactionAdmissionError
 from .render_pdf import (
     PdfLayoutFidelityError,
     PdfLayoutFidelityReport,
@@ -417,6 +418,7 @@ __all__ = [
     "LIMIT_REASON_CODES",
     "LimitFinding",
     "LimitProfile",
+    "RedactionAdmissionError",
     "MOBILE_V1",
     "evaluate_asset_limits",
     "PREFLIGHT_CHECKS",
