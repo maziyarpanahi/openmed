@@ -257,6 +257,7 @@ nav:
       - Federated Update Metadata: training/federated-update-metadata.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic Speech Timing: training/synthetic/speech-rendering.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
