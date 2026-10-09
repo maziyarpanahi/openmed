@@ -1,8 +1,13 @@
 """Offline runtime, privacy and fail-closed summarizer acceptance tests."""
 
 import json
+import re
 import socket
+import subprocess
 from datetime import datetime
+from enum import Enum
+from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -18,6 +23,184 @@ from openmed.core.model_registry import resolve_summarizer_model
 from openmed.core.offline import OfflineModeError
 from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.mlx.maple import MapleTask, build_maple_task_messages
+
+BACKEND_GUIDE = (
+    Path(__file__).resolve().parents[3] / "docs" / "clinical" / "local-backends.md"
+)
+DOCUMENTED_ERROR_MODULES = (
+    "openmed.clinical.summarize",
+    "openmed.clinical.summarize_backends",
+    "openmed.clinical.nli",
+    "openmed.clinical.nli_backends",
+    "openmed.models.clinical_slm_manifest",
+    "openmed.models.clinical_slm_capabilities",
+    "openmed.models.clinical_slm_memory",
+)
+
+
+def _backend_error_exports() -> tuple[str, ...]:
+    names = {"MissingOptionalDependencyError"}
+    for module_name in DOCUMENTED_ERROR_MODULES:
+        module = import_module(module_name)
+        exports = getattr(module, "__all__", None)
+        if exports is None:
+            exports = [
+                name
+                for name, value in vars(module).items()
+                if not name.startswith("_")
+                and getattr(value, "__module__", None) == module_name
+            ]
+        for name in exports:
+            value = getattr(module, name)
+            if isinstance(value, type) and issubclass(value, Exception):
+                names.add(name)
+    return tuple(sorted(names))
+
+
+def _backend_table(markdown: str, heading: str) -> str:
+    assert heading in markdown, "backend outcome table is missing"
+    return markdown.split(heading, 1)[1].split("\n## ", 1)[0]
+
+
+def _assert_documented_backend_outcomes(markdown: str) -> None:
+    errors = re.findall(
+        r"(?m)^\| `([A-Z]\w+Error)` \|",
+        _backend_table(markdown, "## Backend exceptions\n"),
+    )
+    assert tuple(sorted(errors)) == _backend_error_exports(), (
+        "documented backend errors differ from public exports"
+    )
+    refusals = re.findall(
+        r"(?m)^\| `([A-Z_]+)` \| `([a-z_]+)` \|",
+        _backend_table(markdown, "## Brief refusals\n"),
+    )
+    brief_module = import_module("openmed.clinical.brief")
+    expected = tuple(
+        sorted(
+            (name, member.value)
+            for name, member in brief_module.BriefRefusal.__members__.items()
+        )
+    )
+    assert tuple(sorted(refusals)) == expected, (
+        "documented brief refusals differ from enum members"
+    )
+
+
+def _run_backend_guide_examples(markdown: str) -> list[dict]:
+    from openmed.core.offline import network_blocked_if_offline
+
+    examples = re.findall(r"```python\n(.*?)\n```", markdown, flags=re.DOTALL)
+    assert examples, "backend guide has no runnable Python examples"
+    namespaces = []
+    with network_blocked_if_offline(local_only=True):
+        for index, source in enumerate(examples):
+            namespace = {"__name__": "__local_backend_docs_example__"}
+            exec(compile(source, f"<backend-doc-example-{index}>", "exec"), namespace)
+            namespaces.append(namespace)
+    return namespaces
+
+
+@pytest.fixture
+def forbid_backend_guide_model_loading(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("backend documentation attempted external runtime work")
+
+    monkeypatch.setattr(backends, "_require_runtime", fail)
+    monkeypatch.setattr(backends, "_cached_artifact", fail)
+    monkeypatch.setattr(backends, "_load_model", fail)
+    monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+    monkeypatch.setattr(subprocess, "Popen", fail)
+
+
+def test_local_backend_guide_documents_every_error_and_brief_refusal():
+    _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_local_backend_guide_examples_run_offline_with_only_synthetic_doubles(
+    forbid_backend_guide_model_loading, capsys
+):
+    examples = _run_backend_guide_examples(BACKEND_GUIDE.read_text(encoding="utf-8"))
+    assert len(examples) == 4
+    assert examples[0]["custom"].backend == "caller-supplied-local"
+    assert examples[1]["verdicts"][0]["label"] == "entailment"
+    assert examples[2]["integrity"].verified
+    assert examples[2]["capability"].supported
+    assert examples[2]["memory"].accepted
+    assert not examples[2]["package"].exists()
+    assert examples[3]["audit"]["status"] == "needs_review"
+    assert "summary" not in examples[3]["audit"]
+    assert capsys.readouterr().out == ""
+
+
+def test_local_backend_guide_check_rejects_new_exported_backend_error(monkeypatch):
+    module = import_module("openmed.clinical.nli_backends")
+    error = type("SyntheticNewBackendError", (RuntimeError,), {})
+    monkeypatch.setattr(module, "SyntheticNewBackendError", error, raising=False)
+    monkeypatch.setattr(
+        module, "__all__", [*module.__all__, "SyntheticNewBackendError"]
+    )
+    with pytest.raises(AssertionError, match="errors differ from public exports"):
+        _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_local_backend_guide_check_rejects_new_implicit_backend_export(monkeypatch):
+    error = type(
+        "SyntheticNewBackendError", (RuntimeError,), {"__module__": backends.__name__}
+    )
+    monkeypatch.setattr(backends, "SyntheticNewBackendError", error, raising=False)
+    with pytest.raises(AssertionError, match="errors differ from public exports"):
+        _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_local_backend_guide_check_rejects_new_brief_refusal(monkeypatch):
+    module = import_module("openmed.clinical.brief")
+    members = {
+        name: item.value for name, item in module.BriefRefusal.__members__.items()
+    }
+    members["SYNTHETIC_NEW_REFUSAL"] = "synthetic_new_refusal"
+    monkeypatch.setattr(module, "BriefRefusal", Enum("SyntheticRefusal", members))
+    with pytest.raises(AssertionError, match="refusals differ from enum members"):
+        _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "message"),
+    [
+        ("| `LocalNLIError` |", "| `SyntheticMissingError` |", "errors differ"),
+        (
+            "| `LocalNLIError` |",
+            "| `LocalNLIError` |\n| `LocalNLIError` |",
+            "errors differ",
+        ),
+        ("| `PRIVACY` | `privacy` |", "| `PRIVACY` | `changed` |", "refusals differ"),
+        ("## Backend exceptions\n", "## Removed table\n", "table is missing"),
+        ("## Brief refusals\n", "## Removed table\n", "table is missing"),
+    ],
+)
+def test_local_backend_guide_check_rejects_table_drift(before, after, message):
+    markdown = BACKEND_GUIDE.read_text(encoding="utf-8").replace(before, after, 1)
+    with pytest.raises(AssertionError, match=message):
+        _assert_documented_backend_outcomes(markdown)
+
+
+def test_local_backend_guide_example_check_rejects_incompatible_brief_provider(
+    forbid_backend_guide_model_loading,
+):
+    markdown = BACKEND_GUIDE.read_text(encoding="utf-8").replace(
+        '"calibration_id": thresholds.calibration_id,',
+        '"calibration_id": "synthetic-incompatible",',
+        1,
+    )
+    with pytest.raises(AssertionError):
+        _run_backend_guide_examples(markdown)
+
+
+def test_local_backend_guide_example_check_rejects_missing_examples():
+    with pytest.raises(AssertionError, match="no runnable Python examples"):
+        _run_backend_guide_examples("No executable examples.\n")
 
 
 def deidentified():
