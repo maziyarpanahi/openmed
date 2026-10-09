@@ -107,6 +107,11 @@ issue link. Deleting a referenced module or test fails the offline gate. It does
 not run or semantically qualify the linked control tests; changes to behavior
 require human mapping review and the relevant test suites.
 
+The enforcing docs gates are
+[`tests/unit/test_multimodal_threat_model.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/test_multimodal_threat_model.py),
+[`tests/integration/test_multimodal_threat_model.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/integration/test_multimodal_threat_model.py)
+and [`tests/unit/test_docs_publication.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/test_docs_publication.py).
+
 ```sh
 .venv/bin/python -m pytest tests/unit/test_multimodal_threat_model.py tests/integration/test_multimodal_threat_model.py tests/unit/test_docs_publication.py -q
 make docs-build
