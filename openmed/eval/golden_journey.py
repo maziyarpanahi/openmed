@@ -8,9 +8,13 @@ synthetic values, opaque identifiers, coordinates, versions, and digests.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
+from datetime import date
 from importlib import resources
 from pathlib import Path
 from typing import Any, Final, cast
@@ -26,6 +30,8 @@ from openmed.clinical.journey_contracts import (
     sha256_digest,
 )
 from openmed.clinical.units import parse_measurement
+from openmed.core.date_shift import stable_offset_for
+from openmed.core.surrogate_vault import SurrogateVault
 from openmed.interop.identity import (
     CompositeIdentityResolver,
     ExactIdentityResolver,
@@ -109,6 +115,519 @@ _ADAPTERS: Final[Mapping[str, Callable[[], Any]]] = {
 
 class GoldenJourneyError(ValueError):
     """Raised when the synthetic scenario cannot satisfy its pinned contract."""
+
+
+@dataclass(frozen=True)
+class JourneyPrivacySource:
+    """An in-memory source surface; its representation omits protected text.
+
+    Only the five golden source formats are supported. DICOM SR means the
+    already extracted document text, not a DICOM binary or header profile.
+    """
+
+    format: str = field(repr=False)
+    text: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class JourneyPrivacySpan:
+    """Half-open source and replacement offsets for one confirmed witness.
+
+    Date witnesses must contain complete ISO or compact calendar days.
+    Identifier witnesses must belong to the confirmed patient and use the
+    supplied subject vault. Detection and subject reconciliation are the
+    caller's responsibility.
+    """
+
+    start: int
+    end: int
+    replacement_start: int
+    replacement_end: int
+    label: str = field(default="ID_NUM", repr=False)
+
+    def __post_init__(self) -> None:
+        if (
+            any(
+                type(item) is not int or item < 0
+                for item in (
+                    self.start,
+                    self.end,
+                    self.replacement_start,
+                    self.replacement_end,
+                )
+            )
+            or self.end <= self.start
+            or self.replacement_end <= self.replacement_start
+            or type(self.label) is not str
+            or self.label not in {"ID_NUM", "PERSON"}
+        ):
+            raise ValueError("invalid privacy witness")
+
+
+@dataclass(frozen=True)
+class JourneyPrivacyTransformation:
+    """Protected output and witnesses from a trusted local format processor.
+
+    ``patient_keyed`` must explicitly assert that the processor applied the
+    supplied patient key. Missing witnesses never prove consistency.
+    """
+
+    text: str = field(repr=False)
+    patient_keyed: bool = field(default=False, repr=False)
+    dates: tuple[JourneyPrivacySpan, ...] = field(default=(), repr=False)
+    identifiers: tuple[JourneyPrivacySpan, ...] = field(default=(), repr=False)
+
+
+@dataclass(frozen=True)
+class JourneyPrivacyContext:
+    """Shared, memory-only inputs passed to every local format processor."""
+
+    patient_key: str = field(repr=False)
+    date_shift_secret: bytes = field(repr=False)
+    date_shift_max_days: int = field(repr=False)
+    vault: SurrogateVault = field(repr=False)
+
+
+@dataclass(frozen=True)
+class JourneyPrivacyFormatResult:
+    """Counts and keyed digests for one controlled source-format name."""
+
+    format: str
+    state: str
+    date_witness_count: int = 0
+    surrogate_witness_count: int = 0
+    date_shift_inconsistency_count: int = 0
+    surrogate_inconsistency_count: int = 0
+    source_digest: str = ""
+    date_shift_digest: str = ""
+    shifted_interval_digest: str = ""
+    surrogate_set_digest: str = ""
+
+    def __post_init__(self) -> None:
+        counts = (
+            self.date_witness_count,
+            self.surrogate_witness_count,
+            self.date_shift_inconsistency_count,
+            self.surrogate_inconsistency_count,
+        )
+        proofs = (
+            self.source_digest,
+            self.date_shift_digest,
+            self.shifted_interval_digest,
+            self.surrogate_set_digest,
+        )
+        if (
+            type(self.format) is not str
+            or self.format not in _ADAPTERS
+            or type(self.state) is not str
+            or self.state not in {"success", "unsupported", "failure"}
+            or any(type(item) is not int or not 0 <= item <= 512 for item in counts)
+            or any(
+                type(item) is not str
+                or (item and not re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", item))
+                for item in proofs
+            )
+            or not self.source_digest
+        ):
+            raise ValueError("invalid privacy format evidence")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return only controlled states, counts and HMAC digests."""
+
+        return {
+            "format": self.format,
+            "state": self.state,
+            "date_witness_count": self.date_witness_count,
+            "surrogate_witness_count": self.surrogate_witness_count,
+            "date_shift_inconsistency_count": self.date_shift_inconsistency_count,
+            "surrogate_inconsistency_count": self.surrogate_inconsistency_count,
+            "source_digest": self.source_digest,
+            "date_shift_digest": self.date_shift_digest,
+            "shifted_interval_digest": self.shifted_interval_digest,
+            "surrogate_set_digest": self.surrogate_set_digest,
+        }
+
+
+@dataclass(frozen=True)
+class JourneyPrivacyConsistency:
+    """Value-free five-format consistency evidence for one confirmed patient."""
+
+    patient_digest: str
+    formats: tuple[JourneyPrivacyFormatResult, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.patient_digest) is not str
+            or not re.fullmatch(r"hmac-sha256:[0-9a-f]{64}", self.patient_digest)
+            or type(self.formats) is not tuple
+            or any(
+                type(item) is not JourneyPrivacyFormatResult for item in self.formats
+            )
+            or tuple(item.format for item in self.formats) != tuple(_ADAPTERS)
+        ):
+            raise ValueError("invalid privacy consistency evidence")
+
+    @property
+    def state(self) -> str:
+        """Return failure, partial, unsupported or success without upgrading gaps."""
+
+        states = {item.state for item in self.formats}
+        if "failure" in states:
+            return "failure"
+        if states == {"unsupported"}:
+            return "unsupported"
+        return "partial" if "unsupported" in states else "success"
+
+    def lane_metrics(self) -> dict[str, int]:
+        """Return the four additional v1.1 privacy-lane counts.
+
+        Failed processors count as unsupported coverage as well as retaining
+        their failure state. These counts supplement, never replace, leakage
+        and raw-value evidence.
+        """
+
+        return {
+            "date_shift_inconsistency_count": sum(
+                item.date_shift_inconsistency_count for item in self.formats
+            ),
+            "surrogate_inconsistency_count": sum(
+                item.surrogate_inconsistency_count for item in self.formats
+            ),
+            "consistency_checked_format_count": sum(
+                item.state != "unsupported" and bool(item.shifted_interval_digest)
+                for item in self.formats
+            ),
+            "consistency_unsupported_format_count": sum(
+                item.state == "unsupported" or not item.shifted_interval_digest
+                for item in self.formats
+            ),
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a separate evidence report without source or replacement values."""
+
+        return {
+            "schema_version": "1.1.0",
+            "compatibility_policy": "same_major",
+            "state": self.state,
+            "patient_digest": self.patient_digest,
+            "metrics": self.lane_metrics(),
+            "formats": [item.to_dict() for item in self.formats],
+        }
+
+
+JourneyPrivacyProcessor = Callable[
+    [JourneyPrivacySource, JourneyPrivacyContext], JourneyPrivacyTransformation
+]
+_PRIVACY_MAX_TEXT: Final = 1_048_576
+_PRIVACY_MAX_WITNESSES: Final = 512
+_PRIVACY_IDENTIFIER_LABELS: Final = frozenset({"PERSON", "ID_NUM"})
+
+
+def verify_journey_privacy_consistency(
+    sources: Sequence[JourneyPrivacySource],
+    *,
+    patient_key: str,
+    date_shift_secret: bytes,
+    proof_secret: bytes,
+    processors: Mapping[str, JourneyPrivacyProcessor],
+    date_shift_max_days: int = 365,
+) -> JourneyPrivacyConsistency:
+    """De-identify and verify five patient-linked surfaces using local processors.
+
+    Each injected processor receives the same patient key, shift secret and
+    fresh memory-only vault. It must return actual transformed text and source
+    and output offsets for confirmed patient dates and identifiers. The
+    verifier reads those surfaces itself, checks the existing HMAC-derived
+    offset, preserves day intervals, and compares emitted surrogates to the
+    one subject surrogate established before processing. It never infers
+    missing format support, invokes a model loader, or writes protected data.
+
+    Args:
+        sources: Exactly one source for each of the five golden formats.
+        patient_key: Application-confirmed, non-empty patient key.
+        date_shift_secret: At least 32 bytes for the existing shift algorithm.
+        proof_secret: Independent, private key of at least 32 bytes for evidence.
+        processors: Trusted local callables; absent formats are unsupported.
+        date_shift_max_days: Positive bound for the existing date shift.
+
+    Returns:
+        Counts and domain-separated HMAC digests, without protected surfaces.
+
+    Raises:
+        GoldenJourneyError: The bounded input contract is invalid.
+    """
+
+    if (
+        type(sources) not in {list, tuple}
+        or len(sources) != len(_ADAPTERS)
+        or any(type(item) is not JourneyPrivacySource for item in sources)
+        or tuple(item.format for item in sources) != tuple(_ADAPTERS)
+        or any(not _privacy_text(item.text) for item in sources)
+        or type(patient_key) is not str
+        or not patient_key
+        or len(patient_key) > 4096
+        or type(date_shift_secret) is not bytes
+        or len(date_shift_secret) < 32
+        or type(proof_secret) is not bytes
+        or len(proof_secret) < 32
+        or hmac.compare_digest(date_shift_secret, proof_secret)
+        or type(date_shift_max_days) is not int
+        or not 1 <= date_shift_max_days <= 3650
+        or not isinstance(processors, Mapping)
+        or any(
+            key not in _ADAPTERS or not callable(value)
+            for key, value in processors.items()
+        )
+    ):
+        raise GoldenJourneyError("invalid Journey privacy consistency inputs")
+    try:
+        patient_bytes = patient_key.encode("utf-8")
+        expected_offset = stable_offset_for(
+            patient_key, max_days=date_shift_max_days, secret=date_shift_secret
+        )
+        vault = SurrogateVault.in_memory(proof_secret)
+        expected_surrogate = vault.resolve_subject(patient_key)
+    except (UnicodeError, ValueError, TypeError):
+        raise GoldenJourneyError("invalid Journey privacy consistency inputs") from None
+    context = JourneyPrivacyContext(
+        patient_key, date_shift_secret, date_shift_max_days, vault
+    )
+    results: list[JourneyPrivacyFormatResult] = []
+    for source in sources:
+        source_digest = _privacy_proof(
+            proof_secret, "source", [patient_bytes.hex(), source.format, source.text]
+        )
+        processor = processors.get(source.format)
+        if processor is None:
+            results.append(
+                JourneyPrivacyFormatResult(
+                    source.format, "unsupported", source_digest=source_digest
+                )
+            )
+            continue
+        try:
+            transformed = processor(source, context)
+            result = _verify_privacy_transformation(
+                source,
+                transformed,
+                context,
+                expected_offset,
+                expected_surrogate,
+                proof_secret,
+                source_digest,
+            )
+        except Exception:
+            # Trusted processors may raise with source values in their messages.
+            # Neither those messages nor chained exceptions enter evidence.
+            result = JourneyPrivacyFormatResult(
+                source.format, "failure", source_digest=source_digest
+            )
+        results.append(result)
+    return JourneyPrivacyConsistency(
+        _privacy_proof(proof_secret, "patient", patient_key), tuple(results)
+    )
+
+
+def verify_golden_journey_privacy(
+    scenario: Mapping[str, Any],
+    *,
+    patient_key: str,
+    date_shift_secret: bytes,
+    proof_secret: bytes,
+    processors: Mapping[str, JourneyPrivacyProcessor],
+    date_shift_max_days: int = 365,
+) -> JourneyPrivacyConsistency:
+    """Verify the unchanged golden payloads without fabricating missing witnesses.
+
+    The frozen scenario has no shared patient dates and identifiers in every
+    payload. Absent processors or actual witnesses therefore remain unsupported.
+    DICOM SR verification covers ``document_text`` only.
+    """
+
+    _validate_scenario(scenario)
+    sources = tuple(
+        JourneyPrivacySource(
+            item["format"],
+            item["document_text"] if item["format"] == "dicom_sr" else item["payload"],
+        )
+        for item in scenario["sources"]
+    )
+    return verify_journey_privacy_consistency(
+        sources,
+        patient_key=patient_key,
+        date_shift_secret=date_shift_secret,
+        proof_secret=proof_secret,
+        processors=processors,
+        date_shift_max_days=date_shift_max_days,
+    )
+
+
+def _privacy_text(value: Any) -> bool:
+    if type(value) is not str or not value or len(value) > _PRIVACY_MAX_TEXT:
+        return False
+    try:
+        return len(value.encode("utf-8")) <= _PRIVACY_MAX_TEXT
+    except UnicodeError:
+        return False
+
+
+def _privacy_proof(secret: bytes, domain: str, value: Any) -> str:
+    material = canonical_json(["journey-privacy-v1", domain, value]).encode("utf-8")
+    return "hmac-sha256:" + hmac.new(secret, material, hashlib.sha256).hexdigest()
+
+
+def _privacy_spans(
+    spans: Any,
+    source: str,
+    transformed: str,
+    *,
+    identifiers: bool,
+) -> list[tuple[str, str, str]]:
+    if type(spans) is not tuple or not 1 <= len(spans) <= _PRIVACY_MAX_WITNESSES:
+        raise ValueError("invalid privacy witnesses")
+    pairs: list[tuple[str, str, str]] = []
+    source_ranges: list[tuple[int, int]] = []
+    output_ranges: list[tuple[int, int]] = []
+    for span in spans:
+        if type(span) is not JourneyPrivacySpan:
+            raise ValueError("invalid privacy witnesses")
+        offsets = (span.start, span.end, span.replacement_start, span.replacement_end)
+        if (
+            any(type(item) is not int for item in offsets)
+            or not 0 <= span.start < span.end <= len(source)
+            or not 0
+            <= span.replacement_start
+            < span.replacement_end
+            <= len(transformed)
+            or (identifiers and span.label not in _PRIVACY_IDENTIFIER_LABELS)
+        ):
+            raise ValueError("invalid privacy witnesses")
+        source_ranges.append((span.start, span.end))
+        output_ranges.append((span.replacement_start, span.replacement_end))
+        pairs.append(
+            (
+                source[span.start : span.end],
+                transformed[span.replacement_start : span.replacement_end],
+                span.label,
+            )
+        )
+    for ranges in (source_ranges, output_ranges):
+        ordered = sorted(ranges)
+        if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+            raise ValueError("invalid privacy witnesses")
+    return pairs
+
+
+def _privacy_day(value: str) -> date | None:
+    if not re.fullmatch(r"[0-9]{4}(?:-[0-9]{2}-[0-9]{2}|[0-9]{4})", value):
+        return None
+    try:
+        return date(
+            int(value[:4]),
+            int(value[-4:-2]) if "-" not in value else int(value[5:7]),
+            int(value[-2:]),
+        )
+    except ValueError:
+        return None
+
+
+def _verify_privacy_transformation(
+    source: JourneyPrivacySource,
+    transformed: JourneyPrivacyTransformation,
+    context: JourneyPrivacyContext,
+    expected_offset: int,
+    expected_surrogate: str,
+    proof_secret: bytes,
+    source_digest: str,
+) -> JourneyPrivacyFormatResult:
+    if (
+        type(transformed) is not JourneyPrivacyTransformation
+        or not _privacy_text(transformed.text)
+        or type(transformed.patient_keyed) is not bool
+    ):
+        raise ValueError("invalid privacy transformation")
+    if (
+        not transformed.patient_keyed
+        or not transformed.dates
+        or not transformed.identifiers
+    ):
+        return JourneyPrivacyFormatResult(
+            source.format, "unsupported", source_digest=source_digest
+        )
+    dates = _privacy_spans(
+        transformed.dates, source.text, transformed.text, identifiers=False
+    )
+    identifiers = _privacy_spans(
+        transformed.identifiers, source.text, transformed.text, identifiers=True
+    )
+    for side in ("source", "replacement"):
+        all_spans = transformed.dates + transformed.identifiers
+        ranges = sorted(
+            (span.start, span.end)
+            if side == "source"
+            else (span.replacement_start, span.replacement_end)
+            for span in all_spans
+        )
+        if any(left[1] > right[0] for left, right in zip(ranges, ranges[1:])):
+            raise ValueError("invalid privacy witnesses")
+    parsed_dates = [
+        (_privacy_day(original), _privacy_day(shifted))
+        for original, shifted, _label in dates
+    ]
+    if any(original is None or shifted is None for original, shifted in parsed_dates):
+        return JourneyPrivacyFormatResult(
+            source.format, "unsupported", source_digest=source_digest
+        )
+    day_pairs = sorted(
+        (cast(date, original), cast(date, shifted))
+        for original, shifted in parsed_dates
+    )
+    date_mismatch = any(
+        (shifted - original).days != expected_offset for original, shifted in day_pairs
+    )
+    intervals = [
+        (original.toordinal(), shifted.toordinal()) for original, shifted in day_pairs
+    ]
+    # Relative intervals can expose small gaps; protect them with a keyed proof.
+    origin, shifted_origin = intervals[0]
+    relative_intervals = [
+        (original - origin, shifted - shifted_origin) for original, shifted in intervals
+    ]
+    date_mismatch = date_mismatch or any(
+        left != right for left, right in relative_intervals
+    )
+    surrogate_mismatch = False
+    emitted: set[str] = set()
+    for original, replacement, label in identifiers:
+        expected = context.vault.get(original, label=label, lang="en")
+        surrogate_mismatch = surrogate_mismatch or (
+            expected != expected_surrogate
+            or replacement != expected_surrogate
+            or replacement == original
+        )
+        emitted.add(replacement)
+    return JourneyPrivacyFormatResult(
+        source.format,
+        "failure" if date_mismatch or surrogate_mismatch else "success",
+        len(dates),
+        len(identifiers),
+        int(date_mismatch),
+        int(surrogate_mismatch),
+        source_digest,
+        _privacy_proof(
+            proof_secret,
+            "shift",
+            [
+                context.patient_key,
+                sorted({(shifted - original).days for original, shifted in day_pairs}),
+            ],
+        ),
+        _privacy_proof(proof_secret, "intervals", [context.patient_key, intervals]),
+        _privacy_proof(
+            proof_secret, "surrogates", [context.patient_key, sorted(emitted)]
+        ),
+    )
 
 
 class _SyntheticIdentityPlugin:
@@ -960,9 +1479,18 @@ __all__ = [
     "GOLDEN_JOURNEY_SCHEMA_NAME",
     "GOLDEN_JOURNEY_SCHEMA_VERSION",
     "GoldenJourneyError",
+    "JourneyPrivacyConsistency",
+    "JourneyPrivacyContext",
+    "JourneyPrivacyFormatResult",
+    "JourneyPrivacyProcessor",
+    "JourneyPrivacySource",
+    "JourneyPrivacySpan",
+    "JourneyPrivacyTransformation",
     "load_golden_journey_scenario",
     "load_golden_journey_schema",
     "render_semantic_diff",
     "run_golden_journey",
     "semantic_diff",
+    "verify_golden_journey_privacy",
+    "verify_journey_privacy_consistency",
 ]

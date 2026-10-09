@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Verify patient-keyed calendar-day shifts and emitted subject surrogates across
+  five Journey source surfaces using bounded local witness processors. Keep
+  protected values in memory and emit keyed proofs and counts; report missing
+  format coverage explicitly. Release schema v1.1 adds consistency blockers
+  while preserving v1.0 report parsing and historical signature verification.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
