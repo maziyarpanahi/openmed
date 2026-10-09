@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional bounded local audio sample conversion for ASR, with explicit channel
+  policy, anti-alias filtering, PCM16 output, rational timing lineage, protected
+  buffers and reviewer-confirmed handoff. Add the aligned on-device OpenMedKit
+  converter and synthetic offline safety controls (#3673).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
