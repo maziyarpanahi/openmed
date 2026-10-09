@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Import-free effect-path inventory and local/CI guards for unclassified
+  HTTP/database effect candidates and built-in MCP, REST, CLI and Journey
+  dependencies reaching legacy FHIR/OpenMRS write-back paths.
+
 ### Documentation
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic

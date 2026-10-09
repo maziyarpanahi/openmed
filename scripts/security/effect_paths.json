@@ -1,0 +1,485 @@
+{
+  "paths": [
+    {
+      "classification": "operational",
+      "function": "ConsentCache.set",
+      "module": "openmed.clinical.consent_cache"
+    },
+    {
+      "classification": "operational",
+      "function": "_download_url",
+      "module": "openmed.clinical.grounding.vocab"
+    },
+    {
+      "classification": "operational",
+      "function": "_fetch_checksum",
+      "module": "openmed.clinical.grounding.vocab"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteTerminologyMappingStore.__init__",
+      "module": "openmed.clinical.terminology.store"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteTerminologyMappingStore._migrate",
+      "module": "openmed.clinical.terminology.store"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteTerminologyMappingStore._rollback",
+      "module": "openmed.clinical.terminology.store"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteTerminologyMappingStore.record",
+      "module": "openmed.clinical.terminology.store"
+    },
+    {
+      "classification": "operational",
+      "function": "UrlLibTrialSourceTransport.fetch",
+      "module": "openmed.clinical.trials.source"
+    },
+    {
+      "classification": "operational",
+      "function": "ProjectionAuditLog.__init__",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "ProjectionAuditLog.append",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "ProjectionAuditLog.close",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionAPI.correct",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionAPI.read",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionAPI.write",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionNamespaceStore.__init__",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionNamespaceStore.close",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_ProjectionNamespaceStore.write",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_apply_single_migration",
+      "module": "openmed.compliance.projections"
+    },
+    {
+      "classification": "operational",
+      "function": "_probe_http",
+      "module": "openmed.deploy.journey"
+    },
+    {
+      "classification": "operational",
+      "function": "_download_url",
+      "module": "openmed.eval.datasets.drugprot"
+    },
+    {
+      "classification": "operational",
+      "function": "_load_dataset_rows_via_server",
+      "module": "openmed.eval.suites.shield"
+    },
+    {
+      "classification": "operational",
+      "function": "CohortDefinitionServiceBridge.export",
+      "module": "openmed.interop.bridges.cohort_definition"
+    },
+    {
+      "classification": "operational",
+      "function": "CohortDefinitionServiceBridge.import_definition",
+      "module": "openmed.interop.bridges.cohort_definition"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "_create_sidecar_schema",
+      "module": "openmed.interop.fhir_omop"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "_insert_sidecar_rows",
+      "module": "openmed.interop.fhir_omop"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "write_fhir_omop_sqlite",
+      "module": "openmed.interop.fhir_omop"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "FHIRServerClient._request",
+      "module": "openmed.interop.fhir_server"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "FHIRServerClient.fetch_and_deidentify",
+      "module": "openmed.interop.fhir_server"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "FHIRServerClient.put_resource",
+      "module": "openmed.interop.fhir_server"
+    },
+    {
+      "classification": "operational",
+      "function": "ICD11APIClient.access_token",
+      "module": "openmed.interop.icd11_api"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.__init__",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore._apply_migration",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore._insert_link",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.add_link",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.apply_review",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.close",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.integrity_check",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "IdentityResolutionStore.save_resolution",
+      "module": "openmed.interop.identity.store"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresIngestionStore._ledger_transaction",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteIngestionStore._ledger_transaction",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "_IngestionStoreMixin._insert_payload",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "_IngestionStoreMixin._release_lease_locked",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "_IngestionStoreMixin.put_pipeline_stage",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "_IngestionStoreMixin.register_manifest",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "operational",
+      "function": "_IngestionStoreMixin.release_lease",
+      "module": "openmed.interop.ingest.store"
+    },
+    {
+      "classification": "governed",
+      "function": "FhirOmopLineageApproval.commit",
+      "module": "openmed.interop.lineage.fhir_omop_writes"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "_delete_sql_note_rows",
+      "module": "openmed.interop.omop.cdm_loader"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "_upsert_sql_tables",
+      "module": "openmed.interop.omop.cdm_loader"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "create_omop_schema",
+      "module": "openmed.interop.omop.cdm_loader"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "write_omop_sqlite",
+      "module": "openmed.interop.omop.cdm_loader"
+    },
+    {
+      "classification": "governed",
+      "function": "VocabularyWriteGate.commit",
+      "module": "openmed.interop.omop.vocabulary_write_gate"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "OpenMRSAdapter.write_back",
+      "module": "openmed.interop.openmrs"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "OpenMRSClient._request",
+      "module": "openmed.interop.openmrs"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "OpenMRSClient._write",
+      "module": "openmed.interop.openmrs"
+    },
+    {
+      "classification": "legacy_explicit_opt_in",
+      "function": "PostgresRedactionAdapter.redact",
+      "module": "openmed.interop.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "WorkflowRunner.run",
+      "module": "openmed.mcp.workflow"
+    },
+    {
+      "classification": "operational",
+      "function": "StreamingTesseractEngine.recognize",
+      "module": "openmed.multimodal.ocr_tesseract_stream"
+    },
+    {
+      "classification": "operational",
+      "function": "BatchProcessor._process_items",
+      "module": "openmed.processing.batch"
+    },
+    {
+      "classification": "operational",
+      "function": "_ConfluentJsonConsumer.commit",
+      "module": "openmed.processing.kafka_connector"
+    },
+    {
+      "classification": "operational",
+      "function": "_commit_if_checkpointed",
+      "module": "openmed.processing.kafka_connector"
+    },
+    {
+      "classification": "operational",
+      "function": "deidentify_stream",
+      "module": "openmed.processing.kafka_connector"
+    },
+    {
+      "classification": "operational",
+      "function": "_PulsarJsonProducer.produce",
+      "module": "openmed.processing.pulsar_connector"
+    },
+    {
+      "classification": "operational",
+      "function": "RayShardExecutor.execute",
+      "module": "openmed.processing.ray_executor"
+    },
+    {
+      "classification": "operational",
+      "function": "run_shard_plan",
+      "module": "openmed.processing.shard_executor"
+    },
+    {
+      "classification": "operational",
+      "function": "SparkShardExecutor.execute",
+      "module": "openmed.processing.spark_executor"
+    },
+    {
+      "classification": "operational",
+      "function": "KServeV2HttpTransport.infer",
+      "module": "openmed.service.backends.remote_inference"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenMedClient._post",
+      "module": "openmed.service.client"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenMedClient._request",
+      "module": "openmed.service.client"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenMedClient.decision",
+      "module": "openmed.service.client"
+    },
+    {
+      "classification": "operational",
+      "function": "CorrelationIdMiddleware.__call__.send_with_request_id",
+      "module": "openmed.service.logging"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenHIMMediatorClient.heartbeat",
+      "module": "openmed.service.openhim_mediator"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenHIMMediatorClient.register",
+      "module": "openmed.service.openhim_mediator"
+    },
+    {
+      "classification": "operational",
+      "function": "HttpExternalLLMTransport.__call__",
+      "module": "openmed.service.privacy_gateway"
+    },
+    {
+      "classification": "operational",
+      "function": "ServiceRuntime.run_model_request",
+      "module": "openmed.service.runtime"
+    },
+    {
+      "classification": "operational",
+      "function": "_default_metadata_fetcher",
+      "module": "openmed.service.security"
+    },
+    {
+      "classification": "operational",
+      "function": "SMARTBackendBulkIngestor._fetch_access_token",
+      "module": "openmed.service.smart_backend"
+    },
+    {
+      "classification": "operational",
+      "function": "OpenTelemetryMiddleware.__call__.send_with_status",
+      "module": "openmed.service.tracing"
+    },
+    {
+      "classification": "operational",
+      "function": "deliver_webhook",
+      "module": "openmed.service.webhooks"
+    },
+    {
+      "classification": "operational",
+      "function": "CohortResolver.resolve",
+      "module": "openmed.structured.cohort.resolver"
+    },
+    {
+      "classification": "operational",
+      "function": "_parquet_connection",
+      "module": "openmed.structured.cohort.resolver"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore.__init__",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore._apply_migrations",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore.close",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore.integrity_check",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyStore.transaction",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyTransaction._insert_simple",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyTransaction.put_canonical",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyTransaction.put_conflict",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyTransaction.put_fact",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "SQLiteJourneyTransaction.put_job",
+      "module": "openmed.structured.store.local"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresJourneyStore.__init__",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresJourneyStore._apply_postgres_migrations",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "PostgresJourneyStore.transaction",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "_PostgresConnectionAdapter.execute",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "_PostgresConnectionAdapter.executemany",
+      "module": "openmed.structured.store.postgres"
+    },
+    {
+      "classification": "operational",
+      "function": "TerminologyCache.get_or_compute",
+      "module": "openmed.structured.terminology_cache"
+    }
+  ],
+  "schema_version": 1
+}
