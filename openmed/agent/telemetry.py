@@ -85,6 +85,13 @@ class AgentTelemetry:
     exclude identifiers, digests, sequence numbers, counts, and durations.
     """
 
+    enabled: bool
+    _run_id_mode: Literal["omit", "hash"]
+    _tracer: Any
+    _clock: Callable[[], float]
+    _counter: Any
+    _duration: Any
+
     def __init__(
         self,
         *,
@@ -192,7 +199,7 @@ class AgentTelemetry:
                 set_status_on_exception=False,
             )
         duration = validated.get("duration_ms")
-        start = self._clock() if duration is None else None
+        start = self._clock() if duration is None else 0.0
         with manager as span:
             if self._counter is not None:
                 self._counter.add(1, attributes=metric_attributes)
