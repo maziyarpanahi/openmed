@@ -23,6 +23,12 @@ from numbers import Real
 from threading import RLock
 from typing import Any, Protocol
 
+from openmed.agent.approvals.tokens import (
+    ApprovalNonceStore,
+    ApprovalNonceStoreError,
+    _claim_nonce,
+)
+
 CONSENT_RECEIPT_SCHEMA_VERSION = "openmed.mcp.consent_receipt.v1"
 CONSENT_RECEIPT_EVENT = "mcp.consent_receipt"
 DEFAULT_CONSENT_POLICY_VERSION = "openmed.mcp.consent.v1"
@@ -41,6 +47,7 @@ _CONSENT_VERIFICATION_CODES = frozenset(
         "key_unavailable",
         "missing_receipt",
         "not_yet_valid",
+        "nonce_store_unavailable",
         "replay",
         "verified",
     }
@@ -90,6 +97,12 @@ class ConsentReceiptNotYetValidError(ConsentReceiptVerificationError):
 
 class ConsentReceiptReplayError(ConsentReceiptVerificationError):
     """Raised when a valid receipt has already been consumed."""
+
+
+class ConsentReceiptStoreError(
+    ApprovalNonceStoreError, ConsentReceiptVerificationError
+):
+    """Raised when injected replay protection cannot safely consume a receipt."""
 
 
 class ConsentReceiptDeniedError(ConsentReceiptVerificationError):
@@ -486,7 +499,15 @@ class ConsentReceiptIssuer:
 
 
 class ConsentReceiptVerifier:
-    """Verify and atomically consume receipts exactly once."""
+    """Verify and atomically consume receipts exactly once.
+
+    Args:
+        key_provider: Application-owned local signing key provider.
+        clock: Trusted Unix-seconds clock, optionally returning a datetime.
+        clock_skew_seconds: Allowed issuance-time skew; expiry stays exclusive.
+        consumption_store: Optional shared ApprovalNonceStore. Without it,
+            replay protection and consumption snapshots remain process-local.
+    """
 
     def __init__(
         self,
@@ -494,7 +515,12 @@ class ConsentReceiptVerifier:
         *,
         clock: Callable[[], Real | datetime] | Any = time.time,
         clock_skew_seconds: Real = 0,
+        consumption_store: ApprovalNonceStore | None = None,
     ) -> None:
+        if consumption_store is not None and not callable(
+            getattr(consumption_store, "claim", None)
+        ):
+            raise ValueError("consumption_store must expose claim()")
         if isinstance(clock_skew_seconds, bool) or not isinstance(
             clock_skew_seconds, Real
         ):
@@ -509,6 +535,7 @@ class ConsentReceiptVerifier:
         self.clock_skew_seconds = float(clock_skew_seconds)
         self._consumed: set[str] = set()
         self._lock = RLock()
+        self._consumption_store = consumption_store
 
     def verify(
         self,
@@ -566,7 +593,26 @@ class ConsentReceiptVerifier:
             )
 
         with self._lock:
-            if candidate.receipt_id in self._consumed:
+            if self._consumption_store is None:
+                claimed = candidate.receipt_id not in self._consumed
+            else:
+                # Domain separation keeps receipt IDs distinct from token nonces.
+                digest = hashlib.sha256(
+                    b"openmed.mcp.consent_receipt.v1\x00"
+                    + candidate.receipt_id.encode("utf-8")
+                ).hexdigest()
+                try:
+                    claimed = _claim_nonce(
+                        self._consumption_store,
+                        f"sha256:{digest}",
+                        expires_at=math.ceil(candidate.expires_at),
+                        now=math.floor(now),
+                    )
+                except ApprovalNonceStoreError:
+                    raise ConsentReceiptStoreError(
+                        "nonce_store_unavailable", "nonce_store"
+                    ) from None
+            if not claimed:
                 raise ConsentReceiptReplayError("receipt has already been consumed")
             self._consumed.add(candidate.receipt_id)
         return candidate
@@ -614,7 +660,7 @@ class ConsentReceiptVerifier:
     verify_and_consume = verify
 
     def is_consumed(self, receipt_id: str) -> bool:
-        """Return whether a receipt identifier has already been consumed."""
+        """Return whether this verifier consumed an identifier (local snapshot)."""
 
         identifier = _validate_identifier(receipt_id, "receipt_id")
         with self._lock:
@@ -622,7 +668,7 @@ class ConsentReceiptVerifier:
 
     @property
     def consumed_receipt_ids(self) -> frozenset[str]:
-        """Return a read-only snapshot of consumed identifiers for diagnostics."""
+        """Return this verifier's local snapshot, not the shared store's state."""
 
         with self._lock:
             return frozenset(self._consumed)
@@ -1019,6 +1065,7 @@ def _reason_code(error: ConsentReceiptError) -> str:
         ConsentReceiptRequiredError: "missing_receipt",
         ConsentReceiptExpiredError: "expired",
         ConsentReceiptReplayError: "replay",
+        ConsentReceiptStoreError: "nonce_store_unavailable",
         ConsentReceiptBindingError: "binding_mismatch",
         ConsentReceiptDeniedError: "decision_denied",
         ConsentReceiptSignatureError: "invalid_signature",
@@ -1078,6 +1125,7 @@ __all__ = [
     "ConsentReceiptRequired",
     "ConsentReceiptRequiredError",
     "ConsentReceiptSignatureError",
+    "ConsentReceiptStoreError",
     "ConsentReceiptValidationError",
     "ConsentReceiptVerifier",
     "ConsentReceiptVerificationResult",
