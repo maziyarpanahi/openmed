@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- `AggregateDPRelease` now emits release schema version 2 and removes the
+  `noise` and `seed_digest` fields from its public dataclass and serialized
+  records. Update constructors and consumers to use the noisy `value`, budget
+  accounting, and new `test_only` flag instead; ledger schemas and digests are
+  unchanged. Previously written records containing both `value` and `noise`
+  disclose their input aggregates and must not be treated as private releases.
+  Seeded releases are synthetic-test-only and provide no production privacy
+  guarantee; the CLI now requires `--test-mode` with `--seed`. Omit the seed for
+  production system randomness (#3723).
+- Gaussian helpers now use analytic privacy-profile calibration, including
+  epsilon above one, and record `calibration_method` in spend records. Noise
+  scales, utility estimates, and seeded Gaussian outputs intentionally change;
+  unrepresentable calibration fails closed. Update deterministic expectations
+  without restoring the invalid classical scale (#3724).
+
 ### Security
 
 - Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
