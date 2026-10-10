@@ -145,6 +145,23 @@ same exclusive expiry/skew bound and nonce retention, and selects only the
 explicit legacy key. Use v2 for full lifetime protection and disable compatibility
 after outstanding approvals have been renewed. Issuance never creates v1 tokens.
 
+## Protected execution authority
+
+`verifier.consume_authorization(...)` performs the same signature, lifetime,
+role, action and atomic single-use checks as `consume(...)`, then returns a
+protected `ApprovalAuthorization`. It holds the verified `reviewer_role`,
+`consumed_at`, exclusive `expires_at` including allowed skew, and the v2
+`receipt`. Trusted local write adapters use these bounds and the verified role
+to recheck authority before dispatch. Direct construction is refused.
+
+Choose one consumption method for each token; calling both is a replay. This
+authorization object stays in the protected, in-memory execution path and is
+not a serializable audit artifact or a replacement for fresh grant, scope,
+lineage and emergency-stop checks. Serialize only `authorization.receipt`.
+It contains no bearer token, signature or key, and its representation hides
+the protected role and times. A v2 receipt alone supplies no role or validity
+window and must not be treated as a complete execution authorization.
+
 ## Value-free receipts and errors
 
 Successful consumption returns `ApprovalReceipt` using

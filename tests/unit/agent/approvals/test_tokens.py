@@ -13,6 +13,7 @@ from openmed.agent.approvals.tokens import (
     APPROVAL_RECEIPT_SCHEMA_VERSION,
     APPROVAL_TOKEN_SCHEMA_VERSION,
     ApprovalActionMismatchError,
+    ApprovalAuthorization,
     ApprovalExpiredError,
     ApprovalLifetimeError,
     ApprovalNonceStoreError,
@@ -397,9 +398,63 @@ def test_contract_is_exported_from_approvals_package() -> None:
 
     assert approvals.ApprovalToken is ApprovalToken
     assert approvals.ApprovalReceipt is ApprovalReceipt
+    assert approvals.ApprovalAuthorization is ApprovalAuthorization
     assert approvals.ApprovalTokenSigner is ApprovalTokenSigner
     assert approvals.ApprovalTokenVerifier is ApprovalTokenVerifier
     assert approvals.InMemoryApprovalNonceStore is InMemoryApprovalNonceStore
+
+
+def test_protected_authorization_preserves_verified_role_and_skew_bounds() -> None:
+    from dataclasses import FrozenInstanceError
+
+    verifier = ApprovalTokenVerifier(
+        KEY, InMemoryApprovalNonceStore(), clock_skew_seconds=30
+    )
+    token = _token()
+    authorization = verifier.consume_authorization(
+        token,
+        action_digest=ACTION_DIGEST,
+        reviewer_role=REVIEWER_ROLE,
+        now=EXPIRES_AT - 1,
+    )
+    assert type(authorization) is ApprovalAuthorization
+    assert authorization.reviewer_role == REVIEWER_ROLE
+    assert authorization.consumed_at == EXPIRES_AT - 1
+    assert authorization.expires_at == EXPIRES_AT + 30
+    assert set(authorization.receipt.to_dict()) == {
+        "schema_version",
+        "code",
+        "action_digest",
+        "token_digest",
+    }
+    assert authorization.receipt.action_digest == ACTION_DIGEST
+    assert (
+        authorization.receipt.token_digest
+        == _verifier()
+        .consume(
+            token, action_digest=ACTION_DIGEST, reviewer_role=REVIEWER_ROLE, now=NOW
+        )
+        .token_digest
+    )
+    for value in (REVIEWER_ROLE, token.nonce, token.signature, KEY.decode()):
+        assert value not in repr(authorization)
+        assert value not in authorization.receipt.to_json()
+    with pytest.raises(FrozenInstanceError):
+        authorization.expires_at = EXPIRES_AT + 300
+    with pytest.raises(ApprovalReplayError):
+        verifier.consume_authorization(
+            token,
+            action_digest=ACTION_DIGEST,
+            reviewer_role=REVIEWER_ROLE,
+            now=EXPIRES_AT + 29,
+        )
+
+
+def test_authorization_cannot_be_constructed_from_unverified_metadata() -> None:
+    with pytest.raises(
+        ApprovalTokenValidationError, match="authorization_requires_verification"
+    ):
+        ApprovalAuthorization()
 
 
 class RecordingStore(InMemoryApprovalNonceStore):

@@ -327,6 +327,36 @@ class ApprovalReceipt:
         return "ApprovalReceipt(<metadata-only>)"
 
 
+@dataclass(frozen=True, slots=True, init=False, repr=False)
+class ApprovalAuthorization:
+    """Protected local authority returned only after successful consumption.
+
+    This object stays in the trusted execution data path. Its receipt alone is
+    suitable for audit serialization. It contains no bearer token or key.
+
+    Attributes:
+        receipt: Codes-and-digests proof of the exact consumed action.
+        reviewer_role: The signed role checked by the verifier.
+        consumed_at: Trusted integer Unix time of consumption.
+        expires_at: Exclusive token expiry plus the verified skew allowance.
+    """
+
+    receipt: ApprovalReceipt
+    reviewer_role: str
+    consumed_at: int
+    expires_at: int
+
+    def __init__(self) -> None:
+        """Refuse direct construction; obtain authority from the verifier."""
+        raise ApprovalTokenValidationError(
+            "authorization_requires_verification", "authorization"
+        )
+
+    def __repr__(self) -> str:
+        """Keep protected role and time policy out of incidental diagnostics."""
+        return "ApprovalAuthorization(<protected>)"
+
+
 class InMemoryApprovalNonceStore:
     """Thread-safe process-local nonce store for local workflows and tests.
 
@@ -508,6 +538,37 @@ class ApprovalTokenVerifier:
         that presentation, forcing a fresh human approval.
         """
 
+        return self.consume_authorization(
+            token,
+            action_digest=action_digest,
+            reviewer_role=reviewer_role,
+            now=now,
+        ).receipt
+
+    def consume_authorization(
+        self,
+        token: ApprovalToken | Mapping[str, Any] | str | bytes | bytearray,
+        *,
+        action_digest: str,
+        reviewer_role: str,
+        now: int | None = None,
+    ) -> ApprovalAuthorization:
+        """Consume once and retain verified authority for protected adapters.
+
+        Args:
+            token: Exact signed token to verify and consume.
+            action_digest: Commitment of the action to be executed.
+            reviewer_role: Role established by the trusted local application.
+            now: Optional trusted integer Unix time for deterministic checks.
+
+        Returns:
+            Local role and exclusive validity bounds plus a safe audit receipt.
+            Do not serialize this object; serialize only its ``receipt``.
+
+        Raises:
+            ApprovalTokenError: Verification or atomic consumption fails.
+        """
+
         candidate = _coerce_token(token, allow_v1=self._allow_v1)
         _validate_digest(action_digest, "action_digest")
         _validate_reviewer_role(reviewer_role)
@@ -551,10 +612,18 @@ class ApprovalTokenVerifier:
                 "reviewer_role_mismatch", "reviewer_role"
             )
 
-        return ApprovalReceipt(
+        receipt = ApprovalReceipt(
             action_digest=candidate.action_digest,
             token_digest=_sha256(candidate.to_json().encode("utf-8")),
         )
+        authorization = object.__new__(ApprovalAuthorization)
+        object.__setattr__(authorization, "receipt", receipt)
+        object.__setattr__(authorization, "reviewer_role", candidate.reviewer_role)
+        object.__setattr__(authorization, "consumed_at", current_time)
+        object.__setattr__(
+            authorization, "expires_at", candidate.expires_at + self._skew
+        )
+        return authorization
 
     def __repr__(self) -> str:
         """Return a representation that hides keys and nonce-store internals."""
@@ -822,6 +891,7 @@ def _sha256(value: bytes) -> str:
 
 
 __all__ = [
+    "ApprovalAuthorization",
     "DEFAULT_APPROVAL_LIFETIME_SECONDS",
     "MAX_APPROVAL_LIFETIME_SECONDS",
     "MAX_APPROVAL_CLOCK_SKEW_SECONDS",
