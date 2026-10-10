@@ -56,11 +56,14 @@ def normalize_dqd_results_file(
         OmopQualityProtocolError: The file is unreadable, malformed or exceeds bounds.
     """
 
+    raw = None
     try:
         with Path(path).open("rb") as stream:
             raw = stream.read(_MAX_RESULTS_BYTES + 1)
     except (OSError, ValueError, TypeError):
-        raise OmopQualityProtocolError("dqd_results_unreadable") from None
+        pass
+    if raw is None:
+        raise OmopQualityProtocolError("dqd_results_unreadable")
     payload = _decode_json(raw, _MAX_RESULTS_BYTES)
     if not isinstance(payload, Mapping):
         raise OmopQualityProtocolError("dqd_results_invalid")
@@ -175,7 +178,8 @@ def _decode_json(raw: bytes, limit: int) -> Any:
             raw, object_pairs_hook=_unique_object, parse_constant=_invalid_constant
         )
     except (ValueError, UnicodeError, RecursionError):
-        raise OmopQualityProtocolError("dqd_json_invalid") from None
+        pass
+    raise OmopQualityProtocolError("dqd_json_invalid")
 
 
 def _read_request() -> OmopQualityInput:

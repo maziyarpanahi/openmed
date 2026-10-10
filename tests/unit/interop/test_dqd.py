@@ -245,17 +245,21 @@ def test_malformed_json_is_value_free(raw: bytes, tmp_path: Path) -> None:
     with pytest.raises(OmopQualityProtocolError) as caught:
         normalize_dqd_results_file(path, quality_input=fixture.quality_input)
     assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+    assert caught.value.__context__ is None
 
 
 def test_missing_file_and_bounds_are_value_free(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = load_frozen_omop_quality_fixture(FIXTURES / "quality_reconciliation.json")
-    with pytest.raises(OmopQualityProtocolError, match="^dqd_results_unreadable$"):
+    with pytest.raises(
+        OmopQualityProtocolError, match="^dqd_results_unreadable$"
+    ) as caught:
         normalize_dqd_results_file(
             tmp_path / "SYNTHETIC_PRIVATE_PATH.json",
             quality_input=fixture.quality_input,
         )
+    assert caught.value.__context__ is None
     monkeypatch.setattr(dqd, "_MAX_RESULTS_BYTES", 10)
     with pytest.raises(OmopQualityProtocolError, match="dqd_json_too_large"):
         _normalize(_payload(), tmp_path)

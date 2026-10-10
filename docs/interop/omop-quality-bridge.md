@@ -143,6 +143,7 @@ unknown categories and tables outside the Journey projection's nine
 not claim compatibility with other DQD releases or the entire OMOP table set.
 Malformed JSON, duplicate keys, missing check fields, invalid flags/counts and
 unreadable files raise `OmopQualityProtocolError` with controlled diagnostics.
+File and JSON parser errors retain no private path or document exception context.
 
 Each record maps `category` case-insensitively to conformance, completeness or
 plausibility, `cdmTableName` to an allowlisted lowercase table, and
