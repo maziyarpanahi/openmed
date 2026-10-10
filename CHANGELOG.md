@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Select explicit extractive brief sentences by unique reviewed fact coverage,
+  independent omission rules and existing length allocations. Preserve ordered
+  citations and expose insufficient-budget/resource-limit diagnostics without
+  partial output; retain the first-three-sentence comparison baseline (#3653).
+  Recomputed synthetic summary reports retain missing-adjudication failures.
+
 ### Breaking Changes
 
 - `AggregateDPRelease` now emits release schema version 2 and removes the
@@ -40,6 +48,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
+
+- Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
+  empty interruption outcomes, CLI/service parity, and native late-result guards.
+
+- Add opt-in v1 explicit evidence bindings for paraphrased clinical brief claims,
+  bounded local generation, traceable offsets and unchanged verification/privacy
+  gates, with aligned OpenMedKit validation and synthetic offline tests (#3654).
 
 - Add offline qualification of caller-supplied clinical NLI artifacts,
   separate development/held-out evaluation, digest-bound receipts and a

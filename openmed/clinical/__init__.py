@@ -74,6 +74,7 @@ from .brief import (
     brief_policy_fingerprint,
     build_clinical_brief,
 )
+from .brief_cancellation import BriefCancellation, BriefInterrupted
 from .brief_context import (
     BriefContextBinding,
     BriefContextCode,
@@ -1924,6 +1925,8 @@ __all__ = [
     "ClinicalBrief",
     "brief_policy_fingerprint",
     "build_clinical_brief",
+    "BriefCancellation",
+    "BriefInterrupted",
     "ReviewedLocalBriefContext",
     "REVIEWED_LOCAL_EVIDENCE_VERSION",
     "CurrentLocalSource",
