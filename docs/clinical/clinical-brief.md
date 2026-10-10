@@ -1,8 +1,15 @@
 # Guarded clinical brief
 
+See [local backends and typed outcomes](local-backends.md) for executable
+synthetic provider wiring and the complete exception/refusal tables.
+
 Start with the [local summarizer](summarization.md), the
 [clinical NLI gate](nli-verification.md), and the
 [synthetic walkthrough and recording script](../demo/clinical-brief.md).
+
+The [clinical brief threat model](../security/clinical-brief-threat-model.md)
+maps Python, CLI, REST, MCP and OpenMedKit boundaries to existing tests and
+records the remaining application, platform and model obligations.
 
 `openmed.clinical.build_clinical_brief()` composes the existing local clinical
 guards into an immutable `ClinicalBrief`. It never treats a generated summary as

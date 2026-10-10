@@ -50,6 +50,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Document clinical brief trust boundaries across Python, CLI, REST, MCP and
+  OpenMedKit, with existing mitigation tests and explicit residual risks;
+  validate mitigation test links and source citations offline (#3752).
+
+- Explain local summarizer/NLI configuration, pre-load artifact admission and
+  reviewed brief context wiring with executable synthetic doubles and drift
+  checks for every public backend error and brief refusal (#3751).
+
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
   examples. Group clinical navigation by area and expose four previously
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
