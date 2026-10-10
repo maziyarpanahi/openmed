@@ -128,6 +128,7 @@ classification:
     - agent/json-schemas.md
     - agent/reviewer-handoffs.md
     - agent/escalation-circuit-breakers.md
+    - agent/resource-budgets.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
