@@ -656,6 +656,7 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
