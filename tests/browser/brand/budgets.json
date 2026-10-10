@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4442708
+    "json": 4555535
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4442708
+    "docs/search/search_index.json": 4555535
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,12 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The four reviewed runtime authority changes measure 4553849 search bytes, an increase of 31144 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The five reviewed FHIR write changes measure 4522705 search bytes, an increase of 35553 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed approval validity and durable nonce guides measure 4487152 search bytes, an increase of 9665 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The two reviewed DICOM privacy changes measure 4474837 search bytes, an increase of 10972 bytes over the current-master build. The JSON and search ceilings retain the current-master 4336-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The five reviewed runtime guides measure 4463865 search bytes, an increase of 16187 bytes over the current-master build. The JSON and search ceilings retain the current-master 4336-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The eight reviewed FHIR foundation guides measure 4446222 search bytes, an increase of 23981 bytes over the current-master build. The JSON and search ceilings retain the existing 5792-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The reviewed synthetic brief walkthrough with native integration measures 92333171 total bytes, 91968658 unique bytes, and 4436916 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; all route, individual non-JSON, duplicate and source-map limits are unchanged.",
     "The reviewed Swift brief guide and summary-gate build measures 92112754 total bytes, 91748241 unique bytes, and 4433661 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; all route, individual non-JSON, duplicate and source-map limits are unchanged.",
     "The reviewed clinical brief guide and navigation build measures 92092293 total bytes, 91727780 unique bytes, and 4427501 search bytes. Ceilings retain the prior 115486-byte aggregate and 5792-byte search allowances; route, individual non-JSON, duplicate and source-map limits are unchanged.",
