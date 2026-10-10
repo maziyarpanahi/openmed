@@ -128,6 +128,8 @@ dependency-graph walk. No packages are installed and the workspace lock remains
 unchanged. The gate requires uv with CycloneDX 1.5 export support (validated with
 uv 0.9.17). Missing tooling, invalid locks or failed exports fail closed without
 forwarding package-manager stderr or private paths.
+Controlled export and parser refusals also discard exception context that could
+retain package-manager stderr, lock contents or Python source text.
 
 Exposure includes every platform/Python branch retained by each universal
 export. It describes potential installation contexts, rather than the packages
