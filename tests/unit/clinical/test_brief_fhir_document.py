@@ -19,8 +19,10 @@ from tests.unit.clinical.test_brief import fixture_context
 DATE = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
-def make_brief():
-    value, context = fixture_context()
+def make_brief(sentences=None):
+    value, context = (
+        fixture_context() if sentences is None else fixture_context(sentences)
+    )
     return build_clinical_brief(value, model="extractive", context=context)
 
 
@@ -259,7 +261,7 @@ def test_unicode_and_html_narrative_roundtrip_preserves_scalar_offsets(monkeypat
             "Symptoms improved after café fluids.",
         ),
     )
-    brief = make_brief()
+    brief = make_brief(fixtures.SENTENCES)
     assert brief.refusal_reason is None
     result = export(brief)
     assert (
@@ -300,7 +302,8 @@ def test_short_multilingual_and_numeric_identifiers_never_reach_output(
             f"Symptoms improved after {identifier} fluids.",
         ),
     )
-    brief = make_brief()
+    brief = make_brief(fixtures.SENTENCES)
     assert brief.refusal_reason is None
+    assert identifier in brief.summary
     with pytest.raises(BriefDocumentError, match="^privacy$"):
         export(brief, original_identifiers=(identifier,))
