@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
@@ -282,7 +283,9 @@ def test_redact_document_pdf_reports_detected_rectangles(
             ]
         }
 
-    doc = redact_document("synthetic_phi.pdf", models={"detector": detector}, lang="en")
+    source = BytesIO(_synthetic_pdf_bytes())
+    source.name = "synthetic_phi.pdf"
+    doc = redact_document(source, models={"detector": detector}, lang="en")
 
     assert doc.text == "Patient John Doe\nMRN 12345"
     assert doc.metadata["detected_span_count"] == 1

@@ -168,7 +168,7 @@ def test_redact_document_exposes_structured_regions_and_boxes(
         return {"entities": [{"start": start, "end": start + 9, "label": "PERSON"}]}
 
     document = redact_document(
-        "synthetic_table.pdf",
+        Path(__file__).with_name("fixtures") / "synthetic_phi_table.pdf",
         models={"detector": detector},
     )
 

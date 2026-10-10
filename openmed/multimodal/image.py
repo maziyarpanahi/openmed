@@ -21,6 +21,13 @@ from .base import ExtractedDocument, SourceSpan, register_handler
 from .documents_pdf import ProjectedRectangle, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 from .ocr import OcrEngine, OcrResult, ocr
+from .redaction_admission import (
+    RedactionAdmissionError,
+    admit_image,
+    check_geometry,
+    check_limit,
+    redaction_limit_profile,
+)
 
 _PILLOW_HINT = 'Install with: pip install "openmed[multimodal]".'
 _IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
@@ -217,7 +224,9 @@ def redact_image(
         path: Source raster image path or named seekable binary stream.
         output_path: Optional destination path or writable binary stream. When
             omitted, the redacted bytes are returned without writing a file.
-        policy: Optional policy marker copied into result metadata.
+        policy: Optional policy marker copied into result metadata. Its
+            ``asset_limit_profile`` selects a validated LimitProfile; the
+            conservative mobile profile applies by default.
         models: Supplied OpenMed PII model object or mapping. Detector callables
             are resolved from keys/attributes such as ``detector``,
             ``extract_pii``, or ``analyze_text``. Optional ``ocr_engine``,
@@ -240,7 +249,9 @@ def redact_image(
     target = (
         Path(output_path) if output_path is not None and output_stream is None else None
     )
-    image_module, image_chops, image_draw, image_sequence = _import_pillow()
+    limit_profile = redaction_limit_profile(policy)
+    declared_frames = admit_image(path, limit_profile)
+    image_module, image_chops, image_draw, _ = _import_pillow()
     detector = _resolve_detector(models)
     first_pass_engine = (
         ocr_engine if ocr_engine is not None else _model_option(models, "ocr_engine")
@@ -259,7 +270,20 @@ def redact_image(
     with _open_image(path, image_module) as image:
         source_format = _image_format(image, source)
         output_format = _output_format(target or source, source_format)
-        frames = [frame.copy() for frame in image_sequence.Iterator(image)]
+        frame_count = int(getattr(image, "n_frames", 1))
+        check_limit(limit_profile, "frames", frame_count)
+        if frame_count != declared_frames:
+            raise RedactionAdmissionError("frame_count_mismatch", observed=frame_count)
+        frames = []
+        total_pixels = 0
+        for frame_index in range(frame_count):
+            # Check the index before seeking/copying the next frame.
+            check_limit(limit_profile, "frames", frame_index + 1)
+            image.seek(frame_index)
+            check_geometry(limit_profile, image.width, image.height)
+            total_pixels += image.width * image.height
+            check_limit(limit_profile, "total_pixels", total_pixels)
+            frames.append(image.copy())
 
     if len(frames) > 1 and output_format != "TIFF":
         raise ValueError("multi-frame images can only be redacted to TIFF output")
@@ -738,6 +762,7 @@ def _image_handler(
         "destination_path",
     )
     if detector is None and output_path is None:
+        admit_image(path, redaction_limit_profile(policy))
         languages = [lang] if lang else None
         return ocr(
             path,

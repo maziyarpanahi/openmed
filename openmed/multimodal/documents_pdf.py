@@ -18,6 +18,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from .asset_limits import LimitProfile
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .documents_pdf_layout import (
     PdfPageLayout,
@@ -26,6 +27,12 @@ from .documents_pdf_layout import (
     validate_pdf_reading_order,
 )
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .redaction_admission import (
+    admit_pdf,
+    check_limit,
+    pdf_page_pixels,
+    redaction_limit_profile,
+)
 
 _PDFPLUMBER_HINT = 'Install with: pip install "openmed[multimodal]".'
 _PDF_WORD_FIELDS = ("x0", "top", "x1", "bottom")
@@ -74,6 +81,7 @@ def extract_pdf(
     *,
     reading_order: PdfReadingOrder = "auto",
     preserve_lines: bool = False,
+    _limit_profile: LimitProfile | None = None,
 ) -> ExtractedDocument:
     """Extract normalized PDF text plus char-offset source spans.
 
@@ -112,9 +120,10 @@ def extract_pdf(
     word_count = 0
 
     with pdfplumber.open(path) as pdf:
-        pages = tuple(getattr(pdf, "pages", ()))
-        page_count = len(pages)
-        for page_index, page in enumerate(pages):
+        for page_index, page in enumerate(getattr(pdf, "pages", ())):
+            page_count = page_index + 1
+            if _limit_profile is not None:
+                check_limit(_limit_profile, "pages", page_count)
             words = _extract_page_words(page)
             if not words:
                 continue
@@ -464,14 +473,16 @@ def _pdf_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
+    limit_profile = redaction_limit_profile(policy)
+    admit_pdf(path, limit_profile)
     _rewind(path)
-    document = extract_pdf(path)
+    document = extract_pdf(path, _limit_profile=limit_profile)
     # Keep this bbox-preserving extraction as the canonical text/offset map
     # while adding structured boxes for table cells and caption lines.
     from .documents_pdf_tables import extract_pdf_regions, project_structured_spans
 
     _rewind(path)
-    regions = extract_pdf_regions(path, document=document)
+    regions = extract_pdf_regions(path, document=document, _limit_profile=limit_profile)
     entities = _iter_entities(_detect_entities(document, models, lang))
     rectangles = project_structured_spans(document, regions, entities)
     metadata = dict(document.metadata)
@@ -501,7 +512,7 @@ def _pdf_handler(
         "destination_path",
     )
     if output_path is not None or bool(_policy_value(policy, "return_bytes")):
-        redacted_pdf = _render_redacted_pdf(path, rectangles)
+        redacted_pdf = _render_redacted_pdf(path, rectangles, policy=policy)
         if output_path is not None:
             _write_pdf_output(output_path, redacted_pdf)
         metadata.update(
@@ -528,8 +539,11 @@ def _render_redacted_pdf(
     rectangles: Sequence[ProjectedRectangle],
     *,
     resolution: int = 150,
+    policy: Any = None,
 ) -> bytes:
     """Rasterize a PDF and burn opaque boxes into a fresh image-only PDF."""
+    limit_profile = redaction_limit_profile(policy)
+    admit_pdf(source, limit_profile, resolution=resolution)
     pdfplumber = _import_pdfplumber()
     try:
         image_draw = importlib.import_module("PIL.ImageDraw")
@@ -543,36 +557,47 @@ def _render_redacted_pdf(
         by_page.setdefault(rectangle.page, []).append(rectangle)
 
     images: list[Any] = []
-    _rewind(source)
-    with pdfplumber.open(source) as pdf:
-        for page_index, page in enumerate(getattr(pdf, "pages", ())):
-            rendered = page.to_image(
-                resolution=resolution,
-                antialias=True,
-            ).original.convert("RGB")
-            width = max(float(getattr(page, "width", rendered.width)), 1.0)
-            height = max(float(getattr(page, "height", rendered.height)), 1.0)
-            x_scale = rendered.width / width
-            y_scale = rendered.height / height
-            drawer = image_draw.Draw(rendered)
-            for rectangle in by_page.get(page_index, ()):
-                x0, top, x1, bottom = rectangle.bbox
-                drawer.rectangle(
-                    (
-                        int(x0 * x_scale),
-                        int(top * y_scale),
-                        int(x1 * x_scale) + 1,
-                        int(bottom * y_scale) + 1,
-                    ),
-                    fill="black",
-                )
-            images.append(rendered)
-
-    if not images:
-        raise UnsupportedDocumentError("Cannot emit a clean PDF with no pages.")
-    output = BytesIO()
-    first, *remaining = images
     try:
+        _rewind(source)
+        with pdfplumber.open(source) as pdf:
+            total_pixels = 0
+            for page_index, page in enumerate(getattr(pdf, "pages", ())):
+                check_limit(limit_profile, "pages", page_index + 1)
+                media_box = getattr(page, "mediabox", (0, 0, page.width, page.height))
+                pixels = pdf_page_pixels(
+                    float(media_box[2]) - float(media_box[0]),
+                    float(media_box[3]) - float(media_box[1]),
+                    resolution,
+                )
+                check_limit(limit_profile, "pixels", pixels)
+                total_pixels += pixels
+                check_limit(limit_profile, "total_pixels", total_pixels)
+                rendered = page.to_image(
+                    resolution=resolution,
+                    antialias=True,
+                ).original.convert("RGB")
+                images.append(rendered)
+                width = max(float(getattr(page, "width", rendered.width)), 1.0)
+                height = max(float(getattr(page, "height", rendered.height)), 1.0)
+                x_scale = rendered.width / width
+                y_scale = rendered.height / height
+                drawer = image_draw.Draw(rendered)
+                for rectangle in by_page.get(page_index, ()):
+                    x0, top, x1, bottom = rectangle.bbox
+                    drawer.rectangle(
+                        (
+                            int(x0 * x_scale),
+                            int(top * y_scale),
+                            int(x1 * x_scale) + 1,
+                            int(bottom * y_scale) + 1,
+                        ),
+                        fill="black",
+                    )
+
+        if not images:
+            raise UnsupportedDocumentError("Cannot emit a clean PDF with no pages.")
+        output = BytesIO()
+        first, *remaining = images
         first.save(
             output,
             format="PDF",

@@ -239,7 +239,7 @@ def test_redact_document_detects_on_reconstructed_text_and_projects_address(
         }
 
     document = redact_document(
-        "synthetic_phi_twocol.pdf",
+        Path(__file__).with_name("fixtures") / "synthetic_phi_twocol.pdf",
         models={"detector": detector},
     )
 

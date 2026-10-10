@@ -118,6 +118,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and compact-offset input with value-free errors while retaining supported
   extended values, caller timezone rules and golden digests.
 
+### Security
+
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
+
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
