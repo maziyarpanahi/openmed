@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reports separate contract parity from unsupported language capabilities and
   unevaluated model quality. Accept unset optional replacement aliases without
   weakening populated-alias consistency checks (#3659).
+
+- Added passive preliminary FHIR R4 clinical-brief documents in Python and
+  OpenMedKit, preserving evidence commitments, citation order, digests and
+  human-review limitations with closed-subset round trips, explicit conversion
+  losses and final narrative/metadata privacy gates (#3658).
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
