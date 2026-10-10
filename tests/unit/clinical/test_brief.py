@@ -36,21 +36,34 @@ SENTENCES = (
 )
 
 
-def fixture_context():
-    text = " ".join(SENTENCES)
+def fixture_context(sentences=SENTENCES):
+    text = " ".join(sentences)
     result = DeidentificationResult(text, text, [], "mask", datetime(2026, 1, 1))
     facts = [
         BriefFact(
             "synthetic:ref-" + str(i), field, "affirmed", "certain", "recent", "patient"
         )
         for i, field in enumerate(
-            ("admission_reason", "discharge_diagnoses", "hospital_course")
+            (
+                "admission_reason",
+                "discharge_diagnoses",
+                "hospital_course",
+                "key_findings",
+            )[: len(sentences)]
         )
     ]
     policy = brief_policy_fingerprint(text, tuple(facts))
     rows = []
     for i, (sentence, field) in enumerate(
-        zip(SENTENCES, ("admission_reason", "discharge_diagnoses", "hospital_course"))
+        zip(
+            sentences,
+            (
+                "admission_reason",
+                "discharge_diagnoses",
+                "hospital_course",
+                "key_findings",
+            ),
+        )
     ):
         ref = "synthetic:ref-" + str(i)
         start = text.index(sentence)

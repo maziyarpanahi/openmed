@@ -73,3 +73,79 @@ Migration: callers relying on the former implicit sentence-picker must now use
 `model="extractive"`. Maple is a general model, not a released clinical SLM or
 clinically validated summarizer. Summaries require qualified clinical review;
 the source-token leakage check cannot prove that every identifier was detected.
+
+## Evidence-aware explicit extraction
+
+`build_clinical_brief(..., model="extractive", context=reviewed_context)` selects
+whole sentences covering every reviewed fact, including required medication or
+finding evidence after the third sentence. Source order, exact text and original
+source/output citation offsets are retained. This Python CPU selection path is
+independent of generative backends and OpenMedKit's on-device model generation.
+
+Applications owning reviewed de-identified facts can configure
+`ExtractiveSummarizerBackend` directly:
+
+```python
+from openmed.clinical.extractive_selection import ExtractiveFact
+from openmed.clinical.summarize import summarize_deidentified
+from openmed.clinical.summarize_backends import ExtractiveSummarizerBackend
+from openmed.clinical.summary_length_budget import build_summary_length_budget
+from openmed.clinical.summary_omission_budget import ImportanceClassPolicy
+
+# Opaque digests and offsets are supplied by local evidence review.
+backend = ExtractiveSummarizerBackend(
+    evidence=(ExtractiveFact(fact_digest, class_digest, start, end),),
+    importance_classes=(ImportanceClassPolicy(class_digest, 10, mandatory=True),),
+    length_budget=build_summary_length_budget(160, {"key_findings": 160}),
+)
+result = summarize_deidentified(deidentified_result, model=backend)
+```
+
+Each fact names its existing length class (`key_findings` by default). UTF-8
+bytes, including joining spaces, conservatively charge both global and class
+allowances. A sentence with facts from several length classes is charged in
+full to each class, once per class. This estimate does not claim a measured
+tokenizer bound for arbitrary model vocabularies. No class cap or metric
+threshold is increased. The brief adapter retains its existing `key_findings`
+allocation and charges the complete admitted extract including separators.
+
+The bounded exact search maximizes unique fact coverage, then severity-weighted
+coverage, then prefers shorter extracts and earlier sentence indices. Each
+importance class's omission allowance is enforced independently. Duplicate
+identities or source spans cannot inflate coverage; conflicting duplicates or
+facts crossing sentence boundaries refuse. No clinical fact or approval is
+inferred from the note. Coverage metrics and downstream clinical/privacy gates
+remain unchanged; satisfying an omission policy does not waive a coverage gate.
+Malformed Unicode returns a controlled refusal without retaining source values
+in a chained decoder exception.
+
+`backend.select(deidentified_text)` returns an `ExtractiveSelection` with
+`status="selected"`, or `empty_evidence`, `invalid_evidence`,
+`insufficient_budget`, or `selection_limit_exceeded`. At most 64 unique facts
+and 50,000 search states are admitted. Resource exhaustion is distinguished
+from proven infeasibility. Failed selection never returns partial text or
+citations. `summarize_deidentified` raises `ExtractiveSelectionError` carrying
+that safe result; the brief returns an empty `unsupported_claim` refusal with
+the explicit selection status in `metrics.extractive_selection`. Diagnostic
+serialization contains only controlled codes, counts, offsets and digests;
+`selection.summary` is protected clinical output and must never be logged.
+
+The bundled brief audit and response schemas also validate these emitted
+failure metrics. The closed diagnostic contract rejects source text, partial
+citations or charged output, unknown selection states and malformed policy IDs.
+
+Without explicit evidence, `model="extractive"` retains the historical
+first-three-sentence baseline. `model="extractive-baseline"` also selects that
+baseline inside a reviewed brief, for comparison. Neither mode invents evidence.
+
+Reproduce the synthetic comparison with:
+
+```bash
+.venv/bin/python -m openmed.eval.summary_benchmark --model extractive --output eval/suites/summaries/extractive.json
+.venv/bin/python -m openmed.eval.summary_benchmark --model extractive-baseline --output /tmp/extractive-baseline.json
+```
+
+The unchanged seeded fixture and scoring protocol records 1.0 fact recall for
+evidence-aware selection and 0.75 for the baseline. Both reports remain failed:
+clinician adjudication is absent. Synthetic literal alignment is not clinical
+validation, model qualification or release authorization.
