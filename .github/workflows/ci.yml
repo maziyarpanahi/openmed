@@ -338,6 +338,9 @@ jobs:
         tests/unit/install/test_smoke_check.py
         tests/unit/release/test_release_budget_workflow.py
         tests/unit/service/test_brief_surfaces.py
+        tests/unit/clinical/test_temporal_normalizer.py
+        tests/unit/clinical/test_journey_contracts.py
+        tests/unit/clinical/test_clinical_timeline_evidence.py
         tests/unit/ner/test_infer.py
         tests/unit/test_no_raw_text_logging.py
     - name: Build wheel and source distribution

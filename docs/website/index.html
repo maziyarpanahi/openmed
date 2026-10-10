@@ -9,7 +9,7 @@
     <title>OpenMed — local-first clinical AI</title>
     <meta
         name="description"
-        content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks."
+        content="OpenMed reads clinical text and removes 50 PII entity types on hardware you control. Explore 2,200+ open models, on-device runtimes, and reproducible biomedical NER benchmarks."
     >
     <meta
         name="keywords"
@@ -62,7 +62,7 @@
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="OpenMed — local-first clinical AI">
-    <meta property="og:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
+    <meta property="og:description" content="OpenMed reads clinical text and removes 50 PII entity types on hardware you control. Explore 2,200+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
     <meta property="og:url" content="https://openmed.life/">
     <meta property="og:site_name" content="OpenMed">
     <meta property="og:image" content="https://openmed.life/og.png">
@@ -77,7 +77,7 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@OpenMed_AI">
     <meta name="twitter:title" content="OpenMed — local-first clinical AI">
-    <meta name="twitter:description" content="OpenMed reads clinical text and removes 55+ PHI types on hardware you control. Explore 2,000+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
+    <meta name="twitter:description" content="OpenMed reads clinical text and removes 50 PII entity types on hardware you control. Explore 2,200+ open models, on-device runtimes, and reproducible biomedical NER benchmarks.">
     <meta name="twitter:image" content="https://openmed.life/og.png">
     <meta
         name="twitter:image:alt"
@@ -98,11 +98,7 @@
             "https://huggingface.co/OpenMed",
             "https://x.com/OpenMed_AI",
             "https://www.linkedin.com/company/openmed-ai/"
-        ],
-        "founder": {
-            "@type": "Person",
-            "name": "Maziyar Panahi"
-        }
+        ]
     }
     </script>
     <!-- openmed-claim:organization_jsonld:end -->
@@ -123,7 +119,12 @@
         ],
         "softwareVersion": "3.0.0",
         "url": "https://openmed.life/",
-        "isAccessibleForFree": true
+        "isAccessibleForFree": true,
+        "creator": {
+            "@type": "Person",
+            "name": "Maziyar Panahi",
+            "url": "https://maziyarpanahi.com"
+        }
     }
     </script>
     <!-- openmed-claim:software_source_jsonld:end -->
@@ -303,11 +304,11 @@
                         </span>
                     </h1>
                     <p class="hero-lead">
-                        OpenMed reads clinical text and removes 55+ PHI types on the
+                        OpenMed reads clinical text and removes 50 PII entity types on the
                         hardware you control, so patient data never leaves the device.
-                        2,000+ Apache-2.0 models, 35 model-backed PII languages,
+                        2,200+ Apache-2.0 models, 35 model-backed PII languages,
                         state of the art on 10 of 12 biomedical NER benchmarks —
-                        and a new release most weeks.
+                        and 51 releases since August 2025.
                     </p>
                     <div class="button-row">
                         <a
@@ -362,7 +363,7 @@
                         </div>
                     </div>
                     <div class="demo-caption">
-                        <span>Live PHI detection · 34 model-backed languages</span>
+                        <span>Live PHI detection · 35 model-backed languages</span>
                         <span>Fictional patients · no real PHI</span>
                     </div>
                 </div>
@@ -381,11 +382,11 @@
                 <div class="community-grid">
                     <div class="community-lead">
                         <p class="mono-label">Model downloads · all-time</p>
-                        <p class="community-number">340<span>M</span></p>
+                        <p class="community-number">460<span>M</span></p>
                         <p>
-                            One person on lunch breaks in July 2025; the largest open
-                            medical-AI collection by July 2026. Founded by
-                            <span class="accent-text">Maziyar Panahi</span>.
+                            One person, after work, in July 2025; 2,200+
+                            open models and 85 contributors by October 2026.
+                            Created by <span class="accent-text">Maziyar Panahi</span>.
                             <a href="https://github.com/maziyarpanahi/openmed">
                                 Join on GitHub <span aria-hidden="true">↗</span>
                             </a>
@@ -393,15 +394,15 @@
                     </div>
                     <div class="numbers-wall" aria-label="OpenMed community statistics">
                         <div>
-                            <strong>30<span>M</span></strong>
-                            <small>Every month</small>
+                            <strong>36<span>M</span></strong>
+                            <small>Last 30 days</small>
                         </div>
                         <div>
-                            <strong>9.4<span>M</span></strong>
+                            <strong>18.3<span>M</span></strong>
                             <small>PyPI installs</small>
                         </div>
                         <div>
-                            <strong>2,000<span>+</span></strong>
+                            <strong>2,200<span>+</span></strong>
                             <small>Open models</small>
                         </div>
                         <div>
@@ -413,8 +414,8 @@
 
                 <div class="facts-rail">
                     <div>
-                        <strong>A release every week</strong>
-                        <span>13 releases in the first six months</span>
+                        <strong>51 releases since August 2025</strong>
+                        <span>21 in the first six months</span>
                     </div>
                     <div>
                         <strong>42 languages supported</strong>
@@ -426,7 +427,7 @@
                     </div>
                 </div>
                 <div class="snapshot-note">
-                    <span>Counted, not claimed · Hugging Face + PyPI · July 2026</span>
+                    <span>Counted, not claimed · Hugging Face + PyPI + GitHub · October 2026</span>
                     <span data-community-stars>★ 5.4K GitHub stars · counted live</span>
                 </div>
                 <!-- openmed-claim:repository_snapshot:end -->
@@ -491,7 +492,7 @@ print(deidentify(note))
                                 <span class="check-icon" aria-hidden="true"></span>
                                 <div>
                                     <code>extract_pii / deidentify</code>
-                                    <span>Language-aware across 35 supported PII languages</span>
+                                    <span>Language-aware across 35 model-backed PII languages</span>
                                 </div>
                             </li>
                             <li>
@@ -613,7 +614,7 @@ print(deidentify(note))
                                     Languages supported
                                     <small>PII and clinical coverage, per stack</small>
                                 </th>
-                                <td class="openmed-column">34 model-backed · 35 supported codes</td>
+                                <td class="openmed-column">35 model-backed · 42 supported codes</td>
                                 <td>Mostly English endpoints</td>
                                 <td>A few clinical locales, licensed</td>
                                 <td class="muted-value">English only</td>
@@ -744,7 +745,7 @@ print(deidentify(note))
                 <!-- openmed-claim:privacy_contract:start -->
                 <h2>De-identification you can audit, not just trust.</h2>
                 <p class="section-lead">
-                    All 18 HIPAA Safe Harbor identifiers inside a 55+ entity
+                    All 18 HIPAA Safe Harbor identifiers inside a 50-type entity
                     catalog: 35 model-backed PII languages,
                     42 supported codes,
                     600+ PII models, plus validator-backed ID-only locales.
@@ -859,37 +860,37 @@ print(deidentify(note))
                         <div class="model-card-header"><h3>ChemicalDetect</h3><span>featured</span></div>
                         <p class="model-arch">ElectraMed · 33M</p>
                         <p class="model-tags"><span>chemical-entity-recognition</span><span>drug-discovery</span></p>
-                        <div class="model-footer"><span><strong>117K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>2.0M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="disease">
                         <div class="model-card-header"><h3>DiseaseDetect</h3><span>featured</span></div>
                         <p class="model-arch">BioMed · 335M</p>
                         <p class="model-tags"><span>disease-entity-recognition</span><span>pathology</span></p>
-                        <div class="model-footer"><span><strong>104K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>3.2M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="genomics">
                         <div class="model-card-header"><h3>GenomicDetect</h3></div>
                         <p class="model-arch">PubMed · 109M</p>
                         <p class="model-tags"><span>gene-recognition</span><span>genomics</span></p>
-                        <div class="model-footer"><span><strong>103K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>3.0M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="oncology">
                         <div class="model-card-header"><h3>OncologyDetect</h3></div>
                         <p class="model-arch">MultiMed · 568M</p>
                         <p class="model-tags"><span>cancer-genetics</span><span>gene-regulation</span></p>
-                        <div class="model-footer"><span><strong>102K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>3.3M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="chemicals">
                         <div class="model-card-header"><h3>PharmaDetect</h3></div>
                         <p class="model-arch">BigMed · 278M</p>
                         <p class="model-tags"><span>drug-recognition</span><span>pharmacovigilance</span></p>
-                        <div class="model-footer"><span><strong>100K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>3.3M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                     <article data-category="genomics">
                         <div class="model-card-header"><h3>DNADetect</h3></div>
                         <p class="model-arch">SuperClinical · 184M</p>
                         <p class="model-tags"><span>protein-recognition</span><span>molecular-biology</span></p>
-                        <div class="model-footer"><span><strong>90K</strong> downloads</span><a href="https://huggingface.co/OpenMed">Open on HF <span aria-hidden="true">↗</span></a></div>
+                        <div class="model-footer"><span><strong>1.7M</strong> all-time downloads</span><a href="https://huggingface.co/OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M">Open on HF <span aria-hidden="true">↗</span></a></div>
                     </article>
                 </div>
             </div>
@@ -1002,8 +1003,8 @@ print(deidentify(note))
                 </div>
                 <div class="research-stats">
                     <div><strong>25+</strong><b>Curated datasets</b><span>MIMIC-III, PubMed, BC5CDR, BC2GM…</span></div>
-                    <div><strong>600+</strong><b>PII models</b><span>34 model-backed languages</span></div>
-                    <div><strong>55+</strong><b>PII entity types</b><span>All 18 Safe Harbor identifiers, locale-aware</span></div>
+                    <div><strong>600+</strong><b>PII models</b><span>35 model-backed languages</span></div>
+                    <div><strong>50</strong><b>PII entity types</b><span>All 18 Safe Harbor identifiers, locale-aware</span></div>
                     <div><strong>650+</strong><b>MLX variants</b><span>Apple Silicon ready, BERT-family</span></div>
                 </div>
             </div>
@@ -1202,8 +1203,8 @@ print(deidentify(note))
                     </a>
                     <p>
                         Community-driven, open-source effort to democratise
-                        state-of-the-art models for healthcare. Founded by
-                        <a href="https://github.com/maziyarpanahi">Maziyar Panahi</a>.
+                        state-of-the-art models for healthcare. Created by
+                        <a href="https://maziyarpanahi.com">Maziyar Panahi</a>.
                     </p>
                 </div>
                 <div>
