@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import posixpath
@@ -154,6 +155,87 @@ def _markdown_targets(source: str, *, published: set[str]) -> set[str]:
         for href in hrefs
         if (target := _resolve_docs_link(source, href, published=published)) is not None
     }
+
+
+def _migration_python_examples(markdown: str) -> list[tuple[bool, str]]:
+    examples = re.findall(r"(?ms)^```python\n(.*?)^```\s*$", markdown)
+    if not examples:
+        raise ValueError("migration guide has no Python examples")
+    classified: list[tuple[bool, str]] = []
+    for source in examples:
+        marker = source.splitlines()[0]
+        if not marker.startswith(("# Runnable:", "# Fragment:")):
+            raise ValueError("migration example needs a Runnable or Fragment marker")
+        compile(source, "migration_example.py", "exec")
+        classified.append((marker.startswith("# Runnable:"), source))
+    return classified
+
+
+def test_v31_migration_examples_run_offline_without_models_or_source_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openmed.core.models import ModelLoader
+    from openmed.core.offline import HF_OFFLINE_ENV_VARS, network_blocked_if_offline
+
+    def reject_model_load(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("migration examples must not load a model")
+
+    monkeypatch.setattr(ModelLoader, "load_model", reject_model_load)
+    for name in HF_OFFLINE_ENV_VARS:
+        monkeypatch.setenv(name, "1")
+    markdown = (DOCS / "migration" / "3.0-to-3.1.md").read_text(encoding="utf-8")
+    examples = _migration_python_examples(markdown)
+    assert any(runnable for runnable, _ in examples)
+    assert any(not runnable for runnable, _ in examples)
+
+    with network_blocked_if_offline(local_only=True):
+        for runnable, source in examples:
+            if runnable:
+                exec(compile(source, "migration_example.py", "exec"), {})
+
+    output = capsys.readouterr().out
+    results = [ast.literal_eval(line) for line in output.splitlines()]
+    assert results == [
+        {"refused": True, "compatible": True},
+        {"projected_fields": 1, "insufficient_scope_denied": True},
+        {
+            "concept": 1,
+            "person": 1,
+            "visit_occurrence": 1,
+            "note": 1,
+            "note_nlp": 0,
+            "condition_occurrence": 0,
+            "drug_exposure": 0,
+            "measurement": 0,
+            "procedure_occurrence": 0,
+            "observation": 0,
+            "source_to_concept_map": 0,
+        },
+        {"operation_counts": {"insert": 1}, "duplicate_denied": True},
+        {"bundle_type": "transaction", "entry_count": 1},
+    ]
+    assert "synthetic-" not in output
+    assert "org.example" not in output
+
+
+@pytest.mark.parametrize(
+    "markdown",
+    ["No examples.", "```python\nprint('unclassified')\n```\n"],
+)
+def test_migration_examples_require_explicit_execution_classification(
+    markdown: str,
+) -> None:
+    with pytest.raises(ValueError):
+        _migration_python_examples(markdown)
+
+
+def test_migration_fragment_compiles_without_executing_application_effects() -> None:
+    examples = _migration_python_examples(
+        "```python\n# Fragment: not executed.\n"
+        "raise RuntimeError('must never run')\n```\n"
+    )
+    assert examples[0][0] is False
 
 
 def test_publication_classifies_every_default_markdown_page_exactly_once() -> None:

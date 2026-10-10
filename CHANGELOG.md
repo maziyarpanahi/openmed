@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Map direct FHIR/OpenMRS writes, OMOP persistence and transaction exports to
+  their explicit authority, review and execution boundaries in a v3.0-to-v3.1
+  migration guide with offline synthetic examples and marked fragments.
+
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
   examples. Group clinical navigation by area and expose four previously
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
