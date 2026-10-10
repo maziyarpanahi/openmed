@@ -11,6 +11,7 @@ from openmed.agent.audit.action_ledger import (
 from openmed.agent.audit.replay_verifier import (
     FrozenReplayEvidence,
     ReplayError,
+    ReplayReport,
     SignedReplayManifest,
     capture_replay_step,
     verify_replay,
@@ -203,3 +204,26 @@ def test_invalid_grant_is_refused_even_when_response_differs():
             ),
         )
     assert "PRIVATE_VALUE" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"artifact": "synthetic-private-marker"},
+        {"expected_digest": "synthetic-private-marker"},
+        {"actual_digest": "synthetic-private-marker"},
+        {"matched": True},
+    ],
+)
+def test_report_refuses_non_digest_content(changes):
+    fields = dict(
+        matched=False,
+        step=0,
+        artifact="response_digest",
+        expected_digest="hmac-sha256:" + "a" * 64,
+        actual_digest="hmac-sha256:" + "b" * 64,
+    )
+    fields.update(changes)
+    with pytest.raises(ReplayError, match="invalid_report") as caught:
+        ReplayReport(**fields)
+    assert "synthetic-private-marker" not in str(caught.value)
