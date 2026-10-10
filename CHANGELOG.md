@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Add a governed-agent lifecycle overview and organize existing authority,
+  approval, write-back, evidence, recovery, evaluation and assurance guides
+  into one navigation section while preserving their public URLs.
+
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
   examples. Group clinical navigation by area and expose four previously
   unlisted guides, preserving page URLs and the existing Pages byte budgets.

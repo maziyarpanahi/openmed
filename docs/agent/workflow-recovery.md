@@ -92,7 +92,7 @@ validation.
 
 The generic journal and reconciliation engine intentionally do not duplicate
 the contracts tracked by #2766, #2767, #2768, #2771, #2773, #2774, #2775,
-#2776, #2778, #2996, #2998, and #3085. Those contracts remain responsible for
+\#2776, #2778, #2996, #2998, and #3085. Those contracts remain responsible for
 ledger evidence, replay verification, single-use approval receipts, previews,
 FHIR conditional/concurrency/compensation/subscription behavior, staged OMOP
 batches and rollback manifests, action graphs, and action lifecycle phases.
