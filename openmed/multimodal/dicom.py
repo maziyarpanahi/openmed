@@ -16,6 +16,8 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -26,6 +28,23 @@ _DICOM_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
 _DEFAULT_UID_SALT = "openmed-dicom-uid-v1"
 _PROFILE_NAME = "DICOM PS3.15 Basic Application Level Confidentiality Profile"
 _DEID_METHOD = "PS3.15 Basic Profile; dates modified; UIDs remapped"
+
+
+class DicomPixelStatus(str, Enum):
+    """Describe pixel coverage without treating header processing as OCR."""
+
+    NOT_PRESENT = "pixels_not_present"
+    NOT_CLEANED = "pixels_not_cleaned"
+    DECLARED_CLEAN = "pixels_declared_clean"
+    CLEANED = "pixels_cleaned"
+
+
+class DicomDeidentificationError(ValueError):
+    """Refuse an unsafe DICOM operation with a value-free reason code."""
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
+        super().__init__(reason_code)
 
 
 @dataclass(frozen=True)
@@ -39,6 +58,10 @@ class DicomHeaderDeidPolicy:
     date_shift_secret: str | bytes | None = None
     uid_salt: str | bytes = _DEFAULT_UID_SALT
     keep_year: bool = False
+    fail_on_unclean_pixels: bool = False
+    redact_encapsulated_documents: bool = False
+    document_policy: Any = None
+    document_models: Any = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +105,7 @@ class DicomHeaderDeidResult:
     actions: tuple[DicomHeaderAction, ...]
     uid_remap_count: int
     private_tag_removed_count: int
+    pixel_status: DicomPixelStatus = DicomPixelStatus.NOT_CLEANED
 
     @property
     def action_count(self) -> int:
@@ -106,6 +130,7 @@ class DicomHeaderDeidResult:
             "action_counts": dict(sorted(action_counts.items())),
             "uid_remap_count": self.uid_remap_count,
             "private_tag_removed_count": self.private_tag_removed_count,
+            "pixel_status": self.pixel_status.value,
             "actions": [action.to_dict() for action in self.actions],
         }
 
@@ -122,6 +147,10 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
+    overlay_mode: str = "remove"
+    redact_encapsulated_documents: bool = False
+    document_policy: Any = None
+    document_models: Any = None
 
 
 @dataclass(frozen=True)
@@ -191,6 +220,9 @@ class DicomPixelRedactionResult:
     frames_processed: int
     findings: tuple[DicomPixelFinding, ...]
     residual_report: DicomResidualTextReport
+    carrier_actions: tuple[DicomHeaderAction, ...] = ()
+    pixel_status: DicomPixelStatus = DicomPixelStatus.NOT_CLEANED
+    _processed_document_digests: tuple[str, ...] = field(default=(), repr=False)
 
     @property
     def redaction_count(self) -> int:
@@ -217,6 +249,8 @@ class DicomPixelRedactionResult:
             },
             "findings": [finding.to_dict() for finding in self.findings],
             "residual_report": self.residual_report.to_dict(),
+            "carrier_actions": [action.to_dict() for action in self.carrier_actions],
+            "pixel_status": self.pixel_status.value,
         }
 
 
@@ -228,6 +262,7 @@ class _Context:
     actions: list[DicomHeaderAction] = field(default_factory=list)
     uid_map: dict[str, str] = field(default_factory=dict)
     private_tag_removed_count: int = 0
+    processed_document_digests: set[str] = field(default_factory=set)
 
 
 # PS3.15 action X: remove the Attribute.
@@ -347,6 +382,16 @@ def deidentify_dicom_headers(
     exposing equivalent attributes. When no ``output_path`` is supplied, the
     source file is rewritten in place.
     """
+    return _deidentify_headers(path, policy=policy)
+
+
+def _deidentify_headers(
+    path: str | Path,
+    *,
+    policy: Any | None,
+    processed_document_digests: tuple[str, ...] = (),
+    dataset: Any = None,
+) -> DicomHeaderDeidResult:
 
     pydicom = _import_pydicom()
     source = Path(path)
@@ -363,9 +408,17 @@ def deidentify_dicom_headers(
         date_shift_days=shift_days,
         keep_year=resolved_policy.keep_year,
         uid_salt=_bytes_value(resolved_policy.uid_salt, name="uid_salt"),
+        processed_document_digests=set(processed_document_digests),
     )
 
-    dataset = pydicom.dcmread(source, force=True)
+    if dataset is None:
+        dataset = pydicom.dcmread(source, force=True)
+    pixel_status = _pixel_coverage(dataset)
+    if resolved_policy.fail_on_unclean_pixels and (
+        pixel_status is DicomPixelStatus.NOT_CLEANED
+    ):
+        raise DicomDeidentificationError("pixels_not_cleaned")
+    _sanitize_carriers(dataset, context, policy=resolved_policy)
     seeded_phi_terms = _seeded_phi_scrub_terms(dataset)
     _deidentify_dataset(dataset, context, location="Dataset")
     _clear_seeded_phi_copies(
@@ -374,7 +427,7 @@ def deidentify_dicom_headers(
         context,
         location="Dataset",
     )
-    _set_standard_deid_markers(dataset, context)
+    _set_standard_deid_markers(dataset, context, pixel_status=pixel_status)
     _deidentify_file_meta(dataset, context)
     if hasattr(dataset, "preamble"):
         dataset.preamble = b"\0" * 128
@@ -387,6 +440,7 @@ def deidentify_dicom_headers(
         actions=tuple(context.actions),
         uid_remap_count=len(context.uid_map),
         private_tag_removed_count=context.private_tag_removed_count,
+        pixel_status=pixel_status,
     )
 
 
@@ -411,6 +465,39 @@ def redact_dicom_pixels(
     before header de-identification clears them. Returned reports intentionally
     exclude raw OCR/header text and carry hashes, labels, bboxes, and counts.
     """
+    result, _dataset = _redact_pixels(
+        path,
+        policy=policy,
+        output_path=output_path,
+        ocr_engine=ocr_engine,
+        models=models,
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        bbox_padding=bbox_padding,
+        verify_residual=verify_residual,
+        fail_on_residual=fail_on_residual,
+        custom_recognizer=custom_recognizer,
+        lang=lang,
+    )
+    return result
+
+
+def _redact_pixels(
+    path: str | Path,
+    *,
+    policy: Any | None = None,
+    output_path: str | Path | None = None,
+    ocr_engine: Any = None,
+    models: Any = None,
+    model_name: str | None = None,
+    confidence_threshold: float | None = None,
+    bbox_padding: int | None = None,
+    verify_residual: bool | None = None,
+    fail_on_residual: bool | None = None,
+    custom_recognizer: Any = None,
+    lang: str | None = None,
+    save: bool = True,
+) -> tuple[DicomPixelRedactionResult, Any]:
 
     pydicom = _import_pydicom()
     source = Path(path)
@@ -433,11 +520,24 @@ def redact_dicom_pixels(
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     dataset = pydicom.dcmread(source, force=True)
+    context = _Context(date_shift_days=0, keep_year=False, uid_salt=b"unused")
+    if "FloatPixelData" in dataset or "DoubleFloatPixelData" in dataset:
+        raise DicomDeidentificationError("pixel_data_unsupported")
+    if not isinstance(
+        resolved_policy.overlay_mode, str
+    ) or resolved_policy.overlay_mode not in {"remove", "burn"}:
+        raise DicomDeidentificationError("invalid_overlay_mode")
+    overlays = (
+        _overlay_planes(dataset) if resolved_policy.overlay_mode == "burn" else ()
+    )
+    _sanitize_carriers(dataset, context, policy=resolved_policy)
     header_recognizer = _header_seed_recognizer(dataset)
     model = _resolve_pixel_model_name(models, resolved_policy.model_name)
+    _invalidate_identity_claims(dataset)
 
     if "PixelData" not in dataset:
-        _save_dataset(dataset, destination)
+        if save:
+            _save_dataset(dataset, destination)
         residual_report = DicomResidualTextReport(frame_count=0)
         return DicomPixelRedactionResult(
             source_path=source,
@@ -445,11 +545,21 @@ def redact_dicom_pixels(
             frames_processed=0,
             findings=(),
             residual_report=residual_report,
-        )
+            carrier_actions=tuple(context.actions),
+            pixel_status=(
+                DicomPixelStatus.NOT_PRESENT
+                if _pixel_coverage(dataset) is DicomPixelStatus.NOT_PRESENT
+                else DicomPixelStatus.NOT_CLEANED
+            ),
+            _processed_document_digests=tuple(
+                sorted(context.processed_document_digests)
+            ),
+        ), dataset
 
     _decompress_pixel_data(dataset)
     pixel_array = _copy_pixel_array(dataset)
     frame_views = tuple(_iter_pixel_frames(pixel_array, dataset))
+    _burn_overlay_planes(frame_views, overlays, dataset)
     findings: list[DicomPixelFinding] = []
 
     for frame_index, frame in enumerate(frame_views):
@@ -484,14 +594,28 @@ def redact_dicom_pixels(
                 f"{residual_report.residual_entity_count} residual findings"
             )
 
-    _save_dataset(dataset, destination)
+    root_cleaned = resolved_policy.verify_residual and residual_report.passed
+    dataset.BurnedInAnnotation = "NO" if root_cleaned else "YES"
+    pixel_status = (
+        DicomPixelStatus.CLEANED
+        if root_cleaned and _pixel_coverage(dataset) is not DicomPixelStatus.NOT_CLEANED
+        else DicomPixelStatus.NOT_CLEANED
+    )
+    # Pixel processing alone has not cleaned the headers. Invalidate inherited
+    # attestations; the combined dispatcher sets them after its header pass.
+    _invalidate_identity_claims(dataset)
+    if save:
+        _save_dataset(dataset, destination)
     return DicomPixelRedactionResult(
         source_path=source,
         output_path=destination,
         frames_processed=len(frame_views),
         findings=tuple(findings),
         residual_report=residual_report,
-    )
+        carrier_actions=tuple(context.actions),
+        pixel_status=pixel_status,
+        _processed_document_digests=tuple(sorted(context.processed_document_digests)),
+    ), dataset
 
 
 def _import_pydicom() -> Any:
@@ -533,6 +657,7 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
             verify_residual=bool(policy.get("verify_residual", True)),
             fail_on_residual=bool(policy.get("fail_on_residual", True)),
             custom_recognizer=policy.get("custom_recognizer"),
+            **_carrier_policy_fields(policy),
         )
     return DicomPixelRedactionPolicy(
         output_path=getattr(
@@ -553,6 +678,7 @@ def _coerce_pixel_policy(policy: Any | None) -> DicomPixelRedactionPolicy:
         verify_residual=bool(getattr(policy, "verify_residual", True)),
         fail_on_residual=bool(getattr(policy, "fail_on_residual", True)),
         custom_recognizer=getattr(policy, "custom_recognizer", None),
+        **_carrier_policy_fields(policy),
     )
 
 
@@ -595,6 +721,10 @@ def _override_pixel_policy(
             if custom_recognizer is not None
             else policy.custom_recognizer
         ),
+        overlay_mode=policy.overlay_mode,
+        redact_encapsulated_documents=policy.redact_encapsulated_documents,
+        document_policy=policy.document_policy,
+        document_models=policy.document_models,
     )
 
 
@@ -612,6 +742,8 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
             date_shift_secret=policy.get("date_shift_secret"),
             uid_salt=policy.get("uid_salt", _DEFAULT_UID_SALT),
             keep_year=bool(policy.get("keep_year", False)),
+            fail_on_unclean_pixels=bool(policy.get("fail_on_unclean_pixels", False)),
+            **_carrier_policy_fields(policy, pixel=False),
         )
     return DicomHeaderDeidPolicy(
         output_path=getattr(policy, "output_path", None),
@@ -621,7 +753,279 @@ def _coerce_policy(policy: Any | None) -> DicomHeaderDeidPolicy:
         date_shift_secret=getattr(policy, "date_shift_secret", None),
         uid_salt=getattr(policy, "uid_salt", _DEFAULT_UID_SALT),
         keep_year=bool(getattr(policy, "keep_year", False)),
+        fail_on_unclean_pixels=bool(getattr(policy, "fail_on_unclean_pixels", False)),
+        **_carrier_policy_fields(policy, pixel=False),
     )
+
+
+def _carrier_policy_fields(policy: Any, *, pixel: bool = True) -> dict[str, Any]:
+    get = (
+        policy.get
+        if isinstance(policy, Mapping)
+        else lambda k, d: getattr(policy, k, d)
+    )
+    fields = {
+        "redact_encapsulated_documents": bool(
+            get("redact_encapsulated_documents", False)
+        ),
+        "document_policy": get("document_policy", None),
+        "document_models": get("document_models", None),
+    }
+    if pixel:
+        fields["overlay_mode"] = get("overlay_mode", "remove")
+    return fields
+
+
+def _pixel_coverage(dataset: Any) -> DicomPixelStatus:
+    statuses = []
+    if any(
+        key in dataset
+        for key in ("PixelData", "FloatPixelData", "DoubleFloatPixelData")
+    ):
+        statuses.append(
+            DicomPixelStatus.DECLARED_CLEAN
+            if dataset.get("BurnedInAnnotation") == "NO"
+            else DicomPixelStatus.NOT_CLEANED
+        )
+    for element in dataset:
+        if element.VR == "SQ" and int(element.tag) != 0x00880200:
+            statuses.extend(_pixel_coverage(item) for item in element.value or ())
+    if DicomPixelStatus.NOT_CLEANED in statuses:
+        return DicomPixelStatus.NOT_CLEANED
+    if DicomPixelStatus.DECLARED_CLEAN in statuses:
+        return DicomPixelStatus.DECLARED_CLEAN
+    return DicomPixelStatus.NOT_PRESENT
+
+
+def _sanitize_carriers(
+    dataset: Any,
+    context: _Context,
+    *,
+    policy: Any,
+    location: str = "Dataset",
+) -> None:
+    if "PixelDataProviderURL" in dataset:
+        raise DicomDeidentificationError("external_pixel_data_unsupported")
+    if (
+        getattr(policy, "overlay_mode", "remove") == "burn"
+        and location != "Dataset"
+        and any(0x6000 <= int(tag) >> 16 <= 0x60FF for tag in dataset.keys())
+    ):
+        raise DicomDeidentificationError("nested_overlay_burn_unsupported")
+    # A retired overlay may occupy unused bits of the main PixelData rather
+    # than an OverlayData element. Decode/re-encode those bits before dropping
+    # the metadata, and refuse planes overlapping stored image values.
+    try:
+        embedded = [
+            group
+            for group in range(0x6000, 0x6100, 2)
+            if (group, 0x0102) in dataset
+            and (
+                (group, 0x3000) not in dataset
+                or int(dataset[(group, 0x0102)].value) != 0
+                or (
+                    (group, 0x0100) in dataset
+                    and int(dataset[(group, 0x0100)].value) != 1
+                )
+            )
+        ]
+    except Exception:
+        raise DicomDeidentificationError("embedded_overlay_not_cleanable") from None
+    if embedded:
+        try:
+            stored = int(dataset.BitsStored)
+            allocated = int(dataset.BitsAllocated)
+            if any(
+                not stored <= int(dataset[(group, 0x0102)].value) < allocated
+                for group in embedded
+            ):
+                raise ValueError
+            _decompress_pixel_data(dataset)
+            dataset.PixelData = _pixel_bytes(_copy_pixel_array(dataset))
+        except Exception:
+            raise DicomDeidentificationError("embedded_overlay_not_cleanable") from None
+    for tag in list(dataset.keys()):
+        element = dataset[tag]
+        group = int(element.tag) >> 16
+        tag_int = int(element.tag)
+        if (
+            0x5000 <= group <= 0x50FF
+            or 0x6000 <= group <= 0x60FF
+            or tag_int == 0x00880200
+        ):
+            _record_action(
+                element,
+                context,
+                action="remove",
+                ps315_action="X",
+                location=location,
+                record_value=False,
+            )
+            del dataset[tag]
+        elif tag_int == 0x00420011:
+            payload = dataset.EncapsulatedDocument
+            digest = (
+                hashlib.sha256(payload.rstrip(b"\0")).hexdigest()
+                if isinstance(payload, bytes)
+                else ""
+            )
+            if digest in context.processed_document_digests:
+                continue
+            _redact_encapsulated_document(dataset, policy)
+            context.processed_document_digests.add(
+                hashlib.sha256(dataset.EncapsulatedDocument.rstrip(b"\0")).hexdigest()
+            )
+            _record_action(
+                dataset[tag],
+                context,
+                action="replace",
+                ps315_action="D",
+                location=location,
+                record_value=False,
+            )
+        elif element.VR == "SQ":
+            for index, item in enumerate(element.value or ()):
+                _sanitize_carriers(
+                    item,
+                    context,
+                    policy=policy,
+                    location=f"{location}.{_keyword(element)}[{index}]",
+                )
+
+
+def _redact_encapsulated_document(dataset: Any, policy: Any) -> None:
+    if not policy.redact_encapsulated_documents:
+        raise DicomDeidentificationError("encapsulated_document_requires_redaction")
+    mime = dataset.get("MIMETypeOfEncapsulatedDocument")
+    extension = (
+        {
+            "application/pdf": ".pdf",
+            "text/xml": ".xml",
+            "application/xml": ".xml",
+        }.get(mime)
+        if isinstance(mime, str)
+        else None
+    )
+    if extension is None:
+        raise DicomDeidentificationError("encapsulated_document_type_unsupported")
+    original = dataset.EncapsulatedDocument
+    if not isinstance(original, bytes) or not original:
+        raise DicomDeidentificationError("encapsulated_document_invalid")
+    # Only registered redaction handlers with an explicit in-memory byte output
+    # can authorize replacement. Extraction text is never treated as redaction.
+    from .base import redact_document
+
+    source = BytesIO(original)
+    source.name = "encapsulated" + extension
+    try:
+        # The PDF handler otherwise treats models=None as extraction followed
+        # by rasterization without any detected redaction rectangles.
+        from .documents_pdf import _resolve_detector
+
+        if _resolve_detector(policy.document_models) is None:
+            raise ValueError
+        document_policy = dict(policy.document_policy or {})
+        for key in ("output_path", "redacted_path", "destination_path"):
+            document_policy.pop(key, None)
+        document_policy["return_bytes"] = True
+        document = redact_document(
+            source,
+            policy=document_policy,
+            models=policy.document_models,
+        )
+        replacement = document.metadata.get(
+            "redacted_document_bytes", document.metadata.get("redacted_pdf_bytes")
+        )
+        if (
+            not isinstance(replacement, bytes)
+            or not replacement
+            or replacement.rstrip(b"\0") == original.rstrip(b"\0")
+        ):
+            raise ValueError
+    except Exception:
+        raise DicomDeidentificationError(
+            "encapsulated_document_redaction_failed"
+        ) from None
+    dataset.EncapsulatedDocument = replacement
+    dataset.EncapsulatedDocumentLength = len(replacement)
+
+
+def _overlay_planes(dataset: Any) -> tuple[tuple[Any, int, int, int], ...]:
+    planes = []
+    np = _import_numpy()
+    for group in range(0x6000, 0x6100, 2):
+        if (group, 0x0010) not in dataset:
+            continue
+        try:
+            origin = dataset[(group, 0x0050)].value
+            row, column = int(origin[0]) - 1, int(origin[1]) - 1
+            start_frame = (
+                int(dataset.get((group, 0x0051), 1).value) - 1
+                if (group, 0x0051) in dataset
+                else 0
+            )
+            if start_frame < 0:
+                raise ValueError
+            if (group, 0x3000) in dataset:
+                mask = dataset.overlay_array(group)
+            else:
+                _decompress_pixel_data(dataset)
+                bits = int(dataset.BitsAllocated)
+                position = int(dataset[(group, 0x0102)].value)
+                if (
+                    bits not in (8, 16, 32)
+                    or not int(dataset.BitsStored) <= position < bits
+                ):
+                    raise ValueError
+                if int(dataset.SamplesPerPixel) != 1:
+                    raise ValueError
+                endian = (
+                    ">"
+                    if str(dataset.file_meta.TransferSyntaxUID) == "1.2.840.10008.1.2.2"
+                    else "<"
+                )
+                raw = np.frombuffer(
+                    dataset.PixelData, dtype=np.dtype(endian + f"u{bits // 8}")
+                )
+                mask = ((raw >> position) & 1).reshape(
+                    -1, int(dataset.Rows), int(dataset.Columns)
+                )
+                if row != 0 or column != 0:
+                    raise ValueError
+            if mask.ndim == 2:
+                mask = mask[np.newaxis, ...]
+            planes.append((mask, row, column, start_frame))
+        except Exception:
+            raise DicomDeidentificationError("overlay_burn_failed") from None
+    return tuple(planes)
+
+
+def _burn_overlay_planes(
+    frames: Sequence[Any], planes: Sequence[Any], dataset: Any
+) -> None:
+    np = _import_numpy()
+    for masks, row, column, start_frame in planes:
+        if start_frame + len(masks) > len(frames):
+            raise DicomDeidentificationError("overlay_burn_failed")
+        for index, mask in enumerate(masks):
+            frame = frames[start_frame + index]
+            height, width = frame.shape[:2]
+            y0, x0 = max(0, row), max(0, column)
+            y1, x1 = (
+                min(height, row + mask.shape[0]),
+                min(width, column + mask.shape[1]),
+            )
+            if y0 >= y1 or x0 >= x1:
+                continue
+            region = frame[y0:y1, x0:x1]
+            selected = mask[y0 - row : y1 - row, x0 - column : x1 - column].astype(bool)
+            limits = np.iinfo(frame.dtype)
+            fill = (
+                limits.min
+                if dataset.PhotometricInterpretation == "MONOCHROME1"
+                else limits.max
+            )
+            region[selected] = fill
 
 
 def _optional_int(value: Any | None) -> int | None:
@@ -1236,9 +1640,28 @@ def _normalize_seeded_phi_text(value: Any) -> str:
     return " ".join(text.casefold().split())
 
 
-def _set_standard_deid_markers(dataset: Any, context: _Context) -> None:
-    dataset.PatientIdentityRemoved = "YES"
-    dataset.DeidentificationMethod = _DEID_METHOD
+def _invalidate_identity_claims(dataset: Any, *, root: bool = True) -> None:
+    if root or "PatientIdentityRemoved" in dataset:
+        dataset.PatientIdentityRemoved = "NO"
+    for keyword in ("DeidentificationMethod", "DeidentificationMethodCodeSequence"):
+        if keyword in dataset:
+            del dataset[keyword]
+    for element in dataset:
+        if element.VR == "SQ":
+            for item in element.value or ():
+                _invalidate_identity_claims(item, root=False)
+
+
+def _set_standard_deid_markers(
+    dataset: Any, context: _Context, *, pixel_status: DicomPixelStatus
+) -> None:
+    if "DeidentificationMethodCodeSequence" in dataset:
+        del dataset.DeidentificationMethodCodeSequence
+    unclean = pixel_status is DicomPixelStatus.NOT_CLEANED
+    dataset.PatientIdentityRemoved = "NO" if unclean else "YES"
+    dataset.DeidentificationMethod = (
+        "OpenMed header processing; pixels not cleaned" if unclean else _DEID_METHOD
+    )
     dataset.LongitudinalTemporalInformationModified = "MODIFIED"
 
     for tag_int, keyword, vr, ps315_action in (
@@ -1408,6 +1831,7 @@ def _record_action(
     action: str,
     ps315_action: str,
     location: str,
+    record_value: bool = True,
 ) -> None:
     context.actions.append(
         DicomHeaderAction(
@@ -1417,8 +1841,8 @@ def _record_action(
             action=action,
             ps315_action=ps315_action,
             location=location,
-            value_sha256=_hash_value(element.value),
-            value_length=len(str(element.value)),
+            value_sha256=_hash_value(element.value) if record_value else None,
+            value_length=len(str(element.value)) if record_value else None,
         )
     )
 
@@ -1467,7 +1891,13 @@ def _dicom_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    pixel_result = redact_dicom_pixels(path, policy=policy, models=models, lang=lang)
+    pixel_result, dataset = _redact_pixels(
+        path,
+        policy=policy,
+        models=models,
+        lang=lang,
+        save=False,
+    )
     header_policy = _coerce_policy(policy)
     header_policy = DicomHeaderDeidPolicy(
         output_path=pixel_result.output_path,
@@ -1477,8 +1907,17 @@ def _dicom_handler(
         date_shift_secret=header_policy.date_shift_secret,
         uid_salt=header_policy.uid_salt,
         keep_year=header_policy.keep_year,
+        fail_on_unclean_pixels=header_policy.fail_on_unclean_pixels,
+        redact_encapsulated_documents=header_policy.redact_encapsulated_documents,
+        document_policy=header_policy.document_policy,
+        document_models=header_policy.document_models,
     )
-    result = deidentify_dicom_headers(pixel_result.output_path, policy=header_policy)
+    result = _deidentify_headers(
+        pixel_result.output_path,
+        policy=header_policy,
+        processed_document_digests=pixel_result._processed_document_digests,
+        dataset=dataset,
+    )
     return ExtractedDocument(
         text="",
         metadata={
@@ -1496,5 +1935,7 @@ __all__ = [
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
+    "DicomPixelStatus",
+    "DicomDeidentificationError",
     "deidentify_dicom_headers",
 ]
