@@ -58,6 +58,10 @@ def evaluate_medmentions_st21pv(
     the report. The provider is responsible for using a caller-licensed local
     UMLS index; this function performs no download or credential lookup.
 
+    Non-abstaining ``GroundedSpan`` results contribute selected candidates
+    followed by their ranked alternatives. Abstained results and results
+    without a selection remain abstentions even when alternatives are retained.
+
     Args:
         path: Local caller-created st21pv JSONL projection.
         provider: Local callback returning ranked UMLS candidates.
@@ -81,7 +85,14 @@ def evaluate_medmentions_st21pv(
     abstentions = 0
     for case in cases:
         output = provider(case.mention, top_k)
-        candidates = output.candidates if isinstance(output, GroundedSpan) else output
+        if isinstance(output, GroundedSpan):
+            candidates = (
+                (*output.candidates, *output.ranked_alternatives)
+                if output.candidates and not output.abstained
+                else ()
+            )
+        else:
+            candidates = output
         codes = [
             candidate.code
             for candidate in candidates
