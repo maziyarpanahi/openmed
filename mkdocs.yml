@@ -71,6 +71,9 @@ nav:
       - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
+      - Runtime Authority Revocation: agent/runtime-revocation.md
+      - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+      - Effect Admission and Emergency Stop: agent/effect-admission.md
       - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
       - Agent Action Ledger: agent/action-ledger.md
       - Deterministic Agent Replay: agent/deterministic-replay.md

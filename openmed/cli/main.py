@@ -577,6 +577,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    from .agent_admission import add_argparse_admission_commands
+
+    add_argparse_admission_commands(subparsers)
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_batch_run_command(subparsers)
