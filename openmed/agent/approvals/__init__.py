@@ -13,6 +13,7 @@ from .tokens import (
     MAX_APPROVAL_CLOCK_SKEW_SECONDS,
     MAX_APPROVAL_LIFETIME_SECONDS,
     ApprovalActionMismatchError,
+    ApprovalAuthorization,
     ApprovalExpiredError,
     ApprovalKeyError,
     ApprovalKeyProvider,
@@ -35,6 +36,7 @@ from .tokens import (
 )
 
 __all__ = [
+    "ApprovalAuthorization",
     "DEFAULT_APPROVAL_LIFETIME_SECONDS",
     "MAX_APPROVAL_LIFETIME_SECONDS",
     "MAX_APPROVAL_CLOCK_SKEW_SECONDS",
