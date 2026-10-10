@@ -62,6 +62,8 @@ use a controlled CLI error with no exception detail.
 ## Maintaining the vectors
 
 Schema and positive-result digests are versioned reference pins in the runner.
+The outcome pin includes the required fields in each standalone outcome fragment,
+matching the reviewed public catalog.
 An intentional contract change needs a reviewed update to its version, actual
 source catalog or golden resource, pins and mutation tests. Changing expected
 bytes merely to obtain a passing check defeats the agreement guarantee.

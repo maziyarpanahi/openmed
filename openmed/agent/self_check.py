@@ -29,12 +29,12 @@ _VERSIONS: Final = {
 }
 _SCHEMA_DIGESTS: Final = {
     "correlation": "sha256:c36133f0bd6d7a39e35b4486ba81b0b847ab8bfedd83fcedce085148c70454a0",
-    "outcome": "sha256:779d96e55c22eb2b5591d6607d667a54a33858afa688e60d3d2d88bf6a0c22da",
+    "outcome": "sha256:91ec366ce715e460e6edc6bd385bc6ce9d972091e08c53024e76c0735f925360",
     "run_summary": "sha256:5e0fb6c541b163a898fef5575b47c1aab6ac926c0898d2cf4391615bb1fed95a",
     "timing": "sha256:772aea820547fce3cdc8afa571f2f096d01c08bfefd36c004a6672d9768e87ca",
 }
 _RESULT_DIGESTS: Final = {
-    "schema": "sha256:73412ddadbad7250b3f8174a82722a5ed7a7b9b2b00fd08ae2a45074156bb29c",
+    "schema": "sha256:a9f40a6d1044bce5734daf9d291b6c8914b2abd37f7c15713e1567f5341b20c4",
     "golden": "sha256:3f174d47df94694145d38eb9e0e95be1a497673198a093fce70d90c96e9ee040",
     "unsafe_fields": "sha256:c9eb73d7fdeb0b63cfe8c0b946c5fbca3011406c0e5525e06346dd7c1212aa85",
     "outcomes": "sha256:93a3f7adaa783a22f3c9879f08b0fe3f520a7e971733003420c90aa8485bb48a",
