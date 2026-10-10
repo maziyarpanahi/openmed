@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   budget, with a value-free JSON report, stable CLI error codes, and no runtime
   import or network access (#3805).
 
+### Fixed
+
+- Parse clinical and Journey ISO calendar timestamps through one explicit
+  profile on every supported Python version. Reject basic, week-date, ordinal
+  and compact-offset input with value-free errors while retaining supported
+  extended values, caller timezone rules and golden digests.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
