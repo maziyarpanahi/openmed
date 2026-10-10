@@ -168,6 +168,12 @@ quality, clinical validation or a release benchmark.
 
 ## JSON Schema exports
 
+The bundled brief audit and response schemas admit the optional, closed
+`metrics.reviewed_evidence` v1 metadata. Runtime record validation also checks its
+bounded offsets, unique references and receipt time ordering. This describes an
+audit record; it does not replace current source custody or independent review
+authority. The original synthetic evidence-packet schema remains unchanged.
+
 The bundled Draft 2020-12 files in `openmed/core/schemas/json/` describe the
 brief audit and protected response, evidence packet, NLI verification list and
 SDOH evidence report. `openmed.clinical.record_schemas` exports and fingerprints
