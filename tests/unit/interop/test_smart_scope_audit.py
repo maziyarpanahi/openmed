@@ -8,10 +8,10 @@ import pytest
 
 from openmed.interop.smart_scope_audit import (
     audit_smart_scope_preflight,
-    parse_smart_scope_preflight,
     audit_smart_scopes,
     normalize_smart_scope,
     parse_smart_scope,
+    parse_smart_scope_preflight,
 )
 
 
@@ -396,13 +396,10 @@ def test_reason_codes_and_output_are_stable_and_content_free() -> None:
 @pytest.mark.parametrize(
     "value",
     [
-        "patient/Observation.read",  # SMART v1 is not silently promoted.
         "patient/Observation.rr",
         "patient/Observation.",
         "patient/observation.r",
-        "patient/Observation.*",
         "launch/custom-identifier",
-        "offline_access",
         "https://example.invalid/token",
         "Bearer sensitive-value",
     ],

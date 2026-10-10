@@ -39,7 +39,7 @@ _NON_CLINICAL = {
     "online_access": "session",
     "offline_access": "session",
 }
-_RESOURCE_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*\Z")
+_RESOURCE_RE = re.compile(r"[A-Z][A-Za-z0-9]{0,63}\Z")
 _QUERY_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.:-]*\Z")
 _BAD_ESCAPE_RE = re.compile(r"%(?![0-9a-fA-F]{2})")
 

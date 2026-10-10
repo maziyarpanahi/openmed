@@ -61,9 +61,10 @@ review.
 ## Shared scope grammar
 
 `openmed.interop.smart_scope_grammar` owns parsing and comparison. The Python
-scope audit uses it directly; it is also the integration seam for the pending
-#3084 preflight and #2772 custody work. Those OAuth, credential and discovery
-implementations are outside this change. No Swift scope-audit API is introduced.
+scope audit and the current preflight use it directly. Token custody normalizes
+private scopes through the same strict adapter and exports only digest-bearing
+evidence. OAuth, credential storage and discovery remain outside this change.
+No Swift scope-audit API is introduced.
 
 Clinical resource scopes accept patient, user and system contexts, exact resource
 names and `*` resource wildcards. Operations normalize in `cruds` order:
@@ -144,8 +145,8 @@ offline least-privilege check, not authority to execute a clinical operation.
 ## Pre-run least-privilege check
 
 For workflows that declare launch context or resource wildcards, use the
-additive preflight API. The existing `audit_smart_scopes` report above remains
-unchanged for exact-resource examples. The preflight accepts only scope names;
+preflight API. Valid-only `audit_smart_scopes` reports retain their existing
+keys. The preflight accepts names or OAuth space-delimited sets;
 it does not inspect tokens, endpoints, patient identifiers, or clinical data.
 
 ```python
@@ -159,11 +160,15 @@ if not preflight.is_least_privilege:
     print(preflight.to_dict())  # Route findings to operator review.
 ```
 
-The preflight normalizes `patient`, `user`, and `system` scopes with SMART v2
-`c`, `r`, `u`, `d`, and `s` operations. It also recognizes `launch`,
-`launch/patient`, and `launch/encounter`. Findings have stable reason codes:
+The preflight uses the same v1/v2, granular, identity, launch and session grammar.
+Findings have stable reason codes:
 `missing_scope`, `excessive_scope`, and `overbroad_resource`. A wildcard can
 cover a specific resource's required operation while still being reported as
-overbroad. Unknown formats, SMART v1 operation words, and custom launch
-contexts are rejected without echoing the supplied value. Any finding requires
+overbroad. Unknown formats and unsupported custom launch contexts produce
+value-free `findings`; `is_least_privilege` is false whenever any parse finding
+is present. The strict `parse_smart_scope_preflight` adapter still raises a
+controlled `ValueError` on malformed intake for existing custody callers. Its
+normalized `name` is private and excluded from object representations. Custody
+retains granular constraints for permission checks but replaces the complete
+query with a constraint digest in `ScopeEvidence`. Any finding requires
 operator review; this helper never authorizes a clinical action.
