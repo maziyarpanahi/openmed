@@ -9,8 +9,25 @@ public enum ClinicalBriefError: String, Error, LocalizedError, Sendable {
     case invalidPacket = "invalid_packet"
     case privacy = "privacy"
     case unsupportedClaim = "unsupported_claim"
+    case cancelled = "cancelled"
+    case deadlineExceeded = "deadline_exceeded"
 
     public var errorDescription: String? { rawValue }
+}
+
+/// Cooperative native checkpoints; applications supply their existing deadline clock.
+/// The closure must be thread-safe, local, and retain no protected source values.
+public struct ClinicalBriefCancellation: Sendable {
+    private let deadlineExpired: @Sendable () -> Bool
+
+    public init(deadlineExpired: @escaping @Sendable () -> Bool = { false }) {
+        self.deadlineExpired = deadlineExpired
+    }
+
+    public func check() throws {
+        if Task<Never, Never>.isCancelled { throw ClinicalBriefError.cancelled }
+        if deadlineExpired() { throw ClinicalBriefError.deadlineExceeded }
+    }
 }
 
 /// One source/output Unicode-scalar citation in the shared Python wire schema.
@@ -120,6 +137,40 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
     /// Value-free audit packet; generated/source text is excluded.
     public func auditJSON() -> Data { audit }
 
+    /// Generate and verify locally, rejecting late results from legacy providers.
+    /// Providers may capture `cancellation` for checkpoints within their own stages.
+    public static func compose(
+        source: String,
+        originalIdentifiers: [String],
+        cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
+        generate: @Sendable (String) async throws -> String,
+        evaluate: @Sendable (String, String) async throws -> Data,
+        privacyCheck: @Sendable (String) throws -> Bool
+    ) async throws -> ClinicalBrief {
+        do {
+            try cancellation.check()
+            guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024,
+                originalIdentifiers.reduce(0, { $0 + $1.utf8.count }) <= 16_384
+            else { throw ClinicalBriefError.invalidPacket }
+            let summary = try await generate(source)
+            try cancellation.check()
+            guard !summary.isEmpty, summary.utf8.count <= 16_384 else { throw ClinicalBriefError.unsupportedClaim }
+            let packet = try await evaluate(source, summary)
+            try cancellation.check()
+            let result = try validate(
+                evaluationJSON: packet, source: source, generatedSummary: summary,
+                originalIdentifiers: originalIdentifiers, cancellation: cancellation,
+                privacyCheck: privacyCheck)
+            try cancellation.check()
+            return result
+        } catch {
+            try cancellation.check()
+            if error is CancellationError { throw ClinicalBriefError.cancelled }
+            if let controlled = error as? ClinicalBriefError { throw controlled }
+            throw ClinicalBriefError.invalidPacket
+        }
+    }
+
     /// Verify a packet returned by trusted local evidence/NLI application code.
     ///
     /// `privacyCheck` must scan the complete rendered response, not only the
@@ -129,10 +180,12 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
         source: String,
         generatedSummary: String,
         originalIdentifiers: [String],
+        cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
         boundGeneration: ClinicalBriefGeneration? = nil,
         reviewedEvidence: [ClinicalBriefGenerationEvidence] = [],
         privacyCheck: (String) throws -> Bool
     ) throws -> ClinicalBrief {
+        try cancellation.check()
         guard evaluationJSON.count <= 1_048_576, originalIdentifiers.count <= 1024,
             originalIdentifiers.reduce(0, { $0 + $1.utf8.count }) <= 16_384,
             source.utf8.count <= 16_384, generatedSummary.utf8.count <= 16_384,
@@ -211,7 +264,11 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
         }
         guard let rendered = String(data: evaluationJSON, encoding: .utf8) else { throw ClinicalBriefError.invalidPacket }
         var clean = false
-        do { clean = try privacyCheck(rendered) } catch { throw ClinicalBriefError.privacy }
+        do { clean = try privacyCheck(rendered) } catch {
+            try cancellation.check()
+            throw ClinicalBriefError.privacy
+        }
+        try cancellation.check()
         guard clean else { throw ClinicalBriefError.privacy }
         payload["digest"] = recordedDigest
         let typedVerdicts = citations.map { ClinicalBriefVerdict(claimIndex: $0.claimIndex, label: "entailment") }

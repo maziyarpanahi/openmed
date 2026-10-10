@@ -19,6 +19,12 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from openmed.clinical.brief_cancellation import (
+    BriefCancellation,
+    BriefInterrupted,
+    call_with_cancellation,
+    check_cancellation,
+)
 from openmed.core.pii import DeidentificationResult, deidentify
 
 DEFAULT_SUMMARIZATION_MODE = "bhc"
@@ -233,6 +239,8 @@ def summarize_deidentified(
     deidentified: DeidentificationResult,
     mode: str = DEFAULT_SUMMARIZATION_MODE,
     model: object | None = None,
+    *,
+    cancellation: BriefCancellation | None = None,
 ) -> SummarizationResult:
     """Run the guarded summarization stage on a de-identification result.
 
@@ -245,6 +253,7 @@ def summarize_deidentified(
         deidentified: Result produced by the de-identification stage.
         mode: Summarization mode forwarded to compatible backends.
         model: Optional local/on-device summarizer backend.
+        cancellation: Optional cooperative brief interruption context.
 
     Returns:
         A summary paired with a passing leakage check.
@@ -255,6 +264,7 @@ def summarize_deidentified(
         SummarizationLeakageError: If the backend emits a source token.
     """
 
+    check_cancellation(cancellation)
     normalized_mode = _normalize_mode(mode)
     source = _require_deidentification_result(deidentified)
     source_check = _build_leakage_check(source, source.deidentified_text)
@@ -267,12 +277,15 @@ def summarize_deidentified(
     from openmed.clinical.summarize_backends import resolve_summarizer_backend
 
     backend = resolve_summarizer_backend(model)
-    summary = _invoke_backend(backend, source.deidentified_text, normalized_mode)
+    summary = _invoke_backend(
+        backend, source.deidentified_text, normalized_mode, cancellation
+    )
     leakage_check = _build_leakage_check(source, summary)
+    check_cancellation(cancellation)
     if not leakage_check.passed:
         raise SummarizationLeakageError(leakage_check)
 
-    return SummarizationResult(
+    result = SummarizationResult(
         summary=summary,
         leakage_check=leakage_check,
         mode=normalized_mode,
@@ -283,6 +296,8 @@ def summarize_deidentified(
             else None
         ),
     )
+    check_cancellation(cancellation)
+    return result
 
 
 def _normalize_mode(mode: str) -> str:
@@ -315,7 +330,9 @@ def _require_deidentification_result(value: object) -> DeidentificationResult:
     return value
 
 
-def _invoke_backend(model: object | None, text: str, mode: str) -> str:
+def _invoke_backend(
+    model: object | None, text: str, mode: str, cancellation=None
+) -> str:
     from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
@@ -327,7 +344,9 @@ def _invoke_backend(model: object | None, text: str, mode: str) -> str:
     failed = False
     try:
         with network_blocked_if_offline(local_only=True):
-            return _call_backend(model, text, mode)
+            return _call_backend(model, text, mode, cancellation)
+    except BriefInterrupted:
+        raise
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
@@ -345,7 +364,7 @@ def _invoke_backend(model: object | None, text: str, mode: str) -> str:
     raise AssertionError("unreachable summarizer state")
 
 
-def _call_backend(model: object | None, text: str, mode: str) -> str:
+def _call_backend(model: object | None, text: str, mode: str, cancellation=None) -> str:
     if model is None:
         return _extractive_summary(text)
 
@@ -355,8 +374,12 @@ def _call_backend(model: object | None, text: str, mode: str) -> str:
     if not callable(callback):
         raise TypeError("model must be callable or expose a callable summarize method")
 
+    original_callback = callback
+    callback = lambda *args, **kwargs: call_with_cancellation(
+        original_callback, *args, cancellation=cancellation, **kwargs
+    )
     try:
-        parameters = inspect.signature(callback).parameters
+        parameters = inspect.signature(original_callback).parameters
     except (TypeError, ValueError):
         output = callback(text, mode=mode)
     else:

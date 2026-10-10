@@ -252,6 +252,8 @@
     },
     "refusal_reason": {
       "enum": [
+        "cancelled",
+        "deadline_exceeded",
         "empty_evidence",
         "invalid_evidence",
         "invalid_input",
