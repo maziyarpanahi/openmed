@@ -40,6 +40,7 @@ from openmed.core.decoding import (
     SpanNode,
     decode_span_graph,
 )
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 from openmed.processing.advanced_ner import EntitySpan
 
 TIMELINE_ASSISTIVE_DISCLAIMER = (
@@ -1875,7 +1876,7 @@ def _absolute_interval(timex: TemporalExpression) -> NormalizedInterval | None:
     if timex.value is None:
         return None
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", timex.value):
-        value = date.fromisoformat(timex.value)
+        value = parse_iso_date(timex.value)
         return _interval(
             value,
             value,
@@ -2270,7 +2271,7 @@ def _coerce_date(value: str | date | datetime | None) -> date | None:
         return value.date()
     if isinstance(value, date):
         return value
-    return date.fromisoformat(value)
+    return parse_iso_date(value)
 
 
 def _coerce_document_creation_time(
@@ -2289,9 +2290,9 @@ def _coerce_document_creation_time(
         raise ValueError("document_creation_time must not be empty")
     try:
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", normalized):
-            parsed_date = date.fromisoformat(normalized)
+            parsed_date = parse_iso_date(normalized)
             return parsed_date.isoformat(), parsed_date
-        parsed_datetime = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+        parsed_datetime = parse_iso_datetime(normalized.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError(
             "document_creation_time must be a valid ISO date or datetime"
@@ -2418,7 +2419,7 @@ def _normalized_timex_dct_position(
 
 def _normalized_value_date_bounds(value: str) -> tuple[date, date] | None:
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-        parsed = date.fromisoformat(value)
+        parsed = parse_iso_date(value)
         return parsed, parsed
     if match := re.fullmatch(r"(?P<year>\d{4})-(?P<month>\d{2})", value):
         year = int(match.group("year"))
@@ -2437,7 +2438,7 @@ def _normalized_value_date_bounds(value: str) -> tuple[date, date] | None:
         year = int(value)
         return date(year, 1, 1), date(year, 12, 31)
     try:
-        parsed_datetime = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed_datetime = parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError:
         return None
     parsed_date = parsed_datetime.date()
