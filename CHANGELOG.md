@@ -62,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reports separate contract parity from unsupported language capabilities and
   unevaluated model quality. Accept unset optional replacement aliases without
   weakening populated-alias consistency checks (#3659).
+- Fixed-order clinical brief composition over explicitly reviewed synthetic
+  evidence, with local generation, calibrated NLI integration, exact citations,
+  rendered-packet privacy checks and value-free review/provenance output.
 
 - Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
   empty interruption outcomes, CLI/service parity, and native late-result guards.
