@@ -46,6 +46,13 @@ from .delegation import (
     DelegationValidationError,
     DelegationVerificationError,
 )
+from .fhir_write_scope import (
+    FHIRWriteScopeError,
+    FHIRWriteScopeFinding,
+    FHIRWriteScopeVerifier,
+    ReferenceScopeResolver,
+    preview_with_fhir_write_scope,
+)
 from .grants import (
     CAPABILITY_GRANT_SCHEMA_VERSION,
     CAPABILITY_GRANT_SIGNATURE_ALGORITHM,
@@ -122,6 +129,11 @@ __all__ = [
     "DelegationSignatureError",
     "DelegationValidationError",
     "DelegationVerificationError",
+    "FHIRWriteScopeError",
+    "FHIRWriteScopeFinding",
+    "FHIRWriteScopeVerifier",
+    "ReferenceScopeResolver",
+    "preview_with_fhir_write_scope",
     "MappingCapabilityGrantKeyProvider",
     "RecordSelector",
     "StaticCapabilityGrantKeyProvider",

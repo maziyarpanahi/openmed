@@ -7,22 +7,22 @@ on:
       - '.github/workflows/sdk-release-candidate.yml'
       - 'openmed/__about__.py'
       - 'openmed/eval/release_readiness.py'
-      - 'docs/release/v2.5.0.md'
-      - 'docs/migration/2.3-to-2.5.md'
+      - 'CHANGELOG.md'
+      - 'docs/migration/2.5-to-3.0.md'
   workflow_dispatch:
     inputs:
       version:
         description: Stable SDK version to prepare.
         required: true
-        default: 2.5.0
+        default: 3.0.0
       api_base_ref:
         description: Previous stable SDK tag.
         required: true
-        default: v2.3.0
+        default: v2.5.0
       migration_guide:
         description: Reviewed migration guide for this SDK candidate.
         required: true
-        default: docs/migration/2.3-to-2.5.md
+        default: docs/migration/2.5-to-3.0.md
 
 permissions:
   contents: read
@@ -36,9 +36,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      RELEASE_VERSION: ${{ inputs.version || '2.5.0' }}
-      API_BASE_REF: ${{ inputs.api_base_ref || 'v2.3.0' }}
-      MIGRATION_GUIDE: ${{ inputs.migration_guide || 'docs/migration/2.3-to-2.5.md' }}
+      RELEASE_VERSION: ${{ inputs.version || '3.0.0' }}
+      API_BASE_REF: ${{ inputs.api_base_ref || 'v2.5.0' }}
+      MIGRATION_GUIDE: ${{ inputs.migration_guide || 'docs/migration/2.5-to-3.0.md' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -63,6 +63,9 @@ jobs:
             tests/integration/test_end_to_end.py \
             tests/unit/eval/test_golden_fixtures.py \
             tests/unit/eval/test_i18n_golden_fixtures.py \
+            tests/integration/test_v3_golden_journey.py \
+            tests/integration/test_v3_journey_release_gate.py \
+            tests/integration/test_clinical_pipeline_e2e.py \
             --junitxml=artifacts/sdk-readiness/golden.xml -q
           uv run --frozen python - <<'PY'
           import json
@@ -77,7 +80,7 @@ jobs:
           if failed or executed == 0:
               raise SystemExit("golden suite has failures or no executed tests")
           Path("artifacts/sdk-readiness/e2e.json").write_text(json.dumps({
-              "passed": True, "suite": "golden_v2", "executed": executed,
+              "passed": True, "suite": "golden_v3", "executed": executed,
               "head_sha": os.environ["CANDIDATE_SHA"],
           }, indent=2) + "\n")
           PY
