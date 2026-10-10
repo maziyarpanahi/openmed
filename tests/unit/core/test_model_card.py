@@ -267,7 +267,7 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "## OpenMedKit for Android" in card
     assert 'url = uri("https://jitpack.io")' in card
     assert f'implementation("com.github.maziyarpanahi:openmed:v{__version__}")' in card
-    assert "2,000+ medical models" in card
+    assert "2,200+ medical models" in card
     assert "master-SNAPSHOT" not in card
     assert "OpenMedKit.fromDirectory(modelDirectory)" in card
     assert "suspend fun analyzeModel()" in card
