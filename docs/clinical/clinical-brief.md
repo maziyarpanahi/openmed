@@ -73,6 +73,21 @@ The synthetic unit fixtures use explicitly labelled test-only NLI scores and
 privacy detectors. They verify orchestration and refusal behavior, not model
 quality, clinical validation or a release benchmark.
 
+## JSON Schema exports
+
+The bundled Draft 2020-12 files in `openmed/core/schemas/json/` describe the
+brief audit and protected response, evidence packet, NLI verification list and
+SDOH evidence report. `openmed.clinical.record_schemas` exports and fingerprints
+these records without loading a runtime or contacting a service. Optional
+`validate_clinical_record(name, record)` validation requires `jsonschema` and
+reports controlled schema names and field locations without submitted values.
+
+The audit schemas reject nested source and summary text; the response schema
+retains its explicitly protected `summary` field. Schema validation does not
+prove that a supplied record came from the producer, that its digests are
+correct, or that clinical review has occurred. Record versions and Python
+producer behavior remain unchanged.
+
 ## CLI and service interfaces
 
 `openmed brief note.txt --model extractive --profile bhc --review-id <digest>
