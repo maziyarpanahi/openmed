@@ -125,6 +125,14 @@ from .versions import (
     r4_to_r5,
     r5_to_r4,
 )
+from .write_labels import (
+    FHIRWriteLabelPolicy,
+    NormalizedFHIRWrite,
+    WriteLabelError,
+    WriteLabelFinding,
+    normalize_proposed_resource,
+    validate_proposed_resource,
+)
 
 _BULK_EXPORTS = frozenset(
     {
@@ -188,6 +196,12 @@ __all__ = [
     "TransactionLimits",
     "TransactionReviewerRole",
     "assemble_transaction",
+    "FHIRWriteLabelPolicy",
+    "NormalizedFHIRWrite",
+    "WriteLabelError",
+    "WriteLabelFinding",
+    "normalize_proposed_resource",
+    "validate_proposed_resource",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",

@@ -581,6 +581,7 @@ classification:
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
     - interop/fhir-transactions.md
+    - interop/fhir-write-labels.md
     - interop/fhir-conditional-writes.md
     - interop/fhir-write-provenance.md
     - interop/fhir-concurrency.md
