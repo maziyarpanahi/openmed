@@ -32,6 +32,9 @@ DOCUMENTED_ERROR_MODULES = (
     "openmed.clinical.summarize_backends",
     "openmed.clinical.nli",
     "openmed.clinical.nli_backends",
+    "openmed.clinical.nli_qualification",
+    "openmed.clinical.extractive_selection",
+    "openmed.clinical.brief_cancellation",
     "openmed.models.clinical_slm_manifest",
     "openmed.models.clinical_slm_capabilities",
     "openmed.models.clinical_slm_memory",
@@ -64,7 +67,7 @@ def _backend_table(markdown: str, heading: str) -> str:
 
 def _assert_documented_backend_outcomes(markdown: str) -> None:
     errors = re.findall(
-        r"(?m)^\| `([A-Z]\w+Error)` \|",
+        r"(?m)^\| `([A-Z]\w+)` \|",
         _backend_table(markdown, "## Backend exceptions\n"),
     )
     assert tuple(sorted(errors)) == _backend_error_exports(), (
@@ -151,6 +154,16 @@ def test_local_backend_guide_check_rejects_new_implicit_backend_export(monkeypat
         "SyntheticNewBackendError", (RuntimeError,), {"__module__": backends.__name__}
     )
     monkeypatch.setattr(backends, "SyntheticNewBackendError", error, raising=False)
+    with pytest.raises(AssertionError, match="errors differ from public exports"):
+        _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_local_backend_guide_check_rejects_new_interruption_export(monkeypatch):
+    module = import_module("openmed.clinical.brief_cancellation")
+    error = type(
+        "SyntheticInterrupted", (RuntimeError,), {"__module__": module.__name__}
+    )
+    monkeypatch.setattr(module, "SyntheticInterrupted", error, raising=False)
     with pytest.raises(AssertionError, match="errors differ from public exports"):
         _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
 
