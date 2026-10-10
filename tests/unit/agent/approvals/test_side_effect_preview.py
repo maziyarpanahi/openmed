@@ -194,3 +194,42 @@ def test_input_values_are_frozen_after_preview() -> None:
     with pytest.raises(TypeError):
         write.after["code"]["text"] = "changed"
     _check(intent, preview.digest, ({"status": "preliminary"},))
+
+
+def test_finite_decimal_resource_values_can_be_reviewed() -> None:
+    write = ResourceWrite(
+        WriteKind.UPDATE,
+        "Observation",
+        "res_" + "e" * 32,
+        {"valueQuantity.value": 1.25},
+        {"valueQuantity.value": 2.5},
+    )
+    intent = dataclasses.replace(_intent(), writes=(write,))
+    preview = render_side_effect_preview(intent, secret=_SECRET)
+    assert preview.resources[0].fields[0].path == "valueQuantity.value"
+    _check(intent, preview.digest, ({"valueQuantity.value": 1.25},))
+
+
+@pytest.mark.parametrize("malformed", ["nonfinite", "surrogate", "deep"])
+def test_malformed_json_values_fail_with_value_free_preview_errors(
+    malformed: str,
+) -> None:
+    value = (
+        float("nan") if malformed == "nonfinite" else "synthetic-private-" + chr(0xD800)
+    )
+    if malformed == "deep":
+        value = "synthetic-private-sentinel"
+        for _ in range(100):
+            value = [value]
+    with pytest.raises(PreviewError) as excinfo:
+        write = ResourceWrite(
+            WriteKind.CREATE,
+            "Observation",
+            "res_" + "e" * 32,
+            None,
+            {"valueString": value},
+        )
+        render_side_effect_preview(
+            dataclasses.replace(_intent(), writes=(write,)), secret=_SECRET
+        )
+    assert "synthetic-private" not in str(excinfo.value)
