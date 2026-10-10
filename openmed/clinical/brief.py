@@ -278,8 +278,8 @@ def _compose(value, model, profile_name, context, completed):
     from openmed.clinical.summarize_backends import (
         BriefGenerationEvidence,
         BriefGenerationResult,
-        LocalSummarizerError,
         ExtractiveSummarizerBackend,
+        LocalSummarizerError,
         resolve_summarizer_backend,
     )
     from openmed.clinical.summary_citations import compute_summary_citation_metrics
