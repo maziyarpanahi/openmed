@@ -146,6 +146,7 @@ once, after validating public metadata. Provider errors are replaced by the
 value-free `key_provider_failed` diagnostic. Invalid keys fail closed under the
 existing minimum-length contract. No key is persisted, and the adapter performs
 no network, filesystem, telemetry or clinical action.
+Provider and unrepresentable-period failures retain no private exception context.
 
 ### Mapping and representability
 

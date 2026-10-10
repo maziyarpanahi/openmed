@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 
 from openmed.clinical.journey_contracts import canonical_digest
 from openmed.clinical.measures.contracts import (
@@ -12,6 +12,7 @@ from openmed.clinical.measures.contracts import (
     PopulationKind,
     PopulationState,
 )
+from openmed.core.iso_temporal import parse_iso_datetime
 
 from .quality_measure_evidence import (
     CalculationTraceStep,
@@ -174,12 +175,14 @@ def build_native_measure_evidence_packet(
         key_id,
         "hmac-sha256:" + "0" * 64,
     )
+    provider_failed = False
+    signing_key: bytes | bytearray = b""
     try:
         signing_key = key_provider(key_id)
     except Exception:
-        raise QualityMeasureEvidenceError(
-            "key_provider_failed", "key_provider"
-        ) from None
+        provider_failed = True
+    if provider_failed:
+        raise QualityMeasureEvidenceError("key_provider_failed", "key_provider")
     return build_quality_measure_evidence_packet(
         definition,
         value_sets,
@@ -204,22 +207,21 @@ def _packet_boundaries(run: MeasureRunResult) -> MeasureTimeBoundaries:
             )
         ):
             raise QualityMeasureEvidenceError("unsupported_time_precision", "period")
-        start = datetime.fromisoformat(
-            run.measurement_period.start.replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
-        end = datetime.fromisoformat(
-            run.measurement_period.end.replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
+        start = parse_iso_datetime(run.measurement_period.start).astimezone(
+            timezone.utc
+        )
+        end = parse_iso_datetime(run.measurement_period.end).astimezone(timezone.utc)
         # Native ends are inclusive; the packet uses an exclusive end. No rounding.
         end += timedelta(seconds=1)
         return MeasureTimeBoundaries(
             start.isoformat(timespec="seconds").replace("+00:00", "Z"),
             end.isoformat(timespec="seconds").replace("+00:00", "Z"),
         )
-    except (ValueError, OverflowError) as error:
-        if isinstance(error, QualityMeasureEvidenceError):
-            raise
-        raise QualityMeasureEvidenceError("unsupported_time_range", "period") from None
+    except QualityMeasureEvidenceError:
+        raise
+    except (ValueError, OverflowError):
+        pass
+    raise QualityMeasureEvidenceError("unsupported_time_range", "period")
 
 
 __all__ = ["build_native_measure_evidence_packet"]

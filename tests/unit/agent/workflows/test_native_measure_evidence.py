@@ -401,6 +401,7 @@ def test_provider_failure_diagnostics_hide_credentials_and_private_paths():
     with pytest.raises(QualityMeasureEvidenceError) as caught:
         _packet(_run(), key_provider=failing_provider)
     assert caught.value.code == "key_provider_failed"
+    assert caught.value.__context__ is None
     assert secret not in str(caught.value)
     assert secret not in "".join(
         traceback.format_exception(caught.type, caught.value, caught.tb)
@@ -437,8 +438,9 @@ def test_invalid_public_metadata_is_rejected_before_provider(kwargs):
     ],
 )
 def test_unrepresentable_periods_fail_without_rounding(period, code):
-    with pytest.raises(QualityMeasureEvidenceError, match=code):
+    with pytest.raises(QualityMeasureEvidenceError, match=code) as caught:
         _packet(_rebind(_run(), measurement_period=period))
+    assert caught.value.__context__ is None
 
 
 def test_instant_period_becomes_one_second_half_open_interval():
