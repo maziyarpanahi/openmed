@@ -252,7 +252,7 @@ Run the focused offline tests with:
 ## Distinct-role approval quorums
 
 `ApprovalQuorumEvaluator` evaluates existing, successfully consumed
-`ApprovalReceipt` objects against an `ApprovalQuorumPolicy` keyed by a controlled
+`ApprovalAuthorization` objects against an `ApprovalQuorumPolicy` keyed by a controlled
 `action_class`. This Python receipt-policy slice leaves token issuance, handoff
 leases and dispatcher wiring unchanged; it introduces no Swift token verifier
 or autonomous clinical action.
@@ -279,7 +279,7 @@ decision = evaluator.evaluate(
     action_class="high-impact-write",
     action_digest="sha256:" + "a" * 64,
     requester_role=requester,
-    receipts=(),  # Supply trusted receipts from successful token consumption.
+    receipts=(),  # Supply live authorizations from consume_authorization().
     now=20,
 )
 assert decision.approved_count == 0
@@ -300,9 +300,11 @@ future consumption timestamps and receipts at or beyond their exclusive expiry.
 Repeated token digests within a supplied set exclude **all** copies, including
 copies with conflicting roles. `replayed_receipt_digests` accepts token digests
 already used elsewhere. A stateless evaluator cannot detect cross-call replay;
-use durable collection for incremental approvals. Receipt schema validation does
-not authenticate receipt provenance: never accept caller-edited receipt JSON as
-verified evidence. Roles do not identify people; hosts must authenticate reviewers
+use durable collection for incremental approvals. Public quorum entry points require the exact protected authorization type;
+audit `ApprovalReceipt` objects and caller-edited JSON are rejected. The store
+persists a separate closed metadata record, never a serialized authorization.
+Its role, validity bounds and audit receipt remain protected by host database
+integrity and are revalidated internally after restart. Roles do not identify people; hosts must authenticate reviewers
 and enforce person independence before issuing tokens.
 
 Decisions serialize only `action_digest`, `policy_digest`, `requester_role`,
@@ -353,7 +355,7 @@ revalidation at dispatch, reviewer authentication, database integrity and access
 control. Token issuance and existing single-token dispatch behavior are unchanged.
 No network calls, model outputs or restricted assets are added.
 
-Storage contains only validated receipt metadata, roles, digests and timestamps;
+Storage contains only private validated evidence metadata, roles, digests and timestamps;
 errors use controlled codes such as `store_unavailable` and `clock_rollback` and
 omit the private path. Replay tombstones are retained without automatic pruning;
 hosts own database lifecycle and storage capacity. Never log token credentials or

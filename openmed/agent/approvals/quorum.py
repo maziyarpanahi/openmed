@@ -1,7 +1,8 @@
-"""Local quorum policy evaluation over trusted, already-consumed receipts.
+"""Local quorum policy evaluation over protected, consumed authorizations.
 
 This module does not authenticate receipts or authorize dispatch. Applications
-must pass receipts from their trusted token verifier, never caller-edited JSON.
+must pass live authorizations from their trusted token verifier. Audit receipt
+JSON carries no authority. Durable evidence is private host-protected metadata.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .tokens import (
+    ApprovalAuthorization,
     ApprovalReceipt,
     ApprovalTokenValidationError,
     _validate_digest,
@@ -108,7 +110,7 @@ class ApprovalQuorumPolicy:
 class ApprovalQuorumDecision:
     """Value-free advisory decision containing only roles, counts and digests.
 
-    A satisfied decision is not single-use dispatch authority. Receipts carry
+    A satisfied decision is not single-use dispatch authority. Protected authorizations carry
     policy roles rather than human identities, so person independence remains
     the authenticating application's responsibility.
     """
@@ -159,23 +161,101 @@ class ApprovalQuorumDecision:
         }
 
 
-def _receipts(receipts: Iterable[ApprovalReceipt]) -> tuple[ApprovalReceipt, ...]:
-    normalized: list[ApprovalReceipt] = []
+@dataclass(frozen=True, slots=True, repr=False)
+class _QuorumEvidence:
+    """Protected-store metadata, never a reconstructed authorization object."""
+
+    receipt: ApprovalReceipt
+    reviewer_role: str
+    consumed_at: int
+    expires_at: int
+
+    def __post_init__(self) -> None:
+        if type(self.receipt) is not ApprovalReceipt:
+            raise ApprovalQuorumError("invalid_receipt")
+        ApprovalReceipt.from_dict(self.receipt.to_dict())
+        _validate_reviewer_role(self.reviewer_role)
+        _validate_timestamp(self.consumed_at, "consumed_at")
+        _validate_timestamp(self.expires_at, "expires_at")
+        if self.consumed_at >= self.expires_at:
+            raise ApprovalQuorumError("invalid_receipt")
+
+    @property
+    def action_digest(self) -> str:
+        return self.receipt.action_digest
+
+    @property
+    def token_digest(self) -> str:
+        return self.receipt.token_digest
+
+    def to_json(self) -> str:
+        return json.dumps(
+            {
+                "schema_version": "openmed.agent.quorum-evidence.v1",
+                "receipt": self.receipt.to_dict(),
+                "reviewer_role": self.reviewer_role,
+                "consumed_at": self.consumed_at,
+                "expires_at": self.expires_at,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+    @classmethod
+    def from_json(cls, payload: str) -> _QuorumEvidence:
+        row = json.loads(payload)
+        if (
+            type(row) is not dict
+            or set(row)
+            != {
+                "schema_version",
+                "receipt",
+                "reviewer_role",
+                "consumed_at",
+                "expires_at",
+            }
+            or row["schema_version"] != "openmed.agent.quorum-evidence.v1"
+        ):
+            raise ApprovalQuorumError("invalid_receipt")
+        return cls(
+            ApprovalReceipt.from_dict(row["receipt"]),
+            row["reviewer_role"],
+            row["consumed_at"],
+            row["expires_at"],
+        )
+
+
+def _authorizations(
+    receipts: Iterable[ApprovalAuthorization],
+) -> tuple[_QuorumEvidence, ...]:
+    normalized: list[_QuorumEvidence] = []
+    failure = None
     try:
-        for receipt in receipts:
+        for authorization in receipts:
             if len(normalized) >= _MAX_RECEIPTS:
-                raise ApprovalQuorumError("too_many_receipts")
-            if type(receipt) is not ApprovalReceipt:
-                raise ApprovalQuorumError("invalid_receipt")
-            # Revalidate immutable metadata at the trust boundary.
-            normalized.append(ApprovalReceipt.from_dict(receipt.to_dict()))
-    except (TypeError, ApprovalTokenValidationError):
-        raise ApprovalQuorumError("invalid_receipt") from None
+                failure = "too_many_receipts"
+                break
+            if type(authorization) is not ApprovalAuthorization:
+                failure = "invalid_receipt"
+                break
+            normalized.append(
+                _QuorumEvidence(
+                    authorization.receipt,
+                    authorization.reviewer_role,
+                    authorization.consumed_at,
+                    authorization.expires_at,
+                )
+            )
+    except Exception:
+        failure = "invalid_receipt"
+    if failure is not None:
+        # Raise outside the handler so rejected values are absent from context.
+        raise ApprovalQuorumError(failure)
     return tuple(normalized)
 
 
 class ApprovalQuorumEvaluator:
-    """Evaluate trusted receipt sets using policies keyed by action class.
+    """Evaluate live authorization sets using policies keyed by action class.
 
     Args:
         policies: Unique policies; missing classes fail closed.
@@ -202,7 +282,7 @@ class ApprovalQuorumEvaluator:
         action_class: str,
         action_digest: str,
         requester_role: str,
-        receipts: Iterable[ApprovalReceipt],
+        receipts: Iterable[ApprovalAuthorization],
         now: int,
         replayed_receipt_digests: tuple[str, ...] = (),
     ) -> ApprovalQuorumDecision:
@@ -212,20 +292,39 @@ class ApprovalQuorumEvaluator:
             action_class: Registered controlled class label.
             action_digest: Commitment to the exact reviewed action.
             requester_role: Actual requesting policy role, always excluded.
-            receipts: Trusted receipts from successful token verification.
+            receipts: Live protected authorizations from successful token consumption.
             now: Injected Unix timestamp; expiry is exclusive.
             replayed_receipt_digests: Token digests already used elsewhere.
 
         Returns:
             A deterministic metadata-only advisory quorum decision.
         """
+        return self._evaluate_records(
+            action_class=action_class,
+            action_digest=action_digest,
+            requester_role=requester_role,
+            receipts=_authorizations(receipts),
+            now=now,
+            replayed_receipt_digests=replayed_receipt_digests,
+        )
+
+    def _evaluate_records(
+        self,
+        *,
+        action_class: str,
+        action_digest: str,
+        requester_role: str,
+        receipts: tuple[_QuorumEvidence, ...],
+        now: int,
+        replayed_receipt_digests: tuple[str, ...] = (),
+    ) -> ApprovalQuorumDecision:
+        """Evaluate private records from live verification or the trusted store."""
         policy = self.policy(action_class)
         _validate_digest(action_digest, "action_digest")
         _validate_reviewer_role(requester_role)
         _validate_timestamp(now, "now")
         for digest in replayed_receipt_digests:
             _validate_digest(digest, "token_digest")
-        receipts = _receipts(receipts)
         counts = Counter(receipt.token_digest for receipt in receipts)
         # Duplicate token commitments are replay evidence: exclude all copies,
         # including conflicting metadata, rather than choosing a preferred one.
@@ -294,8 +393,12 @@ class SQLiteApprovalQuorumStore:
                     );
                     """
                 )
-        except (sqlite3.Error, TypeError, ValueError):
-            raise ApprovalQuorumError("store_unavailable") from None
+        except Exception:
+            failed = True
+        else:
+            failed = False
+        if failed:
+            raise ApprovalQuorumError("store_unavailable")
 
     def collect(
         self,
@@ -305,7 +408,7 @@ class SQLiteApprovalQuorumStore:
         action_class: str,
         action_digest: str,
         requester_role: str,
-        receipts: Iterable[ApprovalReceipt],
+        receipts: Iterable[ApprovalAuthorization],
         now: int,
     ) -> ApprovalQuorumDecision:
         """Atomically collect new receipts and re-evaluate stored progress.
@@ -318,7 +421,7 @@ class SQLiteApprovalQuorumStore:
             action_class: Registered action class.
             action_digest: Current reviewed action commitment.
             requester_role: Actual requesting policy role.
-            receipts: Newly verified receipts; repeated submissions add nothing.
+            receipts: New live authorizations; repeated submissions add nothing.
             now: Injected current Unix time, monotonic across this database.
 
         Returns:
@@ -328,8 +431,8 @@ class SQLiteApprovalQuorumStore:
             ApprovalQuorumError: Storage failure or clock rollback, without paths.
         """
         _validate_digest(progress_digest, "progress_digest")
-        incoming = _receipts(receipts)
-        initial = evaluator.evaluate(
+        incoming = _authorizations(receipts)
+        initial = evaluator._evaluate_records(
             action_class=action_class,
             action_digest=action_digest,
             requester_role=requester_role,
@@ -344,7 +447,7 @@ class SQLiteApprovalQuorumStore:
             receipt.token_digest
             for receipt in incoming
             if counts[receipt.token_digest] == 1
-            and evaluator.evaluate(
+            and evaluator._evaluate_records(
                 action_class=action_class,
                 action_digest=action_digest,
                 requester_role=requester_role,
@@ -385,29 +488,29 @@ class SQLiteApprovalQuorumStore:
                             "INSERT INTO quorum_receipts VALUES (?, ?, ?)",
                             (receipt.token_digest, progress_digest, receipt.to_json()),
                         )
-                stored = tuple(
-                    ApprovalReceipt.from_json(row[0])
-                    for row in db.execute(
-                        "SELECT receipt FROM quorum_receipts WHERE progress_digest = ?",
-                        (progress_digest,),
-                    )
-                )
-                return evaluator.evaluate(
+                stored_list: list[_QuorumEvidence] = []
+                for row in db.execute(
+                    "SELECT receipt FROM quorum_receipts WHERE progress_digest = ?",
+                    (progress_digest,),
+                ):
+                    if len(stored_list) >= _MAX_RECEIPTS:
+                        raise ApprovalQuorumError("too_many_receipts")
+                    stored_list.append(_QuorumEvidence.from_json(row[0]))
+                stored = tuple(stored_list)
+                return evaluator._evaluate_records(
                     action_class=action_class,
                     action_digest=action_digest,
                     requester_role=requester_role,
                     receipts=stored,
                     now=now,
                 )
-        except (
-            sqlite3.Error,
-            ApprovalTokenValidationError,
-            TypeError,
-            ValueError,
-        ) as exc:
-            if isinstance(exc, ApprovalQuorumError):
-                raise
-            raise ApprovalQuorumError("store_unavailable") from None
+        except Exception as exc:
+            failure = (
+                "clock_rollback"
+                if type(exc) is ApprovalQuorumError and exc.args == ("clock_rollback",)
+                else "store_unavailable"
+            )
+        raise ApprovalQuorumError(failure)
 
     def __repr__(self) -> str:
         """Omit the private local database path from diagnostics."""

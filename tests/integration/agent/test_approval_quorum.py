@@ -1,5 +1,6 @@
 """Durable synthetic quorum progress across independent local store instances."""
 
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
@@ -39,15 +40,15 @@ def evaluator(required_count=2):
 
 def verified(role, nonce, action=ACTION, expiry=100):
     key = b"synthetic-local-quorum-key-32-bytes"
-    token = ApprovalTokenSigner(key).issue(
+    token = ApprovalTokenSigner(key, clock=lambda: 10).issue(
         action_digest=action,
         reviewer_role=role,
         expires_at=expiry,
         nonce=f"nonce_{nonce:032x}",
     )
-    return ApprovalTokenVerifier(key, InMemoryApprovalNonceStore()).consume(
-        token, action_digest=action, reviewer_role=role, now=10
-    )
+    return ApprovalTokenVerifier(
+        key, InMemoryApprovalNonceStore()
+    ).consume_authorization(token, action_digest=action, reviewer_role=role, now=10)
 
 
 def collect(store, receipts=(), action=ACTION, now=20, slot=SLOT, configured=None):
@@ -149,7 +150,11 @@ def test_store_diagnostics_and_rows_are_value_free(tmp_path):
     with sqlite3.connect(path) as db:
         rows = db.execute("SELECT receipt FROM quorum_receipts").fetchall()
     assert len(rows) == 1
-    assert rows[0][0] == receipt.to_json()
+    stored = json.loads(rows[0][0])
+    assert stored["schema_version"] == "openmed.agent.quorum-evidence.v1"
+    assert stored["receipt"] == receipt.receipt.to_dict()
+    assert stored["reviewer_role"] == CLINICIAN
+    assert stored["consumed_at"] == 10 and stored["expires_at"] == 100
     assert "nonce_" not in rows[0][0]
     assert "signature" not in rows[0][0]
     with pytest.raises(ApprovalQuorumError, match="store_unavailable") as caught:
@@ -163,8 +168,9 @@ def test_invalid_stored_receipt_fails_closed_and_rolls_back_collection(tmp_path)
     collect(store, [verified(CLINICIAN, 1)])
     with sqlite3.connect(path) as db:
         db.execute("UPDATE quorum_receipts SET receipt = ?", ('{"PHI": "synthetic"}',))
-    with pytest.raises(ApprovalQuorumError, match="store_unavailable"):
+    with pytest.raises(ApprovalQuorumError, match="store_unavailable") as caught:
         collect(store, [verified(PHARMACIST, 2)])
+    assert caught.value.__context__ is None
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT COUNT(*) FROM quorum_seen").fetchone()[0] == 1
         assert db.execute("SELECT COUNT(*) FROM quorum_receipts").fetchone()[0] == 1

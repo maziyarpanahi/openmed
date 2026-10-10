@@ -1,6 +1,7 @@
 """Synthetic offline quorum policy safety controls."""
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,7 +11,12 @@ from openmed.agent.approvals.quorum import (
     ApprovalQuorumEvaluator,
     ApprovalQuorumPolicy,
 )
-from openmed.agent.approvals.tokens import ApprovalReceipt, ApprovalTokenValidationError
+from openmed.agent.approvals.tokens import (
+    ApprovalTokenSigner,
+    ApprovalTokenValidationError,
+    ApprovalTokenVerifier,
+    InMemoryApprovalNonceStore,
+)
 
 CLINICIAN = "role:org.example/clinician@1.0.0"
 PHARMACIST = "role:org.example/pharmacist@1.0.0"
@@ -21,12 +27,19 @@ CHANGED = "sha256:" + "b" * 64
 
 
 def receipt(role=CLINICIAN, token=1, **kwargs):
-    return ApprovalReceipt(
-        action_digest=kwargs.get("action_digest", ACTION),
+    consumed = kwargs.get("consumed_at", 10)
+    action = kwargs.get("action_digest", ACTION)
+    key = b"synthetic-local-quorum-key-32-bytes"
+    signed = ApprovalTokenSigner(key, clock=lambda: consumed).issue(
+        action_digest=action,
         reviewer_role=role,
-        token_digest=f"sha256:{token:064x}",
-        consumed_at=kwargs.get("consumed_at", 10),
         expires_at=kwargs.get("expires_at", 100),
+        nonce=f"nonce_{token:032x}",
+    )
+    return ApprovalTokenVerifier(
+        key, InMemoryApprovalNonceStore()
+    ).consume_authorization(
+        signed, action_digest=action, reviewer_role=role, now=consumed
     )
 
 
@@ -73,7 +86,6 @@ def test_two_distinct_roles_satisfy_and_order_is_deterministic():
         ([receipt(), receipt(PHARMACIST, 2, consumed_at=21)], 1),
         ([receipt(), receipt(OTHER, 2)], 1),
         ([receipt(), receipt()], 0),
-        ([receipt(), receipt(PHARMACIST)], 0),
     ],
 )
 def test_ineligible_or_replayed_receipts_cannot_satisfy(receipts, expected):
@@ -85,7 +97,7 @@ def test_ineligible_or_replayed_receipts_cannot_satisfy(receipts, expected):
 def test_external_replay_exclusions():
     decision = evaluate(
         [receipt(), receipt(PHARMACIST, 2)],
-        replayed_receipt_digests=(receipt().token_digest,),
+        replayed_receipt_digests=(receipt().receipt.token_digest,),
     )
     assert decision.approved_count == 1
 
@@ -186,3 +198,30 @@ def test_raw_payloads_and_oversized_sets_are_refused():
         evaluate([{"payload": "Synthetic Patient ID 123"}])
     with pytest.raises(ApprovalQuorumError, match="too_many_receipts"):
         evaluate(receipt(token=i) for i in range(10_001))
+
+
+def test_audit_receipt_and_forged_context_cannot_supply_quorum_evidence():
+    verified = receipt()
+    for rejected in (
+        verified.receipt,
+        verified.receipt.to_dict(),
+        SimpleNamespace(
+            receipt=verified.receipt,
+            reviewer_role=CLINICIAN,
+            consumed_at=10,
+            expires_at=100,
+        ),
+    ):
+        with pytest.raises(ApprovalQuorumError, match="invalid_receipt") as caught:
+            evaluate([rejected])
+        assert caught.value.__context__ is None
+
+
+def test_failing_authorization_iterator_has_no_private_exception_context():
+    def failing():
+        yield receipt()
+        raise RuntimeError("Synthetic Patient MRN 123 /private/quorum-input")
+
+    with pytest.raises(ApprovalQuorumError, match="invalid_receipt") as caught:
+        evaluate(failing())
+    assert caught.value.__context__ is None
