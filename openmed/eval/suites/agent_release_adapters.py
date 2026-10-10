@@ -380,12 +380,16 @@ def json_release_evidence(
         _refuse("invalid_kind")
     if type(serialized) is not str:
         _refuse("invalid_json")
+    source = None
+    invalid_json = False
     try:
         source = json.loads(serialized, object_pairs_hook=_pairs)
     except AgentReleaseAdapterError:
         raise
     except (TypeError, ValueError, RecursionError):
-        raise AgentReleaseAdapterError("invalid_json") from None
+        invalid_json = True
+    if invalid_json:
+        _refuse("invalid_json")
     source = _object(
         source,
         {

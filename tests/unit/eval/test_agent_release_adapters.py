@@ -335,3 +335,17 @@ def test_executed_report_output_contains_no_default_case_payloads():
         "retry_effect_ids",
     ):
         assert canary not in rendered
+
+
+@pytest.mark.parametrize(
+    "serialized",
+    ['{"/private/patient-token":', "[" * 2000 + "0" + "]" * 2000],
+    ids=["malformed", "deep"],
+)
+def test_private_json_parser_context_is_not_retained(serialized):
+    with pytest.raises(AgentReleaseAdapterError, match="^invalid_json$") as error:
+        json_release_evidence(
+            serialized, expected_kind="replay", expected_case_digests=()
+        )
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
