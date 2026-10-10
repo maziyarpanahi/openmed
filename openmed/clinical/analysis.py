@@ -18,6 +18,7 @@ from openmed.clinical.context import assert_context, scan_context_cues
 from openmed.clinical.experiencer import resolve_experiencer
 from openmed.clinical.sections import detect_sections, validate_section_spans
 from openmed.core.clinical_language import resolve_clinical_language
+from openmed.core.iso_temporal import parse_iso_date
 
 CLINICAL_CONTEXT_VERSION = "clinical-context-v5"
 DEFAULT_CONTEXT_TASKS = ("sections", "entities", "assertions")
@@ -205,7 +206,7 @@ def analyze_clinical_context(
         ):
             raise ClinicalAnalysisError("invalid_clinical_reference_date")
         try:
-            date.fromisoformat(reference_date)
+            parse_iso_date(reference_date)
         except ValueError:
             raise ClinicalAnalysisError("invalid_clinical_reference_date") from None
     if (
