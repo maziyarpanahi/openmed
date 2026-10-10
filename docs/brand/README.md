@@ -67,6 +67,18 @@ That command performs a network request and must never run in CI. Normal
 `--write`, `--check`, rendering, and validation read only the checked-in
 `system/evidence/github-repository.json` snapshot.
 
+The community numbers on the website (Hugging Face models and downloads,
+PyPI installs and releases, GitHub contributors, and the featured model
+cards) come from `system/evidence/community-metrics.json`. Refresh it the
+same way, deliberately and never from CI:
+
+```bash
+UV_CACHE_DIR=/tmp/openmed-brand-uv-cache uv run --frozen --extra dev --extra docs python scripts/brand/update_claims.py --refresh-community-metrics
+```
+
+Every public figure is a conservative floor of the raw count, and the claims
+expire 31 days after capture, so stale numbers fail validation.
+
 Newsreader web files are deterministic, explicitly ranged subsets of the
 checked-in source fonts. IBM Plex remains full for the documentation and its
 localized routes. Exact upstream provenance, embedded versions, license hashes,

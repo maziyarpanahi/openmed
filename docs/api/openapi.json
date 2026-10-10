@@ -170,6 +170,21 @@
             "title": "Citations",
             "type": "array"
           },
+          "claim_bindings": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Bindings"
+          },
           "digest": {
             "title": "Digest",
             "type": "string"
@@ -178,6 +193,18 @@
             "additionalProperties": true,
             "title": "Envelope",
             "type": "object"
+          },
+          "generation_contract": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Contract"
           },
           "metrics": {
             "additionalProperties": true,
