@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   examples. Group clinical navigation by area and expose four previously
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
+### Added
+
+- Export deterministic, import-light Draft 2020-12 JSON Schemas for public
+  agent outcome, correlation, timing and run-summary records.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
