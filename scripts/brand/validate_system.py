@@ -1271,6 +1271,20 @@ def _validate_claims(errors: list[str]) -> None:
     )
     if entity_tile not in website_text:
         errors.append("website PII entity-type tile differs from the governed claim")
+    model_backed = claims["model_backed_pii_languages"]["value"]
+    supported = claims["supported_pii_languages"]["value"]
+    for count in re.findall(r"(\d+) model-backed", website_text):
+        if int(count) != model_backed:
+            errors.append(
+                f"website says {count} model-backed languages; the claim is {model_backed}"
+            )
+    for count in re.findall(
+        r"(\d+) supported (?:codes|PII language codes)", website_text
+    ):
+        if int(count) != supported:
+            errors.append(
+                f"website says {count} supported codes; the claim is {supported}"
+            )
 
     package = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     expected_description = (
