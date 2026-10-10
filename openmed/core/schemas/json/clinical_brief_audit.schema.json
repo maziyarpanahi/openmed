@@ -218,6 +218,9 @@
         "demographics": {
           "$ref": "#/$defs/demographics"
         },
+        "extractive_selection": {
+          "$ref": "#/$defs/extractive_selection"
+        },
         "leakage": {
           "$ref": "#/$defs/leakage"
         },
@@ -2233,6 +2236,144 @@
         "unused_evidence_count",
         "unused_evidence_rate"
       ]
+    },
+    "extractive_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "charged_tokens",
+        "citations",
+        "coverage",
+        "status"
+      ],
+      "properties": {
+        "charged_tokens": {
+          "type": "integer",
+          "const": 0
+        },
+        "citations": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "omission_budget": {
+          "$ref": "#/$defs/extractive_omission_budget"
+        },
+        "status": {
+          "enum": [
+            "empty_evidence",
+            "invalid_evidence",
+            "insufficient_budget",
+            "selection_limit_exceeded"
+          ]
+        }
+      }
+    },
+    "extractive_omission_class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "fact_count",
+        "mandatory",
+        "omission_limit",
+        "omitted_count",
+        "passed",
+        "severity_weight",
+        "weighted_budget",
+        "weighted_omissions"
+      ],
+      "properties": {
+        "class_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mandatory": {
+          "type": "boolean"
+        },
+        "omission_limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "severity_weight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "weighted_budget": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_omissions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "extractive_omission_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classes",
+        "fact_count",
+        "omitted_count",
+        "passed",
+        "refusal_code",
+        "schema_version",
+        "weighted_budget",
+        "weighted_omissions"
+      ],
+      "properties": {
+        "classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/extractive_omission_class"
+          }
+        },
+        "fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "refusal_code": {
+          "enum": [
+            null,
+            "mandatory_class_omitted",
+            "class_omission_budget_exceeded"
+          ]
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "weighted_budget": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_omissions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   }
 }

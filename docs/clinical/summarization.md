@@ -114,6 +114,10 @@ the explicit selection status in `metrics.extractive_selection`. Diagnostic
 serialization contains only controlled codes, counts, offsets and digests;
 `selection.summary` is protected clinical output and must never be logged.
 
+The bundled brief audit and response schemas also validate these emitted
+failure metrics. The closed diagnostic contract rejects source text, partial
+citations or charged output, unknown selection states and malformed policy IDs.
+
 Without explicit evidence, `model="extractive"` retains the historical
 first-three-sentence baseline. `model="extractive-baseline"` also selects that
 baseline inside a reviewed brief, for comparison. Neither mode invents evidence.
