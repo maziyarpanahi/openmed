@@ -146,6 +146,9 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
+    - agent/runtime-revocation.md
+    - agent/guarded-dispatch.md
+    - agent/effect-admission.md
     - agent/governed-reference-workflow.md
     - agent/action-ledger.md
     - agent/deterministic-replay.md
