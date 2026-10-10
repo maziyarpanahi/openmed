@@ -163,7 +163,7 @@ def run_synthetic_workflow(directory: Path, *, interrupt_after: int = 0) -> dict
         resource_refs=(_digest(b"synthetic-resource"),),
     )
     ledger.record(state=ActionState.PROPOSED, **entry_fields)
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=lambda: NOW).issue(
         action_digest=action_digest,
         reviewer_role=REVIEWER_ROLE,
         expires_at=EXPIRES_AT,
