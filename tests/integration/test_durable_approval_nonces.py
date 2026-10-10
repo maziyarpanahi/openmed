@@ -61,7 +61,7 @@ def test_cross_process_claim_has_exactly_one_winner_and_survives_restart(tmp_pat
     path = tmp_path / "claims.db"
     SQLiteApprovalNonceStore(path)
     token = (
-        ApprovalTokenSigner(KEY)
+        ApprovalTokenSigner(KEY, clock=lambda: 100)
         .issue(
             action_digest=ACTION,
             reviewer_role=ROLE,

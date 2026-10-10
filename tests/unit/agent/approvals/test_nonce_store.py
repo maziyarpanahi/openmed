@@ -28,7 +28,7 @@ DIGEST = "sha256:" + "b" * 64
 def test_reopen_replay_and_database_canary(tmp_path):
     path = tmp_path / "private-canary.db"
     store = SQLiteApprovalNonceStore(path)
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=lambda: 100).issue(
         action_digest=ACTION,
         reviewer_role=ROLE,
         expires_at=200,
@@ -68,6 +68,36 @@ def test_reopen_replay_and_database_canary(tmp_path):
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+def test_reopened_store_retains_v2_claim_through_skew_window(tmp_path):
+    path = tmp_path / "claims.db"
+    token = ApprovalTokenSigner(KEY, clock=lambda: 100).issue(
+        action_digest=ACTION, reviewer_role=ROLE, expires_at=200
+    )
+    first = ApprovalTokenVerifier(
+        KEY, SQLiteApprovalNonceStore(path), clock_skew_seconds=30
+    )
+    first.consume(token, action_digest=ACTION, reviewer_role=ROLE, now=199)
+    reopened = ApprovalTokenVerifier(
+        KEY, SQLiteApprovalNonceStore(path), clock_skew_seconds=30
+    )
+    effects = []
+    for now in (200, 229):
+        with pytest.raises(ApprovalReplayError):
+            dispatch_with_approval_token(
+                token,
+                action_digest=ACTION,
+                reviewer_role=ROLE,
+                verifier=reopened,
+                dispatch=lambda: effects.append("committed"),
+                now=now,
+            )
+    assert effects == []
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT expires_at FROM nonce_claims").fetchall() == [
+            (230,)
+        ]
+
+
 def test_expiry_purge_preserves_unexpired_claims(tmp_path):
     path = tmp_path / "claims.db"
     store = SQLiteApprovalNonceStore(path)
@@ -103,7 +133,7 @@ def test_damaged_store_refuses_dispatch_and_reopening(tmp_path, damage):
                 if damage == "future"
                 else "DROP TABLE nonce_claims"
             )
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=lambda: 100).issue(
         action_digest=ACTION,
         reviewer_role=ROLE,
         expires_at=200,

@@ -109,10 +109,11 @@ corruption (including empty or truncated existing files), missing files during
 claims, invalid schemas, and unknown schema versions raise
 `ApprovalNonceStoreError` with controlled codes. Never recover by deleting or
 resetting a database while approvals remain valid: that discards replay
-protection. Keep the database through every outstanding token's expiry and
-deny dispatch when storage fails. The trusted clock must be consistent across
+protection. Keep the database through every outstanding token's expiry plus
+the shared verifier skew allowance, and deny dispatch when storage fails. The trusted clock must be consistent across
 consumers; moving it forward may purge entries that another consumer still
-considers unexpired.
+considers unexpired. All consumers sharing a store must use the same trusted
+clock and skew policy.
 
 ### MCP consent receipt adapter
 
@@ -135,7 +136,7 @@ receipts, preserving the existing behavior. Store failures raise
 `verify_result()` returns `nonce_store_unavailable`; the policy denies dispatch.
 `is_consumed()` and `consumed_receipt_ids` remain local diagnostic snapshots of
 this verifier's successful consumption, not queries of the shared database.
-Issuance, token formats, and signing keys are unchanged.
+The durable store does not alter issuance, token formats, or signing keys.
 
 The HMAC key is also application-owned and stays local. OpenMed performs no
 network request, telemetry, or notification. Key lookup is delegated only to
