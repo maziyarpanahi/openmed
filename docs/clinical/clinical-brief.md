@@ -30,8 +30,9 @@ Before reviewing references, calculate `brief_policy_fingerprint(text, facts,
 profile)`. This binds the review history to the exact de-identified text,
 clinical axes and profile version. Create review transitions through the existing
 review-state API only for work actually reviewed. Changed content or annotations
-require a new review. The current evidence-packet contract is **synthetic-only**;
-this implementation does not widen that boundary to real patient data.
+require a new review. The existing `EvidencePacket` and `BriefContext` remain
+**synthetic-only**.
+Reviewed-local evidence uses the separate opt-in admission contract below.
 
 Plain-string generation retains the strict extraction path: each atomic claim
 must exactly equal one unique reviewed source span. An opt-in structured path
@@ -97,6 +98,98 @@ cannot authorize evidence. With no explicit bindings, native validation keeps
 exact extraction. Built-in model adapters continue their existing contracts;
 this change adds no trained artifact, cloud fallback or clinical-validation claim.
 
+## Reviewed-local admission (v1)
+
+`ReviewedLocalEvidence` is a separate contract (`kind=reviewed_local_evidence`,
+`schema_version=1`, `provenance_class=reviewed_local`). Its source is the exact
+**de-identified** artifact whose spans will enter generation, not the original
+patient record. `reviewed_source_digest(text)` hashes those UTF-8 bytes. Offsets
+are half-open Unicode-scalar coordinates (`unicode_scalar_half_open`); Python
+code-point and Swift Unicode-scalar counts match, including supplementary
+characters. The packet contains one source digest and length, a policy digest,
+1–64 offset-only references, and a nullable `LocalReviewReceipt`. Metadata
+integers are non-negative signed 64-bit values on both platforms. Malformed
+Unicode source strings produce a controlled invalid-evidence refusal without
+retaining their encoding error or source content.
+
+Source/reference/receipt/authority IDs have the form `source:`, `ref:`,
+`receipt:`, or `authority:` followed by 64 lowercase hexadecimal characters.
+Applications must mint opaque IDs, never encode names, paths or credentials.
+Digests use `sha256:` plus 64 lowercase hexadecimal characters. Parsers reject
+unknown keys, text payloads, duplicate reference IDs and invalid span boundaries.
+`to_dict()`, `to_json()` and `from_json()` round-trip controlled metadata only.
+Decoding or changing a provenance marker never constitutes admission.
+
+A receipt contains opaque receipt and authority IDs, the packet's
+`evidence_digest`, and UTC Unix `issued_at`/`expires_at` seconds. The digest binds
+all version, provenance, source, policy, reference and offset fields, excluding
+the receipt itself. The receipt is a **locator**, not a bearer credential or a
+self-authenticating signature. The application must supply these narrow local
+protocols through `ReviewedLocalBriefContext`:
+
+- `CurrentLocalSource.current_digest(source_id)` authorizes source access and
+  returns the current de-identified source digest, or `None`.
+- `ReviewAuthorityVerifier.verify(receipt, evidence_digest=..., now=...)`
+  resolves an independently held review record, verifies the **entire** receipt
+  and caller/reviewer authority, and checks current revocation. It returns
+  `ReviewAuthorityStatus.CURRENT`, `REVOKED`, or `MISMATCHED`. Booleans and
+  caller-controlled approval markers are refused. No default authority exists.
+
+The context also supplies the ordinary content digest, reviewed `BriefFact`s,
+calibrated NLI and privacy callbacks, plus an optional trusted clock. Recompute
+`brief_policy_fingerprint(text, facts, profile)` and review the new packet digest
+in the application's review store. Never manufacture an approval merely to make
+an example pass. A minimal application composition, after actual local review,
+is:
+
+```python
+from openmed.clinical import ReviewedLocalBriefContext, build_clinical_brief
+
+context = ReviewedLocalBriefContext(
+    packet=reviewed_packet,             # loaded from authorized local custody
+    content_digest=reviewed_content_digest,
+    facts=reviewed_facts,
+    nli_predict=local_calibrated_nli,
+    thresholds=local_thresholds,
+    privacy_detector=local_privacy_detector,
+    source=authorized_source_store,
+    authority=local_review_registry,
+)
+brief = build_clinical_brief(deidentified_result, model="extractive", context=context)
+# Protected response: brief.to_response(); value-free audit: brief.to_dict().
+```
+
+`admit_reviewed_local_evidence()` checks source/policy bindings, receipt existence,
+full digest binding, issuance/expiry, current source custody and review authority.
+After source and review callbacks return, the trusted clock is read again:
+expired receipts, invalid clocks and time rollback fail before generation.
+The brief calls it at the evidence stage and again immediately before generation;
+an admitted record is not a reusable authorization token. Local stores must
+provide consistent reads and enforce their own concurrent-update/access policy.
+Only admitted spans enter the generator; all existing NLI, citation and privacy
+guards still run. Successful audit `metrics.reviewed_evidence` contains only the
+value-free contract, and the generated output still requires human review.
+
+Refusals are typed codes: `invalid_reviewed_evidence`, `review_receipt_missing`,
+`review_receipt_expired`, `review_receipt_mismatched`, `review_receipt_revoked`,
+`review_authority_unavailable`, `review_source_unavailable`,
+`review_source_changed`, and `review_policy_changed`. A receipt with a future
+issuance time is mismatched; expiry is inclusive (`now >= expires_at`). Store and
+verifier exceptions are discarded without copying their messages or chains.
+Changed axes/profile bindings require fresh review. Unavailable stores fail
+closed before generation. Ordinary synthetic behavior and defaults are retained.
+
+OpenMedKit exposes the same v1 metadata, digest and offset convention through
+`ReviewedLocalEvidence.fromJSON`, `toJSON`, and `admit`. The
+`ClinicalBrief.reviewedLocal` adapter admits and rechecks before calling a supplied
+**on-device** generator over reviewed spans, then validates the supplied complete
+local evidence/NLI evaluation through the existing native guards. Its current
+policy digest must be recomputed by the trusted local evaluator; the SDK does
+not mint that policy or review. This adds no inference backend, reviewer UI,
+training prerequisite, cloud fallback, or autonomous clinical action. Both
+platforms' fixtures are wholly synthetic even though they exercise the
+`reviewed_local` provenance class; they do not qualify real clinical use.
+
 ## Fixed execution and failure behavior
 
 The stage order is not configurable: de-identification, sections, evidence,
@@ -133,6 +226,12 @@ quality, clinical validation or a release benchmark.
 
 ## JSON Schema exports
 
+The bundled brief audit and response schemas admit the optional, closed
+`metrics.reviewed_evidence` v1 metadata. Runtime record validation also checks its
+bounded offsets, unique references and receipt time ordering. This describes an
+audit record; it does not replace current source custody or independent review
+authority. The original synthetic evidence-packet schema remains unchanged.
+
 The bundled Draft 2020-12 files in `openmed/core/schemas/json/` describe the
 brief audit and protected response, evidence packet, NLI verification list and
 SDOH evidence report. `openmed.clinical.record_schemas` exports and fingerprints
@@ -154,7 +253,8 @@ producer behavior remain unchanged.
 never overwrites existing destinations. Exit 1 means refusal; stdout contains
 only counts, status and a digest. The installed factory is trusted local Python
 configuration, not an upload or a server request parameter. It returns a callable
-`(original_text, review_id) -> (DeidentificationResult, BriefContext)` backed by
+`(original_text, review_id) -> (DeidentificationResult, context)` where `context`
+is a `BriefContext` or opt-in `ReviewedLocalBriefContext` backed by
 the application's existing review and access-control store. Do not use this
 mechanism to invent review histories or accept untrusted executable modules.
 
