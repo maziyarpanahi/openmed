@@ -7,6 +7,7 @@ from typing import Any, Callable
 from openmed.clinical.brief import (
     BriefContext,
     BriefRefusal,
+    ReviewedLocalBriefContext,
     _result,
     build_clinical_brief,
 )
@@ -97,7 +98,7 @@ def _brief_response(
             )
             if (
                 type(value) is not DeidentificationResult
-                or type(context) is not BriefContext
+                or type(context) not in (BriefContext, ReviewedLocalBriefContext)
                 or value.original_text != text
             ):
                 failed = True
@@ -132,9 +133,42 @@ def brief_response_schema() -> dict[str, Any]:
         "profile_digest": {"type": ["string", "null"]},
         "backend_id": {"type": ["string", "null"]},
     }
+    required = list(properties)
+    properties.update(
+        generation_contract={
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["kind", "schema_version"],
+            "properties": {
+                "kind": {"const": "explicit_evidence"},
+                "schema_version": {"type": "integer", "const": 1},
+            },
+        },
+        claim_bindings={
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["claim_index", "reference_digest"],
+                "properties": {
+                    "claim_index": {"type": "integer", "minimum": 0, "maximum": 63},
+                    "reference_digest": {
+                        "type": "string",
+                        "pattern": "^sha256:[a-f0-9]{64}$",
+                    },
+                },
+            },
+        },
+    )
     return {
         "type": "object",
         "properties": properties,
-        "required": list(properties),
+        "required": required,
         "additionalProperties": False,
+        "dependentRequired": {
+            "generation_contract": ["claim_bindings"],
+            "claim_bindings": ["generation_contract"],
+        },
     }

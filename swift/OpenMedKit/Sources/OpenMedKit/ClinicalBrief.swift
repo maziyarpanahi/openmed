@@ -58,6 +58,62 @@ public struct ClinicalBriefVerdict: Codable, Sendable, Equatable {
     }
 }
 
+/// Protected atomic output from an injected on-device generator.
+public struct ClinicalBriefGeneratedClaim: Codable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    public let text: String
+    public let referenceIDs: [String]
+
+    public var description: String { "ClinicalBriefGeneratedClaim(references: \(referenceIDs.count))" }
+    public var debugDescription: String { description }
+
+    public init(text: String, referenceIDs: [String]) {
+        self.text = text
+        self.referenceIDs = referenceIDs
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case referenceIDs = "reference_ids"
+    }
+}
+
+/// Versioned opt-in generation contract. Plain-string generation is unchanged.
+public struct ClinicalBriefGeneration: Codable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    public let claims: [ClinicalBriefGeneratedClaim]
+    public let schemaVersion: Int
+
+    public var description: String { "ClinicalBriefGeneration(version: \(schemaVersion), claims: \(claims.count))" }
+    public var debugDescription: String { description }
+
+    public init(claims: [ClinicalBriefGeneratedClaim], schemaVersion: Int = 1) {
+        self.claims = claims
+        self.schemaVersion = schemaVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case claims
+        case schemaVersion = "schema_version"
+    }
+}
+
+/// Caller-authorized reviewed reference, never supplied by model output.
+public struct ClinicalBriefGenerationEvidence: Codable, Sendable {
+    public let referenceID: String
+    public let start: Int
+    public let end: Int
+
+    public init(referenceID: String, start: Int, end: Int) {
+        self.referenceID = referenceID
+        self.start = start
+        self.end = end
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case referenceID = "reference_id"
+        case start, end
+    }
+}
+
 /// A fully verified local evaluation packet, not an unguarded model answer.
 ///
 /// Applications supply an on-device verifier for the complete evidence/NLI
@@ -125,6 +181,8 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
         generatedSummary: String,
         originalIdentifiers: [String],
         cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
+        boundGeneration: ClinicalBriefGeneration? = nil,
+        reviewedEvidence: [ClinicalBriefGenerationEvidence] = [],
         privacyCheck: (String) throws -> Bool
     ) throws -> ClinicalBrief {
         try cancellation.check()
@@ -173,6 +231,20 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
         else { throw ClinicalBriefError.invalidPacket }
         let input = Array(source.unicodeScalars)
         let output = Array(summary.unicodeScalars)
+        let boundCitations: [ClinicalBriefCitation]?
+        if let generation = boundGeneration {
+            guard let contract = payload["generation_contract"] as? [String: Any],
+                contract["kind"] as? String == "explicit_evidence",
+                contract["schema_version"] as? Int == 1,
+                let bindings = payload["claim_bindings"] as? [[String: Any]],
+                bindings.count == generation.claims.count
+            else { throw ClinicalBriefError.invalidPacket }
+            boundCitations = try bind(generation, evidence: reviewedEvidence, sourceLength: input.count, summary: summary, bindings: bindings)
+            guard boundCitations == citations else { throw ClinicalBriefError.unsupportedClaim }
+        } else {
+            guard payload["generation_contract"] == nil, payload["claim_bindings"] == nil else { throw ClinicalBriefError.invalidPacket }
+            boundCitations = nil
+        }
         var end = 0
         for (index, citation) in citations.enumerated() {
             guard citation.claimIndex == index,
@@ -182,7 +254,7 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
                 citation.sourceStart < citation.sourceEnd,
                 citation.outputStart >= end, citation.outputEnd <= output.count,
                 citation.outputStart < citation.outputEnd,
-                input[citation.sourceStart..<citation.sourceEnd].elementsEqual(output[citation.outputStart..<citation.outputEnd]),
+                boundCitations != nil || input[citation.sourceStart..<citation.sourceEnd].elementsEqual(output[citation.outputStart..<citation.outputEnd]),
                 output[end..<citation.outputStart].allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) })
             else { throw ClinicalBriefError.unsupportedClaim }
             end = citation.outputEnd
@@ -205,12 +277,52 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
             refusalReason: nil, response: evaluationJSON, audit: try canonical(payload))
     }
 
-    private static func hash(_ data: Data) -> String {
+    /// Binding grants offsets only; the trusted evaluator still verifies every
+    /// claim's reviewed axes, calibrated NLI, citation and privacy gates.
+    private static func bind(
+        _ generation: ClinicalBriefGeneration,
+        evidence: [ClinicalBriefGenerationEvidence],
+        sourceLength: Int,
+        summary: String,
+        bindings: [[String: Any]]
+    ) throws -> [ClinicalBriefCitation] {
+        guard generation.schemaVersion == 1, !generation.claims.isEmpty,
+            generation.claims.count <= 64, !evidence.isEmpty, evidence.count <= 64,
+            summary.utf8.count <= 8192
+        else { throw ClinicalBriefError.unsupportedClaim }
+        var references: [String: ClinicalBriefGenerationEvidence] = [:]
+        for ref in evidence {
+            guard !ref.referenceID.isEmpty, ref.referenceID.utf8.count <= 256,
+                ref.start >= 0, ref.start < ref.end, ref.end <= sourceLength,
+                references[ref.referenceID] == nil
+            else { throw ClinicalBriefError.unsupportedClaim }
+            references[ref.referenceID] = ref
+        }
+        var citations: [ClinicalBriefCitation] = []
+        var offset = 0
+        for (index, claim) in generation.claims.enumerated() {
+            guard !claim.text.isEmpty,
+                claim.text == claim.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                claim.referenceIDs.count == 1,
+                let ref = references[claim.referenceIDs[0]],
+                !evidence.contains(where: { $0.referenceID != ref.referenceID && $0.start < ref.end && ref.start < $0.end }),
+                bindings[index]["claim_index"] as? Int == index,
+                bindings[index]["reference_digest"] as? String == hash(try canonical(ref.referenceID))
+            else { throw ClinicalBriefError.unsupportedClaim }
+            let end = offset + claim.text.unicodeScalars.count
+            citations.append(ClinicalBriefCitation(claimIndex: index, sourceStart: ref.start, sourceEnd: ref.end, outputStart: offset, outputEnd: end))
+            offset = end + 1
+        }
+        guard generation.claims.map(\.text).joined(separator: " ") == summary else { throw ClinicalBriefError.unsupportedClaim }
+        return citations
+    }
+
+    static func hash(_ data: Data) -> String {
         "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Python's sorted, compact, ASCII JSON convention for the shared digest.
-    private static func canonical(_ value: Any, depth: Int = 0) throws -> Data {
+    static func canonical(_ value: Any, depth: Int = 0) throws -> Data {
         guard depth < 64 else { throw ClinicalBriefError.invalidPacket }
         func render(_ item: Any) throws -> String {
             String(decoding: try canonical(item, depth: depth + 1), as: UTF8.self)

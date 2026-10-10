@@ -1,8 +1,8 @@
 """Fixed-order clinical briefs over explicitly reviewed local evidence.
 
 No review is minted by this module. Raw input without an approved evidence
-context is de-identified, then refused. The initial composer deliberately accepts
-only exact, atomic source claims; paraphrases need a future alignment adapter.
+context is de-identified, then refused. Atomic claims use either unique exact
+extraction or versioned explicit bindings; binding never establishes support.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Callable
@@ -22,6 +23,14 @@ from openmed.clinical.brief_cancellation import (
 )
 from openmed.clinical.evidence_packet import EvidencePacket, validate_evidence_packet
 from openmed.clinical.nli_gate import NLIThresholds
+from openmed.clinical.reviewed_local_evidence import (
+    CurrentLocalSource,
+    ReviewAdmissionError,
+    ReviewAuthorityVerifier,
+    ReviewedLocalEvidence,
+    admit_reviewed_local_evidence,
+    reviewed_source_digest,
+)
 from openmed.core.pii import DeidentificationResult
 
 STAGES = (
@@ -65,6 +74,15 @@ class BriefRefusal(str, Enum):
     NLI_UNAVAILABLE = "nli_unavailable"
     NLI_REJECTED = "nli_rejected"
     PRIVACY = "privacy"
+    INVALID_REVIEWED_EVIDENCE = "invalid_reviewed_evidence"
+    REVIEW_RECEIPT_MISSING = "review_receipt_missing"
+    REVIEW_RECEIPT_EXPIRED = "review_receipt_expired"
+    REVIEW_RECEIPT_MISMATCHED = "review_receipt_mismatched"
+    REVIEW_RECEIPT_REVOKED = "review_receipt_revoked"
+    REVIEW_AUTHORITY_UNAVAILABLE = "review_authority_unavailable"
+    REVIEW_SOURCE_UNAVAILABLE = "review_source_unavailable"
+    REVIEW_SOURCE_CHANGED = "review_source_changed"
+    REVIEW_POLICY_CHANGED = "review_policy_changed"
     STAGE_FAILED = "stage_failed"
     CANCELLED = "cancelled"
     DEADLINE_EXCEEDED = "deadline_exceeded"
@@ -131,6 +149,26 @@ class BriefContext:
     privacy_detector: Callable[[str], Any] = field(repr=False)
 
 
+@dataclass(frozen=True, repr=False)
+class ReviewedLocalBriefContext:
+    """Opt-in local admission; the ordinary BriefContext remains synthetic-only.
+
+    Stores and callbacks are trusted application configuration, never request
+    fields. The source lookup must authorize the caller and return the digest of
+    the current de-identified artifact. Authority verifies its own review record.
+    """
+
+    packet: ReviewedLocalEvidence
+    content_digest: str
+    facts: tuple[BriefFact, ...]
+    nli_predict: Callable[[str, str], Any] = field(repr=False)
+    thresholds: NLIThresholds
+    privacy_detector: Callable[[str], Any] = field(repr=False)
+    source: CurrentLocalSource = field(repr=False)
+    authority: ReviewAuthorityVerifier = field(repr=False)
+    clock: Callable[[], float] = field(default=time.time, repr=False)
+
+
 @dataclass(frozen=True)
 class ClinicalBrief:
     """Immutable result; safe serialization never includes generated text."""
@@ -188,7 +226,7 @@ def build_clinical_brief(
     *,
     model: object = None,
     profile: str = "bhc",
-    context: BriefContext | None = None,
+    context: BriefContext | ReviewedLocalBriefContext | None = None,
     cancellation: BriefCancellation | None = None,
 ) -> ClinicalBrief:
     """Compose the fixed guarded pipeline; never approve unreviewed evidence.
@@ -204,6 +242,7 @@ def build_clinical_brief(
         A review-required brief, or a typed refusal with no source values.
         Missing stages, models, evidence or failed checks always fail closed.
     """
+    from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.review_packet_privacy import ReviewPacketPrivacyBlocked
     from openmed.clinical.summarize import SummarizationLeakageError
     from openmed.core.offline import network_blocked_if_offline
@@ -223,8 +262,17 @@ def build_clinical_brief(
         if cancellation is not None:
             cancellation.cancel()
         reason = BriefRefusal.CANCELLED
+    except ReviewAdmissionError as error:
+        reason = BriefRefusal(error.reason.value)
     except _Stop as error:
         reason = error.reason
+    except ExtractiveSelectionError as error:
+        return _result(
+            "",
+            BriefRefusal.UNSUPPORTED_CLAIM,
+            completed,
+            metrics={"extractive_selection": error.result.to_dict()},
+        )
     except (SummarizationLeakageError, ReviewPacketPrivacyBlocked):
         reason = BriefRefusal.PRIVACY
     except Exception:
@@ -292,7 +340,13 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     from openmed.clinical.review_packet_privacy import enforce_review_packet_privacy
     from openmed.clinical.sections import detect_sections
     from openmed.clinical.summarize import _build_leakage_check
-    from openmed.clinical.summarize_backends import resolve_summarizer_backend
+    from openmed.clinical.summarize_backends import (
+        BriefGenerationEvidence,
+        BriefGenerationResult,
+        ExtractiveSummarizerBackend,
+        LocalSummarizerError,
+        resolve_summarizer_backend,
+    )
     from openmed.clinical.summary_citations import compute_summary_citation_metrics
     from openmed.clinical.summary_claim_segments import segment_summary_claims
     from openmed.clinical.summary_demographic_minimizer import (
@@ -343,20 +397,40 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     stage("evidence")
     if context is None:
         raise _Stop(BriefRefusal.REVIEW_REQUIRED)
-    if type(context) is not BriefContext or context.content_digest != _digest(text):
+    if type(context) not in (
+        BriefContext,
+        ReviewedLocalBriefContext,
+    ) or context.content_digest != _digest(text):
         raise _Stop(BriefRefusal.INVALID_EVIDENCE)
-    if (
-        type(context.facts) is not tuple
-        or len(context.facts) > 64
-        or type(context.packet) is not EvidencePacket
-        or len(context.packet.references) > 64
-    ):
+    if type(context.facts) is not tuple or len(context.facts) > 64:
         raise _Stop(BriefRefusal.INVALID_EVIDENCE)
-    packet = validate_evidence_packet(context.packet)
-    if packet.policy_fingerprint != brief_policy_fingerprint(
-        text, context.facts, profile_name
-    ):
-        raise _Stop(BriefRefusal.INVALID_EVIDENCE)
+
+    def admit_local():
+        admitted_packet = admit_reviewed_local_evidence(
+            context.packet,
+            source_digest=reviewed_source_digest(text),
+            policy_digest=brief_policy_fingerprint(text, context.facts, profile_name),
+            source=context.source,
+            authority=context.authority,
+            clock=context.clock,
+        )
+        if admitted_packet.source_length != len(text):
+            raise _Stop(BriefRefusal.INVALID_REVIEWED_EVIDENCE)
+        return admitted_packet
+
+    if type(context) is ReviewedLocalBriefContext:
+        packet = admit_local()
+    else:
+        if (
+            type(context.packet) is not EvidencePacket
+            or len(context.packet.references) > 64
+        ):
+            raise _Stop(BriefRefusal.INVALID_EVIDENCE)
+        packet = validate_evidence_packet(context.packet)
+        if packet.policy_fingerprint != brief_policy_fingerprint(
+            text, context.facts, profile_name
+        ):
+            raise _Stop(BriefRefusal.INVALID_EVIDENCE)
     refs = tuple(sorted(packet.references, key=lambda r: (r.start, r.end)))
     if not refs:
         raise _Stop(BriefRefusal.EMPTY_EVIDENCE)
@@ -373,7 +447,9 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
             {
                 "evidence_type": "structured_fact",
                 "source_ref": {
-                    "source_id": r.source_id,
+                    "source_id": packet.source_id
+                    if type(packet) is ReviewedLocalEvidence
+                    else r.source_id,
                     "start": r.start,
                     "end": r.end,
                 },
@@ -404,7 +480,10 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     budget = build_summary_length_budget(
         2048, {"key_findings": sum(r.end - r.start for r in refs)}
     )
-    if budget.deferred_evidence_classes:
+    if (
+        budget.deferred_evidence_classes
+        and type(backend) is not ExtractiveSummarizerBackend
+    ):
         raise _Stop(BriefRefusal.INVALID_INPUT)
     stage("profile")
     profile = get_summary_profile(profile_name)
@@ -419,9 +498,64 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     from dataclasses import replace
 
     admitted = " ".join(text[r.start : r.end] for r in refs)
+    if type(backend) is ExtractiveSummarizerBackend and model != "extractive-baseline":
+        from openmed.clinical.extractive_selection import ExtractiveFact
+        from openmed.clinical.summary_omission_budget import ImportanceClassPolicy
+
+        # Reviewed facts remain mandatory. Offsets are rebased only for the
+        # admitted artifact; final citations continue to bind original offsets.
+        class_id = _digest("extractive-mandatory-reviewed-facts-v1")
+        selection_facts = []
+        start = 0
+        for r in refs:
+            end = start + r.end - r.start
+            selection_facts.append(
+                ExtractiveFact(_digest(r.reference_id), class_id, start, end)
+            )
+            start = end + 1
+        backend = ExtractiveSummarizerBackend(
+            evidence=tuple(selection_facts),
+            importance_classes=(ImportanceClassPolicy(class_id, 1, mandatory=True),),
+            length_budget=build_summary_length_budget(
+                budget.max_tokens, {"key_findings": len(admitted.encode("utf-8"))}
+            ),
+        )
+    bound = None
+    generation_backend = backend
+    if callable(getattr(backend, "generate_brief", None)):
+
+        def generate_bound(_text, *, mode, cancellation=None):
+            nonlocal bound
+            candidate = call_with_cancellation(
+                backend.generate_brief,
+                tuple(
+                    BriefGenerationEvidence(
+                        r.reference_id, text[r.start : r.end], r.start, r.end
+                    )
+                    for r in refs
+                ),
+                mode=mode,
+                cancellation=cancellation,
+            )
+            if type(candidate) is not BriefGenerationResult:
+                raise LocalSummarizerError("invalid brief generation result")
+            rendered = candidate.render()
+            if any(c.reference_ids[0] not in facts for c in candidate.claims):
+                raise LocalSummarizerError("unknown brief evidence reference")
+            bound = candidate
+            return rendered
+
+        generation_backend = generate_bound
+    if type(context) is ReviewedLocalBriefContext:
+        # A decoded/admitted record is not reusable authority. Recheck custody,
+        # clock and revocation at the last boundary before the generator runs.
+        rechecked = admit_local()
+        if rechecked.evidence_digest != packet.evidence_digest:
+            raise _Stop(BriefRefusal.REVIEW_RECEIPT_MISMATCHED)
+        packet = rechecked
     generated = summarize_deidentified(
         replace(value, deidentified_text=admitted, audit_report=None),
-        model=backend,
+        model=generation_backend,
         cancellation=cancellation,
     )
     summary = generated.summary
@@ -441,8 +575,25 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     if not segments or any(s.review_required for s in segments):
         raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
     aligned = []
+    if bound is not None and len(segments) != len(bound.claims):
+        raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
     for index, segment in enumerate(segments):
-        matches = [r for r in refs if text[r.start : r.end] == segment.text]
+        if bound is None:
+            matches = [r for r in refs if text[r.start : r.end] == segment.text]
+        else:
+            claim = bound.claims[index]
+            if segment.text != claim.text:
+                raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
+            matches = [r for r in refs if r.reference_id == claim.reference_ids[0]]
+            # Coincident/overlapping reviewed spans remain ambiguous, even if
+            # the generator selected an identifier for one of them.
+            if len(matches) == 1 and any(
+                r.reference_id != matches[0].reference_id
+                and r.start < matches[0].end
+                and matches[0].start < r.end
+                for r in refs
+            ):
+                raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
         if len(matches) != 1:
             raise _Stop(BriefRefusal.UNSUPPORTED_CLAIM)
         aligned.append(
@@ -653,6 +804,17 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
         model_id=generated.metadata["backend_id"],
         review_status="queued",
     )
+    binding_metadata = (
+        {
+            "generation_contract": {"kind": "explicit_evidence", "schema_version": 1},
+            "claim_bindings": [
+                {"claim_index": i, "reference_digest": _digest(r.reference_id)}
+                for i, (_, _, r, _) in enumerate(aligned)
+            ],
+        }
+        if bound is not None
+        else {}
+    )
     result = _result(
         summary,
         None,
@@ -669,6 +831,11 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
         ],
         verdicts=verdicts,
         metrics={
+            **(
+                {"reviewed_evidence": packet.to_dict()}
+                if type(packet) is ReviewedLocalEvidence
+                else {}
+            ),
             "coverage": coverage.to_dict(),
             "unsupported_claims": unsupported.to_dict(),
             "citation_support": support.to_dict(),
@@ -681,6 +848,7 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
         envelope=envelope.to_dict(),
         backend_id=generated.metadata["backend_id"],
         review_packet=review.to_dict(),
+        **binding_metadata,
     )
     # Scan the assembled protected response, including labels and metadata, not
     # only generation. There is no export or persistence before this check.
