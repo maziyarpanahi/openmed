@@ -1107,14 +1107,18 @@ def _contract_version(schema_version: str, compatibility_policy: str) -> None:
 
 
 def _json_object(value: str | bytes | bytearray, name: str) -> Mapping[str, Any]:
+    invalid = False
     try:
         data = json.loads(
             value,
             object_pairs_hook=_unique_json_fields,
             parse_constant=_reject_json_constant,
         )
-    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
-        raise SavedCohortError(f"{name} is not valid JSON") from None
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError, RecursionError):
+        invalid = True
+    if invalid:
+        # Decoder exceptions retain source documents and bytes in their context.
+        raise SavedCohortError(f"{name} is not valid JSON")
     return _mapping(data, name)
 
 

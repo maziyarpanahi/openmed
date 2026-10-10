@@ -238,9 +238,12 @@ digest. Drift returns `conflict` with code
 
 ## Compatibility and licensing boundaries
 
-Both persisted artifacts declare schema version `1.0.0` and compatibility
-policy `same_major`. The machine-readable schema is bundled as
-`saved_cohort.schema.json`. Unsupported versions fail explicitly.
+New persisted artifacts declare schema version `1.1.0` and compatibility
+policy `same_major`. Verified legacy records retain their original manifest
+versions and immutable storage bytes. The machine-readable schema is bundled
+as `saved_cohort.schema.json`. Unsupported versions fail explicitly. Malformed,
+undecodable or excessively nested JSON produces a controlled refusal without
+retaining decoder exceptions containing source documents or bytes.
 
 OpenMed records vocabulary digests and caller-supplied license tags, but never
 bundles vocabulary content. A source snapshot declaring

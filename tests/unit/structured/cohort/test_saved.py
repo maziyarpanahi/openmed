@@ -315,6 +315,26 @@ def test_legacy_byte_retention_rejects_ambiguous_json(hidden) -> None:
     assert "synthetic-private-sentinel" not in str(caught.value)
 
 
+@pytest.mark.parametrize(
+    "parser", [CohortExecution.from_json, CohortDefinitionVersion.from_json]
+)
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"synthetic-private-sentinel":',
+        b'{"synthetic-private-sentinel":"\xff"}',
+        "[" * 2000 + "]" * 2000,
+    ],
+    ids=["malformed", "encoding", "deep"],
+)
+def test_saved_json_refusals_do_not_retain_private_decoder_context(parser, payload):
+    with pytest.raises(SavedCohortError, match="is not valid JSON") as caught:
+        parser(payload)
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "synthetic-private-sentinel" not in str(caught.value)
+
+
 @given(st.permutations(("p", "q", "r")))
 def test_membership_order_cannot_change_run_digest(order: list[str]) -> None:
     memberships = tuple(_membership(item) for item in order)
