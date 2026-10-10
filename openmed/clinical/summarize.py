@@ -316,6 +316,7 @@ def _require_deidentification_result(value: object) -> DeidentificationResult:
 
 
 def _invoke_backend(model: object | None, text: str, mode: str) -> str:
+    from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
         MLXSummarizerBackend,
@@ -329,6 +330,12 @@ def _invoke_backend(model: object | None, text: str, mode: str) -> str:
             return _call_backend(model, text, mode)
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
+            raise
+        failed = True
+    except ExtractiveSelectionError:
+        from openmed.clinical.summarize_backends import ExtractiveSummarizerBackend
+
+        if type(model) is ExtractiveSummarizerBackend:
             raise
         failed = True
     except Exception:

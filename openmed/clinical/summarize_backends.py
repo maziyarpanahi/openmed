@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from openmed.core.capabilities import MissingOptionalDependencyError
 from openmed.core.model_registry import resolve_summarizer_model
@@ -16,6 +16,14 @@ from openmed.models.clinical_slm_memory import (
     preflight_clinical_slm_memory,
 )
 from openmed.models.clinical_slm_templates import compute_template_digest
+
+if TYPE_CHECKING:
+    from openmed.clinical.extractive_selection import (
+        ExtractiveFact,
+        ExtractiveSelection,
+    )
+    from openmed.clinical.summary_length_budget import SummaryLengthBudget
+    from openmed.clinical.summary_omission_budget import ImportanceClassPolicy
 
 MAX_INPUT_BYTES = 16_384
 MAX_OUTPUT_BYTES = 8_192
@@ -32,24 +40,81 @@ class RemoteSummarizerError(LocalSummarizerError):
     """A network provider or URL was supplied to a local-only task."""
 
 
+def _utf8_size(text: str) -> int:
+    if type(text) is str:
+        try:
+            return len(text.encode("utf-8"))
+        except UnicodeEncodeError:
+            pass
+    # A decoder exception retains its input even if its message omits it.
+    raise LocalSummarizerError("invalid summarizer text")
+
+
 class ExtractiveSummarizerBackend:
-    """Explicit deterministic CPU baseline, not a trained summarizer."""
+    """Explicit CPU extraction, optionally bound to reviewed evidence.
+
+    Args:
+        evidence: Offset-only ``ExtractiveFact`` records, or ``None`` for the
+            historical first-three-sentence baseline.
+        importance_classes: Existing omission policies for those facts.
+        length_budget: Existing class/global allowance for the complete extract.
+    """
 
     backend_id = "deterministic-extractive"
     template_digest = compute_template_digest("extractive-first-three-sentences-v1")
 
+    def __init__(
+        self,
+        *,
+        evidence: tuple[ExtractiveFact, ...] | None = None,
+        importance_classes: tuple[ImportanceClassPolicy, ...] | None = None,
+        length_budget: SummaryLengthBudget | None = None,
+    ) -> None:
+        self.evidence = evidence
+        self.importance_classes = importance_classes
+        self.length_budget = length_budget
+        if evidence is not None:
+            self.template_digest = compute_template_digest(
+                "extractive-reviewed-fact-coverage-utf8-budget-v1"
+            )
+
+    def select(self, text: str) -> ExtractiveSelection:
+        """Select whole sentences using the configured evidence and policies.
+
+        Args:
+            text: Already de-identified source matching the configured offsets.
+
+        Returns:
+            Protected text and value-free diagnostics, or an explicit refusal.
+        """
+        from openmed.clinical.extractive_selection import select_extractive_sentences
+
+        return select_extractive_sentences(
+            text,
+            evidence=self.evidence,
+            importance_classes=self.importance_classes,
+            length_budget=self.length_budget,
+        )
+
     def summarize(self, text: str, *, mode: str = "bhc") -> str:
-        """Select up to three sentences without model loading or network use."""
+        """Select reviewed facts, or run the comparison baseline without evidence."""
         from openmed.clinical.summarize import _extractive_summary
 
         _validate_input(text, mode)
+        if self.evidence is not None:
+            from openmed.clinical.extractive_selection import ExtractiveSelectionError
+
+            result = self.select(text)
+            if result.status != "selected":
+                raise ExtractiveSelectionError(result)
+            return result.summary
         return _extractive_summary(text)
 
 
 def _validate_input(text: str, mode: str) -> None:
     if mode != "bhc":
         raise LocalSummarizerError("unsupported summarization mode")
-    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_INPUT_BYTES:
+    if _utf8_size(text) > MAX_INPUT_BYTES:
         raise LocalSummarizerError("summarizer input limit exceeded")
 
 
@@ -229,7 +294,7 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
     if model is None:
         return MLXSummarizerBackend()
     if isinstance(model, str):
-        if model == "extractive":
+        if model in {"extractive", "extractive-baseline"}:
             return ExtractiveSummarizerBackend()
         if ":" in model or model.lower() in {
             "remote",
