@@ -46,6 +46,7 @@ export type PIILanguage =
   | "mr"
   | "ne"
   | "or"
+  | "pl"
   | "pa"
   | "ta"
   | "te"
@@ -69,6 +70,7 @@ export type PIILanguage =
   | "xh"
   | "zh"
   | "uk"
+  | "ur"
   | "cs"
   | "el"
   | "vi";
@@ -614,6 +616,10 @@ export class OpenMedClient {
     return this.post("/ground", request);
   }
 
+  async brief(request: BriefRequest): Promise<BriefResponse> {
+    return this.post("/brief", request);
+  }
+
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
     return this.post("/pii/extract", request);
   }
@@ -922,4 +928,31 @@ function toOpenMedErrorEnvelope(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export interface BriefRequest {
+  text: string;
+  model?: "mlx" | "extractive" | "maple" | "maple-preview";
+  profile?: "bhc" | "brief_hospital_course" | "clinical_handoff" | "discharge_summary" | "problem_oriented";
+  review_id?: string | null;
+}
+
+/** Protected application response; do not log summary text. */
+export interface BriefResponse {
+  schema_version: 1;
+  status: "needs_review" | "refused";
+  summary: string;
+  refusal_reason: string | null;
+  summary_digest: string;
+  summary_characters: number;
+  digest: string;
+  stages: string[];
+  citations: Record<string, unknown>[];
+  verdicts: Record<string, unknown>[];
+  metrics: Record<string, unknown>;
+  envelope: Record<string, unknown>;
+  review_packet: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  profile_digest: string | null;
+  backend_id: string | null;
 }

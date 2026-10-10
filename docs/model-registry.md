@@ -9,6 +9,9 @@ OpenMed ships a manifest-backed registry (`openmed.core.model_registry.OPENMED_M
 checkpoint with metadata such as category, specialization, recommended confidence, Hugging Face IDs, device fit, and
 benchmark summaries. Use it to pick the right model, surface dropdowns in UIs, or validate incoming requests.
 
+The [clinical NLI checkpoint preparation](models/clinical-nli.md) documents a
+planned sequence-classification release. It does not add a model alias.
+
 ## Family API compatibility
 
 `RegistryService` retains the v2.3 family-based signatures and schema-v1

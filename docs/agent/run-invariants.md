@@ -50,7 +50,7 @@ with a fixed code. The module never logs or persists evidence.
 The phase transition table and reviewed resume rule belong to the separate
 action-phase contract in issue #2998. This checker validates the final phase
 only; the execution adapter must validate each transition and review evidence
-when that contract is available. This checker also does not replace the signed
+using that contract. This checker also does not replace the signed
 action ledger or sealed evaluation contracts.
 
 Run the focused tests with:

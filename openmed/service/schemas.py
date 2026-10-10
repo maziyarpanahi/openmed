@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, Optional, Union
 
+from pydantic import StrictStr
+
 from openmed.clinical.grounding.systems import SYSTEM_URIS, canonical_system
 from openmed.core.policy import canonical_policy_name
 from openmed.interop.tools import (
@@ -1251,3 +1253,39 @@ class JourneyResourcePageResponse(_StrictModel):
     policy: JourneyPolicyResponse
     schema_version: Literal["1.0.0"]
     compatibility_policy: Literal["same_major"]
+
+
+class BriefRequest(_StrictModel):
+    """Bounded local brief request; review configuration stays server-owned."""
+
+    text: StrictStr = Field(min_length=1, max_length=16384, repr=False)
+    model: Literal["mlx", "extractive", "maple", "maple-preview"] = "mlx"
+    profile: Literal[
+        "bhc",
+        "brief_hospital_course",
+        "clinical_handoff",
+        "discharge_summary",
+        "problem_oriented",
+    ] = "bhc"
+    review_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class BriefResponse(_StrictModel):
+    """Protected brief response; never use this model as an access-log payload."""
+
+    schema_version: Literal[1]
+    status: Literal["needs_review", "refused"]
+    summary: str = Field(repr=False)
+    refusal_reason: Optional[str]
+    summary_digest: str
+    summary_characters: int
+    digest: str
+    stages: list[str]
+    citations: list[dict[str, Any]]
+    verdicts: list[dict[str, Any]]
+    metrics: dict[str, Any]
+    envelope: dict[str, Any]
+    review_packet: dict[str, Any]
+    provenance: dict[str, Any]
+    profile_digest: Optional[str]
+    backend_id: Optional[str]

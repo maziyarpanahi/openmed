@@ -64,7 +64,11 @@ from ._output import (
 from .active_learning import add_active_learning_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
-from .benchmark import add_cost_command, add_generalization_command
+from .benchmark import (
+    add_cost_command,
+    add_generalization_command,
+    add_metadata_commands,
+)
 from .calibrate import add_calibrate_command
 from .contract import (
     OFFLINE_ERROR_CODE,
@@ -84,6 +88,7 @@ from .scaffold import (
     ScaffoldError,
     scaffold_project,
 )
+from .slm_verify import add_slm_verify_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -589,6 +594,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_icd11_command(subparsers)
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
+    from .brief import add_brief_command
+
+    add_brief_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -1642,6 +1650,11 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
     dp_parser.add_argument("--label", default="aggregate_query")
     dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Allow seeded synthetic experiments; outputs are not private releases.",
+    )
     dp_parser.add_argument("--overwrite", action="store_true")
     dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
@@ -2447,6 +2460,8 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     )
     models_verify.set_defaults(handler=_handle_models_verify)
 
+    add_slm_verify_command(models_sub)
+
     models_size = models_sub.add_parser(
         "size",
         help="Show model download, disk, and peak RAM estimates.",
@@ -3119,6 +3134,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
     add_cost_command(benchmark_sub)
     add_generalization_command(benchmark_sub)
+    add_metadata_commands(benchmark_sub)
 
 
 def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
@@ -4516,6 +4532,12 @@ def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
         release_aggregate,
     )
 
+    if args.seed is not None and not args.test_mode:
+        raise CliError(
+            "Seeded aggregate releases require --test-mode and synthetic data.",
+            code="dp_seed_requires_test_mode",
+            exit_code=EXIT_ERROR,
+        )
     _preflight_structured_paths(
         inputs=((args.input, "Aggregate input", frozenset({".json"})),),
         outputs=((args.output, "Aggregate output", frozenset({".json"})),),
@@ -6186,16 +6208,24 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     from openmed.eval.datasets import CLINICAL_PRIVACY_MODEL_ID
     from openmed.eval.harness import run_benchmark
     from openmed.eval.suites import (
+        OPENMED_SYNTH,
+        OPENMED_SYNTH_REFERENCE_MODEL,
         SHIELD,
         load_suite_fixtures,
+        openmed_synth_reference_runner,
         run_clinical_phi_shield_benchmark,
         suite_metadata,
     )
+    from openmed.eval.suites.openmed_synth import openmed_synth_execution_metadata
+
+    suite = str(args.suite or SHIELD)
 
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
         raise CliError(str(exc), code="invalid_argument", exit_code=EXIT_USAGE)
+    if not models and suite == OPENMED_SYNTH:
+        models = [OPENMED_SYNTH_REFERENCE_MODEL]
     if not models:
         raise CliError(
             "At least one model identifier is required.",
@@ -6203,7 +6233,6 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
             exit_code=EXIT_USAGE,
         )
 
-    suite = str(args.suite or SHIELD)
     if args.checkpoint_manifest_ref and args.checkpoint_manifest is None:
         raise CliError(
             "--checkpoint-manifest-ref requires --checkpoint-manifest.",
@@ -6279,7 +6308,16 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
                 suite=suite,
                 model_name=model,
                 device=args.device,
-                metadata=metadata,
+                runner=(
+                    openmed_synth_reference_runner
+                    if suite == OPENMED_SYNTH and model == OPENMED_SYNTH_REFERENCE_MODEL
+                    else None
+                ),
+                metadata=(
+                    {**metadata, **openmed_synth_execution_metadata(model)}
+                    if suite == OPENMED_SYNTH
+                    else metadata
+                ),
             )
             for model in models
         ]

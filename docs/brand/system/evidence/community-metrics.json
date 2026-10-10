@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-10-09T09:23:58Z",
+  "hugging_face": {
+    "organization": "OpenMed",
+    "api_url": "https://huggingface.co/api/models?author=OpenMed&limit=1000&expand[]=downloads&expand[]=downloadsAllTime&expand[]=createdAt",
+    "method": "Sum of per-model downloadsAllTime and downloads (rolling 30 days) over every public model the Hub API returns. Hub counters include automated downloads; they are not users.",
+    "public_models": 2277,
+    "downloads_all_time": 466266617,
+    "downloads_30d": 36563992,
+    "first_model_created_at": "2025-07-16T18:40:33.000Z"
+  },
+  "featured_models": {
+    "OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M": 2034090,
+    "OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M": 3288667,
+    "OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M": 3010128,
+    "OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M": 3381583,
+    "OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M": 3381224,
+    "OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M": 1747683
+  },
+  "pypi": {
+    "package": "openmed",
+    "json_url": "https://pypi.org/pypi/openmed/json",
+    "release_count": 51,
+    "first_release_at": "2025-08-09T13:24:57.980084Z",
+    "releases_first_six_months": 21,
+    "first_six_months_definition": "uploads within 183 days of the first",
+    "installs_total": 18322130,
+    "installs_total_source": "https://static.pepy.tech/personalized-badge/openmed?units=none&period=total&left_text=downloads",
+    "installs_last_month": 1880822,
+    "installs_last_month_source": "https://pypistats.org/api/packages/openmed/recent"
+  },
+  "github": {
+    "contributors_url": "https://api.github.com/repos/maziyarpanahi/openmed/contributors?per_page=100&anon=0",
+    "human_contributors": 85
+  },
+  "owner": "repository-owner",
+  "review_by": "2026-11-09",
+  "refresh": {
+    "command": "python scripts/brand/update_claims.py --refresh-community-metrics",
+    "network": "explicit opt-in only",
+    "ci": "forbidden"
+  },
+  "display": {
+    "downloads_all_time_millions": "460",
+    "downloads_30d_millions": "36",
+    "installs_total_millions": "18.3",
+    "public_models_floor": 2200,
+    "first_model_month": "July 2025",
+    "first_release_month": "August 2025",
+    "captured_month": "October 2026",
+    "featured_models_millions": {
+      "OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M": "2.0",
+      "OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M": "3.2",
+      "OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M": "3.0",
+      "OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M": "3.3",
+      "OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M": "3.3",
+      "OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M": "1.7"
+    },
+    "method": "floor"
+  }
+}

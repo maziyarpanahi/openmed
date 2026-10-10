@@ -322,6 +322,35 @@ class ReplayReport:
     expected_digest: str | None
     actual_digest: str | None
 
+    def __post_init__(self) -> None:
+        if type(self.matched) is not bool:
+            raise ReplayError("invalid_report")
+        if self.matched:
+            if any(
+                value is not None
+                for value in (
+                    self.step,
+                    self.artifact,
+                    self.expected_digest,
+                    self.actual_digest,
+                )
+            ):
+                raise ReplayError("invalid_report")
+            return
+        if (
+            type(self.step) is not int
+            or not 0 <= self.step < 1024
+            or type(self.artifact) is not str
+            or self.artifact not in _FIELDS
+        ):
+            raise ReplayError("invalid_report")
+        pattern = _SIGNATURE_RE if self.artifact in _CONTENT_FIELDS else _DIGEST_RE
+        if any(
+            type(value) is not str or pattern.fullmatch(value) is None
+            for value in (self.expected_digest, self.actual_digest)
+        ):
+            raise ReplayError("invalid_report")
+
     def to_dict(self) -> dict[str, bool | int | str | None]:
         """Return a value-free report suitable for audit storage."""
         return {

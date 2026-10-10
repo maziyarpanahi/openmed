@@ -273,8 +273,23 @@ jobs:
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
     - name: Test with pytest
-      run: |
-        uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+      timeout-minutes: 45
+      run: >-
+        uv run --frozen python -c
+        "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
+        --cov=openmed --cov-report=xml --cov-report=term-missing
+        --tb=line --show-capture=no --color=no --code-highlight=no -ra
+        --junitxml=pytest-results.xml
+
+    - name: Upload test diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: pytest-${{ matrix.os }}-py${{ matrix.python-version }}-${{ github.run_attempt }}
+        path: |
+          pytest-results.xml
+          coverage.xml
+        if-no-files-found: warn
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
@@ -283,6 +298,79 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  sdk-compatibility:
+    # Bounded core contracts and installed artifacts on every advertised lane.
+    # Model/runtime qualification remains separate; no weights are downloaded.
+    needs: repo-policy
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      OPENMED_OFFLINE: "1"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+      with:
+        python-version: ${{ matrix.python-version }}
+    - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      with:
+        version: "0.11.28"
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+    - name: Prepare frozen test and package dependencies
+      shell: bash
+      run: |
+        uv sync --frozen --extra dev --python "${{ matrix.python-version }}"
+        uv export --frozen --no-hashes --no-emit-project --extra cli --extra service --extra mcp --output-file "$RUNNER_TEMP/compat-constraints.txt"
+    - name: Core privacy and platform contracts
+      run: >-
+        uv run --frozen pytest -q --timeout=120 --timeout-method=thread
+        tests/unit/install/test_smoke_check.py
+        tests/unit/release/test_release_budget_workflow.py
+        tests/unit/service/test_brief_surfaces.py
+        tests/unit/clinical/test_temporal_normalizer.py
+        tests/unit/clinical/test_journey_contracts.py
+        tests/unit/clinical/test_clinical_timeline_evidence.py
+        tests/unit/ner/test_infer.py
+        tests/unit/test_no_raw_text_logging.py
+    - name: Build wheel and source distribution
+      shell: bash
+      run: uv build --out-dir "$RUNNER_TEMP/compat-dist"
+    - name: Verify clean core and adapter installs plus missing-resource controls
+      shell: bash
+      run: >-
+        python scripts/install/smoke_check.py
+        --artifacts "$RUNNER_TEMP/compat-dist"
+        --constraints "$RUNNER_TEMP/compat-constraints.txt"
+        --report sdk-compatibility.json
+    - name: Upload value-free compatibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: sdk-compatibility-${{ matrix.os }}-${{ matrix.python-version }}
+        path: sdk-compatibility.json
+        if-no-files-found: warn
+
+  sdk-compatibility-gate:
+    # Stable required-check name; a missing/cancelled matrix is not success.
+    needs: sdk-compatibility
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Require every advertised combination
+      env:
+        MATRIX_RESULT: ${{ needs.sdk-compatibility.result }}
+      run: test "$MATRIX_RESULT" = success
 
   security:
     needs: repo-policy
@@ -496,6 +584,7 @@ jobs:
     - yasbd-integration
     - i18n-cjk-indic
     - browser-extension
+    - sdk-compatibility-gate
     if: >-
       always() &&
       needs.repo-policy.result == 'success' &&
@@ -505,6 +594,7 @@ jobs:
       needs.spacy-integration.result == 'success' &&
       needs.yasbd-integration.result == 'success' &&
       needs.browser-extension.result == 'success' &&
+      needs.sdk-compatibility-gate.result == 'success' &&
       (
         needs.i18n-cjk-indic.result == 'success' ||
         needs.i18n-cjk-indic.result == 'skipped'
@@ -530,6 +620,65 @@ jobs:
     - name: Build package
       run: |
         uv build
+
+    - name: Verify refreshed wheel-size baseline
+      id: wheel_baseline
+      shell: bash
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        git fetch --no-tags --depth=1 origin "$BASE_SHA"
+        if git diff --quiet "$BASE_SHA" HEAD -- gates/release_budgets.json; then
+          echo "Release budgets unchanged; no baseline refresh to verify."
+          exit 0
+        else
+          diff_status=$?
+          if [ "$diff_status" -ne 1 ]; then
+            exit "$diff_status"
+          fi
+        fi
+        baseline_source="$(mktemp -d)"
+        git archive "$BASE_SHA" | tar -x -C "$baseline_source"
+        uv build --out-dir "$RUNNER_TEMP/openmed-baseline-dist" "$baseline_source"
+        echo "measured=true" >> "$GITHUB_OUTPUT"
+        python - "$RUNNER_TEMP/openmed-baseline-dist" <<'PY'
+        import hashlib
+        import json
+        import os
+        import platform
+        import subprocess
+        import sys
+        import zipfile
+        from pathlib import Path
+
+        wheels = list(Path(sys.argv[1]).glob("openmed-*.whl"))
+        if len(wheels) != 1:
+            raise SystemExit("Expected exactly one frozen-base wheel")
+        wheel = wheels[0]
+        measured = wheel.stat().st_size
+        budget = json.loads(Path("gates/release_budgets.json").read_text())
+        expected = budget["entries"]["package::openmed::wheel"]["metrics"]["baseline_bytes"]
+        with zipfile.ZipFile(wheel) as archive:
+            metadata_paths = [name for name in archive.namelist() if name.endswith(".dist-info/WHEEL")]
+            if len(metadata_paths) != 1:
+                raise SystemExit("Expected exactly one wheel metadata record")
+            wheel_metadata = archive.read(metadata_paths[0]).decode("utf-8")
+        receipt = {
+            "base_sha": os.environ["BASE_SHA"],
+            "python": platform.python_version(),
+            "uv": subprocess.check_output(["uv", "--version"], text=True).strip(),
+            "wheel_metadata": wheel_metadata,
+            "measured_bytes": measured,
+            "proposed_baseline_bytes": expected,
+            "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+            "matches": measured == expected,
+        }
+        (wheel.parent / "baseline-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+        print(f"Frozen-base wheel: {measured} bytes, sha256={hashlib.sha256(wheel.read_bytes()).hexdigest()}")
+        if measured != expected:
+            raise SystemExit(f"Wheel baseline mismatch: measured {measured}, proposed {expected}")
+        PY
 
     - name: Enforce wheel size budget and record language-extra footprints
       run: |
@@ -569,3 +718,10 @@ jobs:
           dist/
           size-budget-report.json
       if: always()
+
+    - name: Upload wheel baseline evidence
+      if: always() && steps.wheel_baseline.outputs.measured == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: wheel-size-baseline
+        path: ${{ runner.temp }}/openmed-baseline-dist/
