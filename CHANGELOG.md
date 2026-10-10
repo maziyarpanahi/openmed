@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added injected runtime clinical-agent authority revocation checks before
+  sensitive reads, effects and recovery, with monotonic grant/ticket generations,
+  descendant and approval invalidation, and content-free offline tests (#3664).
 - Added guarded dispatch on the existing workflow executor, enforcing signed
   grants, purpose tickets, minimum-data projections, pinned tool identity and
   exact single-use approval, with content-free cancellation and uncertain-effect
