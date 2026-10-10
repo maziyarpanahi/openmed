@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added guarded dispatch on the existing workflow executor, enforcing signed
+  grants, purpose tickets, minimum-data projections, pinned tool identity and
+  exact single-use approval, with content-free cancellation and uncertain-effect
+  recovery outcomes through injected local providers (#3661).
 - Add default-off agent effect admission, signed local transition receipts,
   independent rollback detection, emergency stop and fresh-enable CLI commands
   with synthetic approval/recovery safety controls (#3765).
