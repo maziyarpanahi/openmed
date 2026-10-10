@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add offline qualification of caller-supplied clinical NLI artifacts,
+  separate development/held-out evaluation, digest-bound receipts and a
+  drift-checked BriefContext callback; synthetic data never establishes
+  clinical qualification (#3656).
+
 - Added a local Journey-fact ClinicalBrief context provider with explicit review
   verification, source/fact/profile/calibration bindings, typed mapping refusals
   and offline Python, CLI, REST and MCP injection tests (#3652).
