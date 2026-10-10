@@ -314,12 +314,16 @@ def test_configuration_and_exclusive_output(candidate_inputs):
     )
     result = candidate_from_arguments(args)
     assert json.loads(output.read_text()) == result.to_dict()
-    with pytest.raises(AgentCandidateError, match="output_unavailable"):
+    with pytest.raises(AgentCandidateError, match="output_unavailable") as error:
         candidate_from_arguments(args)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
     output.unlink()
     output.symlink_to(inputs.params["policy"])
-    with pytest.raises(AgentCandidateError, match="output_unavailable"):
+    with pytest.raises(AgentCandidateError, match="output_unavailable") as error:
         candidate_from_arguments(args)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
 
 
 def test_git_file_checkout_and_annotated_tag_are_supported(candidate_inputs):
@@ -380,3 +384,28 @@ def test_tag_argument_cannot_be_a_revision_expression(candidate_inputs):
     )
     assert result.packet.decision == "NOT_READY"
     assert result.packet.to_dict()["reason_codes"] == ["tag_unavailable"]
+
+
+def test_missing_private_key_has_no_io_exception_context(candidate_inputs):
+    inputs = candidate_inputs
+    args = SimpleNamespace(signing_key_file=inputs.tmp / "private-patient-key")
+    with pytest.raises(AgentCandidateError, match="^signing_key_unavailable$") as error:
+        candidate_from_arguments(args)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+def test_private_packet_mapping_failure_has_no_exception_context():
+    class UnreadablePacket(dict):
+        def __iter__(self):
+            raise ValueError("/private/patient-token")
+
+    with pytest.raises(AgentCandidateError, match="^packet_invalid$") as error:
+        AgentCandidatePacket.from_dict(UnreadablePacket())
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+def test_deep_malformed_packet_fails_offline_verification():
+    packet = AgentCandidatePacket("[" * 2000 + "0" + "]" * 2000)
+    assert not packet.verify(_KEY)

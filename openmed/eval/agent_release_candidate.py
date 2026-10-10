@@ -202,8 +202,9 @@ class AgentCandidatePacket:
         try:
             _validate_packet(payload)
             return cls(_canonical(payload))
-        except (TypeError, ValueError, KeyError) as exc:
-            raise AgentCandidateError("packet_invalid") from exc
+        except (TypeError, ValueError, KeyError):
+            pass
+        raise AgentCandidateError("packet_invalid")
 
     def to_dict(self) -> dict[str, Any]:
         """Return an independent copy of the content-free packet."""
@@ -240,7 +241,7 @@ class AgentCandidatePacket:
             return hmac.compare_digest(
                 packet_digest, _payload_digest(payload)
             ) and hmac.compare_digest(signature, expected_signature)
-        except (AgentCandidateError, TypeError, ValueError, KeyError):
+        except (AgentCandidateError, TypeError, ValueError, KeyError, RecursionError):
             return False
 
 
@@ -536,10 +537,13 @@ def candidate_from_arguments(args: argparse.Namespace) -> AgentReleaseCandidate:
     Raises:
         AgentCandidateError: Key, configuration or output is unavailable.
     """
+    key = None
     try:
         key = _read_file(args.signing_key_file)
-    except OSError as exc:
-        raise AgentCandidateError("signing_key_unavailable") from exc
+    except OSError:
+        pass
+    if key is None:
+        raise AgentCandidateError("signing_key_unavailable")
     result = run_agent_release_candidate(
         repo_root=args.repo_root,
         source_sha=args.source_sha,
@@ -551,12 +555,15 @@ def candidate_from_arguments(args: argparse.Namespace) -> AgentReleaseCandidate:
         evidence_files=args.evidence,
         signing_key=key,
     )
+    output_unavailable = False
     try:
         # Do not overwrite artifacts or follow output symlinks.
         with args.output.open("x", encoding="utf-8") as handle:
             handle.write(_canonical(result.to_dict()) + "\n")
-    except OSError as exc:
-        raise AgentCandidateError("output_unavailable") from exc
+    except OSError:
+        output_unavailable = True
+    if output_unavailable:
+        raise AgentCandidateError("output_unavailable")
     return result
 
 
