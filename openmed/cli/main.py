@@ -622,6 +622,9 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    from .multimodal_notice import add_multimodal_notice_command
+
+    add_multimodal_notice_command(subparsers)
     _finalize_parser(parser)
     return parser
 

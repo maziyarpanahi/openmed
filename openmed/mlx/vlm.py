@@ -9,9 +9,17 @@ from __future__ import annotations
 import json
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, ClassVar, Sequence
+
+from openmed.multimodal.notices import (
+    NOTICE_CATALOG,
+    MultimodalNotice,
+    MultimodalNoticeError,
+    NoticeBoundOutput,
+    NoticeKind,
+)
 
 DEFAULT_NORTH_MICRO_VISION_MODEL = "OpenMed/North-Micro-Vision-Instruct-4bit-mlx"
 SUPPORTED_COMPASS_MODEL_TYPE = "cohere_compass"
@@ -45,16 +53,51 @@ class CompassPreparedInput:
 
 
 @dataclass(frozen=True)
-class VisionLanguageGeneration:
-    """Text plus deterministic generation and performance metadata."""
+class VisionLanguageGeneration(NoticeBoundOutput):
+    """Protected visual text and metadata with a mandatory review notice."""
 
-    text: str
-    token_ids: tuple[int, ...]
+    NOTICE_KIND: ClassVar[NoticeKind] = NoticeKind.VISUAL_DESCRIPTION
+    SCHEMA_VERSION: ClassVar[str] = "openmed.multimodal.vision_generation.v1"
+    text: str = field(repr=False)
+    token_ids: tuple[int, ...] = field(repr=False)
     prompt_tokens: int
     generation_tokens: int
     prompt_seconds: float
     generation_seconds: float
     peak_memory_gb: float
+    notice: MultimodalNotice
+
+    def __post_init__(self) -> None:
+        self._validate_notice()
+        if not isinstance(self.text, str):
+            raise MultimodalNoticeError("vision output text must be a string")
+        if not isinstance(self.token_ids, (tuple, list)) or any(
+            type(token) is not int or not 0 <= token < 2**31 for token in self.token_ids
+        ):
+            raise MultimodalNoticeError("vision token IDs are invalid")
+        if any(
+            type(count) is not int or count < 0
+            for count in (self.prompt_tokens, self.generation_tokens)
+        ):
+            raise MultimodalNoticeError("vision token counts are invalid")
+        for value in (
+            self.prompt_seconds,
+            self.generation_seconds,
+            self.peak_memory_gb,
+        ):
+            if (
+                type(value) not in (int, float)
+                or value < 0
+                or value > 1e12
+                or not math.isfinite(value)
+            ):
+                raise MultimodalNoticeError("vision performance metadata is invalid")
+        object.__setattr__(self, "token_ids", tuple(self.token_ids))
+
+    def render_text(self) -> str:
+        """Render protected generated text together with its review notice."""
+        self.__post_init__()
+        return f"[{self.notice.identifier}] {self.notice.text}\n\n{self.text}"
 
 
 def smart_resize(
@@ -501,7 +544,8 @@ class OpenMedMLXVisionLanguageModel:
             formatted: Treat ``prompt`` as an already-rendered chat template.
 
         Returns:
-            The decoded assistant response.
+            The decoded assistant response together with its mandatory notice.
+            Use ``generate_with_metadata`` for separate protected text/notice fields.
         """
 
         return self.generate_with_metadata(
@@ -513,7 +557,7 @@ class OpenMedMLXVisionLanguageModel:
             top_p=top_p,
             top_k=top_k,
             formatted=formatted,
-        ).text
+        ).render_text()
 
     def generate_with_metadata(
         self,
@@ -594,6 +638,7 @@ class OpenMedMLXVisionLanguageModel:
             prompt_seconds=prompt_seconds,
             generation_seconds=generation_seconds,
             peak_memory_gb=float(mx.get_peak_memory()) / 1e9,
+            notice=NOTICE_CATALOG[NoticeKind.VISUAL_DESCRIPTION],
         )
 
 

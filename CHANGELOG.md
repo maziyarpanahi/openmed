@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry/wording gates (#3828). Direct generation
+  construction now requires its notice; Python text generation includes it.
+
 - Add offline qualification of caller-supplied clinical NLI artifacts,
   separate development/held-out evaluation, digest-bound receipts and a
   drift-checked BriefContext callback; synthetic data never establishes

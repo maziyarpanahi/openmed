@@ -6,32 +6,6 @@
     import MLXLMCommon
     import Tokenizers
 
-    /// Generation result returned by ``OpenMedVisionLanguageModel``.
-    public struct OpenMedVisionLanguageGeneration: Sendable {
-        public let text: String
-        public let tokenIDs: [Int]
-        public let promptTokenCount: Int
-        public let generationTokenCount: Int
-        public let promptTime: TimeInterval
-        public let generationTime: TimeInterval
-
-        public init(
-            text: String,
-            tokenIDs: [Int] = [],
-            promptTokenCount: Int,
-            generationTokenCount: Int,
-            promptTime: TimeInterval,
-            generationTime: TimeInterval
-        ) {
-            self.text = text
-            self.tokenIDs = tokenIDs
-            self.promptTokenCount = promptTokenCount
-            self.generationTokenCount = generationTokenCount
-            self.promptTime = promptTime
-            self.generationTime = generationTime
-        }
-    }
-
     /// First-class OpenMedKit runtime for OpenMed MLX vision-language models.
     ///
     /// Model weights are downloaded once and all inference remains on-device.
@@ -171,13 +145,14 @@
                 }
             }
             let text = await container.decode(tokenIds: tokenIDs)
-            return OpenMedVisionLanguageGeneration(
+            return try OpenMedVisionLanguageGeneration(
                 text: text.trimmingCharacters(in: .whitespacesAndNewlines),
                 tokenIDs: tokenIDs,
                 promptTokenCount: completion?.promptTokenCount ?? 0,
                 generationTokenCount: completion?.generationTokenCount ?? 0,
                 promptTime: completion?.promptTime ?? 0,
-                generationTime: completion?.generateTime ?? 0
+                generationTime: completion?.generateTime ?? 0,
+                notice: MultimodalNoticeKind.visualDescription.notice
             )
         }
 
