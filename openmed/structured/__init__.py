@@ -332,6 +332,18 @@ from .scan import (
     TableRoleScan,
 )
 from .scan import scan_table as scan_column_roles
+from .schema_extract import (
+    SCHEMA_EXTRACT_ADVISORY,
+    FieldBinding,
+    FieldSource,
+    MissingRequiredField,
+    ScalarType,
+    SchemaDefinitionError,
+    SchemaExtraction,
+    SchemaValidationIssue,
+    extract_to_schema,
+    normalize_field_key,
+)
 from .schema_policy import (
     ACTION_DATE_SHIFT,
     ACTION_DEIDENTIFY,
@@ -841,4 +853,14 @@ __all__ = [
     "write_table",
     "structured_privacy_fixture",
     "validate_schema_policy",
+    "SCHEMA_EXTRACT_ADVISORY",
+    "FieldBinding",
+    "FieldSource",
+    "MissingRequiredField",
+    "ScalarType",
+    "SchemaDefinitionError",
+    "SchemaExtraction",
+    "SchemaValidationIssue",
+    "extract_to_schema",
+    "normalize_field_key",
 ]

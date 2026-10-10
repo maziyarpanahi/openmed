@@ -89,6 +89,25 @@ for entity in result.entities:
 
 ---
 
+## 30 सेकंड में क्लिनिकल सारांश का उदाहरण
+
+सोर्स चेकआउट से केवल CPU पर चलने वाला सिंथेटिक इंटरफ़ेस प्रदर्शन चलाएँ:
+
+```bash
+python examples/v30_clinical_brief.py
+# वैकल्पिक: --model mlx; Apple silicon पर निश्चित मॉडल पहले से कैश होना चाहिए।
+```
+
+यह अंतर्निहित नोट का डी-आइडेंटिफिकेशन, एंटिटी निष्कर्षण और कॉन्सेप्ट मिलान करके
+स्रोत-संदर्भ वाला सारांश, सत्यापन परिणाम और मूल मानों के बिना समीक्षा पैकेट दिखाता है।
+**NER/NLI प्रदाता स्पष्ट रूप से सिंथेटिक टेस्ट डबल हैं; ये प्रशिक्षित मॉडल या
+क्लिनिकल सत्यापन नहीं हैं।** बाहरी नोट इनपुट स्वीकार नहीं किया जाता। MLX असमर्थित
+आउटपुट को अस्वीकार कर सकता है; सुरक्षा जाँच कभी नहीं छोड़ी जाती।
+[सारांश गाइड](docs/clinical/clinical-brief.md) और
+[डेमो स्क्रिप्ट](docs/demo/clinical-brief.md) में सीमाएँ और स्थानीय सेटअप देखें।
+
+---
+
 ## एजेंट के साथ बना रहे हैं?
 
 [उपभोक्ता एजेंट-उपयोग गाइड](docs/agent-usage.md) से शुरू करें या चुनी हुई
@@ -124,7 +143,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -167,11 +186,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v2.5.0` release उपयोग करें:
+फिर immutable OpenMed `v3.0.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.5.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
 }
 ```
 
@@ -529,17 +548,17 @@ print([(e.label, e.text) for e in variants["baseline"].entities])
 
 ---
 
-## बहुभाषी PII (38 समर्थित रूट; 35 मॉडल-समर्थित)
+## बहुभाषी PII (42 समर्थित रूट; 35 मॉडल-समर्थित)
 
-निष्कर्षण और डी-आइडेंटिफिकेशन **38 समर्थित PII भाषा codes** में उपलब्ध हैं:
-`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`, `ja`, `kn`, `ko`, `mr`, `nl`, `no`, `or`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
+निष्कर्षण और डी-आइडेंटिफिकेशन **40 समर्थित PII भाषा codes** में उपलब्ध हैं:
+`am`, `ar`, `as`, `bn`, `cs`, `da`, `de`, `el`, `en`, `es`, `fa`, `fr`, `gu`, `he`, `hi`, `id`, `it`, `ja`, `kn`, `ko`, `ml`, `mr`, `nl`, `no`, `or`, `pa`, `pl`, `pt`, `ro`, `ru`, `sv`, `sw`, `ta`, `te`, `th`, `tr`, `uk`, `ur`, `vi`, `xh`, `zh` और `zu`, कुल **रजिस्ट्री-आधारित PII मॉडल कैटलॉग** के साथ।
 Russian routing अभी दस्तावेज़ित multilingual default-model placeholder का उपयोग
 करती है। Bengali, Chinese और Tamil के dedicated registry entries हैं।
-एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family दो अतिरिक्त routes
-(`ml` और `pa`) स्वीकार करती है और Assamese, Bengali, Gujarati, Hindi, Kannada,
-Marathi, Odia, Tamil तथा Telugu को भी सेवा दे सकती है। `OPENMED_INDIC_NER_MODEL` सेट करें; OpenMed इन
+एक वैकल्पिक, उपयोगकर्ता द्वारा configured Indic NER family Assamese, Bengali,
+Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil तथा Telugu
+को भी सेवा दे सकती है। `OPENMED_INDIC_NER_MODEL` सेट करें; OpenMed इन
 weights को न तो bundle करता है और न अपने आप चुनता है।
-OpenMed में Polish, Latvian, Slovak, Malay, Filipino और Finnish जैसे अतिरिक्त ID-only locales के लिए validator-समर्थित national-ID coverage भी शामिल है।
+OpenMed में Latvian, Slovak, Malay, Filipino और Finnish जैसे अतिरिक्त ID-only locales के लिए validator-समर्थित national-ID coverage भी शामिल है।
 
 हर code के default PII मॉडल, Faker locale और डी-आइडेंटिफिकेशन के पहले/बाद के उदाहरण के लिए [प्रति-भाषा गाइड](docs/languages.md) देखें।
 
@@ -662,7 +681,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.5.0 release notes](docs/release/v2.5.0.md) | [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 3.0.0 माइग्रेशन गाइड](docs/migration/2.5-to-3.0.md) | [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [एक्सटेंशन प्लगइन SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |
@@ -731,7 +750,7 @@ OpenMed SDK का स्रोत [Apache-2.0 License](LICENSE) के अं�
 
 यदि OpenMed आपके लिए उपयोगी है, तो एक star दूसरों को इसे खोजने में मदद करता है।
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
