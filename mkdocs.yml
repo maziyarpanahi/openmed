@@ -324,6 +324,7 @@ nav:
       - WebP Header Preflight: multimodal/webp-header-preflight.md
       - Image Orientation Preflight: multimodal/image-orientation-preflight.md
       - TIFF Header Preflight: multimodal/tiff-preflight.md
+      - Non-ECG Waveform Acquisition: multimodal/physiological-waveforms.md
       - Audio Format Summaries: multimodal/audio-format-summaries.md
       - Frame-Sampling Manifests: multimodal/frame-sampling-manifests.md
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md

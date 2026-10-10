@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add aligned offline Python and OpenMedKit non-ECG waveform acquisition
+  contracts for PPG, respiration, pressure and capnography, with controlled
+  quality states, content-free reports and explicit reviewer confirmation.
+  These engineering checks expose no derived vital signs or alarms (#3840).
+
 - Added a local Journey-fact ClinicalBrief context provider with explicit review
   verification, source/fact/profile/calibration bindings, typed mapping refusals
   and offline Python, CLI, REST and MCP injection tests (#3652).
