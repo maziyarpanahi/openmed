@@ -222,26 +222,24 @@ class AggregateDPRelease:
     """One aggregate-only Laplace release and its accounting evidence."""
 
     value: float | dict[str, float]
-    noise: float | dict[str, float]
     spend: DPBudgetSpend
     composition: DPBudgetComposition
     mechanism: str = "laplace"
     scope: str = "aggregate_only"
-    seed_digest: str | None = None
+    test_only: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Return the released aggregate and safe accounting metadata."""
 
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "scope": self.scope,
             "row_level_anonymization": False,
             "mechanism": self.mechanism,
             "value": self.value,
-            "noise": self.noise,
             "spend": self.spend.to_dict(),
             "composition": self.composition.to_dict(),
-            "seed_digest": self.seed_digest,
+            "test_only": self.test_only,
             "limitations": [
                 "This mechanism releases aggregates only.",
                 "It does not anonymize or authorize row-level release.",
@@ -264,8 +262,9 @@ def release_aggregate(
     The input is deliberately restricted to a scalar or a mapping of named
     numeric aggregates. Sequences of rows, row mappings, and nested values are
     rejected so callers cannot mistake this operation for row-level release.
-    A supplied seed makes synthetic/offline tests reproducible; production
-    callers should omit it and use system randomness.
+    A supplied seed makes synthetic tests reproducible and marks the result
+    ``test_only``. Seeded output provides no production privacy guarantee.
+    Neither the noise draw nor seed information is retained in the result.
     """
 
     if not isinstance(ledger, AggregateDPBudgetLedger):
@@ -277,13 +276,14 @@ def release_aggregate(
     if delta != 0.0:
         raise ValueError("the Laplace mechanism uses delta=0")
     normalized = _aggregate_value(value)
+    _validate_label(label)
+    rng = _random_source(seed, label)
     spend = ledger.spend(
         epsilon,
         delta,
         label=label,
         mechanism="laplace",
     )
-    rng = _random_source(seed, label)
     if isinstance(normalized, dict):
         noise = {name: _laplace_noise(rng, scale) for name in normalized}
         released = {name: normalized[name] + noise[name] for name in normalized}
@@ -292,14 +292,9 @@ def release_aggregate(
         released = normalized + noise
     return AggregateDPRelease(
         value=released,
-        noise=noise,
         spend=spend,
         composition=ledger.compose(),
-        seed_digest=(
-            stable_hash({"seed": _seed_text(seed), "label": label})
-            if seed is not None
-            else None
-        ),
+        test_only=seed is not None,
     )
 
 

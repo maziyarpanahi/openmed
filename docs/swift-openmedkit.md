@@ -30,6 +30,17 @@ byte-identical protected response for that fixed output. This proves wire and
 guard interoperability, not independent Swift reimplementation of all Python
 metrics or model-quality equivalence.
 
+The fixture also tests source-identifier matching, including two-character Han
+names, unspaced scripts, recognized Hangul particles and full-width, confusable,
+canonical and zero-width variants. Native matching preserves whitespace parts,
+its existing punctuation-separated components of at least three characters,
+and word boundaries for spaced scripts. The shared fixture records native-only
+component matches explicitly; Python retains its whitespace-part contract.
+Its confusable mappings mirror the
+existing Python detector inventory; the shared controls cover every mapping.
+See [summarization](clinical/summarization.md) for the remaining risks from
+inflected names and unrecognized suffixes. This guard complements `privacyCheck`.
+
 OpenMedKit is the Swift package for running OpenMed models in **macOS**,
 **iOS**, **iPadOS**, **watchOS**, and **visionOS** apps.
 
