@@ -5,9 +5,15 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
+from openmed.clinical.brief_cancellation import (
+    BriefCancellation,
+    BriefInterrupted,
+    check_cancellation,
+)
 from openmed.core.capabilities import MissingOptionalDependencyError
 from openmed.core.model_registry import (
     resolve_summarizer_model,
@@ -31,6 +37,14 @@ from openmed.models.clinical_slm_memory import (
     preflight_clinical_slm_memory,
 )
 from openmed.models.clinical_slm_templates import compute_template_digest
+
+if TYPE_CHECKING:
+    from openmed.clinical.extractive_selection import (
+        ExtractiveFact,
+        ExtractiveSelection,
+    )
+    from openmed.clinical.summary_length_budget import SummaryLengthBudget
+    from openmed.clinical.summary_omission_budget import ImportanceClassPolicy
 
 MAX_INPUT_BYTES = 16_384
 MAX_OUTPUT_BYTES = 8_192
@@ -90,24 +104,176 @@ class LocalSummarizerPackageError(LocalSummarizerError):
         super().__init__(self.code)
 
 
+@dataclass(frozen=True)
+class BriefGenerationEvidence:
+    """Protected reviewed span exposed only to an injected local generator."""
+
+    reference_id: str
+    text: str = field(repr=False)
+    start: int
+    end: int
+
+
+@dataclass(frozen=True, repr=False)
+class BriefGeneratedClaim:
+    """Atomic protected output with exactly one explicit evidence binding.
+
+    The v1 contract refuses multiple references rather than guessing which
+    reviewed clinical axes apply to the generated claim.
+    """
+
+    text: str
+    reference_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, repr=False)
+class BriefGenerationResult:
+    """Opt-in v1 brief output; legacy string summarization is unchanged.
+
+    Claims are joined with one space, so no unbound prose can enter the output.
+    Validation happens at the composer boundary, even for injected providers.
+    """
+
+    claims: tuple[BriefGeneratedClaim, ...]
+    schema_version: int = 1
+
+    def render(self) -> str:
+        """Validate bounded atomic claims and return their protected text.
+
+        Raises:
+            LocalSummarizerError: For unknown versions or malformed bindings.
+        """
+        from openmed.clinical.summary_claim_segments import segment_summary_claims
+
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != 1
+            or type(self.claims) is not tuple
+            or not 0 < len(self.claims) <= 64
+        ):
+            raise LocalSummarizerError("invalid brief generation contract")
+        total = 0
+        for claim in self.claims:
+            if (
+                type(claim) is not BriefGeneratedClaim
+                or type(claim.text) is not str
+                or not claim.text
+                or len(claim.text) > MAX_OUTPUT_BYTES
+                or claim.text != claim.text.strip()
+                or type(claim.reference_ids) is not tuple
+                or len(claim.reference_ids) != 1
+                or type(claim.reference_ids[0]) is not str
+                or not 0 < len(claim.reference_ids[0]) <= 256
+                or _utf8_size(claim.reference_ids[0]) > 256
+            ):
+                raise LocalSummarizerError("invalid brief claim binding")
+            total += _utf8_size(claim.text)
+            if total + len(self.claims) - 1 > MAX_OUTPUT_BYTES:
+                raise LocalSummarizerError("brief output limit exceeded")
+            segments = segment_summary_claims(claim.text).segments
+            if (
+                len(segments) != 1
+                or segments[0].review_required
+                or segments[0].text != claim.text
+            ):
+                raise LocalSummarizerError("non-atomic brief claim")
+        return " ".join(claim.text for claim in self.claims)
+
+
+class BoundBriefGenerator(Protocol):
+    """Optional caller-owned local generator; no default model claims support."""
+
+    def generate_brief(
+        self, evidence: tuple[BriefGenerationEvidence, ...], *, mode: str
+    ) -> BriefGenerationResult:
+        """Return v1 claims referencing only the supplied reviewed evidence."""
+
+
+def _utf8_size(text: str) -> int:
+    if type(text) is str:
+        try:
+            return len(text.encode("utf-8"))
+        except UnicodeEncodeError:
+            pass
+    # A decoder exception retains its input even if its message omits it.
+    raise LocalSummarizerError("invalid summarizer text")
+
+
 class ExtractiveSummarizerBackend:
-    """Explicit deterministic CPU baseline, not a trained summarizer."""
+    """Explicit CPU extraction, optionally bound to reviewed evidence.
+
+    Args:
+        evidence: Offset-only ``ExtractiveFact`` records, or ``None`` for the
+            historical first-three-sentence baseline.
+        importance_classes: Existing omission policies for those facts.
+        length_budget: Existing class/global allowance for the complete extract.
+    """
 
     backend_id = "deterministic-extractive"
     template_digest = compute_template_digest("extractive-first-three-sentences-v1")
 
-    def summarize(self, text: str, *, mode: str = "bhc") -> str:
-        """Select up to three sentences without model loading or network use."""
+    def __init__(
+        self,
+        *,
+        evidence: tuple[ExtractiveFact, ...] | None = None,
+        importance_classes: tuple[ImportanceClassPolicy, ...] | None = None,
+        length_budget: SummaryLengthBudget | None = None,
+    ) -> None:
+        self.evidence = evidence
+        self.importance_classes = importance_classes
+        self.length_budget = length_budget
+        if evidence is not None:
+            self.template_digest = compute_template_digest(
+                "extractive-reviewed-fact-coverage-utf8-budget-v1"
+            )
+
+    def select(self, text: str) -> ExtractiveSelection:
+        """Select whole sentences using the configured evidence and policies.
+
+        Args:
+            text: Already de-identified source matching the configured offsets.
+
+        Returns:
+            Protected text and value-free diagnostics, or an explicit refusal.
+        """
+        from openmed.clinical.extractive_selection import select_extractive_sentences
+
+        return select_extractive_sentences(
+            text,
+            evidence=self.evidence,
+            importance_classes=self.importance_classes,
+            length_budget=self.length_budget,
+        )
+
+    def summarize(
+        self,
+        text: str,
+        *,
+        mode: str = "bhc",
+        cancellation: BriefCancellation | None = None,
+    ) -> str:
+        """Select reviewed facts, or run the comparison baseline without evidence."""
         from openmed.clinical.summarize import _extractive_summary
 
+        check_cancellation(cancellation)
         _validate_input(text, mode)
-        return _extractive_summary(text)
+        if self.evidence is not None:
+            from openmed.clinical.extractive_selection import ExtractiveSelectionError
+
+            result = self.select(text)
+            check_cancellation(cancellation)
+            if result.status != "selected":
+                raise ExtractiveSelectionError(result)
+            return result.summary
+        summary = _extractive_summary(text)
+        check_cancellation(cancellation)
+        return summary
 
 
 def _validate_input(text: str, mode: str) -> None:
     if mode != "bhc":
         raise LocalSummarizerError("unsupported summarization mode")
-    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_INPUT_BYTES:
+    if _utf8_size(text) > MAX_INPUT_BYTES:
         raise LocalSummarizerError("summarizer input limit exceeded")
 
 
@@ -190,8 +356,15 @@ class MLXSummarizerBackend:
             )
         )
 
-    def summarize(self, text: str, *, mode: str = "bhc") -> str:
+    def summarize(
+        self,
+        text: str,
+        *,
+        mode: str = "bhc",
+        cancellation: BriefCancellation | None = None,
+    ) -> str:
         """Run all preflights, then generate under the outbound socket guard."""
+        check_cancellation(cancellation)
         _validate_input(text, mode)
         _require_runtime()
         result: str | None = None
@@ -199,7 +372,9 @@ class MLXSummarizerBackend:
         package_code = None
         try:
             with network_blocked_if_offline(local_only=True):
-                result = self._generate(text)
+                result = self._generate(text, cancellation)
+        except BriefInterrupted:
+            raise
         except LocalSummarizerPackageError as error:
             if type(error) is LocalSummarizerPackageError:
                 package_code = error.code
@@ -218,6 +393,7 @@ class MLXSummarizerBackend:
                 failed = True
         except Exception:
             failed = True
+        check_cancellation(cancellation)
         if package_code is not None:
             raise LocalSummarizerPackageError(package_code)
         if failed:
@@ -226,7 +402,7 @@ class MLXSummarizerBackend:
         assert result is not None
         return result
 
-    def _generate(self, text: str) -> str:
+    def _generate(self, text: str, cancellation=None) -> str:
         from openmed.mlx.maple import (
             build_maple_task_messages,
             parse_maple_task_response,
@@ -316,32 +492,41 @@ class MLXSummarizerBackend:
         )
         if not memory.accepted:
             raise LocalSummarizerError("summarizer memory budget exceeded")
+        check_cancellation(cancellation)
         runner = _load_model(path)
-        prompt = runner.format_chat_prompt(messages)
-        tokens = runner.tokenizer.encode(prompt)
-        if (
-            len(tokens) > manifest.context_limits["max_input_tokens"]
-            or len(tokens) + output_tokens > context
-        ):
-            raise LocalSummarizerError("summarizer token budget exceeded")
-        output = runner.generate(
-            prompt=prompt,
-            max_tokens=output_tokens,
-            temp=0.0,
-            verbose=False,
-            speculative=False,
-        )
-        if (
-            not isinstance(output, str)
-            or len(output.encode("utf-8")) > MAX_RESPONSE_BYTES
-        ):
-            raise LocalSummarizerError("invalid summarizer output")
-        parsed = parse_maple_task_response("summarize", output, text)
-        if not parsed.evidence or not parsed.answer:
-            raise LocalSummarizerError("summary evidence is required")
-        if len(parsed.answer.encode("utf-8")) > MAX_OUTPUT_BYTES:
-            raise LocalSummarizerError("summary output limit exceeded")
-        return parsed.answer
+        try:
+            check_cancellation(cancellation)
+            prompt = runner.format_chat_prompt(messages)
+            tokens = runner.tokenizer.encode(prompt)
+            if (
+                len(tokens) > manifest.context_limits["max_input_tokens"]
+                or len(tokens) + output_tokens > context
+            ):
+                raise LocalSummarizerError("summarizer token budget exceeded")
+            check_cancellation(cancellation)
+            output = runner.generate(
+                prompt=prompt,
+                max_tokens=output_tokens,
+                temp=0.0,
+                verbose=False,
+                speculative=False,
+            )
+            check_cancellation(cancellation)
+            if (
+                not isinstance(output, str)
+                or len(output.encode("utf-8")) > MAX_RESPONSE_BYTES
+            ):
+                raise LocalSummarizerError("invalid summarizer output")
+            parsed = parse_maple_task_response("summarize", output, text)
+            if not parsed.evidence or not parsed.answer:
+                raise LocalSummarizerError("summary evidence is required")
+            if len(parsed.answer.encode("utf-8")) > MAX_OUTPUT_BYTES:
+                raise LocalSummarizerError("summary output limit exceeded")
+            return parsed.answer
+        finally:
+            # This runner is created for this call; never unload caller-owned providers.
+            runner.model = None
+            runner.tokenizer = None
 
 
 def resolve_summarizer_backend(model: object | None = None) -> object:
@@ -353,7 +538,7 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
     if model is None:
         return MLXSummarizerBackend()
     if isinstance(model, str):
-        if model == "extractive":
+        if model in {"extractive", "extractive-baseline"}:
             return ExtractiveSummarizerBackend()
         if ":" in model or model.lower() in {
             "remote",
@@ -364,6 +549,10 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
         }:
             raise RemoteSummarizerError("remote summarizer backends are prohibited")
         return MLXSummarizerBackend(model)
-    if callable(model) or callable(getattr(model, "summarize", None)):
+    if (
+        callable(model)
+        or callable(getattr(model, "summarize", None))
+        or callable(getattr(model, "generate_brief", None))
+    ):
         return model
     raise LocalSummarizerError("invalid local summarizer backend")

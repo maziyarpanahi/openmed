@@ -130,6 +130,72 @@ does not lock files against another process or verify a later runtime's reads.
 A self-digest detects inconsistency, not authenticity; pin the expected manifest
 digest through a trusted distribution channel. Hashes are not anonymization.
 
+## Verifying a package from the command line
+
+Air-gapped operators can gate a package without writing Python:
+
+```console
+openmed models slm-verify /opt/openmed/clinical-slm \
+    --task bounded_summarization --memory-budget 8000000000 --json
+```
+
+`--task` and `--memory-budget` are required so every run states the capability
+and the device budget it checked; repeat `--task` to require several
+capabilities, and add `--headroom-bytes` to reserve memory that must stay free
+after loading. The command reads package metadata and declared component bytes
+only. It never imports an inference runtime, constructs a tokenizer or model,
+or opens a network connection, so it runs on a host with no runtime
+dependencies installed.
+
+`--json` prints a machine-readable report with an `ok` envelope; without it the
+same verdict is printed as one line. A completed run exits `0` when the verdict
+is `pass` and `1` when it is `fail`, and still prints the full report either
+way. Usage errors (a missing or malformed option) exit `2`.
+
+```json
+{
+  "command": "models slm-verify",
+  "ok": true,
+  "data": {
+    "verdict": "pass",
+    "manifest": {"component_count": 4, "manifest_digest": "sha256:6db7c4a9…"},
+    "verification": {"verified": true, "reason_codes": []},
+    "capabilities": {"decision": "supported", "reason_codes": []},
+    "memory": {"decision": "accepted", "reason_codes": []},
+    "reason_codes": [],
+    "network": {"mandatory": false}
+  }
+}
+```
+
+Each sub-report keeps the schema of the corresponding Python API, so the same
+reason codes appear in both. Failures are reported as `verdict: "fail"` with
+every contributing reason code collected in `reason_codes`; the command also
+reports reasons that a single-library check would hide, such as an unsupported
+capability next to a memory rejection. Capability and context metadata come from
+`clinical-slm-capabilities.json` when a package ships one, and otherwise from
+the artifact manifest, in which case the probe reports missing context limits.
+
+A run that cannot produce a report fails closed with a stable error code in the
+`error` envelope instead of a verdict:
+
+| `error.code` | Meaning |
+| --- | --- |
+| `unsupported_platform` | The platform cannot hash components (no POSIX no-follow directory descriptors), so verification is refused before any check. |
+| `slm_manifest_invalid` | The manifest was rejected while loading or validating; the message carries the manifest reason code, such as `unknown_license`, `manifest_missing`, or `manifest_digest_required`. |
+| `slm_package_invalid` | A declared component could not be read or hashed, or the memory artifact record is unusable. |
+| `slm_unknown_task` | A requested capability or task is outside the closed vocabulary (`bounded_summarization`, `nli`, and their documented aliases). |
+| `slm_capability_metadata_invalid` | Capability metadata could not be normalized into the closed vocabulary. |
+| `slm_memory_profile_invalid` | The runtime profile implied by the memory options was rejected. |
+
+Reported codes replace values: no package path, model identifier, component
+file name, license string, or file content appears in the report, in an error
+message, or in the one-line summary, so the output can be attached to a review
+ticket or an audit log without redaction. The verdict covers package integrity,
+declared capability coverage, and the explicit memory budget only. It is not a
+clinical validation, and human review remains required before any patient-facing
+use.
+
 ## Provisioning the registered MLX summarizer
 
 The registered `mlx`, `maple` and `maple-preview` aliases now require an
