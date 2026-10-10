@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -148,15 +149,29 @@ class SideEffectPreview:
     workflow_after: WorkflowState
 
 
-def _canonical_value(value: Any) -> Any:
-    if value is None or type(value) in (str, bool, int):
+def _canonical_value(value: Any, depth: int = 0) -> Any:
+    if depth > 64:
+        raise PreviewError("invalid_value")
+    if type(value) is str:
+        try:
+            value.encode("utf-8")
+        except UnicodeError:
+            raise PreviewError("invalid_value") from None
+        return value
+    if value is None or type(value) in (bool, int):
+        return value
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise PreviewError("invalid_value")
         return value
     if type(value) is list or type(value) is tuple:
-        return [_canonical_value(item) for item in value]
+        return [_canonical_value(item, depth + 1) for item in value]
     if isinstance(value, Mapping):
         if any(type(key) is not str for key in value):
             raise PreviewError("invalid_value")
-        return {key: _canonical_value(value[key]) for key in sorted(value)}
+        for key in value:
+            _canonical_value(key, depth + 1)
+        return {key: _canonical_value(value[key], depth + 1) for key in sorted(value)}
     raise PreviewError("invalid_value")
 
 
