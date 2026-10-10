@@ -1,12 +1,14 @@
 # Single-use human approval tokens
 
 `openmed.agent.approvals` provides a local, fail-closed approval gate for
-high-impact actions. A token is signed over exactly five claims:
+high-impact actions. A token is signed over exactly seven claims:
 
 - the SHA-256 digest of the action or reviewed side-effect preview;
 - a canonical reviewer policy role;
 - an exclusive Unix expiry timestamp;
-- a random 128-bit nonce; and
+- a random 128-bit nonce;
+- a non-secret signing-key identifier;
+- a Unix issuance timestamp; and
 - the token schema version.
 
 Changing any signed claim invalidates the signature. The verifier atomically
@@ -31,10 +33,12 @@ from openmed.agent.approvals import (
 )
 
 key = b"replace-with-32-or-more-local-key-bytes"
+# Synthetic injected time for a fully offline, reproducible example.
+now = 1_999_999_900
 action_digest = "sha256:" + "a" * 64
 reviewer_role = "role:org.example/clinical-reviewer@1.0.0"
 
-token = ApprovalTokenSigner(key).issue(
+token = ApprovalTokenSigner(key, clock=lambda: now).issue(
     action_digest=action_digest,
     reviewer_role=reviewer_role,
     expires_at=2_000_000_000,
@@ -47,7 +51,7 @@ result, receipt = dispatch_with_approval_token(
     reviewer_role=reviewer_role,
     verifier=verifier,
     dispatch=lambda: "local result",
-    now=1_999_999_999,
+    now=now,
 )
 ```
 
@@ -84,23 +88,101 @@ claim semantics. Store only the nonce digest supplied to `claim()`, not the
 serialized bearer token.
 
 The HMAC key is also application-owned and stays local. OpenMed performs no
-network request, key lookup, telemetry, notification, or persistence. HMAC is
+network request, telemetry, notification, or persistence; key lookup is delegated
+only to the application's injected local provider. HMAC is
 a shared-key primitive: any component that can verify with the key can also
 issue a token, so keep signing in the component that authenticates reviewers.
 
+## Key rotation and bounded validity
+
+Issuance defaults to `openmed.agent.approval_token.v2`. `key_id` and `issued_at`
+are part of the canonical HMAC payload: changing either invalidates the
+signature. Keys are never derived from identifiers. `key_id` is a
+**developer-authored, non-secret label**, matching `[a-z][a-z0-9._-]{0,127}`;
+do not use key material, credentials, patient identifiers or private paths.
+Passing raw bytes is shorthand for the single key identifier `default`.
+
+Inject an `ApprovalKeyProvider` with `get_key(key_id) -> bytes | None`, or use
+`MappingApprovalKeyProvider` over an application-owned mapping. Keep both
+current and retiring entries during rotation. Sign with the selected `key_id`;
+verification resolves each token's signed identifier. Removing the retiring
+entry immediately produces `unknown_key`, even for an otherwise valid token.
+A provider may return `None` or raise `KeyError` for unknown keys. Other provider
+failures are reduced to `key_provider_unavailable`, without source details.
+HMAC keys must be at least 32 bytes; providers and clocks must remain local.
+
+Both signer and verifier accept `max_lifetime_seconds` (default 900, configurable
+from 1 through 86,400) and `clock_skew_seconds` (default 0, configurable from 0
+through 300). Supply matching policy at both ends; a stricter verifier fails
+closed. The injected integer clock defaults to local Unix time. `issued_at`
+defaults to that clock but can be supplied explicitly. Policy checks enforce:
+
+- `expires_at > issued_at`;
+- `expires_at - issued_at <= max_lifetime_seconds` (skew never enlarges this ceiling);
+- `issued_at <= now + clock_skew_seconds`; and
+- `now < expires_at + clock_skew_seconds` (exclusive upper edge).
+
+Issuance checks these bounds before generating a nonce or signing. Verification
+checks the signature and bounds before claiming the nonce. Nonce retention uses
+expiry **plus skew**, so a token consumed before expiry cannot be replayed
+during the tolerance window. The store protocol is unchanged. Token expiry
+plus skew must fit the supported signed 64-bit timestamp range.
+
+## Explicit v1 migration
+
+v1 verification is disabled by default (`legacy_token_disabled`). For a short,
+application-controlled migration, configure `ApprovalTokenVerifier(...,
+allow_v1=True, legacy_key_id="retiring")` with the local provider. The default
+legacy key label is `default`. This flag verifies the original five-claim HMAC
+format, without adding unsigned v2 fields or guessing a key from the signature.
+`ApprovalToken.from_dict` and `from_json` also require `allow_v1=True` to parse
+v1 directly; direct token objects cannot bypass the verifier flag.
+
+v1 has neither issuance time nor key identifier. Its historical total lifetime
+and not-before time cannot be proven. Compatibility therefore restricts its
+**remaining** validity (`expires_at - now <= max_lifetime_seconds`), applies the
+same exclusive expiry/skew bound and nonce retention, and selects only the
+explicit legacy key. Use v2 for full lifetime protection and disable compatibility
+after outstanding approvals have been renewed. Issuance never creates v1 tokens.
+
+## Protected execution authority
+
+`verifier.consume_authorization(...)` performs the same signature, lifetime,
+role, action and atomic single-use checks as `consume(...)`, then returns a
+protected `ApprovalAuthorization`. It holds the verified `reviewer_role`,
+`consumed_at`, exclusive `expires_at` including allowed skew, and the v2
+`receipt`. Trusted local write adapters use these bounds and the verified role
+to recheck authority before dispatch. Direct construction is refused.
+
+Choose one consumption method for each token; calling both is a replay. This
+authorization object stays in the protected, in-memory execution path and is
+not a serializable audit artifact or a replacement for fresh grant, scope,
+lineage and emergency-stop checks. Serialize only `authorization.receipt`.
+It contains no bearer token, signature or key, and its representation hides
+the protected role and times. A v2 receipt alone supplies no role or validity
+window and must not be treated as a complete execution authorization.
+
 ## Value-free receipts and errors
 
-Successful consumption returns `ApprovalReceipt`. It contains only the action
-digest, reviewer role, a digest of the complete signed token, consumption and
-expiry timestamps, and a schema version. It omits the nonce, signature, action
-payload, reviewer identity, and clinical values. Receipts are verification
+Successful consumption returns `ApprovalReceipt` using
+`openmed.agent.approval_receipt.v2`. Its exact fields are `schema_version`,
+`code` (`approved`), `action_digest`, and `token_digest` (the SHA-256 digest of
+the complete signed token). This codes-and-digests-only receipt replaces the
+v1 receipt: reviewer roles and consumption/expiry timestamps are no longer
+receipt fields. It omits key identifiers, issuance time, nonce, signature,
+action payload, reviewer identity, and clinical values. Receipts are verification
 evidence, not proof that the callback committed successfully and not evidence
 that a clinical decision was correct.
 
 Failures expose stable codes and fixed field names only:
 
 - `invalid_signature` for changed or incorrectly keyed tokens;
-- `expired` at or after the exclusive expiry;
+- `expired` at or after expiry plus configured skew;
+- `not_yet_valid` when issuance is beyond the allowed skew;
+- `lifetime_exceeded` for an excessive signed lifetime;
+- `unknown_key` when the selected key has been removed or is unknown;
+- `key_provider_unavailable` when the injected provider fails;
+- `legacy_token_disabled` for v1 tokens without explicit compatibility;
 - `replayed` after a nonce has been claimed;
 - `action_mismatch` for a material action change; and
 - `reviewer_role_mismatch` for the wrong policy role.
