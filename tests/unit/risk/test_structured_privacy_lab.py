@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 
 import pytest
 
@@ -187,12 +188,68 @@ def test_dp_aggregate_is_reproducible_and_rejects_row_level_input():
     )
     assert first.to_dict() == second.to_dict()
     assert first.to_dict()["row_level_anonymization"] is False
+    assert first.to_dict()["test_only"] is True
     with pytest.raises(TypeError, match="row-level"):
         release_aggregate(
             [{"synthetic_count": 12}],
             ledger=AggregateDPBudgetLedger(max_epsilon=1.0, max_delta=0.0),
             epsilon=0.25,
         )
+
+
+@pytest.mark.parametrize("value", [782341.125, {"synthetic_count": 782341.125}])
+def test_dp_release_never_retains_reconstruction_material(value, caplog):
+    release = release_aggregate(
+        value,
+        ledger=AggregateDPBudgetLedger(max_epsilon=1.0, max_delta=0.0),
+        epsilon=0.5,
+        seed="synthetic-seed-only",
+    )
+    for record in (release.to_dict(), asdict(release), vars(release)):
+        assert "noise" not in record
+        assert "seed_digest" not in record
+        assert record["value"] != value
+        serialized = json.dumps(record, default=asdict)
+        assert "782341.125" not in serialized
+        assert "synthetic-seed-only" not in serialized
+    assert "782341.125" not in repr(release) + caplog.text
+
+
+def test_dp_release_defaults_to_system_randomness_without_seed_evidence():
+    release = release_aggregate(
+        17, ledger=AggregateDPBudgetLedger(1.0, 0.0), epsilon=0.5
+    )
+    assert release.to_dict()["test_only"] is False
+    assert release.to_dict()["schema_version"] == 2
+
+
+def test_cli_dp_seed_requires_test_mode_and_writes_only_safe_record(tmp_path, capsys):
+    source = tmp_path / "aggregate.json"
+    output = tmp_path / "release.json"
+    source.write_text('{"synthetic_count": 782341.125}', encoding="utf-8")
+    args = [
+        "risk",
+        "dp-aggregate",
+        str(source),
+        "--output",
+        str(output),
+        "--epsilon",
+        "0.5",
+        "--budget-epsilon",
+        "1.0",
+        "--seed",
+        "sentinel-seed",
+    ]
+    assert main_module.main(args) != 0
+    assert not output.exists()
+    captured = capsys.readouterr()
+    assert "sentinel-seed" not in captured.out + captured.err
+    assert main_module.main([*args, "--test-mode"]) == 0
+    record = json.loads(output.read_text(encoding="utf-8"))
+    assert record["test_only"] is True
+    assert "noise" not in record and "seed_digest" not in record
+    captured = capsys.readouterr()
+    assert "782341.125" not in output.read_text() + captured.out + captured.err
 
 
 def test_membership_self_test_is_bounded_and_aggregate_only():

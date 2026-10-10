@@ -212,10 +212,108 @@ def test_linux_rss_reader_uses_current_resident_pages(
     assert streaming._process_rss_bytes() == 7 * 4_096
 
 
+@pytest.fixture
+def windows_memory_api(monkeypatch: pytest.MonkeyPatch):
+    """Expose mutable Windows API readings without requiring a Windows host."""
+
+    import ctypes
+
+    class ApiFunction:
+        def __init__(self, callback):
+            self.callback = callback
+
+        def __call__(self, *args):
+            return self.callback(*args)
+
+    state = SimpleNamespace(
+        rss=10_000,
+        success=True,
+        error=None,
+        library_calls=[],
+    )
+
+    def sample(_handle, counters, size):
+        assert counters._obj.cb == size == ctypes.sizeof(counters._obj)
+        if state.error is not None:
+            raise state.error
+        counters._obj.WorkingSetSize = state.rss
+        return state.success
+
+    state.memory_info = ApiFunction(sample)
+    kernel = SimpleNamespace(GetCurrentProcess=ApiFunction(lambda: 123))
+    api = SimpleNamespace(GetProcessMemoryInfo=state.memory_info)
+
+    def load_library(name, *, use_last_error):
+        assert use_last_error is True
+        state.library_calls.append(name)
+        return kernel if name == "kernel32" else api
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library, raising=False)
+    monkeypatch.setattr(streaming, "os", SimpleNamespace(name="nt"))
+    reader_factory = streaming._windows_process_rss_reader
+    reader_factory.cache_clear()
+    try:
+        yield state
+    finally:
+        reader_factory.cache_clear()
+
+
+def test_windows_rss_reader_reuses_ffi_types_and_reads_current_memory(
+    windows_memory_api,
+) -> None:
+    """Sampling must not retain a fresh ctypes pointer type on every call."""
+
+    assert streaming._process_rss_bytes() == 10_000
+    counter_pointer = windows_memory_api.memory_info.argtypes[1]
+    for index in range(1_000):
+        windows_memory_api.rss = 20_000 + index
+        assert streaming._process_rss_bytes() == 20_000 + index
+        assert windows_memory_api.memory_info.argtypes[1] is counter_pointer
+    assert windows_memory_api.library_calls == ["kernel32", "psapi"]
+
+
+@pytest.mark.parametrize("failure", ["false", "os_error", "argument_error"])
+def test_windows_rss_reader_preserves_failure_and_recovery_behavior(
+    windows_memory_api,
+    failure: str,
+) -> None:
+    """API failure is unavailable, not zero RSS or a stale successful sample."""
+
+    import ctypes
+
+    assert streaming._process_rss_bytes() == 10_000
+    if failure == "false":
+        windows_memory_api.success = False
+    elif failure == "os_error":
+        windows_memory_api.error = OSError("synthetic API failure")
+    else:
+        windows_memory_api.error = ctypes.ArgumentError("synthetic argument failure")
+    assert streaming._process_rss_bytes() is None
+
+    windows_memory_api.success = True
+    windows_memory_api.error = None
+    windows_memory_api.rss = 30_000
+    assert streaming._process_rss_bytes() == 30_000
+
+
+def test_windows_rss_guard_still_rejects_one_byte_above_ceiling(
+    windows_memory_api,
+) -> None:
+    """Reusing API setup must not alter the additional-RSS safety boundary."""
+
+    guard = streaming._ProcessMemoryGuard(2_048)
+    windows_memory_api.rss += 2_048
+    guard.check(stage="synthetic boundary")
+    assert guard.peak_delta_bytes == 2_048
+    windows_memory_api.rss += 1
+    with pytest.raises(MemoryCeilingError, match="observed 2049 bytes"):
+        guard.check(stage="synthetic overflow")
+
+
 def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     tmp_path: Path,
 ) -> None:
-    """A file larger than the ceiling succeeds when its live working set fits."""
+    """Measure the streaming working set independently of the pytest process."""
 
     source = tmp_path / "larger_than_ceiling.csv"
     output = tmp_path / "larger_than_ceiling_out.csv"
@@ -227,19 +325,48 @@ def test_file_larger_than_memory_ceiling_streams_below_process_limit(
     ceiling = 16 * 1024 * 1024
     assert source.stat().st_size > ceiling
 
-    report = stream_deidentify_table(
-        source,
-        output,
-        quasi_identifiers=["age", "zip"],
-        target_k=2,
-        chunk_size=32,
-        memory_ceiling=ceiling,
-        overwrite=True,
+    # Other tests and coverage instrumentation can allocate in the parent
+    # process while RSS is sampled. A fresh interpreter isolates this workload
+    # without increasing its ceiling or replacing the production RSS guard.
+    script = """
+import json
+from pathlib import Path
+import sys
+
+from openmed.structured.streaming import stream_deidentify_table
+
+report = stream_deidentify_table(
+    Path(sys.argv[1]),
+    Path(sys.argv[2]),
+    quasi_identifiers=["age", "zip"],
+    target_k=2,
+    chunk_size=32,
+    memory_ceiling=int(sys.argv[3]),
+    overwrite=True,
+)
+print(json.dumps({
+    "record_count": report["decision"]["record_count"],
+    "rss_guard_available": report["memory"]["rss_guard_available"],
+    "peak_rss_delta_bytes": report["memory"]["peak_rss_delta_bytes"],
+}, sort_keys=True))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(source), str(output), str(ceiling)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
     )
 
-    assert report["decision"]["record_count"] == 100_000
-    assert report["memory"]["rss_guard_available"] is True
-    assert report["memory"]["peak_rss_delta_bytes"] <= ceiling
+    assert result.returncode == 0, (
+        f"memory guard subprocess failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    report = json.loads(result.stdout)
+    assert report["record_count"] == 100_000
+    assert report["rss_guard_available"] is True
+    assert report["peak_rss_delta_bytes"] <= ceiling
+    with output.open("r", encoding="utf-8", newline="") as handle:
+        assert sum(1 for _row in csv.DictReader(handle)) == 100_000
 
 
 # ---------------------------------------------------------------------------

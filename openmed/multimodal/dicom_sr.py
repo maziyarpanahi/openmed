@@ -23,12 +23,12 @@ PHI in SR headers never leaks into the flattened output.
 from __future__ import annotations
 
 import importlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Sequence, TypedDict
 
 from .base import ExtractedDocument, SourceSpan, register_handler
 from .dicom import (
-    DicomHeaderDeidPolicy,
     _coerce_policy,
     deidentify_dicom_headers,
 )
@@ -96,8 +96,10 @@ def extract_dicom_sr(
     :class:`SrContentItem` rows (preserving nested ``CONTAINER`` structure and a
     stable ``node_path``) and linearized into a readable narrative. Unless
     ``deidentify_headers`` is ``False``, SR header PHI is de-identified in a
-    temporary copy before any text is produced so identifiers never reach the
-    flattened output.
+    temporary copy before text is produced. The default Basic Profile replaces
+    the content sequence with dummy content. To retain clinical content, enable
+    ``clean_structured_content`` and supply a local detector; enable
+    ``clean_descriptors`` to retain cleaned narrative items as well.
 
     Args:
         path: Path to a DICOM SR (``.dcm``) file.
@@ -349,15 +351,7 @@ def _deidentified_copy(
     resolved = _coerce_policy(policy)
     tempdir = tempfile.TemporaryDirectory(prefix="openmed-dicom-sr-")
     output_path = Path(tempdir.name) / "deid_sr.dcm"
-    header_policy = DicomHeaderDeidPolicy(
-        output_path=output_path,
-        date_shift_days=resolved.date_shift_days,
-        patient_key=resolved.patient_key,
-        date_shift_max_days=resolved.date_shift_max_days,
-        date_shift_secret=resolved.date_shift_secret,
-        uid_salt=resolved.uid_salt,
-        keep_year=resolved.keep_year,
-    )
+    header_policy = replace(resolved, output_path=output_path)
     try:
         result = deidentify_dicom_headers(source, policy=header_policy)
     except Exception:
@@ -406,7 +400,14 @@ def _dicom_sr_handler(
     models: Any = None,
     lang: str | None = None,
 ) -> ExtractedDocument:
-    return extract_dicom_sr(path, policy=policy)
+    resolved = _coerce_policy(policy)
+    return extract_dicom_sr(
+        path,
+        policy=replace(
+            resolved,
+            detector=resolved.detector if resolved.detector is not None else models,
+        ),
+    )
 
 
 # Registered with a content detector so SR objects flatten to reviewable text

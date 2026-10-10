@@ -220,7 +220,7 @@ class OpenMedKit(
     )
 
     companion object {
-        const val VERSION = "2.5.0"
+        const val VERSION = "3.0.0"
 
         /**
          * Load an exported OpenMed ONNX directory for local Android inference.

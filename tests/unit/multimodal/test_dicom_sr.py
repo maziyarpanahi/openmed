@@ -95,7 +95,15 @@ def test_walk_sr_content_tree_reproduces_every_node():
 
 def test_num_items_carry_numeric_value_and_coded_unit(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 5})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 5,
+        },
+    )
     by_path = _by_path(document.metadata["content_items"])
 
     long_axis = by_path["1.3.1.3"]
@@ -111,7 +119,15 @@ def test_num_items_carry_numeric_value_and_coded_unit(tmp_path: Path):
 
 def test_nested_container_structure_and_node_paths_preserved(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 5})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 5,
+        },
+    )
     items = document.metadata["content_items"]
 
     # Document order is preserved root-first with a stable, unique node_path.
@@ -130,7 +146,15 @@ def test_nested_container_structure_and_node_paths_preserved(tmp_path: Path):
 
 def test_linearized_text_indents_by_depth_and_maps_spans(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 5})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 5,
+        },
+    )
 
     assert document.text.splitlines()[0] == "Imaging Measurement Report"
     assert "  Procedure reported: CT of chest" in document.text
@@ -150,7 +174,15 @@ def _line_for(text: str, span) -> str:
 
 def test_sr_header_phi_is_deidentified_before_text_emission(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 9})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 9,
+        },
+    )
 
     serialized = json.dumps(
         {
@@ -172,7 +204,15 @@ def test_sr_header_phi_is_deidentified_before_text_emission(tmp_path: Path):
 
 def test_advisory_is_emitted(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 3})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 3,
+        },
+    )
 
     assert document.metadata["advisory"] == DICOM_SR_ADVISORY
     assert "not a clinical interpretation" in DICOM_SR_ADVISORY
@@ -181,7 +221,15 @@ def test_advisory_is_emitted(tmp_path: Path):
 
 def test_redact_document_dispatches_sr_extraction(tmp_path: Path):
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = redact_document(source, policy={"date_shift_days": 4})
+    document = redact_document(
+        source,
+        policy={
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+            "date_shift_days": 4,
+        },
+    )
 
     assert document.metadata["format"] == "dicom_sr"
     assert document.metadata["node_count"] == len(_EXPECTED_NODES)

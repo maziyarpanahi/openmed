@@ -233,7 +233,7 @@ class ConversionOffsetMap:
             for index, (source_start, source_end) in enumerate(
                 self.converted_to_original_spans
             )
-            if source_start < end and source_end > start
+            if start < end and source_start < end and source_end > start
         ]
         if mapped:
             return min(mapped), max(mapped) + 1
