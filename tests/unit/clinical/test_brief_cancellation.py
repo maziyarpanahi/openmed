@@ -13,6 +13,42 @@ from openmed.core.budget import RequestBudget
 from tests.unit.clinical.test_brief import SENTENCES, fixture_context
 
 
+def test_structured_generator_receives_and_honors_the_request_cancellation():
+    from tests.unit.clinical.test_brief_bindings import SyntheticBoundGenerator
+
+    request = BriefCancellation()
+    received = []
+
+    class CooperativeGenerator(SyntheticBoundGenerator):
+        def generate_brief(self, evidence, *, mode, cancellation=None):
+            received.append(cancellation)
+            assert cancellation is request
+            cancellation.cancel()
+            return super().generate_brief(evidence, mode=mode)
+
+    value, context = fixture_context()
+    result = build_clinical_brief(
+        value, context=context, model=CooperativeGenerator(), cancellation=request
+    )
+    assert received == [request]
+    assert result.refusal_reason is BriefRefusal.CANCELLED
+    assert result.summary == "" and result.citations == ()
+
+
+def test_actual_cancelled_brief_validates_against_both_bundled_record_schemas():
+    from openmed.clinical.record_schemas import validate_clinical_record
+
+    request = BriefCancellation()
+    request.cancel()
+    value, context = fixture_context()
+    result = build_clinical_brief(
+        value, context=context, model="extractive", cancellation=request
+    )
+    assert result.refusal_reason is BriefRefusal.CANCELLED
+    validate_clinical_record("brief_audit", result.to_dict())
+    validate_clinical_record("brief_response", result.to_response())
+
+
 @pytest.mark.parametrize("stage", STAGES)
 @pytest.mark.parametrize("expired", [False, True])
 def test_interrupt_at_every_stage_prevents_later_work(monkeypatch, stage, expired):

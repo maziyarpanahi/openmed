@@ -432,6 +432,13 @@ generation, local evaluation, rendered-packet verification and publication.
 Evaluators may capture the context for checks inside their own evidence/NLI
 stages. No mobile lifecycle policy or Apple Foundation Models cloud fallback is
 added. All successful briefs still require qualified human review.
+
+Structured `generate_brief` backends receive the same request context when their
+signature explicitly declares `cancellation`. Late structured results are
+discarded too. Native `ClinicalBrief.reviewedLocal` accepts the same deadline
+context and checks admission callbacks, generation, evaluation and publication;
+cancelled generation cannot reach the evaluator. Both bundled brief record
+schemas admit the controlled `cancelled` and `deadline_exceeded` refusal codes.
 ## Extracted facts and explicit review receipts
 
 `LocalBriefContextProvider` in `openmed.clinical.brief_context` adapts existing
