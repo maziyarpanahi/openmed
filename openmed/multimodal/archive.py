@@ -210,6 +210,7 @@ def admitted_zip(
         ValueError,
         UnicodeError,
         zipfile.BadZipFile,
+        NotImplementedError,
         zlib.error,
         struct.error,
     ) as error:

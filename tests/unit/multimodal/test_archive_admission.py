@@ -82,6 +82,11 @@ def attack(path, kind):
         patch_member(path, flags=1)
     elif kind == "compression":
         patch_member(path, method=99)
+    elif kind == "version":
+        raw = bytearray(path.read_bytes())
+        central = raw.index(b"PK\x01\x02")
+        struct.pack_into("<H", raw, central + 6, 255)
+        path.write_bytes(raw)
     return path
 
 
@@ -97,6 +102,7 @@ def attack(path, kind):
         ("path", "path_traversal"),
         ("encrypted", "archive_encrypted"),
         ("compression", "archive_compression"),
+        ("version", "archive_invalid"),
     ],
 )
 def test_all_formats_reject_before_decoder_and_without_phi(
