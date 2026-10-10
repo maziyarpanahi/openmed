@@ -148,12 +148,12 @@ public struct ClinicalBrief: Sendable, CustomStringConvertible {
             refusalReason: nil, response: evaluationJSON, audit: try canonical(payload))
     }
 
-    private static func hash(_ data: Data) -> String {
+    static func hash(_ data: Data) -> String {
         "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Python's sorted, compact, ASCII JSON convention for the shared digest.
-    private static func canonical(_ value: Any, depth: Int = 0) throws -> Data {
+    static func canonical(_ value: Any, depth: Int = 0) throws -> Data {
         guard depth < 64 else { throw ClinicalBriefError.invalidPacket }
         func render(_ item: Any) throws -> String {
             String(decoding: try canonical(item, depth: depth + 1), as: UTF8.self)
