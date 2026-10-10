@@ -71,6 +71,23 @@ def _records() -> tuple[
     return artifact, evidence, first_fact, second_fact, conflict, resolution, dataset
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "20260105T100000Z",
+        "2026-W02-1T10:00:00Z",
+        "2026-005T10:00:00Z",
+        "2026-01-05T10:00:00+0530",
+    ],
+)
+def test_journey_timestamps_reject_interpreter_dependent_grammars(value):
+    fixture = _fixtures()["clinical_artifact"]
+    fixture["recorded_at"] = value
+    with pytest.raises(JourneyContractError) as error:
+        ClinicalArtifact.from_dict(fixture)
+    assert value not in str(error.value)
+
+
 def test_all_contracts_round_trip_and_validate_against_bundled_schemas() -> None:
     fixtures = _fixtures()
     classes = {
