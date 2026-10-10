@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add default-off agent effect admission, signed local transition receipts,
+  independent rollback detection, emergency stop and fresh-enable CLI commands
+  with synthetic approval/recovery safety controls (#3765).
+
 - Add opt-in FHIR R4 server `$validate` preflight through an injected target-bound
   transport and opaque credential handle. Return controlled issue summaries and
   request digests; block errors and unavailable validation before application review.
