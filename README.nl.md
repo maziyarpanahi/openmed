@@ -102,7 +102,7 @@ Op ondersteunde Apple-hardware kan OpenMed **MLX** en **[OpenMedKit](swift/OpenM
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Op niet-Apple-Silicon-hosts worden MLX-modelnamen automatisch vervangen door het
 
 ---
 
-## Meertalige PII (38 ondersteunde routes; 35 modelondersteund)
+## Meertalige PII (42 ondersteunde routes; 35 modelondersteund)
 
 Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr`, in totaal **de geregistreerde PII-modelcatalogus**.
 
@@ -393,7 +393,7 @@ Als OpenMed nuttig is in je onderzoek, citeer het dan:
 
 Als OpenMed nuttig voor je is, helpt een ster anderen om het te ontdekken.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
