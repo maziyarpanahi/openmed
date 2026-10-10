@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from openmed.clinical.brief_cancellation import BriefCancellation
 from openmed.service.brief import BRIEF_PROFILES, LOCAL_BRIEF_MODELS, brief_response
 
 from ._output import CliError, add_json_flag, emit
@@ -20,6 +21,7 @@ def add_brief_command(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("--model", choices=LOCAL_BRIEF_MODELS, default="mlx")
     parser.add_argument("--profile", choices=BRIEF_PROFILES, default="bhc")
     parser.add_argument("--review-id")
+    parser.add_argument("--timeout-seconds", type=float, default=None)
     parser.add_argument(
         "--context-factory",
         help="Trusted installed module:function returning an application review provider.",
@@ -34,7 +36,15 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
     """Write two new private files; never overwrite an existing destination."""
     failed = False
     created = []
+    cancellation = BriefCancellation()
     try:
+        timeout = getattr(args, "timeout_seconds", None)
+        if timeout is not None:
+            from openmed.core.budget import RequestBudget
+
+            cancellation = BriefCancellation(
+                RequestBudget(max_wall_time=timeout).start()
+            )
         factory = getattr(args, "context_factory", None)
         if factory is not None:
             module_name, function_name = factory.split(":")
@@ -60,7 +70,11 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             profile=args.profile,
             review_id=args.review_id,
             context_provider=context_provider,
+            cancellation=cancellation,
         )
+        if response["refusal_reason"] in {"cancelled", "deadline_exceeded"}:
+            emit(args, response, human=response["refusal_reason"])
+            return 1
         summary = response.pop("summary")
         audit = json.dumps(response, sort_keys=True, indent=2) + "\n"
         # Reserve both paths before writing content; exclusive creation also
@@ -75,8 +89,13 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
                 handles.append(
                     stack.enter_context(os.fdopen(fd, "w", encoding="utf-8"))
                 )
+            cancellation.check()
             handles[0].write(summary)
             handles[1].write(audit)
+        cancellation.check()
+    except KeyboardInterrupt:
+        cancellation.cancel()
+        failed = True
     except Exception:
         failed = True
     if failed:
@@ -85,6 +104,12 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
                 path.unlink(missing_ok=True)
             except OSError:
                 pass
+        try:
+            cancellation.check()
+        except Exception:
+            response = brief_response("", cancellation=cancellation)
+            emit(args, response, human=response["refusal_reason"])
+            return 1
         raise CliError("Brief request or output failed.", code="brief_failed")
     emit(
         args,
