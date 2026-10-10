@@ -384,5 +384,31 @@ def test_clock_provider_failures_are_sanitized_and_rolled_back(store):
     with pytest.raises(HandoffStoreError) as error:
         store.current(ACTION)
     assert SENSITIVE not in "".join(traceback.format_exception(error.value))
+    assert error.value.__context__ is None
     store._clock = lambda: NOW
     assert acquire(store).ok
+
+
+def test_handoff_timestamp_refuses_integer_overflow_with_controlled_error():
+    with pytest.raises(HandoffStoreError, match="^invalid_timestamp$"):
+        HandoffRevision(ACTION, 1, DIGEST, DIGEST, DIGEST, 10**1000)
+
+
+def test_sqlite_revision_overflow_is_rejected_before_a_write(store):
+    with pytest.raises(HandoffStoreError, match="^invalid_revision$"):
+        publish(store, expected_revision=10**1000)
+    assert store.current(ACTION).code == "not_found"
+
+
+def test_sqlite_open_failure_retains_no_private_exception_context(
+    tmp_path, monkeypatch
+):
+    def fail(*a, **kw):
+        raise sqlite3.OperationalError(SENSITIVE)
+
+    monkeypatch.setattr("openmed.agent.handoff_store.sqlite3.connect", fail)
+    with pytest.raises(
+        HandoffStoreError, match="^store_unavailable_or_incompatible$"
+    ) as caught:
+        SQLiteHandoffStore(tmp_path / "handoffs.db")
+    assert caught.value.__context__ is None

@@ -179,6 +179,9 @@ persisted clock watermark. Clock rollback fails closed with `clock_regressed`
 until the clock catches up, including after restart, so expired leases cannot be
 resurrected by a backward clock adjustment. There is no pruning or remote
 replication. Database paths and SQLite exception text are absent from diagnostics.
+Clock and storage failures discard their original exception contexts. Revision
+and integer timestamp metadata reject values outside signed 64-bit storage bounds
+with controlled errors before persistence or numeric conversion.
 
 This slice owns the existing Python handoff concurrency boundary. OpenMedKit's
 on-device governance projection and parity fixtures are separately tracked in

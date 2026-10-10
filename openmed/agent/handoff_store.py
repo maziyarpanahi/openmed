@@ -27,6 +27,7 @@ from .reviewer_handoff import ReviewerHandoffError, ReviewerHandoffPacket
 
 MAX_REVIEW_LEASE_SECONDS = 86400
 HANDOFF_STORE_SCHEMA_VERSION = 1
+_MAX_SQLITE_INTEGER = (1 << 63) - 1
 
 
 class HandoffStoreError(ValueError):
@@ -44,7 +45,10 @@ def _digest(value: object) -> None:
 
 
 def _revision(value: object, *, allow_zero: bool = False) -> None:
-    if type(value) is not int or value < (0 if allow_zero else 1):
+    if (
+        type(value) is not int
+        or not (0 if allow_zero else 1) <= value <= _MAX_SQLITE_INTEGER
+    ):
         raise HandoffStoreError("invalid_revision")
 
 
@@ -54,9 +58,10 @@ def _duration(value: object) -> None:
 
 
 def _timestamp(value: object) -> None:
-    if type(value) is not int and type(value) is not float:
-        raise HandoffStoreError("invalid_timestamp")
-    if not math.isfinite(value) or value <= 0:
+    if not (
+        (type(value) is int and 0 < value <= _MAX_SQLITE_INTEGER)
+        or (type(value) is float and math.isfinite(value) and value > 0)
+    ):
         raise HandoffStoreError("invalid_timestamp")
 
 
@@ -237,6 +242,7 @@ class SQLiteHandoffStore:
         self._max_lease_seconds = max_lease_seconds
         self._lock = threading.RLock()
         self._db: sqlite3.Connection | None = None
+        failed = False
         try:
             self._db = sqlite3.connect(
                 str(path), isolation_level=None, check_same_thread=False, timeout=5
@@ -267,7 +273,9 @@ class SQLiteHandoffStore:
             if self._db is not None:
                 self._db.close()
             self._db = None
-            raise HandoffStoreError("store_unavailable_or_incompatible") from None
+            failed = True
+        if failed:
+            raise HandoffStoreError("store_unavailable_or_incompatible")
 
     def close(self) -> None:
         """Close the local database connection."""
@@ -282,12 +290,17 @@ class SQLiteHandoffStore:
             if self._db is None:
                 raise HandoffStoreError("store_closed")
             db = self._db
+            storage_failed = False
             try:
                 db.execute("BEGIN IMMEDIATE")
+                clock_failed = False
+                value = None
                 try:
                     value = self._clock()
                 except Exception:
-                    raise HandoffStoreError("clock_unavailable") from None
+                    clock_failed = True
+                if clock_failed:
+                    raise HandoffStoreError("clock_unavailable")
                 if (
                     type(value) is not datetime
                     or value.tzinfo is None
@@ -303,10 +316,12 @@ class SQLiteHandoffStore:
                 db.commit()
             except sqlite3.Error:
                 db.rollback()
-                raise HandoffStoreError("store_unavailable") from None
+                storage_failed = True
             except BaseException:
                 db.rollback()
                 raise
+            if storage_failed:
+                raise HandoffStoreError("store_unavailable")
 
     @staticmethod
     def _current(db: sqlite3.Connection, action_id: str) -> HandoffRevision | None:
