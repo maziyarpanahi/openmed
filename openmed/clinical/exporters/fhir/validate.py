@@ -24,6 +24,8 @@ from functools import lru_cache
 from importlib import resources
 from typing import Any
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 from ._validation_primitives import _extract_codes, _Occurrence, _occurrence_groups
 
 __all__ = [
@@ -443,7 +445,7 @@ def _valid_datetime(value: str, *, require_time: bool) -> bool:
     if _DATETIME_RE.fullmatch(value) is None:
         return False
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError:
         return False
     return parsed.tzinfo is not None
