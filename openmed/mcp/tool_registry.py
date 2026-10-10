@@ -672,7 +672,20 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
 def validate_registered_tool_input(name: str, payload: Any) -> JsonObject:
     """Validate an input payload against the latest registered spec for *name*."""
 
-    spec = TOOL_REGISTRY.get(name)
+    return validate_tool_input(TOOL_REGISTRY.get(name), payload)
+
+
+def validate_tool_input(spec: ToolSpec, payload: Any) -> JsonObject:
+    """Validate input against an injected, pinned tool specification.
+
+    Args:
+        spec: Registered specification selected by the host.
+        payload: Process-local tool arguments.
+
+    Returns:
+        A validated argument mapping.
+    """
+
     errors: list[str] = []
     _validate_schema(payload, spec.input_schema, "$", errors)
     if errors:
@@ -2418,5 +2431,6 @@ __all__ = [
     "validate_registered_tool_input",
     "validate_registered_tool_output",
     "validate_registered_workflow_artifact",
+    "validate_tool_input",
     "validate_tool_output",
 ]
