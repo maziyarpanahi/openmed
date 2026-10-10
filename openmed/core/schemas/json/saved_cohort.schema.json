@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openmed.dev/schemas/v3/structured/saved-cohort.schema.json",
   "title": "OpenMed saved cohort artifacts",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "oneOf": [
     {"$ref": "#/$defs/definition_version"},
     {"$ref": "#/$defs/execution"}
@@ -47,7 +47,7 @@
         "compatibility_policy": {"const": "same_major"},
         "definition": {"$ref": "#/$defs/phenotype"},
         "definition_digest": {"$ref": "#/$defs/digest"},
-        "schema_version": {"const": "1.0.0"},
+        "schema_version": {"type": "string", "pattern": "^1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
         "version_id": {"$ref": "#/$defs/opaque_id"}
       }
     },
@@ -105,7 +105,7 @@
         "expression": {"type": "object"},
         "input_digest": {"$ref": "#/$defs/digest"},
         "policy_digest": {"$ref": "#/$defs/digest"},
-        "schema_version": {"const": "1.0.0"},
+        "schema_version": {"type": "string", "pattern": "^1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"},
         "source_snapshot": {"$ref": "#/$defs/source_snapshot"},
         "vocabulary_digest": {"$ref": "#/$defs/digest"}
       }
@@ -192,28 +192,219 @@
         "advisory": {
           "const": "Saved cohort membership is an analytical result for human review and must not automatically trigger enrollment, outreach, or clinical action."
         },
-        "compatibility_policy": {"const": "same_major"},
-        "execution_digest": {"$ref": "#/$defs/digest"},
-        "manifest": {"$ref": "#/$defs/manifest"},
+        "compatibility_policy": {
+          "const": "same_major"
+        },
+        "execution_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "manifest": {
+          "$ref": "#/$defs/manifest"
+        },
         "membership_counts": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["conflict", "met", "not_met", "unknown"],
+          "required": [
+            "conflict",
+            "met",
+            "not_met",
+            "unknown"
+          ],
           "properties": {
-            "conflict": {"type": "integer", "minimum": 0},
-            "met": {"type": "integer", "minimum": 0},
-            "not_met": {"type": "integer", "minimum": 0},
-            "unknown": {"type": "integer", "minimum": 0}
+            "conflict": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "met": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_met": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unknown": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
-        "membership_digest": {"$ref": "#/$defs/digest"},
+        "membership_digest": {
+          "$ref": "#/$defs/digest"
+        },
         "memberships": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"$ref": "#/$defs/membership"}
+          "items": {
+            "$ref": "#/$defs/membership"
+          }
         },
-        "review_required": {"type": "boolean"},
-        "schema_version": {"const": "1.0.0"}
+        "review_required": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "warnings": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/empty_population_warning"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "schema_version": {
+                "pattern": "^1\\.0\\."
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "coverage"
+                  ]
+                },
+                {
+                  "required": [
+                    "warnings"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "coverage",
+              "warnings"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "membership_counts": {
+                      "properties": {
+                        "met": {
+                          "const": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "review_required": {
+                      "const": true
+                    },
+                    "warnings": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "concept_set_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept_set_ref",
+        "expanded_count",
+        "matched_count"
+      ],
+      "properties": {
+        "concept_set_ref": {
+          "$ref": "#/$defs/digest"
+        },
+        "expanded_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "matched_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_patient_count",
+        "concept_sets",
+        "unmapped_source_count"
+      ],
+      "properties": {
+        "source_patient_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unmapped_source_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "concept_sets": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/concept_set_coverage"
+          }
+        }
+      }
+    },
+    "empty_population_warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "review_required",
+        "sub_reasons"
+      ],
+      "properties": {
+        "code": {
+          "const": "empty_population"
+        },
+        "review_required": {
+          "const": true
+        },
+        "sub_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "no_source_patients",
+              "concept_set_unmatched",
+              "unmapped_sources_present",
+              "coverage_unknown"
+            ]
+          }
+        }
       }
     }
   }

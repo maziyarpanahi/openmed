@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Require review of empty cohort populations with value-free source coverage,
+  explicit unknown counts, and typed warnings across saved runs, local
+  DuckDB/Parquet resolution, and existing Journey reads. Read legacy saved
+  executions without rewriting their immutable storage bytes.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

@@ -396,7 +396,12 @@
   "cohort": {
     "advisory": "Saved cohort membership is an analytical result for human review and must not automatically trigger enrollment, outreach, or clinical action.",
     "compatibility_policy": "same_major",
-    "execution_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
+    "coverage": {
+      "concept_sets": null,
+      "source_patient_count": null,
+      "unmapped_source_count": null
+    },
+    "execution_digest": "sha256:5124055037d539010d2e0388940d95f30834b05cb1035356026e3fa8343433b4",
     "manifest": {
       "compatibility_policy": "same_major",
       "criterion_ids": [
@@ -404,9 +409,9 @@
         "corrected-lab-present"
       ],
       "definition_digest": "sha256:c446fe69401af65e31208e2119f184e63d3d5626f80456a322b75b66f489670e",
-      "definition_version_id": "cohortdef_6fdd7a02c1386300d337ac1810d21529",
+      "definition_version_id": "cohortdef_1774baccf702e79ecfb869b2f84b4ebf",
       "evaluator_version": "3.0.0",
-      "execution_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+      "execution_id": "cohortrun_7e719e535bdc2a235c8e487249bbba73",
       "expression": {
         "children": [
           {
@@ -442,9 +447,9 @@
         ],
         "operator": "and"
       },
-      "input_digest": "sha256:5e597fec3b2068311687478eb154a4d704161d412c8bc59147df5e2e4a7e9e08",
+      "input_digest": "sha256:d9d522211095024593ed9144703dae491b99320dfee3bea4d8fd89b5d055dc29",
       "policy_digest": "sha256:6271c0b1c778cb53e792226a676ed58367441c097d9800f846c046c7aa4472a3",
-      "schema_version": "1.0.0",
+      "schema_version": "1.1.0",
       "source_snapshot": {
         "bundled_vocabulary": false,
         "digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
@@ -502,7 +507,8 @@
       }
     ],
     "review_required": false,
-    "schema_version": "1.0.0"
+    "schema_version": "1.1.0",
+    "warnings": []
   },
   "compatibility_policy": "same_major",
   "conflicts": [
@@ -542,7 +548,7 @@
         "terms_digest": "sha256:a2e2756f3df97610961cedb91f46044322c301560bc55fb7da29ac9226755597"
       }
     ],
-    "manifest_digest": "sha256:584f9254038976f6aed41c97ccad3b755360a054c2406068176312305b824d91",
+    "manifest_digest": "sha256:69920ef696e41e3efea81f8800db5ca9b6dd6f93f0774e90dd6021f20a61d6e0",
     "model_versions": {
       "assertion": "1.0.0",
       "document_routing": "1.0.0",
@@ -562,8 +568,8 @@
         "subject_synthetic0000001"
       ],
       "review_excluded_count": 0,
-      "source_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
-      "source_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+      "source_digest": "sha256:5124055037d539010d2e0388940d95f30834b05cb1035356026e3fa8343433b4",
+      "source_id": "cohortrun_7e719e535bdc2a235c8e487249bbba73",
       "source_kind": "cohort",
       "source_snapshot_digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
       "source_snapshot_id": "snapshot_goldenjourney001"
@@ -590,8 +596,8 @@
           "temporality": "1.0.0"
         },
         "policy_digest": "sha256:6271c0b1c778cb53e792226a676ed58367441c097d9800f846c046c7aa4472a3",
-        "source_digest": "sha256:4350b560137e049d248e594c479cd09c7a3ffc42a0a599e5c32fe4db031dd266",
-        "source_id": "cohortrun_41c000d110429afb0f61f4c1664310ba",
+        "source_digest": "sha256:5124055037d539010d2e0388940d95f30834b05cb1035356026e3fa8343433b4",
+        "source_id": "cohortrun_7e719e535bdc2a235c8e487249bbba73",
         "source_kind": "cohort",
         "source_snapshot_digest": "sha256:92935e73b9a4d2cd31ba5e0185ca09d0c38434c50713d009297151abf3be4651",
         "vocabulary_digest": "sha256:7e93971e109facd9199df54d9e5cb0f7354de78cb814667665c9f5ee58803945"
@@ -608,7 +614,7 @@
       "license_tags": [
         "license.permitted"
       ],
-      "manifest_hash": "sha256:584f9254038976f6aed41c97ccad3b755360a054c2406068176312305b824d91",
+      "manifest_hash": "sha256:69920ef696e41e3efea81f8800db5ca9b6dd6f93f0774e90dd6021f20a61d6e0",
       "parent_snapshot_ids": [
         "snapshot_goldenjourney001"
       ],
@@ -616,7 +622,7 @@
       "record_count": 1,
       "schema_hash": "sha256:5965ebcbd7e02e2e8653c93ba3d32264451e6ec60cd70c0c3322dc1d25afe2b6",
       "schema_version": "1.0.0",
-      "snapshot_id": "datasetsnapshot_b0318b7b2699dad0cc92f15ebcea6423",
+      "snapshot_id": "datasetsnapshot_66ea7f5b0c50b6287a4d0fd1da6760e7",
       "source_artifact_ids": [],
       "source_fact_ids": [
         "fact_45f8fd01d413602883ce7480a4a0aac2",
