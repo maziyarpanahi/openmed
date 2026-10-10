@@ -281,10 +281,11 @@ def summarize_deidentified(
         backend, source.deidentified_text, normalized_mode, cancellation
     )
     leakage_check = _build_leakage_check(source, summary)
+    check_cancellation(cancellation)
     if not leakage_check.passed:
         raise SummarizationLeakageError(leakage_check)
 
-    return SummarizationResult(
+    result = SummarizationResult(
         summary=summary,
         leakage_check=leakage_check,
         mode=normalized_mode,
@@ -295,6 +296,8 @@ def summarize_deidentified(
             else None
         ),
     )
+    check_cancellation(cancellation)
+    return result
 
 
 def _normalize_mode(mode: str) -> str:

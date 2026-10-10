@@ -159,3 +159,27 @@ def test_interruption_exception_does_not_chain_private_provider_failure():
         call_with_cancellation(fail, cancellation=cancellation)
     assert caught.value.__context__ is None
     assert caught.value.__cause__ is None
+
+
+def test_direct_summarization_rejects_cancellation_during_final_leakage_check(
+    monkeypatch,
+):
+    module = importlib.import_module("openmed.clinical.summarize")
+    value, _ = fixture_context()
+    cancellation = BriefCancellation()
+    original = module._build_leakage_check
+    count = 0
+
+    def leakage(*args):
+        nonlocal count
+        result = original(*args)
+        count += 1
+        if count == 2:
+            cancellation.cancel()
+        return result
+
+    monkeypatch.setattr(module, "_build_leakage_check", leakage)
+    with pytest.raises(BriefInterrupted, match="cancelled"):
+        module.summarize_deidentified(
+            value, model="extractive", cancellation=cancellation
+        )
