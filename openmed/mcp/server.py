@@ -975,6 +975,33 @@ def openmed_run_workflow(
     return validate_registered_tool_output("openmed_run_workflow", response)
 
 
+def openmed_brief(
+    text: str,
+    model: str = "mlx",
+    profile: str = "bhc",
+    review_id: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Build a local review-required brief without accepting approval over MCP."""
+    from openmed.mcp.tool_registry import validate_registered_tool_input
+    from openmed.service.brief import brief_response
+
+    validate_registered_tool_input(
+        "openmed_brief",
+        {"text": text, "model": model, "profile": profile, "review_id": review_id},
+    )
+    provider = getattr(_runtime(runtime_provider), "brief_context_provider", None)
+    response = brief_response(
+        text,
+        model=model,
+        profile=profile,
+        review_id=review_id,
+        context_provider=provider,
+    )
+    return validate_registered_tool_output("openmed_brief", response)
+
+
 def openmed_ground(
     spans: list[Dict[str, Any]],
     vocabularies: Optional[list[str]] = None,
@@ -1851,6 +1878,9 @@ def build_mcp_tool_handlers(
             runtime_provider=runtime_provider,
         ),
         "openmed_ground": lambda **kwargs: openmed_ground(**kwargs),
+        "openmed_brief": lambda **kwargs: openmed_brief(
+            **kwargs, runtime_provider=runtime_provider
+        ),
         "openmed_ground_concepts": (lambda **kwargs: openmed_ground_concepts(**kwargs)),
         "openmed_export_fhir": lambda **kwargs: openmed_export_fhir(**kwargs),
         "openmed_risk_score": lambda **kwargs: openmed_risk_score(**kwargs),

@@ -16,6 +16,7 @@ from openmed.service.app import create_app
 from openmed.service.client import (
     CLIENT_ENDPOINTS,
     AnalyzeRequest,
+    BriefRequest,
     FixedOptionDecisionRequest,
     ModelUnloadRequest,
     OpenMedAPIError,
@@ -235,6 +236,7 @@ def test_client_propagates_request_id_on_error() -> None:
 def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     spec = json.loads(open("docs/api/openapi.json", encoding="utf-8").read())
     request_types = {
+        "brief": BriefRequest,
         "analyze": AnalyzeRequest,
         "extract_pii": PIIExtractRequest,
         "extract_pii_stream": PIIExtractStreamRequest,
@@ -246,6 +248,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     }
 
     assert set(CLIENT_ENDPOINTS) == {
+        "brief",
         "analyze",
         "extract_pii",
         "extract_pii_stream",

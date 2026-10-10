@@ -120,7 +120,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -331,7 +331,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 <div dir="rtl">
 
-## PII چندزبانه (38 مسیر پشتیبانی‌شده؛ 35 مسیر با مدل)
+## PII چندزبانه (42 مسیر پشتیبانی‌شده؛ 35 مسیر با مدل)
 
 استخراج و حذفِ هویت در زبان‌های `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و `tr`، در مجموع **فهرست ثبت‌شدهٔ مدل‌های PII**.
 
@@ -472,7 +472,7 @@ OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شد�
 
 </div>
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

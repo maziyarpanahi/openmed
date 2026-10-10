@@ -21,6 +21,15 @@
   ],
   "item": [
     {
+      "name": "Clinical brief (synthetic refusal example)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}, {"key": "Accept", "value": "application/json"}],
+        "url": {"raw": "{{base_url}}/brief", "host": ["{{base_url}}"], "path": ["brief"]},
+        "body": {"mode": "raw", "raw": "{\"text\":\"Synthetic discharge note.\",\"review_id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}", "options": {"raw": {"language": "json"}}}
+      }
+    },
+    {
       "name": "Health & Readiness",
       "description": "Liveness, readiness, and health probes. No request body.",
       "item": [
