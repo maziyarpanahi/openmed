@@ -49,6 +49,10 @@ from openmed.clinical.record_schemas import (
 from openmed.clinical.review_packet import (
     PROTECTED_TEXT_POLICY,
     REVIEW_PACKET_SCHEMA_VERSION,
+    ReviewCitation,
+    ReviewFinding,
+    ReviewGateResult,
+    ReviewPacket,
 )
 from openmed.clinical.review_state_machine import (
     ReviewState,
@@ -487,3 +491,66 @@ def test_missing_jsonschema_reports_the_dev_extra(
         validate_clinical_record("sdoh_evidence_report", {})
     assert "jsonschema" in str(excinfo.value)
     assert "dev" in str(excinfo.value)
+
+
+def _custom_review_packet():
+    return ReviewPacket(
+        citations=(
+            ReviewCitation(
+                "synthetic-citation",
+                "synthetic-source",
+                title="synthetic-title",
+                locator="synthetic-locator",
+                published="2026-01-01",
+            ),
+        ),
+        findings=(
+            ReviewFinding(
+                "synthetic-finding",
+                "condition",
+                uncertainty="uncertain",
+                citation_ids=("synthetic-citation",),
+            ),
+        ),
+        gate_results=(
+            ReviewGateResult(
+                "synthetic-gate",
+                True,
+                citation_ids=("synthetic-citation",),
+            ),
+        ),
+    ).to_dict()
+
+
+@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
+def test_schema_accepts_sanitized_review_reference_details(name):
+    payload = _record_payloads()[name]
+    payload["review_packet"] = _custom_review_packet()
+    validate_clinical_record(name, payload)
+
+
+@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
+@pytest.mark.parametrize(
+    "section,field",
+    [
+        ("citations", "citation_id"),
+        ("citations", "source"),
+        ("citations", "title"),
+        ("citations", "locator"),
+        ("citations", "published"),
+        ("findings", "finding_id"),
+        ("findings", "label"),
+        ("findings", "status"),
+        ("gate_results", "gate_id"),
+        ("gate_results", "reason"),
+        ("gate_results", "severity"),
+    ],
+)
+def test_schema_rejects_source_text_in_review_fields(name, section, field):
+    payload = _record_payloads()[name]
+    payload["review_packet"] = _custom_review_packet()
+    payload["review_packet"]["findings"][0].pop("uncertainty")
+    validate_clinical_record(name, payload)
+    payload["review_packet"][section][0][field] = "synthetic private source sentence"
+    with pytest.raises(ClinicalRecordSchemaError):
+        validate_clinical_record(name, payload)

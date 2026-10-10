@@ -256,10 +256,11 @@
       "properties": {
         "citation_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
         },
         "locator": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
         },
         "metadata": {
           "$ref": "#/$defs/review_metadata"
@@ -268,20 +269,45 @@
           "const": true
         },
         "published": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
         },
         "relevance": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         },
         "source": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "enum": [
+                "claim",
+                "condition",
+                "entity",
+                "finding",
+                "lab_result",
+                "measurement",
+                "medication",
+                "medication_review",
+                "procedure",
+                "relation",
+                "renal_function_measure",
+                "source",
+                "synthetic_finding"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^label:sha256:[0-9a-f]{64}$"
+            }
+          ]
         },
         "source_hash": {
-          "type": "string"
+          "$ref": "#/$defs/digest"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
         }
       }
     },
@@ -300,7 +326,8 @@
         "citation_ids": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
           }
         },
         "confidence": {
@@ -308,27 +335,109 @@
         },
         "finding_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
         },
         "label": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "enum": [
+                "claim",
+                "condition",
+                "entity",
+                "finding",
+                "lab_result",
+                "measurement",
+                "medication",
+                "medication_review",
+                "procedure",
+                "relation",
+                "renal_function_measure",
+                "source",
+                "synthetic_finding"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^label:sha256:[0-9a-f]{64}$"
+            }
+          ]
         },
         "protected_text_available": {
           "const": true
         },
         "source_hash": {
-          "type": "string"
+          "$ref": "#/$defs/digest"
         },
         "source_offset": {
           "$ref": "#/$defs/source_offset"
         },
         "status": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
         },
         "uncertainty": {
-          "type": "number"
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
         }
       }
     },
@@ -349,7 +458,8 @@
         "citation_ids": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
           }
         },
         "details": {
@@ -357,20 +467,60 @@
         },
         "gate_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
         },
         "passed": {
           "type": "boolean"
         },
         "reason": {
-          "type": "string"
+          "enum": [
+            "blocked",
+            "failed",
+            "ok",
+            "passed",
+            "protected",
+            "provided",
+            "requires_review",
+            "review_required",
+            "unspecified"
+          ]
         },
         "reason_hash": {
-          "type": "string"
+          "$ref": "#/$defs/digest"
         },
         "severity": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
         }
       }
     },
@@ -412,14 +562,44 @@
         },
         "packet_id": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
         },
         "privacy": {
           "$ref": "#/$defs/review_privacy"
         },
         "review_status": {
-          "type": "string",
-          "minLength": 1
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
         },
         "schema_version": {
           "const": "openmed.clinical.review_packet.v1"
