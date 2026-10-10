@@ -19,7 +19,10 @@ use mode `0600`; keep their parent directories protected too.
 
 Keep the anchor on independently protected storage **outside ledger restore
 operations**. Each transaction atomically appends an HMAC-SHA256 signed receipt
-and advances the anchor using SQLite rollback journals and full synchronization.
+and advances the anchor using SQLite rollback journals and `synchronous=EXTRA`
+for both databases. This includes directory synchronization when a DELETE-mode
+journal is removed, following [SQLite's durability requirements](https://www.sqlite.org/pragma.html#pragma_synchronous).
+The filesystem must provide reliable local locking and synchronization.
 Restoring either database alone fails closed, including after restart. Restoring
 both databases and the signing key together defeats local rollback detection;
 this threat requires a trusted external storage/restore boundary. Losing or

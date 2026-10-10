@@ -323,3 +323,23 @@ def test_unavailable_storage_and_short_keys_are_controlled(tmp_path: Path) -> No
     with pytest.raises(AdmissionError, match="untrusted_state"):
         store.initialize(now=100)
     assert store.status().reason_code == "untrusted_state"
+
+
+@pytest.mark.parametrize(
+    "state", ["enabled", "stopped", None, {}, [], "synthetic-private-state"]
+)
+def test_invalid_transition_state_is_controlled_without_touching_generation(
+    tmp_path, state
+):
+    store = store_at(tmp_path)
+    store.initialize(now=100)
+    before = store.status()
+    with pytest.raises(AdmissionError, match="invalid_transition") as caught:
+        store.transition(
+            state,
+            role=AdmissionRole.OPERATOR,
+            reason=AdmissionReason.EXPLICIT_ENABLE,
+            now=101,
+        )
+    assert str(caught.value) == "invalid_transition"
+    assert store.status() == before

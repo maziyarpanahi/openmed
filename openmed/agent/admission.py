@@ -178,7 +178,7 @@ class SQLiteAdmissionStore:
                 ]
                 if mode not in {"delete", "truncate", "persist"}:
                     raise AdmissionError("untrusted_state")
-                connection.execute(f"PRAGMA {database}.synchronous=FULL")
+                connection.execute(f"PRAGMA {database}.synchronous=EXTRA")
             connection.execute("BEGIN IMMEDIATE")
             yield connection
             connection.commit()
@@ -411,6 +411,8 @@ class SQLiteAdmissionStore:
         Raises:
             AdmissionError: If authority metadata or durable state is invalid.
         """
+        if type(state) is not AdmissionState:
+            raise AdmissionError("invalid_transition")
         scope = _scope(workflow_id)
         self._validate_transition(role, reason, now)
         if (

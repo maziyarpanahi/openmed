@@ -55,7 +55,7 @@ def test_stop_after_preview_blocks_valid_approval_before_effect(
     controller = EffectAdmissionController(store)
     controller.enable(workflow_id=WORKFLOW, now=101)
     generation = controller.require_admitted(WORKFLOW).generation
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=lambda: 101).issue(
         action_digest=ACTION, reviewer_role=ROLE, expires_at=200
     )
     verifier = ApprovalTokenVerifier(KEY, InMemoryApprovalNonceStore())
