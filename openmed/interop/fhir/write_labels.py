@@ -1,7 +1,7 @@
 """Offline origin and provisional-status policy for proposed FHIR R4 writes.
 
-This is a labeling gate, not approval verification or write execution. Receipts
-must come from the caller's trusted, action-bound approval verifier.
+This is a labeling gate, not approval verification or write execution. Local
+authority must come from the caller's trusted, action-bound approval verifier.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from openmed.agent.approvals.tokens import ApprovalReceipt
+from openmed.agent.approvals.tokens import ApprovalAuthorization
 
 __all__ = [
     "FHIRWriteLabelPolicy",
@@ -67,8 +67,8 @@ class FHIRWriteLabelPolicy:
     """Configured origin labels and roles allowed to retain final assertions.
 
     No role attests by default. An attesting role can retain a supplied final
-    status only during validation with a consumed approval receipt. Normalizing
-    for preview always downgrades final assertions, even for clinicians.
+    status only during validation with protected verified approval authority.
+    Normalizing for preview always downgrades final assertions, even for clinicians.
     """
 
     security_system: str = "http://terminology.hl7.org/CodeSystem/v3-ObservationValue"
@@ -138,15 +138,15 @@ def validate_proposed_resource(
     resource: dict[str, Any],
     *,
     policy: FHIRWriteLabelPolicy = FHIRWriteLabelPolicy(),
-    approval_receipt: ApprovalReceipt | None = None,
+    approval_authorization: ApprovalAuthorization | None = None,
 ) -> tuple[WriteLabelFinding, ...]:
     """Check labels and status without changing or exposing resource values.
 
     Args:
         resource: Single R4 Observation, Condition or AllergyIntolerance.
         policy: Required label pairs and explicitly configured attesting roles.
-        approval_receipt: Already verified, consumed, action-bound receipt. This
-            function checks its role only; it does not authorize execution.
+        approval_authorization: Verified, consumed, action-bound local authority.
+            This function checks its role only; it does not authorize execution.
 
     Returns:
         Controlled findings; an empty tuple passes this labeling gate only.
@@ -155,8 +155,13 @@ def validate_proposed_resource(
     resource_type, findings = _structure(resource)
     if findings:
         return tuple(findings)
-    if approval_receipt is not None and type(approval_receipt) is not ApprovalReceipt:
-        findings.append(_finding(resource_type, "resourceType", "invalid_receipt"))
+    if (
+        approval_authorization is not None
+        and type(approval_authorization) is not ApprovalAuthorization
+    ):
+        findings.append(
+            _finding(resource_type, "resourceType", "invalid_authorization")
+        )
     meta = resource.get("meta", {})
     findings.extend(_labels(meta, resource_type, policy, require=True))
     status, status_findings = _status(resource, resource_type)
@@ -166,8 +171,8 @@ def validate_proposed_resource(
             _finding(resource_type, _status_path(resource_type), "missing_status")
         )
     if status in _FINAL_CODES and not (
-        type(approval_receipt) is ApprovalReceipt
-        and approval_receipt.reviewer_role in policy.attesting_roles
+        type(approval_authorization) is ApprovalAuthorization
+        and approval_authorization.reviewer_role in policy.attesting_roles
     ):
         findings.append(
             _finding(resource_type, _status_path(resource_type), "attestation_required")

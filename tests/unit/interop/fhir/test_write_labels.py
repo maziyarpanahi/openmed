@@ -6,7 +6,11 @@ from dataclasses import asdict
 
 import pytest
 
-from openmed.agent.approvals.tokens import ApprovalReceipt
+from openmed.agent.approvals.tokens import (
+    ApprovalTokenSigner,
+    ApprovalTokenVerifier,
+    InMemoryApprovalNonceStore,
+)
 from openmed.interop.fhir.write_labels import (
     FHIRWriteLabelPolicy,
     WriteLabelError,
@@ -65,8 +69,23 @@ def set_status(payload, status):
         }
 
 
-def receipt(role=ROLE):
-    return ApprovalReceipt("sha256:" + "a" * 64, role, "sha256:" + "b" * 64, 10, 20)
+def authorization(role=ROLE):
+    key = b"synthetic-local-approval-key-32-bytes"
+    digest = "sha256:" + "a" * 64
+    token = ApprovalTokenSigner(key, clock=lambda: 10).issue(
+        action_digest=digest,
+        reviewer_role=role,
+        expires_at=20,
+        nonce="nonce_" + "1" * 32,
+    )
+    return ApprovalTokenVerifier(
+        key, InMemoryApprovalNonceStore()
+    ).consume_authorization(
+        token,
+        action_digest=digest,
+        reviewer_role=role,
+        now=10,
+    )
 
 
 @pytest.mark.parametrize("kind", TYPES)
@@ -103,11 +122,13 @@ def test_final_assertions_require_consumed_receipt_and_configured_attesting_role
     payload = normalize_proposed_resource(resource(kind), policy=policy).resource
     set_status(payload, "final" if kind == "Observation" else "confirmed")
     findings = validate_proposed_resource(
-        payload, policy=policy, approval_receipt=receipt(role) if role else None
+        payload,
+        policy=policy,
+        approval_authorization=authorization(role) if role else None,
     )
     assert bool(findings) == (role != ROLE)
     assert validate_proposed_resource(
-        payload, approval_receipt=receipt()
+        payload, approval_authorization=authorization()
     )  # Empty role policy.
     # Even an attesting policy never upgrades a proposal at normalization.
     normalized = normalize_proposed_resource(payload, policy=policy)
@@ -135,7 +156,9 @@ def test_origin_label_negative_controls_fail_closed(kind, field, mutation):
         payload["meta"][field] = []
     else:
         payload["meta"][field] = [CANARY]
-    findings = validate_proposed_resource(payload, approval_receipt=receipt())
+    findings = validate_proposed_resource(
+        payload, approval_authorization=authorization()
+    )
     assert findings
     assert CANARY not in repr(findings)
     if mutation != "missing":
@@ -272,9 +295,9 @@ def test_plain_role_or_receipt_mapping_cannot_attest():
     policy = FHIRWriteLabelPolicy(attesting_roles=frozenset({ROLE}))
     payload = normalize_proposed_resource(resource("Observation")).resource
     payload["status"] = "final"
-    for invalid in [ROLE, {"reviewer_role": ROLE}, CANARY]:
+    for invalid in [ROLE, {"reviewer_role": ROLE}, CANARY, authorization().receipt]:
         assert validate_proposed_resource(
-            payload, policy=policy, approval_receipt=invalid
+            payload, policy=policy, approval_authorization=invalid
         )
 
 

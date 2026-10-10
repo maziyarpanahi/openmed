@@ -64,15 +64,19 @@ are deep-copied unchanged. Input is never mutated, including on rejection.
 ## Approval boundary
 
 No role attests by default. `validate_proposed_resource` permits a supplied
-final/confirmed status only when an existing `ApprovalReceipt` has a
-`reviewer_role` in `policy.attesting_roles`. Other roles cannot retain it.
+final/confirmed status only when `approval_authorization` is a verified local
+`ApprovalAuthorization` whose signed `reviewer_role` belongs to
+`policy.attesting_roles`. Other roles cannot retain it.
 Origin labels remain mandatory for every role. Normalization always applies
 provisional statuses; it never promotes a machine assertion to a clinical fact.
 
-The caller must obtain the receipt from the trusted single-use token verifier
-for the exact approved action. This policy checks the role, not receipt
-signature, expiry, action digest, reviewer identity or execution authority.
-Receipt dictionaries and role strings are rejected. Any clinician finalization
+The caller must obtain the protected authorization with the trusted single-use
+token verifier's `consume_authorization(...)` for the exact approved action.
+This labeling policy checks the verified role; the execution adapter must still
+recheck the exclusive validity window, action binding and fresh authority at
+dispatch. The v2 audit receipt alone has no role or validity window and cannot
+attest. Receipt objects, dictionaries and role strings are rejected. Any
+clinician finalization
 requires a fresh preview and action-bound approval for that exact payload;
 changing statuses after approval invalidates the prior action commitment.
 
@@ -89,10 +93,10 @@ fixed schema elements; unknown resource types are reported as `Resource`.
 Normalization reports `origin_label_added` and `provisional_status_applied`.
 Rejections include `missing_origin_label`, `origin_label_mismatch`,
 `invalid_origin_label`, `invalid_meta`, `invalid_status`, `missing_status`,
-`attestation_required`, `invalid_receipt`, `unsupported_resource_type`,
+`attestation_required`, `invalid_authorization`, `unsupported_resource_type`,
 `invalid_resource` and `nested_resources_unsupported`.
 
-For example, a labeled confirmed Condition without an attesting receipt yields:
+For example, a labeled confirmed Condition without verified attesting authority yields:
 
 ```json
 {"resource_type":"Condition","path":"verificationStatus","code":"attestation_required"}

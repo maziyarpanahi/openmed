@@ -106,7 +106,7 @@ def test_existing_single_use_approval_receipt_controls_status_exception(role, al
     )
     key = b"synthetic-local-approval-key-32-bytes"
     action_digest = "sha256:" + "a" * 64
-    token = ApprovalTokenSigner(key).issue(
+    token = ApprovalTokenSigner(key, clock=lambda: 10).issue(
         action_digest=action_digest,
         reviewer_role=role,
         expires_at=20,
@@ -115,8 +115,10 @@ def test_existing_single_use_approval_receipt_controls_status_exception(role, al
     verifier = ApprovalTokenVerifier(
         key, InMemoryApprovalNonceStore(), clock=lambda: 10
     )
-    receipt = verifier.consume(token, action_digest=action_digest, reviewer_role=role)
+    authorization = verifier.consume_authorization(
+        token, action_digest=action_digest, reviewer_role=role
+    )
     findings = validate_proposed_resource(
-        payload, policy=policy, approval_receipt=receipt
+        payload, policy=policy, approval_authorization=authorization
     )
     assert (not findings) == allowed
