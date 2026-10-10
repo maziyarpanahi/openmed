@@ -365,3 +365,38 @@ def test_derived_fact_with_direct_clinical_evidence_can_finalize():
     assert pending.chains[0].uncertainty == 1.0
     approved = build(**args, review_receipts=(approval(pending),))
     assert approved.finalize((FIELD,)).chain_count == 1
+
+
+def test_failing_fact_iterator_has_a_controlled_error_without_private_context():
+    def failing():
+        yield records()[2]
+        raise RuntimeError(CANARIES[0])
+
+    with pytest.raises(AbstractionEvidenceError) as caught:
+        build(facts=failing())
+    assert caught.value.code == "invalid_collection"
+    assert caught.value.__context__ is None
+
+
+def test_failing_origin_mapping_has_a_controlled_error_without_private_context():
+    class FailingOrigins(dict):
+        def items(self):
+            raise RuntimeError(CANARIES[2])
+
+    with pytest.raises(AbstractionEvidenceError) as caught:
+        build(source_kinds=FailingOrigins())
+    assert caught.value.code == "invalid_source_kinds"
+    assert caught.value.__context__ is None
+
+
+def test_declared_origin_metadata_is_snapshotted_before_chain_construction():
+    artifact, _, _ = records()
+
+    class DeclaredOrigins(dict):
+        def get(self, *_):
+            raise RuntimeError(CANARIES[5])
+
+    pending = build(
+        source_kinds=DeclaredOrigins({artifact.artifact_id: SourceKind.CLINICAL_RECORD})
+    )
+    assert codes(pending) == {"review_not_approved"}

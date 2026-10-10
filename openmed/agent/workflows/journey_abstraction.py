@@ -123,13 +123,7 @@ def build_journey_abstraction_evidence(
     artifact_by_id = _index(artifacts, ClinicalArtifact, "artifact_id")
     conflict_by_id = _index(conflicts, ConflictSet, "conflict_id")
     receipts = _index(review_receipts, AbstractionReviewReceipt, "field_id")
-    if not isinstance(source_kinds, Mapping) or any(
-        type(key) is not str
-        or not _OPAQUE_ID.fullmatch(key)
-        or type(value) is not SourceKind
-        for key, value in source_kinds.items()
-    ):
-        raise AbstractionEvidenceError("invalid_source_kinds")
+    origins = _source_kind_map(source_kinds)
     if set(receipts) - set(bindings):
         raise AbstractionEvidenceError("unknown_review_field")
     chains = []
@@ -173,7 +167,7 @@ def build_journey_abstraction_evidence(
                 continue
             if artifact.subject_id not in {None, snapshot.subject_id}:
                 block("subject_mismatch")
-            kind = source_kinds.get(artifact.artifact_id)
+            kind = origins.get(artifact.artifact_id)
             if kind is None:
                 block("source_kind_undeclared")
                 continue
@@ -229,6 +223,35 @@ def build_journey_abstraction_evidence(
                 )
         chains.append(chain)
     return ChartAbstractionEvidence(chains, blocking_issues=issues)
+
+
+def _source_kind_map(value: Mapping[str, SourceKind]) -> dict[str, SourceKind]:
+    """Snapshot bounded origin metadata without retaining rejected mapping errors."""
+    if not isinstance(value, Mapping):
+        raise AbstractionEvidenceError("invalid_source_kinds")
+    failed = False
+    try:
+        entries = _bounded_tuple(
+            value.items(), field_name="source_kinds", maximum=10_000
+        )
+    except Exception:
+        failed = True
+    if failed:
+        raise AbstractionEvidenceError("invalid_source_kinds")
+    result = {}
+    for entry in entries:
+        if type(entry) is not tuple or len(entry) != 2:
+            raise AbstractionEvidenceError("invalid_source_kinds")
+        key, kind = entry
+        if (
+            type(key) is not str
+            or not _OPAQUE_ID.fullmatch(key)
+            or type(kind) is not SourceKind
+            or key in result
+        ):
+            raise AbstractionEvidenceError("invalid_source_kinds")
+        result[key] = kind
+    return result
 
 
 def _index(records: Iterable[Any], record_type: type, id_field: str) -> dict[str, Any]:

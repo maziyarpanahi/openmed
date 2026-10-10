@@ -97,7 +97,10 @@ receipt = reviewed.finalize(("registry.primary_diagnosis",))
 
 The caller declares source origin and rule/model kind; arbitrary artifact types,
 fact statuses and Journey review labels cannot prove either origin or approval.
-Unknown origin blocks instead of defaulting to a clinical record. Mark generated
+Unknown origin blocks instead of defaulting to a clinical record. Origin declarations are copied
+into a bounded local metadata snapshot before chain construction; malformed
+collections and mappings produce controlled errors without private exception
+context. Mark generated
 artifacts with `SourceKind.GENERATED_TEXT`. A generated-only chain cannot finalize.
 Parent facts are not recursively treated as clinical source evidence; a derived
 fact must retain its own direct clinical text locators.

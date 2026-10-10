@@ -407,14 +407,14 @@ class ChartAbstractionEvidence:
 
         normalized_issues = tuple(sorted(set(issues)))
         required_fields_digest = _digest(list(required))
+        approved_field_count = sum(
+            chain.reviewer_state is ReviewerState.APPROVED for chain in self.chains
+        )
+        clinical_source_count = sum(chain.has_clinical_source for chain in self.chains)
         report_fields = {
-            "approved_field_count": sum(
-                chain.reviewer_state is ReviewerState.APPROVED for chain in self.chains
-            ),
+            "approved_field_count": approved_field_count,
             "chain_count": len(self.chains),
-            "clinical_source_count": sum(
-                chain.has_clinical_source for chain in self.chains
-            ),
+            "clinical_source_count": clinical_source_count,
             "evidence_digest": self.evidence_digest,
             "issues": [issue.to_dict() for issue in normalized_issues],
             "required_field_count": len(required),
@@ -428,8 +428,8 @@ class ChartAbstractionEvidence:
             issues=normalized_issues,
             chain_count=len(self.chains),
             required_field_count=len(required),
-            clinical_source_count=report_fields["clinical_source_count"],
-            approved_field_count=report_fields["approved_field_count"],
+            clinical_source_count=clinical_source_count,
+            approved_field_count=approved_field_count,
         )
 
     def finalize(self, required_fields: Iterable[str]) -> FinalizedAbstractionEvidence:
@@ -495,23 +495,26 @@ def _normalize_required_fields(fields: Iterable[str]) -> tuple[str, ...]:
 def _bounded_tuple(value: Any, *, field_name: str, maximum: int) -> tuple[Any, ...]:
     if isinstance(value, (str, bytes, bytearray, Mapping)):
         raise AbstractionEvidenceError("invalid_collection", field_name)
+    invalid = False
     try:
         iterator = iter(value)
-    except (KeyboardInterrupt, SystemExit):
-        raise
     except Exception:
-        raise AbstractionEvidenceError("invalid_collection", field_name) from None
+        invalid = True
+    if invalid:
+        raise AbstractionEvidenceError("invalid_collection", field_name)
 
     items: list[Any] = []
+    failure = None
     try:
         for item in iterator:
             if len(items) >= maximum:
-                raise AbstractionEvidenceError("too_many_items", field_name)
+                failure = "too_many_items"
+                break
             items.append(item)
-    except (KeyboardInterrupt, SystemExit, AbstractionEvidenceError):
-        raise
     except Exception:
-        raise AbstractionEvidenceError("invalid_collection", field_name) from None
+        failure = "invalid_collection"
+    if failure is not None:
+        raise AbstractionEvidenceError(failure, field_name)
     return tuple(items)
 
 
