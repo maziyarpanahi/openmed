@@ -41,7 +41,7 @@ def _prepare(monkeypatch):
     # First authenticate the caller-owned action review. Its receipt can be
     # embedded without creating a self-referential final Bundle digest.
     key = b"synthetic-test-key-for-offline-assembly-only"
-    signer = ApprovalTokenSigner(key)
+    signer = ApprovalTokenSigner(key, clock=lambda: 10)
     verifier = ApprovalTokenVerifier(
         key, InMemoryApprovalNonceStore(), clock=lambda: 10
     )
