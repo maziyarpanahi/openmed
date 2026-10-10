@@ -91,6 +91,17 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .server_validation import (
+    MAX_SERVER_VALIDATION_ISSUES,
+    MAX_SERVER_VALIDATION_RESOURCE_BYTES,
+    FHIRServerValidationIssue,
+    FHIRServerValidationReason,
+    FHIRServerValidationResult,
+    FHIRServerValidationStatus,
+    FHIRValidationResponse,
+    FHIRValidationTransport,
+    preflight_server_validation,
+)
 from .transactions import (
     ApprovedWriteEntry,
     AssembledTransaction,
@@ -204,6 +215,15 @@ _WRITE_CLIENT_EXPORTS = frozenset(
 )
 
 __all__ = [
+    "MAX_SERVER_VALIDATION_ISSUES",
+    "MAX_SERVER_VALIDATION_RESOURCE_BYTES",
+    "FHIRServerValidationIssue",
+    "FHIRServerValidationReason",
+    "FHIRServerValidationResult",
+    "FHIRServerValidationStatus",
+    "FHIRValidationResponse",
+    "FHIRValidationTransport",
+    "preflight_server_validation",
     "FHIRCredentialCustody",
     "FHIRHTTPResponse",
     "FHIRPreparedWrite",

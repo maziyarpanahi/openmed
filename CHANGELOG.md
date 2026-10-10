@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add opt-in FHIR R4 server `$validate` preflight through an injected target-bound
+  transport and opaque credential handle. Return controlled issue summaries and
+  request digests; block errors and unavailable validation before application review.
+
 - Add injected, bounded FHIR R4 write execution for existing conditional plans
   and assembled transactions. Bind exact wire details to consumed approval
   receipts, repeat local authorization and lineage gates, preserve predicates,
