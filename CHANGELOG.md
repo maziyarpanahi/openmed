@@ -9,9 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
+  pins and retain lockfile SARIF diagnostics after image-build failures.
+
 - Require Strawberry GraphQL 0.327.2 or newer in the optional service and
   development profiles to fix completed-subscription retention and awaitable
   permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
+### Documentation
+
+- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
+  examples. Group clinical navigation by area and expose four previously
+  unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Fixed
 
