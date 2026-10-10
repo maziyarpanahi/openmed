@@ -50,7 +50,7 @@ from openmed.agent.timing import ActionTiming, AgentRunTiming, RunTiming
 SCHEMA_NAMES = ("correlation", "outcome", "run_summary", "timing")
 SCHEMA_SHA256 = {
     "correlation": "c36133f0bd6d7a39e35b4486ba81b0b847ab8bfedd83fcedce085148c70454a0",
-    "outcome": "779d96e55c22eb2b5591d6607d667a54a33858afa688e60d3d2d88bf6a0c22da",
+    "outcome": "91ec366ce715e460e6edc6bd385bc6ce9d972091e08c53024e76c0735f925360",
     "run_summary": "5e0fb6c541b163a898fef5575b47c1aab6ac926c0898d2cf4391615bb1fed95a",
     "timing": "772aea820547fce3cdc8afa571f2f096d01c08bfefd36c004a6672d9768e87ca",
 }
@@ -276,6 +276,23 @@ def test_outcome_and_correlation_versions_enums_and_fields_track_source() -> Non
     assert correlation["$defs"]["correlation_action_id"]["minLength"] == (
         len(ACTION_ID_PREFIX) + 2 * CORRELATION_TOKEN_BYTES
     )
+
+
+@pytest.mark.parametrize("outcome_class", list(OutcomeClass))
+def test_outcome_definition_is_closed_when_resolved_independently(
+    outcome_class: OutcomeClass,
+) -> None:
+    schema = build_agent_schema("outcome")
+    fragment = schema["$defs"][f"outcome_{outcome_class.value}"]
+    validator = Draft202012Validator(fragment)
+    payload = WorkflowOutcome(
+        outcome_class, min(allowed_reason_codes(outcome_class))
+    ).to_dict()
+    validator.validate(payload)
+    with pytest.raises(ValidationError):
+        validator.validate({**payload, "note": "synthetic private content"})
+    with pytest.raises(ValidationError):
+        validator.validate({**payload, "schema_version": "v0"})
 
 
 def test_timing_schema_matches_serialized_fields_without_inventing_version() -> None:

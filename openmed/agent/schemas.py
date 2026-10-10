@@ -53,12 +53,14 @@ def _outcome_schema() -> dict[str, Any]:
     classes = sorted(item.value for item in OutcomeClass)
     reasons = {name: sorted(allowed_reason_codes(name)) for name in classes}
     definitions = {
-        f"outcome_{name}": {
-            "properties": {
+        f"outcome_{name}": _object(
+            {
+                "schema_version": {"const": OUTCOME_SCHEMA_VERSION},
                 "outcome_class": {"const": name},
                 "reason_code": {"enum": reasons[name]},
-            }
-        }
+            },
+            ["schema_version", "outcome_class", "reason_code"],
+        )
         for name in classes
     }
     return {
