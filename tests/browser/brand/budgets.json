@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4488838
+    "json": 4524391
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4488838
+    "docs/search/search_index.json": 4524391
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The five reviewed FHIR write changes measure 4522705 search bytes, an increase of 35553 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The reviewed approval validity and durable nonce guides measure 4487152 search bytes, an increase of 9665 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The two reviewed DICOM privacy changes measure 4474837 search bytes, an increase of 10972 bytes over the current-master build. The JSON and search ceilings retain the current-master 4336-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The five reviewed runtime guides measure 4463865 search bytes, an increase of 16187 bytes over the current-master build. The JSON and search ceilings retain the current-master 4336-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
