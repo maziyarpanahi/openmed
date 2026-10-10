@@ -7,10 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
+  pins and retain lockfile SARIF diagnostics after image-build failures.
+
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
+### Documentation
+
+- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
+  examples. Group clinical navigation by area and expose four previously
+  unlisted guides, preserving page URLs and the existing Pages byte budgets.
+
 ### Added
 
 - Bundle seven metadata-only agent run-summary golden vectors with strict,
   offline validation of canonical JSON, Markdown digests and commitments (#3044).
+- Export deterministic, import-light Draft 2020-12 JSON Schemas for public
+  agent outcome, correlation, timing and run-summary records.
+- Added the offline `openmed models slm-verify` command, which verifies a local
+  clinical SLM package, probes explicitly requested capabilities against the
+  declared metadata, and runs the memory preflight for an explicit device
+  budget, with a value-free JSON report, stable CLI error codes, and no runtime
+  import or network access (#3805).
+- Added bundled Draft 2020-12 JSON Schemas for clinical brief audit and response
+  records, evidence packets, NLI verification results and SDOH evidence reports,
+  with a committed fingerprint snapshot, schema drift comparison, optional
+  `jsonschema` validation and value-free contract tests (#3803).
+
+### Fixed
+
+- Parse clinical and Journey ISO calendar timestamps through one explicit
+  profile on every supported Python version. Reject basic, week-date, ordinal
+  and compact-offset input with value-free errors while retaining supported
+  extended values, caller timezone rules and golden digests.
 
 ## [3.0.0] - 2026-10-05
 
