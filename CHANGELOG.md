@@ -108,6 +108,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Normalize SMART v1 read/write/all permissions, wildcard resources, granular
+  queries and non-clinical identity/launch/session scopes in offline scope
+  audits. Compare constraints conservatively and report malformed input without
+  echoing values; granular audit evidence contains only constraint digests (#3767).
+
 - Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
   encapsulated documents, expose truthful pixel-cleaning outcomes, and stage
   combined header/pixel processing before writing its final artifact (#3725).
