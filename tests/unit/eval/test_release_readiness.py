@@ -57,7 +57,7 @@ def _make_repo_root(tmp_path: Path) -> Path:
     (root / "README.md").write_text("# OpenMed\n", encoding="utf-8")
     (root / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
-    migration = root / "docs" / "migration" / "2.3-to-2.5.md"
+    migration = root / "docs" / "migration" / "2.5-to-3.0.md"
     migration.parent.mkdir(parents=True)
     migration.write_text("# Migration Guide\n", encoding="utf-8")
 
@@ -190,7 +190,7 @@ def test_quarantined_extraction_gate_propagates(tmp_path):
 
 def test_missing_migration_guide_fails_closed(tmp_path):
     root = _make_repo_root(tmp_path)
-    (root / "docs" / "migration" / "2.3-to-2.5.md").unlink()
+    (root / "docs" / "migration" / "2.5-to-3.0.md").unlink()
 
     report = _evaluate(root)
 
@@ -198,7 +198,7 @@ def test_missing_migration_guide_fails_closed(tmp_path):
     check = next(
         item for item in report.failing_checks() if item.gate == "required_docs"
     )
-    assert "docs/migration/2.3-to-2.5.md" in check.reason
+    assert "docs/migration/2.5-to-3.0.md" in check.reason
 
 
 def test_disclaimer_comment_does_not_satisfy_gate(tmp_path):
@@ -259,6 +259,71 @@ def test_non_boolean_or_unnamed_golden_result_fails_closed(tmp_path):
     assert report.decision == NOT_READY
     check = next(item for item in report.failing_checks() if item.gate == "e2e_golden")
     assert "named passing suite" in check.reason
+
+
+def _document_breaking_api(root: Path) -> dict:
+    path = root / "gates/api_compat_report.json"
+    payload = json.loads(path.read_text())
+    payload["before_ref"] = "v2.5.0"
+    payload["summary"]["breaking"] = 1
+    payload["breaking"] = [{"symbol": "openmed.clinical.grounding.ground"}]
+    path.write_text(json.dumps(payload))
+    (root / "docs/migration/2.5-to-3.0.md").write_text(
+        "# Migration\nUse openmed.clinical.grounding.ground(text_or_entities=...).\n"
+    )
+    return payload
+
+
+def test_documented_breaking_api_is_allowed_for_major_release_only(tmp_path):
+    root = _make_repo_root(tmp_path)
+    _document_breaking_api(root)
+    report = _evaluate(root, version="3.0.0")
+    assert report.decision == READY
+    check = next(item for item in report.checks if item.gate == "api_compat")
+    assert check.details["breaking"] == 1
+    assert check.details["reviewed_major_migrations"] == [
+        "openmed.clinical.grounding.ground"
+    ]
+    assert check.details["migration_hash"]
+    assert report.verify(READINESS_KEY)
+
+
+@pytest.mark.parametrize("version", ["2.5.1", "2.6.0", "2.5.0", "1.0.0", "3.0.0rc1"])
+def test_breaking_api_is_not_waived_for_minor_patch_or_invalid_version(
+    tmp_path, version
+):
+    root = _make_repo_root(tmp_path)
+    _document_breaking_api(root)
+    assert _evaluate(root, version=version).decision == NOT_READY
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        [],
+        [None],
+        [{"symbol": []}],
+        [{"symbol": "unlisted.api"}],
+        [{"symbol": "openmed.missing"}],
+    ],
+)
+def test_major_release_refuses_missing_or_malformed_migration_entries(
+    tmp_path, entries
+):
+    root = _make_repo_root(tmp_path)
+    payload = _document_breaking_api(root)
+    payload["breaking"] = entries
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    assert _evaluate(root, version="3.0.0").decision == NOT_READY
+
+
+@pytest.mark.parametrize("count", [True, 1.0, "1", None, [], -1])
+def test_invalid_breaking_change_count_fails_closed(tmp_path, count):
+    root = _make_repo_root(tmp_path)
+    payload = _document_breaking_api(root)
+    payload["summary"]["breaking"] = count
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    assert _evaluate(root, version="3.0.0").decision == NOT_READY
 
 
 def test_report_serialization_round_trip_remains_verifiable(tmp_path):
@@ -353,6 +418,18 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
                 "family": "PII",
                 "tier": "small",
                 "formats": ["mlx-fp"],
+                "languages": ["en"],
+                "param_count": 100,
+                "license": "apache-2.0",
+                "reproducibility_hash": "sha256:synthetic",
+                "script_coverage": {
+                    "gujarati": {
+                        "unk_rate": 0.0,
+                        "byte_fallback_rate": 0.0,
+                        "tokens_per_grapheme": 0.8,
+                        "verdict": "unclaimed",
+                    }
+                },
             }
         )
         + "\n",
@@ -456,6 +533,118 @@ def test_sdk_continuity_refuses_missing_or_unsafe_baseline(tmp_path):
         report = evaluate_readiness(repo_root=root, sdk_baseline=baseline)
         assert report.decision == NOT_READY
         assert not report.checks[0].passed
+
+
+def test_sdk_continuity_accepts_catalog_edits_without_model_promotion(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "models.jsonl"
+    row = json.loads(path.read_text())
+    row["languages"].append("gu")
+    row["script_coverage"]["gujarati"]["verdict"] = "supported"
+    path.write_text(json.dumps(row) + "\n")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == READY
+    assert report.checks[0].details["catalog_metadata_changes"] == {
+        "synthetic/model": ["languages", "script_coverage"]
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("formats", ["onnx"]),
+        ("license", "restricted"),
+        ("reproducibility_hash", "sha256:other"),
+        ("param_count", 101),
+        ("repo_id", "synthetic/other"),
+        ("languages", []),
+        ("languages", ["en", "en"]),
+        ("languages", ["en", True]),
+        ("script_coverage", []),
+    ],
+)
+def test_sdk_catalog_edits_cannot_mask_artifact_or_metadata_regressions(
+    tmp_path, field, value
+):
+    root = _sdk_repository(tmp_path)
+    path = root / "models.jsonl"
+    row = json.loads(path.read_text())
+    row["languages"].append("gu")
+    row[field] = value
+    path.write_text(json.dumps(row) + "\n")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+    assert not report.checks[0].passed
+
+
+def test_sdk_catalog_edits_cannot_change_tokenizer_measurements(tmp_path):
+    root = _sdk_repository(tmp_path)
+    path = root / "models.jsonl"
+    row = json.loads(path.read_text())
+    row["languages"].append("gu")
+    row["script_coverage"]["gujarati"].update(verdict="supported", unk_rate=0.2)
+    path.write_text(json.dumps(row) + "\n")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+def _add_summary_policy(root: Path) -> dict:
+    path = root / "gates/baseline.json"
+    payload = json.loads(path.read_text())
+    payload["summary"] = {
+        "clinical_fact_recall_min": 0.95,
+        "fact_coverage_min": 0.95,
+        "unsupported_claim_rate_max": 0.0,
+        "citation_support_min": 1.0,
+        "leaked_identifier_count_max": 0,
+    }
+    path.write_text(json.dumps(payload))
+    return payload
+
+
+def test_sdk_continuity_allows_new_strict_summary_policy_without_training(tmp_path):
+    root = _sdk_repository(tmp_path)
+    _add_summary_policy(root)
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == READY
+    assert report.checks[0].gate == "sdk_model_continuity"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("clinical_fact_recall_min", 0.5),
+        ("fact_coverage_min", 0.9),
+        ("unsupported_claim_rate_max", 0.01),
+        ("citation_support_min", 0.99),
+        ("leaked_identifier_count_max", 1),
+        ("leaked_identifier_count_max", False),
+        ("unknown_gate", 0),
+    ],
+)
+def test_sdk_continuity_rejects_invalid_or_relaxed_summary_policy(tmp_path, key, value):
+    root = _sdk_repository(tmp_path)
+    payload = _add_summary_policy(root)
+    payload["summary"][key] = value
+    (root / "gates/baseline.json").write_text(json.dumps(payload))
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+def test_sdk_summary_policy_cannot_rewrite_retained_model_evidence(tmp_path):
+    root = _sdk_repository(tmp_path)
+    payload = _add_summary_policy(root)
+    payload["entries"]["pii::small::mlx-fp"]["repo_id"] = "synthetic/other"
+    (root / "gates/baseline.json").write_text(json.dumps(payload))
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
+
+
+def test_sdk_continuity_rejects_non_object_evidence_without_crashing(tmp_path):
+    root = _sdk_repository(tmp_path)
+    (root / "gates/baseline.json").write_text("[]")
+    report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
+    assert report.decision == NOT_READY
 
 
 def test_missing_model_gate_still_fails_without_explicit_sdk_scope(tmp_path):
