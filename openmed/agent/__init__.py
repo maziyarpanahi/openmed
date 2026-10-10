@@ -133,6 +133,15 @@ from .run_diff import (
     RunSummaryDiff,
     diff_run_summaries,
 )
+from .run_invariants import (
+    RUN_INVARIANT_REASON_CODES,
+    RUN_INVARIANT_SCHEMA_VERSION,
+    CompletedRun,
+    RunAction,
+    RunInvariantError,
+    RunInvariantReport,
+    check_run_invariants,
+)
 from .run_summary import (
     MAX_RUN_SUMMARY_JSON_BYTES,
     RUN_SUMMARY_SCHEMA_VERSION,
@@ -304,6 +313,12 @@ __all__ = [
     "RunCommitmentVerificationResult",
     "RUN_DIFF_SCHEMA_VERSION",
     "RunDiffError",
+    "RunAction",
+    "RunInvariantError",
+    "RunInvariantReport",
+    "CompletedRun",
+    "RUN_INVARIANT_REASON_CODES",
+    "RUN_INVARIANT_SCHEMA_VERSION",
     "MAX_SEQUENCE_FINDINGS",
     "MAX_SEQUENCE_NUMBER",
     "RunEvent",
@@ -355,6 +370,7 @@ __all__ = [
     "explain_cohort_membership",
     "diff_run_summaries",
     "check_capability_validity",
+    "check_run_invariants",
     "compute_run_summary_commitment",
     "envelope_from_exception",
     "error_class_for_code",
