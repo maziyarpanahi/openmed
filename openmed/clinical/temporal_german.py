@@ -6,6 +6,8 @@ import calendar
 import re
 from datetime import date, timedelta
 
+from openmed.core.iso_temporal import parse_iso_date
+
 _MONTHS = {
     name: index
     for index, name in enumerate(
@@ -83,7 +85,7 @@ def _german_value(phrase: str, reference: date | None):
     lowered = text.casefold()
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
         try:
-            return date.fromisoformat(text).isoformat(), None, ("day",)
+            return parse_iso_date(text).isoformat(), None, ("day",)
         except ValueError:
             return None, None, ("day", "invalid")
     numeric = _NUMERIC.fullmatch(text)

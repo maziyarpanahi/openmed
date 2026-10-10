@@ -1032,6 +1032,7 @@ def _validate_fonts_and_consumers(errors: list[str]) -> None:
 
 def _validate_claims(errors: list[str]) -> None:
     sys.path.insert(0, str(REPO_ROOT))
+    from openmed.__about__ import __version__  # noqa: PLC0415
     from openmed.core.language_pack_catalog import (  # noqa: PLC0415
         DEFAULT_MODEL_PLACEHOLDER_LANGUAGES,
         DEFAULT_PII_MODELS,
@@ -1047,6 +1048,9 @@ def _validate_claims(errors: list[str]) -> None:
         "network": "forbidden",
         "network_refresh_command": (
             "python scripts/brand/update_claims.py --refresh-github-stars"
+        ),
+        "community_refresh_command": (
+            "python scripts/brand/update_claims.py --refresh-community-metrics"
         ),
         "network_refresh_ci_policy": "never invoke from CI",
         "rounding": "none unless a claim definition explicitly says otherwise",
@@ -1066,7 +1070,7 @@ def _validate_claims(errors: list[str]) -> None:
             f"claims registry lacks required contract fields {sorted(missing_claims)}"
         )
     expected_values = {
-        "package_version": "2.5.0",
+        "package_version": __version__,
         "repository_model_snapshot": 2266,
         "hugging_face_openmed_owned_snapshot": 2266,
         "supported_pii_languages": len(DEFAULT_PII_MODELS),
@@ -1233,6 +1237,54 @@ def _validate_claims(errors: list[str]) -> None:
     )
     if "--refresh-github-stars" in workflow_text:
         errors.append("CI must never invoke the networked GitHub stars refresh")
+    if "--refresh-community-metrics" in workflow_text:
+        errors.append("CI must never invoke the networked community metrics refresh")
+
+    community = _load_json("docs/brand/system/evidence/community-metrics.json")
+    community_claims = {
+        "hugging_face_public_models": community["hugging_face"]["public_models"],
+        "cumulative_model_downloads": community["hugging_face"]["downloads_all_time"],
+        "monthly_model_downloads": community["hugging_face"]["downloads_30d"],
+        "cumulative_package_installs": community["pypi"]["installs_total"],
+    }
+    for claim_name, raw in community_claims.items():
+        claim = claims.get(claim_name, {})
+        if (
+            claim.get("status") != "verified"
+            or claim.get("value") != raw
+            or claim.get("as_of") != community["captured_at"][:10]
+            or claim.get("review_by") != community["review_by"]
+        ):
+            errors.append(
+                f"claim {claim_name} differs from committed community evidence"
+            )
+    website_text = (REPO_ROOT / "docs/website/index.html").read_text(encoding="utf-8")
+    for repo_id, millions in community["display"]["featured_models_millions"].items():
+        card = (
+            f"<strong>{millions}M</strong> all-time downloads</span>"
+            f'<a href="https://huggingface.co/{repo_id}">'
+        )
+        if card not in website_text:
+            errors.append(f"website model card for {repo_id} differs from evidence")
+    entity_tile = (
+        f"<strong>{claims['pii_entity_types']['value']}</strong><b>PII entity types</b>"
+    )
+    if entity_tile not in website_text:
+        errors.append("website PII entity-type tile differs from the governed claim")
+    model_backed = claims["model_backed_pii_languages"]["value"]
+    supported = claims["supported_pii_languages"]["value"]
+    for count in re.findall(r"(\d+) model-backed", website_text):
+        if int(count) != model_backed:
+            errors.append(
+                f"website says {count} model-backed languages; the claim is {model_backed}"
+            )
+    for count in re.findall(
+        r"(\d+) supported (?:codes|PII language codes)", website_text
+    ):
+        if int(count) != supported:
+            errors.append(
+                f"website says {count} supported codes; the claim is {supported}"
+            )
 
     package = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     expected_description = (
@@ -1283,7 +1335,7 @@ def _validate_claims(errors: list[str]) -> None:
     if (
         organization.get("url") != "https://openmed.life/"
         or organization.get("sameAs") != expected_identity_links
-        or organization.get("founder") != {"@type": "Person", "name": "Maziyar Panahi"}
+        or "founder" in organization
     ):
         errors.append("website Organization JSON-LD identity graph is not canonical")
     software = by_type.get("SoftwareSourceCode", {})
@@ -1291,6 +1343,7 @@ def _validate_claims(errors: list[str]) -> None:
         software.get("softwareVersion") != claims["package_version"]["value"]
         or software.get("license") != "https://www.apache.org/licenses/LICENSE-2.0"
         or software.get("codeRepository") != "https://github.com/maziyarpanahi/openmed"
+        or software.get("creator", {}).get("name") != "Maziyar Panahi"
     ):
         errors.append("website software JSON-LD disagrees with governed claims")
     _validate_faq_parity(website, by_type.get("FAQPage", {}), errors)
