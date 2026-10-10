@@ -13,6 +13,7 @@ from openmed.risk.differential_privacy import (
     PrivacyBudget,
     PrivacyBudgetExceeded,
     gaussian_noise,
+    gaussian_privacy_delta,
     gaussian_scale,
     laplace_noise,
     laplace_scale,
@@ -52,9 +53,9 @@ def test_gaussian_scale_and_seeded_noise_follow_sensitivity_formula() -> None:
     sensitivity = 2.0
     epsilon = 0.8
     delta = 1e-5
-    expected_scale = sensitivity * math.sqrt(2.0 * math.log(1.25 / delta)) / epsilon
+    expected_scale = gaussian_scale(sensitivity, epsilon, delta)
 
-    assert gaussian_scale(sensitivity, epsilon, delta) == pytest.approx(expected_scale)
+    assert gaussian_privacy_delta(expected_scale, sensitivity, epsilon) <= delta
     assert gaussian_noise(
         sensitivity,
         epsilon,
@@ -81,6 +82,68 @@ def test_gaussian_count_release_charges_delta_and_scale() -> None:
     assert budget.spent_delta == pytest.approx(delta)
     assert budget.spends[0].mechanism == "gaussian"
     assert budget.spends[0].noise_scale == pytest.approx(expected_scale)
+    assert budget.spends[0].to_dict()["calibration_method"] == "analytic_gaussian"
+
+
+@pytest.mark.parametrize("epsilon", [0.05, 0.1, 0.5, 0.99, 1, 2, 10, 20, 50])
+@pytest.mark.parametrize("delta", [1e-10, 1e-8, 1e-5, 1e-3])
+def test_analytic_gaussian_meets_independently_evaluated_profile(epsilon, delta):
+    sigma = gaussian_scale(1.0, epsilon, delta)
+    # Independent direct equation from Balle/Wang Theorem 8. The production
+    # implementation uses scaled erfc; this ordinary range needs no scaling.
+    first = math.erfc((epsilon * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
+    second = (
+        math.exp(epsilon)
+        * math.erfc((epsilon * sigma + 0.5 / sigma) / math.sqrt(2))
+        / 2
+    )
+    assert first - second <= delta
+    assert gaussian_privacy_delta(sigma, 1.0, epsilon) == pytest.approx(
+        first - second, rel=1e-9, abs=1e-16
+    )
+    assert gaussian_scale(7.0, epsilon, delta) == pytest.approx(7 * sigma)
+
+
+def test_gaussian_old_high_epsilon_reproduction_and_utility():
+    old_sigma = math.sqrt(2 * math.log(1.25 / 1e-5)) / 20
+    assert gaussian_privacy_delta(old_sigma, 1.0, 20) > 1e-3
+    report = utility_report([0.5, 10, 20, 50], mechanism="gaussian", delta=1e-5)
+    for point in report.points:
+        assert gaussian_privacy_delta(point.noise_scale, 1, point.epsilon) <= 1e-5
+
+
+@pytest.mark.parametrize(
+    "epsilon,delta",
+    [
+        (0, 1e-5),
+        (float("inf"), 1e-5),
+        (float("nan"), 1e-5),
+        (1, 0),
+        (1, -1),
+        (1, 1),
+        (1, float("nan")),
+    ],
+)
+def test_gaussian_invalid_parameters_fail_closed(epsilon, delta):
+    with pytest.raises(ValueError):
+        gaussian_scale(1.0, epsilon, delta)
+
+
+def test_gaussian_extreme_scales_and_zero_sensitivity():
+    assert gaussian_scale(0, 20, 1e-5) == 0
+    assert gaussian_privacy_delta(0, 0, 20) == 0
+    assert gaussian_privacy_delta(0, 1, 20) == 1
+    assert gaussian_privacy_delta(gaussian_scale(1, 1000, 1e-10), 1, 1000) <= 1e-10
+    with pytest.raises(ValueError, match="not representable"):
+        gaussian_scale(1e308, 0.05, 1e-10)
+
+
+def test_gaussian_cancellation_uses_conservative_tail_not_false_zero():
+    sigma = gaussian_scale(1, 1e-20, 1e-20)
+    # The privacy-loss tail is an independent sufficient DP bound. In this
+    # extreme regime subtracting two almost equal CDFs would round to zero.
+    tail = math.erfc((1e-20 * sigma - 0.5 / sigma) / math.sqrt(2)) / 2
+    assert tail <= 1e-20
 
 
 def test_budget_composes_queries_and_rejects_without_mutating() -> None:
@@ -195,3 +258,14 @@ class _FixedGaussian:
 
     def gauss(self, mu: float, sigma: float) -> float:
         return mu + self.value * sigma
+
+
+@pytest.mark.parametrize("sensitivity", [0.1, 1.0, 7.0])
+def test_small_epsilon_calibration_accounts_for_cdf_rounding(sensitivity):
+    epsilon, delta = 1e-20, 1e-5
+    sigma = gaussian_scale(sensitivity, epsilon, delta)
+    # Independently, delta(epsilon) >= delta(0) - (exp(epsilon) - 1).
+    # The zero-epsilon Gaussian profile uses erf directly, avoiding CDF
+    # subtraction; a violating lower bound proves under-calibration.
+    zero_profile = math.erf(sensitivity / (2.0 * sigma * math.sqrt(2.0)))
+    assert zero_profile - math.expm1(epsilon) <= delta
