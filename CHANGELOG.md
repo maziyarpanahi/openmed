@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add versioned synthetic multilingual full-pipeline clinical-brief regressions
+  for Latin, RTL, Indic and code-switched evidence, public surface/native packet
+  parity, protected-span offset round trips and governed conflict refusals.
+  Reports separate contract parity from unsupported language capabilities and
+  unevaluated model quality. Accept unset optional replacement aliases without
+  weakening populated-alias consistency checks (#3659).
+
 - Added passive preliminary FHIR R4 clinical-brief documents in Python and
   OpenMedKit, preserving evidence commitments, citation order, digests and
   human-review limitations with closed-subset round trips, explicit conversion

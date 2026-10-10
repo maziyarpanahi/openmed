@@ -613,3 +613,50 @@ protected output; `auditJSON()` and the description are value-free. A shared
 synthetic fixture checks Python/Swift byte-identical export and round trips.
 Native callbacks are trusted on-device application code; no remote fallback or
 EHR transport is provided.
+
+## Multilingual regression boundary
+
+The version-1 synthetic corpus in
+`tests/fixtures/eval/summaries/multilingual_briefs.json` covers English and French
+Latin text, Arabic RTL text, Hindi combining marks, and English/Hindi code
+switching. It reuses the existing per-language identifier traps and language-pack
+registry. Fixed local generation, NLI and privacy providers exercise the complete
+composer and CLI, REST, Python client and MCP adapters offline. Shared packets
+are recomputed by the public Python composer and validated by OpenMedKit; native
+citation offsets use Unicode scalars, matching Python code points, rather than
+Swift Characters or UTF-16 units.
+
+The fixture preparation explicitly normalizes with `normalize_for_detection()`
+(NFKC and digit folding), retains its original offset map, and gold-masks the
+synthetic identifier. Citation tests project each post-mask source span through
+the de-identification map and then the normalization map back to raw source;
+normalizing that raw slice reproduces the exact cited claim. Every interior
+replacement boundary is rejected. Normalization is an upstream preparation step,
+not an implicit composer transformation. Gold masking does not measure identifier
+detection recall. Populated replacement aliases must agree; an unset optional
+`PIIEntity.surrogate` does not conflict with its `redacted_text`.
+
+Preserved negated, family and historical facts retain their reviewed axes and
+require human review. Generated negation, family-to-patient or temporal changes
+are refused by exact-source alignment as `unsupported_claim`; the suite does not
+claim semantic conflict detection for paraphrases. Fixed NLI contradictions yield
+`nli_rejected`, and a provider without declared fixture-pair support yields
+`nli_unavailable`. Refusals contain no partial summary or citations. Changed
+source digests or annotations invalidate the evidence identity and review.
+
+The regression report separates `contract_parity` from `model_quality`, which is
+always `not_evaluated`. It contains only counts, digests and controlled codes.
+`clinical_language_support` remains `not_established`, even if a packet passes.
+A language pack or surrogate locale does not establish summarizer, NLI or
+atomicity support. The composer currently has no language argument and uses the
+English claim policy; explicit non-English calls to `segment_summary_claims()`
+remain `unsupported_language`. The report records that unsupported atomicity
+separately from synthetic transport parity. No model weights, clinical benchmark,
+cloud fallback or release qualification are added.
+
+Run the focused offline slice with:
+
+```sh
+.venv/bin/python -m pytest tests/unit/clinical/test_multilingual_brief.py tests/integration/test_multilingual_clinical_brief.py tests/unit/clinical/test_citation_boundaries.py -q
+cd swift/OpenMedKit && swift test
+```
