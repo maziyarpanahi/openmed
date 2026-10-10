@@ -1,5 +1,8 @@
 # Post-de-identification summarization
 
+See [local backends and typed outcomes](local-backends.md) for executable
+synthetic provider wiring and the complete exception/refusal tables.
+
 OpenMed's clinical summarization stage is generative-last. The public
 `openmed.clinical.summarize()` entry point de-identifies a note first, then
 passes only the de-identified text to a summarizer backend. The default `mlx`

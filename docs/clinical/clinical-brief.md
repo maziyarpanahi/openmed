@@ -1,5 +1,8 @@
 # Guarded clinical brief
 
+See [local backends and typed outcomes](local-backends.md) for executable
+synthetic provider wiring and the complete exception/refusal tables.
+
 Start with the [local summarizer](summarization.md), the
 [clinical NLI gate](nli-verification.md), and the
 [synthetic walkthrough and recording script](../demo/clinical-brief.md).
