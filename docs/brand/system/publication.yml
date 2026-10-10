@@ -135,6 +135,7 @@ classification:
     - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
+    - agent/run-invariants.md
     - agent/schema-compatibility.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
