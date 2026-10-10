@@ -41,11 +41,22 @@
         "$ref": "#/$defs/citation"
       }
     },
+    "claim_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/claim_binding"
+      }
+    },
     "digest": {
       "$ref": "#/$defs/digest"
     },
     "envelope": {
       "$ref": "#/$defs/envelope"
+    },
+    "generation_contract": {
+      "$ref": "#/$defs/generation_contract"
     },
     "metrics": {
       "$ref": "#/$defs/metrics"
@@ -2371,6 +2382,68 @@
           "maximum": 9223372036854775807
         }
       }
+    },
+    "generation_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schema_version"
+      ],
+      "properties": {
+        "kind": {
+          "const": "explicit_evidence"
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "claim_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_index",
+        "reference_digest"
+      ],
+      "properties": {
+        "claim_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "reference_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
     }
-  }
+  },
+  "dependentRequired": {
+    "generation_contract": [
+      "claim_bindings"
+    ],
+    "claim_bindings": [
+      "generation_contract"
+    ]
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "generation_contract"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "needs_review"
+          },
+          "refusal_reason": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
 }

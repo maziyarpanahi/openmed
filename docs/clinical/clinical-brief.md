@@ -87,6 +87,11 @@ audits add `generation_contract` and `claim_bindings` with reference digests;
 legacy exact-match packets remain unchanged. Original identifiers are checked
 against generated text, and the complete response is privacy-scanned.
 
+The bundled audit and response schemas and service response model admit this
+optional metadata. Both fields must occur together, and the binding sequence
+must match the citation count and order. Unknown metadata is refused. Legacy
+HTTP responses retain their original fields without added null placeholders.
+
 OpenMedKit's `ClinicalBriefGeneration` and `ClinicalBriefGeneratedClaim` use the
 same v1 wire fields (`schema_version`, `claims`, `text`, `reference_ids`). Supply
 `boundGeneration` and caller-authorized `reviewedEvidence` to

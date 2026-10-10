@@ -1497,7 +1497,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         ):
             return await run_in_threadpool(_profile_summary, payload)
 
-    @app.post("/brief", response_model=BriefResponse)
+    @app.post("/brief", response_model=BriefResponse, response_model_exclude_unset=True)
     async def brief_route(payload: BriefRequest, request: Request) -> Dict[str, Any]:
         """Return the shared local brief without recording protected content."""
         from .brief import brief_response

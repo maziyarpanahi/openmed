@@ -321,3 +321,49 @@ def test_direct_generation_render_does_not_retain_malformed_private_values(field
         BriefGenerationResult((claim,)).render()
     assert caught.value.__context__ is None
     assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
+
+
+def test_actual_bound_brief_matches_bundled_and_service_response_contracts():
+    from openmed.clinical.record_schemas import validate_clinical_record
+    from openmed.service.schemas import BriefResponse
+
+    value, context = fixture_context()
+    brief = build_clinical_brief(
+        value, context=context, model=SyntheticBoundGenerator()
+    )
+    assert brief.refusal_reason is None
+    validate_clinical_record("brief_audit", brief.to_dict())
+    validate_clinical_record("brief_response", brief.to_response())
+    response = BriefResponse.model_validate(brief.to_response())
+    assert response.model_dump(exclude_unset=True) == brief.to_response()
+
+
+@pytest.mark.parametrize("schema", ["brief_audit", "brief_response"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda x: x.pop("generation_contract"),
+        lambda x: x.pop("claim_bindings"),
+        lambda x: x["generation_contract"].update(schema_version=True),
+        lambda x: x["generation_contract"].update(text="Synthetic unknown value"),
+        lambda x: x["claim_bindings"][0].update(reference_digest="invalid"),
+        lambda x: x["claim_bindings"].pop(),
+        lambda x: x["claim_bindings"][0].update(claim_index=1),
+        lambda x: x["citations"][0].update(claim_index=1),
+    ],
+)
+def test_bound_record_contract_rejects_inconsistent_metadata(schema, mutation):
+    from openmed.clinical.record_schemas import (
+        ClinicalRecordSchemaError,
+        validate_clinical_record,
+    )
+
+    value, context = fixture_context()
+    brief = build_clinical_brief(
+        value, context=context, model=SyntheticBoundGenerator()
+    )
+    record = brief.to_dict() if schema == "brief_audit" else brief.to_response()
+    mutation(record)
+    with pytest.raises(ClinicalRecordSchemaError) as caught:
+        validate_clinical_record(schema, record)
+    assert "Synthetic unknown value" not in str(caught.value)
