@@ -308,3 +308,16 @@ def test_unicode_output_uses_scalar_offsets_not_utf8_byte_offsets():
     assert brief.summary[citation["output_start"] : citation["output_end"]] == texts[-1]
     assert citation["output_end"] == len(brief.summary)
     assert citation["output_end"] < len(brief.summary.encode())
+
+
+@pytest.mark.parametrize("field", ["text", "reference"])
+def test_direct_generation_render_does_not_retain_malformed_private_values(field):
+    private = "SYNTHETIC_PRIVATE_IDENTIFIER\ud800"
+    claim = BriefGeneratedClaim(
+        private if field == "text" else "Symptoms improved.",
+        (private if field == "reference" else "synthetic:ref-0",),
+    )
+    with pytest.raises(LocalSummarizerError) as caught:
+        BriefGenerationResult((claim,)).render()
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
