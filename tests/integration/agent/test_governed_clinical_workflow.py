@@ -65,7 +65,7 @@ def test_interrupted_and_uninterrupted_runs_have_identical_evidence(
 def test_expiry_duplicate_and_broadened_projection_fail_before_dispatch() -> None:
     calls: list[str] = []
     digest = "sha256:" + "a" * 64
-    signer = ApprovalTokenSigner(KEY)
+    signer = ApprovalTokenSigner(KEY, clock=lambda: NOW - 1)
     verifier = ApprovalTokenVerifier(KEY, InMemoryApprovalNonceStore())
     expired = signer.issue(
         action_digest=digest,
