@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
