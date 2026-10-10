@@ -91,6 +91,15 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .transactions import (
+    ApprovedWriteEntry,
+    AssembledTransaction,
+    TransactionApproval,
+    TransactionAssemblyError,
+    TransactionLimits,
+    TransactionReviewerRole,
+    assemble_transaction,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -115,6 +124,14 @@ from .versions import (
     parse_fhir_version,
     r4_to_r5,
     r5_to_r4,
+)
+from .write_labels import (
+    FHIRWriteLabelPolicy,
+    NormalizedFHIRWrite,
+    WriteLabelError,
+    WriteLabelFinding,
+    normalize_proposed_resource,
+    validate_proposed_resource,
 )
 
 _BULK_EXPORTS = frozenset(
@@ -197,6 +214,19 @@ __all__ = [
     "FHIRWriteLimits",
     "FHIRWriteOutcome",
     "FHIRWriteStatus",
+    "ApprovedWriteEntry",
+    "AssembledTransaction",
+    "TransactionApproval",
+    "TransactionAssemblyError",
+    "TransactionLimits",
+    "TransactionReviewerRole",
+    "assemble_transaction",
+    "FHIRWriteLabelPolicy",
+    "NormalizedFHIRWrite",
+    "WriteLabelError",
+    "WriteLabelFinding",
+    "normalize_proposed_resource",
+    "validate_proposed_resource",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
