@@ -50,7 +50,14 @@ def artifact_digest(text: str) -> str:
     """Hash an exact local UTF-8 artifact without retaining its content."""
     if type(text) is not str:
         raise SummaryReviewError("invalid_artifact")
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+    encoded = None
+    try:
+        encoded = text.encode("utf-8", errors="strict")
+    except UnicodeError:
+        pass
+    if encoded is None:
+        raise SummaryReviewError("invalid_artifact")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def _digest(value: Any) -> str:

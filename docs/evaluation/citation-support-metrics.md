@@ -274,3 +274,6 @@ sealed private JSON. No raw review receipt or private artifact is written by the
 APIs. Synthetic unit and integration vectors cover stable round trips, stale spans
 and artifacts, rubric drift, duplicate rows, broken seals, incomplete review,
 disagreement resolution, diagnostic leakage and gate refusal.
+
+Direct artifact hashing also refuses malformed Unicode through a controlled,
+value-free error without retaining a chained decoder exception.

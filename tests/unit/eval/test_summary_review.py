@@ -494,3 +494,10 @@ def test_authenticated_unknown_request_schema_is_still_rejected():
     bundle["schema_version"] = "unsupported-review-version"
     with pytest.raises(SummaryReviewError):
         import_summary_review(bundle, **args)
+
+
+def test_direct_artifact_digest_refuses_malformed_unicode_without_input_context():
+    with pytest.raises(SummaryReviewError, match="^invalid_artifact$") as caught:
+        artifact_digest("Synthetic private artifact \ud800")
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
