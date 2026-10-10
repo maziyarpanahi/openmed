@@ -34,11 +34,166 @@ require a new review. The existing `EvidencePacket` and `BriefContext` remain
 **synthetic-only**.
 Reviewed-local evidence uses the separate opt-in admission contract below.
 
-The initial alignment policy is deliberately strict: each atomic generated claim
-must exactly equal one unique reviewed source span. Paraphrases, ambiguous spans,
+Plain-string generation retains the strict extraction path: each atomic claim
+must exactly equal one unique reviewed source span. An opt-in structured path
+also accepts paraphrases through explicit bindings (below). Ambiguous spans,
 missing profile fields, demographic evidence, contradictions and NLI abstentions
-are refused. This is not a general paraphrase-grounding system. Clinical axes come
-from reviewed evidence, never inferred from a generated answer.
+are refused. Clinical axes come from reviewed evidence, never from generation.
+
+## Explicit paraphrase bindings (v1)
+
+A trusted local backend may implement `generate_brief(evidence, *, mode)` instead
+of `summarize(text, *, mode)`. It receives a tuple of `BriefGenerationEvidence`
+records containing only reviewed de-identified spans, opaque `reference_id`s and
+original half-open Unicode-scalar source offsets. It returns
+`BriefGenerationResult(claims, schema_version=1)` from
+`openmed.clinical.summarize_backends`:
+
+For example, when the supplied synthetic evidence contains only the reviewed
+span `Symptoms improved after fluids.`, a deterministic test generator can
+propose the following paraphrase. A complete brief must also satisfy its profile.
+
+```python
+from openmed.clinical.summarize_backends import (
+    BriefGeneratedClaim,
+    BriefGenerationResult,
+)
+
+class SyntheticGenerator:
+    def generate_brief(self, evidence, *, mode):
+        # Contract illustration only; not a model or a clinical verifier.
+        return BriefGenerationResult((
+            BriefGeneratedClaim(
+                "Symptoms improved following fluid treatment.",
+                (evidence[0].reference_id,),
+            ),
+        ))
+```
+
+The result admits 1–64 atomic claims and at most 8,192 UTF-8 output bytes.
+Each claim requires exactly one reviewed reference. Empty, invented, repeated or
+multiple references, overlapping reviewed spans, compound claims, unknown schema
+versions and free-form structured results refuse. There is no similarity search
+or confidence-based evidence inference. Multi-reference synthesis needs a future
+version that defines how reviewed clinical axes combine; v1 does not guess.
+Direct generation-contract validation also refuses malformed Unicode with a
+value-free error that retains no chained decoder exception.
+
+Claim text is joined with one space; the composer computes output offsets and
+maps the selected reference to original source offsets. Explicit bindings grant
+only alignment: every claim still passes the assertion, temporal, experiencer,
+calibrated NLI, citation and privacy gates. No threshold changes. Successful
+audits add `generation_contract` and `claim_bindings` with reference digests;
+legacy exact-match packets remain unchanged. Original identifiers are checked
+against generated text, and the complete response is privacy-scanned.
+
+The bundled audit and response schemas and service response model admit this
+optional metadata. Both fields must occur together, and the binding sequence
+must match the citation count and order. Unknown metadata is refused. Legacy
+HTTP responses retain their original fields without added null placeholders.
+
+OpenMedKit's `ClinicalBriefGeneration` and `ClinicalBriefGeneratedClaim` use the
+same v1 wire fields (`schema_version`, `claims`, `text`, `reference_ids`). Supply
+`boundGeneration` and caller-authorized `reviewedEvidence` to
+`ClinicalBrief.validate` alongside the packet from the trusted on-device
+evidence/NLI evaluator. Native checks independently bind reference digests and
+source/output offsets and require entailment verdicts. The caller must validate
+atomicity and all reviewed clinical axes through that evaluator; model output
+cannot authorize evidence. With no explicit bindings, native validation keeps
+exact extraction. Built-in model adapters continue their existing contracts;
+this change adds no trained artifact, cloud fallback or clinical-validation claim.
+
+## Reviewed-local admission (v1)
+
+`ReviewedLocalEvidence` is a separate contract (`kind=reviewed_local_evidence`,
+`schema_version=1`, `provenance_class=reviewed_local`). Its source is the exact
+**de-identified** artifact whose spans will enter generation, not the original
+patient record. `reviewed_source_digest(text)` hashes those UTF-8 bytes. Offsets
+are half-open Unicode-scalar coordinates (`unicode_scalar_half_open`); Python
+code-point and Swift Unicode-scalar counts match, including supplementary
+characters. The packet contains one source digest and length, a policy digest,
+1–64 offset-only references, and a nullable `LocalReviewReceipt`. Metadata
+integers are non-negative signed 64-bit values on both platforms. Malformed
+Unicode source strings produce a controlled invalid-evidence refusal without
+retaining their encoding error or source content.
+
+Source/reference/receipt/authority IDs have the form `source:`, `ref:`,
+`receipt:`, or `authority:` followed by 64 lowercase hexadecimal characters.
+Applications must mint opaque IDs, never encode names, paths or credentials.
+Digests use `sha256:` plus 64 lowercase hexadecimal characters. Parsers reject
+unknown keys, text payloads, duplicate reference IDs and invalid span boundaries.
+`to_dict()`, `to_json()` and `from_json()` round-trip controlled metadata only.
+Decoding or changing a provenance marker never constitutes admission.
+
+A receipt contains opaque receipt and authority IDs, the packet's
+`evidence_digest`, and UTC Unix `issued_at`/`expires_at` seconds. The digest binds
+all version, provenance, source, policy, reference and offset fields, excluding
+the receipt itself. The receipt is a **locator**, not a bearer credential or a
+self-authenticating signature. The application must supply these narrow local
+protocols through `ReviewedLocalBriefContext`:
+
+- `CurrentLocalSource.current_digest(source_id)` authorizes source access and
+  returns the current de-identified source digest, or `None`.
+- `ReviewAuthorityVerifier.verify(receipt, evidence_digest=..., now=...)`
+  resolves an independently held review record, verifies the **entire** receipt
+  and caller/reviewer authority, and checks current revocation. It returns
+  `ReviewAuthorityStatus.CURRENT`, `REVOKED`, or `MISMATCHED`. Booleans and
+  caller-controlled approval markers are refused. No default authority exists.
+
+The context also supplies the ordinary content digest, reviewed `BriefFact`s,
+calibrated NLI and privacy callbacks, plus an optional trusted clock. Recompute
+`brief_policy_fingerprint(text, facts, profile)` and review the new packet digest
+in the application's review store. Never manufacture an approval merely to make
+an example pass. A minimal application composition, after actual local review,
+is:
+
+```python
+from openmed.clinical import ReviewedLocalBriefContext, build_clinical_brief
+
+context = ReviewedLocalBriefContext(
+    packet=reviewed_packet,             # loaded from authorized local custody
+    content_digest=reviewed_content_digest,
+    facts=reviewed_facts,
+    nli_predict=local_calibrated_nli,
+    thresholds=local_thresholds,
+    privacy_detector=local_privacy_detector,
+    source=authorized_source_store,
+    authority=local_review_registry,
+)
+brief = build_clinical_brief(deidentified_result, model="extractive", context=context)
+# Protected response: brief.to_response(); value-free audit: brief.to_dict().
+```
+
+`admit_reviewed_local_evidence()` checks source/policy bindings, receipt existence,
+full digest binding, issuance/expiry, current source custody and review authority.
+After source and review callbacks return, the trusted clock is read again:
+expired receipts, invalid clocks and time rollback fail before generation.
+The brief calls it at the evidence stage and again immediately before generation;
+an admitted record is not a reusable authorization token. Local stores must
+provide consistent reads and enforce their own concurrent-update/access policy.
+Only admitted spans enter the generator; all existing NLI, citation and privacy
+guards still run. Successful audit `metrics.reviewed_evidence` contains only the
+value-free contract, and the generated output still requires human review.
+
+Refusals are typed codes: `invalid_reviewed_evidence`, `review_receipt_missing`,
+`review_receipt_expired`, `review_receipt_mismatched`, `review_receipt_revoked`,
+`review_authority_unavailable`, `review_source_unavailable`,
+`review_source_changed`, and `review_policy_changed`. A receipt with a future
+issuance time is mismatched; expiry is inclusive (`now >= expires_at`). Store and
+verifier exceptions are discarded without copying their messages or chains.
+Changed axes/profile bindings require fresh review. Unavailable stores fail
+closed before generation. Ordinary synthetic behavior and defaults are retained.
+
+OpenMedKit exposes the same v1 metadata, digest and offset convention through
+`ReviewedLocalEvidence.fromJSON`, `toJSON`, and `admit`. The
+`ClinicalBrief.reviewedLocal` adapter admits and rechecks before calling a supplied
+**on-device** generator over reviewed spans, then validates the supplied complete
+local evidence/NLI evaluation through the existing native guards. Its current
+policy digest must be recomputed by the trusted local evaluator; the SDK does
+not mint that policy or review. This adds no inference backend, reviewer UI,
+training prerequisite, cloud fallback, or autonomous clinical action. Both
+platforms' fixtures are wholly synthetic even though they exercise the
+`reviewed_local` provenance class; they do not qualify real clinical use.
 
 ## Reviewed-local admission (v1)
 

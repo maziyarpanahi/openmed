@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add opt-in v1 explicit evidence bindings for paraphrased clinical brief claims,
+  bounded local generation, traceable offsets and unchanged verification/privacy
+  gates, with aligned OpenMedKit validation and synthetic offline tests (#3654).
+
 - Add offline qualification of caller-supplied clinical NLI artifacts,
   separate development/held-out evaluation, digest-bound receipts and a
   drift-checked BriefContext callback; synthetic data never establishes

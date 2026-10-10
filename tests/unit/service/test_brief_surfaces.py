@@ -79,6 +79,28 @@ def test_rest_python_mcp_and_schema_parity(caplog):
     assert "dehydration" not in json.dumps(records)
 
 
+def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
+    from jsonschema import Draft202012Validator
+
+    from openmed.clinical.brief import build_clinical_brief
+    from tests.unit.clinical.test_brief_bindings import SyntheticBoundGenerator
+
+    value, context = fixture_context()
+    expected = build_clinical_brief(
+        value, context=context, model=SyntheticBoundGenerator()
+    ).to_response()
+    Draft202012Validator(brief_response_schema()).validate(expected)
+    monkeypatch.setattr(
+        "openmed.service.brief.brief_response", lambda *a, **kw: expected
+    )
+    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+        response = client.post(
+            "/brief", json={"text": "Synthetic note", "model": "extractive"}
+        )
+    assert response.status_code == 200
+    assert response.json() == expected
+
+
 @pytest.mark.parametrize(
     "change",
     [
