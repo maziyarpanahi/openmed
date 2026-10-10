@@ -772,6 +772,29 @@
             )
         }
 
+        /// Generate and verify a local brief before exposing any output.
+        /// The evaluator must execute the complete reviewed-evidence/NLI pipeline
+        /// on-device. It must not call a cloud service or manufacture approvals.
+        public func brief(
+            source: String,
+            originalIdentifiers: [String],
+            evaluate: @Sendable (String, String) async throws -> Data,
+            privacyCheck: @Sendable (String) throws -> Bool
+        ) async throws -> ClinicalBrief {
+            guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024 else {
+                throw ClinicalBriefError.invalidPacket
+            }
+            do {
+                let result = try await complete(OpenMedMapleRequest(task: .brief, document: source))
+                guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
+                let packet = try await evaluate(source, summary)
+                return try ClinicalBrief.validate(
+                    evaluationJSON: packet, source: source,
+                    generatedSummary: summary, originalIdentifiers: originalIdentifiers,
+                    privacyCheck: privacyCheck)
+            } catch let error as ClinicalBriefError { throw error } catch is CancellationError { throw CancellationError() } catch { throw ClinicalBriefError.invalidPacket }
+        }
+
         /// Releases model ownership. Call before switching to another large
         /// on-device model.
         public func unload() {

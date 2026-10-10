@@ -43,6 +43,7 @@ PIILanguage = Literal[
     "mr",
     "ne",
     "or",
+    "pl",
     "pa",
     "ta",
     "te",
@@ -66,6 +67,7 @@ PIILanguage = Literal[
     "xh",
     "zh",
     "uk",
+    "ur",
     "cs",
     "el",
     "vi",
@@ -89,6 +91,16 @@ class AnalyzeRequest:
     sentence_clean: bool = False
     use_fast_tokenizer: bool = True
     keep_alive: Optional[KeepAliveValue] = None
+
+
+@dataclass(frozen=True)
+class BriefRequest:
+    """Typed clinical brief request; review references are opaque handles."""
+
+    text: str
+    model: Literal["mlx", "extractive", "maple", "maple-preview"] = "mlx"
+    profile: str = "bhc"
+    review_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -173,6 +185,9 @@ def _request_field_names(request_type: type[Any]) -> frozenset[str]:
 
 
 CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
+    "brief": ClientEndpoint(
+        method="POST", path="/brief", request_fields=_request_field_names(BriefRequest)
+    ),
     "analyze": ClientEndpoint(
         method="POST",
         path="/analyze",
@@ -245,6 +260,22 @@ class OpenMedClient(JourneyWorkflowClientMixin):
     Non-2xx responses, including unfollowed redirects, raise
     :class:`OpenMedAPIError` for both JSON and streaming requests.
     """
+
+    def brief(
+        self,
+        text: str,
+        *,
+        model: str = "mlx",
+        profile: str = "bhc",
+        review_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Request a guarded local brief; returned summary is protected content."""
+        return self._post(
+            "/brief",
+            BriefRequest(text, model, profile, review_id),
+            request_id=request_id,
+        )
 
     def __init__(
         self,

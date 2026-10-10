@@ -102,7 +102,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Apple Silicon కాని హోస్ట్‌లపై, MLX మోడల్ �
 
 ---
 
-## బహుభాషా PII (38 మద్దతు ఉన్న మార్గాలు; 35 మోడల్ మద్దతుతో)
+## బహుభాషా PII (42 మద్దతు ఉన్న మార్గాలు; 35 మోడల్ మద్దతుతో)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` మరియు `tr` భాషల్లో వెలికితీత మరియు డీ-ఐడెంటిఫికేషన్, మొత్తం **నమోదిత PII మోడల్ కేటలాగ్**.
 
@@ -393,7 +393,7 @@ OpenMed SDK సోర్స్ [Apache-2.0 License](LICENSE) క్రింద 
 
 OpenMed మీకు ఉపయోగకరంగా ఉంటే, ఒక స్టార్ ఇతరులు దాన్ని కనుగొనడంలో సహాయపడుతుంది.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

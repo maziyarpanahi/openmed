@@ -2,19 +2,19 @@
 
 OpenMed 集成了精选的生物医学模型、高级去标识化、多模态输入、结构化健康数据工具以及单次调用编排，帮助你无需处理繁杂的基础设施即可交付临床自然语言处理工作流。本文档让可复制的代码片段和工作流触手可及：所有章节均以 Markdown 为基础，支持搜索，并针对快速浏览以及复制到笔记本进行了优化。
 
-OpenMed `2.5.0` 为 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署界面延续稳定的 v2 契约，并整合策略感知的去标识化、扩展的临床与结构化数据工作流、广泛的多语言 PII 覆盖以及失败即关闭的发布证据：
+OpenMed `3.0.0` 候选版本新增版本化的纵向患者 Journey 契约和受保护的本地临床接口，并提供 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署文档。功能覆盖因平台而异；升级前请阅读 [2.5 到 3.0 迁移指南](/docs/migration/2.5-to-3.0/)。新模型训练和检查点发布属于可选研究，不是功能或软件库发布的前提。候选版本整合策略感知的去标识化、临床与结构化数据工作流、多语言 PII 支持以及失败即关闭的发布证据：
 
 - **策略感知的去标识化**：提供签名审计报告、可复现性哈希、审查包、脱敏预览和发布门禁。
 - **多模态与结构化输入**：覆盖 OCR、图像、PDF、DOCX、EPUB、vCard/iCalendar、DICOM、CSV/TSV、JSONL 聊天记录、HL7 v2、CDA/C-CDA、FHIR 操作以及 FHIR Bulk NDJSON。
 - **Python、Swift、Kotlin/Android、REST、gRPC、React Native、TypeScript 和浏览器路径**：包括 OpenMedKit、类型化 REST 客户端、ONNX/WebGPU 和 Transformers.js 导出包。
-- **34 个受支持的 PII 语言代码：am、ar、as、bn、cs、da、de、el、en、es、fr、he、hi、id、it、ja、ko、mr、nl、no、or、pt、ro、ru、sv、sw、ta、te、th、tr、uk、xh、zh 和 zu**：俄语使用文档化的多语言默认模型占位符，孟加拉语、中文和泰米尔语使用专用注册表条目，并提供区域感知的验证与替代值生成。用户配置的 Indic NER 适配器还可添加四条可选路由，并可服务阿萨姆语、孟加拉语、印地语、马拉地语、奥里亚语、泰米尔语和泰卢固语。仅提供证件号验证的区域仍有额外覆盖。
+- **42 个受支持的 PII 语言代码：am、ar、as、bn、cs、da、de、el、en、es、fa、fr、gu、he、hi、id、it、ja、kn、ko、ml、mr、nl、no、or、pa、pl、pt、ro、ru、sv、sw、ta、te、th、tr、uk、ur、vi、xh、zh 和 zu**：俄语使用文档化的多语言默认模型占位符，孟加拉语、中文和泰米尔语使用专用注册表条目，并提供区域感知的验证与替代值生成。用户配置的 Indic NER 适配器可服务阿萨姆语、孟加拉语、古吉拉特语、印地语、卡纳达语、马拉雅拉姆语、马拉地语、奥里亚语、旁遮普语、泰米尔语和泰卢固语。仅提供证件号验证的区域仍有额外覆盖。
 - **发布证据**：包括泄漏热力图、模型评分卡、阈值扫描、k-匿名性/l-多样性/t-接近性、效用损失、SBOM、签名镜像、SLSA 来源证明、密钥扫描和可复现依赖锁。
 
 ## 你将获得什么
 
 - **精选模型注册表** — 可发现的 Hugging Face 模型，并包含领域、大小和设备建议等元数据。
 - **单行编排** — `analyze_text` 封装验证、推理和格式化，可用于脚本、笔记本或服务。
-- **PII 检测与去标识化** — 兼顾 HIPAA 要求的智能实体合并、策略配置文件、签名审计报告和生产级去标识化。
+- **PII 检测与去标识化** — 兼顾 HIPAA 要求的智能实体合并、策略配置文件、签名审计报告和面向部署的去标识化工作流。
 - **Apple Silicon 与移动端加速** — 基于 MLX 的 Python 推理，以及通过 OpenMedKit 实现的 Swift 原生和 Android/Kotlin 应用集成。
 - **REST 服务** — FastAPI 端点包括 `/livez`、`/readyz`、`/analyze`、`/pii/extract`、`/pii/deidentify`，并支持预热池、批处理、指标和类型化 Python/TypeScript 客户端。
 - **浏览器与 React Native 导出** — 面向浏览器运行时中 Transformers.js 词元分类的 ONNX/WebGPU 包，以及移动应用使用的 React Native 桥接。
@@ -51,7 +51,8 @@ uv run python examples/pii_model_comparison.py
 
 ## 最新版本亮点
 
-- [OpenMed 2.5.0 发布说明](/docs/release/v2.5.0/) — 当前安装坐标、兼容性指南、平台覆盖范围和验证要求。
+- [OpenMed 3.0.0 迁移指南](/docs/migration/2.5-to-3.0/) — 发布后预期的安装坐标、兼容性指南和验证要求；并非已经发布的声明。平台覆盖范围请参阅[功能地图](/docs/feature-map/)。
+- [OpenMed 2.5.0 发布说明](/docs/release/v2.5.0/) — 上一个稳定版本的历史覆盖范围和安装坐标。
 - [OpenMed 1.9.1 发布说明](/docs/release/v1.9.1/) — 最后一个 1.9 补丁版本的历史 Swift 打包、Android 发布强化和依赖安全修复。
 - [OpenMed 1.8.0 发布说明](/docs/release/v1.8.0/) — 历史跨平台运行时与服务版本清单。
 - [OpenMed v1.6-v1.7 功能覆盖](/docs/release/v1.6-v1.7-feature-coverage/) — 示例、文档、网站和源代码模块的历史覆盖清单。
@@ -65,7 +66,7 @@ uv run python examples/pii_model_comparison.py
 
 1. [快速开始](/docs/zh/getting-started/) — 最快建立可用环境并运行可复制脚本的路径。
 2. [功能地图](/docs/feature-map/) — 查看每项能力如何映射到代码。
-3. [OpenMed 2.5.0 发布说明](/docs/release/v2.5.0/) — 查看当前安装坐标、兼容性契约和验证要求。
+3. [OpenMed 3.0.0 迁移指南](/docs/migration/2.5-to-3.0/) — 升级前查看契约变更和验证要求。
 4. 核心指南：
     - [文本分析辅助函数](/docs/analyze-text/)：单次调用推理。
     - [REST 服务（MVP）](/docs/rest-service/)：容器化 HTTP 端点。

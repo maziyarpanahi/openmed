@@ -273,6 +273,17 @@ from openmed.eval.suites.omop_quality import (
     FrozenOmopQualityFixture,
     load_frozen_omop_quality_fixture,
 )
+from openmed.eval.suites.openmed_synth import (
+    OPENMED_SYNTH,
+    OPENMED_SYNTH_DATASET_CARD,
+    OPENMED_SYNTH_DEFAULT_CORPUS_SIZE,
+    OPENMED_SYNTH_DEFAULT_SEED,
+    OPENMED_SYNTH_REFERENCE_MODEL,
+    load_openmed_synth_fixtures,
+    openmed_synth_reference_runner,
+    openmed_synth_suite_metadata,
+    run_openmed_synth_benchmark,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -303,6 +314,22 @@ from openmed.eval.suites.shield import (
     run_clinical_phi_shield_benchmark,
     shield_suite_metadata,
 )
+from openmed.eval.suites.temporal_consistency import (
+    SCORED_AXES as TEMPORAL_CONSISTENCY_AXES,
+)
+from openmed.eval.suites.temporal_consistency import (
+    TEMPORAL_CONSISTENCY,
+    TEMPORAL_CONSISTENCY_FIXTURE_PATH,
+    TEMPORAL_CONSISTENCY_SCHEMA_VERSION,
+    AxisAccuracy,
+    TemporalConsistencyFixture,
+    TemporalConsistencyResult,
+    evaluate_temporal_consistency,
+    load_temporal_consistency_fixtures,
+    run_temporal_consistency_suite,
+    score_temporal_consistency,
+    temporal_consistency_metadata,
+)
 from openmed.eval.suites.temporal_tlinks import (
     TEMPORAL_TLINK_FIXTURE_PATH,
     TEMPORAL_TLINK_FIXTURE_SCHEMA_VERSION,
@@ -332,6 +359,7 @@ PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
+    OPENMED_SYNTH,
     I2B2,
     N2C2,
     SHIELD,
@@ -351,6 +379,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     INDIC_NAME_CONSISTENCY,
     INDIA_CLINICAL_PHI_LEAKAGE,
     INDIA_SURROGATE_CONSISTENCY,
+    TEMPORAL_CONSISTENCY,
 )
 SUPPORTED_SUITES: tuple[str, ...] = (
     DEFAULT_SUITES
@@ -380,6 +409,14 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         )
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == OPENMED_SYNTH:
+        return load_openmed_synth_fixtures(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == GROUNDING_CALIBRATION:
         from openmed.eval.suites.grounding_calibration import load_grounding_gold
 
@@ -448,10 +485,41 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
             kwargs.get("manifest_path"),
             kwargs.get("fixture_path", kwargs.get("path")),
         )
+    if suite == TEMPORAL_CONSISTENCY:
+        return list(load_temporal_consistency_fixtures(kwargs.get("path")))
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
+_TASK_FALLBACKS = {
+    GOLDEN: "clinical_deidentification",
+    OPENMED_SYNTH: "clinical_deidentification",
+    I2B2: "clinical_deidentification",
+    N2C2: "clinical_deidentification",
+    SHIELD: "clinical_deidentification",
+    POLICY_COMPLIANCE: "privacy_policy_compliance",
+    MULTIMODAL_DICOM: "dicom_deidentification",
+    CODE_MIXED_ROUTING: "code_mixed_privacy_routing",
+    INDIA_HEALTH_ID_LEAKAGE: "health_identifier_leakage",
+    INDIAN_MULTI_ID: "multi_identifier_detection",
+    INDIC_NAME_CONSISTENCY: "name_surrogate_consistency",
+    INDIA_CLINICAL_PHI_LEAKAGE: "clinical_deidentification",
+    INDIA_SURROGATE_CONSISTENCY: "identifier_surrogate_consistency",
+    TEMPORAL_CONSISTENCY: "temporal_assertion_consistency",
+    GROUNDING_CALIBRATION: "grounding_calibration",
+    CLINICAL_DOMAIN_COVERAGE: "clinical_domain_coverage",
+}
+
+
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
+    """Return registry metadata with an explicit, non-placeholder task."""
+    suite = validate_suite_name(name)
+    metadata = _suite_metadata(suite, **kwargs)
+    if not metadata.get("task"):
+        metadata["task"] = _TASK_FALLBACKS[suite]
+    return metadata
+
+
+def _suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
     if suite == CLINICAL_DOMAIN_COVERAGE:
@@ -481,6 +549,14 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         )
 
         return grounding_calibration_metadata(**kwargs)
+    if suite == OPENMED_SYNTH:
+        return openmed_synth_suite_metadata(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
@@ -510,6 +586,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return india_clinical_leakage_metadata(**kwargs)
     if suite == INDIA_SURROGATE_CONSISTENCY:
         return india_surrogate_consistency_metadata(**kwargs)
+    if suite == TEMPORAL_CONSISTENCY:
+        return temporal_consistency_metadata()
     return {"suite": suite}
 
 
@@ -629,6 +707,11 @@ __all__ = [
     "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
+    "OPENMED_SYNTH",
+    "OPENMED_SYNTH_DATASET_CARD",
+    "OPENMED_SYNTH_DEFAULT_CORPUS_SIZE",
+    "OPENMED_SYNTH_DEFAULT_SEED",
+    "OPENMED_SYNTH_REFERENCE_MODEL",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
@@ -655,6 +738,13 @@ __all__ = [
     "INDIAN_MULTI_ID",
     "INDIC_NAME_CONSISTENCY",
     "INDIA_SURROGATE_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY",
+    "TEMPORAL_CONSISTENCY_AXES",
+    "TEMPORAL_CONSISTENCY_FIXTURE_PATH",
+    "TEMPORAL_CONSISTENCY_SCHEMA_VERSION",
+    "AxisAccuracy",
+    "TemporalConsistencyFixture",
+    "TemporalConsistencyResult",
     "INDIA_CLINICAL_SUITE",
     "INDIC_ENCODER_RECALL_DELTA",
     "RELATIONS",
@@ -696,6 +786,10 @@ __all__ = [
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
+    "load_openmed_synth_fixtures",
+    "openmed_synth_reference_runner",
+    "openmed_synth_suite_metadata",
+    "run_openmed_synth_benchmark",
     "run_domain_coverage",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",
@@ -835,5 +929,10 @@ __all__ = [
     "load_india_surrogate_consistency_fixtures",
     "run_india_clinical_suite_report",
     "run_india_surrogate_consistency_gate",
+    "evaluate_temporal_consistency",
+    "load_temporal_consistency_fixtures",
+    "run_temporal_consistency_suite",
+    "score_temporal_consistency",
+    "temporal_consistency_metadata",
     "validate_name_matching_mode",
 ]
