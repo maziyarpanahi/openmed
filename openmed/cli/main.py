@@ -600,6 +600,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .brief import add_brief_command
 
     add_brief_command(subparsers)
+    from .nli_qualification import add_nli_qualification_command
+
+    add_nli_qualification_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
