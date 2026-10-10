@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add injected, bounded FHIR R4 write execution for existing conditional plans
+  and assembled transactions. Bind exact wire details to consumed approval
+  receipts, repeat local authorization and lineage gates, preserve predicates,
+  version preconditions and idempotency keys, and require durable attempt
+  reservations. Ambiguous outcomes require reconciliation without retry or
+  automatic compensation (#3662).
 - Added deterministic, bounded FHIR R4 transaction assembly for approved
   creates and updates, preserving conditional/version requests and recording
   value-free Provenance with exact canonical Bundle digests (#3771).

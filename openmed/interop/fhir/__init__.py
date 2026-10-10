@@ -188,7 +188,32 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
     }
 )
 
+_WRITE_CLIENT_EXPORTS = frozenset(
+    {
+        "FHIRCredentialCustody",
+        "FHIRHTTPResponse",
+        "FHIRPreparedWrite",
+        "FHIRTransportRequest",
+        "FHIRWriteClient",
+        "FHIRWriteError",
+        "FHIRWriteLedger",
+        "FHIRWriteLimits",
+        "FHIRWriteOutcome",
+        "FHIRWriteStatus",
+    }
+)
+
 __all__ = [
+    "FHIRCredentialCustody",
+    "FHIRHTTPResponse",
+    "FHIRPreparedWrite",
+    "FHIRTransportRequest",
+    "FHIRWriteClient",
+    "FHIRWriteError",
+    "FHIRWriteLedger",
+    "FHIRWriteLimits",
+    "FHIRWriteOutcome",
+    "FHIRWriteStatus",
     "ApprovedWriteEntry",
     "AssembledTransaction",
     "TransactionApproval",
@@ -353,4 +378,6 @@ def __getattr__(name: str) -> Any:
         return getattr(import_module(".bulk", __name__), name)
     if name in _JOURNEY_ROUNDTRIP_EXPORTS:
         return getattr(import_module(".journey_roundtrip", __name__), name)
+    if name in _WRITE_CLIENT_EXPORTS:
+        return getattr(import_module(".write_client", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
