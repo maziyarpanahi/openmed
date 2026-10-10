@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security fixes
+
+- Align Python and OpenMedKit summary leakage guards for Unicode variants,
+  unspaced scripts, short identifiers and recognized Hangul suffixes. Reuse
+  detector normalization, retain value-free counts and source digests, and add
+  shared synthetic brief/refusal parity controls (#3729).
+
 ### Changed
 
 - Select explicit extractive brief sentences by unique reviewed fact coverage,
@@ -52,6 +59,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
+
+- Add versioned synthetic multilingual full-pipeline clinical-brief regressions
+  for Latin, RTL, Indic and code-switched evidence, public surface/native packet
+  parity, protected-span offset round trips and governed conflict refusals.
+  Reports separate contract parity from unsupported language capabilities and
+  unevaluated model quality. Accept unset optional replacement aliases without
+  weakening populated-alias consistency checks (#3659).
+
+- Added passive preliminary FHIR R4 clinical-brief documents in Python and
+  OpenMedKit, preserving evidence commitments, citation order, digests and
+  human-review limitations with closed-subset round trips, explicit conversion
+  losses and final narrative/metadata privacy gates (#3658).
+- Fixed-order clinical brief composition over explicitly reviewed synthetic
+  evidence, with local generation, calibrated NLI integration, exact citations,
+  rendered-packet privacy checks and value-free review/provenance output.
 
 - Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
   empty interruption outcomes, CLI/service parity, and native late-result guards.

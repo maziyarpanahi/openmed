@@ -306,6 +306,12 @@ The summary and the assembled protected response both pass the configured privac
 detector. Python outbound sockets are blocked; trusted callbacks are not isolated
 plugins and must not invoke external processes/services themselves.
 
+The shared [source-surface leakage guard](summarization.md) runs before the
+caller-supplied detector. It checks supported Unicode variants, unspaced script
+surfaces and recognized Hangul suffixes. A match refuses with `privacy`, without
+returning a partial summary. Inflected names outside those rules still require
+the separate detector and human review.
+
 `refusal_reason` is a `BriefRefusal` enum. Refusals contain no partial summary.
 Exceptions from backends are not copied into reports or chained into public
 errors. The `stages` trace records entered stages; on refusal the last stage
@@ -528,3 +534,138 @@ callbacks must not launch external network clients or log source text. A context
 with `code="ready"` admits evidence to the guarded composer; a successful brief
 still has `status="needs_review"`. Synthetic callbacks and fixtures establish
 contract behavior only, not clinical validation or model qualification.
+
+## Passive FHIR R4 documents
+
+`openmed.clinical.exporters.fhir.export_brief_document()` projects a successful
+brief into the closed `openmed.clinical.brief.fhir-r4.v1` subset. It runs offline
+without a transport, SMART credentials, models or EHR writes. Refused results,
+missing or changed provenance, and any requested finalization are rejected.
+The current `ClinicalBrief` result always requires review: approved **source
+evidence** does not approve the generated document.
+
+```python
+from datetime import datetime, timezone
+from openmed.clinical.exporters.fhir import (
+    export_brief_document,
+    import_brief_document,
+)
+
+# brief is an existing successful ClinicalBrief. local_detector must be a
+# configured local leakage detector; an empty test detector is not a PHI guard.
+document = export_brief_document(
+    brief,
+    recorded_at=datetime.now(timezone.utc),
+    privacy_detector=local_detector,
+    original_identifiers=original_identifier_tokens,
+)
+audit = document.to_dict()         # codes, counts, offsets/digests; no narrative
+protected = document.to_response() # protected narrative; do not log
+restored = import_brief_document(
+    protected,
+    privacy_detector=local_detector,
+    original_identifiers=original_identifier_tokens,
+)
+assert restored.to_response() == protected
+```
+
+The response has `bundle`, `document_reference` and `document_url`:
+
+- The document Bundle includes a **preliminary** Composition first, its local
+  Device author, and one evidence DocumentReference per cited claim. Every
+  Composition reference resolves inside the Bundle. The Bundle has a deterministic
+  identifier bound to the projected metadata and explicit UTC export time.
+- Composition narrative preserves the summary. Claim sections follow citation
+  order and retain Unicode-scalar output/source offsets in the controlled metadata
+  extension. A final Limitations section preserves the human-review disclaimer.
+- Evidence attachments contain only `urn:sha256` commitments, fixed titles and
+  media types. They contain no source payloads, private paths, original identifiers
+  or remote locations. Commitments cannot retrieve source text; applications must
+  resolve evidence through their own authorized local evidence store.
+- The separate document DocumentReference is `current` with `docStatus=preliminary`.
+  Its attachment URL equals `document_url`, an opaque local identifier for the
+  Bundle in this response. No bytes are uploaded or external URLs dereferenced.
+- The controlled extension preserves the brief, summary, source, provenance and
+  policy digests, evidence identifiers/hashes, citations, queued review status and
+  conversion-loss codes. It cannot attest approval or reconstruct a ClinicalBrief.
+
+Conversion losses explicitly report unavailable profile section names and omitted
+source payloads, evaluation metrics, detailed review packets and model details.
+The brief contract does not expose profile section boundaries, so the exporter
+preserves claim order without inventing profile headings or clinical context.
+Dates are explicit **export times**, never inferred patient dates. No patient
+identity or clinical attester is synthesized.
+
+This subset follows the R4 [Composition](https://hl7.org/fhir/R4/composition.html),
+[DocumentReference](https://hl7.org/fhir/R4/documentreference.html) and
+[document Bundle](https://hl7.org/fhir/R4/documents.html) structures; it does not
+claim full R4, IPS, US Core or national implementation-guide conformance.
+`import_brief_document()` is the subset validator: it rejects unknown fields,
+altered narrative, unsafe status, attachment changes, external/dangling references,
+write requests and changed section order. Imported commitments are structural
+evidence links, not authentication of an external author or validation against
+an unavailable source store.
+
+Both directions require the configured detector on decoded string surfaces and
+the assembled document, including extensions and attachment metadata. All
+findings block output. Original identifier tokens are also prohibited across
+those surfaces. `BriefDocumentError` contains only a controlled code and never
+chains callback exceptions. `repr(document)` and `to_dict()` omit narrative;
+only explicit `to_response()` returns it. These gates supplement upstream
+de-identification and do not establish model quality or authorize clinical use.
+
+OpenMedKit mirrors this subset with `ClinicalBriefFHIRDocument.export(brief,
+recordedAt:date, originalIdentifiers:tokens, privacyCheck:localCheck)` and
+`ClinicalBriefFHIRDocument.validate(documentJSON:data,
+originalIdentifiers:tokens, privacyCheck:localCheck)`. `responseJSON()` is
+protected output; `auditJSON()` and the description are value-free. A shared
+synthetic fixture checks Python/Swift byte-identical export and round trips.
+Native callbacks are trusted on-device application code; no remote fallback or
+EHR transport is provided.
+
+## Multilingual regression boundary
+
+The version-1 synthetic corpus in
+`tests/fixtures/eval/summaries/multilingual_briefs.json` covers English and French
+Latin text, Arabic RTL text, Hindi combining marks, and English/Hindi code
+switching. It reuses the existing per-language identifier traps and language-pack
+registry. Fixed local generation, NLI and privacy providers exercise the complete
+composer and CLI, REST, Python client and MCP adapters offline. Shared packets
+are recomputed by the public Python composer and validated by OpenMedKit; native
+citation offsets use Unicode scalars, matching Python code points, rather than
+Swift Characters or UTF-16 units.
+
+The fixture preparation explicitly normalizes with `normalize_for_detection()`
+(NFKC and digit folding), retains its original offset map, and gold-masks the
+synthetic identifier. Citation tests project each post-mask source span through
+the de-identification map and then the normalization map back to raw source;
+normalizing that raw slice reproduces the exact cited claim. Every interior
+replacement boundary is rejected. Normalization is an upstream preparation step,
+not an implicit composer transformation. Gold masking does not measure identifier
+detection recall. Populated replacement aliases must agree; an unset optional
+`PIIEntity.surrogate` does not conflict with its `redacted_text`.
+
+Preserved negated, family and historical facts retain their reviewed axes and
+require human review. Generated negation, family-to-patient or temporal changes
+are refused by exact-source alignment as `unsupported_claim`; the suite does not
+claim semantic conflict detection for paraphrases. Fixed NLI contradictions yield
+`nli_rejected`, and a provider without declared fixture-pair support yields
+`nli_unavailable`. Refusals contain no partial summary or citations. Changed
+source digests or annotations invalidate the evidence identity and review.
+
+The regression report separates `contract_parity` from `model_quality`, which is
+always `not_evaluated`. It contains only counts, digests and controlled codes.
+`clinical_language_support` remains `not_established`, even if a packet passes.
+A language pack or surrogate locale does not establish summarizer, NLI or
+atomicity support. The composer currently has no language argument and uses the
+English claim policy; explicit non-English calls to `segment_summary_claims()`
+remain `unsupported_language`. The report records that unsupported atomicity
+separately from synthetic transport parity. No model weights, clinical benchmark,
+cloud fallback or release qualification are added.
+
+Run the focused offline slice with:
+
+```sh
+.venv/bin/python -m pytest tests/unit/clinical/test_multilingual_brief.py tests/integration/test_multilingual_clinical_brief.py tests/unit/clinical/test_citation_boundaries.py -q
+cd swift/OpenMedKit && swift test
+```
