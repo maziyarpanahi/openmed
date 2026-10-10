@@ -387,6 +387,39 @@ def test_verification_provider_properties_cannot_leak_exception_text(failure, ca
     with pytest.raises(LocalNLIError) as raised:
         summarize(_nli_source(), model="extractive", verify=Backend())
     assert private not in str(raised.value)
-    assert raised.value.__suppress_context__
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
     captured = capsys.readouterr()
     assert private not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_summary_nli_cancellation_stops_remaining_claims_and_discards_late_result(
+    failure,
+):
+    from openmed.clinical.brief_cancellation import BriefCancellation, BriefInterrupted
+    from openmed.clinical.summarize import summarize_deidentified
+
+    request = BriefCancellation()
+    calls = []
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            calls.append(1)
+            request.cancel()
+            if failure:
+                raise RuntimeError("synthetic-private-sentinel")
+            return {"label": "entailment", "score": 0.9}
+
+    with pytest.raises(BriefInterrupted) as caught:
+        summarize_deidentified(
+            _nli_source(),
+            model=lambda _: "The patient has pneumonia. The patient has no pneumonia.",
+            verify=Backend(),
+            cancellation=request,
+        )
+    assert calls == [1]
+    assert caught.value.__context__ is None
+    assert "synthetic-private-sentinel" not in str(caught.value)

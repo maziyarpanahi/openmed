@@ -106,6 +106,10 @@ even for caller-owned backends, and local inference failures have value-free
 messages. Backends, calibration thresholds and the clinical brief pipeline
 are unchanged. These Python hooks add no REST, MCP or CLI operation.
 
+Controlled verification refusals discard private provider/encoding exception
+context. When a direct de-identified summary supplies a cancellation context,
+the hook checks it before and after each local NLI call and emits no late result.
+
 ## MedNLI data policy
 
 MedNLI is DUA-gated and eval-only. The BigBio mirror is represented by a gated

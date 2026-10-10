@@ -67,6 +67,24 @@ def test_hook_record_rejects_malformed_or_forged_metadata(override):
         ClaimVerification.from_dict(payload)
 
 
+@pytest.mark.parametrize("invalid", ["claim", "source"])
+def test_hook_refuses_invalid_encoding_without_retaining_protected_text(invalid):
+    from openmed.clinical.nli import _verify_claim_spans
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    private = "synthetic-private-sentinel\ud800"
+    source = private if invalid == "source" else "Synthetic source."
+    claim = private if invalid == "claim" else "Synthetic claim."
+    with pytest.raises(
+        LocalNLIError, match="verification text encoding is invalid"
+    ) as caught:
+        _verify_claim_spans([claim], source, [(0, len(source))], option="heuristic")
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert not hasattr(caught.value, "object")
+    assert "synthetic-private-sentinel" not in str(caught.value)
+
+
 def test_nli_returns_the_documented_value_free_shape() -> None:
     result = nli(
         "Synthetic patient has pneumonia.",

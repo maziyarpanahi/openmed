@@ -244,7 +244,7 @@ class SummarizationResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible result without source PHI metadata."""
 
-        payload = {
+        payload: dict[str, Any] = {
             "summary": self.summary,
             "leakage_check": self.leakage_check.to_dict(),
             "mode": self.mode,
@@ -348,6 +348,7 @@ def summarize_deidentified(
         mode: Summarization mode forwarded to compatible backends.
         model: Optional local/on-device summarizer backend.
         cancellation: Optional cooperative brief interruption context.
+        verify: Optional local NLI verification, as in :func:`summarize`.
 
     Returns:
         A summary paired with a passing leakage check.
@@ -396,6 +397,7 @@ def summarize_deidentified(
             option=verify,
             claim_offsets=[claim.offset for claim in claims],
             review_flags=[claim.review_required for claim in claims],
+            cancellation=cancellation,
         )
 
     result = SummarizationResult(

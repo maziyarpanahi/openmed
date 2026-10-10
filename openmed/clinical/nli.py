@@ -21,7 +21,10 @@ import re
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, TypedDict, runtime_checkable
+
+if TYPE_CHECKING:
+    from .brief_cancellation import BriefCancellation
 
 NLI_LABELS = ("entailment", "contradiction", "neutral", "abstention")
 NliLabel = Literal["entailment", "contradiction", "neutral", "abstention"]
@@ -188,11 +191,18 @@ class ClaimVerification:
 
 
 def _verification_digest(text: str) -> str:
+    from .nli_backends import LocalNLIError
+
+    encoded = None
+    try:
+        encoded = text.encode("utf-8")
+    except UnicodeError:
+        pass
+    if encoded is None:
+        raise LocalNLIError("verification text encoding is invalid")
     return (
         "sha256:"
-        + hashlib.sha256(
-            b"openmed-claim-verification-v1\x00" + text.encode("utf-8")
-        ).hexdigest()
+        + hashlib.sha256(b"openmed-claim-verification-v1\x00" + encoded).hexdigest()
     )
 
 
@@ -211,7 +221,13 @@ def _verification_refusal(error: Exception, fallback: str) -> Exception:
         "local NLI checkpoint is unavailable",
         "local NLI inference failed",
     }
-    message = str(error) if type(error) is LocalNLIError else ""
+    message = (
+        error.args[0]
+        if type(error) is LocalNLIError
+        and len(error.args) == 1
+        and isinstance(error.args[0], str)
+        else ""
+    )
     return LocalNLIError(message if message in safe_messages else fallback)
 
 
@@ -223,12 +239,15 @@ def _verify_claim_spans(
     option: object,
     claim_offsets: Sequence[tuple[int, int] | None] | None = None,
     review_flags: Sequence[bool] | None = None,
+    cancellation: BriefCancellation | None = None,
 ) -> tuple[ClaimVerification, ...]:
     """Compose existing NLI over exact source slices, retaining unresolved claims."""
     from openmed.core.offline import network_blocked_if_offline
 
+    from .brief_cancellation import check_cancellation
     from .nli_backends import LocalNLIError, resolve_nli_backend
 
+    check_cancellation(cancellation)
     if len(claims) != len(source_offsets):
         raise LocalNLIError("verification span alignment is invalid")
     outputs = (
@@ -239,18 +258,21 @@ def _verify_claim_spans(
     )
     if len(outputs) != len(claims) or len(reviews) != len(claims):
         raise LocalNLIError("verification span alignment is invalid")
+    failure = None
     try:
         backend = resolve_nli_backend(
             get_default_backend() if option is True else option
         )
     except Exception as error:
-        raise _verification_refusal(
-            error, "local NLI backend resolution failed"
-        ) from None
+        failure = _verification_refusal(error, "local NLI backend resolution failed")
+    check_cancellation(cancellation)
+    if failure is not None:
+        raise failure
     results: list[ClaimVerification] = []
     for index, (claim, offset, output, review) in enumerate(
         zip(claims, source_offsets, outputs, reviews, strict=True)
     ):
+        check_cancellation(cancellation)
         premise = None
         if source is not None and offset is not None:
             start, end = offset
@@ -263,13 +285,15 @@ def _verify_claim_spans(
         usable = bool(premise and premise.strip() and claim and claim.strip())
         if usable:
             # Always block network for NLI, including caller-owned backends.
+            failure = None
             try:
                 with network_blocked_if_offline(local_only=True):
                     decision = verify([claim], premise, backend=backend)[0]
             except Exception as error:
-                raise _verification_refusal(
-                    error, "local NLI inference failed"
-                ) from None
+                failure = _verification_refusal(error, "local NLI inference failed")
+            check_cancellation(cancellation)
+            if failure is not None:
+                raise failure
             label, score, backend_id = (
                 decision["label"],
                 decision["score"],
@@ -285,7 +309,9 @@ def _verify_claim_spans(
                 backend_id=backend_id,
                 source_offset=offset if usable else None,
                 claim_offset=output if claim else None,
-                source_digest=_verification_digest(premise) if usable else None,
+                source_digest=_verification_digest(premise)
+                if usable and premise is not None
+                else None,
                 claim_digest=_verification_digest(claim) if claim else None,
                 review_required=review or label != "entailment",
             )
