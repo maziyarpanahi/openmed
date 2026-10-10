@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   archive-safety limits before parsing, verify actual member sizes with bounded
   decompression, and report archive failures using content-free codes/counts
   (#3812).
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
 
 ## [3.0.0] - 2026-10-05
 
