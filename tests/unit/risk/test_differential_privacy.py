@@ -258,3 +258,14 @@ class _FixedGaussian:
 
     def gauss(self, mu: float, sigma: float) -> float:
         return mu + self.value * sigma
+
+
+@pytest.mark.parametrize("sensitivity", [0.1, 1.0, 7.0])
+def test_small_epsilon_calibration_accounts_for_cdf_rounding(sensitivity):
+    epsilon, delta = 1e-20, 1e-5
+    sigma = gaussian_scale(sensitivity, epsilon, delta)
+    # Independently, delta(epsilon) >= delta(0) - (exp(epsilon) - 1).
+    # The zero-epsilon Gaussian profile uses erf directly, avoiding CDF
+    # subtraction; a violating lower bound proves under-calibration.
+    zero_profile = math.erf(sensitivity / (2.0 * sigma * math.sqrt(2.0)))
+    assert zero_profile - math.expm1(epsilon) <= delta

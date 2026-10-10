@@ -119,8 +119,8 @@ digests are unchanged.
 The separate `openmed.risk.differential_privacy` Gaussian helpers now use the
 analytic privacy profile from [Balle and Wang, Theorem 8](https://proceedings.mlr.press/v80/balle18a.html),
 including epsilon values above one. `gaussian_privacy_delta` checks achieved
-privacy loss; near floating-point cancellation it returns a conservative tail
-bound. Unrepresentable scales fail closed. Spend records identify
+privacy loss with a bounded CDF rounding allowance; near severe floating-point
+cancellation it returns a conservative tail bound. Unrepresentable scales fail closed. Spend records identify
 `analytic_gaussian` calibration without recording the noise draw or result.
 Seeded Gaussian outputs change deliberately because the old classical scale
 was not valid for general epsilon. Laplace calibration is unchanged.

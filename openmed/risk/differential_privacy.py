@@ -157,7 +157,7 @@ def _scaled_erfc(value: float) -> float:
 
 
 def gaussian_privacy_delta(sigma: float, sensitivity: float, epsilon: float) -> float:
-    """Return the Gaussian privacy profile at the declared L2 sensitivity.
+    """Return a conservative Gaussian privacy profile at the declared L2 sensitivity.
 
     Uses Theorem 8 of https://proceedings.mlr.press/v80/balle18a.html.
     A scaled complementary error function avoids ``exp(epsilon)`` overflow.
@@ -185,7 +185,10 @@ def gaussian_privacy_delta(sigma: float, sensitivity: float, epsilon: float) -> 
     second = 0.5 * math.exp(-a * a) * _scaled_erfc(b)
     if first - second <= 1e-8 * first:
         return first
-    return max(0.0, min(1.0, first - second))
+    # CDF subtraction can understate a small positive profile by a few ulps.
+    # Include the rounding allowance before calibration compares to delta.
+    allowance = 4.0 * (math.ulp(first) + math.ulp(second))
+    return max(0.0, min(1.0, first - second + allowance))
 
 
 def gaussian_scale(sensitivity: float, epsilon: float, delta: float) -> float:
