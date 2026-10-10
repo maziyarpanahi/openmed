@@ -1,7 +1,63 @@
 # Eval Harness & Metrics
 
+## Clinical summary release evidence
+
+`python -m openmed.eval.summary_benchmark --model extractive --output report.json`
+runs seeded synthetic discharge fixtures without downloads. `--model mlx` uses
+the pinned, already-cached local model. Gold-span masking isolates summarization;
+this does not evaluate the de-identification model. The conservative protocol
+recognizes exact assertion-bearing sentences, treats paraphrases as unresolved
+and never fabricates clinician adjudication.
+
+Thresholds live in `gates/baseline.json` under `summary`. The gate composes
+clinical-fact recall, fact coverage, unsupported-claim rate, adjudicated citation
+support and zero source-identifier leakage. Missing evidence, missing
+adjudication and empty output fail closed. Reports in `eval/suites/summaries/`
+are counts-only `BenchmarkReport` records with deterministic content digests.
+They record actual runs, not a claim that either backend is release-ready.
+
+`python -m openmed.eval.summary_benchmark --verify report.json` returns exit 1
+for failed, missing or invalid evidence. The daily summary-evidence job consumes
+the committed reports and stays red while their release checks fail; it does
+not skip for a missing candidate. It runs in `summary-evidence.yml`, separate
+from the manual-only model release workflow; manual `release-gates.yml` also
+consumes the same reports. Synthetic checks never authorize clinical use.
+
+Credentialed evaluations can call `load_summary_eval_dataset("mimic-iv-bhc",
+path=...)`. This delegates to the existing local-only DUA loader and refuses an
+absent authorized corpus. Do not commit its rows, source text or generated text.
+
 `run_benchmark` executes a model over a sequence of `BenchmarkFixture` objects and returns a
 `BenchmarkReport` whose `metrics` dict contains the standard OM-018 metric bundle.
+
+## Inspect suites and compare reports
+
+These commands inspect local metadata and saved reports without running models
+or fetching datasets:
+
+```bash
+openmed benchmark list-suites
+openmed benchmark describe n2c2 --json
+openmed benchmark compare baseline.json candidate.json --json
+openmed benchmark compare baseline.json candidate.json --fail-on-regression
+```
+
+The registry supplies task names, category mappings, license metadata and access
+requirements. Public synthetic fixtures do not authorize access to restricted
+real-world corpora. Unnormalized source licenses are reported explicitly.
+
+Comparison reports candidate-minus-baseline deltas for recognized aggregate
+leakage, recall and F1 metrics. Lower leakage and higher recall/F1 are better;
+any adverse delta is a descriptive regression, with no statistical tolerance
+implied. Missing metrics are unavailable, not zero or a passing result.
+Reports must have matching registered suites and positive, equal fixture counts.
+This is not proof that their underlying corpora match and does not replace the
+release gates. Only allow-listed aggregate metric names and rates are emitted;
+report paths, model names, arbitrary metadata and per-document fields are not.
+
+The default inspection exit status is 0 even when a regression is reported.
+`--fail-on-regression` returns 1 for regression or missing evidence; invalid,
+empty, mismatched or over-8-MiB reports return 2. All commands support `--json`.
 
 ## Chinese clinical NER
 

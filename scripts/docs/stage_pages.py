@@ -1762,6 +1762,34 @@ def prune_source_maps(output_dir: Path) -> list[str]:
     return removed
 
 
+def compact_search_index(output_dir: Path) -> int:
+    """Serialize the search index as UTF-8 without changing its JSON data.
+
+    MkDocs escapes non-ASCII search text. Keeping the same strings as UTF-8
+    reduces transfer size while preserving every document, token, and setting.
+    """
+
+    index_path = output_dir / "docs" / "search" / "search_index.json"
+    if index_path.is_symlink() or not index_path.resolve().is_relative_to(
+        output_dir.resolve()
+    ):
+        raise PageStagingError("Staged search index must remain inside the artifact")
+    try:
+        original = index_path.read_bytes()
+        payload = json.loads(original)
+        compacted = (
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise PageStagingError("Could not compact staged search index") from exc
+    if len(compacted) >= len(original):
+        return 0
+    index_path.write_bytes(compacted)
+    saved = len(original) - len(compacted)
+    print(f"[pages] compacted search index without data loss: {saved} bytes saved")
+    return saved
+
+
 def stage_pages(
     *,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -1782,6 +1810,7 @@ def stage_pages(
     copy_website(DEFAULT_WEBSITE_DIR, output_dir)
     copy_locale_sitemaps(output_dir, publication)
     prune_source_maps(output_dir)
+    compact_search_index(output_dir)
 
     required = {
         *normalized_expected_paths(publication),

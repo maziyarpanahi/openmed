@@ -101,3 +101,27 @@ The result has this shape:
 The report is a review aid, not a compliance certification or clinical
 decision guarantee. Use synthetic advisory snapshots in tests and keep any
 source snapshot governed separately from the report artifact.
+
+## Temporary NLTK exception for the universal lockfile
+
+On 2026-10-03, the maintainer approved a time-limited exception for
+`CVE-2026-81726` / [GHSA-8mgp-746c-j5xp](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp),
+scoped to the `nltk` package in `uv.lock` through **2026-10-17**. At review,
+upstream listed no patched release and the latest published NLTK was 3.10.3.
+The finding remains present in scanner evidence; it is not considered fixed.
+
+The affected model-artifact import/export APIs can read or write outside
+configured NLTK path-security roots when given untrusted paths. OpenMed has no
+direct calls to these APIs. NLTK is not in the core dependency closure or the
+reference service image. The universal lock includes it through the optional
+`agents`, `llamaindex`, `medspacy`, `quickumls`, and `scrubadub` extras. This
+review does not prove that every downstream configuration is unexploitable:
+do not let untrusted workflows select model import/export paths in those
+integrations, and use OS-level containment when running untrusted code.
+
+The policy in `deploy/security/cve-allowlist.yaml` remains at the HIGH
+threshold. The exception cannot suppress a different package, artifact, or
+advisory. It stops applying when the scanner reports a fixed version and
+fails closed after its expiry. Upgrade to a verified patched release and
+remove the exception when available; renewal requires a fresh maintainer
+decision. Model training is unrelated to this dependency review.

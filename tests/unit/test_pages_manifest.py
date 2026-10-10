@@ -16,6 +16,7 @@ from scripts.docs.stage_pages import (
     artifact_path_for_url,
     build_manifest,
     changed_snapshot_paths,
+    compact_search_index,
     copy_locale_sitemaps,
     ensure_safe_output_dir,
     find_overlay_collisions,
@@ -699,6 +700,62 @@ def test_source_maps_are_pruned_from_the_staged_artifact(tmp_path: Path) -> None
     assert prune_source_maps(tmp_path) == ["assets/bundle.js.map"]
     assert not source_map.exists()
     assert runtime.is_file()
+
+
+def test_search_compaction_preserves_multilingual_data_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    index = tmp_path / "docs" / "search" / "search_index.json"
+    index.parent.mkdir(parents=True)
+    payload = {
+        "config": {"lang": ["en", "zh", "hi"], "separator": r"[\s\-]+"},
+        "docs": [
+            {
+                "location": "zh/",
+                "title": "中文 दस्तावेज़ 🩺",
+                "text": '<p>中文\nclinical "evidence"</p>',
+            }
+        ],
+    }
+    index.write_text(json.dumps(payload, ensure_ascii=True), encoding="utf-8")
+    before = index.stat().st_size
+
+    saved = compact_search_index(tmp_path)
+
+    assert saved > 0
+    assert index.stat().st_size == before - saved
+    assert json.loads(index.read_bytes()) == payload
+    assert "中文" in index.read_text(encoding="utf-8")
+    assert compact_search_index(tmp_path) == 0
+
+
+@pytest.mark.parametrize("contents", [None, b"{invalid", b"\xff"])
+def test_search_compaction_fails_closed_on_missing_or_invalid_index(
+    tmp_path: Path, contents: bytes | None
+) -> None:
+    index = tmp_path / "docs" / "search" / "search_index.json"
+    index.parent.mkdir(parents=True)
+    if contents is not None:
+        index.write_bytes(contents)
+
+    with pytest.raises(PageStagingError, match="compact staged search index"):
+        compact_search_index(tmp_path)
+
+
+def test_search_compaction_rejects_an_index_symlink(tmp_path: Path) -> None:
+    artifact = tmp_path / "artifact"
+    index = artifact / "docs" / "search" / "search_index.json"
+    index.parent.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"text": "untouched"}', encoding="utf-8")
+    try:
+        index.symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink creation is unavailable on this platform")
+
+    with pytest.raises(PageStagingError, match="inside the artifact"):
+        compact_search_index(artifact)
+    assert outside.read_text(encoding="utf-8") == '{"text": "untouched"}'
 
 
 def test_release_tag_is_normalized_and_rejects_non_versions() -> None:
