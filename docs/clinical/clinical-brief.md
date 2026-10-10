@@ -75,6 +75,8 @@ multiple references, overlapping reviewed spans, compound claims, unknown schema
 versions and free-form structured results refuse. There is no similarity search
 or confidence-based evidence inference. Multi-reference synthesis needs a future
 version that defines how reviewed clinical axes combine; v1 does not guess.
+Direct generation-contract validation also refuses malformed Unicode with a
+value-free error that retains no chained decoder exception.
 
 Claim text is joined with one space; the composer computes output offsets and
 maps the selected reference to original source offsets. Explicit bindings grant

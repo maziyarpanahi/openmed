@@ -95,14 +95,16 @@ class BriefGenerationResult:
                 type(claim) is not BriefGeneratedClaim
                 or type(claim.text) is not str
                 or not claim.text
+                or len(claim.text) > MAX_OUTPUT_BYTES
                 or claim.text != claim.text.strip()
                 or type(claim.reference_ids) is not tuple
                 or len(claim.reference_ids) != 1
                 or type(claim.reference_ids[0]) is not str
-                or not 0 < len(claim.reference_ids[0].encode()) <= 256
+                or not 0 < len(claim.reference_ids[0]) <= 256
+                or _utf8_size(claim.reference_ids[0]) > 256
             ):
                 raise LocalSummarizerError("invalid brief claim binding")
-            total += len(claim.text.encode())
+            total += _utf8_size(claim.text)
             if total + len(self.claims) - 1 > MAX_OUTPUT_BYTES:
                 raise LocalSummarizerError("brief output limit exceeded")
             segments = segment_summary_claims(claim.text).segments
