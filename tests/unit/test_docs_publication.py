@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import posixpath
 import re
 from pathlib import Path
@@ -463,18 +464,31 @@ def test_website_preserves_the_approved_head_to_head_matrix() -> None:
 def test_website_preserves_every_approved_landing_view_and_interaction() -> None:
     website = (DOCS / "website" / "index.html").read_text(encoding="utf-8")
     script = (DOCS / "website" / "assets" / "script.js").read_text(encoding="utf-8")
+    # Community numbers come from the dated evidence snapshot, so a refresh
+    # updates the page and this test together.
+    community = json.loads(
+        (DOCS / "brand" / "system" / "evidence" / "community-metrics.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    shown = community["display"]
+    claims = yaml.safe_load(
+        (DOCS / "brand" / "system" / "claims.yml").read_text(encoding="utf-8")
+    )["claims"]
 
     approved_copy = (
         "current release",
         "Your data. Your model. Your",
         "pii.detect() · on-device",
-        "Live PHI detection · 34 model-backed languages",
+        "Live PHI detection · "
+        f"{claims['model_backed_pii_languages']['value']} model-backed languages",
         "Model downloads · all-time",
-        "340<span>M</span>",
-        "30<span>M</span>",
-        "9.4<span>M</span>",
-        "2,000<span>+</span>",
-        "Counted, not claimed · Hugging Face + PyPI · July 2026",
+        f"{shown['downloads_all_time_millions']}<span>M</span>",
+        f"{shown['downloads_30d_millions']}<span>M</span>",
+        f"{shown['installs_total_millions']}<span>M</span>",
+        f"{shown['public_models_floor']:,}<span>+</span>",
+        "Counted, not claimed · Hugging Face + PyPI + GitHub · "
+        f"{shown['captured_month']}",
         "Four lines, no account.",
         "No API key to provision, no procurement call",
         "The one thing no cloud API can do: run in a pocket.",
@@ -484,7 +498,8 @@ def test_website_preserves_every_approved_landing_view_and_interaction() -> None
         "Zero data movement",
         "Pick the entity type, not the platform.",
         "ElectraMed · 33M",
-        "117K</strong> downloads",
+        f"{shown['featured_models_millions'][next(iter(community['featured_models']))]}M"
+        "</strong> all-time downloads",
         "Open at the core. Real products on top.",
         "Terminal-native AI for clinical workflows",
         "Benchmarks you can rerun on your own notes.",
