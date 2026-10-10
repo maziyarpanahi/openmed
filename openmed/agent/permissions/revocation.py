@@ -330,14 +330,24 @@ class AuthorityRuntime:
         return AuthorityBinding(tuple(versions))
 
     def check(
-        self, binding: AuthorityBinding, boundary: AuthorityBoundary
+        self,
+        binding: AuthorityBinding,
+        boundary: AuthorityBoundary,
+        *,
+        approval_expires_at: int | None = None,
     ) -> AuthorityReceipt:
-        """Perform new lookups; never renew or overwrite preview generations."""
+        """Perform new lookups without renewing preview generations.
+
+        A verified approval expiry, when supplied, is checked at the same final
+        clock boundary after all provider and generation-store callbacks.
+        """
         if (
             type(binding) is not AuthorityBinding
             or type(boundary) is not AuthorityBoundary
         ):
             raise ValueError("invalid_authority_check")
+        if approval_expires_at is not None:
+            _integer(approval_expires_at)
         now = self._now(binding, boundary)
         statuses = []
         for version in binding.versions:
@@ -353,7 +363,9 @@ class AuthorityRuntime:
             statuses.append(status)
         # Provider/store calls may advance time. Recheck the entire cohort at
         # admission so an earlier response cannot silently age out mid-check.
-        self._check_final_time(binding, boundary, statuses)
+        self._check_final_time(
+            binding, boundary, statuses, approval_expires_at=approval_expires_at
+        )
         return AuthorityReceipt(
             boundary, AuthorityReason.ACTIVE, len(binding.versions), binding.digest()
         )
@@ -430,8 +442,12 @@ class AuthorityRuntime:
         binding: AuthorityBinding,
         boundary: AuthorityBoundary,
         statuses: list[AuthorityStatus],
+        *,
+        approval_expires_at: int | None = None,
     ) -> None:
         now = self._now(binding, boundary)
+        if approval_expires_at is not None and now >= approval_expires_at:
+            self.deny(binding, boundary, AuthorityReason.EXPIRED)
         for version, status in zip(binding.versions, statuses, strict=True):
             if not 0 <= now - status.observed_at <= self._max_status_age:
                 self.deny(binding, boundary, AuthorityReason.STALE)

@@ -165,7 +165,7 @@ def test_status_outage_prevents_every_adapter_callback(adapter):
 
 
 def _approval(fixture, *, store=None):
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=fixture.clock).issue(
         action_digest=ACTION_DIGEST,
         reviewer_role="role:org.example/reviewer@1.0.0",
         expires_at=100,
@@ -348,3 +348,47 @@ def test_approval_binding_malformed_recovery_data_is_rejected():
     payload["payload"] = "synthetic-private-payload"
     with pytest.raises(ValueError, match="invalid_approval_authority_binding"):
         ApprovalAuthorityBinding.from_dict(payload)
+
+
+def test_approval_expiry_during_fresh_status_lookup_prevents_effect():
+    fixture = SyntheticAuthority()
+    token = ApprovalTokenSigner(KEY, clock=fixture.clock).issue(
+        action_digest=ACTION_DIGEST,
+        reviewer_role="role:org.example/reviewer@1.0.0",
+        expires_at=20,
+    )
+    verifier = ApprovalTokenVerifier(
+        KEY, InMemoryApprovalNonceStore(), clock=fixture.clock
+    )
+    binding = ApprovalAuthorityBinding.create(
+        token, fixture.runtime.bind(fixture.contracts)
+    )
+    lookup = fixture.provider.get_status
+
+    def slow_status(kind, digest):
+        fixture.clock.now = 20
+        return lookup(kind, digest)
+
+    fixture.provider.get_status = slow_status
+    calls = []
+    with pytest.raises(AuthorityDeniedError, match="authority_expired"):
+        _approve(fixture, token, verifier, binding, lambda: calls.append("effect"))
+    assert calls == []
+    fixture.clock.now = 10  # Verify the burned nonce within its original valid window.
+    with pytest.raises(ApprovalReplayError):
+        _approve(fixture, token, verifier, binding, lambda: calls.append("replay"))
+
+
+def test_serializable_receipt_cannot_supply_execution_validity():
+    fixture = SyntheticAuthority()
+    token, verifier, binding = _approval(fixture)
+    consume = verifier.consume_authorization
+
+    def public_receipt(*args, **kwargs):
+        return consume(*args, **kwargs).receipt
+
+    verifier.consume_authorization = public_receipt
+    with pytest.raises(AuthorityDeniedError, match="authority_approval_mismatch"):
+        _approve(
+            fixture, token, verifier, binding, lambda: pytest.fail("receipt dispatched")
+        )

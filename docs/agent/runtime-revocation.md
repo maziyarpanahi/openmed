@@ -85,7 +85,10 @@ and the exact preview authority generations, never the bearer token.
 `dispatch_with_revocable_approval` requires that exact token, verifies and consumes
 it using the existing `ApprovalTokenVerifier`, and rechecks authority after nonce
 consumption. Revocation during consumption prevents the effect and leaves the
-token consumed. An active status with a changed generation also invalidates the
+token consumed. The adapter retains verified local approval validity and
+checks its exclusive expiry again after all status/store callbacks at the
+same final clock boundary. Public receipts remain codes and digests and cannot
+supply execution authority. An active status with a changed generation also invalidates the
 original approval, requiring a new preview and fresh human approval. A different
 token cannot reuse the saved binding. Nest static grant, ticket and delegation
 adapters in the effect callback as appropriate; approval alone never establishes

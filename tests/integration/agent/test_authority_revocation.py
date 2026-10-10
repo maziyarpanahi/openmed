@@ -208,3 +208,63 @@ def test_live_expiry_and_outage_fail_closed_before_recovery_observations():
             binding=binding,
             now=10,
         )
+
+
+@pytest.mark.parametrize("revoke_phase", [None, "approval_recorded", "dispatching"])
+def test_revocation_composes_on_actual_guarded_dispatch_boundary(revoke_phase):
+    from openmed.agent.permissions.access_tickets import AccessTicketVerifier
+    from openmed.agent.permissions.revocation import InMemoryAuthorityGenerationStore
+    from openmed.agent.permissions.runtime_authority import (
+        grant_authority,
+        read_with_revocable_ticket,
+        ticket_authority,
+    )
+    from tests.fixtures.agent.authority_status import SyntheticStatusProvider
+    from tests.fixtures.agent.guarded_dispatch import PRIVATE, DispatchHarness
+
+    h = DispatchHarness()
+    provider = SyntheticStatusProvider(lambda: h.now)
+    contracts = (
+        grant_authority(h.authority.grant),
+        ticket_authority(h.authority.ticket),
+    )
+    provider.register(contracts)
+    runtime = AuthorityRuntime(
+        provider, InMemoryAuthorityGenerationStore(), clock=lambda: h.now
+    )
+    binding = runtime.bind(contracts)
+    invoke = h.tools.invoke
+
+    def governed(spec, arguments, *, effect):
+        return dispatch_with_revocable_grant(
+            h.authority.grant,
+            h.authority.grant_request,
+            h.grants,
+            lambda: read_with_revocable_ticket(
+                h.authority.ticket,
+                h.authority.ticket_request,
+                AccessTicketVerifier(clock=lambda: h.now),
+                lambda: invoke(spec, arguments, effect=effect),
+                runtime=runtime,
+                binding=binding,
+            ),
+            runtime=runtime,
+            binding=binding,
+            now=h.now,
+        )
+
+    h.tools.invoke = governed
+    append = h.effects.append
+
+    def revoke_after_storage(checkpoint):
+        append(checkpoint)
+        if checkpoint.phase.value == revoke_phase:
+            provider.revoke(contracts[1])
+
+    h.effects.append = revoke_after_storage
+    result = h.adapter().dispatch(h.arguments)
+    assert h.tools.calls == (1 if revoke_phase is None else 0)
+    assert result.outcome.outcome_class.value == (
+        "success" if revoke_phase is None else "review_required"
+    )
+    assert PRIVATE not in json.dumps(result.to_dict())

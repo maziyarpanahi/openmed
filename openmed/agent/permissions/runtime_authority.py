@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from openmed.agent.approvals.tokens import (
+    ApprovalAuthorization,
     ApprovalExpiredError,
     ApprovalReceipt,
     ApprovalToken,
@@ -238,13 +239,17 @@ def dispatch_with_revocable_approval(
     if _sha256(token.to_json()) != binding.token_digest:
         runtime.deny(binding.authority, boundary, AuthorityReason.APPROVAL_MISMATCH)
     try:
-        receipt = verifier.consume(
+        authorization = verifier.consume_authorization(
             token, action_digest=action_digest, reviewer_role=reviewer_role, now=now
         )
     except ApprovalExpiredError:
         runtime.deny(binding.authority, boundary, AuthorityReason.EXPIRED)
-    runtime.check(binding.authority, boundary)
-    return dispatch(), receipt
+    if type(authorization) is not ApprovalAuthorization:
+        runtime.deny(binding.authority, boundary, AuthorityReason.APPROVAL_MISMATCH)
+    runtime.check(
+        binding.authority, boundary, approval_expires_at=authorization.expires_at
+    )
+    return dispatch(), authorization.receipt
 
 
 def recover_with_revocable_authority(
