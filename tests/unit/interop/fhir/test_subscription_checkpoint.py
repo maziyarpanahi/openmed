@@ -206,3 +206,22 @@ def test_no_network_needed_and_distinct_streams(tmp_path, monkeypatch):
         store.commit(**first)
         first["subscription_id"] = "different-synthetic-subscription"
         assert store.claim(**first).status == "claimed"
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["subscription_id", "notification_id", "resource_id", "resource_version"],
+)
+def test_invalid_unicode_identity_is_value_free(tmp_path, field):
+    event = _event(0)
+    event[field] = "synthetic-private-marker-\ud800"
+    with SubscriptionCheckpoint(
+        tmp_path / "checkpoint.sqlite", secret=_SECRET
+    ) as store:
+        with pytest.raises(
+            SubscriptionCheckpointError, match="invalid_identity"
+        ) as caught:
+            store.claim(**event)
+    assert "synthetic-private-marker" not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__suppress_context__

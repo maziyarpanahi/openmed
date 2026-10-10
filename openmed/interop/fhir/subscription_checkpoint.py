@@ -41,7 +41,10 @@ class QuarantinedDelivery:
 def _identity(value: str, name: str) -> bytes:
     if type(value) is not str or not 1 <= len(value) <= 512:
         raise SubscriptionCheckpointError(f"{name}: invalid_identity")
-    return value.encode("utf-8")
+    try:
+        return value.encode("utf-8")
+    except UnicodeError:
+        raise SubscriptionCheckpointError(f"{name}: invalid_identity") from None
 
 
 def _sequence(value: int) -> int:
