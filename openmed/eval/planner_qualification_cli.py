@@ -8,13 +8,13 @@ import re
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import Sequence
+from typing import NoReturn, Sequence
 
 from openmed.eval.planner_qualification import _DiscardOutput, qualify_planner
 
 
 class _Parser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         self.exit(2, "invalid_arguments\n")
 
 

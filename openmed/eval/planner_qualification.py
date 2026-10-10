@@ -12,7 +12,7 @@ import json
 from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from openmed.agent.approvals.tokens import (
     ApprovalTokenError,
@@ -472,7 +472,9 @@ def qualify_planner(planner: Planner) -> PlannerQualificationReport:
                             separators=(",", ":"),
                         )
                         approval.consume(
-                            call.approval_token,
+                            # Deliberately submit untrusted evidence to the verifier;
+                            # malformed values must follow its actual refusal path.
+                            cast(Any, call.approval_token),
                             action_digest="sha256:"
                             + hashlib.sha256(action_json.encode()).hexdigest(),
                             reviewer_role="synthetic-reviewer",
