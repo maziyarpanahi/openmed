@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import yaml
 
@@ -513,7 +513,7 @@ def _declared_sdoh_languages(values: Sequence[str] | None) -> tuple[str, ...]:
     declared = tuple(_sdoh_language(value) for value in values)
     if None in declared or len(set(declared)) != len(declared):
         raise ValueError("invalid_sdoh_language_declaration")
-    return tuple(sorted(declared))
+    return tuple(sorted(cast(tuple[str, ...], declared)))
 
 
 def _supports_sdoh_language(declared: tuple[str, ...], requested: str) -> bool:
