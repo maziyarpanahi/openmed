@@ -1,0 +1,481 @@
+{
+  "brief": {
+    "backend_id": "deterministic-extractive",
+    "citations": [
+      {
+        "claim_index": 0,
+        "output_end": 36,
+        "output_start": 0,
+        "source_end": 93,
+        "source_start": 57
+      },
+      {
+        "claim_index": 1,
+        "output_end": 75,
+        "output_start": 37,
+        "source_end": 132,
+        "source_start": 94
+      },
+      {
+        "claim_index": 2,
+        "output_end": 116,
+        "output_start": 76,
+        "source_end": 173,
+        "source_start": 133
+      }
+    ],
+    "digest": "sha256:7ea2dd64da4bf8d1e96cda07e408cf6b296f204d69698e5f87aa1e600d25958f",
+    "envelope": {
+      "disclaimer": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.",
+      "human_review_mode": true,
+      "is_diagnostic": false,
+      "provenance": {
+        "artifact_id": "deidentified-1c2ceed6dd1a51083fa4772b",
+        "content_hash": "sha256:1c2ceed6dd1a51083fa4772b02da31e491a89ecc5c538c431c586facc8273f3c",
+        "deidentification_method": "mask",
+        "max_length": 512,
+        "sentence_count": 6,
+        "sentence_detection": true,
+        "sentence_language": "en",
+        "source_hash": "sha256:1c2ceed6dd1a51083fa4772b02da31e491a89ecc5c538c431c586facc8273f3c",
+        "verification_method": "deidentification_result",
+        "verified": true
+      },
+      "refusal_reasons": [],
+      "requires_human_review": true,
+      "schema_version": 1,
+      "status": "ready",
+      "summary": {
+        "summary_digest": "sha256:4a364670e1a65f8055fee66781fee836538c5bffdc0e51a25dfd7f960f65a5cc"
+      }
+    },
+    "metrics": {
+      "citation_support": {
+        "citation_count": 3,
+        "citation_precision": null,
+        "claim_count": 3,
+        "clinician_adjudication": {
+          "adjudicated_citation_count": 0,
+          "adjudicated_claim_count": 0,
+          "adjudication_coverage": 0.0,
+          "available": false,
+          "citation_precision": null,
+          "conflicting_adjudication_count": 0,
+          "contradicting_citation_count": 0,
+          "irrelevant_citation_count": 0,
+          "label_counts": {
+            "contradicts": 0,
+            "irrelevant": 0,
+            "supports": 0,
+            "unclear": 0
+          },
+          "status": "not_available",
+          "support_recall": null,
+          "supported_claim_count": 0,
+          "supporting_citation_count": 0,
+          "unadjudicated_citation_count": 3,
+          "unadjudicated_claim_count": 3,
+          "unclear_citation_count": 0,
+          "unmatched_adjudication_count": 0
+        },
+        "deterministic_span_checks": {
+          "citation_count": 3,
+          "citation_span_validity": 1.0,
+          "claim_span_count": 3,
+          "claim_span_validity": 1.0,
+          "duplicate_citation_count": 0,
+          "evidence_span_count": 3,
+          "evidence_span_validity": 1.0,
+          "invalid_citation_count": 0,
+          "invalid_citation_reasons": {},
+          "invalid_claim_span_count": 0,
+          "invalid_evidence_span_count": 0,
+          "missing_claim_span_count": 0,
+          "missing_evidence_span_count": 0,
+          "passed": true,
+          "valid_citation_count": 3,
+          "valid_claim_span_count": 3,
+          "valid_evidence_span_count": 3
+        },
+        "disclaimer": "Claim-level citation metrics are evaluation evidence only; they are not a clinical decision, compliance certification, or guarantee of clinical truth. Qualified human review remains required before clinical use.",
+        "evidence_count": 3,
+        "human_review_required": true,
+        "orphan_claim_count": 0,
+        "orphan_claim_rate": 0.0,
+        "provenance": {
+          "adjudication_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "claim_digest": "sha256:959a6e01b76b7736bb0c8e82a5a22e6a6f6f460652f7d218d12844940f1a9c2e",
+          "evidence_digest": "sha256:a3ee4607532bc88ad65e16d2584cad290a51da8a1961fd918d85374038b90daa",
+          "input_digest": "sha256:2732c741666e33e8f61c8f9db1fe67b2caed8c0db0b2d0286aa7e640af72907a"
+        },
+        "schema_version": 1,
+        "suite": "citation_support_metrics",
+        "support_recall": null,
+        "unused_evidence_count": 0,
+        "unused_evidence_rate": 0.0
+      },
+      "coverage": {
+        "cited_fact_count": 3,
+        "duplicate_source_fact_count": 0,
+        "fail_closed": false,
+        "failure_reasons": [],
+        "invalid_citation_count": 0,
+        "invalid_source_fact_count": 0,
+        "missing_citation_count": 0,
+        "omission_count": 0,
+        "omissions": 0,
+        "passed": true,
+        "recall": 1.0,
+        "schema_version": 1,
+        "source_evidence_available": true,
+        "source_evidence_count": 3,
+        "source_fact_count": 3,
+        "summary_fact_count": 3,
+        "unsupported_fact_count": 0,
+        "unsupported_facts": 0
+      },
+      "demographics": {
+        "allowed_count": 0,
+        "input_count": 0,
+        "purpose_id": "sha256:43978a756136cfa102c35d4f21116cf1d870996ee664074bf18e3626944b6f66",
+        "removed_classes": [],
+        "removed_count": 0,
+        "schema_version": 1
+      },
+      "leakage": {
+        "checked_token_count": 2,
+        "leaked_token_count": 0,
+        "leaked_token_hashes": [],
+        "passed": true
+      },
+      "temporal_order": {
+        "advisory": "Temporal-order validation is a deterministic review aid. Invalid or ambiguous ordering requires review and does not rewrite the clinical claim.",
+        "findings": [
+          {
+            "code": "unknown_event",
+            "reference_indexes": [
+              0,
+              1
+            ]
+          },
+          {
+            "code": "unknown_event",
+            "reference_indexes": [
+              0,
+              2
+            ]
+          },
+          {
+            "code": "unknown_event",
+            "reference_indexes": [
+              1,
+              2
+            ]
+          }
+        ],
+        "reference_count": 3,
+        "review_required": true,
+        "schema_version": 1,
+        "status": "review_required"
+      },
+      "unsupported_claims": {
+        "alpha": 0.05,
+        "approved_evidence_count": 3,
+        "assessments": [
+          {
+            "approved_evidence_count": 1,
+            "cited_evidence_count": 1,
+            "claim_class": "finding",
+            "matching_evidence_count": 1,
+            "review_required": false,
+            "state": "supported"
+          },
+          {
+            "approved_evidence_count": 1,
+            "cited_evidence_count": 1,
+            "claim_class": "finding",
+            "matching_evidence_count": 1,
+            "review_required": false,
+            "state": "supported"
+          },
+          {
+            "approved_evidence_count": 1,
+            "cited_evidence_count": 1,
+            "claim_class": "finding",
+            "matching_evidence_count": 1,
+            "review_required": false,
+            "state": "supported"
+          }
+        ],
+        "by_claim_class": {
+          "finding": {
+            "bootstrap_ci": {
+              "alpha": 0.05,
+              "degenerate": false,
+              "lower": 0.0,
+              "n_resamples": 1000,
+              "point": 0.0,
+              "upper": 0.0
+            },
+            "claim_class": "finding",
+            "claim_count": 3,
+            "contradicted_count": 0,
+            "counts": {
+              "contradicted": 0,
+              "supported": 3,
+              "uncited": 0,
+              "unresolved": 0
+            },
+            "supported_count": 3,
+            "uncited_count": 0,
+            "unresolved_count": 0,
+            "unsupported_count": 0,
+            "unsupported_rate": 0.0
+          }
+        },
+        "claim_count": 3,
+        "disclaimer": "Unsupported-claim rates are evaluation evidence only; they are not a clinical decision, compliance certification, or faithfulness guarantee.",
+        "evidence_count": 3,
+        "evidence_digest": "sha256:ad0d797c4cdaccf4505c7f4c2d89be7bf3b3bd379de54981d2357e05dc19bdc5",
+        "human_review_required": true,
+        "n_resamples": 1000,
+        "overall": {
+          "bootstrap_ci": {
+            "alpha": 0.05,
+            "degenerate": false,
+            "lower": 0.0,
+            "n_resamples": 1000,
+            "point": 0.0,
+            "upper": 0.0
+          },
+          "claim_class": "overall",
+          "claim_count": 3,
+          "contradicted_count": 0,
+          "counts": {
+            "contradicted": 0,
+            "supported": 3,
+            "uncited": 0,
+            "unresolved": 0
+          },
+          "supported_count": 3,
+          "uncited_count": 0,
+          "unresolved_count": 0,
+          "unsupported_count": 0,
+          "unsupported_rate": 0.0
+        },
+        "review_required_count": 0,
+        "schema_version": 1,
+        "seed": 0,
+        "suite": "summary_unsupported_claims",
+        "unsupported_count": 0,
+        "unsupported_rate": 0.0
+      }
+    },
+    "profile_digest": "sha256:1c83deede37096d6628dea8b9526982d84dfe8c2eb765077d57cbf164dc9e547",
+    "provenance": {
+      "disclaimer": "Guarded clinical-output provenance is value-free assistive metadata for human review; it is not a clinical decision, compliance certification, diagnosis, or treatment recommendation.",
+      "evidence": [
+        {
+          "evidence_hash": "sha256:e554ab60c413249053cb2cb50c8940ba617d0a33df2ddd7c1738df838fa50719",
+          "evidence_id": "sha256:36b3ef6d59e4ca1a54ee95783f636c3bdd40290af3ee6af5270147d5f18cc786",
+          "kind": "source_span",
+          "source_offsets": {
+            "end": 132,
+            "start": 94
+          }
+        },
+        {
+          "evidence_hash": "sha256:593ba78134e430f4d8bc0cc882d1ed85abfd00beed136a1e1a1d0a83bdb9651b",
+          "evidence_id": "sha256:756d6760cdb8e67179251f689ec4b8883a59d286fbd2fb3052d141e0695ded8d",
+          "kind": "source_span",
+          "source_offsets": {
+            "end": 93,
+            "start": 57
+          }
+        },
+        {
+          "evidence_hash": "sha256:bf9f143e39f51fa1265d27168c1eaf688013cedabe4203fafa653c0aa6cbb586",
+          "evidence_id": "sha256:f856794c66b8a40aa010700245aa1178588767ecd6c6f4d899e2b77736b829f6",
+          "kind": "source_span",
+          "source_offsets": {
+            "end": 173,
+            "start": 133
+          }
+        }
+      ],
+      "evidence_ids": [
+        "sha256:36b3ef6d59e4ca1a54ee95783f636c3bdd40290af3ee6af5270147d5f18cc786",
+        "sha256:756d6760cdb8e67179251f689ec4b8883a59d286fbd2fb3052d141e0695ded8d",
+        "sha256:f856794c66b8a40aa010700245aa1178588767ecd6c6f4d899e2b77736b829f6"
+      ],
+      "input_hash": "sha256:b83cfc7fa4a33ee6ef6180ea2cf2beca4c73ac06c7c98dde068941a5b9bc3616",
+      "integrity": {
+        "changed_evidence_count": 0,
+        "changed_evidence_ids": [],
+        "input_changed": false,
+        "input_checked": false,
+        "input_present": true,
+        "manifest_hash_valid": true,
+        "missing_evidence_count": 0,
+        "missing_evidence_ids": [],
+        "model_present": true,
+        "output_changed": false,
+        "output_checked": false,
+        "output_present": true,
+        "policy_present": true,
+        "reason_codes": [],
+        "record_hash_valid": true
+      },
+      "model": {
+        "model_fingerprint": "sha256:f8b428859e362eefbbb748e33c184104d2e47bfc188137eddff0b12b3f92883c",
+        "model_id": "sha256:892917b3f4c3acef2326eb319dd8e67d8e9a86a3552c2656797eece278e46292",
+        "revision": null,
+        "tokenizer_fingerprint": null,
+        "tokenizer_id": null
+      },
+      "output_hash": "sha256:4dc25b3e2eca2c08b7ea14f581bf534d952c0cdd73e6631a8d9d83a273f1d18e",
+      "output_kind": "clinical_output",
+      "policy_fingerprint": "sha256:aeef746ee0d8b7e391be17215305cfd5d415320743451199b3105bd0e75da93a",
+      "record_hash": "sha256:6f4285d761cf3623e717d3904fa076a93b50dea23fbb1666e55f95554bd2cdc4",
+      "record_id": "sha256:481f10a116a0b04ceca0d06d27eb2fdfaf467c1d590a285b64487cbae2fc318f",
+      "record_type": "openmed.clinical.guarded_output_provenance",
+      "review": {
+        "required": true,
+        "status": "queued",
+        "transitions": []
+      },
+      "review_required": true,
+      "review_status": "queued",
+      "review_transitions": [],
+      "schema_version": 1
+    },
+    "refusal_reason": null,
+    "review_packet": {
+      "advisory": "Human-review packets are assistive evidence summaries, not clinical decisions, release approvals, or compliance certifications.",
+      "citations": [
+        {
+          "citation_id": "sha256:519fde81c38bd8098dd440b2b5136f04b7c874c7137fff707cca11a7f9f2fecb",
+          "source": "label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d"
+        },
+        {
+          "citation_id": "sha256:90270b7c902ca8e66681661a53ab4797983787899720bb45c96541af3a131c56",
+          "source": "label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d"
+        },
+        {
+          "citation_id": "sha256:a85abda07d21c5a615d97e920516f5a26a00e97665a5fdacfd1a44c26bec3838",
+          "source": "label:sha256:1fb6eafe02c48930f7043d147bb93cf474376911d0b23e372d69231cec25b15d"
+        }
+      ],
+      "findings": [
+        {
+          "citation_ids": [
+            "sha256:a85abda07d21c5a615d97e920516f5a26a00e97665a5fdacfd1a44c26bec3838"
+          ],
+          "finding_id": "identifier:sha256:448444379404e09e7957468e9977664563a8495fc4214b5fd28fed745e212273",
+          "label": "label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b",
+          "status": "needs_review"
+        },
+        {
+          "citation_ids": [
+            "sha256:519fde81c38bd8098dd440b2b5136f04b7c874c7137fff707cca11a7f9f2fecb"
+          ],
+          "finding_id": "identifier:sha256:cde1052b94339187485185d6e505d0e1ce49f7f7192805495b99d54a62f0e9fa",
+          "label": "label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b",
+          "status": "needs_review"
+        },
+        {
+          "citation_ids": [
+            "sha256:90270b7c902ca8e66681661a53ab4797983787899720bb45c96541af3a131c56"
+          ],
+          "finding_id": "identifier:sha256:f5747093554f8ed652ac918d185bd4e7a758da640928d9c845e75701bb5da20e",
+          "label": "label:sha256:f88db897ba94b98eb796dbf6182f2e4490d1617243434345ed1b0bca7b74095b",
+          "status": "needs_review"
+        }
+      ],
+      "gate_results": [
+        {
+          "blocking": false,
+          "gate_id": "identifier:sha256:92d4e6c8ed22722a3071a26569a0a192ace2bf389edf9518f82f7987f0b3d7ea",
+          "passed": false,
+          "reason": "provided",
+          "reason_hash": "sha256:0e7f4723a26cced927abb64ae839a1b829e847e7a772213c43202eebc93bb8dc",
+          "severity": "info"
+        }
+      ],
+      "packet_id": "sha256:504509639dec2838823122c308cb125f63f9053d922abee4f68ca4faff523a38",
+      "privacy": {
+        "protected_text_available": false,
+        "protected_text_included": false,
+        "protected_text_policy": "explicit_local_opt_in"
+      },
+      "review_status": "review_required",
+      "schema_version": "openmed.clinical.review_packet.v1",
+      "summary": {
+        "citation_count": 3,
+        "failed_gate_count": 1,
+        "finding_count": 3,
+        "gate_count": 1,
+        "review_required": true
+      }
+    },
+    "schema_version": 1,
+    "stages": [
+      "deidentification",
+      "sections",
+      "evidence",
+      "summary_input",
+      "section_plan",
+      "length_budget",
+      "profile",
+      "generation",
+      "envelope",
+      "demographics",
+      "claims",
+      "assertion",
+      "temporality",
+      "experiencer",
+      "nli",
+      "citations",
+      "boundaries",
+      "minimality",
+      "temporal_order",
+      "unsupported_claims",
+      "coverage",
+      "citation_support",
+      "empty_evidence",
+      "privacy",
+      "review",
+      "provenance"
+    ],
+    "status": "needs_review",
+    "summary": "The admission problem was pneumonia. The discharge diagnosis was pneumonia. Symptoms improved after supportive care.",
+    "summary_characters": 116,
+    "summary_digest": "sha256:4a364670e1a65f8055fee66781fee836538c5bffdc0e51a25dfd7f960f65a5cc",
+    "verdicts": [
+      {
+        "claim_index": 0,
+        "label": "entailment"
+      },
+      {
+        "claim_index": 1,
+        "label": "entailment"
+      },
+      {
+        "claim_index": 2,
+        "label": "entailment"
+      }
+    ]
+  },
+  "deidentified_digest": "sha256:3615cc2268185f79ea48e9d5d8af5fc345d4325d934943af64589557b74da1d8",
+  "extraction_count": 1,
+  "grounding": [
+    {
+      "candidate_count": 1,
+      "end": 92,
+      "start": 83
+    }
+  ],
+  "model_validation": false,
+  "providers": "fixture-ner-and-nli-not-deployable",
+  "synthetic_only": true
+}

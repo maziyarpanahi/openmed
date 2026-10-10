@@ -1,0 +1,51 @@
+# OpenMed synthetic clinical-PHI eval corpus
+
+This card describes the public `openmed-synth` benchmark suite. The corpus is
+generated locally by
+[`scripts/eval/build_openmed_synth_corpus.py`](https://github.com/maziyarpanahi/openmed/blob/master/scripts/eval/build_openmed_synth_corpus.py)
+and loaded through the OpenMed golden-fixture machinery. No network access or
+credential is needed.
+
+| Field | Value |
+| --- | --- |
+| Dataset | `openmed-synth` |
+| Version | 1.0.0 |
+| Record count | 14 |
+| Labels | `DATE_OF_BIRTH`, `EMAIL`, `ID_NUM`, `LOCATION`, `PERSON`, `PHONE`, `STREET_ADDRESS`, `ZIPCODE` |
+| Label distribution | 14 spans per label; 112 spans total |
+| Languages | `de`, `en`, `es`, `fr`, `hi`, `pt`, `zh` |
+| Generation method | Seeded Faker locales plus OpenMed `clinical_ids.py` providers; dates and locale-shaped postcodes use stable seeded integer draws; gold offsets and mask outputs are computed from the rendered segments |
+| Default seed | 2352 |
+| License | Apache-2.0 |
+| Content hash | sha256:56f7bab49f18143fb4acedaac701eab9b3d43856b79b634a0f4d330285d4fb54 |
+
+The content hash is the SHA-256 digest of the canonical JSONL emitted for the
+default seed and size. Re-running the generator with the same inputs must
+produce the same bytes and hash; changing the seed changes the corpus hash.
+Each row contains source text, canonical gold spans, and an expected `mask`
+post-action output. Spans are validated through `GoldenFixture` before the
+suite exposes them to the benchmark harness.
+
+All names, dates, contact details, addresses, locations, email addresses, and
+medical-record identifiers are generated synthetic values. This corpus
+contains no real PHI, production records, or DUA-gated data, and it is not
+clinical ground truth. It is an assistive de-identification evaluation
+fixture, not a clinical decision-making or patient-care tool.
+
+## Smoke tests versus model evaluation
+
+`openmed benchmark pii --suite openmed-synth` deliberately returns gold spans
+as a fixture-integrity smoke test. Its report sets `uses_gold_reference: true`
+and `evaluation_kind: fixture_smoke_only`. A perfect smoke score is not model
+performance. The explicit `openmed-synth-reference` alias behaves identically.
+
+Passing a different model name uses the regular local model runner, not gold
+spans; cache the model assets before offline use. An injected Python runner is
+labeled `caller_supplied_runner`, since the harness cannot verify whether it
+actually executes a model. All modes set `clinical_validation: false`.
+
+Generation is bounded to 1–10,000 records and a signed 64-bit seed. The pinned
+hash above was verified with Faker 40.15.0 from `uv.lock`; reproducibility across
+arbitrary Faker versions is not promised. Use the frozen environment when
+reproducing this receipt. Faker values are invented, but accidental resemblance
+to real people or addresses is possible; they are not anonymized patient data.

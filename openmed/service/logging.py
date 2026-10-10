@@ -25,6 +25,7 @@ _GROUNDING_INPUT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_input_count"
 _GROUNDING_RESULT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_result_count"
 _GROUNDING_SYSTEMS_SCOPE_KEY = "openmed.access_log_grounding_systems"
 _GROUNDING_LANG_SCOPE_KEY = "openmed.access_log_grounding_lang"
+_BRIEF_SCOPE_KEY = "openmed.access_log_brief"
 
 _REQUEST_ID: ContextVar[Optional[str]] = ContextVar(
     "openmed_service_request_id",
@@ -107,6 +108,24 @@ def set_access_log_grounding(
         request.scope[_GROUNDING_RESULT_COUNT_SCOPE_KEY] = max(0, int(result_count))
 
 
+def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
+    """Attach only bounded counts and closed-vocabulary brief outcomes."""
+    from openmed.clinical.brief import BriefRefusal
+
+    reason = response.get("refusal_reason")
+    backend = response.get("backend_id")
+    request.scope[_BRIEF_SCOPE_KEY] = {
+        "brief_claim_count": len(response.get("verdicts", [])),
+        "brief_summary_characters": int(response.get("summary_characters", 0)),
+        "brief_refusal_reason": reason
+        if reason in {item.value for item in BriefRefusal}
+        else None,
+        "brief_backend": backend
+        if backend in {"deterministic-extractive", "local-mlx"}
+        else "local",
+    }
+
+
 class CorrelationIdMiddleware:
     """Add request IDs and emit PHI-free structured access logs."""
 
@@ -166,6 +185,7 @@ class CorrelationIdMiddleware:
                             "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
                         }
                     )
+                payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 emit_access_log(
                     self.logger,
                     self.log_config,
