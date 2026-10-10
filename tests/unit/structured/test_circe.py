@@ -360,6 +360,8 @@ def test_malformed_json_is_typed_and_value_free(value):
     with pytest.raises(CirceInputError) as error:
         import_value(value)
     assert "private" not in str(error.value)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
 
 
 @pytest.mark.parametrize(
@@ -552,3 +554,38 @@ def test_every_native_negation_filter_is_an_explicit_export_loss(negation):
         and loss.reason_code == "assertion_filter_unsupported"
         for loss in result.value.losses
     )
+
+
+def test_private_date_parser_context_is_not_retained():
+    value = expression()
+    value["PrimaryCriteria"]["CriteriaList"][0]["ConditionOccurrence"][
+        "OccurrenceStartDate"
+    ] = {"Op": "eq", "Value": "/private/patient-date"}
+    with pytest.raises(CirceInputError, match="circe_date_invalid") as error:
+        import_value(value)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+@pytest.mark.parametrize("controlled", [False, True])
+def test_private_mapping_failures_have_only_controlled_codes(controlled):
+    class UnreadableMapping(dict):
+        def items(self):
+            if controlled:
+                raise CirceInputError("/private/patient-token")
+            raise RuntimeError("/private/patient-token")
+
+    with pytest.raises(CirceInputError, match="^circe_invalid$") as error:
+        import_value(UnreadableMapping(expression()))
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
+
+
+def test_private_conversion_constructor_parser_context_is_not_retained():
+    from dataclasses import replace
+
+    conversion = import_value(expression()).value
+    with pytest.raises(CirceInputError, match="^circe_invalid$") as error:
+        replace(conversion, _expression_bytes=b"/private/patient-token")
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None

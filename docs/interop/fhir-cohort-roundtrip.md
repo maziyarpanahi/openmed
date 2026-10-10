@@ -247,7 +247,9 @@ mappings. Threshold expansion and native output are limited to 256 generated
 criteria. Exceeding a bound raises `CirceLimitError`; malformed supported
 fields, duplicate JSON keys, invalid references and missing per-concept
 vocabulary IDs raise `CirceInputError`. Both errors contain controlled codes
-only. A supplied expression digest mismatch returns `StoreState.CONFLICT`.
+only. Public conversion boundaries return fresh controlled errors without retaining
+private parser or caller-mapping exception context. A supplied expression
+digest mismatch returns `StoreState.CONFLICT`.
 
 A conversion binds the canonical Circe JSON digest and the complete existing
 exchange-envelope digest in direction order, and exposes the native definition

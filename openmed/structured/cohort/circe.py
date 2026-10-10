@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
+from functools import wraps
 from itertools import combinations
-from typing import Any, Final
+from typing import Any, Final, ParamSpec, TypeVar
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
 from openmed.structured.store import StoreResult, StoreState
@@ -63,6 +64,53 @@ class CirceLimitError(CirceInputError):
     """A JSON or boolean-expansion resource bound was exceeded."""
 
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+_CONTROLLED_ERROR_CODES: Final = frozenset(
+    {
+        "circe_codeset_reference_invalid",
+        "circe_custody_invalid",
+        "circe_date_invalid",
+        "circe_depth_limit",
+        "circe_domain_binding_invalid",
+        "circe_domain_invalid",
+        "circe_duplicate_codeset",
+        "circe_duplicate_key",
+        "circe_empty_codeset",
+        "circe_envelope_invalid",
+        "circe_expansion_limit",
+        "circe_group_invalid",
+        "circe_invalid",
+        "circe_node_limit",
+        "circe_primary_missing",
+        "circe_size_limit",
+        "circe_vocabulary_missing",
+        "circe_window_invalid",
+    }
+)
+
+
+def _private_errors(function: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Keep parser and caller-mapping exceptions out of public diagnostics."""
+
+    @wraps(function)
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        code = "circe_invalid"
+        error_type: type[CirceInputError] = CirceInputError
+        try:
+            return function(*args, **kwargs)
+        except CirceInputError as error:
+            if type(error.code) is str and error.code in _CONTROLLED_ERROR_CODES:
+                code = error.code
+                if isinstance(error, CirceLimitError):
+                    error_type = CirceLimitError
+        except Exception:
+            pass
+        raise error_type(code)
+
+    return wrapped
+
+
 @dataclass(frozen=True, slots=True)
 class CirceConversion:
     """Conversion targets and value-free custody for human loss review.
@@ -79,6 +127,7 @@ class CirceConversion:
     exchange: CohortDefinitionExchange | None = field(repr=False)
     _expression_bytes: bytes = field(repr=False)
 
+    @_private_errors
     def __post_init__(self) -> None:
         expression_digest = canonical_digest(_bounded_json(self._expression_bytes))
         exchange_digest = (
@@ -303,6 +352,7 @@ def _date_range(temporal: TemporalWindow) -> dict[str, str] | None:
     return None
 
 
+@_private_errors
 def export_circe_expression(
     exchange: CohortDefinitionExchange,
     *,
@@ -786,6 +836,7 @@ class _Importer:
         return _join("or", [term for term in terms if term is not None])
 
 
+@_private_errors
 def import_circe_expression(
     value: Mapping[str, Any] | str | bytes | bytearray,
     *,
