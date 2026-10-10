@@ -470,7 +470,7 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 </div>
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
