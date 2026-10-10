@@ -14,6 +14,14 @@ from .action_graph import (
     GraphFinding,
     validate_action_graph,
 )
+from .action_phases import (
+    ACTION_PHASE_TRANSITIONS,
+    ActionPhase,
+    ActionPhaseError,
+    is_resumable_phase,
+    is_terminal_phase,
+    validate_action_transition,
+)
 from .artifact_reference import (
     ARTIFACT_REFERENCE_VERSION,
     MAX_ARTIFACT_BYTE_SIZE,
@@ -112,6 +120,13 @@ from .reviewer_handoff import (
     ReviewerHandoffPacket,
     allowed_handoff_reason_codes,
 )
+from .run_commitment import (
+    RUN_COMMITMENT_VERSION,
+    RunCommitmentError,
+    RunCommitmentVerificationResult,
+    compute_run_summary_commitment,
+    verify_run_summary_commitment,
+)
 from .run_diff import (
     RUN_DIFF_SCHEMA_VERSION,
     RunDiffError,
@@ -136,6 +151,13 @@ from .schema_compatibility import (
     SchemaRange,
     SemVer,
     check_schema_compatibility,
+)
+from .schemas import (
+    AGENT_SCHEMA_DIALECT,
+    build_agent_schema,
+    build_agent_schema_catalog,
+    list_agent_schema_names,
+    render_agent_schema,
 )
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 from .workflow_rollup import (
@@ -183,6 +205,10 @@ from .workflows import (
 )
 
 __all__ = [
+    "AGENT_SCHEMA_DIALECT",
+    "ACTION_PHASE_TRANSITIONS",
+    "ActionPhase",
+    "ActionPhaseError",
     "ALLOWED_ATTRIBUTES",
     "ARTIFACT_REFERENCE_VERSION",
     "AttributeKind",
@@ -273,6 +299,9 @@ __all__ = [
     "MAX_HANDOFF_EVIDENCE_REFERENCES",
     "MAX_POLICY_MATRIX_ROWS",
     "MAX_RUN_SUMMARY_JSON_BYTES",
+    "RUN_COMMITMENT_VERSION",
+    "RunCommitmentError",
+    "RunCommitmentVerificationResult",
     "RUN_DIFF_SCHEMA_VERSION",
     "RunDiffError",
     "MAX_SEQUENCE_FINDINGS",
@@ -317,17 +346,25 @@ __all__ = [
     "WorkflowRollupError",
     "WorkflowRollupRow",
     "allowed_reason_codes",
+    "build_agent_schema",
+    "build_agent_schema_catalog",
+    "is_resumable_phase",
+    "is_terminal_phase",
+    "validate_action_transition",
     "compose_evidence_answer",
     "explain_cohort_membership",
     "diff_run_summaries",
     "check_capability_validity",
+    "compute_run_summary_commitment",
     "envelope_from_exception",
     "error_class_for_code",
     "is_retryable",
     "load_evidence_query_schema",
+    "list_agent_schema_names",
     "make_evidence_citation",
     "make_query_access_decision",
     "plan_evidence_query",
+    "render_agent_schema",
     "allowed_handoff_reason_codes",
     "check_schema_compatibility",
     "security",
@@ -335,4 +372,5 @@ __all__ = [
     "validate_artifact_references",
     "validate_event_attributes",
     "validate_event_sequence",
+    "verify_run_summary_commitment",
 ]

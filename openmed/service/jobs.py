@@ -120,10 +120,11 @@ class LocalJobStore:
     def create(self, record: dict[str, Any]) -> dict[str, Any]:
         """Persist a new job record."""
         with self._lock:
+            previous = _copy_record(self._records)
             self.cleanup_expired_locked()
             job_id = str(record["id"])
             self._records[job_id] = _copy_record(record)
-            self._persist_locked()
+            self._publish_locked(previous)
             return _copy_record(self._records[job_id])
 
     def get(self, job_id: str) -> Optional[dict[str, Any]]:
@@ -136,17 +137,19 @@ class LocalJobStore:
     def update(self, job_id: str, **changes: Any) -> dict[str, Any]:
         """Apply changes to a job record and persist them."""
         with self._lock:
+            previous = _copy_record(self._records)
             record = self._records[job_id]
             record.update(_copy_record(changes))
             record["updated_at"] = _isoformat(self.clock())
-            self._persist_locked()
+            self._publish_locked(previous)
             return _copy_record(record)
 
     def cleanup_expired(self) -> None:
         """Remove terminal records whose TTL has elapsed."""
         with self._lock:
+            previous = _copy_record(self._records)
             if self.cleanup_expired_locked():
-                self._persist_locked()
+                self._publish_locked(previous)
 
     def cleanup_expired_locked(self) -> bool:
         now = self.clock()
@@ -165,32 +168,46 @@ class LocalJobStore:
             return {}
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
+        except json.JSONDecodeError:
+            raise ValueError("Job metadata store contains invalid JSON") from None
         if not isinstance(raw, dict):
-            return {}
+            raise ValueError("Job metadata store must contain a JSON object")
         jobs = raw.get("jobs")
         if not isinstance(jobs, dict):
-            return {}
-        return {
-            str(job_id): dict(record)
-            for job_id, record in jobs.items()
-            if isinstance(record, dict)
-        }
+            raise ValueError("Job metadata store must contain a jobs object")
+        if any(not isinstance(record, dict) for record in jobs.values()):
+            raise ValueError("Job metadata store contains an invalid job record")
+        return {str(job_id): dict(record) for job_id, record in jobs.items()}
 
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"jobs": self._records}
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=str(self.path.parent),
-            delete=False,
-        ) as handle:
-            json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
-            handle.write("\n")
-            temp_name = handle.name
-        os.replace(temp_name, self.path)
+        temp_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=str(self.path.parent),
+                delete=False,
+            ) as handle:
+                temp_name = handle.name
+                json.dump(payload, handle, ensure_ascii=True, indent=2, sort_keys=True)
+                handle.write("\n")
+            os.replace(temp_name, self.path)
+        except BaseException:
+            if temp_name is not None:
+                try:
+                    os.unlink(temp_name)
+                except OSError:
+                    pass
+            raise
+
+    def _publish_locked(self, previous: dict[str, dict[str, Any]]) -> None:
+        try:
+            self._persist_locked()
+        except BaseException:
+            self._records = previous
+            raise
 
 
 def _parse_timestamp(raw_value: Any) -> datetime:
@@ -262,12 +279,16 @@ class DeidentifyJobQueue:
             self._shutdown = True
         self._executor.shutdown(wait=False, cancel_futures=True)
 
-    def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
-        now = self.clock()
+    def _expiry_timestamp(self, moment: datetime) -> str:
+        """Return the metadata expiry for a record that reached *moment*."""
         expires_at = datetime.fromtimestamp(
-            now.timestamp() + self.store.ttl_seconds,
+            moment.timestamp() + self.store.ttl_seconds,
             tz=timezone.utc,
         )
+        return _isoformat(expires_at)
+
+    def _new_record(self, payload: DeidentifyJobRequest) -> dict[str, Any]:
+        now = self.clock()
         documents = [
             _document_metadata(index, document)
             for index, document in enumerate(payload.documents)
@@ -289,7 +310,7 @@ class DeidentifyJobQueue:
             "updated_at": _isoformat(now),
             "started_at": None,
             "completed_at": None,
-            "expires_at": _isoformat(expires_at),
+            "expires_at": self._expiry_timestamp(now),
         }
 
     def _run_job(self, item: _JobWorkItem) -> None:
@@ -307,11 +328,10 @@ class DeidentifyJobQueue:
             document_id = _document_id(index, document)
             try:
                 result = self._deidentify_document(item.payload, document)
+                summary.add_result(document_id, result)
             except Exception as exc:
                 summary.failed_count += 1
                 error = _safe_error(exc)
-            else:
-                summary.add_result(document_id, result)
 
             self.store.update(item.job_id, **summary.to_progress_record())
 
@@ -323,6 +343,7 @@ class DeidentifyJobQueue:
             progress_percent=100.0,
             error=error,
             completed_at=_isoformat(completed_at),
+            expires_at=self._expiry_timestamp(completed_at),
         )
         self._send_terminal_webhook(item.payload.webhook, final_record)
 
@@ -392,11 +413,16 @@ class _JobSummary:
 
     def add_result(self, document_id: str, result: Any) -> None:
         """Add one de-identification result without retaining raw text."""
-        self.processed_count += 1
+        labels: dict[str, int] = {}
+        spans: list[dict[str, Any]] = []
         for entity in getattr(result, "pii_entities", []) or []:
             label = _entity_label(entity)
-            self.label_histogram[label] = self.label_histogram.get(label, 0) + 1
-            self.spans.append(_entity_span(document_id, entity, label))
+            spans.append(_entity_span(document_id, entity, label))
+            labels[label] = labels.get(label, 0) + 1
+        self.processed_count += 1
+        for label, count in labels.items():
+            self.label_histogram[label] = self.label_histogram.get(label, 0) + count
+        self.spans.extend(spans)
 
     def to_progress_record(self) -> dict[str, Any]:
         attempted = self.processed_count + self.failed_count

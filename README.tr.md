@@ -102,7 +102,7 @@ Desteklenen Apple donanımında OpenMed, gerekli yapıtlar hazır olduktan sonra
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -275,7 +275,7 @@ Apple Silicon olmayan ana makinelerde MLX model adları otomatik olarak ilgili P
 
 ---
 
-## Çok dilli PII (38 desteklenen yol; 35 model destekli)
+## Çok dilli PII (42 desteklenen yol; 35 model destekli)
 
 `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme: toplam **kayıtlı PII model kataloğu**.
 
@@ -393,7 +393,7 @@ OpenMed araştırmanızda faydalı olduysa, lütfen atıfta bulunun:
 
 OpenMed sizin için faydalıysa, bir yıldız başkalarının onu keşfetmesine yardımcı olur.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
