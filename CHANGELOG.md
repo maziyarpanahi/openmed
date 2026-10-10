@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline, synthetic governed clinical reference workflow covering
+  approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
 - Added metadata-only signed action ledgers and deterministic replay evidence,
   permanent circuit-breaker stops, cooperative resource budgets, and completed
   run invariant reports for governed agent runtimes (#2766, #2767, #2769, #2770,
