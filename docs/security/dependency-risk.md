@@ -102,6 +102,80 @@ The report is a review aid, not a compliance certification or clinical
 decision guarantee. Use synthetic advisory snapshots in tests and keep any
 source snapshot governed separately from the report artifact.
 
+## Vulnerability gate exposure evidence
+
+The CI vulnerability gate is separate from the offline risk-report API above.
+`scripts/security/vulnerability_scan_gate.py` annotates each explicitly selected
+lockfile finding with its exact locked package/version exposure:
+
+```sh
+uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
+  --report vulnerability-reports/trivy-image.json \
+  --report vulnerability-reports/trivy-lockfile.json \
+  --lock-report vulnerability-reports/trivy-lockfile.json \
+  --lockfile uv.lock \
+  --review-extra-only nltk=nltk \
+  --output vulnerability-reports/vulnerability-scan-summary.json
+```
+
+The tool copies the lock into an isolated temporary project and runs
+[`uv export`](https://docs.astral.sh/uv/reference/cli/#uv-export) offline with
+`--frozen`, `--no-build`, `--no-python-downloads`, `--no-default-groups`,
+`--no-dev` and `--no-emit-project`. It exports core, then each declared extra
+separately. uv interprets transitive extras, platform/Python markers and its
+resolution forks; the gate does not approximate their meaning with a plain
+dependency-graph walk. No packages are installed and the workspace lock remains
+unchanged. The gate requires uv with CycloneDX 1.5 export support (validated with
+uv 0.9.17). Missing tooling, invalid locks or failed exports fail closed without
+forwarding package-manager stderr or private paths.
+
+Exposure includes every platform/Python branch retained by each universal
+export. It describes potential installation contexts, rather than the packages
+installed on the current machine. `core: true` means the exact package/version
+appears in the core closure; `extras` names the single-extra installs containing
+it, including any core dependencies shared by those installs. Combinations of
+multiple extras are outside the report's explicit scope
+`core_and_each_extra_separately_all_lock_platforms`. A locked version absent
+from these contexts has status `not_in_examined_contexts`; it may still be
+reachable through a combination of extras. A scanner version absent from the
+lock has status `unmatched_version` and `core: null`, never a claimed absence
+from core. An image finding receives no lockfile attribution even if its
+package/version happens to match the lock.
+
+The version-2 gate summary and job output contain only bounded package names,
+versions, advisory identifiers, controlled severity/status/context codes and
+counts, and declared extras. Scanner targets, titles, URLs, report paths and
+source code are omitted. The `findings` array includes findings below the
+blocking threshold so their exposure remains reviewable. Original Trivy JSON
+and SARIF artifacts remain separate scanner evidence governed by the existing
+workflow. Exposure cannot suppress a finding: the existing threshold,
+package/target-specific waiver matching, expiry and refusal of waivers for
+findings with a fixed version all still apply. Invalid or expired waiver
+policy still exits with failure; its summary retains exposure with
+`policy_status: invalid`, `threshold: null` and no claimed waiver/blocking
+decisions.
+
+`--review-extra-only PACKAGE=MODULE` additionally verifies that the reviewed
+distribution is present only outside core and that the Python source tree
+contains no direct or literal dynamic import of its module. Distribution and
+import names are supplied explicitly because they can differ. This static
+guard does not execute source code; computed module names and runtime imports
+inside third-party integrations still require review. The unit suite checks
+the current NLTK boundary and proves that a synthetic direct or literal
+dynamic import fails the guard. The CI gate applies this check to `openmed/`;
+if NLTK is removed from the lock or intentionally integrated, review the guard
+configuration separately rather than silently weakening it.
+
+The focused offline check is:
+
+```sh
+.venv/bin/python -m pytest tests/unit/security/test_vulnerability_scan_gate.py -q
+```
+
+This evidence supports a maintainer's allowlist review. Adding, renewing,
+removing or replacing a waiver remains a separate decision; this reporting
+change makes none of those changes.
+
 ## Temporary NLTK exception for the universal lockfile
 
 On 2026-10-03, the maintainer approved a time-limited exception for
