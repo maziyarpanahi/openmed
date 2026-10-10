@@ -123,6 +123,7 @@ def assert_code(code, callback):
         callback()
     assert error.value.code == code
     assert str(error.value) == code
+    assert error.value.__context__ is None
 
 
 def test_order_guards_and_runner_sees_no_labels(setup_session):
@@ -531,3 +532,16 @@ def test_record_digest_detects_checkpoint_corruption(setup_session):
     with sqlite3.connect(path) as connection:
         connection.execute("UPDATE sessions SET record = ?", (json.dumps(document),))
     assert_code("record_invalid", lambda: EvaluationSession(**args))
+
+
+def test_invalid_json_refusal_drops_private_parser_document():
+    assert_code(
+        "record_invalid", lambda: SessionRecord.from_json('{"secret": "' + CANARY)
+    )
+
+
+def test_storage_refusal_drops_private_path_and_os_context(tmp_path):
+    assert_code(
+        "store_failed",
+        lambda: SQLiteSessionStore(tmp_path / CANARY / "missing.sqlite"),
+    )

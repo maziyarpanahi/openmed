@@ -180,7 +180,9 @@ recovery procedure. In-memory or temporary SQLite database names are rejected.
 ### Stable refusals and synthetic example
 
 `EvaluationSessionError.code` exposes controlled codes without echoing provider
-exceptions or input values. Key refusals include:
+exceptions or input values. Public session and storage boundaries raise fresh
+controlled errors outside provider and parser handlers; rejected documents and
+private paths are absent from exception context. Key refusals include:
 
 | Trigger | Code |
 | --- | --- |

@@ -8,9 +8,10 @@ import math
 import re
 import sqlite3
 from dataclasses import dataclass, replace
+from functools import wraps
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, ParamSpec, Sequence, TypeVar
 
 from openmed.eval.governance import (
     FEEDBACK_DETAILED,
@@ -83,6 +84,36 @@ class EvaluationSessionError(ValueError):
         super().__init__(self.code)
 
 
+_Parameters = ParamSpec("_Parameters")
+_Result = TypeVar("_Result")
+
+
+def _boundary(
+    fallback: str,
+) -> Callable[[Callable[_Parameters, _Result]], Callable[_Parameters, _Result]]:
+    """Publish only a fresh controlled refusal, without private exception context."""
+
+    def decorate(
+        callback: Callable[_Parameters, _Result],
+    ) -> Callable[_Parameters, _Result]:
+        @wraps(callback)
+        def controlled(
+            *args: _Parameters.args, **kwargs: _Parameters.kwargs
+        ) -> _Result:
+            try:
+                return callback(*args, **kwargs)
+            except EvaluationSessionError as exc:
+                code = exc.code
+            except Exception:
+                code = fallback
+            # Outside both handlers: JSON documents and provider errors are absent.
+            raise EvaluationSessionError(code)
+
+        return controlled
+
+    return decorate
+
+
 def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
@@ -152,6 +183,7 @@ class SessionRecord:
         return _json(self.to_dict())
 
     @classmethod
+    @_boundary("record_invalid")
     def from_json(cls, value: str) -> SessionRecord:
         """Validate persisted schema and digest before trusting any checkpoint."""
         try:
@@ -189,6 +221,7 @@ class SQLiteSessionStore:
     stays locked: recovery sacrifices availability rather than repeating release.
     """
 
+    @_boundary("store_failed")
     def __init__(self, path: str | Path) -> None:
         """Open a local database; never use a submission-controlled location."""
         try:
@@ -208,10 +241,12 @@ class SQLiteSessionStore:
         except Exception:
             raise EvaluationSessionError("store_failed") from None
 
+    @_boundary("store_failed")
     def close(self) -> None:
         """Close the local connection."""
         self._db.close()
 
+    @_boundary("store_failed")
     def load(self, session_key: str) -> SessionRecord | None:
         """Read and validate a durable session checkpoint."""
         _require_digest(session_key)
@@ -245,6 +280,7 @@ class SQLiteSessionStore:
         ):
             raise EvaluationSessionError("record_invalid")
 
+    @_boundary("store_failed")
     def save(self, record: SessionRecord, previous: SessionRecord | None) -> None:
         """Commit a checkpoint with compare-and-swap conflict detection."""
         if type(record) is not SessionRecord:
@@ -277,6 +313,7 @@ class SQLiteSessionStore:
         except Exception:
             raise EvaluationSessionError("store_failed") from None
 
+    @_boundary("store_failed")
     def claim_release(
         self,
         previous: SessionRecord,
@@ -313,6 +350,7 @@ class SQLiteSessionStore:
         except Exception:
             raise EvaluationSessionError("store_failed") from None
 
+    @_boundary("store_failed")
     def finish_release(
         self,
         previous: SessionRecord,
@@ -392,6 +430,7 @@ class EvaluationSession:
     No content is persisted, so outputs cannot be recovered from this database.
     """
 
+    @_boundary("invalid_configuration")
     def __init__(
         self,
         *,
@@ -527,6 +566,7 @@ class EvaluationSession:
         ):
             raise EvaluationSessionError("holdout_commitment_mismatch")
 
+    @_boundary("verification_failed")
     def verify(self) -> None:
         """Verify both seals before exposing any case to the injected runner."""
         with self._lock:
@@ -540,6 +580,7 @@ class EvaluationSession:
             except Exception:
                 raise EvaluationSessionError("verification_failed") from None
 
+    @_boundary("execution_failed")
     def run_cases(self) -> None:
         """Execute and score verified cases privately, returning no output or score."""
         with self._lock:
@@ -568,6 +609,7 @@ class EvaluationSession:
             except Exception:
                 raise EvaluationSessionError("execution_failed") from None
 
+    @_boundary("forensics_failed")
     def run_forensics(self) -> None:
         """Run all existing overlap checks and bind their content-free report."""
         with self._lock:
@@ -588,6 +630,7 @@ class EvaluationSession:
             except Exception:
                 raise EvaluationSessionError("forensics_failed") from None
 
+    @_boundary("adjudication_failed")
     def build_adjudication(self) -> None:
         """Render and audit blinded packets, then invoke the injected local review."""
         with self._lock:
@@ -638,6 +681,7 @@ class EvaluationSession:
             except Exception:
                 raise EvaluationSessionError("adjudication_failed") from None
 
+    @_boundary("feedback_failed")
     def release_feedback(self) -> SessionFeedback:
         """Claim release durably, consume one session attempt, then return feedback.
 
