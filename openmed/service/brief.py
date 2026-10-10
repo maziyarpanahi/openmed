@@ -6,6 +6,7 @@ from typing import Any, Callable
 from openmed.clinical.brief import (
     BriefContext,
     BriefRefusal,
+    ReviewedLocalBriefContext,
     _result,
     build_clinical_brief,
 )
@@ -52,7 +53,7 @@ def brief_response(
             value, context = context_provider(text, review_id)
             if (
                 type(value) is not DeidentificationResult
-                or type(context) is not BriefContext
+                or type(context) not in (BriefContext, ReviewedLocalBriefContext)
                 or value.original_text != text
             ):
                 failed = True
