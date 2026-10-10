@@ -93,6 +93,49 @@ def reviewed_fixture():
     return result, context
 
 
+def test_actual_reviewed_local_brief_matches_bundled_audit_and_response_schemas():
+    from openmed.clinical.record_schemas import validate_clinical_record
+
+    value, context = reviewed_fixture()
+    brief = build_clinical_brief(value, context=context, model="extractive")
+    assert brief.refusal_reason is None
+    validate_clinical_record("brief_audit", brief.to_dict())
+    validate_clinical_record("brief_response", brief.to_response())
+
+
+@pytest.mark.parametrize("change", ["text", "offset", "identity", "receipt", "version"])
+def test_bundled_brief_schemas_refuse_invalid_reviewed_local_metadata(change):
+    import copy
+
+    from openmed.clinical.record_schemas import (
+        ClinicalRecordSchemaError,
+        validate_clinical_record,
+    )
+
+    value, context = reviewed_fixture()
+    audit = copy.deepcopy(
+        build_clinical_brief(value, context=context, model="extractive").to_dict()
+    )
+    metadata = audit["metrics"]["reviewed_evidence"]
+    if change == "text":
+        metadata["text"] = "SYNTHETIC_PRIVATE_IDENTIFIER"
+    elif change == "offset":
+        metadata["source_length"] = 0
+    elif change == "identity":
+        metadata["references"][1]["reference_id"] = metadata["references"][0][
+            "reference_id"
+        ]
+    elif change == "receipt":
+        metadata["review_receipt"]["expires_at"] = metadata["review_receipt"][
+            "issued_at"
+        ]
+    else:
+        metadata["schema_version"] = True
+    with pytest.raises(ClinicalRecordSchemaError) as caught:
+        validate_clinical_record("brief_audit", audit)
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
+
+
 def admit(context):
     return admit_reviewed_local_evidence(
         context.packet,
