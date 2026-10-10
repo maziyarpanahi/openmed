@@ -46,6 +46,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   digest-bound expiring receipts, typed refusals and synthetic offline fixtures
   (#3651). Existing evidence packets remain synthetic-only.
 
+- Added immutable run-scoped agent tool catalog bindings, exact-version pinned
+  dispatch, deterministic restore eligibility and content-free re-review outcomes
+  for implementation, schema and side-effect drift (#3665).
+
+- Added injected runtime clinical-agent authority revocation checks before
+  sensitive reads, effects and recovery, with monotonic grant/ticket generations,
+  descendant and approval invalidation, and content-free offline tests (#3664).
+- Added guarded dispatch on the existing workflow executor, enforcing signed
+  grants, purpose tickets, minimum-data projections, pinned tool identity and
+  exact single-use approval, with content-free cancellation and uncertain-effect
+  recovery outcomes through injected local providers (#3661).
+- Add default-off agent effect admission, signed local transition receipts,
+  independent rollback detection, emergency stop and fresh-enable CLI commands
+  with synthetic approval/recovery safety controls (#3765).
+
 - Add opt-in FHIR R4 server `$validate` preflight through an injected target-bound
   transport and opaque credential handle. Return controlled issue summaries and
   request digests; block errors and unavailable validation before application review.
