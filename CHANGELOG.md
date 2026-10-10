@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport and opaque credential handle. Return controlled issue summaries and
   request digests; block errors and unavailable validation before application review.
 
+- Added opt-in private SQLite approval nonce claims shared across processes and
+  restarts, fail-closed durable replay protection, and a compatible consumption
+  store adapter for MCP consent receipts (#3763).
+
 - Added an offline, synthetic governed clinical reference workflow covering
   approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
 - Added metadata-only signed action ledgers and deterministic replay evidence,
@@ -346,6 +350,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a duplicate-cue guard (#3108).
 
 ### Changed
+
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
 
 - Training and new-checkpoint publication are optional research, without a
   library-release milestone or feature-blocking relationship. SDK readiness
