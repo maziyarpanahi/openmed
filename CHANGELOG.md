@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added metadata-only signed action ledgers and deterministic replay evidence,
+  permanent circuit-breaker stops, cooperative resource budgets, and completed
+  run invariant reports for governed agent runtimes (#2766, #2767, #2769, #2770,
+  #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
