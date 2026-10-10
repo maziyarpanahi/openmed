@@ -49,6 +49,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a local Journey-fact ClinicalBrief context provider with explicit review
+  verification, source/fact/profile/calibration bindings, typed mapping refusals
+  and offline Python, CLI, REST and MCP injection tests (#3652).
+
+- Add the separately versioned reviewed-local clinical evidence contract and
+  opt-in Python/OpenMedKit brief admission, with current source/review custody,
+  digest-bound expiring receipts, typed refusals and synthetic offline fixtures
+  (#3651). Existing evidence packets remain synthetic-only.
+
 - Added immutable run-scoped agent tool catalog bindings, exact-version pinned
   dispatch, deterministic restore eligibility and content-free re-review outcomes
   for implementation, schema and side-effect drift (#3665).
@@ -109,6 +118,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `jsonschema` validation and value-free contract tests (#3803).
 
 ### Fixed
+
+- Normalize SMART v1 read/write/all permissions, wildcard resources, granular
+  queries and non-clinical identity/launch/session scopes in offline scope
+  audits. Compare constraints conservatively and report malformed input without
+  echoing values; granular audit evidence contains only constraint digests (#3767).
 
 - Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
   encapsulated documents, expose truthful pixel-cleaning outcomes, and stage

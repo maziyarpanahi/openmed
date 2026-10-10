@@ -228,6 +228,9 @@
         "leakage": {
           "$ref": "#/$defs/leakage"
         },
+        "reviewed_evidence": {
+          "$ref": "#/$defs/reviewed_local_evidence"
+        },
         "temporal_order": {
           "$ref": "#/$defs/temporal_order"
         },
@@ -241,10 +244,19 @@
         "empty_evidence",
         "invalid_evidence",
         "invalid_input",
+        "invalid_reviewed_evidence",
         "nli_rejected",
         "nli_unavailable",
         "privacy",
+        "review_authority_unavailable",
+        "review_policy_changed",
+        "review_receipt_expired",
+        "review_receipt_mismatched",
+        "review_receipt_missing",
+        "review_receipt_revoked",
         "review_required",
+        "review_source_changed",
+        "review_source_unavailable",
         "stage_failed",
         "unsupported_claim"
       ]
@@ -2240,6 +2252,128 @@
         "unused_evidence_count",
         "unused_evidence_rate"
       ]
+    },
+    "reviewed_local_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "offset_convention",
+        "policy_digest",
+        "provenance_class",
+        "references",
+        "review_receipt",
+        "schema_version",
+        "source_digest",
+        "source_id",
+        "source_length"
+      ],
+      "properties": {
+        "kind": {
+          "const": "reviewed_local_evidence"
+        },
+        "offset_convention": {
+          "const": "unicode_scalar_half_open"
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "provenance_class": {
+          "const": "reviewed_local"
+        },
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/reviewed_local_reference"
+          }
+        },
+        "review_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/reviewed_local_receipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "source_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^source:[0-9a-f]{64}$"
+        },
+        "source_length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "reviewed_local_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_id",
+        "evidence_digest",
+        "expires_at",
+        "issued_at",
+        "receipt_id"
+      ],
+      "properties": {
+        "authority_id": {
+          "type": "string",
+          "pattern": "^authority:[0-9a-f]{64}$"
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^receipt:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "reviewed_local_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "end",
+        "reference_id",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "reference_id": {
+          "type": "string",
+          "pattern": "^ref:[0-9a-f]{64}$"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
     },
     "extractive_selection": {
       "type": "object",

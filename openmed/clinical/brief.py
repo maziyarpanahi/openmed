@@ -9,12 +9,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
 from openmed.clinical.evidence_packet import EvidencePacket, validate_evidence_packet
 from openmed.clinical.nli_gate import NLIThresholds
+from openmed.clinical.reviewed_local_evidence import (
+    CurrentLocalSource,
+    ReviewAdmissionError,
+    ReviewAuthorityVerifier,
+    ReviewedLocalEvidence,
+    admit_reviewed_local_evidence,
+    reviewed_source_digest,
+)
 from openmed.core.pii import DeidentificationResult
 
 STAGES = (
@@ -58,6 +67,15 @@ class BriefRefusal(str, Enum):
     NLI_UNAVAILABLE = "nli_unavailable"
     NLI_REJECTED = "nli_rejected"
     PRIVACY = "privacy"
+    INVALID_REVIEWED_EVIDENCE = "invalid_reviewed_evidence"
+    REVIEW_RECEIPT_MISSING = "review_receipt_missing"
+    REVIEW_RECEIPT_EXPIRED = "review_receipt_expired"
+    REVIEW_RECEIPT_MISMATCHED = "review_receipt_mismatched"
+    REVIEW_RECEIPT_REVOKED = "review_receipt_revoked"
+    REVIEW_AUTHORITY_UNAVAILABLE = "review_authority_unavailable"
+    REVIEW_SOURCE_UNAVAILABLE = "review_source_unavailable"
+    REVIEW_SOURCE_CHANGED = "review_source_changed"
+    REVIEW_POLICY_CHANGED = "review_policy_changed"
     STAGE_FAILED = "stage_failed"
 
 
@@ -122,6 +140,26 @@ class BriefContext:
     privacy_detector: Callable[[str], Any] = field(repr=False)
 
 
+@dataclass(frozen=True, repr=False)
+class ReviewedLocalBriefContext:
+    """Opt-in local admission; the ordinary BriefContext remains synthetic-only.
+
+    Stores and callbacks are trusted application configuration, never request
+    fields. The source lookup must authorize the caller and return the digest of
+    the current de-identified artifact. Authority verifies its own review record.
+    """
+
+    packet: ReviewedLocalEvidence
+    content_digest: str
+    facts: tuple[BriefFact, ...]
+    nli_predict: Callable[[str, str], Any] = field(repr=False)
+    thresholds: NLIThresholds
+    privacy_detector: Callable[[str], Any] = field(repr=False)
+    source: CurrentLocalSource = field(repr=False)
+    authority: ReviewAuthorityVerifier = field(repr=False)
+    clock: Callable[[], float] = field(default=time.time, repr=False)
+
+
 @dataclass(frozen=True)
 class ClinicalBrief:
     """Immutable result; safe serialization never includes generated text."""
@@ -179,7 +217,7 @@ def build_clinical_brief(
     *,
     model: object = None,
     profile: str = "bhc",
-    context: BriefContext | None = None,
+    context: BriefContext | ReviewedLocalBriefContext | None = None,
 ) -> ClinicalBrief:
     """Compose the fixed guarded pipeline; never approve unreviewed evidence.
 
@@ -203,6 +241,8 @@ def build_clinical_brief(
     try:
         with network_blocked_if_offline(local_only=True):
             return _compose(note_or_deid_result, model, profile, context, completed)
+    except ReviewAdmissionError as error:
+        reason = BriefRefusal(error.reason.value)
     except _Stop as error:
         reason = error.reason
     except ExtractiveSelectionError as error:
@@ -328,20 +368,40 @@ def _compose(value, model, profile_name, context, completed):
     stage("evidence")
     if context is None:
         raise _Stop(BriefRefusal.REVIEW_REQUIRED)
-    if type(context) is not BriefContext or context.content_digest != _digest(text):
+    if type(context) not in (
+        BriefContext,
+        ReviewedLocalBriefContext,
+    ) or context.content_digest != _digest(text):
         raise _Stop(BriefRefusal.INVALID_EVIDENCE)
-    if (
-        type(context.facts) is not tuple
-        or len(context.facts) > 64
-        or type(context.packet) is not EvidencePacket
-        or len(context.packet.references) > 64
-    ):
+    if type(context.facts) is not tuple or len(context.facts) > 64:
         raise _Stop(BriefRefusal.INVALID_EVIDENCE)
-    packet = validate_evidence_packet(context.packet)
-    if packet.policy_fingerprint != brief_policy_fingerprint(
-        text, context.facts, profile_name
-    ):
-        raise _Stop(BriefRefusal.INVALID_EVIDENCE)
+
+    def admit_local():
+        admitted_packet = admit_reviewed_local_evidence(
+            context.packet,
+            source_digest=reviewed_source_digest(text),
+            policy_digest=brief_policy_fingerprint(text, context.facts, profile_name),
+            source=context.source,
+            authority=context.authority,
+            clock=context.clock,
+        )
+        if admitted_packet.source_length != len(text):
+            raise _Stop(BriefRefusal.INVALID_REVIEWED_EVIDENCE)
+        return admitted_packet
+
+    if type(context) is ReviewedLocalBriefContext:
+        packet = admit_local()
+    else:
+        if (
+            type(context.packet) is not EvidencePacket
+            or len(context.packet.references) > 64
+        ):
+            raise _Stop(BriefRefusal.INVALID_EVIDENCE)
+        packet = validate_evidence_packet(context.packet)
+        if packet.policy_fingerprint != brief_policy_fingerprint(
+            text, context.facts, profile_name
+        ):
+            raise _Stop(BriefRefusal.INVALID_EVIDENCE)
     refs = tuple(sorted(packet.references, key=lambda r: (r.start, r.end)))
     if not refs:
         raise _Stop(BriefRefusal.EMPTY_EVIDENCE)
@@ -358,7 +418,9 @@ def _compose(value, model, profile_name, context, completed):
             {
                 "evidence_type": "structured_fact",
                 "source_ref": {
-                    "source_id": r.source_id,
+                    "source_id": packet.source_id
+                    if type(packet) is ReviewedLocalEvidence
+                    else r.source_id,
                     "start": r.start,
                     "end": r.end,
                 },
@@ -429,6 +491,13 @@ def _compose(value, model, profile_name, context, completed):
                 budget.max_tokens, {"key_findings": len(admitted.encode("utf-8"))}
             ),
         )
+    if type(context) is ReviewedLocalBriefContext:
+        # A decoded/admitted record is not reusable authority. Recheck custody,
+        # clock and revocation at the last boundary before the generator runs.
+        rechecked = admit_local()
+        if rechecked.evidence_digest != packet.evidence_digest:
+            raise _Stop(BriefRefusal.REVIEW_RECEIPT_MISMATCHED)
+        packet = rechecked
     generated = summarize_deidentified(
         replace(value, deidentified_text=admitted, audit_report=None), model=backend
     )
@@ -667,6 +736,11 @@ def _compose(value, model, profile_name, context, completed):
         ],
         verdicts=verdicts,
         metrics={
+            **(
+                {"reviewed_evidence": packet.to_dict()}
+                if type(packet) is ReviewedLocalEvidence
+                else {}
+            ),
             "coverage": coverage.to_dict(),
             "unsupported_claims": unsupported.to_dict(),
             "citation_support": support.to_dict(),
