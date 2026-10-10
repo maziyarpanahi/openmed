@@ -21,7 +21,7 @@ from typing import Any, Protocol
 from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID
 
-from openmed.agent.approvals.tokens import ApprovalReceipt
+from openmed.agent.approvals.tokens import ApprovalAuthorization, ApprovalReceipt
 from openmed.interop.fhir_capability_preflight import (
     FHIRCapabilityMetadata,
     FHIRWriteInteraction,
@@ -254,8 +254,8 @@ class FHIRPreparedWrite:
     Lineage and request details stay private. The outer action digest binds the
     exact payload, predicate, version headers, endpoint, credential handle,
     limits, scopes and lineage snapshot. Existing lineage approval alone does
-    not bind all of these wire details; require an ApprovalReceipt for this
-    outer action as well as the existing lineage gate at dispatch.
+    not bind all of these wire details; require verified local authorization for
+    this outer action as well as the existing lineage gate at dispatch.
     """
 
     action_digest: str
@@ -293,7 +293,7 @@ class FHIRPreparedWrite:
 @dataclass(slots=True)
 class _Attempt:
     prepared: FHIRPreparedWrite
-    receipt: ApprovalReceipt
+    approval: ApprovalAuthorization
     submitted: bool = False
     response: FHIRHTTPResponse | None = None
 
@@ -546,17 +546,19 @@ class FHIRWriteClient:
             raise FHIRWriteError("invalid_payload") from None
 
     def submit(
-        self, prepared: FHIRPreparedWrite, receipt: ApprovalReceipt
+        self, prepared: FHIRPreparedWrite, authorization: ApprovalAuthorization
     ) -> FHIRWriteOutcome:
         """Submit once after repeated authorization; never retry or compensate.
 
+        Obtain authorization with ``consume_authorization()`` after reviewing
+        this exact proposal. Its public receipt alone cannot authorize dispatch.
         A duplicate exact key reads its durable result. A reserved key without
         a verifiable outcome requires reconciliation, including after restart.
         Transport failures after entering the sender are always ambiguous.
         """
         self._require_prepared(prepared)
         try:
-            self._guard(prepared, receipt)
+            self._guard(prepared, authorization)
         except FHIRWriteError as exc:
             return self._outcome(prepared, FHIRWriteStatus.REJECTED, exc.reason_code)
         try:
@@ -585,11 +587,11 @@ class FHIRWriteClient:
             return self._outcome(
                 prepared, FHIRWriteStatus.REJECTED, "ledger_unavailable"
             )
-        attempt = _Attempt(prepared, receipt)
+        attempt = _Attempt(prepared, authorization)
         token = self._active.set(attempt)
         try:
             try:
-                self._guard(prepared, receipt)
+                self._guard(prepared, authorization)
                 self._custody.dispatch(
                     prepared._handle,
                     audience=self._audience,
@@ -652,7 +654,7 @@ class FHIRWriteClient:
             or re.fullmatch(r"Bearer [A-Za-z0-9._~+/-]+={0,}", authorization) is None
         ):
             raise FHIRWriteError("credential_rejected")
-        self._guard(attempt.prepared, attempt.receipt)
+        self._guard(attempt.prepared, attempt.approval)
         prepared = attempt.prepared
         request = FHIRTransportRequest(
             prepared._method,
@@ -800,7 +802,9 @@ class FHIRWriteClient:
         if not valid:
             raise FHIRWriteError("invalid_plan")
 
-    def _guard(self, prepared: FHIRPreparedWrite, receipt: ApprovalReceipt) -> None:
+    def _guard(
+        self, prepared: FHIRPreparedWrite, authorization: ApprovalAuthorization
+    ) -> None:
         self._require_prepared(prepared)
         try:
             now = self._clock()
@@ -808,14 +812,14 @@ class FHIRWriteClient:
                 type(now) is not datetime
                 or now.tzinfo is None
                 or now.utcoffset() is None
-                or type(receipt) is not ApprovalReceipt
-                or receipt.action_digest != prepared.action_digest
+                or type(authorization) is not ApprovalAuthorization
+                or authorization.receipt.action_digest != prepared.action_digest
             ):
                 raise FHIRWriteError("authorization_rejected")
             instant = now.timestamp()
-            if not receipt.consumed_at <= instant < receipt.expires_at:
+            if not authorization.consumed_at <= instant < authorization.expires_at:
                 raise FHIRWriteError("authorization_expired")
-            if self._authorize(prepared, receipt) is not True:
+            if self._authorize(prepared, authorization.receipt) is not True:
                 raise FHIRWriteError("authorization_rejected")
             if not hmac.compare_digest(
                 _lineage(self._verify_lineage(prepared), self._limits),
@@ -831,7 +835,11 @@ class FHIRWriteClient:
                 or current.utcoffset() is None
             ):
                 raise FHIRWriteError("authorization_rejected")
-            if not receipt.consumed_at <= current.timestamp() < receipt.expires_at:
+            if (
+                not authorization.consumed_at
+                <= current.timestamp()
+                < authorization.expires_at
+            ):
                 raise FHIRWriteError("authorization_expired")
         except FHIRWriteError:
             raise

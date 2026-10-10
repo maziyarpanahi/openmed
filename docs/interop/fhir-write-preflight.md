@@ -74,7 +74,7 @@ FHIR service.
 
 `openmed.interop.fhir.write_client.FHIRWriteClient` owns bounded execution after
 planning and protected human review. It uses an injected one-shot HTTP
-transport, the existing `ApprovalReceipt`, caller-owned SMART credential
+transport, verified local `ApprovalAuthorization`, caller-owned SMART credential
 custody, a required durable attempt ledger, and repeated authorization and
 field-lineage verification. It adds no HTTP dependency or default connection.
 
@@ -99,8 +99,8 @@ are supplied by [#3439](https://github.com/maziyarpanahi/openmed/pull/3439),
 [#3443](https://github.com/maziyarpanahi/openmed/pull/3443), and
 [#3449](https://github.com/maziyarpanahi/openmed/pull/3449); transaction assembly
 is supplied by [#4000](https://github.com/maziyarpanahi/openmed/pull/4000).
-These predecessor PRs are open at development time. The adapter consumes their
-structural interfaces without importing or bundling their implementations.
+The adapter consumes these structural interfaces without bundling a second
+implementation.
 Synthetic vectors cover development independently; compatibility must also
 be checked against the actual predecessor classes at pinned commits.
 
@@ -126,9 +126,15 @@ scope is added by the adapter.
 The `authorize(prepared, receipt)` callback must verify the consumed receipt
 against trusted local issuance state, active grant, patient scope, default-off
 effect admission, emergency stop, match readiness, and fresh update evidence.
-It must return exact `True`. Approval consumption happens once before submit;
-the callback verifies that consumed receipt repeatedly without consuming the
-token again. No approval is issued by the client.
+It must return exact `True`. After review of the exact proposal, call the approval
+verifier's `consume_authorization()` once and pass its protected local result to `submit()`.
+The client checks its consumed action and exclusive validity window before
+reservation, custody, and dispatch, including after fresh policy and lineage reads.
+The callback receives that result's codes-and-digests receipt and verifies the
+remaining authority repeatedly without consuming the token again. A serialized
+receipt or caller-supplied role/expiry metadata cannot authorize execution. Keep
+the protected authorization in memory and serialize only its public receipt.
+No approval is issued by the client.
 
 The `verify_lineage(prepared)` callback must reconstruct the original write
 intent from `prepared.payload`, retain the exact original plans and target

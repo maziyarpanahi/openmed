@@ -29,8 +29,8 @@ from tests.unit.interop.fhir.test_write_client import (
     NOW,
     ROLE,
     SECRET,
+    _authorization,
     _prepared,
-    _receipt,
     _setup,
     _transaction,
 )
@@ -170,8 +170,10 @@ def forbid_network(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", forbidden)
 
 
-def _signed_receipt(prepared):
-    signer = ApprovalTokenSigner(b"synthetic-local-human-approval-key")
+def _signed_authorization(prepared):
+    signer = ApprovalTokenSigner(
+        b"synthetic-local-human-approval-key", clock=lambda: int(NOW.timestamp())
+    )
     token = signer.issue(
         action_digest=prepared.action_digest,
         reviewer_role=ROLE,
@@ -182,13 +184,15 @@ def _signed_receipt(prepared):
         InMemoryApprovalNonceStore(),
         clock=lambda: int(NOW.timestamp()),
     )
-    return verifier.consume(
+    return verifier.consume_authorization(
         token, action_digest=prepared.action_digest, reviewer_role=ROLE
     )
 
 
 @pytest.mark.parametrize("kind", ["create", "update", "transaction"])
-def test_fake_server_exact_approved_wire_with_real_consumed_receipt(tmp_path, kind):
+def test_fake_server_exact_approved_wire_with_real_consumed_authorization(
+    tmp_path, kind
+):
     env = _setup(ledger=_DurableLedger(tmp_path / "attempts.db"))
     if kind == "transaction":
         proposed = env.client.prepare_transaction(
@@ -202,8 +206,8 @@ def test_fake_server_exact_approved_wire_with_real_consumed_receipt(tmp_path, ki
         )
     else:
         proposed = _prepared(env, kind)
-    receipt = _signed_receipt(proposed)
-    env.client._authorize = lambda p, r: r == receipt
+    receipt = _signed_authorization(proposed)
+    env.client._authorize = lambda p, r: r == receipt.receipt
     server = _FakeFHIR(proposed, kind)
     env.client._transport = server
     outcome = env.client.submit(proposed, receipt)
@@ -220,12 +224,12 @@ def test_commit_then_timeout_stays_unknown_across_reopened_ledger(tmp_path):
     server = _FakeFHIR(proposed, "create")
     server.lose_ack = True
     env.client._transport = server
-    result = env.client.submit(proposed, _signed_receipt(proposed))
+    result = env.client.submit(proposed, _signed_authorization(proposed))
     assert result.status is FHIRWriteStatus.UNKNOWN and server.applied == 1
     restarted = _setup(ledger=_DurableLedger(path), transport=server)
     same = _prepared(restarted)
     assert same.action_digest == proposed.action_digest
-    assert restarted.client.submit(same, _receipt(same)) == result
+    assert restarted.client.submit(same, _authorization(same)) == result
     assert restarted.client.reconcile(same) == result
     assert server.calls == 1
 
@@ -239,7 +243,7 @@ def test_concurrent_clients_cannot_dispatch_the_same_key_twice(tmp_path):
 
     def run(env):
         prepared = _prepared(env)
-        return env.client.submit(prepared, _receipt(prepared))
+        return env.client.submit(prepared, _authorization(prepared))
 
     with ThreadPoolExecutor(max_workers=12) as executor:
         outcomes = list(executor.map(run, clients))
@@ -263,7 +267,7 @@ def test_reserved_crash_without_outcome_never_replays_after_reopen(tmp_path):
     restarted = _setup(ledger=_DurableLedger(path))
     same = _prepared(restarted)
     assert (
-        restarted.client.submit(same, _receipt(same)).reason_code
+        restarted.client.submit(same, _authorization(same)).reason_code
         == "attempt_in_progress"
     )
     assert restarted.client.reconcile(same).status is FHIRWriteStatus.UNKNOWN

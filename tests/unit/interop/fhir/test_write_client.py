@@ -11,7 +11,11 @@ from types import SimpleNamespace as Vector
 
 import pytest
 
-from openmed.agent.approvals.tokens import ApprovalReceipt
+from openmed.agent.approvals.tokens import (
+    ApprovalTokenSigner,
+    ApprovalTokenVerifier,
+    InMemoryApprovalNonceStore,
+)
 from openmed.interop.fhir.write_client import (
     FHIRHTTPResponse,
     FHIRWriteClient,
@@ -185,16 +189,19 @@ def _prepared(env, kind="create", resource=None, **changes):
     )
 
 
-def _receipt(prepared, **changes):
-    fields = dict(
+def _authorization(prepared):
+    key = b"synthetic-local-human-approval-key"
+    instant = int(NOW.timestamp())
+    token = ApprovalTokenSigner(key, clock=lambda: instant).issue(
         action_digest=prepared.action_digest,
         reviewer_role=ROLE,
-        token_digest="sha256:" + "2" * 64,
-        consumed_at=int(NOW.timestamp()),
-        expires_at=int(NOW.timestamp()) + 60,
+        expires_at=instant + 60,
     )
-    fields.update(changes)
-    return ApprovalReceipt(**fields)
+    return ApprovalTokenVerifier(
+        key, InMemoryApprovalNonceStore(), clock=lambda: instant
+    ).consume_authorization(
+        token, action_digest=prepared.action_digest, reviewer_role=ROLE
+    )
 
 
 @pytest.mark.parametrize(
@@ -204,10 +211,10 @@ def _receipt(prepared, **changes):
         ("update", "PUT", "Observation?identifier=urn%3Asynthetic%7C123", "If-Match"),
     ],
 )
-def test_exact_wire_request_and_safe_receipt(kind, method, path, header):
+def test_exact_wire_request_and_safe_authorization(kind, method, path, header):
     env = _setup()
     proposed = _prepared(env, kind)
-    outcome = env.client.submit(proposed, _receipt(proposed))
+    outcome = env.client.submit(proposed, _authorization(proposed))
     assert outcome.status is FHIRWriteStatus.COMMITTED
     request = env.requests[0]
     assert request.method == method and request.url == AUDIENCE + "/" + path
@@ -250,7 +257,7 @@ def test_no_mutation_of_snapshot_or_detached_review_copy():
     resource["note"][0]["text"] = "changed"
     proposed.payload["note"][0]["text"] = "changed-again"
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.COMMITTED
     )
     assert PRIVATE.encode() in env.requests[0].body
@@ -276,7 +283,7 @@ def test_tampered_review_proposal_never_dispatches(field, value):
     env = _setup()
     proposed = _prepared(env, "update")
     with pytest.raises(FHIRWriteError, match="invalid_plan"):
-        env.client.submit(replace(proposed, **{field: value}), _receipt(proposed))
+        env.client.submit(replace(proposed, **{field: value}), _authorization(proposed))
     assert not env.requests and not env.ledger.claims
 
 
@@ -285,7 +292,7 @@ def test_authorization_requires_exact_true(allow):
     env = _setup()
     env.allow = allow
     proposed = _prepared(env)
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert result.status is FHIRWriteStatus.REJECTED
     assert result.reason_code == "authorization_rejected"
     assert not env.requests and not env.ledger.claims
@@ -296,7 +303,7 @@ def test_receipt_future_or_expired(offset):
     env = _setup()
     env.now += timedelta(seconds=offset)
     proposed = _prepared(env)
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert result.reason_code == "authorization_expired" and not env.requests
 
 
@@ -310,7 +317,7 @@ def test_expiry_during_lineage_verification_is_rechecked():
 
     env.client._verify_lineage = lineage
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code
+        env.client.submit(proposed, _authorization(proposed)).reason_code
         == "authorization_expired"
     )
     assert not env.requests
@@ -327,7 +334,7 @@ def test_revocation_between_reservation_custody_and_send(at):
 
     env.client._authorize = authorize
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.REJECTED
     )
     assert not env.requests
@@ -338,7 +345,7 @@ def test_credential_denial_and_out_of_band_sender_do_not_send():
     proposed = _prepared(env)
     env.credential_ok = False
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code
+        env.client.submit(proposed, _authorization(proposed)).reason_code
         == "credential_rejected"
     )
     with pytest.raises(FHIRWriteError, match="credential_rejected"):
@@ -358,7 +365,7 @@ def test_post_submission_exception_is_unknown_without_retry(exception):
         raise exception
 
     env.client._transport = fail
-    receipt = _receipt(proposed)
+    receipt = _authorization(proposed)
     first = env.client.submit(proposed, receipt)
     assert first.status is FHIRWriteStatus.UNKNOWN and first.reconciliation_required
     assert env.client.submit(proposed, receipt) == first
@@ -369,7 +376,7 @@ def test_post_submission_exception_is_unknown_without_retry(exception):
 def test_duplicate_and_changed_payload_same_key():
     env = _setup()
     original = _prepared(env)
-    receipt = _receipt(original)
+    receipt = _authorization(original)
     result = env.client.submit(original, receipt)
     assert env.client.submit(original, receipt) == result
     changed = _prepared(
@@ -377,7 +384,7 @@ def test_duplicate_and_changed_payload_same_key():
     )
     assert changed.action_digest != original.action_digest
     assert (
-        env.client.submit(changed, _receipt(changed)).reason_code
+        env.client.submit(changed, _authorization(changed)).reason_code
         == "idempotency_mismatch"
     )
     assert len(env.requests) == 1
@@ -388,7 +395,7 @@ def test_reserved_key_after_crash_is_unknown_and_not_replayed():
     proposed = _prepared(env)
     env.ledger.claim(KEY, proposed.action_digest)
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code
+        env.client.submit(proposed, _authorization(proposed)).reason_code
         == "attempt_in_progress"
     )
     assert env.client.reconcile(proposed).status is FHIRWriteStatus.UNKNOWN
@@ -406,7 +413,7 @@ def test_failed_storage_acknowledgements(method):
     if method == "lookup":
         env.ledger.claim(KEY, proposed.action_digest)
     setattr(env.ledger, method, fail)
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert result.reason_code == (
         "receipt_uncertain" if method == "finish" else "ledger_unavailable"
     )
@@ -418,7 +425,7 @@ def test_lost_finish_ack_preserves_durable_evidence_for_read_only_reconcile():
     env = _setup()
     proposed = _prepared(env)
     env.ledger.ack = False
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert result.status is FHIRWriteStatus.UNKNOWN
     assert env.client.reconcile(proposed).status is FHIRWriteStatus.COMMITTED
     assert len(env.requests) == 1
@@ -449,7 +456,7 @@ def test_closed_status_classification(status, expected, reason):
     env = _setup()
     proposed = _prepared(env)
     env.response = _response(status)
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert result.status.value == expected and result.reason_code == reason
     assert len(env.requests) == 1
 
@@ -477,7 +484,7 @@ def test_unexpected_resource_acknowledgements_are_unknown(body):
     env = _setup()
     proposed = _prepared(env)
     env.response = _response(body=body)
-    result = env.client.submit(proposed, _receipt(proposed))
+    result = env.client.submit(proposed, _authorization(proposed))
     assert (
         result.reason_code == "unexpected_response" and result.reconciliation_required
     )
@@ -502,7 +509,7 @@ def test_unexpected_headers_do_not_claim_commit(headers):
     proposed = _prepared(env)
     env.response = _response(headers=headers)
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.UNKNOWN
     )
 
@@ -521,7 +528,7 @@ def test_minimal_resource_acknowledgement(location, etag):
         204, headers=(("Location", location), ("ETag", etag))
     )
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.COMMITTED
     )
 
@@ -543,7 +550,7 @@ def test_wrong_minimal_ack_is_unknown(location, etag):
         204, headers=(("Location", location), ("ETag", etag))
     )
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.UNKNOWN
     )
 
@@ -553,14 +560,14 @@ def test_oversized_response_and_json_depth_are_bounded():
     proposed = _prepared(env)
     env.response = _response(body=b"x" * 301)
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code
+        env.client.submit(proposed, _authorization(proposed)).reason_code
         == "response_limit_exceeded"
     )
     env = _setup(limits=FHIRWriteLimits(max_json_depth=6))
     proposed = _prepared(env)
     env.response = _response(body=b'{"deep": [[[[[[[[1]]]]]]]]}')
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code
+        env.client.submit(proposed, _authorization(proposed)).reason_code
         == "unexpected_response"
     )
 
@@ -657,7 +664,8 @@ def test_changed_lineage_gate_refuses_before_claim():
     proposed = _prepared(env)
     env.manifest = _manifest(policy_digest="3" * 64)
     assert (
-        env.client.submit(proposed, _receipt(proposed)).reason_code == "invalid_lineage"
+        env.client.submit(proposed, _authorization(proposed)).reason_code
+        == "invalid_lineage"
     )
     assert not env.requests and not env.ledger.claims
 
@@ -708,7 +716,7 @@ def test_capability_denial_and_different_audience_binding():
     proposed = _prepared(original)
     other = _setup(audience="https://other.invalid/fhir")
     with pytest.raises(FHIRWriteError, match="invalid_plan"):
-        other.client.submit(proposed, _receipt(proposed))
+        other.client.submit(proposed, _authorization(proposed))
 
 
 def _transaction():
@@ -782,7 +790,7 @@ def test_transaction_preserves_exact_bytes_and_checks_all_scopes():
         200, json.dumps(response).encode(), (("Content-Type", "application/fhir+json"),)
     )
     assert (
-        env.client.submit(prepared, _receipt(prepared)).status
+        env.client.submit(prepared, _authorization(prepared)).status
         is FHIRWriteStatus.COMMITTED
     )
     assert env.requests[0].url == AUDIENCE and env.requests[0].method == "POST"
@@ -848,7 +856,7 @@ def test_transaction_mixed_or_incomplete_acknowledgement_is_unknown():
         ).encode(),
     )
     assert (
-        env.client.submit(prepared, _receipt(prepared)).status
+        env.client.submit(prepared, _authorization(prepared)).status
         is FHIRWriteStatus.UNKNOWN
     )
 
@@ -858,7 +866,7 @@ def test_invalid_response_objects_and_malformed_outcomes_are_closed():
     proposed = _prepared(env)
     env.response = {"status": 201, "private": PRIVATE}
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.UNKNOWN
     )
     with pytest.raises(FHIRWriteError):
@@ -903,7 +911,7 @@ def test_acknowledgement_must_match_supplied_resource_id():
         },
     )
     assert (
-        env.client.submit(proposed, _receipt(proposed)).status
+        env.client.submit(proposed, _authorization(proposed)).status
         is FHIRWriteStatus.UNKNOWN
     )
 
@@ -915,3 +923,22 @@ def test_package_exports_are_lazy_and_identical():
     for name in write_client.__all__:
         assert name in fhir.__all__
         assert getattr(fhir, name) is getattr(write_client, name)
+
+
+@pytest.mark.parametrize("proof", ["receipt", "mapping", "other_action"])
+def test_unverified_metadata_and_different_action_cannot_authorize_dispatch(proof):
+    env = _setup()
+    proposed = _prepared(env)
+    authority = _authorization(proposed)
+    if proof == "receipt":
+        candidate = authority.receipt
+    elif proof == "mapping":
+        candidate = authority.receipt.to_dict()
+    else:
+        changed = _prepared(
+            env, resource={"resourceType": "Observation", "status": "amended"}
+        )
+        candidate = _authorization(changed)
+    result = env.client.submit(proposed, candidate)
+    assert result.reason_code == "authorization_rejected"
+    assert not env.requests and not env.ledger.claims
