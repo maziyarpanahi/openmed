@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
+  encapsulated documents, expose truthful pixel-cleaning outcomes, and stage
+  combined header/pixel processing before writing its final artifact (#3725).
+- Apply the pinned DICOM 2026d Basic Profile catalog recursively, declare
+  explicit retention/cleaning options with method codes, clean retained text
+  through a caller detector, and replace identifying file metadata (#3727).
 - Parse clinical and Journey ISO calendar timestamps through one explicit
   profile on every supported Python version. Reject basic, week-date, ordinal
   and compact-offset input with value-free errors while retaining supported
