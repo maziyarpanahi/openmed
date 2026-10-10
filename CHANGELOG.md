@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a local Journey-fact ClinicalBrief context provider with explicit review
+  verification, source/fact/profile/calibration bindings, typed mapping refusals
+  and offline Python, CLI, REST and MCP injection tests (#3652).
+
 - Add the separately versioned reviewed-local clinical evidence contract and
   opt-in Python/OpenMedKit brief admission, with current source/review custody,
   digest-bound expiring receipts, typed refusals and synthetic offline fixtures

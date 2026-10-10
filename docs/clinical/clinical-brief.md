@@ -211,3 +211,90 @@ lowercase hexadecimal characters. Configure REST with
 Missing review configuration returns a typed refusal, not an unguarded summary.
 REST access logs add only bounded outcome vocabulary and counts to the normal
 request duration. Never log the response: `summary` is protected content.
+
+## Extracted facts and explicit review receipts
+
+`LocalBriefContextProvider` in `openmed.clinical.brief_context` adapts existing
+Python Journey `ClinicalFact` and `EvidenceLocator` records into `BriefContext`.
+It implements the callable used by all four Python/CLI/REST/MCP seams above.
+This issue's adapter targets those Python extraction and transport contracts;
+the existing native brief packet contract is unchanged.
+
+Two narrow application-owned protocols keep extraction, access control and review
+authority separate from context construction:
+
+- `BriefExtractionProvider.resolve(text, review_id)` authorizes the caller and
+  resolves the current protected `BriefExtraction`, or returns `None`. Include
+  the complete selected facts, locators, mappings and known conflicts.
+- `BriefReviewVerifier.verify(review_id, plan)` checks an **existing** explicit
+  receipt, including current authorization, validity and revocation. Return
+  `(stored_binding_digest, approved_evidence_packet)` or `None`. Never construct
+  approval transitions merely because the provider requested verification.
+
+`BriefExtraction` contains a `DeidentificationResult`, artifact/source identities,
+facts and locators, and one `BriefFactMapping(fact_id, profile_field, temporality)`
+per selected fact. Set `synthetic=True` only for synthetic test evidence. The
+adapter preserves the existing synthetic-only packet boundary; reviewed-local
+admission is separate work in #3651. It does not certify that caller-labelled
+data is synthetic and is not a production evidence/review store.
+
+Assertion, certainty and experiencer are read from the existing normalized fact
+attributes (`assertion`, `certainty`, `experiencer`). Temporality is explicitly
+declared in the mapping and reviewed; lifecycle status and dates do not imply a
+temporal axis. Missing/unknown axes or field states refuse instead of becoming
+negative facts. Unsupported axes, profile fields and demographic facts refuse.
+There is no inferred fact type-to-profile table or heuristic axis fallback.
+
+Each fact must have exactly one untransformed `text_span` locator in the selected
+de-identified artifact. Offsets are half-open Python character positions. The
+span must fit within one detected section. Missing locators, mixed subjects or
+encounters, duplicate/shared/overlapping spans, duplicate source claims and
+non-text/transformed locators fail closed. Original-source offsets require an
+upstream mapping and renewed review; the adapter never guesses a redaction shift.
+An open conflict involving selected facts blocks construction.
+
+Before review, use `plan_brief_context(extraction, profile="bhc",
+thresholds=thresholds)` to get the unapproved plan. Its `binding.digest` binds
+the original and de-identified sources, artifact/source identities,
+de-identification method/mapping/entities, complete fact and locator records,
+explicit field/temporal mappings, conflicts, versioned profile and full calibrated
+threshold policy. Source/reference identifiers in the plan are synthetic-prefixed
+digests rather than copied record identifiers. The existing packet policy binds
+content and mapped axes; the separate receipt binding also covers full fact and
+calibration identities. Changed evidence requires a new explicit receipt. The
+adapter compares the stored binding and exact packet spans, validates approval
+history and rechecks the plan after verification. It creates no approval itself.
+
+```python
+from openmed.clinical.brief_context import LocalBriefContextProvider
+
+# All dependencies below belong to the trusted local application.
+provider = LocalBriefContextProvider(
+    extraction_provider=authorized_extraction_store,
+    review_verifier=independent_receipt_store,
+    thresholds=reviewed_calibration,
+    nli_predict=calibrated_local_predictor,
+    privacy_detector=local_privacy_detector,
+    profile="bhc",
+)
+app.state.brief_context_provider = provider  # REST
+# Also return provider from a CLI context factory, or inject it into MCP runtime.
+outcome = provider.build(original_text, opaque_review_id)
+safe_diagnostics = outcome.to_dict()  # controlled code and binding digest only
+```
+
+`build` returns `BriefContextOutcome` with a `BriefContextCode`: `ready`,
+`missing_facts`, `missing_mapping`, `conflicted_facts`, `unsupported_mapping`,
+`unknown_fact`, `missing_source`, `ambiguous_source`, `invalid_offsets`,
+`review_required`, `evidence_changed`, `invalid_evidence` or
+`provider_unavailable`. Its artifact/context are protected application values;
+only `to_dict()` is a diagnostic serialization. The callable raises a value-free
+`BriefContextError` on refusal; existing transports convert failed lookups into
+their existing `invalid_evidence` refusal, with no summary or generation.
+
+No model is downloaded or initialized to construct a context. Python outbound
+sockets are blocked during provider calls, as during composition. Trusted
+callbacks must not launch external network clients or log source text. A context
+with `code="ready"` admits evidence to the guarded composer; a successful brief
+still has `status="needs_review"`. Synthetic callbacks and fixtures establish
+contract behavior only, not clinical validation or model qualification.
