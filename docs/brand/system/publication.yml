@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/side-effect-previews.md
     - agent/action-phases.md
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
@@ -124,13 +125,17 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/json-schemas.md
     - agent/reviewer-handoffs.md
+    - agent/escalation-circuit-breakers.md
+    - agent/resource-budgets.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
+    - agent/run-invariants.md
     - agent/schema-compatibility.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
@@ -141,6 +146,9 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
+    - agent/governed-reference-workflow.md
+    - agent/action-ledger.md
+    - agent/deterministic-replay.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -187,11 +195,126 @@ classification:
     - deploy/multi-arch.md
     - model-loader.md
     - models/bundled-offline.md
+    - clinical/clinical-brief.md
+    - clinical/summary-output-normalization.md
+    - clinical/summary-section-planning.md
+    - demo/clinical-brief.md
+    - clinical/summary-template-profiles.md
+    - clinical/summary-length-budgets.md
+    - clinical/summary-empty-evidence.md
+    - clinical/summary-claim-segmentation.md
+    - clinical/summary-temporal-order.md
+    - clinical/summary-medication-changes.md
+    - clinical/summary-lab-trends.md
+    - clinical/summary-input-contract.md
+    - clinical/summary-safety.md
+    - clinical/summary-citations.md
+    - evaluation/summary-coverage.md
+    - clinical/summarization.md
+    - evaluation/summary-unsupported-claims.md
+    - clinical/summary-omission-budgets.md
+    - clinical/summary-demographic-minimization.md
+    - clinical/summary-retry-control.md
+    - clinical/journey-contracts.md
+    - clinical/terminology-resolution.md
+    - clinical/longitudinal-journey.md
+    - clinical/context-and-extraction.md
+    - clinical/concept-grounding.md
+    - clinical/data-quality-profiler.md
+    - clinical/valueset-ecl-expansion.md
+    - clinical/code-crosswalk.md
+    - clinical/terminology-conflicts.md
+    - clinical/abbreviation-disambiguation.md
+    - clinical/coreference.md
+    - clinical/terminology-provenance.md
+    - clinical/status-vocabulary.md
+    - clinical/consent-cache.md
+    - clinical/chinese-terminology-grounding.md
+    - clinical/language-matrix.md
+    - clinical/experiencer-refinement.md
+    - clinical/context-analysis.md
+    - clinical/nli-label-contract.md
+    - clinical/nli-assertion-pairs.md
+    - clinical/nli-experiencer-pairs.md
+    - clinical/nli-verification.md
+    - clinical/nli-temporal-pairs.md
+    - clinical/nli-numeric-precheck.md
+    - clinical/nli-medication-status.md
+    - clinical/nli-premise-windows.md
+    - clinical/nli-hypothesis-guard.md
+    - clinical/nli-batch-planning.md
+    - clinical/nli-cascade.md
+    - clinical/nli-abstention.md
+    - models/clinical-nli.md
+    - clinical/sdoh-temporal-qualifiers.md
+    - clinical/sdoh-section-scope.md
+    - clinical/sdoh-evidence-deduplication.md
+    - clinical/sdoh-longitudinal-resolution.md
+    - clinical/sdoh-sensitive-use-labels.md
+    - clinical/sdoh-review-routing.md
+    - clinical/sdoh-category-completeness.md
+    - clinical/sdoh-experiencer-filtering.md
+    - clinical/sdoh-negated-needs.md
+    - clinical/sdoh-evidence.md
+    - evaluation/sdoh-counterfactuals.md
+    - evaluation/sdoh-false-positive-stress.md
+    - clinical/medication-change-relations.md
+    - clinical/laboratory-result-relations.md
+    - clinical/procedure-indication-relations.md
+    - clinical/diagnosis-treatment-relations.md
+    - clinical/relation-review-priority.md
+    - clinical/relation-evidence-binding.md
+    - clinical/relation-deduplication.md
+    - clinical/multilingual-relations.md
+    - clinical/relation-directionality.md
+    - clinical/relation-unit-compatibility.md
+    - evaluation/relation-review-yield.md
+    - evaluation/relation-audit.md
+    - clinical/temporal-normalization.md
+    - clinical/medication-reconciliation.md
+    - clinical/event-timeline.md
+    - clinical/timeline-evidence.md
+    - clinical/measurement-trends.md
+    - clinical/timeline-provenance.md
+    - clinical/sig-parser.md
+    - clinical/lab-reference-ranges.md
+    - clinical/lab-measurements.md
+    - clinical/unit-display-audit.md
+    - clinical/event-contradictions.md
+    - clinical/temporal-intervals.md
+    - clinical/timeline-buckets.md
+    - clinical/model-packs.md
+    - clinical/note-routing.md
+    - clinical/radiology-profile.md
+    - clinical/pathology-profile.md
+    - clinical/discharge-profile.md
+    - clinical/section-provenance.md
+    - clinical/guarded-output-provenance.md
+    - clinical/citation-ordering.md
+    - clinical/citation-minimality.md
+    - clinical/citation-boundary-validation.md
+    - clinical/evidence-tables.md
+    - clinical/uncertainty-source-types.md
+    - clinical/review-override-reasons.md
+    - clinical/review-packet-privacy.md
+    - clinical/review-packet-migrations.md
+    - clinical/evidence-recency-labels.md
+    - clinical/evidence-packets.md
+    - clinical/review-transitions.md
+    - clinical/claim-conflicts.md
+    - clinical/review-sla.md
+    - clinical/evidence-span-audit.md
+    - clinical/output-use-policy.md
+    - clinical/evidence-coverage.md
+    - clinical/human-review-packets.md
+    - clinical/uncertainty-disclosure.md
+    - clinical/claim-integrity.md
+    - clinical/refusal-taxonomy.md
     - models/clinical-slm-manifest.md
-    - models/bootstrap-diagnostics.md
     - models/clinical-slm-capabilities.md
     - models/clinical-slm-memory-preflight.md
     - models/clinical-slm-template-digests.md
+    - models/bootstrap-diagnostics.md
     - models/cache-quotas.md
     - models/rollback-compatibility.md
     - models/journey-specialist-pack.md
@@ -204,7 +327,6 @@ classification:
     - output-formatting.md
     - structured/offset-properties.md
     - structured/schema-snapshots.md
-    - clinical/journey-contracts.md
     - structured/local-journey-store.md
     - structured/postgres-object-journey-store.md
     - interop/resumable-ingestion.md
@@ -215,88 +337,13 @@ classification:
     - interop/annotation-interchange.md
     - interop/v3-golden-journey.md
     - release/v3.0-journey-release-gate.md
-    - clinical/model-packs.md
     - structured/clinical-fact-normalization.md
-    - clinical/terminology-resolution.md
     - structured/fact-reconciliation.md
-    - clinical/longitudinal-journey.md
     - structured/terminology-cache.md
     - structured/redaction-contract.md
-    - clinical/context-and-extraction.md
-    - clinical/section-provenance.md
-    - clinical/nli-label-contract.md
-    - clinical/nli-assertion-pairs.md
-    - clinical/nli-experiencer-pairs.md
-    - clinical/concept-grounding.md
-    - clinical/data-quality-profiler.md
     - grounding.md
-    - clinical/valueset-ecl-expansion.md
     - interop/snomed-terminology-bridge.md
-    - clinical/code-crosswalk.md
-    - clinical/terminology-conflicts.md
-    - clinical/abbreviation-disambiguation.md
-    - clinical/nli-verification.md
-    - clinical/coreference.md
-    - clinical/temporal-normalization.md
-    - clinical/nli-temporal-pairs.md
-    - clinical/sdoh-temporal-qualifiers.md
-    - clinical/medication-reconciliation.md
-    - clinical/nli-numeric-precheck.md
-    - clinical/nli-medication-status.md
-    - clinical/medication-change-relations.md
-    - clinical/laboratory-result-relations.md
-    - clinical/procedure-indication-relations.md
-    - clinical/diagnosis-treatment-relations.md
-    - clinical/relation-review-priority.md
-    - clinical/event-timeline.md
-    - clinical/timeline-evidence.md
-    - clinical/measurement-trends.md
-    - clinical/terminology-provenance.md
-    - clinical/status-vocabulary.md
-    - clinical/consent-cache.md
-    - clinical/timeline-provenance.md
-    - clinical/guarded-output-provenance.md
-    - clinical/citation-ordering.md
-    - clinical/citation-minimality.md
-    - clinical/citation-boundary-validation.md
-    - clinical/summary-output-normalization.md
-    - clinical/evidence-tables.md
-    - clinical/relation-evidence-binding.md
-    - clinical/relation-deduplication.md
-    - clinical/summary-section-planning.md
-    - clinical/clinical-brief.md
-    - demo/clinical-brief.md
-    - clinical/summary-template-profiles.md
-    - clinical/summary-length-budgets.md
-    - clinical/summary-empty-evidence.md
-    - clinical/uncertainty-source-types.md
-    - clinical/nli-premise-windows.md
-    - clinical/nli-hypothesis-guard.md
-    - clinical/summary-claim-segmentation.md
-    - clinical/summary-temporal-order.md
-    - clinical/summary-medication-changes.md
-    - clinical/summary-lab-trends.md
-    - clinical/summary-input-contract.md
-    - clinical/summary-safety.md
-    - clinical/summary-citations.md
-    - evaluation/summary-coverage.md
-    - clinical/sdoh-section-scope.md
-    - clinical/sdoh-evidence-deduplication.md
-    - clinical/sdoh-longitudinal-resolution.md
-    - clinical/sdoh-sensitive-use-labels.md
-    - clinical/sdoh-review-routing.md
-    - clinical/sdoh-category-completeness.md
-    - clinical/review-override-reasons.md
-    - clinical/review-packet-privacy.md
-    - clinical/review-packet-migrations.md
-    - clinical/evidence-recency-labels.md
-    - clinical/chinese-terminology-grounding.md
     - chinese-segmentation-operations.md
-    - clinical/multilingual-relations.md
-    - clinical/relation-directionality.md
-    - clinical/relation-unit-compatibility.md
-    - clinical/sig-parser.md
-    - clinical/summarization.md
     - structured/schema-guided-extraction.md
     - medical-tokenizer.md
     - indic-normalization.md
@@ -376,12 +423,10 @@ classification:
     - eval-harness.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
-    - evaluation/summary-unsupported-claims.md
     - evaluation/comparator-reports.md
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
-    - evaluation/relation-review-yield.md
     - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
@@ -396,18 +441,12 @@ classification:
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
-    - clinical/language-matrix.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
     - runtimes/edge-sbc.md
-    - clinical/experiencer-refinement.md
-    - clinical/nli-batch-planning.md
-    - clinical/sdoh-experiencer-filtering.md
-    - clinical/sdoh-negated-needs.md
     - runtimes/cpu-fastpath.md
     - runtimes/openvino.md
     - runtimes/tensorrt.md
-    - clinical/nli-cascade.md
     - runtimes/webgpu.md
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md
@@ -420,36 +459,9 @@ classification:
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
-    - clinical/lab-reference-ranges.md
-    - clinical/lab-measurements.md
-    - clinical/unit-display-audit.md
-    - clinical/evidence-packets.md
-    - clinical/review-transitions.md
-    - clinical/event-contradictions.md
-    - clinical/temporal-intervals.md
-    - clinical/timeline-buckets.md
-    - clinical/claim-conflicts.md
-    - clinical/review-sla.md
     - evaluation/model-provenance-diff.md
-    - clinical/evidence-span-audit.md
-    - clinical/output-use-policy.md
-    - clinical/evidence-coverage.md
-    - clinical/human-review-packets.md
-    - clinical/uncertainty-disclosure.md
-    - clinical/claim-integrity.md
-    - clinical/refusal-taxonomy.md
-    - clinical/nli-abstention.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
-    - clinical/sdoh-evidence.md
-    - clinical/note-routing.md
-    - clinical/radiology-profile.md
-    - clinical/pathology-profile.md
-    - clinical/discharge-profile.md
-    - evaluation/relation-audit.md
-    - clinical/summary-omission-budgets.md
-    - clinical/summary-demographic-minimization.md
-    - clinical/summary-retry-control.md
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
@@ -568,7 +580,13 @@ classification:
     - interop/fhir-bulk-data.md
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
+    - interop/fhir-conditional-writes.md
+    - interop/fhir-write-provenance.md
+    - interop/fhir-concurrency.md
+    - interop/fhir-transaction-compensation.md
+    - interop/fhir-subscription-checkpoints.md
     - interop/smart-scope-audit.md
+    - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
@@ -671,10 +689,6 @@ classification:
     - generative-model-policy.md
     - api-reference.md
   link_only:
-    - models/clinical-nli.md
-    - evaluation/sdoh-counterfactuals.md
-    - evaluation/sdoh-false-positive-stress.md
-    - clinical/context-analysis.md
     - privacy/clinical-preserve.md
     - benchmarks/golden.md
     - clinical-domains.md

@@ -1146,6 +1146,39 @@ test("docs drawer traps focus and returns it on Escape", async ({
   expectCleanAudit(audit);
 });
 
+test("docs clinical topics expose the previously unlisted guide routes", async ({
+  baseURL,
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await prepareTheme(page, "light");
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/clinical/clinical-brief/", {
+    waitUntil: "domcontentloaded",
+  });
+  const navigation = page.locator(".md-sidebar--primary");
+  const follow = async (name: string, route: string): Promise<void> => {
+    await navigation.getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(new URL(route, baseURL).href);
+    await expect(page.locator("h1")).toBeVisible();
+    await expectNoPageOverflow(page);
+  };
+  await follow("Clinical NLI", "/docs/clinical/nli-label-contract/");
+  await follow("Clinical NLI Checkpoints", "/docs/models/clinical-nli/");
+  await follow("Social Determinants", "/docs/clinical/sdoh-temporal-qualifiers/");
+  await follow(
+    "Synthetic SDOH Counterfactuals",
+    "/docs/evaluation/sdoh-counterfactuals/",
+  );
+  await follow(
+    "Synthetic SDOH False-positive Stress",
+    "/docs/evaluation/sdoh-false-positive-stress/",
+  );
+  await follow("Context, Grounding and Journey", "/docs/clinical/journey-contracts/");
+  await follow("Clinical Context Analysis", "/docs/clinical/context-analysis/");
+  expectCleanAudit(audit);
+});
+
 test("docs search, locale, theme, and code copy controls operate", async ({
   baseURL,
   page,
