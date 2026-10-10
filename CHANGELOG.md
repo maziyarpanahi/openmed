@@ -7,11 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- `AggregateDPRelease` now emits release schema version 2 and removes the
+  `noise` and `seed_digest` fields from its public dataclass and serialized
+  records. Update constructors and consumers to use the noisy `value`, budget
+  accounting, and new `test_only` flag instead; ledger schemas and digests are
+  unchanged. Previously written records containing both `value` and `noise`
+  disclose their input aggregates and must not be treated as private releases.
+  Seeded releases are synthetic-test-only and provide no production privacy
+  guarantee; the CLI now requires `--test-mode` with `--seed`. Omit the seed for
+  production system randomness (#3723).
+- Gaussian helpers now use analytic privacy-profile calibration, including
+  epsilon above one, and record `calibration_method` in spend records. Noise
+  scales, utility estimates, and seeded Gaussian outputs intentionally change;
+  unrepresentable calibration fails closed. Update deterministic expectations
+  without restoring the invalid classical scale (#3724).
+
+### Security
+
+- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
+  pins and retain lockfile SARIF diagnostics after image-build failures.
+
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
+### Documentation
+
+- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
+  examples. Group clinical navigation by area and expose four previously
+  unlisted guides, preserving page URLs and the existing Pages byte budgets.
+
 ### Added
 
 - Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
   integer/scaled samples, withheld identification/date/annotation text, explicit
   discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
+- Added immutable run-scoped agent tool catalog bindings, exact-version pinned
+  dispatch, deterministic restore eligibility and content-free re-review outcomes
+  for implementation, schema and side-effect drift (#3665).
+
+- Added injected runtime clinical-agent authority revocation checks before
+  sensitive reads, effects and recovery, with monotonic grant/ticket generations,
+  descendant and approval invalidation, and content-free offline tests (#3664).
+- Added guarded dispatch on the existing workflow executor, enforcing signed
+  grants, purpose tickets, minimum-data projections, pinned tool identity and
+  exact single-use approval, with content-free cancellation and uncertain-effect
+  recovery outcomes through injected local providers (#3661).
+- Add default-off agent effect admission, signed local transition receipts,
+  independent rollback detection, emergency stop and fresh-enable CLI commands
+  with synthetic approval/recovery safety controls (#3765).
+
+- Add opt-in FHIR R4 server `$validate` preflight through an injected target-bound
+  transport and opaque credential handle. Return controlled issue summaries and
+  request digests; block errors and unavailable validation before application review.
+
+- Add injected, bounded FHIR R4 write execution for existing conditional plans
+  and assembled transactions. Bind exact wire details to consumed approval
+  receipts, repeat local authorization and lineage gates, preserve predicates,
+  version preconditions and idempotency keys, and require durable attempt
+  reservations. Ambiguous outcomes require reconciliation without retry or
+  automatic compensation (#3662).
+- Added deterministic, bounded FHIR R4 transaction assembly for approved
+  creates and updates, preserving conditional/version requests and recording
+  value-free Provenance with exact canonical Bundle digests (#3771).
+- Added offline FHIR write-origin labeling and provisional-status normalization
+  for Observation, Condition and AllergyIntolerance, with exact-label rejection,
+  role-gated attestation and value-free findings (#3766).
+- Added offline FHIR write-reference scope verification against purpose-bound
+  ticket selectors, injected non-compartment resolution, guarded preview
+  dispatch, internal transaction/contained checks and value-free denials (#3764).
+
+- Added opt-in private SQLite approval nonce claims shared across processes and
+  restarts, fail-closed durable replay protection, and a compatible consumption
+  store adapter for MCP consent receipts (#3763).
+
+- Added an offline, synthetic governed clinical reference workflow covering
+  approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
+- Added metadata-only signed action ledgers and deterministic replay evidence,
+  permanent circuit-breaker stops, cooperative resource budgets, and completed
+  run invariant reports for governed agent runtimes (#2766, #2767, #2769, #2770,
+  #3001). These contracts do not dispatch effects or replace adapter validation.
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Export deterministic, import-light Draft 2020-12 JSON Schemas for public
+  agent outcome, correlation, timing and run-summary records.
+- Added the offline `openmed models slm-verify` command, which verifies a local
+  clinical SLM package, probes explicitly requested capabilities against the
+  declared metadata, and runs the memory preflight for an explicit device
+  budget, with a value-free JSON report, stable CLI error codes, and no runtime
+  import or network access (#3805).
+- Added bundled Draft 2020-12 JSON Schemas for clinical brief audit and response
+  records, evidence packets, NLI verification results and SDOH evidence reports,
+  with a committed fingerprint snapshot, schema drift comparison, optional
+  `jsonschema` validation and value-free contract tests (#3803).
+
+### Fixed
+
+- Normalize SMART v1 read/write/all permissions, wildcard resources, granular
+  queries and non-clinical identity/launch/session scopes in offline scope
+  audits. Compare constraints conservatively and report malformed input without
+  echoing values; granular audit evidence contains only constraint digests (#3767).
+
+- Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
+  encapsulated documents, expose truthful pixel-cleaning outcomes, and stage
+  combined header/pixel processing before writing its final artifact (#3725).
+- Apply the pinned DICOM 2026d Basic Profile catalog recursively, declare
+  explicit retention/cleaning options with method codes, clean retained text
+  through a caller detector, and replace identifying file metadata (#3727).
+- Parse clinical and Journey ISO calendar timestamps through one explicit
+  profile on every supported Python version. Reject basic, week-date, ordinal
+  and compact-offset input with value-free errors while retaining supported
+  extended values, caller timezone rules and golden digests.
 
 ## [3.0.0] - 2026-10-05
 
@@ -281,6 +390,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a duplicate-cue guard (#3108).
 
 ### Changed
+
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
 
 - Training and new-checkpoint publication are optional research, without a
   library-release milestone or feature-blocking relationship. SDK readiness
