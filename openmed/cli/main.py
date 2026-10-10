@@ -88,6 +88,7 @@ from .scaffold import (
     ScaffoldError,
     scaffold_project,
 )
+from .slm_verify import add_slm_verify_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -2453,6 +2454,8 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Verify every cached model with integrity metadata.",
     )
     models_verify.set_defaults(handler=_handle_models_verify)
+
+    add_slm_verify_command(models_sub)
 
     models_size = models_sub.add_parser(
         "size",
