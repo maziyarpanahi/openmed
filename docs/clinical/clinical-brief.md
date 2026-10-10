@@ -49,7 +49,10 @@ patient record. `reviewed_source_digest(text)` hashes those UTF-8 bytes. Offsets
 are half-open Unicode-scalar coordinates (`unicode_scalar_half_open`); Python
 code-point and Swift Unicode-scalar counts match, including supplementary
 characters. The packet contains one source digest and length, a policy digest,
-1–64 offset-only references, and a nullable `LocalReviewReceipt`.
+1–64 offset-only references, and a nullable `LocalReviewReceipt`. Metadata
+integers are non-negative signed 64-bit values on both platforms. Malformed
+Unicode source strings produce a controlled invalid-evidence refusal without
+retaining their encoding error or source content.
 
 Source/reference/receipt/authority IDs have the form `source:`, `ref:`,
 `receipt:`, or `authority:` followed by 64 lowercase hexadecimal characters.
@@ -100,6 +103,8 @@ brief = build_clinical_brief(deidentified_result, model="extractive", context=co
 
 `admit_reviewed_local_evidence()` checks source/policy bindings, receipt existence,
 full digest binding, issuance/expiry, current source custody and review authority.
+After source and review callbacks return, the trusted clock is read again:
+expired receipts, invalid clocks and time rollback fail before generation.
 The brief calls it at the evidence stage and again immediately before generation;
 an admitted record is not a reusable authorization token. Local stores must
 provide consistent reads and enforce their own concurrent-update/access policy.

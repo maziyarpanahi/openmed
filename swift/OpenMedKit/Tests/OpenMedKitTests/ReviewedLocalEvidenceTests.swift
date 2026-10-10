@@ -159,4 +159,51 @@ final class ReviewedLocalEvidenceTests: XCTestCase {
             XCTFail("expired review admitted")
         } catch { XCTAssertEqual(error as? ReviewAdmissionRefusal, .expired) }
     }
+    private final class TestAdmissionClock: @unchecked Sendable {
+        var instant: TimeInterval = 1000
+        var verifications = 0
+        var generated = 0
+    }
+
+    private struct LaggingAuthority: ReviewAuthorityVerifier {
+        let registered: LocalReviewReceipt
+        let clock: TestAdmissionClock
+        func verify(_ receipt: LocalReviewReceipt, evidenceDigest: String, now: Int) throws -> ReviewAuthorityStatus {
+            guard receipt == registered, evidenceDigest == registered.evidenceDigest else { return .mismatched }
+            clock.verifications += 1
+            if clock.verifications == 2 { clock.instant = TimeInterval(receipt.expiresAt) }
+            return .current
+        }
+    }
+
+    func testSlowReviewCallbackCannotExpireReceiptBeforeGeneration() async throws {
+        let (packet, source, _, _) = try fixture()
+        let clock = TestAdmissionClock()
+        do {
+            _ = try await ClinicalBrief.reviewedLocal(
+                evidence: packet, source: source, policyDigest: packet.policyDigest,
+                currentSource: Source(digest: packet.sourceDigest),
+                authority: LaggingAuthority(registered: try XCTUnwrap(packet.reviewReceipt), clock: clock),
+                originalIdentifiers: [], clock: { clock.instant },
+                generate: { _ in
+                    clock.generated += 1
+                    return ""
+                },
+                evaluate: { _, _ in Data() }, privacyCheck: { _ in true })
+            XCTFail("expired review admitted")
+        } catch { XCTAssertEqual(error as? ReviewAdmissionRefusal, .expired) }
+        XCTAssertEqual(clock.generated, 0)
+    }
+
+    func testSharedWirePreservesExactSigned64BitBoundary() throws {
+        let (packet, _, _, _) = try fixture()
+        let changed = try mutate(packet) {
+            var receipt = $0["review_receipt"] as! [String: Any]
+            receipt["expires_at"] = Int.max
+            $0["review_receipt"] = receipt
+        }
+        XCTAssertEqual(changed.reviewReceipt?.expiresAt, Int.max)
+        XCTAssertEqual(try ReviewedLocalEvidence.fromJSON(changed.toJSON()), changed)
+    }
+
 }

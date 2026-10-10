@@ -132,12 +132,9 @@ public struct ReviewedLocalEvidence: Codable, Sendable, Equatable {
             CFGetTypeID(number) != CFBooleanGetTypeID(),
             String(cString: number.objCType) != "d",
             String(cString: number.objCType) != "f",
-            number.doubleValue.isFinite,
-            number.doubleValue >= 0,
-            number.doubleValue < Double(Int.max),
-            number.doubleValue.rounded(.towardZero) == number.doubleValue
+            let parsed = Int(number.stringValue), parsed >= 0
         else { return nil }
-        return number.intValue
+        return parsed
     }
 
     /// Decode only bounded, value-free metadata with exact object keys.
@@ -220,10 +217,17 @@ public struct ReviewedLocalEvidence: Codable, Sendable, Equatable {
         let status: ReviewAuthorityStatus
         do { status = try authority.verify(receipt, evidenceDigest: digest, now: now) } catch { throw ReviewAdmissionRefusal.authorityUnavailable }
         switch status {
-        case .current: return
+        case .current: break
         case .revoked: throw ReviewAdmissionRefusal.revoked
         case .mismatched: throw ReviewAdmissionRefusal.mismatched
         }
+        let finalInstant = clock()
+        guard finalInstant.isFinite, finalInstant >= 0, finalInstant < Double(Int.max) else {
+            throw ReviewAdmissionRefusal.authorityUnavailable
+        }
+        let finalNow = Int(finalInstant)
+        guard finalNow >= now else { throw ReviewAdmissionRefusal.authorityUnavailable }
+        guard finalNow < receipt.expiresAt else { throw ReviewAdmissionRefusal.expired }
     }
 }
 

@@ -71,7 +71,15 @@ class CurrentLocalSource(Protocol):
 
 def reviewed_source_digest(text: str) -> str:
     """Hash the exact de-identified offset coordinate source without storing it."""
-    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+    encoded = None
+    try:
+        if type(text) is str:
+            encoded = text.encode("utf-8")
+    except UnicodeError:
+        pass
+    if encoded is None:
+        raise _invalid()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def _invalid() -> ReviewAdmissionError:
@@ -88,7 +96,7 @@ def _digest(value: Any) -> None:
 
 
 def _integer(value: Any) -> bool:
-    return type(value) is int and value >= 0
+    return type(value) is int and 0 <= value <= (1 << 63) - 1
 
 
 def _keys(value: Any, required: set[str]) -> None:
@@ -245,6 +253,19 @@ class ReviewedLocalEvidence:
         raise _invalid()
 
 
+def _read_admission_time(clock: Callable[[], float]) -> int:
+    now = None
+    try:
+        instant = clock()
+        if type(instant) in (int, float) and instant >= 0:
+            now = int(instant)
+    except Exception:
+        pass
+    if now is None or not _integer(now):
+        raise ReviewAdmissionError(ReviewAdmissionRefusal.AUTHORITY_UNAVAILABLE)
+    return now
+
+
 def admit_reviewed_local_evidence(
     packet: ReviewedLocalEvidence,
     *,
@@ -282,15 +303,7 @@ def admit_reviewed_local_evidence(
         raise ReviewAdmissionError(ReviewAdmissionRefusal.MISSING)
     if receipt.evidence_digest != packet.evidence_digest:
         raise ReviewAdmissionError(ReviewAdmissionRefusal.MISMATCHED)
-    now = None
-    try:
-        instant = clock()
-        if type(instant) in (int, float) and instant >= 0:
-            now = int(instant)
-    except Exception:
-        pass
-    if now is None:
-        raise ReviewAdmissionError(ReviewAdmissionRefusal.AUTHORITY_UNAVAILABLE)
+    now = _read_admission_time(clock)
     if now < receipt.issued_at:
         raise ReviewAdmissionError(ReviewAdmissionRefusal.MISMATCHED)
     if now >= receipt.expires_at:
@@ -317,4 +330,9 @@ def admit_reviewed_local_evidence(
         raise ReviewAdmissionError(ReviewAdmissionRefusal.REVOKED)
     if status is not ReviewAuthorityStatus.CURRENT:
         raise ReviewAdmissionError(ReviewAdmissionRefusal.MISMATCHED)
+    final_now = _read_admission_time(clock)
+    if final_now < now:
+        raise ReviewAdmissionError(ReviewAdmissionRefusal.AUTHORITY_UNAVAILABLE)
+    if final_now >= receipt.expires_at:
+        raise ReviewAdmissionError(ReviewAdmissionRefusal.EXPIRED)
     return packet

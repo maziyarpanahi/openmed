@@ -212,7 +212,7 @@ def test_custody_and_authority_are_rechecked_at_generation(drift):
 
         def clock():
             calls.append(1)
-            return 1000 if len(calls) == 1 else 1100
+            return 1000 if context.authority.calls < 2 else 1100
 
         context = replace(context, clock=clock)
     brief = build_clinical_brief(
@@ -368,3 +368,48 @@ def test_safe_serialization_revalidates_altered_frozen_records():
             serialize()
         assert error.value.reason is ReviewAdmissionRefusal.INVALID
         assert "SYNTHETIC_PRIVATE_PATH" not in str(error.value)
+
+
+def test_slow_review_callback_cannot_expire_receipt_before_generation():
+    result, context = reviewed_fixture()
+    instant = [NOW]
+    original = context.authority.verify
+    generated = []
+
+    def verify(*args, **kwargs):
+        status = original(*args, **kwargs)
+        if context.authority.calls == 2:
+            instant[0] = context.packet.review_receipt.expires_at
+        return status
+
+    context.authority.verify = verify
+    context = replace(context, clock=lambda: instant[0])
+    brief = build_clinical_brief(
+        result,
+        context=context,
+        model=lambda text: generated.append(text) or result.deidentified_text,
+    )
+    assert not generated
+    assert brief.refusal_reason is BriefRefusal.REVIEW_RECEIPT_EXPIRED
+    assert brief.to_dict()["stages"][-1] == "generation"
+
+
+def test_invalid_unicode_source_digest_has_a_value_free_error_without_context():
+    source = "SYNTHETIC_PRIVATE_MARKER" + chr(0xD800)
+    with pytest.raises(ReviewAdmissionError) as caught:
+        reviewed_source_digest(source)
+    assert caught.value.reason is ReviewAdmissionRefusal.INVALID
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE_MARKER" not in str(caught.value)
+
+
+def test_wire_integers_must_fit_the_shared_signed_64_bit_contract():
+    _, context = reviewed_fixture()
+    payload = context.packet.to_dict()
+    payload["source_length"] = 1 << 63
+    with pytest.raises(ReviewAdmissionError):
+        ReviewedLocalEvidence.from_dict(payload)
+    assert (
+        replace(context.packet.review_receipt, expires_at=(1 << 63) - 1).expires_at
+        == (1 << 63) - 1
+    )
