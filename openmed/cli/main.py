@@ -88,6 +88,7 @@ from .scaffold import (
     ScaffoldError,
     scaffold_project,
 )
+from .slm_verify import add_slm_verify_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -576,6 +577,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    from .agent_admission import add_argparse_admission_commands
+
+    add_argparse_admission_commands(subparsers)
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_batch_run_command(subparsers)
@@ -596,6 +600,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .brief import add_brief_command
 
     add_brief_command(subparsers)
+    from .nli_qualification import add_nli_qualification_command
+
+    add_nli_qualification_command(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -1652,6 +1659,11 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
     dp_parser.add_argument("--label", default="aggregate_query")
     dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Allow seeded synthetic experiments; outputs are not private releases.",
+    )
     dp_parser.add_argument("--overwrite", action="store_true")
     dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
@@ -2456,6 +2468,8 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Verify every cached model with integrity metadata.",
     )
     models_verify.set_defaults(handler=_handle_models_verify)
+
+    add_slm_verify_command(models_sub)
 
     models_size = models_sub.add_parser(
         "size",
@@ -4527,6 +4541,12 @@ def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
         release_aggregate,
     )
 
+    if args.seed is not None and not args.test_mode:
+        raise CliError(
+            "Seeded aggregate releases require --test-mode and synthetic data.",
+            code="dp_seed_requires_test_mode",
+            exit_code=EXIT_ERROR,
+        )
     _preflight_structured_paths(
         inputs=((args.input, "Aggregate input", frozenset({".json"})),),
         outputs=((args.output, "Aggregate output", frozenset({".json"})),),

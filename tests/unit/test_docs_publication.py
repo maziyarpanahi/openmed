@@ -369,12 +369,16 @@ def test_website_preserves_every_approved_landing_view_and_interaction() -> None
         )
     )
     shown = community["display"]
+    claims = yaml.safe_load(
+        (DOCS / "brand" / "system" / "claims.yml").read_text(encoding="utf-8")
+    )["claims"]
 
     approved_copy = (
         "current release",
         "Your data. Your model. Your",
         "pii.detect() · on-device",
-        "Live PHI detection · 34 model-backed languages",
+        "Live PHI detection · "
+        f"{claims['model_backed_pii_languages']['value']} model-backed languages",
         "Model downloads · all-time",
         f"{shown['downloads_all_time_millions']}<span>M</span>",
         f"{shown['downloads_30d_millions']}<span>M</span>",
