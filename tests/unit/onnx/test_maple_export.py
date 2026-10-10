@@ -260,7 +260,7 @@ def test_exposes_pinned_export_requirements_and_cli(capsys):
     assert main(["requirements"]) == 0
     output = capsys.readouterr().out
     assert "onnxruntime==1.25.1" in output
-    assert "torch==2.9.1" in output
+    assert "torch==2.13.0" in output
 
 
 def test_maple_builder_adapter_selects_alternating_rope_and_fused_qmoe():
