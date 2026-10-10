@@ -249,6 +249,19 @@ def test_explicit_export_time_is_required_and_normalized():
     assert export().to_response()["bundle"]["timestamp"] == "2026-01-01T00:00:00+00:00"
 
 
+@pytest.mark.parametrize(
+    "timestamp",
+    ["20260101T000000+0000", "2026-W01-4T00:00:00Z", "PRIVATE_TIMESTAMP"],
+)
+def test_import_rejects_timestamps_outside_the_shared_iso_profile(timestamp):
+    payload = export().to_response()
+    payload["bundle"]["timestamp"] = timestamp
+    with pytest.raises(BriefDocumentError, match="^invalid_document$") as caught:
+        import_brief_document(payload, privacy_detector=lambda _: [])
+    assert caught.value.__context__ is None
+    assert timestamp not in str(caught.value)
+
+
 def test_unicode_and_html_narrative_roundtrip_preserves_scalar_offsets(monkeypatch):
     import tests.unit.clinical.test_brief as fixtures
 
