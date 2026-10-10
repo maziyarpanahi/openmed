@@ -152,6 +152,13 @@ from .schema_compatibility import (
     SemVer,
     check_schema_compatibility,
 )
+from .schemas import (
+    AGENT_SCHEMA_DIALECT,
+    build_agent_schema,
+    build_agent_schema_catalog,
+    list_agent_schema_names,
+    render_agent_schema,
+)
 from .timing import ActionTiming, AgentRunTiming, RunTiming, TimingValidationError
 from .workflow_rollup import (
     WORKFLOW_ROLLUP_SCHEMA_VERSION,
@@ -198,6 +205,7 @@ from .workflows import (
 )
 
 __all__ = [
+    "AGENT_SCHEMA_DIALECT",
     "ACTION_PHASE_TRANSITIONS",
     "ActionPhase",
     "ActionPhaseError",
@@ -338,6 +346,8 @@ __all__ = [
     "WorkflowRollupError",
     "WorkflowRollupRow",
     "allowed_reason_codes",
+    "build_agent_schema",
+    "build_agent_schema_catalog",
     "is_resumable_phase",
     "is_terminal_phase",
     "validate_action_transition",
@@ -350,9 +360,11 @@ __all__ = [
     "error_class_for_code",
     "is_retryable",
     "load_evidence_query_schema",
+    "list_agent_schema_names",
     "make_evidence_citation",
     "make_query_access_decision",
     "plan_evidence_query",
+    "render_agent_schema",
     "allowed_handoff_reason_codes",
     "check_schema_compatibility",
     "security",
