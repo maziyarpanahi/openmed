@@ -1,4 +1,4 @@
-"""Draft 2020-12 schema export for content-free agent exchange records.
+"""Draft 2020-12 schema export for closed agent governance wire records.
 
 The exported schemas are deterministic, self-contained, and safe to generate
 offline. They describe the public JSON projections of approval tokens and
@@ -175,6 +175,8 @@ def _approval_token_schema() -> dict[str, Any]:
                     "type": "string",
                     "const": APPROVAL_TOKEN_SCHEMA_VERSION,
                 },
+                "key_id": _bounded_string(_KEY_ID_PATTERN, max_length=128),
+                "issued_at": _timestamp(),
                 "action_digest": _digest(),
                 "reviewer_role": _bounded_string(
                     _ROLE_PATTERN, max_length=_MAX_GOVERNANCE_IDENTIFIER_LENGTH
@@ -201,12 +203,8 @@ def _approval_receipt_schema() -> dict[str, Any]:
                     "const": APPROVAL_RECEIPT_SCHEMA_VERSION,
                 },
                 "action_digest": _digest(),
-                "reviewer_role": _bounded_string(
-                    _ROLE_PATTERN, max_length=_MAX_GOVERNANCE_IDENTIFIER_LENGTH
-                ),
                 "token_digest": _digest(),
-                "consumed_at": _timestamp(),
-                "expires_at": _timestamp(),
+                "code": {"type": "string", "const": "approved"},
             }
         ),
     }

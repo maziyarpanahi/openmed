@@ -53,10 +53,10 @@ SCHEMA_NAMES = (
 
 SCHEMA_FINGERPRINTS: dict[str, str] = {
     "approval_receipt": (
-        "sha256:51ced4e5cc84a9096d3ded9e1c33814d64c7625b8d2a9fc8afcd8475585560bf"
+        "sha256:6343d7273ef80e93f9a884a33222eb26302221dee8cde595a6481b8b9cc619d7"
     ),
     "approval_token": (
-        "sha256:2695264b78ca4c984583156e16fae34648eb08d1b308bd1261367bb7ca721ffc"
+        "sha256:03517d5a64b37f7179b5a1253bb11a7cbaaea628911dddab2fbac50d7fba7307"
     ),
     "capability_grant": (
         "sha256:ea1cab83e31c9b9596764821cfe846260473efcfcb61866b51659096fac5fa6f"
@@ -104,15 +104,14 @@ def _payloads() -> dict[str, Callable[[], dict[str, Any]]]:
             action_digest=_DIGEST,
             reviewer_role=_ROLE,
             expires_at=_TIMESTAMP,
+            key_id="approval-key-1",
+            issued_at=_TIMESTAMP - 1,
             nonce=_NONCE,
             signature=_SIGNATURE,
         ).to_dict(),
         "approval_receipt": lambda: tokens.ApprovalReceipt(
             action_digest=_DIGEST,
-            reviewer_role=_ROLE,
             token_digest=_TOKEN_DIGEST,
-            consumed_at=_TIMESTAMP - 1,
-            expires_at=_TIMESTAMP,
         ).to_dict(),
         "reviewer_handoff": lambda: ReviewerHandoffPacket(
             run_id=_RUN_ID,
@@ -373,7 +372,7 @@ def test_schemas_never_embed_signatures_or_secrets() -> None:
         pytest.param(
             "approval_token",
             lambda payload: payload.update(
-                {"schema_version": "openmed.agent.approval_token.v2"}
+                {"schema_version": "openmed.agent.approval_token.v3"}
             ),
             id="token-unsupported-version",
         ),
@@ -422,7 +421,7 @@ def test_schemas_never_embed_signatures_or_secrets() -> None:
         pytest.param(
             "approval_receipt",
             lambda payload: payload.update(
-                {"schema_version": "openmed.agent.approval_receipt.v2"}
+                {"schema_version": "openmed.agent.approval_receipt.v3"}
             ),
             id="receipt-unsupported-version",
         ),
@@ -698,9 +697,9 @@ def test_checkpoint_completed_phase_requires_committed_effects() -> None:
 
 
 def test_runtime_only_invariants_are_not_claimed_by_the_schema() -> None:
-    receipt = _payload("approval_receipt")
-    receipt["consumed_at"] = receipt["expires_at"]
-    _validator("approval_receipt").validate(receipt)
+    token = _payload("approval_token")
+    token["issued_at"] = token["expires_at"]
+    _validator("approval_token").validate(token)
 
     handoff = _payload("reviewer_handoff")
     handoff["expires_at"] = handoff["issued_at"]
@@ -765,3 +764,88 @@ def test_terminal_decisions_reject_orphan_retry_keys(disposition, reason) -> Non
     payload.update(disposition=disposition, reason=reason, retry_effect_ids=[])
     with pytest.raises(ValidationError):
         _validator("recovery_decision").validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("key_id", "UPPERCASE"),
+        ("key_id", "key\n"),
+        ("key_id", "x" * 129),
+        ("key_id", None),
+        ("issued_at", -1),
+        ("issued_at", 1.5),
+        ("issued_at", True),
+        ("issued_at", 2**63),
+    ],
+)
+def test_v2_token_metadata_uses_closed_bounded_fields(field, value):
+    payload = _payload("approval_token")
+    payload[field] = value
+    with pytest.raises(ValidationError):
+        _validator("approval_token").validate(payload)
+
+
+@pytest.mark.parametrize("field", ["key_id", "issued_at"])
+def test_v2_token_requires_every_signed_metadata_field(field):
+    payload = _payload("approval_token")
+    del payload[field]
+    with pytest.raises(ValidationError):
+        _validator("approval_token").validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("reviewer_role", _ROLE),
+        ("consumed_at", _TIMESTAMP - 1),
+        ("expires_at", _TIMESTAMP),
+        ("code", "denied"),
+    ],
+)
+def test_v2_public_receipt_refuses_execution_authority_and_unknown_codes(field, value):
+    payload = _payload("approval_receipt")
+    payload[field] = value
+    with pytest.raises(ValidationError):
+        _validator("approval_receipt").validate(payload)
+
+
+def test_real_v2_signing_consumption_and_structure_only_boundary():
+    key = b"synthetic-exchange-schema-approval-key"
+    signer = tokens.ApprovalTokenSigner(key, clock=lambda: _TIMESTAMP - 1)
+    verifier = tokens.ApprovalTokenVerifier(
+        key,
+        tokens.InMemoryApprovalNonceStore(),
+        clock=lambda: _TIMESTAMP - 1,
+    )
+    token = signer.issue(
+        action_digest=_DIGEST, reviewer_role=_ROLE, expires_at=_TIMESTAMP
+    )
+    payload = token.to_dict()
+    _validator("approval_token").validate(payload)
+    tampered = dict(payload, signature="hmac-sha256:" + "0" * 64)
+    # Signature shape passes the structural schema; authentication still refuses it.
+    _validator("approval_token").validate(tampered)
+    with pytest.raises(tokens.ApprovalSignatureError):
+        verifier.consume_authorization(
+            tampered, action_digest=_DIGEST, reviewer_role=_ROLE
+        )
+    authority = verifier.consume_authorization(
+        token, action_digest=_DIGEST, reviewer_role=_ROLE
+    )
+    receipt = authority.receipt.to_dict()
+    assert set(receipt) == {"schema_version", "action_digest", "token_digest", "code"}
+    _validator("approval_receipt").validate(receipt)
+    assert not _validator("approval_receipt").is_valid(authority)
+    with pytest.raises(tokens.ApprovalReplayError):
+        verifier.consume_authorization(
+            token, action_digest=_DIGEST, reviewer_role=_ROLE
+        )
+
+
+@pytest.mark.parametrize("name", ["approval_token", "approval_receipt"])
+def test_current_wire_schema_refuses_legacy_v1_records(name):
+    payload = _payload(name)
+    payload["schema_version"] = "openmed.agent." + name + ".v1"
+    with pytest.raises(ValidationError):
+        _validator(name).validate(payload)

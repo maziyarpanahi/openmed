@@ -1,7 +1,7 @@
 # Agent exchange record JSON Schemas
 
 `openmed.agent.exchange_record_schemas` exports strict Draft 2020-12 contracts
-for the content-free governance records that agent clients, CLIs, services, and
+for the closed governance wire records that agent clients, CLIs, services, and
 adapters exchange: single-use [human approval tokens](human-approval-tokens.md)
 and their [receipts](human-approval-receipts.md),
 [reviewer handoff packets](reviewer-handoffs.md),
@@ -53,7 +53,7 @@ registry entry, or a cross-record reference.
 ## Closed contract
 
 Each record object sets `additionalProperties: false` and requires exactly the
-keys its Python type serializes: metadata-only approval tokens and receipts,
+keys its Python type serializes: protected approval tokens and code/digest receipts,
 reviewer handoff packets, capability grant manifests, recovery checkpoints,
 and recovery decisions. Unknown fields are invalid, including raw clinical
 identifiers, credentials, secrets, private paths, request arguments, results,
@@ -84,7 +84,17 @@ contracts:
 - evidence references are bounded by the public handoff limit, a grant carries
   at least one unique constraint, and a checkpoint carries at least one effect.
 
+The current approval schemas describe v2: tokens require signed `key_id` and
+`issued_at` fields; public receipts contain only schema version, action digest,
+token digest and the `approved` code. Legacy v1 records require the separate
+explicit runtime compatibility path and do not validate against these current
+schemas. Protected `ApprovalAuthorization` is local execution authority and has
+no exchange schema; serialized receipts cannot supply its role or validity.
+
 ## Structure only
+
+Approval token JSON is a protected bearer credential and must never be emitted
+in audit logs or public receipts. The schema exports formats, not token values.
 
 The approval token schema describes the serialized token structure and the
 HMAC-SHA256 signature format. It never embeds a signature value, a nonce value,
@@ -99,8 +109,9 @@ JSON Schema validation checks the serialized contract. Constructing the Python
 records remains the source of truth for invariants that a structural validator
 cannot express:
 
-- approval receipts reject a `consumed_at` that is not earlier than
-  `expires_at`, and a consumed token is rejected once expired or replayed;
+- the approval verifier authenticates signed issuance/key metadata, enforces
+  lifetime and clock-skew policy, and rejects expired or replayed tokens;
+  public receipt structure never authenticates execution authority;
 - reviewer handoff packets require `expires_at` after `issued_at` and reject
   evidence references past validation time;
 - capability grant constraints are sorted and deduplicated, and signatures are
