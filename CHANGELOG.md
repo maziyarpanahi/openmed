@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   batches, with independent patient/encounter/namespace/snapshot scope checks,
   strict nested field projections, original evidence identity and content-free
   quarantine diagnostics. Privacy scanning remains a separate boundary (#3671).
+- Added a local Journey-fact ClinicalBrief context provider with explicit review
+  verification, source/fact/profile/calibration bindings, typed mapping refusals
+  and offline Python, CLI, REST and MCP injection tests (#3652).
+
+- Add the separately versioned reviewed-local clinical evidence contract and
+  opt-in Python/OpenMedKit brief admission, with current source/review custody,
+  digest-bound expiring receipts, typed refusals and synthetic offline fixtures
+  (#3651). Existing evidence packets remain synthetic-only.
 
 - Added immutable run-scoped agent tool catalog bindings, exact-version pinned
   dispatch, deterministic restore eligibility and content-free re-review outcomes
