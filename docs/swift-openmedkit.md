@@ -1,5 +1,35 @@
 # OpenMedKit (Swift Package)
 
+## Guarded clinical briefs
+
+Maple has a structured `.brief` task. Use `OpenMedMaple.brief(source:
+originalIdentifiers:evaluate:privacyCheck:)` to buffer generation and validate a
+complete local evaluation packet before exposing it. The `evaluate` callback
+must execute reviewed-evidence and calibrated NLI verification **on-device**;
+it must not manufacture review history or call a cloud service. No verifier or
+calibrated checkpoint is implicitly installed by this API.
+
+The native boundary independently enforces source/output digest binding,
+identifier leakage, the human-review/non-diagnostic safety envelope, exact
+Unicode-scalar citation boundaries and entailment verdicts. `ClinicalBrief`
+exposes summary, citations, verdicts and digest. `responseJSON()` is protected
+output; `auditJSON()` excludes generated text. Typed failures never contain
+prompts, model responses or private exception strings. Missing local model files
+fail closed through the existing Maple runtime, with no cloud fallback.
+
+The scan demo now renders verified citations after de-identification. Configure
+its `briefEvaluator` and `briefPrivacyCheck` with trusted local integrations;
+without them the action displays a review-configuration refusal instead of the
+previous unverified reasoning answer. This is an integration boundary, not a
+bundled native NLI implementation or clinical readiness claim.
+
+Python and Swift consume `tests/fixtures/clinical/brief_parity/verified.json`.
+The Python test regenerates the packet from the composed pipeline with explicit
+test-only NLI/privacy doubles. The Swift test checks the native guards and
+byte-identical protected response for that fixed output. This proves wire and
+guard interoperability, not independent Swift reimplementation of all Python
+metrics or model-quality equivalence.
+
 OpenMedKit is the Swift package for running OpenMed models in **macOS**,
 **iOS**, **iPadOS**, **watchOS**, and **visionOS** apps.
 
@@ -70,7 +100,7 @@ model available when the product must support constrained devices.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
