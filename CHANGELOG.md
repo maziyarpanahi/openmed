@@ -49,17 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-<<<<<<< HEAD
 - Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
   for the OMOP quality bridge, with value-free diagnostics, strict version and
   table allowlists, and synthetic leakage and status regression fixtures (#3799).
 
-=======
 - Added passive preliminary FHIR R4 clinical-brief documents in Python and
   OpenMedKit, preserving evidence commitments, citation order, digests and
   human-review limitations with closed-subset round trips, explicit conversion
   losses and final narrative/metadata privacy gates (#3658).
->>>>>>> origin/master
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
