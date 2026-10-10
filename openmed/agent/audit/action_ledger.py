@@ -314,7 +314,7 @@ class ActionLedger:
                 entries.append(ActionEntry.from_dict(payload))
             except ActionLedgerError:
                 raise
-            except (OSError, ValueError, UnicodeError, TypeError):
+            except (OSError, ValueError, UnicodeError, TypeError, RecursionError):
                 raise ActionLedgerError("invalid_entry_json") from None
         return verify_action_ledger(tuple(entries))
 

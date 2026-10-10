@@ -5,7 +5,9 @@ caller-owned local directory. Each sequence gets a private, immutable JSON file.
 The next entry includes the preceding entry's SHA-256 digest. `load()` verifies
 the complete chain, the run and action identity, metadata continuity, and the
 state path before `record()` can append. Gaps, edits, conflicting writers, and
-unknown files fail closed with stable, value-free error codes.
+unknown files fail closed with stable, value-free error codes. Entry files are
+bounded to 16 KiB; malformed or deeply nested JSON also receives a fixed error,
+without exposing the submitted entry.
 
 ```python
 from openmed.agent.audit.action_ledger import ActionLedger, ActionState
