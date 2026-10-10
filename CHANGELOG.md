@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared metadata, and runs the memory preflight for an explicit device
   budget, with a value-free JSON report, stable CLI error codes, and no runtime
   import or network access (#3805).
+- Added bundled Draft 2020-12 JSON Schemas for clinical brief audit and response
+  records, evidence packets, NLI verification results and SDOH evidence reports,
+  with a committed fingerprint snapshot, schema drift comparison, optional
+  `jsonschema` validation and value-free contract tests (#3803).
 
 ### Fixed
 
