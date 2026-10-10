@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grants, purpose tickets, minimum-data projections, pinned tool identity and
   exact single-use approval, with content-free cancellation and uncertain-effect
   recovery outcomes through injected local providers (#3661).
+- Add default-off agent effect admission, signed local transition receipts,
+  independent rollback detection, emergency stop and fresh-enable CLI commands
+  with synthetic approval/recovery safety controls (#3765).
 
 - Added an offline, synthetic governed clinical reference workflow covering
   approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
@@ -347,6 +350,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a duplicate-cue guard (#3108).
 
 ### Changed
+
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
 
 - Training and new-checkpoint publication are optional research, without a
   library-release milestone or feature-blocking relationship. SDK readiness
