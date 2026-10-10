@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added immutable run-scoped agent tool catalog bindings, exact-version pinned
+  dispatch, deterministic restore eligibility and content-free re-review outcomes
+  for implementation, schema and side-effect drift (#3665).
+
 - Added injected runtime clinical-agent authority revocation checks before
   sensitive reads, effects and recovery, with monotonic grant/ticket generations,
   descendant and approval invalidation, and content-free offline tests (#3664).

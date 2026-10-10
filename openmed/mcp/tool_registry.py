@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -351,6 +352,8 @@ class ToolRegistry:
         self._specs: dict[tuple[str, str], ToolSpec] = {}
         self._workflows: dict[tuple[str, str], WorkflowSpec] = {}
         self._handlers: dict[tuple[str, str], Callable[..., Mapping[str, Any]]] = {}
+        self._implementation_ids: dict[tuple[str, str], str] = {}
+        self._binding_lock = RLock()
         self._plugin_loader = plugin_loader
         self._plugin_loader_started = False
         self._plugin_loader_lock = RLock()
@@ -372,11 +375,41 @@ class ToolRegistry:
         if handler is not None and not callable(handler):
             raise TypeError("tool handler must be callable")
         key = (spec.name, spec.version)
-        if key in self._specs:
-            raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
-        self._specs[key] = spec
-        if handler is not None:
-            self._handlers[key] = handler
+        with self._binding_lock:
+            if key in self._specs:
+                raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
+            self._specs[key] = spec
+            if handler is not None:
+                self._handlers[key] = handler
+                self._implementation_ids[key] = "sha256:" + secrets.token_hex(32)
+
+    def implementation_binding(
+        self, name: str, version: str
+    ) -> tuple[ToolSpec, Callable[..., Mapping[str, Any]], str]:
+        """Capture an exact-version contract, callable and opaque identity.
+
+        Args:
+            name: Registered runtime tool name.
+            version: Exact registered semantic version; latest is never inferred.
+
+        Returns:
+            A detached specification, the registered callable, and a random
+            registration identity unrelated to source, configuration or data.
+            Identities last for this registry instance; a fresh registration
+            requires re-review even when its schemas match.
+
+        Raises:
+            KeyError: If the exact version or executable handler is unavailable.
+        """
+
+        self._ensure_runtime_plugins()
+        key = (name, version)
+        with self._binding_lock:
+            return (
+                deepcopy(self._specs[key]),
+                self._handlers[key],
+                self._implementation_ids[key],
+            )
 
     def register_workflow(self, spec: WorkflowSpec) -> None:
         """Register one discoverable workflow spec version."""
