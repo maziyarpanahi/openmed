@@ -78,6 +78,12 @@ stable. Library releases must also pass the repository policy, dependency
 license policy, and test suite.
 
 Model promotion and Library/SDK publication remain separate release streams.
+Training, fine-tuning, and publishing new checkpoints are optional model-research
+work. They have no library-release milestone and are not prerequisites for
+feature APIs or SDK releases. Existing and caller-supplied local artifacts can
+satisfy runtime contracts; missing or unqualified artifacts must still produce
+typed refusal. Deferral never turns a failed model benchmark into passing
+evidence or bypasses its promotion gates.
 `.github/workflows/release-gates.yml` runs only by explicit model-candidate
 dispatch or the metadata-only rollback dispatch; it has no schedule and never
 publishes model artifacts. An SDK `v*` tag does not promote a model. A
@@ -92,17 +98,25 @@ gates.
 For an SDK candidate that retains model targets, use the explicit SDK stream:
 
 ```bash
-python -m openmed.eval.release_readiness --sdk-baseline v2.3.0 \
-  --migration-guide docs/migration/2.3-to-2.5.md \
+python -m openmed.eval.release_readiness --sdk-baseline v2.5.0 \
+  --migration-guide docs/migration/2.5-to-3.0.md \
   --api-compat-report api-surface-diff.json \
-  --e2e-report e2e-golden-report.json --version 2.5.0 \
+  --e2e-report e2e-golden-report.json --version 3.0.0 \
   --output release-readiness-report.json --json
 ```
 
-This mode verifies the baseline is an ancestor stable tag, requires exact
-`models.jsonl` and retained `gates/baseline.json` contents, and compares every
-model pointer target across registry schema representations. Changed or
-missing evidence fails closed. It does not claim new model qualification.
+This mode verifies the baseline is an ancestor stable tag, preserves every
+model row, artifact pin, license, benchmark and retained baseline entry, and
+compares every model pointer target across registry schema representations.
+Only additive language-routing metadata and script verdicts over unchanged
+tokenizer measurements can change without model promotion. A new summary
+policy may add strict thresholds; it cannot rewrite existing model evidence.
+These catalog edits are not clinical model qualification. Changed artifacts,
+pointers or retained metrics, and missing evidence, still fail closed.
+
+Minor and patch SDK releases must have no breaking APIs. A major release may
+include intentional breaking APIs only when every reported symbol is covered
+by its migration guide; the readiness report retains their count and guide hash.
 Model candidates use `--gate-report` with signed evaluation evidence; the two
 CLI modes cannot be combined. Both streams require API, documentation,
 disclaimer, and golden-suite checks, and emit signed readiness reports.
