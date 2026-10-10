@@ -39,16 +39,34 @@ The standard `ApprovalTokenVerifier` consumes the nonce once; a mismatched signe
 presentation requires fresh human approval. Approval is required by default and
 cannot be disabled for a state-changing `ToolSpec`.
 
+## Default-off effect admission
+
+State-changing tools also require an explicitly injected `EffectAdmissionCheck`
+and the exact admission generation captured at preview. Omitted configuration
+uses the disabled `EffectAdmissionController`; reads remain available while
+effects are disabled or stopped. The generation is part of the approval action
+digest, so stop and re-enable cannot reuse an earlier approved preview. A new
+generation requires fresh review, grants, tickets and approval.
+
+The adapter rechecks admission before reservation, after approval storage and
+again after the durable dispatch append immediately before invocation. Production
+hosts use operator-managed durable admission and its independent rollback anchor.
+A stop cannot recall an effect whose invocation has already begun; the final
+check narrows that boundary without claiming cross-provider atomic execution.
+
 ## Injected protocols
 
 - `DispatchToolProvider.get(name)` resolves the registered specification.
   `invoke(spec, arguments, effect=...)` invokes the **pinned** implementation
   once, using the recorded idempotency key. It keeps payloads and tool outputs
   private. A provider must not silently substitute another version or transport.
-- `DispatchApprovalProvider.consume(...)` has the existing
-  `ApprovalTokenVerifier` signature and returns an authenticated, single-use
-  `ApprovalReceipt`. Merely constructing a receipt does not authenticate it;
-  this provider is a trusted verification boundary.
+- `DispatchApprovalProvider.consume_authorization(...)` uses the existing
+  `ApprovalTokenVerifier` signature and returns protected local
+  `ApprovalAuthorization` after signature, action, role, time and nonce checks.
+  Its public `receipt` exposes only codes and digests. Serialized receipts and
+  dictionaries never supply role or validity authority; only the trusted local
+  verifier may create the execution context. The checkpoint records the receipt
+  digest and verified expiry, without retaining the bearer token or key.
 - `DispatchEffectStore.claim(checkpoint)` atomically reserves the **run/action**,
   including attempts with changed argument digests, and persists the initial
   content-free intent. Existing reservations return `False`. Failed or

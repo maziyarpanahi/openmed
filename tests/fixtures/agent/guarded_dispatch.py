@@ -6,6 +6,7 @@ import hashlib
 import threading
 from dataclasses import replace
 
+from openmed.agent.admission import AdmissionError, AdmissionState, AdmissionStatus
 from openmed.agent.approvals.tokens import (
     ApprovalTokenSigner,
     ApprovalTokenVerifier,
@@ -44,6 +45,25 @@ ROLE = "role:org.example/clinician@1.0.0"
 TOOL = "tool:org.example/summarize@1.0.0"
 ACTION = "action:org.example/execute@1.0.0"
 PRIVATE = "SYNTHETIC Alice Example 01/02/1970 /private/record API_SECRET"
+
+
+class SyntheticAdmission:
+    """Explicit test host enablement; production uses durable operator control."""
+
+    def __init__(self):
+        self.state = AdmissionState.ENABLED
+        self.generation = 1
+
+    def require_admitted(self, workflow_id, *, generation=None):
+        if self.state is not AdmissionState.ENABLED or generation != self.generation:
+            raise AdmissionError("admission_denied")
+        return AdmissionStatus(
+            workflow_id.serialize(),
+            self.state,
+            self.generation,
+            "sha256:" + "0" * 64,
+            "admitted",
+        )
 
 
 class MemoryEffects:
@@ -207,8 +227,10 @@ class DispatchHarness:
         self.tools = RegisteredTools(self.spec, self.effects)
         self.grants = CapabilityGrantVerifier(KEY)
         self.approvals = ApprovalTokenVerifier(KEY, InMemoryApprovalNonceStore())
+        self.admission = SyntheticAdmission()
+        self.admission_generation = self.admission.generation
         digest = self.adapter().action_digest(self.arguments)
-        self.token = ApprovalTokenSigner(KEY).issue(
+        self.token = ApprovalTokenSigner(KEY, clock=lambda: self.now).issue(
             action_digest=digest,
             reviewer_role=ROLE,
             expires_at=100,
@@ -226,6 +248,8 @@ class DispatchHarness:
             effects=self.effects,
             clock=lambda: self.now,
             cancelled=lambda: self.cancelled,
+            admission=self.admission,
+            admission_generation=self.admission_generation,
         )
         values.update(overrides)
         return GuardedDispatchAdapter(**values)

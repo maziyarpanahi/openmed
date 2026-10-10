@@ -15,7 +15,17 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from openmed.agent.action_phases import ActionPhase
-from openmed.agent.approvals.tokens import ApprovalReceipt, ApprovalToken
+from openmed.agent.admission import (
+    AdmissionState,
+    AdmissionStatus,
+    EffectAdmissionCheck,
+    EffectAdmissionController,
+)
+from openmed.agent.approvals.tokens import (
+    ApprovalAuthorization,
+    ApprovalToken,
+    _validate_reviewer_role,
+)
 from openmed.agent.correlation import ActionId, RunId
 from openmed.agent.identifiers import ToolId, WorkflowId
 from openmed.agent.outcomes import OutcomeClass, WorkflowOutcome
@@ -63,15 +73,15 @@ class DispatchToolProvider(Protocol):
 class DispatchApprovalProvider(Protocol):
     """Consume exact, single-use approval (implemented by ApprovalTokenVerifier)."""
 
-    def consume(
+    def consume_authorization(
         self,
         token: ApprovalToken,
         *,
         action_digest: str,
         reviewer_role: str,
         now: int | None = None,
-    ) -> ApprovalReceipt:
-        """Return a verified receipt or deny without invoking a tool."""
+    ) -> ApprovalAuthorization:
+        """Return protected verified authority or deny without invoking a tool."""
         ...
 
 
@@ -143,13 +153,7 @@ class DispatchBinding:
             or self.tool_id.version != self.spec.version
         ):
             raise ValueError("invalid_dispatch_binding")
-        ApprovalReceipt(
-            action_digest="sha256:" + "0" * 64,
-            reviewer_role=self.reviewer_role,
-            token_digest="sha256:" + "0" * 64,
-            consumed_at=0,
-            expires_at=1,
-        )
+        _validate_reviewer_role(self.reviewer_role)
         object.__setattr__(self, "spec", copy.deepcopy(self.spec))
 
 
@@ -194,6 +198,8 @@ class GuardedDispatchAdapter:
         effects: Atomic reservation, journal and sink observation provider.
         clock: Injected epoch-second clock, shared by every authority check.
         cancelled: Cooperative cancellation probe, checked before invocation.
+        admission: Explicit effect admission; omitted means disabled for writes.
+        admission_generation: Generation captured at preview and bound to approval.
     """
 
     def __init__(
@@ -207,6 +213,8 @@ class GuardedDispatchAdapter:
         effects: DispatchEffectStore,
         clock: Callable[[], int],
         cancelled: Callable[[], bool] = lambda: False,
+        admission: EffectAdmissionCheck | None = None,
+        admission_generation: int | None = None,
     ) -> None:
         self._binding = copy.deepcopy(binding)
         self._authority = copy.deepcopy(authority)
@@ -216,6 +224,10 @@ class GuardedDispatchAdapter:
         self._effects = effects
         self._clock = clock
         self._cancelled = cancelled
+        self._admission = (
+            admission if admission is not None else EffectAdmissionController()
+        )
+        self._admission_generation = admission_generation
 
     def action_digest(self, arguments: Mapping[str, Any]) -> str:
         """Bind exact JSON arguments and trusted policy for approval preview.
@@ -244,6 +256,9 @@ class GuardedDispatchAdapter:
                 ],
                 "approval_required": self._approval_required,
                 "reviewer_role": binding.reviewer_role,
+                "admission_generation": self._admission_generation
+                if binding.spec.state_changing
+                else None,
                 "arguments": arguments,
             }
         )
@@ -251,6 +266,23 @@ class GuardedDispatchAdapter:
     @property
     def _approval_required(self) -> bool:
         return self._binding.approval_required or self._binding.spec.state_changing
+
+    def _admit_effect(self) -> None:
+        if not self._binding.spec.state_changing:
+            return
+        generation = self._admission_generation
+        if type(generation) is not int or generation < 0:
+            raise ValueError("admission_generation_required")
+        status = self._admission.require_admitted(
+            self._binding.workflow_id, generation=generation
+        )
+        if (
+            type(status) is not AdmissionStatus
+            or status.state is not AdmissionState.ENABLED
+            or status.generation != generation
+            or status.scope != self._binding.workflow_id.serialize()
+        ):
+            raise ValueError("invalid_admission_status")
 
     def __call__(self, **arguments: Any) -> dict[str, Any]:
         """Execute as a workflow step, stopping the runner on any unsafe outcome."""
@@ -275,6 +307,7 @@ class GuardedDispatchAdapter:
             now = self._clock()
             if type(now) is not int or now < 0:
                 raise ValueError("invalid_clock")
+            self._admit_effect()
             if (
                 self._tools.get(binding.spec.name) != binding.spec
                 or authority.grant_request != binding.grant_request
@@ -328,6 +361,7 @@ class GuardedDispatchAdapter:
         try:
             if self._cancelled():
                 return self._cancel(lineage, now, persist=False)
+            self._admit_effect()
             # The store reserves run/action, not only the argument-derived key.
             if self._effects.claim(checkpoint) is not True:
                 return self._review(lineage, now, persist=False)
@@ -337,25 +371,25 @@ class GuardedDispatchAdapter:
             if self._approval_required:
                 if type(authority.approval) is not ApprovalToken:
                     raise ValueError("approval_required")
-                receipt = self._approvals.consume(
+                authorization = self._approvals.consume_authorization(
                     authority.approval,
                     action_digest=digest,
                     reviewer_role=binding.reviewer_role,
                     now=now,
                 )
                 if (
-                    type(receipt) is not ApprovalReceipt
-                    or receipt.action_digest != digest
-                    or receipt.reviewer_role != binding.reviewer_role
-                    or receipt.expires_at <= now
+                    type(authorization) is not ApprovalAuthorization
+                    or authorization.receipt.action_digest != digest
+                    or authorization.reviewer_role != binding.reviewer_role
+                    or authorization.expires_at <= now
                 ):
-                    raise ValueError("invalid_approval_receipt")
+                    raise ValueError("invalid_approval_authorization")
                 checkpoint = _next(
                     checkpoint,
                     RecoveryPhase.APPROVAL_RECORDED,
                     approval_action_digest=digest,
-                    approval_receipt_digest=_digest(receipt.to_dict()),
-                    approval_expires_at=receipt.expires_at,
+                    approval_receipt_digest=_digest(authorization.receipt.to_dict()),
+                    approval_expires_at=authorization.expires_at,
                 )
                 lineage.append(checkpoint)
                 self._effects.append(checkpoint)
@@ -382,6 +416,7 @@ class GuardedDispatchAdapter:
                 raise ValueError("approval_expired")
             if self._tools.get(binding.spec.name) != binding.spec:
                 raise ValueError("tool_changed")
+            self._admit_effect()
             checkpoint = _next(checkpoint, RecoveryPhase.DISPATCHING)
             lineage.append(checkpoint)
             self._effects.append(checkpoint)
@@ -402,6 +437,7 @@ class GuardedDispatchAdapter:
                 raise ValueError("approval_expired")
             if self._tools.get(binding.spec.name) != binding.spec:
                 raise ValueError("tool_changed")
+            self._admit_effect()
             dispatch_time = final_time
         except (Exception, asyncio.CancelledError):
             return self._cancel(lineage, now, denied=True)

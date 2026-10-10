@@ -84,3 +84,58 @@ def test_runner_stops_without_retry_or_downstream_execution(failure):
             if failure == "cancellation"
             else RecoveryReason.AMBIGUOUS_EFFECT.value
         )
+
+
+@pytest.mark.parametrize("stop_phase", [None, "approval_recorded", "dispatching"])
+def test_real_durable_admission_controls_registered_dispatch(tmp_path, stop_phase):
+    from openmed.agent.admission import (
+        AdmissionState,
+        EffectAdmissionController,
+        SQLiteAdmissionStore,
+    )
+    from openmed.agent.approvals.tokens import ApprovalTokenSigner
+    from tests.fixtures.agent.guarded_dispatch import KEY, ROLE
+
+    h = DispatchHarness()
+    ledger, anchor = tmp_path / "admission.db", tmp_path / "anchor.db"
+    store = SQLiteAdmissionStore(ledger, anchor, KEY)
+    store.initialize(now=1)
+    control = EffectAdmissionController(store)
+    control.enable(workflow_id=h.binding.workflow_id, now=2)
+    generation = control.require_admitted(h.binding.workflow_id).generation
+    preview = h.adapter(admission=control, admission_generation=generation)
+    token = ApprovalTokenSigner(KEY, clock=lambda: h.now).issue(
+        action_digest=preview.action_digest(h.arguments),
+        reviewer_role=ROLE,
+        expires_at=100,
+        nonce_source=lambda n: b"d" * n,
+    )
+    authority = replace(h.authority, approval=token)
+    append = h.effects.append
+
+    def stop_after_append(checkpoint):
+        append(checkpoint)
+        if checkpoint.phase.value == stop_phase:
+            control.stop(now=3)
+
+    h.effects.append = stop_after_append
+    result = h.adapter(
+        authority=authority,
+        admission=control,
+        admission_generation=generation,
+    ).dispatch(h.arguments)
+    assert h.tools.calls == (1 if stop_phase is None else 0)
+    assert result.outcome.outcome_class.value == (
+        "success" if stop_phase is None else "policy_denied"
+    )
+    assert PRIVATE not in json.dumps(result.to_dict())
+    if stop_phase is not None:
+        reopened = EffectAdmissionController(SQLiteAdmissionStore(ledger, anchor, KEY))
+        assert reopened.status(h.binding.workflow_id).state is AdmissionState.STOPPED
+        retry = h.adapter(
+            authority=authority,
+            admission=reopened,
+            admission_generation=generation,
+        ).dispatch(h.arguments)
+        assert retry.outcome.outcome_class.value == "policy_denied"
+        assert h.tools.calls == 0

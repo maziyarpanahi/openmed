@@ -191,7 +191,9 @@ def test_independent_corruption_never_invokes(mutation):
     elif mutation in {"approval_expiry", "approval_role"}:
         a = replace(
             a,
-            approval=ApprovalTokenSigner(KEY).issue(
+            approval=ApprovalTokenSigner(
+                KEY, clock=lambda: 9 if mutation == "approval_expiry" else 10
+            ).issue(
                 action_digest=a.approval.action_digest,
                 reviewer_role=ROLE
                 if mutation == "approval_expiry"
@@ -260,14 +262,14 @@ def test_cancellation_is_typed_and_private_free(boundary):
     if boundary == "before":
         h.cancelled = True
     elif boundary == "approval":
-        consume = h.approvals.consume
+        consume = h.approvals.consume_authorization
 
         def cancel_after_approval(*args, **kwargs):
             result = consume(*args, **kwargs)
             h.cancelled = True
             return result
 
-        h.approvals.consume = cancel_after_approval
+        h.approvals.consume_authorization = cancel_after_approval
     elif boundary == "dispatch":
         append = h.effects.append
 
@@ -335,7 +337,7 @@ def test_concurrent_dispatch_and_changed_arguments_share_action_reservation():
     assert h.tools.calls == 1
     assert sum(r.outcome.outcome_class is OutcomeClass.SUCCESS for r in results) == 1
     changed = {"text": "different synthetic arguments"}
-    token = ApprovalTokenSigner(KEY).issue(
+    token = ApprovalTokenSigner(KEY, clock=lambda: h.now).issue(
         action_digest=h.adapter().action_digest(changed),
         reviewer_role=ROLE,
         expires_at=100,
@@ -409,3 +411,106 @@ def test_nested_unprojected_field_cannot_hide_under_authorized_parent():
     result = h.adapter().dispatch({"text": {PRIVATE: PRIVATE}})
     assert h.tools.calls == 0
     assert_private_free(result)
+
+
+def test_state_changing_dispatch_without_admission_is_disabled():
+    from openmed.agent.workflows.dispatch import GuardedDispatchAdapter
+
+    h = DispatchHarness()
+    adapter = GuardedDispatchAdapter(
+        binding=h.binding,
+        authority=h.authority,
+        tools=h.tools,
+        grants=h.grants,
+        approvals=h.approvals,
+        effects=h.effects,
+        clock=lambda: h.now,
+    )
+    result = adapter.dispatch(h.arguments)
+    assert h.tools.calls == 0
+    assert not h.effects.lineages
+    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+    assert_private_free(result)
+
+
+def test_public_receipt_cannot_replace_verified_execution_authority():
+    h = DispatchHarness()
+    consume = h.approvals.consume_authorization
+
+    def public_receipt(*args, **kwargs):
+        return consume(*args, **kwargs).receipt
+
+    h.approvals.consume_authorization = public_receipt
+    result = h.adapter().dispatch(h.arguments)
+    assert h.tools.calls == 0
+    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+    assert_private_free(result)
+
+
+@pytest.mark.parametrize("generation", [None, True, "1", 0])
+def test_write_requires_current_preview_generation(generation):
+    h = DispatchHarness()
+    result = h.adapter(admission_generation=generation).dispatch(h.arguments)
+    assert h.tools.calls == 0
+    assert not h.effects.lineages
+    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+    assert_private_free(result)
+
+
+@pytest.mark.parametrize("boundary", ["before", "approval_recorded", "dispatching"])
+def test_emergency_stop_prevents_invocation_at_each_durable_boundary(boundary):
+    from openmed.agent.admission import AdmissionState
+
+    h = DispatchHarness()
+    if boundary == "before":
+        h.admission.state = AdmissionState.STOPPED
+    else:
+        append = h.effects.append
+
+        def stop_after_append(checkpoint):
+            append(checkpoint)
+            if checkpoint.phase.value == boundary:
+                h.admission.state = AdmissionState.STOPPED
+                h.admission.generation += 1
+
+        h.effects.append = stop_after_append
+    result = h.adapter().dispatch(h.arguments)
+    assert h.tools.calls == 0
+    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+    assert_private_free(result)
+
+
+def test_fresh_enable_requires_fresh_generation_bound_approval():
+    h = DispatchHarness()
+    h.admission.generation = 2
+    adapter = h.adapter(admission_generation=2)
+    assert adapter.action_digest(h.arguments) != h.token.action_digest
+    result = adapter.dispatch(h.arguments)
+    assert h.tools.calls == 0
+    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+    fresh = DispatchHarness()
+    fresh.admission.generation = fresh.admission_generation = 2
+    digest = fresh.adapter().action_digest(fresh.arguments)
+    token = ApprovalTokenSigner(KEY, clock=lambda: fresh.now).issue(
+        action_digest=digest,
+        reviewer_role=ROLE,
+        expires_at=100,
+        nonce_source=lambda n: b"q" * n,
+    )
+    result = fresh.adapter(authority=replace(fresh.authority, approval=token)).dispatch(
+        fresh.arguments
+    )
+    assert result.outcome.outcome_class is OutcomeClass.SUCCESS
+    assert fresh.tools.calls == 1
+
+
+def test_read_only_tool_remains_available_during_emergency_stop():
+    from openmed.agent.admission import AdmissionState
+
+    h = DispatchHarness(read_only=True, approval_required=False)
+    h.admission.state = AdmissionState.STOPPED
+    result = h.adapter(authority=replace(h.authority, approval=None)).dispatch(
+        h.arguments
+    )
+    assert result.outcome.outcome_class is OutcomeClass.SUCCESS
+    assert h.tools.calls == 1
