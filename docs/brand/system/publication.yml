@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/side-effect-previews.md
     - agent/action-phases.md
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
@@ -578,7 +579,13 @@ classification:
     - interop/fhir-bulk-data.md
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
+    - interop/fhir-conditional-writes.md
+    - interop/fhir-write-provenance.md
+    - interop/fhir-concurrency.md
+    - interop/fhir-transaction-compensation.md
+    - interop/fhir-subscription-checkpoints.md
     - interop/smart-scope-audit.md
+    - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
