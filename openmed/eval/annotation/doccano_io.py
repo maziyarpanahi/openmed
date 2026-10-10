@@ -111,7 +111,7 @@ def export_doccano(
             "doccano export requires the de-identified text"
         )
     _require_digest(text_digest, "text_digest")
-    if sha256_digest(text) != text_digest:
+    if _text_digest(text) != text_digest:
         raise AnnotationInterchangeError(
             "doccano export text does not match the supplied de-identification digest"
         )
@@ -287,7 +287,7 @@ def import_doccano(
     text = document.get("text")
     if not isinstance(text, str) or not text:
         raise _invalid("line 1 must carry the de-identified text")
-    if sha256_digest(text) != text_digest:
+    if _text_digest(text) != text_digest:
         raise _invalid(
             "doccano text does not match the supplied de-identification digest"
         )
@@ -623,13 +623,17 @@ def _single_line(payload: str | bytes) -> str:
             raise _invalid("payload exceeds the annotation input limit")
         try:
             raw = bytes(payload).decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise _invalid("payload must be UTF-8 encoded") from exc
+        except UnicodeDecodeError:
+            raise _invalid("payload must be UTF-8 encoded") from None
     elif isinstance(payload, str):
         raw = payload
     else:
         raise _invalid("payload must be text or UTF-8 bytes")
-    if len(raw.encode("utf-8")) > MAX_ANNOTATION_INPUT_BYTES:
+    try:
+        encoded_length = len(raw.encode("utf-8"))
+    except UnicodeEncodeError:
+        raise _invalid("payload must be UTF-8 encoded") from None
+    if encoded_length > MAX_ANNOTATION_INPUT_BYTES:
         raise _invalid("payload exceeds the annotation input limit")
     lines = [item.strip() for item in raw.splitlines() if item.strip()]
     if len(lines) != 1:
@@ -648,11 +652,11 @@ def _strict_load(line: str) -> Any:
         )
     except AnnotationInterchangeError:
         raise
-    except (ValueError, RecursionError) as exc:
+    except (ValueError, RecursionError):
         raise AnnotationValidationError(
             AnnotationIssue("line 1 must be a valid JSON object", line=1),
             format_name=DOCCANO_FORMAT_NAME,
-        ) from exc
+        ) from None
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -694,6 +698,13 @@ def _report(
 
 def _loss(annotation_id: str, kind: AnnotationLossKind, code: str) -> AnnotationLoss:
     return AnnotationLoss(annotation_id=annotation_id, kind=kind, lossy=True, code=code)
+
+
+def _text_digest(text: str) -> str:
+    try:
+        return sha256_digest(text)
+    except UnicodeEncodeError:
+        raise AnnotationInterchangeError("doccano text must be UTF-8 encoded") from None
 
 
 def _require_digest(value: Any, field_name: str) -> str:

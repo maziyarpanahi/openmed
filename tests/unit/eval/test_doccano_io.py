@@ -743,3 +743,38 @@ def test_cli_doccano_export_requires_the_de_identified_text(
         parsed.handler(parsed)
 
     assert excinfo.value.code == "annotation_export_failed"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "synthetic-source-sentinel\ud800",
+        json.dumps({"text": "synthetic-source-sentinel\ud800", "label": []}),
+        b"synthetic-source-sentinel\xff",
+        '{"text": "synthetic-source-sentinel",',
+    ],
+    ids=["raw-surrogate", "escaped-surrogate", "invalid-utf8", "invalid-json"],
+)
+def test_import_encoding_and_json_errors_are_typed_and_value_free(payload):
+    import traceback
+
+    with pytest.raises(
+        (AnnotationInterchangeError, AnnotationValidationError)
+    ) as excinfo:
+        _import(payload)
+    assert excinfo.value.__cause__ is None
+    rendered = "".join(traceback.format_exception(excinfo.value))
+    assert "synthetic-source-sentinel" not in rendered
+
+
+def test_export_refuses_unencodable_text_with_a_typed_error():
+    with pytest.raises(
+        (AnnotationInterchangeError, AnnotationValidationError)
+    ) as excinfo:
+        export_doccano(
+            build_annotation_envelope([]),
+            text="synthetic-source-sentinel\ud800",
+            text_digest=_TEXT_DIGEST,
+        )
+    assert excinfo.value.__cause__ is None
+    assert "synthetic-source-sentinel" not in str(excinfo.value)

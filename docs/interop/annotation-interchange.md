@@ -201,6 +201,9 @@ is reported as a declared loss instead of being silently dropped. Doccano
 relation types such as `foundedAt` are normalized to controlled codes and
 recorded as `doccano_relation_type_normalized`.
 
+Both directions reject unencodable Unicode with typed, value-free errors.
+Malformed JSON and UTF-8 errors suppress decoder exception chains.
+
 Export the other direction with the same digest requirement:
 
 ```python
