@@ -278,3 +278,46 @@ def test_preflight_order_is_enforced(local_runner, monkeypatch):
     monkeypatch.setattr(backends, "preflight_clinical_slm_memory", check_memory)
     summarize_deidentified(deidentified(), model="mlx")
     assert calls == ["runtime", "cache", "capability", "memory", "load", "generate"]
+
+
+@pytest.mark.parametrize("boundary", ["load", "generate", "failure", "success"])
+def test_owned_mlx_runner_released_at_all_terminal_boundaries(
+    local_runner, monkeypatch, boundary
+):
+    from openmed.clinical.brief_cancellation import BriefCancellation, BriefInterrupted
+
+    cancellation = BriefCancellation()
+    original_load = backends._load_model
+    owned = []
+
+    def load(path):
+        runner = original_load(path)
+        runner.model = object()
+        original_generate = runner.generate
+
+        def generate(**kwargs):
+            if boundary != "success":
+                cancellation.cancel()
+            if boundary == "failure":
+                raise RuntimeError("SYNTHETIC_PRIVATE_PROVIDER_FAILURE")
+            return original_generate(**kwargs)
+
+        runner.generate = generate
+        owned.append(runner)
+        if boundary == "load":
+            cancellation.cancel()
+        return runner
+
+    monkeypatch.setattr(backends, "_load_model", load)
+    if boundary == "success":
+        result = summarize_deidentified(
+            deidentified(), model="mlx", cancellation=cancellation
+        )
+        assert result.summary == "A cough is present."
+    else:
+        with pytest.raises(BriefInterrupted, match="cancelled"):
+            summarize_deidentified(
+                deidentified(), model="mlx", cancellation=cancellation
+            )
+    assert len(owned) == 1
+    assert owned[0].model is owned[0].tokenizer is None

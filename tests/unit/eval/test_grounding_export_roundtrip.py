@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from openmed.clinical.grounding import Candidate
+from openmed.clinical.grounding import Candidate, GroundedSpan
 from openmed.eval.golden.loader import list_fixture_paths
 from openmed.eval.medmentions_linking import (
     MEDMENTIONS_TOP1_FLOOR,
@@ -21,6 +21,105 @@ from openmed.eval.suites.grounding_export import (
     run_grounding_export_suite,
     validate_fhir_r4_shape,
 )
+
+
+def _synthetic_linking_projection(tmp_path: Path) -> Path:
+    path = tmp_path / "synthetic-linking.jsonl"
+    path.write_text(
+        json.dumps({"mention": "synthetic mention", "cui": "SYNTHETIC-GOLD"}) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _synthetic_linking_candidate(code: str, system: str = "umls") -> Candidate:
+    return Candidate(
+        system=system,
+        code=code,
+        display="synthetic",
+        score=0.5,
+        source="synthetic-test",
+    )
+
+
+@pytest.mark.parametrize("top_k, expected", [(1, 0.0), (2, 0.0), (3, 1.0), (5, 1.0)])
+def test_medmentions_grounded_span_scores_ranked_alternatives_at_requested_depth(
+    tmp_path: Path, top_k: int, expected: float
+) -> None:
+    selected = _synthetic_linking_candidate("SYNTHETIC-SELECTED")
+    alternatives = (
+        _synthetic_linking_candidate("SYNTHETIC-SECOND"),
+        _synthetic_linking_candidate("SYNTHETIC-GOLD"),
+    )
+    span = GroundedSpan(
+        "synthetic mention", 0, 17, (selected,), alternatives=alternatives
+    )
+    calls: list[tuple[str, int]] = []
+
+    def provider(mention: str, depth: int) -> GroundedSpan:
+        calls.append((mention, depth))
+        return span
+
+    report = evaluate_medmentions_st21pv(
+        _synthetic_linking_projection(tmp_path), provider=provider, top_k=top_k
+    )
+    assert report.metrics["top1_accuracy"] == 0.0
+    assert report.metrics[f"top{top_k}_accuracy"] == expected
+    assert report.metrics["abstention_rate"] == 0.0
+    assert calls == [("synthetic mention", top_k)]
+    assert span.candidates == (selected,)
+    assert span.ranked_alternatives == alternatives
+    assert "synthetic mention" not in report.to_json()
+    assert "SYNTHETIC-GOLD" not in report.to_json()
+
+
+@pytest.mark.parametrize(
+    "abstained, selected", [(True, False), (True, True), (False, False)]
+)
+def test_medmentions_never_credits_withheld_or_unselected_alternatives(
+    tmp_path: Path, abstained: bool, selected: bool
+) -> None:
+    gold = _synthetic_linking_candidate("SYNTHETIC-GOLD")
+    span = GroundedSpan(
+        "synthetic mention",
+        0,
+        17,
+        (gold,) if selected else (),
+        alternatives=(gold,),
+        abstained=abstained,
+    )
+    report = evaluate_medmentions_st21pv(
+        _synthetic_linking_projection(tmp_path),
+        provider=lambda *_: span,
+        top_k=2,
+    )
+    assert report.metrics["top1_accuracy"] == 0.0
+    assert report.metrics["top2_accuracy"] == 0.0
+    assert report.metrics["abstention_rate"] == 1.0
+
+
+@pytest.mark.parametrize("as_span", [True, False])
+def test_medmentions_filters_non_umls_before_top_k_for_both_provider_shapes(
+    tmp_path: Path, as_span: bool
+) -> None:
+    selected = _synthetic_linking_candidate("SYNTHETIC-WRONG", "UMLS")
+    alternatives = (
+        _synthetic_linking_candidate("SYNTHETIC-OTHER", "icd10cm"),
+        _synthetic_linking_candidate("SYNTHETIC-GOLD", "UmLs"),
+    )
+    output = (
+        GroundedSpan("synthetic mention", 0, 17, (selected,), alternatives=alternatives)
+        if as_span
+        else (selected, *alternatives)
+    )
+    report = evaluate_medmentions_st21pv(
+        _synthetic_linking_projection(tmp_path),
+        provider=lambda *_: output,
+        top_k=2,
+    )
+    assert report.metrics["top1_accuracy"] == 0.0
+    assert report.metrics["top2_accuracy"] == 1.0
+    assert report.metrics["abstention_rate"] == 0.0
 
 
 def test_grounding_export_fixture_is_not_generic_deidentification_gold() -> None:

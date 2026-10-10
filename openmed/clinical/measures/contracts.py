@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.iso_temporal import parse_iso_datetime
 
 MEASURE_SCHEMA_VERSION: Final = "1.0.0"
 MEASURE_COMPATIBILITY_POLICY: Final = "same_major"
@@ -1043,7 +1044,7 @@ def _timestamp(value: Any, name: str) -> str:
 
 
 def _time_key(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return parse_iso_datetime(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _enum(value: Any, enum_type: type[Enum], name: str) -> Any:
