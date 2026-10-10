@@ -189,6 +189,11 @@ in process and are never persisted by the library.
 
 Use the live library receipt to bind the callback; serialized receipts are
 aggregate audit evidence, with no receipt-import or third-party trust API.
+Only the qualifier creates live receipt objects. Public construction, audit-shaped
+objects and edits to a serialized synthetic receipt cannot authorize calibration.
+This is an input boundary inside a trusted Python process, not protection against
+arbitrary code execution in that process. Malformed Unicode pairs fail with
+controlled errors that retain no private decoder exception.
 The existing synthetic-only evidence admission in BriefContext is preserved.
 Qualification does not authorize reviewed evidence admission or autonomous
 clinical action. This command targets the existing Python local-artifact

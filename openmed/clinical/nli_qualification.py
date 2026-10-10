@@ -70,11 +70,15 @@ class NLIQualificationPolicy:
             raise NLIQualificationError("invalid_policy")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, init=False)
 class NLIQualificationReceipt:
     """Immutable aggregate receipt; no paths, identifiers or source text."""
 
     _payload: str = field(repr=False)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Refuse audit-record construction; only the qualifier issues receipts."""
+        raise NLIQualificationError("invalid_receipt")
 
     @property
     def digest(self) -> str:
@@ -88,6 +92,12 @@ class NLIQualificationReceipt:
     def to_json(self) -> str:
         """Serialize only controlled metadata, digests and aggregate metrics."""
         return _json(self.to_dict())
+
+
+def _qualification_receipt(payload: dict[str, Any]) -> NLIQualificationReceipt:
+    receipt = object.__new__(NLIQualificationReceipt)
+    object.__setattr__(receipt, "_payload", _json(payload))
+    return receipt
 
 
 def _artifact_digest(path: Path) -> str:
@@ -108,7 +118,8 @@ def _artifact_digest(path: Path) -> str:
             raise ValueError
         return _digest(entries)
     except (OSError, ValueError):
-        raise NLIQualificationError("artifact_unavailable") from None
+        pass
+    raise NLIQualificationError("artifact_unavailable")
 
 
 def _mapping(value: Mapping[str, str]) -> dict[str, str]:
@@ -118,7 +129,8 @@ def _mapping(value: Mapping[str, str]) -> dict[str, str]:
             raise ValueError
         return mapped
     except (AttributeError, TypeError, ValueError):
-        raise NLIQualificationError("unknown_label") from None
+        pass
+    raise NLIQualificationError("unknown_label")
 
 
 def _split(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -161,10 +173,11 @@ def _split(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
             "provenance": {"kind": kind, "reference_digest": _digest(reference)},
             "records": records,
         }
-    except NLIQualificationError:
-        raise
+    except NLIQualificationError as error:
+        failure = str(error)
     except (KeyError, TypeError, ValueError, AttributeError):
-        raise NLIQualificationError("invalid_dataset") from None
+        failure = "invalid_dataset"
+    raise NLIQualificationError(failure)
 
 
 def _binding(path, mapping, development, evaluation, policy, runtime):
@@ -265,8 +278,8 @@ def qualify_local_nli(
         qualified status. Qualified means only the declared supplied-policy test.
         Missing data never falls back to bundled synthetic examples.
     """
-    reasons = []
-    payload = {
+    reasons: list[str] = []
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "status": "unavailable",
         "qualified": False,
@@ -291,7 +304,7 @@ def qualify_local_nli(
                 payload["provenance"][name] = split["provenance"]
                 payload["split_counts"][name] = len(split["records"])
         if dev is None or ev is None:
-            return NLIQualificationReceipt(_json(payload))
+            return _qualification_receipt(payload)
         drows, erows = dev["records"], ev["records"]
         groups = {r["group_id"] for r in drows} & {r["group_id"] for r in erows}
         pairs = {(r["premise"], r["hypothesis"]) for r in drows} & {
@@ -315,7 +328,7 @@ def qualify_local_nli(
                 reasons.append(f"insufficient_slice_{slice_name}")
         payload["status"] = "insufficient"
         if reasons:
-            return NLIQualificationReceipt(_json(payload))
+            return _qualification_receipt(payload)
         backend = EncoderNLIBackend(
             model_path,
             label_mapping=mapping,
@@ -369,7 +382,7 @@ def qualify_local_nli(
             else "local_inference_unavailable"
         )
         payload["status"] = "unavailable"
-    return NLIQualificationReceipt(_json(payload))
+    return _qualification_receipt(payload)
 
 
 class QualifiedNLIBackend:
@@ -411,6 +424,8 @@ def bind_qualified_nli(
     Synthetic receipts cannot enter this path. Receipts are local evidence,
     not signed third-party attestations or approval to use restricted data.
     """
+    if type(receipt) is not NLIQualificationReceipt:
+        raise NLIQualificationError("invalid_receipt")
     payload = receipt.to_dict()
     if (
         not payload["qualified"]

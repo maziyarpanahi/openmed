@@ -281,3 +281,67 @@ def test_relaxed_constraints_do_not_accept_all_abstention(inputs):
 def test_repeated_identifier_cannot_enter_heldout(inputs):
     inputs["evaluation"]["records"][0]["id"] = inputs["development"]["records"][0]["id"]
     assert "split_overlap" in qualify_local_nli(**inputs).to_dict()["reasons"]
+
+
+def test_synthetic_audit_payload_cannot_construct_a_live_qualified_receipt(inputs):
+    from openmed.clinical.nli_qualification import NLIQualificationReceipt
+
+    payload = qualify_local_nli(**inputs, loader=FakeLoader()).to_dict()
+    payload.update(qualified=True, status="qualified", reasons=[])
+    payload.pop("receipt_digest")
+    with pytest.raises(NLIQualificationError, match="invalid_receipt"):
+        fake = NLIQualificationReceipt(json.dumps(payload))
+        bind_qualified_nli(fake, **inputs, loader=FakeLoader())
+
+
+def test_audit_shaped_object_is_not_live_calibration_authority(inputs):
+    payload = qualify_local_nli(**inputs, loader=FakeLoader()).to_dict()
+    payload.update(qualified=True, status="qualified", reasons=[])
+    with pytest.raises(NLIQualificationError, match="invalid_receipt"):
+        bind_qualified_nli(
+            SimpleNamespace(to_dict=lambda: payload, digest="c" * 64),
+            **inputs,
+            loader=FakeLoader(),
+        )
+
+
+def test_predict_controls_unicode_hash_failure_without_retaining_pair(inputs):
+    from openmed.clinical.nli_backends import EncoderNLIBackend, LocalNLIError
+    from openmed.clinical.nli_gate import NLIThresholds
+
+    backend = EncoderNLIBackend(
+        inputs["model_path"],
+        label_mapping=MAPPING,
+        thresholds=NLIThresholds(),
+        loader=FakeLoader(),
+    )
+    with pytest.raises(LocalNLIError) as caught:
+        backend.predict("entailment SYNTHETIC_PRIVATE_IDENTIFIER\ud800", "Synthetic")
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)
+
+
+def test_score_provider_exception_is_value_free_without_private_context(inputs):
+    from openmed.clinical.nli_backends import EncoderNLIBackend, LocalNLIError
+    from openmed.clinical.nli_gate import NLIThresholds
+
+    backend = EncoderNLIBackend(
+        inputs["model_path"],
+        label_mapping=MAPPING,
+        thresholds=NLIThresholds(),
+        loader=FakeLoader(failure=True),
+    )
+    with pytest.raises(LocalNLIError) as caught:
+        backend.predict_scores("entailment synthetic", "synthetic")
+    assert caught.value.__context__ is None
+    assert "SECRET" not in str(caught.value)
+
+
+def test_binding_label_failure_retains_no_private_decoder_context(inputs):
+    options = declared_inputs(inputs)
+    receipt = qualify_local_nli(**options, loader=FakeLoader())
+    options["label_mapping"]["0"] = "SYNTHETIC_PRIVATE_IDENTIFIER"
+    with pytest.raises(NLIQualificationError, match="unknown_label") as caught:
+        bind_qualified_nli(receipt, **options, loader=FakeLoader())
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)

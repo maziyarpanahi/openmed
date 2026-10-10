@@ -82,6 +82,7 @@ class EncoderNLIBackend:
 
     def _load(self) -> Mapping[str, Any]:
         if self._artifact is None:
+            failed = False
             try:
                 if self._loader is None:
                     from openmed.core.models import ModelLoader
@@ -93,7 +94,9 @@ class EncoderNLIBackend:
                 if not isinstance(artifact, Mapping):
                     raise TypeError("invalid local classifier")
             except Exception:
-                raise LocalNLIError("local NLI checkpoint is unavailable") from None
+                failed = True
+            if failed:
+                raise LocalNLIError("local NLI checkpoint is unavailable")
             self._artifact = artifact
         return self._artifact
 
@@ -109,7 +112,17 @@ class EncoderNLIBackend:
         if not isinstance(hypothesis, str) or not hypothesis.strip():
             raise LocalNLIError("NLI hypothesis is required")
 
+        invalid_unicode = False
+        try:
+            hash_text(premise)
+            hash_text(hypothesis)
+        except UnicodeError:
+            invalid_unicode = True
+        if invalid_unicode:
+            raise LocalNLIError("invalid NLI pair")
+
         artifact = self._load()
+        failed = False
         try:
             tokenizer = artifact["tokenizer"]
             model = artifact["model"]
@@ -149,7 +162,9 @@ class EncoderNLIBackend:
         except NLIContextLimitError:
             raise
         except Exception:
-            raise LocalNLIError("local NLI inference failed") from None
+            failed = True
+        if failed:
+            raise LocalNLIError("local NLI inference failed")
         return scores
 
     def predict(self, premise: str, hypothesis: str) -> dict[str, str | float]:
