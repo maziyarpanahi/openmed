@@ -453,8 +453,8 @@ def _render_android_onnx_model_card(
             "This model is part of **OpenMed**, an Apache-2.0, local-first "
             "clinical AI stack:",
             "",
-            "- **2,000+ medical models** for clinical NER, biomedical extraction, and privacy.",
-            "- **PII detection and de-identification** across 55+ identifier types and 20 languages.",
+            "- **2,200+ medical models** for clinical NER, biomedical extraction, and privacy.",
+            "- **PII detection and de-identification** across 50 entity types and 35 model-backed languages.",
             "- **Python, MLX, Swift, Android, React Native, Web, REST, and gRPC** runtimes.",
             "- **Structured and multimodal intake** for OCR, documents, DICOM, FHIR, and HL7.",
             "- **Offline and air-gapped deployment** with no telemetry by default.",
