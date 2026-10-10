@@ -79,7 +79,8 @@ contracts:
 - the first checkpoint has no predecessor digest and every later sequence does;
 - a resumable decision names the effects to retry and compensates none, a
   completing decision retries and compensates none, and a review decision
-  retries none;
+  retries none; both retry identifiers and idempotency keys must be empty in
+  completing and review decisions;
 - evidence references are bounded by the public handoff limit, a grant carries
   at least one unique constraint, and a checkpoint carries at least one effect.
 

@@ -65,7 +65,7 @@ SCHEMA_FINGERPRINTS: dict[str, str] = {
         "sha256:19c5085b7ce870e8311130f8336f7f586a7d97def2822d65e00b34755ab1f4d8"
     ),
     "recovery_decision": (
-        "sha256:da85bfce0ea599bad873b443c2eb611ac34ced8e5a55849dd2e46623a7d2b138"
+        "sha256:b66991b4e4b7e531d1514c935477968582ee0faed6bac77d79f880386c7046a2"
     ),
     "reviewer_handoff": (
         "sha256:ae5130f20f359cf429c0f45293f045439b16829afa66c6bfd9e2bde279a5e5ca"
@@ -754,3 +754,14 @@ def test_catalog_builds_independent_mappings() -> None:
     first["approval_token"]["properties"].clear()
 
     assert build_exchange_record_schema_catalog()["approval_token"]["properties"]
+
+
+@pytest.mark.parametrize(
+    "disposition,reason",
+    [("complete", "effects_reconciled"), ("review_required", "ambiguous_effect")],
+)
+def test_terminal_decisions_reject_orphan_retry_keys(disposition, reason) -> None:
+    payload = _payload("recovery_decision")
+    payload.update(disposition=disposition, reason=reason, retry_effect_ids=[])
+    with pytest.raises(ValidationError):
+        _validator("recovery_decision").validate(payload)
