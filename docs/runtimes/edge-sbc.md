@@ -34,7 +34,9 @@ Use `openmed[onnx-runtime]` on a connected staging machine when the application
 also needs the Hub download helper, then transfer the pinned artifact directory
 to the SBC. The tokenizer wheel can carry transitive packaging or Hub utilities;
 the benchmark does not invoke them and blocks outbound sockets for the complete
-runtime-load and inference window.
+runtime-load and inference window. Lightweight `fsspec>=2026.6.0` and
+`jinja2>=3.1.6` floors secure that transitive path without adding model frameworks
+or enabling downloads during local inference.
 
 Raspberry Pi OS or Ubuntu must be 64-bit and report `aarch64`. A 32-bit `armv7l`
 userspace is unsupported. Jetson uses `CPUExecutionProvider`; CUDA and TensorRT

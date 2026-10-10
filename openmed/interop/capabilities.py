@@ -603,7 +603,7 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         "GLiNER-BioMed",
         "openmed.interop.gliner_biomed",
         extra="gliner",
-        dependencies=("gliner[tokenizers]>=0.2.0", "torch>=2.0"),
+        dependencies=("gliner[tokenizers]>=0.2.0", "torch>=2.13.0"),
         documentation=("docs/zero-shot-ner.md",),
         tests=("tests/unit/interop/test_gliner_biomed_adapter.py",),
         description="Optional zero-shot biomedical entity adapter.",
