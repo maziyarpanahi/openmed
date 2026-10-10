@@ -79,6 +79,75 @@ def test_module_all_hides_unlisted_symbol():
     assert "fixturepkg.api.removed" in before
 
 
+@pytest.mark.parametrize("explicit_exports", [False, True])
+def test_hidden_definitions_are_not_fingerprinted(monkeypatch, explicit_exports):
+    source = (
+        "def _hidden():\n    return 'private'\n"
+        "class _Hidden:\n    def method(self):\n        return 'private'\n"
+        "_PRIVATE = {'hidden': [1, 2, 3]}\n"
+        "def public(value: str) -> str:\n    return value\n"
+    )
+    if explicit_exports:
+        source += (
+            "def unexported():\n    return 'hidden'\n"
+            "class Unexported:\n    pass\n"
+            "UNEXPORTED = [1, 2, 3]\n"
+            "__all__ = ['public']\n"
+        )
+    original = api_surface_diff._fingerprint
+    seen = []
+
+    def fingerprint(node, kind):
+        seen.append(kind)
+        assert getattr(node, "name", "public") == "public"
+        return original(node, kind)
+
+    monkeypatch.setattr(api_surface_diff, "_fingerprint", fingerprint)
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): source}, "fixturepkg"
+    )
+    assert set(surface) == {"fixturepkg.api.public"}
+    assert surface["fixturepkg.api.public"].signature == "(value: str) -> str"
+    assert seen == ["function"]
+
+
+def test_dotted_member_exports_still_extract_their_class():
+    surface = api_surface_diff.extract_surface_from_sources(
+        {
+            PurePosixPath("fixturepkg/api.py"): (
+                "class Client:\n"
+                "    def request(self, value: str) -> str:\n"
+                "        return value\n"
+                "__all__ = ['Client.request']\n"
+            )
+        },
+        "fixturepkg",
+    )
+    assert set(surface) == {"fixturepkg.api.Client.request"}
+    assert surface["fixturepkg.api.Client.request"].signature == "(value: str) -> str"
+
+
+def test_shared_assignment_fingerprint_is_computed_once(monkeypatch):
+    calls = []
+    original = api_surface_diff._fingerprint
+
+    def fingerprint(node, kind):
+        calls.append(kind)
+        return original(node, kind)
+
+    monkeypatch.setattr(api_surface_diff, "_fingerprint", fingerprint)
+    surface = api_surface_diff.extract_surface_from_sources(
+        {PurePosixPath("fixturepkg/api.py"): "first = second = {'value': 1}\n"},
+        "fixturepkg",
+    )
+    assert set(surface) == {"fixturepkg.api.first", "fixturepkg.api.second"}
+    assert (
+        surface["fixturepkg.api.first"].fingerprint
+        == surface["fixturepkg.api.second"].fingerprint
+    )
+    assert calls == ["data"]
+
+
 def test_reexported_function_keeps_static_signature_without_importing():
     sources = {
         PurePosixPath("fixturepkg/__init__.py"): (

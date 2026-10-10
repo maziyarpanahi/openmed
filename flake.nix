@@ -64,7 +64,25 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
-          python = pkgs.python312;
+          # Apply the secured reference-template implementation throughout
+          # the shell's Python dependency graph, not just its top-level list.
+          python = pkgs.python312.override {
+            packageOverrides = final: prev: {
+              fsspec = prev.fsspec.overridePythonAttrs (old: {
+                version = "2026.6.0";
+                # PyPI omits runnable tests; retain the upstream release
+                # archive so the inherited pytest check still exercises them.
+                src = pkgs.fetchurl {
+                  url = "https://github.com/fsspec/filesystem_spec/archive/refs/tags/2026.6.0.tar.gz";
+                  hash = "sha256-Ir9N9QJDvHsfck5q3zgx9vfHky6XXpgsAJA6uhoHrgE=";
+                };
+                nativeCheckInputs = old.nativeCheckInputs ++ [ final.jinja2 ];
+                meta = old.meta // {
+                  changelog = "https://github.com/fsspec/filesystem_spec/blob/2026.6.0/docs/source/changelog.rst";
+                };
+              });
+            };
+          };
           openmed = self.packages.${system}.openmed;
 
           # The generated service stubs require grpcio >= 1.81.1. Keep the
@@ -162,6 +180,7 @@
               httpx
               hypothesis
               ipykernel
+              jinja2
               jsonschema
               mypy
               nbclient

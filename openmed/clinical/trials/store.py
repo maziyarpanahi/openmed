@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.core.iso_temporal import parse_iso_datetime
 
 from .contracts import (
     TRIAL_COMPATIBILITY_POLICY,
@@ -220,7 +221,7 @@ class LocalTrialStore:
 
 
 def _time_key(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return parse_iso_datetime(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
 def _record_key(record: TrialStudyRecord) -> tuple[str, datetime, str]:
