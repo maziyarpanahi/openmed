@@ -174,7 +174,8 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `2.5.0` includes release-critical Apple, Android, browser, and service entry points:
+The OpenMed `3.0.0` candidate retains release-critical Apple, Android, browser,
+and service entry points. Native feature coverage differs by platform:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps
