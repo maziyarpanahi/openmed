@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Clinical Side-Effect Previews: agent/side-effect-previews.md
       - Agent Action Execution Phases: agent/action-phases.md
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
@@ -49,13 +50,17 @@ nav:
       - Agent Event Attributes: agent/event-attributes.md
       - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Agent Governance JSON Schemas: agent/json-schemas.md
       - Reviewer Handoff Packets: agent/reviewer-handoffs.md
+      - Escalation Circuit Breakers: agent/escalation-circuit-breakers.md
+      - Per-run Agent Resource Budgets: agent/resource-budgets.md
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
       - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Deterministic Agent Run Commitments: agent/run-commitments.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
+      - Agent Run Completion Invariants: agent/run-invariants.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
@@ -66,6 +71,12 @@ nav:
       - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
+      - Runtime Authority Revocation: agent/runtime-revocation.md
+      - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+      - Effect Admission and Emergency Stop: agent/effect-admission.md
+      - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
+      - Agent Action Ledger: agent/action-ledger.md
+      - Deterministic Agent Replay: agent/deterministic-replay.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -112,11 +123,136 @@ nav:
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
-      - Clinical SLM Artifact Manifest: models/clinical-slm-manifest.md
+      - Guarded Clinical Intelligence:
+          - Brief and Summarization:
+              - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
+              - Section-Preserving Summary Planning: clinical/summary-section-planning.md
+              - Synthetic Brief Walkthrough: demo/clinical-brief.md
+              - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
+              - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
+              - Empty-evidence Summary Refusal: clinical/summary-empty-evidence.md
+              - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
+              - Summary Temporal-order Validation: clinical/summary-temporal-order.md
+              - Medication-change Summary Views: clinical/summary-medication-changes.md
+              - Laboratory Sequence Summary Views: clinical/summary-lab-trends.md
+              - Guarded Summary Input Contract: clinical/summary-input-contract.md
+              - Summary Safety Envelope: clinical/summary-safety.md
+              - Summary Citation Consistency: clinical/summary-citations.md
+              - Summary Fact Coverage: evaluation/summary-coverage.md
+              - Post-de-identification Summarization: clinical/summarization.md
+              - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
+              - Summary omission budgets: clinical/summary-omission-budgets.md
+              - Summary demographic minimization: clinical/summary-demographic-minimization.md
+              - Bounded local-summary retries: clinical/summary-retry-control.md
+          - Context, Grounding and Journey:
+              - Longitudinal Journey Contracts: clinical/journey-contracts.md
+              - Terminology Resolution Cascades: clinical/terminology-resolution.md
+              - Point-in-Time Longitudinal Journey: clinical/longitudinal-journey.md
+              - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+              - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
+              - Clinical Data-quality Profiler: clinical/data-quality-profiler.md
+              - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
+              - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
+              - Terminology Conflict Resolution: clinical/terminology-conflicts.md
+              - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
+              - Clinical Coreference Resolution: clinical/coreference.md
+              - Terminology Snapshot Provenance: clinical/terminology-provenance.md
+              - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
+              - Consent Cache Invalidation: clinical/consent-cache.md
+              - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
+              - Language Route Health Matrix: clinical/language-matrix.md
+              - Experiencer Refinement: clinical/experiencer-refinement.md
+              - Clinical Context Analysis: clinical/context-analysis.md
+          - Clinical NLI:
+              - Clinical NLI Label Contract: clinical/nli-label-contract.md
+              - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
+              - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
+              - Clinical NLI Verification: clinical/nli-verification.md
+              - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
+              - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
+              - Medication-status NLI Precheck: clinical/nli-medication-status.md
+              - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
+              - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
+              - Clinical NLI Batch Planning: clinical/nli-batch-planning.md
+              - Clinical NLI Cascade: clinical/nli-cascade.md
+              - Clinical NLI abstention gate: clinical/nli-abstention.md
+              - Clinical NLI Checkpoints: models/clinical-nli.md
+          - Social Determinants:
+              - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
+              - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
+              - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
+              - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
+              - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
+              - SDOH Review Routing: clinical/sdoh-review-routing.md
+              - SDOH Category Completeness: clinical/sdoh-category-completeness.md
+              - SDOH Experiencer Filtering: clinical/sdoh-experiencer-filtering.md
+              - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
+              - Social-determinant evidence contract: clinical/sdoh-evidence.md
+              - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
+              - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+          - Guarded Relations:
+              - Medication-change Relation Candidates: clinical/medication-change-relations.md
+              - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
+              - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
+              - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
+              - Relation Review Priority Policy: clinical/relation-review-priority.md
+              - Relation Evidence Binding: clinical/relation-evidence-binding.md
+              - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
+              - Multilingual Clinical Relations: clinical/multilingual-relations.md
+              - Guarded Relation Directionality: clinical/relation-directionality.md
+              - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
+              - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
+              - Relation-candidate audit report: evaluation/relation-audit.md
+          - Timelines and Measurements:
+              - Temporal Normalization: clinical/temporal-normalization.md
+              - Medication Reconciliation: clinical/medication-reconciliation.md
+              - Clinical Event Timeline Assembler: clinical/event-timeline.md
+              - Evidence-linked Clinical Timeline Graph: clinical/timeline-evidence.md
+              - Serial Measurement Trends: clinical/measurement-trends.md
+              - Clinical Timeline Provenance: clinical/timeline-provenance.md
+              - Medication Sig Parser: clinical/sig-parser.md
+              - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
+              - Lab Measurement Normalization: clinical/lab-measurements.md
+              - Unit-display normalization audit: clinical/unit-display-audit.md
+              - Clinical event contradiction reports: clinical/event-contradictions.md
+              - Conservative Temporal Intervals: clinical/temporal-intervals.md
+              - Bucketed Clinical Timelines: clinical/timeline-buckets.md
+          - Note Routing and Document Profiles:
+              - Clinical Task Router and Model Packs: clinical/model-packs.md
+              - Section-aware note routing: clinical/note-routing.md
+              - Radiology Finding Profile: clinical/radiology-profile.md
+              - Pathology result profile: clinical/pathology-profile.md
+              - Structured discharge-summary profile: clinical/discharge-profile.md
+          - Evidence, Citations and Human Review:
+              - Clinical Section-Boundary Provenance: clinical/section-provenance.md
+              - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
+              - Deterministic Citation Ordering: clinical/citation-ordering.md
+              - Citation Minimality Checks: clinical/citation-minimality.md
+              - Citation Boundary Validation: clinical/citation-boundary-validation.md
+              - Clinical Evidence Tables: clinical/evidence-tables.md
+              - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
+              - Structured Review Override Reasons: clinical/review-override-reasons.md
+              - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
+              - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
+              - Evidence Recency Labels: clinical/evidence-recency-labels.md
+              - Guarded evidence packets: clinical/evidence-packets.md
+              - Guarded review-state transitions: clinical/review-transitions.md
+              - Evidence-claim contradiction review: clinical/claim-conflicts.md
+              - Human-review queue SLA reports: clinical/review-sla.md
+              - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
+              - Clinical Output Use Policy: clinical/output-use-policy.md
+              - Value-free Evidence Coverage: clinical/evidence-coverage.md
+              - Human-review packets: clinical/human-review-packets.md
+              - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
+              - Clinical claim-packet integrity: clinical/claim-integrity.md
+              - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
+          - Clinical SLM Admission:
+              - Clinical SLM Artifact Manifest: models/clinical-slm-manifest.md
+              - Clinical SLM Capability Probes: models/clinical-slm-capabilities.md
+              - Clinical SLM Memory Preflight: models/clinical-slm-memory-preflight.md
+              - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Offline Bootstrap Diagnostics: models/bootstrap-diagnostics.md
-      - Clinical SLM Capability Probes: models/clinical-slm-capabilities.md
-      - Clinical SLM Memory Preflight: models/clinical-slm-memory-preflight.md
-      - Clinical SLM Prompt-Template Digests: models/clinical-slm-template-digests.md
       - Local Model-Cache Quotas: models/cache-quotas.md
       - Registry Rollback Compatibility: models/rollback-compatibility.md
       - Journey Specialist Pack: models/journey-specialist-pack.md
@@ -129,7 +265,6 @@ nav:
       - Advanced NER & Output Formatting: output-formatting.md
       - Cross-format Offset Properties: structured/offset-properties.md
       - Schema Snapshot Compatibility: structured/schema-snapshots.md
-      - Longitudinal Journey Contracts: clinical/journey-contracts.md
       - Durable Local Journey Storage: structured/local-journey-store.md
       - PostgreSQL and Object-backed Journey Storage: structured/postgres-object-journey-store.md
       - Resumable Ingestion Control Plane: interop/resumable-ingestion.md
@@ -140,88 +275,13 @@ nav:
       - Annotation Interchange and Pipeline Migration: interop/annotation-interchange.md
       - V3 Five-source Golden Journey: interop/v3-golden-journey.md
       - V3 Journey Release Gate: release/v3.0-journey-release-gate.md
-      - Clinical Task Router and Model Packs: clinical/model-packs.md
       - Clinical Fact Normalization: structured/clinical-fact-normalization.md
-      - Terminology Resolution Cascades: clinical/terminology-resolution.md
       - Fact Reconciliation and Correction History: structured/fact-reconciliation.md
-      - Point-in-Time Longitudinal Journey: clinical/longitudinal-journey.md
       - Provenance-aware Terminology Cache: structured/terminology-cache.md
       - Nested Resource Redaction Contract: structured/redaction-contract.md
-      - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
-      - Clinical Section-Boundary Provenance: clinical/section-provenance.md
-      - Clinical NLI Label Contract: clinical/nli-label-contract.md
-      - Assertion-aware Clinical NLI Pairs: clinical/nli-assertion-pairs.md
-      - Experiencer-aware Clinical NLI Pairs: clinical/nli-experiencer-pairs.md
-      - Concept Grounding & Interoperability Export: clinical/concept-grounding.md
-      - Clinical Data-quality Profiler: clinical/data-quality-profiler.md
       - Offline Terminology Grounding: grounding.md
-      - FHIR ValueSet and ECL Expansion: clinical/valueset-ecl-expansion.md
       - SNOMED CT Terminology Bridge: interop/snomed-terminology-bridge.md
-      - ICD-10-CM and SNOMED CT Crosswalks: clinical/code-crosswalk.md
-      - Terminology Conflict Resolution: clinical/terminology-conflicts.md
-      - Clinical Abbreviation Disambiguation: clinical/abbreviation-disambiguation.md
-      - Clinical NLI Verification: clinical/nli-verification.md
-      - Clinical Coreference Resolution: clinical/coreference.md
-      - Temporal Normalization: clinical/temporal-normalization.md
-      - Temporality-aware Clinical NLI Pairs: clinical/nli-temporal-pairs.md
-      - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
-      - Medication Reconciliation: clinical/medication-reconciliation.md
-      - Numeric NLI Contradiction Precheck: clinical/nli-numeric-precheck.md
-      - Medication-status NLI Precheck: clinical/nli-medication-status.md
-      - Medication-change Relation Candidates: clinical/medication-change-relations.md
-      - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
-      - Procedure-to-indication Relation Candidates: clinical/procedure-indication-relations.md
-      - Diagnosis-to-treatment Relation Candidates: clinical/diagnosis-treatment-relations.md
-      - Relation Review Priority Policy: clinical/relation-review-priority.md
-      - Clinical Event Timeline Assembler: clinical/event-timeline.md
-      - Evidence-linked Clinical Timeline Graph: clinical/timeline-evidence.md
-      - Serial Measurement Trends: clinical/measurement-trends.md
-      - Terminology Snapshot Provenance: clinical/terminology-provenance.md
-      - Local Extensions to the Status Vocabulary: clinical/status-vocabulary.md
-      - Consent Cache Invalidation: clinical/consent-cache.md
-      - Clinical Timeline Provenance: clinical/timeline-provenance.md
-      - Guarded Clinical-Output Provenance: clinical/guarded-output-provenance.md
-      - Deterministic Citation Ordering: clinical/citation-ordering.md
-      - Citation Minimality Checks: clinical/citation-minimality.md
-      - Citation Boundary Validation: clinical/citation-boundary-validation.md
-      - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
-      - Clinical Evidence Tables: clinical/evidence-tables.md
-      - Relation Evidence Binding: clinical/relation-evidence-binding.md
-      - Clinical Relation Duplicate Collapse: clinical/relation-deduplication.md
-      - Section-Preserving Summary Planning: clinical/summary-section-planning.md
-      - Guarded Clinical Brief: clinical/clinical-brief.md
-      - Synthetic Brief Walkthrough: demo/clinical-brief.md
-      - Versioned Summary Template Profiles: clinical/summary-template-profiles.md
-      - Deterministic Summary Length Budgets: clinical/summary-length-budgets.md
-      - Empty-evidence Summary Refusal: clinical/summary-empty-evidence.md
-      - Typed Clinical Uncertainty Sources: clinical/uncertainty-source-types.md
-      - Minimal Clinical NLI Premise Windows: clinical/nli-premise-windows.md
-      - Clinical NLI Hypothesis Guard: clinical/nli-hypothesis-guard.md
-      - Atomic Summary Claim Segmentation: clinical/summary-claim-segmentation.md
-      - Summary Temporal-order Validation: clinical/summary-temporal-order.md
-      - Medication-change Summary Views: clinical/summary-medication-changes.md
-      - Laboratory Sequence Summary Views: clinical/summary-lab-trends.md
-      - Guarded Summary Input Contract: clinical/summary-input-contract.md
-      - Summary Safety Envelope: clinical/summary-safety.md
-      - Summary Citation Consistency: clinical/summary-citations.md
-      - Summary Fact Coverage: evaluation/summary-coverage.md
-      - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
-      - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
-      - SDOH Longitudinal Status Resolution: clinical/sdoh-longitudinal-resolution.md
-      - SDOH Sensitive-Use Labels: clinical/sdoh-sensitive-use-labels.md
-      - SDOH Review Routing: clinical/sdoh-review-routing.md
-      - SDOH Category Completeness: clinical/sdoh-category-completeness.md
-      - Structured Review Override Reasons: clinical/review-override-reasons.md
-      - Clinical Review Packet Privacy: clinical/review-packet-privacy.md
-      - Clinical Review Packet Migrations: clinical/review-packet-migrations.md
-      - Evidence Recency Labels: clinical/evidence-recency-labels.md
-      - Chinese Terminology Grounding: clinical/chinese-terminology-grounding.md
       - Chinese Segmentation Operations: chinese-segmentation-operations.md
-      - Multilingual Clinical Relations: clinical/multilingual-relations.md
-      - Guarded Relation Directionality: clinical/relation-directionality.md
-      - Quantitative Relation Unit Compatibility: clinical/relation-unit-compatibility.md
-      - Medication Sig Parser: clinical/sig-parser.md
-      - Post-de-identification Summarization: clinical/summarization.md
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
@@ -301,12 +361,10 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
-      - Unsupported Claim Rates: evaluation/summary-unsupported-claims.md
       - Comparator Reports: evaluation/comparator-reports.md
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
-      - Guarded Clinical Relation Review Yield: evaluation/relation-review-yield.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
@@ -321,18 +379,12 @@ nav:
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
-      - Language Route Health Matrix: clinical/language-matrix.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
       - Raspberry Pi & Jetson Edge Benchmark: runtimes/edge-sbc.md
-      - Experiencer Refinement: clinical/experiencer-refinement.md
-      - Clinical NLI Batch Planning: clinical/nli-batch-planning.md
-      - SDOH Experiencer Filtering: clinical/sdoh-experiencer-filtering.md
-      - SDOH Negated-Need Resolution: clinical/sdoh-negated-needs.md
       - CPU INT8 Classification Fast Path: runtimes/cpu-fastpath.md
       - OpenVINO Runtime: runtimes/openvino.md
       - TensorRT Runtime: runtimes/tensorrt.md
-      - Clinical NLI Cascade: clinical/nli-cascade.md
       - WebGPU Token-Classification Runtime: runtimes/webgpu.md
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
@@ -345,36 +397,9 @@ nav:
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
-      - Typed laboratory reference-range provenance: clinical/lab-reference-ranges.md
-      - Lab Measurement Normalization: clinical/lab-measurements.md
-      - Unit-display normalization audit: clinical/unit-display-audit.md
-      - Guarded evidence packets: clinical/evidence-packets.md
-      - Guarded review-state transitions: clinical/review-transitions.md
-      - Clinical event contradiction reports: clinical/event-contradictions.md
-      - Conservative Temporal Intervals: clinical/temporal-intervals.md
-      - Bucketed Clinical Timelines: clinical/timeline-buckets.md
-      - Evidence-claim contradiction review: clinical/claim-conflicts.md
-      - Human-review queue SLA reports: clinical/review-sla.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
-      - Clinical Evidence-Span Overlap Audit: clinical/evidence-span-audit.md
-      - Clinical Output Use Policy: clinical/output-use-policy.md
-      - Value-free Evidence Coverage: clinical/evidence-coverage.md
-      - Human-review packets: clinical/human-review-packets.md
-      - Uncertainty-disclosure completeness audit: clinical/uncertainty-disclosure.md
-      - Clinical claim-packet integrity: clinical/claim-integrity.md
-      - Clinical Refusal Reason Taxonomy: clinical/refusal-taxonomy.md
-      - Clinical NLI abstention gate: clinical/nli-abstention.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
-      - Social-determinant evidence contract: clinical/sdoh-evidence.md
-      - Section-aware note routing: clinical/note-routing.md
-      - Radiology Finding Profile: clinical/radiology-profile.md
-      - Pathology result profile: clinical/pathology-profile.md
-      - Structured discharge-summary profile: clinical/discharge-profile.md
-      - Relation-candidate audit report: evaluation/relation-audit.md
-      - Summary omission budgets: clinical/summary-omission-budgets.md
-      - Summary demographic minimization: clinical/summary-demographic-minimization.md
-      - Bounded local-summary retries: clinical/summary-retry-control.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
@@ -494,7 +519,13 @@ nav:
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
+      - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+      - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
+      - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
+      - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
+      - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
       - SMART Scope Audit Examples: interop/smart-scope-audit.md
+      - SMART Token Custody: interop/smart-token-custody.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
@@ -630,6 +661,7 @@ theme:
         name: Switch to light mode
   features:
     - navigation.sections
+    - navigation.prune
     - navigation.tabs
     - navigation.tracking
     - navigation.footer
