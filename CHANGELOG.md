@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
 - Added an offline Draft 2020-12 catalog for approval tokens and receipts,
   reviewer handoff packets, capability grant manifests and workflow recovery
   checkpoints and decisions, with local references, bounded fields, version,
