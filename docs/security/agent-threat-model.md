@@ -195,7 +195,12 @@ coded paths exempt coded primitives (such as `Patient.gender`,
 
 `DocumentReference.content[].format` is a direct Coding path with the same
 exempt leaves. Concept `text`, unexpected children, strings under `category`,
-and unknown paths are still scanned. The implementation is conservative for other resource types;
+and unknown paths are still scanned. A dotted or indexed JSON property name
+cannot impersonate a structured coded path. Only the root, contained resources,
+Bundle entry resources and the supported Subscription notification resource
+slots can establish a new resource-relative coded path; an unexpected nested
+`resourceType` declaration does not create an exemption.
+The implementation is conservative for other resource types;
 this path table is not a complete FHIR schema validator or an authorization
 policy. Coded values still require the application's FHIR validation and context
 projection. Resource traversal is limited to 10,000 nodes and depth 64; ordinary

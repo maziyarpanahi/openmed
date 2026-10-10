@@ -362,3 +362,44 @@ def test_entity_without_semicolon_keeps_source_spans_exact():
     assert parsed.source_spans[1] == (9, 10)
     report = screen_fhir_input({"resourceType": "Observation", "text": {"div": source}})
     assert report.findings[0].offsets == (5, source.index("</div>"))
+
+
+@pytest.mark.parametrize("container", ["extension", "note", "code"])
+def test_embedded_resource_type_cannot_reset_coded_exemptions(container):
+    payload = {
+        "resourceType": "Observation",
+        container: {"resourceType": "Observation", "status": _CUE},
+    }
+    with pytest.raises(PromptInjectionDetected) as caught:
+        InjectionGuard().guard_fhir_input(payload)
+    assert {item.element_path for item in caught.value.findings} == {
+        f"Observation.{container}.status"
+    }
+    assert _CUE not in json.dumps(caught.value.to_dict())
+    allowed = InjectionGuard("allow").guard_fhir_input(payload)
+    assert _CUE not in allowed.value[container]["status"]
+
+
+def test_contained_and_bundle_resources_keep_their_real_coded_paths():
+    inner = {"resourceType": "Observation", "status": _CUE}
+    resource = {
+        "resourceType": "Bundle",
+        "entry": [{"resource": {"resourceType": "Patient", "contained": [inner]}}],
+    }
+    assert not InjectionGuard().guard_fhir_input(resource).flagged
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "code.coding[0].code",
+        "category[0].coding[0].display",
+        "component[0].code.coding[0].system",
+    ],
+)
+def test_flat_key_cannot_impersonate_a_structured_coded_path(key):
+    payload = {"resourceType": "Observation", key: _CUE}
+    with pytest.raises(PromptInjectionDetected) as caught:
+        InjectionGuard().guard_fhir_input(payload)
+    assert all("element_" in item.element_path for item in caught.value.findings)
+    assert key not in json.dumps(caught.value.to_dict())

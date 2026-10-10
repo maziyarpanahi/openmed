@@ -99,6 +99,24 @@ def _coded_path(resource_type: str, path: str) -> bool:
     return False
 
 
+def _resource_boundary(resource_type: str, relative: str, depth: int) -> bool:
+    # A declared type can reset coded paths only at a structural resource slot.
+    # An unexpected object cannot impersonate a resource inside a coded element.
+    return (
+        depth == 0
+        or re.fullmatch(r"contained\[\d+\]", relative) is not None
+        or (
+            resource_type == "Bundle"
+            and re.fullmatch(r"entry\[\d+\]\.resource", relative) is not None
+        )
+        or (
+            resource_type == "SubscriptionStatus"
+            and re.fullmatch(r"notificationEvent\[\d+\]\.focus\.resource", relative)
+            is not None
+        )
+    )
+
+
 def screen_fhir_input(
     value: Mapping[str, Any], *, guard: InjectionGuard | None = None
 ) -> GuardedInput:
@@ -222,7 +240,7 @@ def screen_fhir_input(
                 child,
                 path + "." + _safe_element(key),
                 resource_type,
-                relative + "." + key,
+                relative + "." + _safe_element(key),
                 depth + 1,
             )
         result["data"] = base64.b64encode(safe.encode("utf-8")).decode("ascii")
@@ -245,7 +263,9 @@ def screen_fhir_input(
             )
         if isinstance(node, Mapping):
             declared_type = node.get("resourceType")
-            if declared_type is not None:
+            if declared_type is not None and _resource_boundary(
+                resource_type, relative, depth
+            ):
                 resource_type = (
                     declared_type
                     if isinstance(declared_type, str)
@@ -273,7 +293,7 @@ def screen_fhir_input(
                     child,
                     path + "." + _safe_element(key),
                     resource_type,
-                    (relative + "." if relative else "") + key,
+                    (relative + "." if relative else "") + _safe_element(key),
                     depth + 1,
                 )
             return result
