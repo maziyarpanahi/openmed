@@ -23,6 +23,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 
 from openmed.core.audit import hash_text
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 CLAIM_CONFLICT_SCHEMA_VERSION = 1
 CLAIM_CONFLICT_ADVISORY = (
@@ -1841,8 +1842,8 @@ def _date_value(value: object | None) -> date | None:
         return None
     try:
         if "T" in normalized:
-            return datetime.fromisoformat(normalized.replace("Z", "+00:00")).date()
-        return date.fromisoformat(normalized)
+            return parse_iso_datetime(normalized.replace("Z", "+00:00")).date()
+        return parse_iso_date(normalized)
     except ValueError:
         return None
 

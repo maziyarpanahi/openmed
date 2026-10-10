@@ -55,6 +55,35 @@ For relative expressions, `anchor` records the normalized reference time used
 for date arithmetic. `reference_time` accepts an ISO string, `date`,
 `datetime`, or `None`. Passing `None` never substitutes the current time.
 
+### Shared ISO input profile
+
+Clinical and Journey ISO parsing uses `openmed.core.iso_temporal` rather than
+the interpreter's changing `fromisoformat()` grammar. The shared profile accepts
+ASCII calendar dates `YYYY-MM-DD` and optional `HH[:MM[:SS[.ffffff]]]` times,
+with a `T`, `t` or space separator. A fractional second has one to six digits.
+Offsets are `Z`/`z` or `+HH:MM`/`-HH:MM`; offset minutes are 00–59 and the
+absolute offset is less than 24 hours.
+
+Basic-format dates/times, week dates, ordinal dates, compact `+HHMM` offsets,
+offset seconds, comma fractions, more than six fractional digits, arbitrary
+Unicode separators and impossible calendar/clock values are rejected. Existing
+normalization and contract errors remain the caller-visible outcomes and do
+not echo the rejected value. The shared parsers raise only
+`ValueError("invalid_iso_temporal")`, without retaining a raw parsing exception.
+
+`parse_iso_date()` requires a complete calendar date; `parse_iso_datetime()`
+maps a date-only input to naive midnight, preserving existing date coercion;
+`parse_iso_time()` parses a clock value. Each caller still owns requirements
+for a time, timezone or reduced precision. Journey timestamps, for example,
+continue to require a timezone. Temporal-expression rules, year/month precision
+and caller-supplied `date`/`datetime` objects keep their existing semantics.
+
+The same synthetic conformance vectors run in the existing Python 3.10–3.13
+compatibility lanes. An AST check prevents direct clinical `fromisoformat`
+access. Python's [datetime documentation](https://docs.python.org/3.13/library/datetime.html#datetime.datetime.fromisoformat)
+records the grammar expansion in 3.11; this profile is defined independently of
+that expansion.
+
 `since X` stores the normalized start in `value`, the supplied document time
 as `anchor`, and adds the `since` flag. This keeps the value layer separate
 from interval and event ordering, which belong to the timeline resolver.

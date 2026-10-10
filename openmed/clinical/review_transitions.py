@@ -36,6 +36,7 @@ from openmed.clinical.review_state_machine import (
     validate_review_transition,
     validate_transition,
 )
+from openmed.core.iso_temporal import parse_iso_datetime
 from openmed.structured.store import (
     JobMetadata,
     JobMetadataStore,
@@ -415,7 +416,7 @@ def load_clinical_review_schema(name: str) -> dict[str, Any]:
 
 
 def _parse_timestamp(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parse_iso_datetime(value.replace("Z", "+00:00"))
 
 
 def json_safe_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
