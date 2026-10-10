@@ -187,8 +187,10 @@ digest or model output is fabricated.
 On rejection, `consume` is never invoked and no partial result is returned.
 Record only `ResultQuarantinedError.to_dict()` in an action trace. It contains a
 fixed schema version and controlled reason code, with no payloads, unexpected
-field names, selector digests or provider exception messages. Existing ticket
-and projection errors retain their own value-free diagnostics. Quarantine means
+field names, selector digests or provider exception messages. Read failures also
+discard the original exception context before raising the controlled quarantine
+error. Existing ticket and projection errors retain their own value-free
+diagnostics. Quarantine means
 withholding output: this library does not log, cache, save or otherwise persist
 rejected content. Applications must keep protected inputs outside audit traces
 and must not capture exception traceback locals.

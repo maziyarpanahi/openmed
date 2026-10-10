@@ -365,4 +365,5 @@ def test_provider_error_is_sanitized():
         )
     assert caught.value.code is ResultQuarantineCode.READ_FAILED
     assert "synthetic secret" not in str(caught.value)
-    assert caught.value.__suppress_context__
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None

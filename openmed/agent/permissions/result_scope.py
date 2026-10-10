@@ -267,12 +267,16 @@ def dispatch_with_authorized_results(
     # Pin the reviewed contract before the adapter can mutate caller-owned data.
     schema = deepcopy(schema)
     _binding(ticket, request, verifier, scope, schema, now)
+    failed = False
+    pages: tuple[ToolResultPage, ...] = ()
     try:
         pages = read()
     except (KeyboardInterrupt, SystemExit):
         raise
     except BaseException:
-        raise ResultQuarantinedError(ResultQuarantineCode.READ_FAILED) from None
+        failed = True
+    if failed:
+        raise ResultQuarantinedError(ResultQuarantineCode.READ_FAILED)
     authorized = authorize_tool_results(
         ticket, request, verifier, scope=scope, schema=schema, pages=pages, now=now
     )
