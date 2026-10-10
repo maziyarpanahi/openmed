@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   independent rollback detection, emergency stop and fresh-enable CLI commands
   with synthetic approval/recovery safety controls (#3765).
 
+- Added opt-in private SQLite approval nonce claims shared across processes and
+  restarts, fail-closed durable replay protection, and a compatible consumption
+  store adapter for MCP consent receipts (#3763).
+
 - Added an offline, synthetic governed clinical reference workflow covering
   approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
 - Added metadata-only signed action ledgers and deterministic replay evidence,
