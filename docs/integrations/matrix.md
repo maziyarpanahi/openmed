@@ -48,7 +48,7 @@ constraints, and PHI-free descriptions.
 | `duckdb` | DuckDB UDFs | `duckdb>=1.0,<2`, `numpy>=1.26` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_duckdb_udf.py` | [DuckDB De-identification UDFs](../duckdb-deidentification.md) |
 | `executable_udf` | Executable UDF | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/integrations/test_executable_udf.py` | [Feature Map](../feature-map.md) |
 | `fhir` | FHIR operations and bulk NDJSON | core | `local-only` | `offline-unit` (2 test files) | `tests/unit/interop/test_fhir_bulk_ndjson.py`, `tests/unit/interop/test_fhir_deidentify_operation.py` | [FHIR Interop Helpers](../fhir-interop.md) |
-| `gliner_biomed` | GLiNER-BioMed | `gliner[tokenizers]>=0.2.0`, `torch>=2.0` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_gliner_biomed_adapter.py` | [Zero-shot NER](../zero-shot-ner.md) |
+| `gliner_biomed` | GLiNER-BioMed | `gliner[tokenizers]>=0.2.0`, `torch>=2.13.0` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_gliner_biomed_adapter.py` | [Zero-shot NER](../zero-shot-ner.md) |
 | `haystack` | Haystack document redaction | `haystack-ai>=2,<3` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_haystack_redaction.py` | [Haystack Redaction Component](../integrations-haystack.md) |
 | `hl7v2` | HL7 v2 | core | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_hl7v2.py` | [HL7 v2 De-identification](../hl7v2-deidentification.md) |
 | `indic` | Indic language helpers | `indic-nlp-library>=0.92` | `local-only` | `offline-unit` (1 test file) | `tests/unit/interop/test_language_adapters.py` | [Feature Map](../feature-map.md) |
