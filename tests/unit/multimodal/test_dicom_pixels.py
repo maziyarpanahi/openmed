@@ -233,3 +233,222 @@ def _write_pixel_dicom(path: Path, pixels) -> Path:
     dataset.PixelData = np.ascontiguousarray(pixels).tobytes()
     dataset.save_as(path, enforce_file_format=True)
     return path
+
+
+@pytest.mark.parametrize("verified", [False, True])
+def test_pixel_markers_only_attest_verified_cleaning(monkeypatch, tmp_path, verified):
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+
+    from openmed.multimodal import DicomPixelStatus
+
+    _generic_model_misses(monkeypatch)
+    source = _write_pixel_dicom(tmp_path / "phi.dcm", _single_frame_pixels())
+    dataset = pydicom.dcmread(source)
+    dataset.PatientIdentityRemoved = "YES"
+    dataset.DeidentificationMethodCodeSequence = Sequence([Dataset()])
+    dataset.save_as(source, enforce_file_format=True)
+    result = redact_dicom_pixels(
+        source,
+        ocr_engine=_BurnedInOcrEngine(_name_words()),
+        model_name="stub",
+        verify_residual=verified,
+    )
+    cleaned = pydicom.dcmread(source)
+    assert result.pixel_status is (
+        DicomPixelStatus.CLEANED if verified else DicomPixelStatus.NOT_CLEANED
+    )
+    assert cleaned.BurnedInAnnotation == ("NO" if verified else "YES")
+    assert cleaned.PatientIdentityRemoved == "NO"
+    assert "DeidentificationMethodCodeSequence" not in cleaned
+
+
+@pytest.mark.parametrize("mode", ["remove", "burn"])
+def test_overlay_is_removed_or_burned_before_ocr(monkeypatch, tmp_path, mode):
+    _generic_model_misses(monkeypatch)
+    pixels = np.zeros((32, 96), dtype=np.uint8)
+    source = _write_pixel_dicom(tmp_path / "overlay.dcm", pixels)
+    dataset = pydicom.dcmread(source)
+    mask = np.zeros_like(pixels)
+    mask[8:20, 8:58] = 1
+    dataset.add_new((0x6000, 0x0010), "US", 32)
+    dataset.add_new((0x6000, 0x0011), "US", 96)
+    dataset.add_new((0x6000, 0x0040), "CS", "G")
+    dataset.add_new((0x6000, 0x0050), "SS", [1, 1])
+    dataset.add_new((0x6000, 0x0100), "US", 1)
+    dataset.add_new((0x6000, 0x0102), "US", 0)
+    dataset.add_new(
+        (0x6000, 0x3000), "OW", np.packbits(mask.ravel(), bitorder="little").tobytes()
+    )
+    dataset.save_as(source, enforce_file_format=True)
+    result = redact_dicom_pixels(
+        source,
+        policy={"overlay_mode": mode},
+        ocr_engine=_BurnedInOcrEngine(_name_words()),
+        model_name="stub",
+    )
+    cleaned = pydicom.dcmread(source)
+    assert not any(0x6000 <= tag.group <= 0x60FF for tag in cleaned.keys())
+    assert cleaned.pixel_array.max() == 0
+    assert result.redaction_count == (2 if mode == "burn" else 0)
+    assert result.carrier_actions
+
+
+def test_embedded_overlay_unused_bits_are_removed_from_stored_pixel_bytes(tmp_path):
+    from openmed.multimodal import deidentify_dicom_headers
+
+    pixels = np.full((32, 96), 5, dtype=np.uint16)
+    pixels[8:20, 8:58] |= 1 << 15
+    source = _write_pixel_dicom(tmp_path / "embedded.dcm", pixels)
+    dataset = pydicom.dcmread(source)
+    dataset.BitsAllocated = 16
+    dataset.BitsStored = 12
+    dataset.HighBit = 11
+    dataset.add_new((0x6000, 0x0010), "US", 32)
+    dataset.add_new((0x6000, 0x0011), "US", 96)
+    dataset.add_new((0x6000, 0x0100), "US", 16)
+    dataset.add_new((0x6000, 0x0102), "US", 15)
+    dataset.save_as(source, enforce_file_format=True)
+    deidentify_dicom_headers(source)
+    cleaned = pydicom.dcmread(source)
+    assert np.frombuffer(cleaned.PixelData, dtype="<u2").max() == 5
+    assert cleaned.pixel_array.min() == 5
+    assert (0x6000, 0x0102) not in cleaned
+
+
+def test_combined_dispatch_redacts_embedded_document_once(monkeypatch, tmp_path):
+    from openmed.multimodal import ExtractedDocument, base, register_handler
+
+    _generic_model_misses(monkeypatch)
+    source = _write_pixel_dicom(tmp_path / "encap.dcm", _single_frame_pixels())
+    dataset = pydicom.dcmread(source)
+    dataset.EncapsulatedDocument = b"%PDF-SYNTHETIC_PAYLOAD"
+    dataset.MIMETypeOfEncapsulatedDocument = "application/pdf"
+    dataset.save_as(source, enforce_file_format=True)
+    calls = []
+
+    def handler(stream, **kwargs):
+        calls.append(stream.read())
+        return ExtractedDocument(
+            text="", metadata={"redacted_document_bytes": b"%PDF-CLEAN!"}
+        )
+
+    monkeypatch.setitem(base._HANDLERS, ".pdf", [])
+    register_handler(".pdf", handler, requires_multimodal=False)
+    result = redact_document(
+        source,
+        policy={
+            "ocr_engine": _BurnedInOcrEngine(_name_words()),
+            "model_name": "stub",
+            "redact_encapsulated_documents": True,
+            "document_models": lambda _: [],
+        },
+    )
+    assert len(calls) == 1
+    cleaned = pydicom.dcmread(source)
+    assert cleaned.EncapsulatedDocument.rstrip(b"\0") == b"%PDF-CLEAN!"
+    assert cleaned.PatientIdentityRemoved == "YES"
+    assert cleaned.BurnedInAnnotation == "NO"
+    assert result.metadata["dicom_pixel_redaction"]["pixel_status"] == "pixels_cleaned"
+
+
+def _add_unclean_nested_pixels(source):
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+
+    dataset = pydicom.dcmread(source)
+    child = Dataset()
+    child.add_new((0x7FE0, 0x0010), "OB", b"SYNTHETIC_CHILD!")
+    child.BurnedInAnnotation = "YES"
+    child.PatientIdentityRemoved = "YES"
+    dataset.ReferencedImageSequence = Sequence([child])
+    dataset.save_as(source, enforce_file_format=True)
+
+
+def test_pixel_outcome_covers_nested_pixels_without_inheriting_clean_claims(
+    monkeypatch, tmp_path
+):
+    from openmed.multimodal import DicomPixelStatus
+
+    _generic_model_misses(monkeypatch)
+    source = _write_pixel_dicom(tmp_path / "nested.dcm", _single_frame_pixels())
+    _add_unclean_nested_pixels(source)
+    result = redact_dicom_pixels(
+        source, ocr_engine=_BurnedInOcrEngine(_name_words()), model_name="stub"
+    )
+    cleaned = pydicom.dcmread(source)
+    assert result.pixel_status is DicomPixelStatus.NOT_CLEANED
+    assert cleaned.PatientIdentityRemoved == "NO"
+    assert cleaned.ReferencedImageSequence[0].PatientIdentityRemoved == "NO"
+
+
+@pytest.mark.parametrize("in_place", [False, True])
+def test_combined_refusal_does_not_publish_partial_pixels(
+    monkeypatch, tmp_path, in_place
+):
+    from openmed.multimodal import DicomDeidentificationError
+
+    _generic_model_misses(monkeypatch)
+    source = _write_pixel_dicom(tmp_path / "nested.dcm", _single_frame_pixels())
+    _add_unclean_nested_pixels(source)
+    original = source.read_bytes()
+    output = source if in_place else tmp_path / "existing.dcm"
+    if not in_place:
+        output.write_bytes(b"original destination")
+    with pytest.raises(DicomDeidentificationError, match="pixels_not_cleaned"):
+        redact_document(
+            source,
+            policy={
+                "output_path": output,
+                "fail_on_unclean_pixels": True,
+                "ocr_engine": _BurnedInOcrEngine(_name_words()),
+                "model_name": "stub",
+            },
+        )
+    assert source.read_bytes() == original
+    if not in_place:
+        assert output.read_bytes() == b"original destination"
+
+
+@pytest.mark.parametrize("pixel_api", [False, True])
+def test_malformed_overlay_refusal_is_value_free(tmp_path, pixel_api):
+    from openmed.multimodal import DicomDeidentificationError, deidentify_dicom_headers
+
+    source = _write_pixel_dicom(tmp_path / "malformed.dcm", _single_frame_pixels())
+    dataset = pydicom.dcmread(source)
+    dataset.add_new((0x6000, 0x0102), "LO", "SYNTHETIC_PRIVATE_SENTINEL")
+    dataset.add_new((0x6000, 0x3000), "OW", b"overlay data")
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+    with pytest.raises(DicomDeidentificationError) as exc:
+        (redact_dicom_pixels if pixel_api else deidentify_dicom_headers)(source)
+    assert str(exc.value) == "embedded_overlay_not_cleanable"
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "keyword", ["FloatPixelData", "DoubleFloatPixelData", "PixelDataProviderURL"]
+)
+def test_unsupported_pixel_storage_cannot_be_empty_success(tmp_path, keyword):
+    from openmed.multimodal import DicomDeidentificationError
+
+    source = _write_pixel_dicom(tmp_path / "alternate.dcm", _single_frame_pixels())
+    dataset = pydicom.dcmread(source)
+    del dataset.PixelData
+    setattr(
+        dataset,
+        keyword,
+        "https://example.invalid/synthetic-private"
+        if keyword == "PixelDataProviderURL"
+        else b"synthetic pixels",
+    )
+    dataset.save_as(source, enforce_file_format=True)
+    original = source.read_bytes()
+    with pytest.raises(DicomDeidentificationError) as exc:
+        redact_dicom_pixels(source)
+    assert exc.value.reason_code == (
+        "external_pixel_data_unsupported"
+        if keyword == "PixelDataProviderURL"
+        else "pixel_data_unsupported"
+    )
+    assert source.read_bytes() == original

@@ -17,6 +17,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 DateMode = Literal["shift", "coarsen", "none"]
 PeriodGranularity = Literal["month", "year"]
 TextRedactor = Callable[[str], Any]
@@ -979,9 +981,9 @@ def _shift_iso_date(
     source_date = match.group("date")
     suffix = match.group("suffix") or ""
     try:
-        date.fromisoformat(source_date)
+        parse_iso_date(source_date)
         if suffix:
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise DHIS2ExportError(f"{path} contains an invalid ISO date") from exc
 
@@ -1010,9 +1012,9 @@ def _coarsen_iso_date(
     source_date = match.group("date")
     suffix = match.group("suffix") or ""
     try:
-        parsed = date.fromisoformat(source_date)
+        parsed = parse_iso_date(source_date)
         if suffix:
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise DHIS2ExportError(f"{path} contains an invalid ISO date") from exc
     if granularity == "year":
@@ -1038,13 +1040,13 @@ def _coarsen_period(
         return value[:4]
     if re.fullmatch(r"\d{8}", value):
         try:
-            date.fromisoformat(f"{value[:4]}-{value[4:6]}-{value[6:8]}")
+            parse_iso_date(f"{value[:4]}-{value[4:6]}-{value[6:8]}")
         except ValueError as exc:
             raise DHIS2ExportError(f"{path} contains an invalid daily period") from exc
         return value[:6]
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
         try:
-            parsed = date.fromisoformat(value)
+            parsed = parse_iso_date(value)
         except ValueError as exc:
             raise DHIS2ExportError(f"{path} contains an invalid daily period") from exc
         return f"{parsed.year:04d}{parsed.month:02d}"
