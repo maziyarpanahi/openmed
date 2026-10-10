@@ -15,7 +15,10 @@ validation or permission to approve real evidence**.
 
 ## Explicit extraction and trusted local summarizers
 
-`model="extractive"` selects the deterministic CPU baseline. Omitting `model`
+For standalone summarization, `model="extractive"` selects the deterministic CPU
+baseline. Within a reviewed brief it selects whole sentences by fact coverage
+and the independent omission and length rules; an infeasible selection is
+refused without partial output. Omitting `model`
 selects the registered, pinned MLX summarizer; extraction is never an automatic
 fallback for missing MLX assets. For raw input, `summarize()` first de-identifies
 locally and may therefore require a cached PII model even in extractive mode.
@@ -279,13 +282,20 @@ it must return a dictionary of **three class probabilities** plus the matching
 `calibration_id`, rather than a selected `label`/`score`. Do not pass the encoder's
 decision method directly or manufacture probabilities from that decision.
 An existing local runtime can expose a separately qualified probability adapter.
+The [offline NLI qualification protocol](../evaluation/nli-calibration.md)
+binds caller-owned artifact bytes, mapping, runtime, separated development and
+held-out data, and policy. Only a live qualifier-issued receipt can construct
+`bind_qualified_nli()`; decoded audit JSON cannot authorize a callback.
 Supply a local privacy detector too; an empty detector result is meaningful only
 when the detector itself has been qualified.
 
 This self-contained example creates review transitions only for synthetic
 evidence. Production application review stores must provide actual reviewed
 history and enforce their own record authorization. The current evidence packet
-remains synthetic-only; this example does not widen that boundary.
+remains synthetic-only. The separate, opt-in `ReviewedLocalBriefContext`
+requires current source custody, independently stored review authority and an
+unexpired, unrevoked receipt; see [reviewed-local admission](clinical-brief.md).
+This example does not manufacture that authority.
 
 ```python
 import hashlib
@@ -415,6 +425,9 @@ classes. Never serialize arbitrary exception objects or their upstream context.
 
 | Exception | Trigger at this boundary | Remediation |
 |---|---|---|
+| `ExtractiveSelectionError` | Reviewed fact coverage cannot satisfy the independent omission/length rules, or bounded selection is exhausted | Inspect its value-free selection diagnostics and re-review the budget/evidence; no partial summary is returned |
+| `NLIQualificationError` | Invalid, unavailable, drifting or unqualified caller-owned artifact/receipt inputs | Reproduce the offline qualification protocol with trusted local inputs; do not promote an audit record into authority |
+| `BriefInterrupted` | Direct summarization reaches a cancelled or expired cooperative checkpoint | Discard the late result; inspect only `cancelled` or `deadline_exceeded` and start a new request if appropriate |
 | `LocalSummarizerError` | Unregistered/invalid backend, rejected admission or inference, invalid output, or trusted callback failure | Check fixed local configuration, artifact/runtime availability, limits and provider contract; keep the failure closed |
 | `RemoteSummarizerError` | A remote provider name or colon-bearing backend string at summarizer resolution | Select a registered local alias or trusted local callable; never send the note to that provider |
 | `SummarizationOrderError` | Guarded stage receives raw/invalid de-identification input or retained source identifiers | Complete and validate local de-identification before generation |
@@ -458,6 +471,17 @@ provider errors. The trace records entered stages, not proof that each passed.
 | `NLI_REJECTED` | `nli_rejected` | A claim does not pass selective entailment, including contradiction or abstention | Retain human review; do not force entailment or relax thresholds silently |
 | `PRIVACY` | `privacy` | Leakage or final privacy validation rejects output | Discard output and investigate with protected handling and synthetic reproduction |
 | `STAGE_FAILED` | `stage_failed` | Other exception or incomplete stage contract, including unavailable summarizer | Inspect controlled configuration/stage information and restore the missing local contract |
+| `INVALID_REVIEWED_EVIDENCE` | `invalid_reviewed_evidence` | The separately versioned local evidence contract is malformed | Obtain bounded exact reviewed evidence; do not reuse a malformed record |
+| `REVIEW_RECEIPT_MISSING` | `review_receipt_missing` | No independently stored matching review receipt is available | Resolve the receipt through the trusted review store |
+| `REVIEW_RECEIPT_EXPIRED` | `review_receipt_expired` | The receipt is outside its exclusive validity interval | Obtain fresh independent review |
+| `REVIEW_RECEIPT_MISMATCHED` | `review_receipt_mismatched` | Receipt, current review state or evidence binding differs | Re-review the current evidence without copying old authority |
+| `REVIEW_RECEIPT_REVOKED` | `review_receipt_revoked` | The trusted authority reports revocation | Stop generation and obtain current authorized review |
+| `REVIEW_AUTHORITY_UNAVAILABLE` | `review_authority_unavailable` | The trusted current-review lookup fails or is unavailable | Restore the application-owned authority; never trust wire metadata alone |
+| `REVIEW_SOURCE_UNAVAILABLE` | `review_source_unavailable` | Current source custody cannot be verified | Restore the independent source lookup |
+| `REVIEW_SOURCE_CHANGED` | `review_source_changed` | Current source identity/content/offset binding has drifted | Rebuild evidence from the current source and obtain fresh review |
+| `REVIEW_POLICY_CHANGED` | `review_policy_changed` | Current policy digest differs from the reviewed policy | Review the evidence against the current policy |
+| `CANCELLED` | `cancelled` | Explicit cancellation or native task cancellation reaches a checkpoint | Discard output and any late callback result; cancellation does not forcibly kill a legacy callback |
+| `DEADLINE_EXCEEDED` | `deadline_exceeded` | The started request budget expires at a checkpoint | Discard output; use an appropriate new request budget without treating the old result as complete |
 
-These tables describe current released behavior. They do not alter exception
+These tables describe the current implementation. They do not alter exception
 typing, refusal values, model qualification or the review/privacy requirements.
