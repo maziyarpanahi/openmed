@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added offline FHIR write-origin labeling and provisional-status normalization
   for Observation, Condition and AllergyIntolerance, with exact-label rejection,
   role-gated attestation and value-free findings (#3766).
+- Added offline FHIR write-reference scope verification against purpose-bound
+  ticket selectors, injected non-compartment resolution, guarded preview
+  dispatch, internal transaction/contained checks and value-free denials (#3764).
 
 - Added opt-in private SQLite approval nonce claims shared across processes and
   restarts, fail-closed durable replay protection, and a compatible consumption
