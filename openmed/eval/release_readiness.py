@@ -35,7 +35,7 @@ READY = "READY"
 NOT_READY = "NOT_READY"
 
 _REQUIRED_DOCS: tuple[str, ...] = ("README.md", "CHANGELOG.md")
-_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/2.3-to-2.5.md")
+_DEFAULT_MIGRATION_GUIDE = Path("docs/migration/2.5-to-3.0.md")
 _DEFAULT_API_COMPAT_REPORT = Path("gates/api_compat_report.json")
 _DEFAULT_E2E_REPORT = Path("gates/e2e_golden_pass.json")
 _DISCLAIMER_MODULE = Path("openmed/clinical/__init__.py")
@@ -211,7 +211,13 @@ def _check_required_docs(repo_root: Path, migration_guide: Path) -> GateCheck:
     )
 
 
-def _check_api_compat(repo_root: Path, report_path: Path) -> GateCheck:
+def _check_api_compat(
+    repo_root: Path,
+    report_path: Path,
+    *,
+    version: str,
+    migration_guide: Path,
+) -> GateCheck:
     path = _resolve_path(repo_root, report_path)
     if not path.is_file():
         return GateCheck(
@@ -224,8 +230,41 @@ def _check_api_compat(repo_root: Path, report_path: Path) -> GateCheck:
         summary = data.get("summary")
         if data.get("schema_version") != 1 or not isinstance(summary, Mapping):
             raise ValueError("unsupported or missing API-compat report schema")
-        breaking = int(summary.get("breaking", -1))
-        if breaking != 0:
+        breaking = summary.get("breaking")
+        if type(breaking) is not int or breaking < 0:
+            raise ValueError("missing breaking-change count")
+        reviewed_breaking: list[str] = []
+        if breaking:
+            before = re.fullmatch(
+                r"v([0-9]+)\.([0-9]+)\.([0-9]+)", str(data.get("before_ref", ""))
+            )
+            target = re.fullmatch(r"([0-9]+)\.([0-9]+)\.([0-9]+)", version)
+            entries = data.get("breaking")
+            guide = _resolve_path(repo_root, migration_guide)
+            if (
+                before is not None
+                and target is not None
+                and int(target[1]) > int(before[1])
+                and isinstance(entries, list)
+                and len(entries) == breaking
+                and guide.is_file()
+            ):
+                text = guide.read_text(encoding="utf-8")
+                symbols = [
+                    entry.get("symbol") for entry in entries if isinstance(entry, dict)
+                ]
+                if (
+                    len(symbols) == breaking
+                    and all(
+                        isinstance(symbol, str)
+                        and symbol.startswith("openmed.")
+                        and symbol in text
+                        for symbol in symbols
+                    )
+                    and len(set(symbols)) == breaking
+                ):
+                    reviewed_breaking = symbols
+        if breaking and not reviewed_breaking:
             return GateCheck(
                 "api_compat",
                 False,
@@ -242,7 +281,11 @@ def _check_api_compat(repo_root: Path, report_path: Path) -> GateCheck:
                 "report_hash": _file_hash(path),
                 "before_ref": str(data.get("before_ref", "")),
                 "after_ref": str(data.get("after_ref", "")),
-                "breaking": 0,
+                "breaking": breaking,
+                "reviewed_major_migrations": reviewed_breaking,
+                "migration_hash": _file_hash(_resolve_path(repo_root, migration_guide))
+                if reviewed_breaking
+                else None,
             },
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -332,6 +375,101 @@ def _check_e2e_golden(repo_root: Path, report_path: Path) -> GateCheck:
         )
 
 
+def _catalog_metadata_changes(previous: bytes, current: bytes) -> dict[str, list[str]]:
+    """Accept catalog-only edits while preserving artifact and metric identity."""
+
+    def indexed_rows(content: bytes) -> dict[str, dict[str, Any]]:
+        rows = [json.loads(line) for line in content.splitlines() if line.strip()]
+        indexed: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("repo_id"), str):
+                raise ValueError("invalid model row")
+            model_id = row["repo_id"]
+            if not model_id or model_id in indexed:
+                raise ValueError("empty or duplicate model id")
+            indexed[model_id] = row
+        return indexed
+
+    before, after = indexed_rows(previous), indexed_rows(current)
+    if before.keys() != after.keys():
+        raise ValueError("model inventory changed")
+    metadata: dict[str, list[str]] = {}
+    allowed = {"languages", "script_coverage"}
+    for model_id, row in before.items():
+        updated = after[model_id]
+        if _canonical_json(
+            {k: v for k, v in row.items() if k not in allowed}
+        ) != _canonical_json({k: v for k, v in updated.items() if k not in allowed}):
+            raise ValueError("model artifact or evidence changed")
+        changed = {key for key in allowed if row.get(key) != updated.get(key)}
+        if "languages" in changed:
+            old, new = row.get("languages"), updated.get("languages")
+            if (
+                not isinstance(old, list)
+                or not isinstance(new, list)
+                or not all(isinstance(item, str) and item.strip() for item in old + new)
+                or len(set(new)) != len(new)
+                or not set(old) <= set(new)
+            ):
+                raise ValueError("invalid or removed language metadata")
+        if "script_coverage" in changed:
+            old, new = row.get("script_coverage"), updated.get("script_coverage")
+            if (
+                not isinstance(old, dict)
+                or not isinstance(new, dict)
+                or old.keys() != new.keys()
+            ):
+                raise ValueError("script metric inventory changed")
+            for script, metrics in old.items():
+                revised = new[script]
+                if (
+                    not isinstance(metrics, dict)
+                    or not isinstance(revised, dict)
+                    or {k: v for k, v in metrics.items() if k != "verdict"}
+                    != {k: v for k, v in revised.items() if k != "verdict"}
+                    or any(
+                        isinstance(v, bool)
+                        for k, v in revised.items()
+                        if k != "verdict"
+                    )
+                    or revised.get("verdict")
+                    not in {"supported", "unsupported", "unclaimed"}
+                ):
+                    raise ValueError("script metrics changed")
+        if changed:
+            metadata[model_id] = sorted(changed)
+    if not metadata:
+        raise ValueError("unexplained model evidence rewrite")
+    return metadata
+
+
+def _summary_policy_added(previous: bytes, current: bytes) -> bool:
+    """Permit a new fail-closed summary policy, never rewrite retained evidence."""
+    from openmed.eval.summary_gate import THRESHOLD_KEYS
+
+    before, after = json.loads(previous), json.loads(current)
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    policy = after.get("summary")
+    return (
+        "summary" not in before
+        and _canonical_json(
+            {key: value for key, value in after.items() if key != "summary"}
+        )
+        == _canonical_json(before)
+        and isinstance(policy, dict)
+        and set(policy) == THRESHOLD_KEYS
+        and all(
+            type(value) in (int, float) and 0 <= value <= 1 for value in policy.values()
+        )
+        and policy["clinical_fact_recall_min"] >= 0.95
+        and policy["fact_coverage_min"] >= 0.95
+        and policy["citation_support_min"] == 1
+        and policy["unsupported_claim_rate_max"] == 0
+        and policy["leaked_identifier_count_max"] == 0
+    )
+
+
 def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck:
     """Verify that an SDK release retains the model artifacts and evidence."""
 
@@ -359,16 +497,28 @@ def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck
         )
         git("merge-base", "--is-ancestor", baseline_sha, "HEAD")
         hashes: dict[str, str] = {}
+        previous_hashes: dict[str, str] = {}
+        metadata_changes: dict[str, list[str]] = {}
         for name in ("models.jsonl", "gates/baseline.json"):
             previous = git("show", f"{baseline_sha}:{name}")
             current = (repo_root / name).read_bytes()
-            if current != previous:
+            retained = current == previous
+            if not retained and name == "models.jsonl":
+                # Language routing/catalog claims are library metadata, not
+                # model bytes. Every other field, row, and artifact pin remains
+                # immutable; changed checkpoints still need signed model gates.
+                metadata_changes = _catalog_metadata_changes(previous, current)
+                retained = True
+            if not retained and name == "gates/baseline.json":
+                retained = _summary_policy_added(previous, current)
+            if not retained:
                 return GateCheck(
                     gate,
                     False,
                     reason=f"Model artifact or retained evidence changed: {name}",
                 )
             hashes[name] = "sha256:" + hashlib.sha256(current).hexdigest()
+            previous_hashes[name] = "sha256:" + hashlib.sha256(previous).hexdigest()
 
         from openmed.core.registry_slots import (
             migrate_registry_state,
@@ -414,6 +564,8 @@ def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck
                 "baseline_tag": baseline_tag,
                 "baseline_sha": baseline_sha,
                 "retained_file_hashes": hashes,
+                "baseline_file_hashes": previous_hashes,
+                "catalog_metadata_changes": metadata_changes,
                 "pointer_count": sum(
                     len(entry["pointers"]) for entry in after["slots"].values()
                 ),
@@ -421,7 +573,7 @@ def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck
                 + hashlib.sha256(previous).hexdigest(),
                 "candidate_registry_hash": "sha256:"
                 + hashlib.sha256(current).hexdigest(),
-                "scope": "SDK only; no model promotion or new model qualification",
+                "scope": "SDK contracts/catalog metadata only; no model promotion or new model qualification",
             },
         )
     except (
@@ -439,7 +591,7 @@ def _check_sdk_model_continuity(repo_root: Path, baseline_tag: str) -> GateCheck
 
 def evaluate_readiness(
     *,
-    version: str = "2.5.0",
+    version: str = "3.0.0",
     repo_root: Path | str | None = None,
     gate_report: GateReport | None = None,
     gate_report_key: bytes | str | None = None,
@@ -487,7 +639,12 @@ def evaluate_readiness(
             else _check_extraction_gates(gate_report, verification_key=verification_key)
         ),
         _check_required_docs(root, Path(migration_guide)),
-        _check_api_compat(root, Path(api_compat_report)),
+        _check_api_compat(
+            root,
+            Path(api_compat_report),
+            version=version,
+            migration_guide=Path(migration_guide),
+        ),
         _check_disclaimer(root),
         _check_e2e_golden(root, Path(e2e_report)),
     )
@@ -523,7 +680,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_DEFAULT_API_COMPAT_REPORT,
     )
     parser.add_argument("--e2e-report", type=Path, default=_DEFAULT_E2E_REPORT)
-    parser.add_argument("--version", default="2.5.0")
+    parser.add_argument("--version", default="3.0.0")
     parser.add_argument("--signing-key")
     parser.add_argument("--key-id", default="release-readiness")
     parser.add_argument("--output", type=Path)

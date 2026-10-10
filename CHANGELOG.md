@@ -1,20 +1,51 @@
 # Changelog
 
-- Add the offline synthetic clinical-brief walkthrough, golden pipeline test,
-  explicit fixture-provider disclaimers and a recording script.
-- Add OpenMedKit guarded clinical-brief packets, local Maple brief generation,
-  native leakage/envelope/citation validation and shared Python wire fixtures.
-- Add fail-closed summary release gates, seeded synthetic benchmark execution,
-  counts-only extractive/MLX evidence and daily committed-report verification.
-- Add guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
-  local review lookup, separate protected/audit CLI files and content-free logs.
-
 All notable changes to OpenMed will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+
+- Select explicit extractive brief sentences by unique reviewed fact coverage,
+  independent omission rules and existing length allocations. Preserve ordered
+  citations and expose insufficient-budget/resource-limit diagnostics without
+  partial output; retain the first-three-sentence comparison baseline (#3653).
+  Recomputed synthetic summary reports retain missing-adjudication failures.
+
+### Breaking Changes
+
+- `AggregateDPRelease` now emits release schema version 2 and removes the
+  `noise` and `seed_digest` fields from its public dataclass and serialized
+  records. Update constructors and consumers to use the noisy `value`, budget
+  accounting, and new `test_only` flag instead; ledger schemas and digests are
+  unchanged. Previously written records containing both `value` and `noise`
+  disclose their input aggregates and must not be treated as private releases.
+  Seeded releases are synthetic-test-only and provide no production privacy
+  guarantee; the CLI now requires `--test-mode` with `--seed`. Omit the seed for
+  production system randomness (#3723).
+- Gaussian helpers now use analytic privacy-profile calibration, including
+  epsilon above one, and record `calibration_method` in spend records. Noise
+  scales, utility estimates, and seeded Gaussian outputs intentionally change;
+  unrepresentable calibration fails closed. Update deterministic expectations
+  without restoring the invalid classical scale (#3724).
+
+### Security
+
+- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
+  pins and retain lockfile SARIF diagnostics after image-build failures.
+
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
+### Documentation
+
+- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
+  examples. Group clinical navigation by area and expose four previously
+  unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
 
@@ -24,11 +55,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Reports separate contract parity from unsupported language capabilities and
   unevaluated model quality. Accept unset optional replacement aliases without
   weakening populated-alias consistency checks (#3659).
+
+- Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
+  empty interruption outcomes, CLI/service parity, and native late-result guards.
+
+- Add opt-in v1 explicit evidence bindings for paraphrased clinical brief claims,
+  bounded local generation, traceable offsets and unchanged verification/privacy
+  gates, with aligned OpenMedKit validation and synthetic offline tests (#3654).
+
+- Add offline qualification of caller-supplied clinical NLI artifacts,
+  separate development/held-out evaluation, digest-bound receipts and a
+  drift-checked BriefContext callback; synthetic data never establishes
+  clinical qualification (#3656).
+
+- Added a local Journey-fact ClinicalBrief context provider with explicit review
+  verification, source/fact/profile/calibration bindings, typed mapping refusals
+  and offline Python, CLI, REST and MCP injection tests (#3652).
+
+- Add the separately versioned reviewed-local clinical evidence contract and
+  opt-in Python/OpenMedKit brief admission, with current source/review custody,
+  digest-bound expiring receipts, typed refusals and synthetic offline fixtures
+  (#3651). Existing evidence packets remain synthetic-only.
+
+- Added immutable run-scoped agent tool catalog bindings, exact-version pinned
+  dispatch, deterministic restore eligibility and content-free re-review outcomes
+  for implementation, schema and side-effect drift (#3665).
+
+- Added injected runtime clinical-agent authority revocation checks before
+  sensitive reads, effects and recovery, with monotonic grant/ticket generations,
+  descendant and approval invalidation, and content-free offline tests (#3664).
+- Added guarded dispatch on the existing workflow executor, enforcing signed
+  grants, purpose tickets, minimum-data projections, pinned tool identity and
+  exact single-use approval, with content-free cancellation and uncertain-effect
+  recovery outcomes through injected local providers (#3661).
+- Add default-off agent effect admission, signed local transition receipts,
+  independent rollback detection, emergency stop and fresh-enable CLI commands
+  with synthetic approval/recovery safety controls (#3765).
+
+- Add opt-in FHIR R4 server `$validate` preflight through an injected target-bound
+  transport and opaque credential handle. Return controlled issue summaries and
+  request digests; block errors and unavailable validation before application review.
+
+- Add injected, bounded FHIR R4 write execution for existing conditional plans
+  and assembled transactions. Bind exact wire details to consumed approval
+  receipts, repeat local authorization and lineage gates, preserve predicates,
+  version preconditions and idempotency keys, and require durable attempt
+  reservations. Ambiguous outcomes require reconciliation without retry or
+  automatic compensation (#3662).
+- Added deterministic, bounded FHIR R4 transaction assembly for approved
+  creates and updates, preserving conditional/version requests and recording
+  value-free Provenance with exact canonical Bundle digests (#3771).
+- Added offline FHIR write-origin labeling and provisional-status normalization
+  for Observation, Condition and AllergyIntolerance, with exact-label rejection,
+  role-gated attestation and value-free findings (#3766).
+- Added offline FHIR write-reference scope verification against purpose-bound
+  ticket selectors, injected non-compartment resolution, guarded preview
+  dispatch, internal transaction/contained checks and value-free denials (#3764).
+
+- Added opt-in private SQLite approval nonce claims shared across processes and
+  restarts, fail-closed durable replay protection, and a compatible consumption
+  store adapter for MCP consent receipts (#3763).
+
+- Added an offline, synthetic governed clinical reference workflow covering
+  approval, FHIR and OMOP effects, action evidence, replay, and recovery (#3196).
+- Added metadata-only signed action ledgers and deterministic replay evidence,
+  permanent circuit-breaker stops, cooperative resource budgets, and completed
+  run invariant reports for governed agent runtimes (#2766, #2767, #2769, #2770,
+  #3001). These contracts do not dispatch effects or replace adapter validation.
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Export deterministic, import-light Draft 2020-12 JSON Schemas for public
+  agent outcome, correlation, timing and run-summary records.
+- Added the offline `openmed models slm-verify` command, which verifies a local
+  clinical SLM package, probes explicitly requested capabilities against the
+  declared metadata, and runs the memory preflight for an explicit device
+  budget, with a value-free JSON report, stable CLI error codes, and no runtime
+  import or network access (#3805).
+- Added bundled Draft 2020-12 JSON Schemas for clinical brief audit and response
+  records, evidence packets, NLI verification results and SDOH evidence reports,
+  with a committed fingerprint snapshot, schema drift comparison, optional
+  `jsonschema` validation and value-free contract tests (#3803).
+
+### Fixed
+
+- Normalize SMART v1 read/write/all permissions, wildcard resources, granular
+  queries and non-clinical identity/launch/session scopes in offline scope
+  audits. Compare constraints conservatively and report malformed input without
+  echoing values; granular audit evidence contains only constraint digests (#3767).
+
+- Remove DICOM overlay, curve and icon carriers recursively; refuse unprocessed
+  encapsulated documents, expose truthful pixel-cleaning outcomes, and stage
+  combined header/pixel processing before writing its final artifact (#3725).
+- Apply the pinned DICOM 2026d Basic Profile catalog recursively, declare
+  explicit retention/cleaning options with method codes, clean retained text
+  through a caller detector, and replace identifying file metadata (#3727).
+- Parse clinical and Journey ISO calendar timestamps through one explicit
+  profile on every supported Python version. Reject basic, week-date, ordinal
+  and compact-offset input with value-free errors while retaining supported
+  extended values, caller timezone rules and golden digests.
+
+## [3.0.0] - 2026-10-05
+
+### Security and build fixes
+
+- Require patched fsspec reference-template handling across affected optional
+  profiles, align the frozen S3 adapter without overriding upstream bounds, and
+  retain safe template interpolation with synthetic security regressions.
+- Raise optional graph authorization and Beam MongoDB driver floors to their
+  patched releases without overriding parent bounds. Upstream Beam MongoDB IO
+  now requires MongoDB Server 4.4 or newer; the base SDK remains unaffected.
+- Refresh the identical service-container UUID library pin to the available
+  Debian revision without relaxing package verification or image scan gates.
+- Align the Nix development shell with secured reference-template dependencies
+  while retaining the upstream release archive's runnable tests.
+- Reduce static API extraction work for private and unexported definitions,
+  preserving public signatures and fingerprints, import-free operation and
+  the existing performance gate.
+
+### Added
+
+- Offline synthetic clinical-brief walkthrough, golden pipeline test, explicit
+  fixture-provider disclaimers and a recording script.
+- OpenMedKit guarded clinical-brief packets, local Maple brief generation,
+  native leakage/envelope/citation validation and shared Python wire fixtures.
+- Fail-closed summary model-promotion gates and seeded, counts-only
+  extractive/MLX benchmark evidence. Failed reports remain failed and do not
+  qualify models; training and model publication are optional, separate from
+  the library/SDK release.
+- Aligned the published and scanned service-container runtime repairs, omitted
+  unrelated desktop source trees, checked installed dependency consistency and
+  removed the installer from the final runtime; no vulnerability waiver added.
+- Guarded clinical-brief CLI, REST, MCP, Python and TypeScript interfaces with
+  local review lookup, separate protected/audit CLI files and content-free logs.
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
-
-### Added
 
 - Added cache-only, registry-pinned MLX summarization with capability, memory,
   prompt-digest and source-token leakage guards. The deterministic CPU baseline
@@ -262,6 +423,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
+
+- Training and new-checkpoint publication are optional research, without a
+  library-release milestone or feature-blocking relationship. SDK readiness
+  verifies retained artifacts and pointers separately from model promotion.
+- Align active Python, npm, Android, Swift demo and Helm version surfaces at
+  3.0.0. Document grounding and GraphQL migrations for the major release, and
+  include Journey and clinical-brief golden coverage in SDK readiness evidence.
 - Clinical NLI now fails closed when no released local checkpoint is registered;
   lexical verification requires `backend="heuristic"`, and results expose
   value-free four-state metadata instead of source or claim text (#3235).
@@ -303,26 +475,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Empty explicit keys are rejected; redaction labels and offsets are unchanged.
 - GitHub Actions are pinned to immutable commits, enforced by CI, and container
   publishing permissions are limited to the publish job.
+- Require Torch 2.13.0 or newer in optional model extras and current runtime
+  recipes to address checkpoint/native-operation vulnerabilities. Torch remains
+  absent from the base SDK; deployments must requalify platform and converter
+  compatibility. Separate optional dependency findings are not waived.
+- Make the Swift clinical-document GLiNER characterization explicitly opt-in
+  through `OPENMED_GLINER_SPAN_ARTIFACT`, matching other local model smoke tests.
+  SDK tests no longer silently select an unrelated home-cache model; clinical
+  coverage assertions and thresholds remain unchanged.
+- Require patched Banks, Datasets, HTTP/2 and OAuthlib dependencies only in the
+  affected optional integrations, with matching lock constraints and regression
+  checks; the base dependency set is unchanged. OAuthlib 4 removes deprecated
+  JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Reuse Windows process-memory API types and bindings during streaming-table
+  RSS sampling so the sampler does not retain a new ctypes pointer type per
+  batch. Actual current-memory readings and unchanged overflow limits remain
+  enforced, including the 16 MiB large-file regression.
+- Require patched PyJWT versions in the locked dependency graph and bound CI
+  tests with per-test timeout diagnostics rather than six-hour silent hangs.
+- Continue optional dependency diagnostics when a module raises during import,
+  recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
+- Preserve tokenizer-provided subword offsets from any standard `Mapping`
+  output when projecting token labels, keeping the absent-offset fallback (#3561).
 - Key GLiNER model cache entries by requested device so a cached instance is not
   moved under a later caller (#3501).
 
+- Include breaking commits with unmapped types in release notes.
 - Hash dataset files with bounded memory (#3510).
+- Report non-object catalog JSONL rows through the normal coherence diagnostic
+  path with physical line numbers, without exposing row values or paths (#3562).
 - Respect explicitly empty gold annotations (#3511).
+- Reject missing requested splits in named CMeEE directories before loading
+  another split, while preserving explicit-file and generic-directory use (#3563).
 - Load prefetched Hugging Face models from the standard cache during offline
   inference, including Transformers 5.x pipeline and component loading (#1983).
+- Validate calibration targets as booleans or numeric zero/one, including
+  aliases, instead of treating non-empty strings as positive labels (#3568).
 - Reject non-integer sharding counts before reading documents.
+- Include ranked grounding alternatives in MedMentions top-k accuracy without
+  crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
+- Keep zero-length spans empty when converting legacy encoding offsets (#3507).
 
 ## [2.5.0] - 2026-09-14
 
