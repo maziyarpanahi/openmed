@@ -277,10 +277,15 @@ Keep artifacts immutable until loading completes and measure the actual device.
 
 ## Wire reviewed evidence into `BriefContext`
 
-The brief's callback differs from `verify()` and `EncoderNLIBackend.predict()`:
-it must return a dictionary of **three class probabilities** plus the matching
-`calibration_id`, rather than a selected `label`/`score`. Do not pass the encoder's
-decision method directly or manufacture probabilities from that decision.
+Prefer a callback returning **three calibrated class probabilities** and the
+matching `calibration_id`. The current composer also accepts the NLI gate's
+legacy `label`/`score` mapping with that matching identifier. In that compatibility
+path, the gate splits the residual probability equally between the other two
+classes; those residuals are not measured class probabilities or evidence of
+empirical calibration. A standalone verifier decision can contain abstention
+labels and does not automatically satisfy this callback contract. Use an
+independently qualified probability adapter instead of manufacturing calibration
+from a selected label or score.
 An existing local runtime can expose a separately qualified probability adapter.
 The [offline NLI qualification protocol](../evaluation/nli-calibration.md)
 binds caller-owned artifact bytes, mapping, runtime, separated development and
