@@ -1,9 +1,8 @@
-"""Public-registration contract for the Indic and Urdu routing candidates.
+"""Public-registration contract for Indic and Urdu routing candidates.
 
 These languages are registered on every public surface (display name, model
-prefix, surrogate locale, REST/MCP enums) but deliberately claim no bundled
-default PII model. A caller that supplies ``model_name`` must be accepted; a
-caller that omits it must get an actionable error naming the missing model.
+prefix, surrogate locale, REST/MCP enums). Routes without a bundled default
+model require an actionable error when the caller omits ``model_name``.
 """
 
 from __future__ import annotations
@@ -228,15 +227,17 @@ def test_no_national_id_provider_is_invented_for_nepali() -> None:
     assert "ne" not in NATIONAL_ID_PROVIDERS
 
 
-def test_urdu_keeps_its_existing_cnic_provider_and_locale() -> None:
+def test_urdu_defaults_to_india_and_retains_explicit_pakistan_cnic() -> None:
+    from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
     from openmed.core.language_pack_catalog import (
         NATIONAL_ID_ONLY_CAPABILITIES,
         NATIONAL_ID_PROVIDERS,
     )
 
-    assert NATIONAL_ID_PROVIDERS["ur"] == ("ur_PK", "cnic")
-    assert NATIONAL_ID_ONLY_CAPABILITIES["ur"].locale == "ur_PK"
-    assert LANG_TO_LOCALE["ur"] == "ur_PK"
+    assert NATIONAL_ID_PROVIDERS["ur"] == ("ur_IN", "aadhaar")
+    assert "ur" not in NATIONAL_ID_ONLY_CAPABILITIES
+    assert LANG_TO_LOCALE["ur"] == "ur_IN"
+    assert _LOCALE_ID_METHODS["ur_PK"] == "cnic"
 
 
 def test_locale_coherence_report_covers_every_user_supplied_language() -> None:

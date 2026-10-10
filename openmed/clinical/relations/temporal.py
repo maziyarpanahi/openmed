@@ -395,7 +395,14 @@ def _temporal_relation_rules(
             source_relation=_BEFORE_DIRECT,
             head_labels=_EVENT_LABELS,
             tail_labels=_TEMPORAL_LABELS,
-            cues=("followed by", "prior to", "before", "precedes", "preceding"),
+            cues=(
+                "followed by",
+                "then",
+                "prior to",
+                "before",
+                "precedes",
+                "preceding",
+            ),
             **common,
         ),
         RelationCandidateRule(
