@@ -259,3 +259,17 @@ def test_private_path_and_symlink_failures_have_value_free_errors(
     with pytest.raises(AccessEventError):
         LocalAccessEventSink(link).verify_chain()
     assert target.read_text() == "do not change"
+
+
+def test_deeply_nested_corrupt_chain_fails_with_a_private_controlled_error(tmp_path):
+    path = tmp_path / "events.jsonl"
+    path.write_text("[" * 2000 + '"SYNTHETIC_PRIVATE_RECORD"' + "]" * 2000 + "\n")
+    original = path.read_bytes()
+    sink = LocalAccessEventSink(path)
+    for operation in (sink.verify_chain, sink.export_counts):
+        with pytest.raises(AccessEventError, match="^invalid_chain$") as caught:
+            operation()
+        assert caught.value.__context__ is None
+    with pytest.raises(AccessEventError, match="^sink_unavailable$"):
+        AccessTicketVerifier(sink=sink).verify(ticket(), request(), now=99)
+    assert path.read_bytes() == original

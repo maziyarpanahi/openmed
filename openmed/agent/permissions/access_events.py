@@ -290,7 +290,13 @@ class LocalAccessEventSink:
                 return tuple(events)
         except AccessEventError:
             raise
-        except (ValueError, TypeError, KeyError, AccessTicketValidationError):
+        except (
+            ValueError,
+            TypeError,
+            KeyError,
+            AccessTicketValidationError,
+            RecursionError,
+        ):
             failure = "invalid_chain"
         except (OSError, ImportError):
             failure = "sink_unavailable"

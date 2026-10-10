@@ -279,7 +279,9 @@ writers are active. Diagnostics omit private log paths and parser payloads.
 `verify_chain()` returns the chain head or raises a controlled error for
 corruption, modification, interior deletion, reordering, duplicate entries or
 partial writes. To detect suffix truncation, compare with an independently saved
-head using `verify_chain(expected_head=head)`. A plain digest chain cannot detect
+head using `verify_chain(expected_head=head)`. Deeply nested malformed JSON also
+fails with a controlled code without retaining the parser exception.
+A plain digest chain cannot detect
 an attacker rewriting the whole log and recomputing all digests without that
 independent anchor. No signatures or compliance guarantee are supplied.
 
