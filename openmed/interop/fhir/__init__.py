@@ -102,6 +102,15 @@ from .server_validation import (
     FHIRValidationTransport,
     preflight_server_validation,
 )
+from .transactions import (
+    ApprovedWriteEntry,
+    AssembledTransaction,
+    TransactionApproval,
+    TransactionAssemblyError,
+    TransactionLimits,
+    TransactionReviewerRole,
+    assemble_transaction,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -126,6 +135,14 @@ from .versions import (
     parse_fhir_version,
     r4_to_r5,
     r5_to_r4,
+)
+from .write_labels import (
+    FHIRWriteLabelPolicy,
+    NormalizedFHIRWrite,
+    WriteLabelError,
+    WriteLabelFinding,
+    normalize_proposed_resource,
+    validate_proposed_resource,
 )
 
 _BULK_EXPORTS = frozenset(
@@ -182,6 +199,21 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
     }
 )
 
+_WRITE_CLIENT_EXPORTS = frozenset(
+    {
+        "FHIRCredentialCustody",
+        "FHIRHTTPResponse",
+        "FHIRPreparedWrite",
+        "FHIRTransportRequest",
+        "FHIRWriteClient",
+        "FHIRWriteError",
+        "FHIRWriteLedger",
+        "FHIRWriteLimits",
+        "FHIRWriteOutcome",
+        "FHIRWriteStatus",
+    }
+)
+
 __all__ = [
     "MAX_SERVER_VALIDATION_ISSUES",
     "MAX_SERVER_VALIDATION_RESOURCE_BYTES",
@@ -192,6 +224,29 @@ __all__ = [
     "FHIRValidationResponse",
     "FHIRValidationTransport",
     "preflight_server_validation",
+    "FHIRCredentialCustody",
+    "FHIRHTTPResponse",
+    "FHIRPreparedWrite",
+    "FHIRTransportRequest",
+    "FHIRWriteClient",
+    "FHIRWriteError",
+    "FHIRWriteLedger",
+    "FHIRWriteLimits",
+    "FHIRWriteOutcome",
+    "FHIRWriteStatus",
+    "ApprovedWriteEntry",
+    "AssembledTransaction",
+    "TransactionApproval",
+    "TransactionAssemblyError",
+    "TransactionLimits",
+    "TransactionReviewerRole",
+    "assemble_transaction",
+    "FHIRWriteLabelPolicy",
+    "NormalizedFHIRWrite",
+    "WriteLabelError",
+    "WriteLabelFinding",
+    "normalize_proposed_resource",
+    "validate_proposed_resource",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
@@ -343,4 +398,6 @@ def __getattr__(name: str) -> Any:
         return getattr(import_module(".bulk", __name__), name)
     if name in _JOURNEY_ROUNDTRIP_EXPORTS:
         return getattr(import_module(".journey_roundtrip", __name__), name)
+    if name in _WRITE_CLIENT_EXPORTS:
+        return getattr(import_module(".write_client", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

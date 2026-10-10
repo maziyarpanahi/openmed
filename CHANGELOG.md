@@ -45,6 +45,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transport and opaque credential handle. Return controlled issue summaries and
   request digests; block errors and unavailable validation before application review.
 
+- Add injected, bounded FHIR R4 write execution for existing conditional plans
+  and assembled transactions. Bind exact wire details to consumed approval
+  receipts, repeat local authorization and lineage gates, preserve predicates,
+  version preconditions and idempotency keys, and require durable attempt
+  reservations. Ambiguous outcomes require reconciliation without retry or
+  automatic compensation (#3662).
+- Added deterministic, bounded FHIR R4 transaction assembly for approved
+  creates and updates, preserving conditional/version requests and recording
+  value-free Provenance with exact canonical Bundle digests (#3771).
+- Added offline FHIR write-origin labeling and provisional-status normalization
+  for Observation, Condition and AllergyIntolerance, with exact-label rejection,
+  role-gated attestation and value-free findings (#3766).
+- Added offline FHIR write-reference scope verification against purpose-bound
+  ticket selectors, injected non-compartment resolution, guarded preview
+  dispatch, internal transaction/contained checks and value-free denials (#3764).
+
 - Added opt-in private SQLite approval nonce claims shared across processes and
   restarts, fail-closed durable replay protection, and a compatible consumption
   store adapter for MCP consent receipts (#3763).
