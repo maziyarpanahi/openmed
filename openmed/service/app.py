@@ -1497,21 +1497,30 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         ):
             return await run_in_threadpool(_profile_summary, payload)
 
-    @app.post("/brief", response_model=BriefResponse)
+    @app.post("/brief", response_model=BriefResponse, response_model_exclude_unset=True)
     async def brief_route(payload: BriefRequest, request: Request) -> Dict[str, Any]:
         """Return the shared local brief without recording protected content."""
+        from openmed.clinical.brief_cancellation import BriefCancellation
+
         from .brief import brief_response
 
+        cancellation = BriefCancellation()
         provider = getattr(request.app.state, "brief_context_provider", None)
         try:
-            response = await run_in_threadpool(
+            response = await asyncio.to_thread(
                 brief_response,
                 payload.text,
                 model=payload.model,
                 profile=payload.profile,
                 review_id=payload.review_id,
                 context_provider=provider,
+                cancellation=cancellation,
             )
+            set_access_log_brief(request, response)
+            return response
+        except asyncio.CancelledError:
+            cancellation.cancel()
+            response = brief_response("", cancellation=cancellation)
             set_access_log_brief(request, response)
             return response
         except (TypeError, ValueError):
