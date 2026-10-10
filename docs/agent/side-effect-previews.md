@@ -41,7 +41,9 @@ handles, then keep the handle mapping to real resources in its trusted local
 review UI. Field paths must come from a
 trusted schema, never from clinical payload keys. Flat paths such as `status`
 or `subject.reference` are allowed; nested field values are compared as
-atomic values. The preview intentionally shows no identifiers or values.
+atomic values. JSON numbers include finite decimal values; nonfinite numbers,
+unpaired Unicode surrogates and values nested beyond 64 levels fail with a
+value-free validation error. The preview intentionally shows no identifiers or values.
 Its digest is a private keyed commitment, not a substitute for the review UI.
 Keep the key private and stable through review and dispatch; rotating it
 invalidates pending previews.
