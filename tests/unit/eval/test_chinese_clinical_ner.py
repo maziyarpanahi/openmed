@@ -96,6 +96,92 @@ def test_cmeee_real_loader_requires_an_explicit_external_path() -> None:
         load_cmeee()
 
 
+def _write_synthetic_cmeee_split(path: Path, record_id: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    row = {"id": record_id, "text": "synthetic", "spans": []}
+    payload = [row] if path.suffix.lower() == ".json" else row
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+
+@pytest.mark.parametrize("split", ["test", "dev", "validation", "holdout"])
+def test_cmeee_named_layout_rejects_missing_requested_split(
+    tmp_path: Path, split: str
+) -> None:
+    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
+
+    with pytest.raises(ValueError) as caught:
+        load_cmeee(tmp_path, split=split, allow_repo_path=True)
+
+    assert str(caught.value) == (
+        "CMeEE named split directory has no requested split source"
+    )
+    assert str(tmp_path) not in str(caught.value)
+
+
+def test_cmeee_missing_split_does_not_reach_generic_loader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.eval.datasets import cmeee
+
+    _write_synthetic_cmeee_split(tmp_path / "nested/CMeEE-dev.ndjson", "dev")
+
+    def unexpected_loader(*args: object, **kwargs: object) -> None:
+        pytest.fail("missing named split reached the generic corpus loader")
+
+    monkeypatch.setattr(cmeee, "load_multilingual_ner_benchmark", unexpected_loader)
+    with pytest.raises(ValueError, match="no requested split source"):
+        load_cmeee(tmp_path, split="test", allow_repo_path=True)
+
+
+@pytest.mark.parametrize("suffix", [".json", ".JSONL", ".ndjson"])
+def test_cmeee_selects_only_requested_nested_case_insensitive_split(
+    tmp_path: Path, suffix: str
+) -> None:
+    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
+    _write_synthetic_cmeee_split(
+        tmp_path / f"nested/CMEEE-TEST{suffix}", "synthetic-test"
+    )
+
+    result = load_cmeee(tmp_path, split="TEST", allow_repo_path=True)
+
+    assert [record.record_id for record in result.records] == ["synthetic-test"]
+    assert result.records[0].split == "TEST"
+
+
+@pytest.mark.parametrize("requested", ["dev", "val", "validation"])
+@pytest.mark.parametrize("available", ["dev", "val", "validation"])
+def test_cmeee_validation_aliases_remain_interchangeable(
+    tmp_path: Path, requested: str, available: str
+) -> None:
+    _write_synthetic_cmeee_split(
+        tmp_path / f"CMeEE_{available}.json", "synthetic-validation"
+    )
+    result = load_cmeee(tmp_path, split=requested, allow_repo_path=True)
+    assert [record.record_id for record in result.records] == ["synthetic-validation"]
+    assert result.records[0].split == requested
+
+
+def test_cmeee_duplicate_requested_splits_still_raise(tmp_path: Path) -> None:
+    _write_synthetic_cmeee_split(tmp_path / "CMeEE_dev.json", "first")
+    _write_synthetic_cmeee_split(tmp_path / "CMeEE_val.json", "second")
+    with pytest.raises(ValueError, match="multiple CMeEE 'dev' sources found"):
+        load_cmeee(tmp_path, split="dev", allow_repo_path=True)
+
+
+def test_cmeee_generic_directory_and_explicit_file_keep_existing_fallback(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "records.jsonl"
+    _write_synthetic_cmeee_split(source, "synthetic-generic")
+    generic = load_cmeee(tmp_path, split="test", allow_repo_path=True)
+    assert [record.record_id for record in generic.records] == ["synthetic-generic"]
+
+    named = tmp_path / "CMeEE_train.json"
+    _write_synthetic_cmeee_split(named, "synthetic-explicit")
+    explicit = load_cmeee(named, split="test", allow_repo_path=True)
+    assert [record.record_id for record in explicit.records] == ["synthetic-explicit"]
+
+
 def test_bundled_chinese_fixture_covers_all_categories_and_synthetic_phi() -> None:
     fixtures = load_chinese_clinical_ner_fixtures()
 
