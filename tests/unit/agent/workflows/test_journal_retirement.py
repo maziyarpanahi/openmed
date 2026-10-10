@@ -324,6 +324,7 @@ def test_private_paths_never_escape_reports_or_io_errors(
     with pytest.raises(RecoveryError, match="retirement_io_failed") as caught:
         journal.retire(plan, confirmation=plan.confirmation_token, now=100)
     assert sentinel not in "".join(traceback.format_exception(caught.value))
+    assert caught.value.__context__ is None
     assert len(journal.load()) == 2
 
 
@@ -408,3 +409,12 @@ def test_journal_lock_symlink_and_interrupted_acquisition_fail_safely(
     with pytest.raises(RecoveryError, match="journal_lock_failed"):
         journal.load()
     assert target.read_text() == "untouched"
+
+
+@pytest.mark.parametrize(
+    "parser", [RetiredJournalRecord.from_json, JournalRetirementPlan.from_json]
+)
+def test_private_json_document_is_not_retained_in_exception_context(parser):
+    with pytest.raises(RecoveryError) as caught:
+        parser('{"SYNTHETIC_PRIVATE_RECORD":')
+    assert caught.value.__context__ is None

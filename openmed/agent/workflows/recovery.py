@@ -19,8 +19,9 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from enum import Enum
+from functools import wraps
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Callable, Final, ParamSpec, TypeVar, cast
 
 from openmed.agent.correlation import ActionId, CorrelationIdError, RunId
 from openmed.agent.identifiers import GovernanceIdError, ToolId, WorkflowId
@@ -80,6 +81,24 @@ class RecoveryError(ValueError):
         self.field_name = field_name
         message = code if field_name is None else f"{field_name}: {code}"
         super().__init__(message)
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def _private_journal_errors(function: Callable[_P, _T]) -> Callable[_P, _T]:
+    @wraps(function)
+    def checked(*args: _P.args, **kwargs: _P.kwargs) -> _T:
+        code, field_name = "invalid_journal", None
+        try:
+            return function(*args, **kwargs)
+        except RecoveryError as error:
+            code, field_name = error.code, error.field_name
+        # Parser documents and private I/O paths must not survive in context.
+        raise RecoveryError(code, field_name)
+
+    return checked
 
 
 class RecoveryPhase(str, Enum):
@@ -624,6 +643,7 @@ class RetiredJournalRecord:
         return _canonical_json(self.to_dict())
 
     @classmethod
+    @_private_journal_errors
     def from_json(cls, serialized: str | bytes | bytearray) -> RetiredJournalRecord:
         """Validate exact fields, terminal state and the seal from strict JSON."""
 
@@ -725,6 +745,7 @@ class JournalRetirementPlan:
         return _canonical_json(self.to_dict())
 
     @classmethod
+    @_private_journal_errors
     def from_json(cls, serialized: str | bytes | bytearray) -> JournalRetirementPlan:
         """Restore a reviewed dry-run plan for confirmed cleanup after restart."""
 
@@ -774,6 +795,7 @@ class CheckpointJournal:
         if not stat.S_ISDIR(mode) or stat.S_ISLNK(mode):
             raise RecoveryError("unsafe_journal", "journal")
 
+    @_private_journal_errors
     def load(self) -> tuple[RecoveryCheckpoint, ...] | RetiredJournalRecord:
         """Load a complete lineage or its authoritative sealed retired record."""
 
@@ -811,6 +833,7 @@ class CheckpointJournal:
             checkpoints.append(self._read_checkpoint(path))
         return validate_checkpoint_lineage(checkpoints, allow_empty=True)
 
+    @_private_journal_errors
     def append(self, checkpoint: RecoveryCheckpoint) -> RecoveryCheckpoint:
         """Atomically append one checkpoint, accepting an identical retry."""
 
@@ -872,6 +895,7 @@ class CheckpointJournal:
                     pass
         return checkpoint
 
+    @_private_journal_errors
     def plan_retirement(
         self, policy: JournalRetentionPolicy, *, now: int
     ) -> JournalRetirementPlan | None:
@@ -946,6 +970,7 @@ class CheckpointJournal:
         unsigned["checkpoint_digests"] = list(values["checkpoint_digests"])
         return JournalRetirementPlan(plan_digest=_digest(unsigned), **values)
 
+    @_private_journal_errors
     def retire(
         self, plan: JournalRetirementPlan, *, confirmation: str, now: int
     ) -> RetiredJournalRecord:

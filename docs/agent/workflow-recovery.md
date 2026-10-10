@@ -195,6 +195,8 @@ An interruption before publication preserves all checkpoints. A failure during
 publication directory sync or cleanup still leaves the terminal record as the
 only recovery authority; retry synchronizes that authority before deletion.
 I/O errors use `retirement_io_failed` without private paths or exception text.
+Public journal and retirement parser failures preserve their controlled codes
+without retaining private parser documents or I/O exceptions in their context.
 Windows does not support Python directory `fsync`, so power-loss persistence
 of publication follows the filesystem's guarantees, as with ordinary journal
 appends. These APIs guarantee process-interruption ordering; they cannot promise
