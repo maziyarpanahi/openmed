@@ -138,7 +138,15 @@ def test_extractor_meets_offline_accuracy_gate(tmp_path: Path):
     gold_items = _fixtures(rows)[0]["content_items"]
 
     source = write_synthetic_sr(tmp_path / "sr.dcm")
-    document = extract_dicom_sr(source, policy={"date_shift_days": 7})
+    document = extract_dicom_sr(
+        source,
+        policy={
+            "date_shift_days": 7,
+            "clean_structured_content": True,
+            "clean_descriptors": True,
+            "detector": lambda text: [],
+        },
+    )
 
     accuracy = compute_sr_content_accuracy(
         document.metadata["content_items"], gold_items
