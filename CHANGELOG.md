@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add opt-in v1 explicit evidence bindings for paraphrased clinical brief claims,
   bounded local generation, traceable offsets and unchanged verification/privacy
   gates, with aligned OpenMedKit validation and synthetic offline tests (#3654).
+- Added a local Journey-fact ClinicalBrief context provider with explicit review
+  verification, source/fact/profile/calibration bindings, typed mapping refusals
+  and offline Python, CLI, REST and MCP injection tests (#3652).
 
 - Add the separately versioned reviewed-local clinical evidence contract and
   opt-in Python/OpenMedKit brief admission, with current source/review custody,
