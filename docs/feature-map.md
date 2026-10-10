@@ -27,6 +27,27 @@ to runtime calibration, privacy and evidence requirements.
 | Common resource surfaces | Governed Python, REST, GraphQL and read-only SQL resources with pagination and typed errors. | [Journey resource API](api/journey-resources.md) |
 | Contract and release evidence | Synthetic end-to-end fixtures, replay, privacy, provenance and platform-sensitive release gates. | [Golden Journey](interop/v3-golden-journey.md), [Journey release gate](release/v3.0-journey-release-gate.md) |
 
+## Guarded Clinical Intelligence
+
+The v3.0 clinical workstreams map to these Python modules, guides and examples.
+Optional runtimes, model artifacts and caller-supplied local providers have
+their own admission requirements. The synthetic brief demonstrates contracts
+and review hand-offs; it does not establish clinical validation or model quality.
+
+| Area | Source modules | Guides | Runnable examples |
+| --- | --- | --- | --- |
+| Guarded clinical brief | `openmed/clinical/brief.py` | [Brief pipeline](clinical/clinical-brief.md), [synthetic walkthrough](demo/clinical-brief.md) | [Fixed synthetic brief](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_clinical_brief.py) |
+| Post-de-identification summarization | `openmed/clinical/summarize.py`, `openmed/clinical/summarize_backends.py` | [Summarization](clinical/summarization.md), [input contract](clinical/summary-input-contract.md), [safety envelope](clinical/summary-safety.md) | Composed in the fixed synthetic brief; no standalone script. |
+| Clinical NLI and claim verification | `openmed/clinical/nli.py`, `openmed/clinical/nli_backends.py`, `openmed/clinical/nli_gate.py` | [Verification](clinical/nli-verification.md), [local checkpoints](models/clinical-nli.md), [abstention](clinical/nli-abstention.md) | Test-only NLI provider in the fixed synthetic brief; no standalone script. |
+| Social determinants of health | `openmed/clinical/sdoh.py`, `openmed/clinical/sdoh_evidence.py`, `openmed/clinical/sdoh_temporal.py` | [Evidence contract](clinical/sdoh-evidence.md), [temporal qualifiers](clinical/sdoh-temporal-qualifiers.md), [counterfactuals](evaluation/sdoh-counterfactuals.md), [false-positive stress](evaluation/sdoh-false-positive-stress.md) | No standalone script. |
+| Guarded clinical relations | `openmed/clinical/relations/` | [Medication changes](clinical/medication-change-relations.md), [review priority](clinical/relation-review-priority.md), [multilingual relations](clinical/multilingual-relations.md) | No standalone script. |
+| Timelines and temporal normalization | `openmed/clinical/timeline/`, `openmed/clinical/temporal_normalizer.py`, `openmed/clinical/timeline_graph.py` | [Timeline assembler](clinical/event-timeline.md), [temporal normalization](clinical/temporal-normalization.md), [timeline evidence](clinical/timeline-evidence.md) | No standalone script. |
+| Note routing and document profiles | `openmed/clinical/note_router.py`, `openmed/clinical/radiology_profile.py`, `openmed/clinical/pathology_profile.py`, `openmed/clinical/discharge_profile.py` | [Routing](clinical/note-routing.md), [radiology](clinical/radiology-profile.md), [pathology](clinical/pathology-profile.md), [discharge](clinical/discharge-profile.md) | No standalone script. |
+| OCR and laboratory measurements | `openmed/multimodal/ocr.py`, `openmed/clinical/lab_measurements.py` | [Memory-only OCR](multimodal/ocr-streaming.md), [lab normalization](clinical/lab-measurements.md), [reference ranges](clinical/lab-reference-ranges.md) | OCR in [multimodal example](https://github.com/maziyarpanahi/openmed/blob/master/examples/v17_multimodal_browser_interop.py); no standalone laboratory script. |
+| Evidence, citations and human review | `openmed/clinical/evidence_packet.py`, `openmed/clinical/review_packet.py`, `openmed/clinical/review_state_machine.py` | [Evidence packets](clinical/evidence-packets.md), [citation boundaries](clinical/citation-boundary-validation.md), [review packets](clinical/human-review-packets.md), [review transitions](clinical/review-transitions.md) | Evidence and synthetic review transitions in the fixed synthetic brief; no standalone review script. |
+| Language packs and Indic/Chinese routing | `openmed/clinical/lexicons/context_cues.py`, `openmed/clinical/relations/multilingual.py`, `openmed/core/script_detect.py` | [Context analysis](clinical/context-analysis.md), [language matrix](clinical/language-matrix.md), [Chinese grounding](clinical/chinese-terminology-grounding.md), [multilingual relations](clinical/multilingual-relations.md) | [Chinese synthetic note](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_chinese_clinical_note.py), [Hindi/Hinglish note](https://github.com/maziyarpanahi/openmed/blob/master/examples/deid_hindi_hinglish_note.py) cover de-identification; no standalone clinical language-pack script. |
+| Clinical SLM manifests and probes | `openmed/models/clinical_slm_manifest.py`, `openmed/models/clinical_slm_capabilities.py`, `openmed/models/clinical_slm_memory.py`, `openmed/models/clinical_slm_templates.py` | [Artifact manifest](models/clinical-slm-manifest.md), [capabilities](models/clinical-slm-capabilities.md), [memory preflight](models/clinical-slm-memory-preflight.md), [template digests](models/clinical-slm-template-digests.md) | No standalone script. |
+
 ## Privacy And De-identification
 
 The [guarded clinical brief](clinical/clinical-brief.md) composes local
