@@ -60,16 +60,70 @@ final class ClinicalBriefTests: XCTestCase {
         }
     }
 
-    private func fixture() throws -> (String, String, Data) {
+    private func fixtureObject() throws -> [String: Any] {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
         let data = try Data(contentsOf: root.appending(path: "tests/fixtures/clinical/brief_parity/verified.json"))
-        let row = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func fixture() throws -> (String, String, Data) {
+        let row = try fixtureObject()
         return (
             try XCTUnwrap(row["source"] as? String),
             try XCTUnwrap(row["generator_output"] as? String),
             Data(try XCTUnwrap(row["evaluation_json"] as? String).utf8)
         )
+    }
+
+    func testSharedUnicodeLeakageCasesHavePythonParityAndValueFreeRefusals() throws {
+        let rows = try XCTUnwrap(fixtureObject()["leakage_cases"] as? [[String: Any]])
+        for row in rows {
+            let id = try XCTUnwrap(row["id"] as? String)
+            let identifier = try XCTUnwrap(row["surface"] as? String)
+            let candidate = try XCTUnwrap(row["candidate"] as? String)
+            let leaked = try XCTUnwrap((row["native_leaked"] ?? row["leaked"]) as? Bool)
+            let data = Data(try XCTUnwrap(row["evaluation_json"] as? String).utf8)
+            XCTAssertEqual(
+                try ClinicalBriefLeakageMatcher.contains(
+                    identifier,
+                    in: ClinicalBriefLeakageMatcher.normalize(candidate)), leaked, id)
+            var detectorCalls = 0
+            if leaked {
+                XCTAssertThrowsError(
+                    try ClinicalBrief.validate(
+                        evaluationJSON: data,
+                        source: candidate, generatedSummary: candidate, originalIdentifiers: [identifier],
+                        privacyCheck: { _ in
+                            detectorCalls += 1
+                            return true
+                        }), id
+                ) {
+                    XCTAssertEqual($0 as? ClinicalBriefError, .privacy, id)
+                    XCTAssertEqual($0.localizedDescription, "privacy", id)
+                }
+                XCTAssertEqual(detectorCalls, 0, id)
+            } else {
+                let brief = try ClinicalBrief.validate(
+                    evaluationJSON: data,
+                    source: candidate, generatedSummary: candidate, originalIdentifiers: [identifier],
+                    privacyCheck: { _ in
+                        detectorCalls += 1
+                        return true
+                    })
+                XCTAssertEqual(brief.summary, candidate, id)
+                XCTAssertEqual(detectorCalls, 1, id)
+            }
+        }
+    }
+
+    func testSharedNormalizationIncludesEveryRetainedConfusableMapping() throws {
+        let rows = try XCTUnwrap(fixtureObject()["normalization_cases"] as? [[String: String]])
+        for row in rows {
+            let input = try XCTUnwrap(row["input"])
+            let expected = try XCTUnwrap(row["normalized"])
+            XCTAssertEqual(Array(ClinicalBriefLeakageMatcher.normalize(input).utf8), Array(expected.utf8))
+        }
     }
 
     private final class CheckpointClock: @unchecked Sendable {

@@ -26,7 +26,8 @@ from openmed.clinical.review_state_machine import (
     ReviewStateMachine,
     make_opaque_event_id,
 )
-from openmed.core.pii import DeidentificationResult
+from openmed.core.pii import DeidentificationResult, PIIEntity
+from tests.unit.clinical.test_summarize import _leakage_parity_cases
 
 SENTENCES = (
     "The admission problem was dehydration.",
@@ -133,6 +134,39 @@ def test_composes_every_stage_and_preserves_safe_serialization():
         build_clinical_brief(result, model="extractive", context=context).digest
         == brief.digest
     )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [c for c in _leakage_parity_cases() if c["leaked"]],
+    ids=lambda case: case["id"],
+)
+def test_brief_refuses_unicode_backend_leakage_before_detector(case):
+    value, context = fixture_context()
+    surface = case["surface"]
+    value = replace(
+        value,
+        original_text=surface,
+        pii_entities=[
+            PIIEntity(
+                text=surface,
+                label="NAME",
+                start=0,
+                end=len(surface),
+                confidence=0.99,
+                redacted_text="[NAME]",
+            )
+        ],
+    )
+    context = replace(
+        context, privacy_detector=lambda _: pytest.fail("leak reached detector")
+    )
+    brief = build_clinical_brief(
+        value, context=context, model=lambda _: case["candidate"]
+    )
+    assert brief.refusal_reason is BriefRefusal.PRIVACY
+    assert brief.summary == ""
+    assert case["candidate"] not in json.dumps(brief.to_dict(), ensure_ascii=False)
 
 
 def test_review_is_never_invented():
