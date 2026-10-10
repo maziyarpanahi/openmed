@@ -1123,6 +1123,7 @@ def _decode_relation_graph(
 # -- MLX model registry -------------------------------------------------------
 
 _MLX_MODEL_MAP: Dict[str, str] = {
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
     "OpenMed/privacy-filter-mlx": "OpenMed/privacy-filter-mlx",
     "OpenMed/privacy-filter-mlx-8bit": "OpenMed/privacy-filter-mlx-8bit",
     "OpenMed/privacy-filter-nemotron-mlx": "OpenMed/privacy-filter-nemotron-mlx",

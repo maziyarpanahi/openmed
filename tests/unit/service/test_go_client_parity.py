@@ -22,6 +22,7 @@ SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 
 # Every OpenAPI operation maps to exactly one exported Go client method.
 CLIENT_METHOD_BY_OPERATION = {
+    ("post", "/brief"): "Brief",
     ("post", "/analyze"): "Analyze",
     ("post", "/cohort/resolve"): "ResolveCohort",
     ("post", "/v1/decisions"): "Decision",
@@ -49,6 +50,7 @@ CLIENT_METHOD_BY_OPERATION = {
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
+    "BriefRequest": "BriefRequest",
     "AnalyzeRequest": "AnalyzeRequest",
     "CohortResolveRequest": "CohortResolveRequest",
     "ConceptAncestorRequest": "ConceptAncestorRequest",
