@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic, bounded FHIR R4 transaction assembly for approved
+  creates and updates, preserving conditional/version requests and recording
+  value-free Provenance with exact canonical Bundle digests (#3771).
 - Added offline FHIR write-origin labeling and provisional-status normalization
   for Observation, Condition and AllergyIntolerance, with exact-label rejection,
   role-gated attestation and value-free findings (#3766).
