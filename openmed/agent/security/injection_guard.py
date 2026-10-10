@@ -19,6 +19,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Pattern
 
+from .injection_cues import _CUE_PACKS, _expand_cue_accents
+
 InjectionGuardMode = Literal["allow", "strict"]
 FindingSeverity = Literal["high", "critical"]
 
@@ -134,6 +136,26 @@ _PATTERN_DEFINITIONS: tuple[_PatternDefinition, ...] = (
             ),
         ),
     ),
+)
+
+# Every pack is applied to normalized text, without a language-detection or
+# language-hint gate that a mixed-language attacker could bypass. English IDs
+# remain unchanged; localized IDs make the covered cue provenance explicit.
+_PATTERN_DEFINITIONS += tuple(
+    _PatternDefinition(
+        pattern_id=f"{category}.{pack.language}",
+        severity="critical" if category == "data_exfiltration" else "high",
+        expressions=tuple(
+            _compile(_expand_cue_accents(unicodedata.normalize("NFKC", value)))
+            for value in getattr(pack, category)
+        ),
+    )
+    for pack in _CUE_PACKS
+    for category in (
+        "instruction_override",
+        "tool_name_spoofing",
+        "data_exfiltration",
+    )
 )
 
 

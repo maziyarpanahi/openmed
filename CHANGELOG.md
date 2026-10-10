@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Draft multilingual lexical injection cue packs for Spanish, French, German,
+  Portuguese, Chinese and Hindi, with offset-only findings, synthetic coverage
+  budgets and explicit pending fluent contributor review (#3782).
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
