@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
 - Bundle seven metadata-only agent run-summary golden vectors with strict,
   offline validation of canonical JSON, Markdown digests and commitments (#3044).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
