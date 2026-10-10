@@ -47,7 +47,7 @@ Correlation IDs use the fixed `run_` and `act_` prefixes with 128-bit lowercase
 hex tokens. Run summaries require the exact Python schema version, the complete
 closed outcome-count vocabulary, bounded counts, bounded arrays and safe
 identifier/digest patterns. Timing describes `AgentRunTiming.to_dict()`:
-`run` and `actions` with nonnegative monotonic nanoseconds and optional bounded
+`run` and `actions` with nonnegative integer nanoseconds and optional bounded
 opaque identifiers. Timing currently has no version field in its serialized
 payload; its catalog `$id` is versioned independently.
 
