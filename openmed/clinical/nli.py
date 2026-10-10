@@ -15,10 +15,12 @@ an authorized evaluator.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import unicodedata
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, Protocol, TypedDict, runtime_checkable
 
 NLI_LABELS = ("entailment", "contradiction", "neutral", "abstention")
@@ -57,6 +59,238 @@ class VerificationResult(TypedDict):
     backend_id: str
     contradicted: bool
     review_required: bool
+
+
+@dataclass(frozen=True)
+class ClaimVerification:
+    """Value-free NLI evidence attached to an opt-in public pipeline result.
+
+    Offsets are half-open character ranges. Source offsets refer to the text
+    passed to the verification stage; summary claim offsets refer to the
+    returned summary. Grounded concept displays need no output-text offsets.
+    """
+
+    claim_index: int
+    label: NliLabel
+    score: float
+    backend_id: str
+    source_offset: tuple[int, int] | None
+    claim_offset: tuple[int, int] | None
+    source_digest: str | None
+    claim_digest: str | None
+    review_required: bool
+
+    def __post_init__(self) -> None:
+        valid = (
+            type(self.claim_index) is int
+            and self.claim_index >= 0
+            and self.label in NLI_LABELS
+            and type(self.score) in {int, float}
+            and 0 <= self.score <= 1
+            and math.isfinite(self.score)
+            and isinstance(self.backend_id, str)
+            and re.fullmatch(r"[a-z][a-z0-9-]{0,63}", self.backend_id) is not None
+            and type(self.review_required) is bool
+            and (self.label == "entailment" or self.review_required)
+        )
+        for offset in (self.source_offset, self.claim_offset):
+            valid = valid and (
+                offset is None
+                or (
+                    type(offset) is tuple
+                    and len(offset) == 2
+                    and all(type(value) is int for value in offset)
+                    and 0 <= offset[0] < offset[1]
+                )
+            )
+        for digest in (self.source_digest, self.claim_digest):
+            valid = valid and (
+                digest is None
+                or (
+                    isinstance(digest, str)
+                    and re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None
+                )
+            )
+        valid = valid and ((self.source_offset is None) == (self.source_digest is None))
+        valid = valid and (self.claim_offset is None or self.claim_digest is not None)
+        valid = valid and (
+            self.label == "abstention"
+            or (self.source_digest is not None and self.claim_digest is not None)
+        )
+        if not valid:
+            raise ValueError("invalid claim verification metadata")
+        object.__setattr__(self, "score", float(self.score))
+
+    @property
+    def contradicted(self) -> bool:
+        """Return whether NLI contradicted the retained claim."""
+        return self.label == "contradiction"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return labels, scores, offsets, digests and controlled review metadata."""
+        return {
+            "claim_index": self.claim_index,
+            "label": self.label,
+            "score": self.score,
+            "backend_id": self.backend_id,
+            "source_offset": list(self.source_offset)
+            if self.source_offset is not None
+            else None,
+            "claim_offset": list(self.claim_offset)
+            if self.claim_offset is not None
+            else None,
+            "source_digest": self.source_digest,
+            "claim_digest": self.claim_digest,
+            "contradicted": self.contradicted,
+            "review_required": self.review_required,
+        }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> "ClaimVerification":
+        """Reconstruct a closed, value-free verification record."""
+        fields = {
+            "claim_index",
+            "label",
+            "score",
+            "backend_id",
+            "source_offset",
+            "claim_offset",
+            "source_digest",
+            "claim_digest",
+            "contradicted",
+            "review_required",
+        }
+        if not isinstance(value, Mapping) or set(value) != fields:
+            raise ValueError("invalid claim verification metadata")
+        offsets = {}
+        for name in ("source_offset", "claim_offset"):
+            offset = value[name]
+            if offset is not None and not isinstance(offset, (list, tuple)):
+                raise ValueError("invalid claim verification metadata")
+            offsets[name] = tuple(offset) if offset is not None else None
+        result = cls(
+            claim_index=value["claim_index"],
+            label=value["label"],
+            score=value["score"],
+            backend_id=value["backend_id"],
+            source_offset=offsets["source_offset"],
+            claim_offset=offsets["claim_offset"],
+            source_digest=value["source_digest"],
+            claim_digest=value["claim_digest"],
+            review_required=value["review_required"],
+        )
+        if (
+            type(value["contradicted"]) is not bool
+            or value["contradicted"] != result.contradicted
+        ):
+            raise ValueError("invalid claim verification metadata")
+        return result
+
+
+def _verification_digest(text: str) -> str:
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            b"openmed-claim-verification-v1\x00" + text.encode("utf-8")
+        ).hexdigest()
+    )
+
+
+def _verification_refusal(error: Exception, fallback: str) -> Exception:
+    """Preserve typed local refusals without forwarding arbitrary provider text."""
+    from .nli_backends import LocalNLIError, RemoteNLIBackendError
+
+    if isinstance(error, RemoteNLIBackendError):
+        return RemoteNLIBackendError("remote NLI backends are prohibited")
+    safe_messages = {
+        "NLI backend must be local or callable",
+        "no released local NLI checkpoint is registered",
+        "NLI model alias is not registered",
+        "NLI checkpoint release metadata is incomplete",
+        "NLI checkpoint calibration is invalid",
+        "local NLI checkpoint is unavailable",
+        "local NLI inference failed",
+    }
+    message = str(error) if type(error) is LocalNLIError else ""
+    return LocalNLIError(message if message in safe_messages else fallback)
+
+
+def _verify_claim_spans(
+    claims: Sequence[str | None],
+    source: str | None,
+    source_offsets: Sequence[tuple[int, int] | None],
+    *,
+    option: object,
+    claim_offsets: Sequence[tuple[int, int] | None] | None = None,
+    review_flags: Sequence[bool] | None = None,
+) -> tuple[ClaimVerification, ...]:
+    """Compose existing NLI over exact source slices, retaining unresolved claims."""
+    from openmed.core.offline import network_blocked_if_offline
+
+    from .nli_backends import LocalNLIError, resolve_nli_backend
+
+    if len(claims) != len(source_offsets):
+        raise LocalNLIError("verification span alignment is invalid")
+    outputs = (
+        tuple(claim_offsets) if claim_offsets is not None else (None,) * len(claims)
+    )
+    reviews = (
+        tuple(review_flags) if review_flags is not None else (False,) * len(claims)
+    )
+    if len(outputs) != len(claims) or len(reviews) != len(claims):
+        raise LocalNLIError("verification span alignment is invalid")
+    try:
+        backend = resolve_nli_backend(
+            get_default_backend() if option is True else option
+        )
+    except Exception as error:
+        raise _verification_refusal(
+            error, "local NLI backend resolution failed"
+        ) from None
+    results: list[ClaimVerification] = []
+    for index, (claim, offset, output, review) in enumerate(
+        zip(claims, source_offsets, outputs, reviews, strict=True)
+    ):
+        premise = None
+        if source is not None and offset is not None:
+            start, end = offset
+            if (
+                type(start) is int
+                and type(end) is int
+                and 0 <= start < end <= len(source)
+            ):
+                premise = source[start:end]
+        usable = bool(premise and premise.strip() and claim and claim.strip())
+        if usable:
+            # Always block network for NLI, including caller-owned backends.
+            try:
+                with network_blocked_if_offline(local_only=True):
+                    decision = verify([claim], premise, backend=backend)[0]
+            except Exception as error:
+                raise _verification_refusal(
+                    error, "local NLI inference failed"
+                ) from None
+            label, score, backend_id = (
+                decision["label"],
+                decision["score"],
+                decision["backend_id"],
+            )
+        else:
+            label, score, backend_id = "abstention", 0.0, "unresolved-span"
+        results.append(
+            ClaimVerification(
+                claim_index=index,
+                label=label,
+                score=score,
+                backend_id=backend_id,
+                source_offset=offset if usable else None,
+                claim_offset=output if claim else None,
+                source_digest=_verification_digest(premise) if usable else None,
+                claim_digest=_verification_digest(claim) if claim else None,
+                review_required=review or label != "entailment",
+            )
+        )
+    return tuple(results)
 
 
 @runtime_checkable
@@ -618,6 +852,7 @@ def _record_value(value: Any, fields: Sequence[str]) -> Any | None:
 
 
 __all__ = [
+    "ClaimVerification",
     "DEFAULT_NLI_BACKEND",
     "HEURISTIC_NLI_BACKEND",
     "MEDNLI_DATA_POLICY",

@@ -7,10 +7,64 @@ import pytest
 from openmed.clinical.nli import (
     MEDNLI_DATA_POLICY,
     NLI_LABELS,
+    ClaimVerification,
     HeuristicNLIBackend,
     nli,
     verify,
 )
+
+
+def test_hook_verification_record_is_closed_and_value_free():
+    record = ClaimVerification(
+        0,
+        "contradiction",
+        0.9,
+        "heuristic",
+        (0, 10),
+        (0, 8),
+        "sha256:" + "a" * 64,
+        "sha256:" + "b" * 64,
+        True,
+    )
+    assert ClaimVerification.from_dict(record.to_dict()) == record
+    payload = record.to_dict()
+    payload["source"] = "Synthetic private source"
+    with pytest.raises(
+        ValueError, match="invalid claim verification metadata"
+    ) as raised:
+        ClaimVerification.from_dict(payload)
+    assert "private source" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"score": True},
+        {"score": float("nan")},
+        {"score": 10**500},
+        {"claim_index": False},
+        {"backend_id": "/private/synthetic"},
+        {"source_offset": [0, True]},
+        {"source_digest": None},
+        {"contradicted": True},
+        {"review_required": False, "label": "abstention"},
+    ],
+)
+def test_hook_record_rejects_malformed_or_forged_metadata(override):
+    record = ClaimVerification(
+        0,
+        "entailment",
+        0.9,
+        "heuristic",
+        (0, 10),
+        None,
+        "sha256:" + "a" * 64,
+        "sha256:" + "b" * 64,
+        False,
+    )
+    payload = record.to_dict() | override
+    with pytest.raises(ValueError, match="invalid claim verification metadata"):
+        ClaimVerification.from_dict(payload)
 
 
 def test_nli_returns_the_documented_value_free_shape() -> None:

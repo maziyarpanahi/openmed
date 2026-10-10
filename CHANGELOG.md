@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in local NLI verification for summarization and grounding, with retained
+  contradiction and abstention outcomes, offset- and digest-bound audit records,
+  typed backend refusals and unchanged default serialization. Source and claim
+  text are omitted from verification metadata; no trained model is required
+  for explicit synthetic heuristic checks.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes
