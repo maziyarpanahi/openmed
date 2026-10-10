@@ -27,7 +27,7 @@ from openmed.multimodal.dicom_sr_provenance import (
     serialize_dicom_sr_provenance,
 )
 
-document = extract_dicom_sr("report.dcm")
+document = extract_dicom_sr("already-deidentified-report.dcm", deidentify_headers=False)
 findings = [
     {"finding_id": "finding-001", "item_path": "1.3.1.3"},
 ]
@@ -38,6 +38,8 @@ print(serialize_dicom_sr_provenance(records))
 
 The mapper is deterministic and local-only. It is an evidence-linking aid, not
 a clinical interpretation or a substitute for qualified review.
+The example assumes an already de-identified report. For original reports,
+use the cleaning policy below before linking findings to retained content.
 
 Explicit offsets must fit the declared item span, and source spans must fit a
 supplied document. Conflicting identifier, template, path and offset aliases
@@ -126,3 +128,91 @@ The carrier actions follow the recursive removal and replacement requirements
 in [DICOM PS3.15 Annex E](https://dicom.nema.org/medical/dicom/current/output/chtml/part15/chapter_E.html).
 Carrier sanitation is separate from the complete free-text Basic Profile
 coverage and from qualification of burned-in OCR or pixel decoders.
+
+## Basic Profile actions and retained content
+
+Header processing uses a pinned **DICOM PS3.15 2026d** catalog: all 657 rows of
+[Table E.1-1](https://dicom.nema.org/medical/dicom/2026d/output/chtml/part15/chapter_E.html),
+including nested sequences, repeating groups and private attributes. Catalog
+metadata contains tags, keywords and action codes only. There are no runtime
+standard downloads or bundled terminology dictionaries.
+
+The default removes optional identifying attributes (`X`), clears zero-length
+attributes (`Z`), replaces required non-empty values with VR-compatible dummies
+(`D`), and deterministically remaps instance UIDs (`U`). Composite actions use
+the first listed alternative; OpenMed does not infer IOD-specific attribute
+types. Dummy sequences contain one item, and default SR `ContentSequence`
+contains a dummy comment. Applying these rules does not validate an IOD or
+establish clinical utility. Review resulting objects for the intended workflow.
+
+Unlisted public attributes with unknown tags or `UN` values are removed.
+Known sequences are recursively processed; numeric/image attributes and code
+strings are kept, instance UIDs are remapped, and unlisted names, dates and
+free text are cleared. Unlisted code strings remain subject to copied-identifier
+scrubbing. Unlisted attributes are reported using tags and controlled actions,
+without values, value hashes, keyword or VR. File metadata is rebuilt from SOP
+class, final SOP instance UID, transfer syntax and OpenMed implementation
+identity; input AE titles, addresses and private information are discarded.
+Preambles are zeroed, and group `0004` attributes are removed from image/report
+objects. This path is not a DICOMDIR rebuilding service.
+
+All six `DicomHeaderDeidPolicy` option flags default to `False`:
+
+| Flag | DCM method code | Behavior |
+| --- | --- | --- |
+| `clean_descriptors` | `113105` | Retain descriptor fields after detector cleaning |
+| `clean_structured_content` | `113104` | Apply SR concept/value-type rules and clean retained content |
+| `retain_longitudinal_temporal_information` | `113107` | Shift whole dates consistently and keep time-of-day values |
+| `retain_device_identity` | `113109` | Keep device identity fields specified by the table |
+| `retain_patient_characteristics` | `113108` | Keep characteristics specified by the table |
+| `retain_uids` | `113110` | Keep instance UIDs and their references |
+
+Explicit legacy date-shift parameters (`date_shift_days`, patient key, shift
+range or secret) request the modified-dates option and now declare its code.
+With no options or shift request, temporal identity is removed, the reported
+shift is zero, and the only method code is Basic Profile `113100`. Enabled
+options appear in both De-identification Method and its Code Sequence. Objects
+with unclean pixels retain `PatientIdentityRemoved=NO` and receive no method
+code sequence claiming whole-instance profile completion.
+
+Cleaning options require an explicit local `detector` (or a detector exposed by
+`document_models`). It receives each retained textual value and returns entity
+spans, either as a list or through the existing `entities`, `pii_entities`, or
+`spans` result seam. Each span must have valid integer `start`/`end` offsets;
+intersecting spans are merged and replaced with `[REMOVED]`. A missing detector
+raises `profile_detector_required`; failed or malformed results raise
+`profile_detector_failed`. Detector exceptions are suppressed, and refusal
+preserves the source and existing destination. Retention flags require exact
+booleans; strings such as `"false"` raise `invalid_profile_option`.
+Known tags with mismatched explicit VRs raise `profile_vr_mismatch`. Cleaning
+binary descriptors requires a format-specific implementation; this text
+detector path refuses them with `profile_binary_cleaning_unsupported` before
+opening the output. Empty required UIDs raise `profile_uid_invalid`. Ambiguous
+or multivalued SR concept-code alternatives raise `profile_concept_invalid`;
+known identity concepts with the wrong value type are removed, and alternate
+scalar `LongCodeValue`/`URNCodeValue` representations apply the same rules.
+
+```python
+from openmed.multimodal import DicomHeaderDeidPolicy, extract_dicom_sr
+
+
+def extract_reviewable_sr(path, local_detector):
+    return extract_dicom_sr(
+        path,
+        policy=DicomHeaderDeidPolicy(
+            clean_structured_content=True,
+            clean_descriptors=True,
+            detector=local_detector,
+        ),
+    )
+```
+
+Structured cleaning follows the concept-code and value-type rules in
+[Table E.3.4-1](https://dicom.nema.org/medical/dicom/2026d/output/chtml/part15/sect_E.3.4.html).
+Patient characteristics encoded as numeric items require their retention
+option too. Retired SNOMED aliases and UMLS/nonstandard non-container concepts
+are conservatively removed; no restricted terminology crosswalk is bundled.
+The header policy and detector also reach both registered DICOM handlers.
+Existing `walk_sr_content_tree` behavior for already de-identified datasets is
+unchanged. Cleaning quality depends on the supplied detector; catalog coverage
+and method codes do not certify freedom from re-identification.
