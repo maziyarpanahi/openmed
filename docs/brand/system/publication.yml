@@ -107,6 +107,7 @@ classification:
     - agent-usage.md
     - agent/action-graphs.md
     - agent/artifact-references.md
+    - agent/side-effect-previews.md
     - agent/action-phases.md
     - agent/capability-grants.md
     - agent/purpose-bound-access.md
@@ -124,13 +125,17 @@ classification:
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
+    - agent/json-schemas.md
     - agent/reviewer-handoffs.md
+    - agent/escalation-circuit-breakers.md
+    - agent/resource-budgets.md
     - agent/policy-decision-matrices.md
     - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
+    - agent/run-invariants.md
     - agent/schema-compatibility.md
     - agent/timing-metadata.md
     - agent/evidence-query-planner.md
@@ -141,6 +146,12 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
+    - agent/runtime-revocation.md
+    - agent/guarded-dispatch.md
+    - agent/effect-admission.md
+    - agent/governed-reference-workflow.md
+    - agent/action-ledger.md
+    - agent/deterministic-replay.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -573,7 +584,15 @@ classification:
     - interop/fhir-bulk-data.md
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
+    - interop/fhir-transactions.md
+    - interop/fhir-write-labels.md
+    - interop/fhir-conditional-writes.md
+    - interop/fhir-write-provenance.md
+    - interop/fhir-concurrency.md
+    - interop/fhir-transaction-compensation.md
+    - interop/fhir-subscription-checkpoints.md
     - interop/smart-scope-audit.md
+    - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
