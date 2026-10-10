@@ -21,6 +21,15 @@ from openmed.clinical.timeline_graph import (
 from openmed.core.audit import hash_text
 
 
+@pytest.mark.parametrize(
+    "value", ["20260105", "2026-W02-1", "2026-005", "2026-01-05T10:00:00+0530"]
+)
+def test_timeline_normalized_values_reject_interpreter_dependent_grammars(value):
+    with pytest.raises(ValueError) as error:
+        TimelineEvidence(0, 1, normalized_value=value)
+    assert value not in str(error.value)
+
+
 @pytest.mark.parametrize("field", ["event_type", "relation"])
 def test_freeform_graph_labels_are_opaque(field: str) -> None:
     private = "patient-jane-doe"

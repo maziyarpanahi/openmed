@@ -12,6 +12,7 @@ from openmed.core.audit import AuditReport
 from openmed.core.pii import deidentify
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.calibrate import (
+    CalibrationSample,
     build_thresholds_payload,
     coerce_calibration_thresholds,
     fit_calibration_thresholds,
@@ -22,6 +23,80 @@ from openmed.eval.calibrate import (
     write_calibration_artifacts,
 )
 from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+
+@pytest.mark.parametrize("key", ["target", "is_true", "matched"])
+@pytest.mark.parametrize("value", [True, False, 0, 1, 0.0, 1.0])
+def test_calibration_target_accepts_only_boolean_or_binary_numbers(
+    key: str, value: object
+) -> None:
+    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8, key: value}
+    sample = CalibrationSample.from_mapping(row)
+    assert sample.target is bool(value)
+
+
+@pytest.mark.parametrize("key", ["target", "is_true", "matched"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "false",
+        "true",
+        "0",
+        "1",
+        "",
+        "synthetic-private-label",
+        None,
+        [],
+        {},
+        [1],
+        2,
+        -1,
+        0.5,
+        float("nan"),
+        float("inf"),
+        -float("inf"),
+    ],
+)
+def test_calibration_target_rejects_truthiness_and_returns_value_free_error(
+    key: str, value: object
+) -> None:
+    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8, key: value}
+    with pytest.raises(ValueError) as caught:
+        CalibrationSample.from_mapping(row)
+    assert str(caught.value) == "calibration target must be a boolean or 0/1"
+
+
+def test_calibration_target_defaults_and_alias_precedence_are_preserved() -> None:
+    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8}
+    assert CalibrationSample.from_mapping(row).target is True
+    assert (
+        CalibrationSample.from_mapping(
+            {**row, "target": False, "is_true": True, "matched": True}
+        ).target
+        is False
+    )
+    assert (
+        CalibrationSample.from_mapping({**row, "is_true": 0, "matched": 1}).target
+        is False
+    )
+    with pytest.raises(ValueError, match="calibration target must"):
+        CalibrationSample.from_mapping({**row, "target": None, "matched": True})
+
+
+def test_calibration_fit_rejects_string_target_instead_of_fitting_positive() -> None:
+    with pytest.raises(ValueError, match="calibration target must"):
+        fit_calibration_thresholds(
+            [
+                {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    "target": "false",
+                }
+            ],
+            model_id="unit-model",
+            suite="synthetic",
+        )
 
 
 def _samples() -> list[dict[str, object]]:
