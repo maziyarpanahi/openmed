@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Experimental Android mirrors of multimodal asset manifests, profile references,
+  preflight findings, abstention records, and provider result envelopes with strict
+  content-free parsing and shared offline Python/Kotlin serialization vectors.
+
 - Add offline qualification of caller-supplied clinical NLI artifacts,
   separate development/held-out evaluation, digest-bound receipts and a
   drift-checked BriefContext callback; synthetic data never establishes
