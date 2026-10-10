@@ -36,6 +36,8 @@ Gold and output rows join on private `case_id` and developer-authored
 identifiers. Duplicate gold/output keys, unknown output keys, inconsistent
 types for the same field ID, malformed scalar values and nonfinite numbers
 are rejected with controlled error codes that do not echo input.
+Input collection failures also produce controlled codes without retaining
+private iterator exceptions in their exception context.
 
 `None` means an unanswerable gold field or an explicit output abstention.
 An absent output is missing, including on an unanswerable field; it never

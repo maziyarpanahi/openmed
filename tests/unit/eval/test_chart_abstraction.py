@@ -213,6 +213,24 @@ def test_invalid_joins_fail_with_controlled_codes(rows, outputs, code):
         run_chart_abstraction_benchmark(rows, outputs)
 
 
+@pytest.mark.parametrize("collection", ["gold", "predictions"])
+def test_private_iterator_failures_have_controlled_codes_without_context(collection):
+    class BrokenCollection:
+        def __iter__(self):
+            raise RuntimeError("SYNTHETIC_PRIVATE_SOURCE /private/record")
+
+    rows, outputs = [gold()], [prediction()]
+    if collection == "gold":
+        rows = BrokenCollection()
+        code = "invalid_gold_fields"
+    else:
+        outputs = BrokenCollection()
+        code = "invalid_predictions"
+    with pytest.raises(ValueError, match=f"^{code}$") as caught:
+        run_chart_abstraction_benchmark(rows, outputs)
+    assert caught.value.__context__ is None
+
+
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), {}, []])
 def test_non_scalar_or_nonfinite_values_are_rejected(value):
     with pytest.raises(ValueError, match="^invalid_value$"):

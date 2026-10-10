@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from statistics import NormalDist
-from typing import Any
+from typing import Any, TypeVar
 
 from openmed.agent.workflows.abstraction_evidence import AbstractionEvidenceChain
 
@@ -18,6 +18,18 @@ _FIELD_ID = re.compile(r"[a-z][a-z0-9_]{0,63}(?:\.[a-z][a-z0-9_]{0,63}){0,7}")
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _Z95 = NormalDist().inv_cdf(0.975)
 AbstractionValue = str | int | float | bool | None
+_T = TypeVar("_T")
+
+
+def _private_collection(values: Sequence[_T], code: str) -> tuple[_T, ...]:
+    result = None
+    try:
+        result = tuple(values)
+    except Exception:
+        pass
+    if result is None:
+        raise ValueError(code)
+    return result
 
 
 class AbstractionFieldType(str, Enum):
@@ -294,8 +306,8 @@ def run_chart_abstraction_benchmark(
     Raises:
         ValueError: A controlled code for malformed or ambiguous inputs.
     """
-    rows = tuple(gold_fields)
-    outputs = tuple(predictions)
+    rows = _private_collection(gold_fields, "invalid_gold_fields")
+    outputs = _private_collection(predictions, "invalid_predictions")
     if not rows or any(type(row) is not ChartAbstractionGoldField for row in rows):
         raise ValueError("invalid_gold_fields")
     if any(type(output) is not ChartAbstractionPrediction for output in outputs):
