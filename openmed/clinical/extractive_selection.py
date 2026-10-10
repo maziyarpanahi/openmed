@@ -14,6 +14,7 @@ from openmed.clinical.summarize_backends import (
     MAX_INPUT_BYTES,
     MAX_OUTPUT_BYTES,
     LocalSummarizerError,
+    _utf8_size,
 )
 from openmed.clinical.summary_length_budget import (
     SUMMARY_EVIDENCE_CLASS_NAMES,
@@ -156,9 +157,12 @@ def select_extractive_sentences(
             ).to_dict()
         return ExtractiveSelection(status, summary, json.dumps(audit, sort_keys=True))
 
+    try:
+        input_bytes = _utf8_size(text)
+    except LocalSummarizerError:
+        return result("invalid_evidence")
     if (
-        not isinstance(text, str)
-        or len(text.encode("utf-8")) > MAX_INPUT_BYTES
+        input_bytes > MAX_INPUT_BYTES
         or type(evidence) is not tuple
         or len(evidence) > MAX_SELECTION_FACTS * 4
         or any(type(f) is not ExtractiveFact for f in evidence)

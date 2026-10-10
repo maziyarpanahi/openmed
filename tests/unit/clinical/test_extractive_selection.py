@@ -200,3 +200,17 @@ def test_backend_refusal_survives_guarded_pipeline_without_private_context():
     assert caught.value.result.status == "insufficient_budget"
     assert text not in str(caught.value)
     assert caught.value.__context__ is None
+
+
+def test_malformed_unicode_has_value_free_selection_and_backend_denials():
+    from openmed.clinical.summarize_backends import LocalSummarizerError
+
+    private = "SYNTHETIC_PRIVATE_IDENTIFIER\ud800"
+    selection = select(private, ())
+    assert selection.status == "invalid_evidence"
+    assert selection.summary == ""
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in json.dumps(selection.to_dict())
+    with pytest.raises(LocalSummarizerError) as caught:
+        ExtractiveSummarizerBackend().summarize(private)
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC_PRIVATE_IDENTIFIER" not in str(caught.value)

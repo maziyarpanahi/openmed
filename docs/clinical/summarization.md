@@ -100,6 +100,8 @@ identities or source spans cannot inflate coverage; conflicting duplicates or
 facts crossing sentence boundaries refuse. No clinical fact or approval is
 inferred from the note. Coverage metrics and downstream clinical/privacy gates
 remain unchanged; satisfying an omission policy does not waive a coverage gate.
+Malformed Unicode returns a controlled refusal without retaining source values
+in a chained decoder exception.
 
 `backend.select(deidentified_text)` returns an `ExtractiveSelection` with
 `status="selected"`, or `empty_evidence`, `invalid_evidence`,

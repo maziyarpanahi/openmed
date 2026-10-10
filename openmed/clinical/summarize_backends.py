@@ -40,6 +40,16 @@ class RemoteSummarizerError(LocalSummarizerError):
     """A network provider or URL was supplied to a local-only task."""
 
 
+def _utf8_size(text: str) -> int:
+    if type(text) is str:
+        try:
+            return len(text.encode("utf-8"))
+        except UnicodeEncodeError:
+            pass
+    # A decoder exception retains its input even if its message omits it.
+    raise LocalSummarizerError("invalid summarizer text")
+
+
 class ExtractiveSummarizerBackend:
     """Explicit CPU extraction, optionally bound to reviewed evidence.
 
@@ -104,7 +114,7 @@ class ExtractiveSummarizerBackend:
 def _validate_input(text: str, mode: str) -> None:
     if mode != "bhc":
         raise LocalSummarizerError("unsupported summarization mode")
-    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_INPUT_BYTES:
+    if _utf8_size(text) > MAX_INPUT_BYTES:
         raise LocalSummarizerError("summarizer input limit exceeded")
 
 
