@@ -26,6 +26,8 @@ expiry checks are deterministic. The verifier first authenticates the manifest,
 ledger, and all grants. It refuses missing evidence, a changed ledger anchor,
 or a mismatched run or plan. Its result is either a match or the first
 divergence, with zero-based step, artifact field, and expected/actual hashes.
+Direct report construction also validates that closed vocabulary and hash shape,
+so malformed values cannot enter a serialized report.
 
 The frozen inputs stay in caller memory. Do not log, persist in audit reports,
 or commit them as fixtures if they contain clinical content. The module's
