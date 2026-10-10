@@ -17,6 +17,10 @@ The supported public surface is exactly what the checker captures:
   `openmed.risk`, `openmed.interop`, `openmed.structured`, `openmed.mlx`,
   `openmed.multimodal`, `openmed.ner`, `openmed.zero_shot`, and
   `openmed.compliance`.
+- Governance and write-back namespaces are checked on every PR too:
+  `openmed.agent` and its `permissions`, `approvals`, `workflows`, `security`,
+  and `tools` subpackages; `openmed.interop.fhir`, `openmed.interop.omop`,
+  `openmed.interop.lineage`; and `openmed.mcp`.
 - For every public callable (function or class), its parameter names, order,
   and which parameters are optional.
 
@@ -52,6 +56,14 @@ against the committed baseline (`scripts/release/public_api_baseline.json`).
   parameter.
 
 ## Deprecation cycle
+
+The v3.1 governance types, approval and permission contracts, workflow
+operations, and FHIR/OMOP write-back APIs follow this same deprecation window.
+Their inclusion in the per-PR baseline does not grant a pre-release exception
+to the compatibility policy. New exports and optional parameters remain
+compatible additions. Declared exports remain checked when optional backends
+are unavailable; an unavailable callable's signature is not inferred from a
+missing extra.
 
 Backwards-incompatible changes are allowed, but only deliberately and with
 warning. The required cycle is:

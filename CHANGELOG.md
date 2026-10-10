@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Include governance, FHIR/OMOP write-back, lineage and MCP namespaces in the
+  per-PR public API compatibility gate, with the same deprecation window and
+  dependency-light capture of declared exports.
+
 ## [3.0.0] - 2026-10-05
 
 ### Security and build fixes

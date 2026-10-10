@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -42,6 +43,141 @@ def test_committed_baseline_exists_and_is_wellformed():
     assert "openmed" in document["modules"]
     # The top-level package must at least carry its documented public surface.
     assert document["modules"]["openmed"]
+
+
+GOVERNANCE_NAMESPACES = (
+    "openmed.agent",
+    "openmed.agent.permissions",
+    "openmed.agent.approvals",
+    "openmed.agent.workflows",
+    "openmed.agent.security",
+    "openmed.agent.tools",
+    "openmed.interop.fhir",
+    "openmed.interop.omop",
+    "openmed.interop.lineage",
+    "openmed.mcp",
+)
+
+
+def test_governance_and_writeback_namespaces_are_in_scope_and_baseline():
+    document = json.loads(BASELINE.read_text(encoding="utf-8"))
+    assert set(GOVERNANCE_NAMESPACES).issubset(api.PUBLIC_SUBPACKAGES)
+    for namespace in GOVERNANCE_NAMESPACES:
+        assert document["modules"][namespace]
+
+
+@pytest.mark.parametrize(
+    "namespace,symbol,old_signature,current_members",
+    [
+        ("openmed.agent.approvals", "ApprovalToken", "(workflow_id, digest=...)", ()),
+        (
+            "openmed.interop.omop",
+            "write_omop_duckdb",
+            "(tables, path=...)",
+            (_member("write_omop_duckdb", signature="(tables, path)"),),
+        ),
+    ],
+)
+@pytest.mark.parametrize("announced", [False, True])
+def test_cli_names_governance_break_and_requires_announcement(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    namespace,
+    symbol,
+    old_signature,
+    current_members,
+    announced,
+):
+    baseline_path = tmp_path / "baseline.json"
+    allowlist_path = tmp_path / "allowlist.json"
+    api.write_baseline(
+        baseline_path, [_surface(namespace, _member(symbol, signature=old_signature))]
+    )
+    location = f"{namespace}.{symbol}"
+    allowlist_path.write_text(
+        json.dumps(
+            {
+                "announced_breaks": {
+                    location: "Synthetic announced major-release removal after deprecation."
+                }
+                if announced
+                else {}
+            }
+        )
+    )
+    monkeypatch.setattr(
+        api, "capture_surface", lambda: [_surface(namespace, *current_members)]
+    )
+    result = api.main(
+        ["--baseline", str(baseline_path), "--allowlist", str(allowlist_path)]
+    )
+    captured = capsys.readouterr()
+    assert result == (0 if announced else 1)
+    assert location in (captured.out if announced else captured.err)
+    assert (
+        "Allowlisted breaking changes" in captured.out
+        if announced
+        else "BREAKING" in captured.err
+    )
+
+
+def test_agent_namespace_addition_passes_cli_without_allowlisting(
+    tmp_path, monkeypatch, capsys
+):
+    namespace = "openmed.agent.approvals"
+    baseline_path = tmp_path / "baseline.json"
+    allowlist_path = tmp_path / "allowlist.json"
+    api.write_baseline(baseline_path, [_surface(namespace, _member("existing"))])
+    allowlist_path.write_text(json.dumps({"announced_breaks": {}}))
+    monkeypatch.setattr(
+        api,
+        "capture_surface",
+        lambda: [
+            _surface(namespace, _member("existing"), _member("new_review_contract"))
+        ],
+    )
+    assert (
+        api.main(["--baseline", str(baseline_path), "--allowlist", str(allowlist_path)])
+        == 0
+    )
+    assert f"{namespace}.new_review_contract" in capsys.readouterr().out
+
+
+def test_gate_captures_governance_without_optional_mcp_hf_or_service_extras():
+    script = f"""
+import importlib.abc
+import importlib.util
+import sys
+
+blocked = {{"mcp", "huggingface_hub", "datasets", "fastapi", "starlette", "uvicorn"}}
+class MissingExtras(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".", 1)[0] in blocked:
+            raise ModuleNotFoundError("optional extra unavailable", name=fullname)
+
+sys.meta_path.insert(0, MissingExtras())
+spec = importlib.util.spec_from_file_location("api_without_extras", {str(SCRIPT)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+snapshots = module.capture_surface()
+captured = {{snapshot.module: snapshot for snapshot in snapshots}}
+for namespace in {GOVERNANCE_NAMESPACES!r}:
+    assert namespace in captured, namespace
+    assert captured[namespace].members, namespace
+assert module.run_check() == 0
+assert not blocked.intersection(sys.modules)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_current_surface_matches_committed_baseline():
