@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local FHIR Subscription intake checkpoints with bounded deduplication,
+  ordered claims, payload-free quarantine, and explicit gap replay (#2776).
 - Add the offline agent governance self-check and `openmed agent self-check`
   command. Independently verify the actual schema catalog, bundled golden
   summaries, closed fields, outcomes, correlations, timing and commitments,
