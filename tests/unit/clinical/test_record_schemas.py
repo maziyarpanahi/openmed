@@ -306,6 +306,64 @@ def test_unknown_record_schema_names_are_rejected() -> None:
         validate_clinical_record("brief_audit_v2", {})
 
 
+@pytest.mark.parametrize("malformed", ["version", "field", "value"])
+def test_validation_errors_never_echo_submitted_content(malformed: str) -> None:
+    sentinel = "synthetic private sentinel"
+    record = _record_payloads()["evidence_packet"]
+    if malformed == "version":
+        record["schema_version"] = sentinel
+    elif malformed == "field":
+        record[sentinel] = sentinel
+    else:
+        record["kind"] = sentinel
+    with pytest.raises(ClinicalRecordSchemaError) as excinfo:
+        validate_clinical_record("evidence_packet", record)
+    assert sentinel not in str(excinfo.value)
+
+
+def test_validation_location_never_echoes_untrusted_metadata_keys() -> None:
+    sentinel = "synthetic private sentinel"
+    record = _record_payloads()["brief_audit"]
+    record["envelope"]["provenance"][sentinel] = {"source_text": sentinel}
+    with pytest.raises(ClinicalRecordSchemaError) as excinfo:
+        validate_clinical_record("brief_audit", record)
+    assert sentinel not in str(excinfo.value)
+
+
+def test_unknown_schema_error_never_echoes_submitted_name() -> None:
+    sentinel = "synthetic private sentinel"
+    with pytest.raises(KeyError) as excinfo:
+        validate_clinical_record(sentinel, {})
+    assert sentinel not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
+def test_nested_record_objects_reject_text_injection(name: str) -> None:
+    from copy import deepcopy
+
+    record = _record_payloads()[name]
+    objects: list[tuple[str | int, ...]] = []
+
+    def collect(value: Any, path: tuple[str | int, ...]) -> None:
+        if isinstance(value, dict):
+            objects.append(path)
+            for key, item in value.items():
+                collect(item, (*path, key))
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                collect(item, (*path, index))
+
+    collect(record, ())
+    for path in objects:
+        changed = deepcopy(record)
+        target = changed
+        for part in path:
+            target = target[part]
+        target["source_text"] = "synthetic private sentinel"
+        with pytest.raises(ClinicalRecordSchemaError):
+            validate_clinical_record(name, changed)
+
+
 def test_inverted_offsets_are_rejected_even_when_the_schema_passes() -> None:
     payloads = _record_payloads()
     payloads["evidence_packet"]["references"] = [

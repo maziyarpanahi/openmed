@@ -80,8 +80,8 @@ class ClinicalRecordSchemaError(ValueError):
 def _normalise_name(name: str) -> str:
     """Return a known clinical record schema name or raise ``KeyError``."""
 
-    if name not in CLINICAL_RECORD_SCHEMA_NAMES:
-        raise KeyError(f"unknown clinical record schema: {name!r}")
+    if type(name) is not str or name not in CLINICAL_RECORD_SCHEMA_NAMES:
+        raise KeyError("unknown clinical record schema")
     return name
 
 
@@ -378,15 +378,26 @@ def validate_clinical_record(name: str, record: Any) -> None:
     schema = load_clinical_record_schema(schema_name)
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema)
-    errors = sorted(
-        validator.iter_errors(record),
-        key=lambda error: (list(error.absolute_path), error.message),
-    )
-    if errors:
-        first = errors[0]
-        location = "/".join(str(part) for part in first.absolute_path) or "$"
+    first = next(validator.iter_errors(record), None)
+    if first is not None:
+        known_fields: set[str] = set()
+        pending: list[Any] = [schema]
+        while pending:
+            node = pending.pop()
+            if isinstance(node, dict):
+                known_fields.update(node.get("properties", {}))
+                pending.extend(node.values())
+            elif isinstance(node, list):
+                pending.extend(node)
+        location = (
+            "/".join(
+                str(part) if type(part) is int or part in known_fields else "*"
+                for part in first.absolute_path
+            )
+            or "$"
+        )
         raise ClinicalRecordSchemaError(
-            f"{schema_name} record violates its schema at {location}: {first.message}"
+            f"{schema_name} record violates its schema at {location}"
         )
     if isinstance(record, Mapping):
         _check_offset_invariants(schema_name, record)
