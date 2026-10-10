@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add bounded local EDF/EDF+ readers for Python and OpenMedKit with windowed
+  integer/scaled samples, withheld identification/date/annotation text, explicit
+  discontinuous gaps, controlled diagnostics and reviewer-confirmed handoff.
+
 - Added immutable run-scoped agent tool catalog bindings, exact-version pinned
   dispatch, deterministic restore eligibility and content-free re-review outcomes
   for implementation, schema and side-effect drift (#3665).
