@@ -133,6 +133,7 @@ jobs:
       - name: Generate SARIF reports
         if: always()
         run: |
+          mkdir -p vulnerability-reports
           trivy image \
             --scanners vuln \
             --pkg-types os,library \

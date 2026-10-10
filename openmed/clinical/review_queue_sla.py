@@ -22,6 +22,8 @@ from math import isfinite
 from types import MappingProxyType
 from typing import Any, TypeAlias
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 __all__ = [
     "AGE_BUCKETS",
     "DEFAULT_OPAQUE_KEY_NAMESPACE",
@@ -473,7 +475,7 @@ def _coerce_datetime(value: datetime | str, name: str) -> datetime:
         parsed = value
     elif isinstance(value, str):
         try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
         except ValueError:
             invalid = True
         else:

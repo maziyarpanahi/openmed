@@ -225,6 +225,14 @@
       "name": "openmed_brief",
       "output_schema": {
         "additionalProperties": false,
+        "dependentRequired": {
+          "claim_bindings": [
+            "generation_contract"
+          ],
+          "generation_contract": [
+            "claim_bindings"
+          ]
+        },
         "properties": {
           "backend_id": {
             "type": [
@@ -238,10 +246,51 @@
             },
             "type": "array"
           },
+          "claim_bindings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "claim_index": {
+                  "maximum": 63,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "reference_digest": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "claim_index",
+                "reference_digest"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array"
+          },
           "digest": {
             "type": "string"
           },
           "envelope": {
+            "type": "object"
+          },
+          "generation_contract": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "explicit_evidence"
+              },
+              "schema_version": {
+                "const": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "schema_version"
+            ],
             "type": "object"
           },
           "metrics": {

@@ -12,6 +12,7 @@ from openmed.agent.tool_inventory import (
     render_tool_inventory_json,
     render_tool_inventory_markdown,
 )
+from openmed.cli.agent_admission import add_admission_commands
 
 MAX_TOOL_INVENTORY_INPUT_BYTES: Final = 10 * 1024 * 1024
 _OUTPUT_FORMATS: Final = frozenset({"json", "text"})
@@ -125,6 +126,7 @@ def add_agent_tools_command(app: Any, typer_module: Any) -> None:
             )
             raise typer_module.Exit(code=1) from None
 
+    add_admission_commands(agents_app, typer_module)
     app.add_typer(agents_app, name="agents")
 
 
