@@ -26,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
-
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
   agent outcome, correlation, timing and run-summary records.
 - Added the offline `openmed models slm-verify` command, which verifies a local
