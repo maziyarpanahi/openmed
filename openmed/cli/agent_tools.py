@@ -86,10 +86,17 @@ def write_tool_inventory(rendered: str, output: Path) -> None:
         raise AgentToolsCliError("write_failed", "output") from None
 
 
-def add_agent_tools_command(app: Any, typer_module: Any) -> None:
+def add_agent_tools_command(
+    app: Any, typer_module: Any, *, governance_service: Any = None
+) -> None:
     """Register the ``openmed agents tools`` Typer command group."""
 
     agents_app = typer_module.Typer(help="Local-agent governance commands.")
+    from .governed_workflows import add_governed_workflow_typer_command
+
+    add_governed_workflow_typer_command(
+        agents_app, typer_module, service=governance_service
+    )
 
     @agents_app.command("tools")
     def agent_tools(
