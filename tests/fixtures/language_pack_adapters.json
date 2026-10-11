@@ -386,7 +386,7 @@
       "ko"
     ],
     "Hebrew": [
-      "en"
+      "he"
     ],
     "Hiragana/Katakana": [
       "ja"
@@ -424,10 +424,7 @@
       "te"
     ],
     "Thai": [
-      "en"
-    ],
-    "Unknown": [
-      "en"
+      "th"
     ]
   },
   "supported_languages": [
