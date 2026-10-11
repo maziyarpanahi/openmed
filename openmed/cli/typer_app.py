@@ -87,7 +87,7 @@ def _render_table(title: str, headers: List[str], rows: List[List[str]]) -> None
     Console().print(table)
 
 
-def build_app():
+def build_app(*, governance_service=None):
     """Build and return the Typer application."""
     _ensure_typer()
 
@@ -96,7 +96,7 @@ def build_app():
     cli_app = typer.Typer(help="Config utilities.")
     zero_app = typer.Typer(help="Zero-shot (GLiNER/GLiNER2) utilities.")
 
-    add_agent_tools_command(app, typer)
+    add_agent_tools_command(app, typer, governance_service=governance_service)
 
     # ------------------------------------------------------------------
     # analyze
