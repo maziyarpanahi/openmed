@@ -763,6 +763,7 @@ def test_import_encoding_and_json_errors_are_typed_and_value_free(payload):
     ) as excinfo:
         _import(payload)
     assert excinfo.value.__cause__ is None
+    assert excinfo.value.__context__ is None
     rendered = "".join(traceback.format_exception(excinfo.value))
     assert "synthetic-source-sentinel" not in rendered
 
@@ -777,4 +778,5 @@ def test_export_refuses_unencodable_text_with_a_typed_error():
             text_digest=_TEXT_DIGEST,
         )
     assert excinfo.value.__cause__ is None
+    assert excinfo.value.__context__ is None
     assert "synthetic-source-sentinel" not in str(excinfo.value)

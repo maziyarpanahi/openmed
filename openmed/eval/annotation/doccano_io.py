@@ -624,7 +624,9 @@ def _single_line(payload: str | bytes) -> str:
         try:
             raw = bytes(payload).decode("utf-8")
         except UnicodeDecodeError:
-            raise _invalid("payload must be UTF-8 encoded") from None
+            raw = None
+        if raw is None:
+            raise _invalid("payload must be UTF-8 encoded")
     elif isinstance(payload, str):
         raw = payload
     else:
@@ -632,7 +634,9 @@ def _single_line(payload: str | bytes) -> str:
     try:
         encoded_length = len(raw.encode("utf-8"))
     except UnicodeEncodeError:
-        raise _invalid("payload must be UTF-8 encoded") from None
+        encoded_length = None
+    if encoded_length is None:
+        raise _invalid("payload must be UTF-8 encoded")
     if encoded_length > MAX_ANNOTATION_INPUT_BYTES:
         raise _invalid("payload exceeds the annotation input limit")
     lines = [item.strip() for item in raw.splitlines() if item.strip()]
@@ -653,10 +657,11 @@ def _strict_load(line: str) -> Any:
     except AnnotationInterchangeError:
         raise
     except (ValueError, RecursionError):
-        raise AnnotationValidationError(
-            AnnotationIssue("line 1 must be a valid JSON object", line=1),
-            format_name=DOCCANO_FORMAT_NAME,
-        ) from None
+        pass
+    raise AnnotationValidationError(
+        AnnotationIssue("line 1 must be a valid JSON object", line=1),
+        format_name=DOCCANO_FORMAT_NAME,
+    )
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -704,7 +709,8 @@ def _text_digest(text: str) -> str:
     try:
         return sha256_digest(text)
     except UnicodeEncodeError:
-        raise AnnotationInterchangeError("doccano text must be UTF-8 encoded") from None
+        pass
+    raise AnnotationInterchangeError("doccano text must be UTF-8 encoded")
 
 
 def _require_digest(value: Any, field_name: str) -> str:
