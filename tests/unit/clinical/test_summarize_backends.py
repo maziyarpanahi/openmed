@@ -581,7 +581,6 @@ def test_provider_refusal_subclass_cannot_leak_exception_properties(
     assert caught.value.__context__ is None
 
 
-
 @pytest.mark.parametrize("boundary", ["load", "generate", "failure", "success"])
 def test_owned_mlx_runner_released_at_all_terminal_boundaries(
     local_runner, monkeypatch, boundary
