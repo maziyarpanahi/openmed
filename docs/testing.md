@@ -71,6 +71,55 @@ python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 `tests/run-tests.sh` stitches together lint, format checks, unit tests, and slow smoke checks. Use it as the baseline
 for CI.
 
+## Lightweight multimodal CI lane
+
+`multimodal-tests` runs on Linux and macOS with Python 3.11, independently of
+model backend qualification. Both jobs must succeed before the CI build gate
+can pass. It executes all of `tests/unit/multimodal`, the synthetic DICOM and
+DICOM SR eval suites, OCR routing eval tests, and the bounded format-parser fuzz
+targets. Fixtures are synthetic; no datasets or model weights are downloaded.
+DocTR, EasyOCR and PaddleOCR adapter contracts use injected fakes.
+
+Install Tesseract (`sudo apt-get install tesseract-ocr` on Linux or
+`brew install tesseract` on macOS), then run from the repository root:
+
+```bash
+uv sync --frozen --extra dev --python 3.11
+.venv/bin/python -m scripts.testing.multimodal_ci --requirements > /tmp/openmed-multimodal-requirements.txt
+uv pip install --python .venv/bin/python -r /tmp/openmed-multimodal-requirements.txt
+make test-multimodal
+```
+
+The requirements command selects fsspec, Jinja2, NumPy, openpyxl, pdfplumber,
+python-docx, python-pptx, Pillow, piexif, pikepdf, pydicom, pytesseract and
+markdown-it-py with the exact bounds from `pyproject.toml`'s `multimodal` extra.
+It checks each against the existing release license allow-list. It excludes
+Torch, ONNX, python-doctr, EasyOCR and PaddleOCR; no new dependency extra or
+license exception is introduced. Do not install the entire `multimodal` extra
+for this lane. The `--no-sync --offline` Make target preserves the installed
+lightweight dependencies and prevents dependency resolution during testing.
+
+Before collection, every required import and the Tesseract executable must be
+available. For example, removing pydicom produces exit code 2 and
+`multimodal-ci: missing or unusable required resources: pydicom`. The gate also
+fails any collection-time `importorskip` or setup/call/teardown skip with
+`multimodal-ci: zero-skip gate failed; skipped reports=N`. It has no skip
+allow-list. Missing resources and gate summaries contain only controlled names
+and counts, never import exception values or source payloads.
+
+Tests run with offline model flags and blocked outbound sockets in the pytest
+process. Parser fuzz workers use the existing synthetic corpus and bounded
+`fuzz-default` profile (40 examples), without networking or heavy providers.
+No network is needed after dependency installation. This lane does not qualify
+model accuracy, clinical safety or platform-specific inference backends.
+
+The enforced budget is **20 minutes per job**, including installation, with
+**10 minutes for tests** and a 120-second per-test timeout. These are limits,
+not measured performance claims. Hosted Linux/macOS durations must be checked
+on the first CI run; a timeout is a failure and must be investigated rather
+than converted to a skip. Failures exposed in existing media implementations
+are follow-up work, outside the lane's CI-wiring boundary.
+
 ## Docs & API checks
 
 - Add `uv run mkdocs build --strict` to your CI to fail on missing nav entries, duplicate anchors, or broken markdown.

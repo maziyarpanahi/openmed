@@ -7,7 +7,6 @@ structural conformance and for clear errors when their dependency is absent.
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -195,11 +194,15 @@ def test_unknown_engine_name_raises_value_error():
         resolve_engine("does-not-exist")
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("pytesseract") is not None,
-    reason="pytesseract is installed",
-)
-def test_missing_tesseract_yields_actionable_error():
+def test_missing_tesseract_yields_actionable_error(monkeypatch):
+    original_import = ocr_mod.importlib.import_module
+
+    def missing_tesseract(module):
+        if module == "pytesseract":
+            raise ImportError("synthetic missing backend")
+        return original_import(module)
+
+    monkeypatch.setattr(ocr_mod.importlib, "import_module", missing_tesseract)
     with pytest.raises(MissingDependencyError) as excinfo:
         ocr("image.png", engine="tesseract")
     message = str(excinfo.value).lower()

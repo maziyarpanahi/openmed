@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
+.PHONY: help build publish release clean install lock-check lint type-check format format-check lint-swift format-swift quality test test-multimodal sbom grpc-proto grpc-proto-check brand-check docs-serve docs-build docs-stage docs-browser-test docs-deploy
 
 UV ?= uv
 
@@ -60,6 +60,9 @@ quality: lint type-check format-check test ## Run the local quality gate
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
 	$(UV) run --frozen --extra dev pytest
+
+test-multimodal: ## Run the offline multimodal slice with a zero-skip gate
+	$(UV) run --no-sync --offline python -m scripts.testing.multimodal_ci
 
 sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependencies
 	@echo "📦 Generating CycloneDX SBOM..."

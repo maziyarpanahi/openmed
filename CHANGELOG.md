@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
+  parser fuzz coverage, with required-resource checks and a zero-skip gate.
 - Opt-in local NLI verification for summarization and grounding, with retained
   contradiction and abstention outcomes, offset- and digest-bound audit records,
   typed backend refusals and unchanged default serialization. Source and claim
