@@ -1,5 +1,8 @@
 # Social-determinant evidence contract
 
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for section-scoped extraction and a labels/offsets/states-only output projection.
+
 Start with the [SDOH extraction guide](sdoh-extraction.md) for the
 registered determinants, cue tables and runnable synthetic examples.
 
