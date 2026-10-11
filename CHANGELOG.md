@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
+
 - Add offline `clinical sdoh`, `clinical relations` and `clinical timeline`
   commands over validated analyzed spans. Emit value-free review records,
   require explicit temporal references and links, and reserve new private
