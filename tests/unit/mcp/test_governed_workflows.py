@@ -709,3 +709,75 @@ def test_actual_registration_rejects_substituted_governance_catalog(
         _server(service)
     assert error.value.category == "unapproved_state_change"
     assert service.calls == [] and service.handoffs == 0
+
+
+def test_readonly_raw_handler_cannot_select_an_effect_method():
+    from openmed.mcp.governed_workflows import build_governed_mcp_handlers
+
+    service = _Service()
+
+    def execute(request):
+        service.clinical_effects += 1
+        return service.view
+
+    service.execute = execute
+    handlers = build_governed_mcp_handlers(
+        service, consent_policy=default_governed_consent_policy()
+    )
+    with pytest.raises(GovernedMCPError):
+        handlers["openmed_workflow_preflight"](
+            request=_request().to_dict(), _operation="execute"
+        )
+    assert service.clinical_effects == 0
+
+
+def test_service_diagnostic_subclass_cannot_export_private_code():
+    class MasqueradingCode(str):
+        def __hash__(self):
+            return hash("governance_conflict")
+
+        def __eq__(self, other):
+            return True
+
+    error = GovernedMCPError("governance_conflict")
+    error.code = MasqueradingCode("PRIVATE-CANARY")
+    service = _Service()
+
+    def fail(request):
+        raise error
+
+    service.preview = fail
+    result = _call(_server(service), "openmed_workflow_preview")
+    assert "PRIVATE-CANARY" not in json.dumps(result.model_dump(mode="json"))
+    assert result.structuredContent["error"]["code"] == "governance_failed"
+
+
+def test_private_consent_provider_context_is_discarded():
+    from openmed.mcp.governed_workflows import build_governed_mcp_handlers
+
+    service = _Service()
+    policy, _ = _consent()
+
+    def fail(*args):
+        raise RuntimeError("PRIVATE-CANARY")
+
+    handlers = build_governed_mcp_handlers(
+        service, consent_policy=policy, receipt_provider=fail, clock=lambda: NOW
+    )
+    with pytest.raises(GovernedMCPError) as caught:
+        handlers["openmed_workflow_request_review"](request=_request().to_dict())
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_canonical_workflow_identifiers_above_256_bytes_are_supported():
+    namespace = ".".join(["a" * 63, "b" * 63, "c" * 63, "d" * 61])
+    request = _request(
+        workflow_id=WorkflowId("workflow:" + namespace + "/synthetic@1.0.0")
+    )
+    service = _Service()
+    service.view = replace(service.view, workflow_id=request.workflow_id)
+    result = _call(
+        _server(service), "openmed_workflow_preflight", request_data=request.to_dict()
+    )
+    assert not result.isError and service.calls == ["preflight"]

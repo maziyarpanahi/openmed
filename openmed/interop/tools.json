@@ -8733,7 +8733,7 @@
                 "type": "string"
               },
               "workflow_id": {
-                "maxLength": 256,
+                "maxLength": 512,
                 "type": "string"
               }
             },
@@ -8864,7 +8864,7 @@
             "type": "string"
           },
           "workflow_id": {
-            "maxLength": 256,
+            "maxLength": 512,
             "type": "string"
           }
         },
@@ -8930,7 +8930,7 @@
                 "type": "string"
               },
               "workflow_id": {
-                "maxLength": 256,
+                "maxLength": 512,
                 "type": "string"
               }
             },
@@ -9061,7 +9061,7 @@
             "type": "string"
           },
           "workflow_id": {
-            "maxLength": 256,
+            "maxLength": 512,
             "type": "string"
           }
         },
@@ -9127,7 +9127,7 @@
                 "type": "string"
               },
               "workflow_id": {
-                "maxLength": 256,
+                "maxLength": 512,
                 "type": "string"
               }
             },
@@ -9258,7 +9258,7 @@
             "type": "string"
           },
           "workflow_id": {
-            "maxLength": 256,
+            "maxLength": 512,
             "type": "string"
           }
         },
@@ -9324,7 +9324,7 @@
                 "type": "string"
               },
               "workflow_id": {
-                "maxLength": 256,
+                "maxLength": 512,
                 "type": "string"
               }
             },
@@ -9455,7 +9455,7 @@
             "type": "string"
           },
           "workflow_id": {
-            "maxLength": 256,
+            "maxLength": 512,
             "type": "string"
           }
         },

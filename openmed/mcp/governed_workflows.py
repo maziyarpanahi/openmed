@@ -26,7 +26,10 @@ from openmed.agent.identifiers import WorkflowId
 from openmed.agent.reviewer_handoff import ReviewerHandoffPacket
 from openmed.mcp.consent_receipts import (
     ConsentReceipt,
+    ConsentReceiptError,
     ConsentReceiptPolicy,
+    ConsentReceiptRequiredError,
+    ConsentReceiptVerificationError,
     ConsentReceiptVerifier,
     MappingConsentKeyProvider,
 )
@@ -67,7 +70,7 @@ class GovernedMCPError(ValueError):
     """Fixed diagnostic with a closed code and no submitted values."""
 
     def __init__(self, code: str) -> None:
-        if code not in _ERROR_CODES:
+        if type(code) is not str or code not in _ERROR_CODES:
             raise ValueError("Invalid governance diagnostic code.")
         self.code = code
         super().__init__("Governed workflow request refused.")
@@ -289,18 +292,25 @@ def default_governed_consent_policy() -> ConsentReceiptPolicy:
 
 
 def _call(service: Any, method: str, request: GovernedMCPRequest) -> Any:
-    if service is None or not callable(getattr(service, method, None)):
+    if service is None:
         raise GovernedMCPError("governance_unavailable")
     code = "governance_failed"
     with open(os.devnull, "w", encoding="utf-8") as sink:
         with redirect_stdout(sink), redirect_stderr(sink):
             try:
-                return getattr(service, method)(request)
+                callback = getattr(service, method, None)
+                if not callable(callback):
+                    code = "governance_unavailable"
+                else:
+                    return callback(request)
             except NotImplementedError:
                 code = "governance_unavailable"
             except GovernedMCPError as error:
-                if error.code in _ERROR_CODES:
-                    code = error.code
+                candidate = (
+                    vars(error).get("code") if type(error) is GovernedMCPError else None
+                )
+                if type(candidate) is str and candidate in _ERROR_CODES:
+                    code = candidate
             except BaseException:
                 pass
     raise GovernedMCPError(code)
@@ -433,9 +443,36 @@ def build_governed_mcp_handlers(
             raise GovernedMCPError("governance_invalid_result")
         return replace(checked, review_request_digest=digest).to_dict()
 
+    def bind(operation: str) -> Callable[..., dict[str, Any]]:
+        def handler(*, request: Any, **unexpected: Any) -> dict[str, Any]:
+            code = "governance_failed"
+            consent_failure: type[ConsentReceiptError] | None = None
+            try:
+                if unexpected:
+                    raise GovernedMCPError("invalid_arguments")
+                return dispatch(operation, request)
+            except ConsentReceiptRequiredError:
+                consent_failure = ConsentReceiptRequiredError
+            except ConsentReceiptVerificationError:
+                consent_failure = ConsentReceiptVerificationError
+            except ConsentReceiptError:
+                consent_failure = ConsentReceiptError
+            except GovernedMCPError as error:
+                candidate = (
+                    vars(error).get("code") if type(error) is GovernedMCPError else None
+                )
+                if type(candidate) is str and candidate in _ERROR_CODES:
+                    code = candidate
+            except Exception:
+                pass
+            if consent_failure is not None:
+                raise consent_failure("Governed workflow consent refused.")
+            raise GovernedMCPError(code)
+
+        return handler
+
     return {
-        name: (lambda _operation=operation, **kwargs: dispatch(_operation, **kwargs))
-        for name, operation in GOVERNED_MCP_OPERATIONS.items()
+        name: bind(operation) for name, operation in GOVERNED_MCP_OPERATIONS.items()
     }
 
 
@@ -447,7 +484,7 @@ GOVERNED_MCP_REQUEST_SCHEMA: dict[str, Any] = {
     "properties": {
         "schema_version": {"type": "string", "const": GOVERNED_MCP_REQUEST_VERSION},
         "run_id": {"type": "string", "pattern": r"^run_[0-9a-f]{32}$"},
-        "workflow_id": {"type": "string", "maxLength": 256},
+        "workflow_id": {"type": "string", "maxLength": 512},
         "action_digest": _DIGEST_SCHEMA,
         "expected_state_digest": _OPTIONAL_DIGEST_SCHEMA,
     },

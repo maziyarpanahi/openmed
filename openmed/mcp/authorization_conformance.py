@@ -165,7 +165,8 @@ def validate_governed_tool_registration(
         ):
             raise ConformanceViolation("unapproved_state_change", "state_change_policy")
         if spec.state_changing and (
-            type(consent_policy) is not ConsentReceiptPolicy
+            consent_policy is None
+            or type(consent_policy) is not ConsentReceiptPolicy
             or not consent_policy.require_receipt
         ):
             raise ConformanceViolation("unapproved_state_change", "state_change_policy")

@@ -265,9 +265,16 @@ def _error_envelope(error: BaseException) -> Dict[str, Any]:
     if isinstance(error, PromptInjectionDetected):
         return {"error": error.to_dict(), "is_error": True}
     if isinstance(error, GovernedMCPError):
+        candidate = vars(error).get("code") if type(error) is GovernedMCPError else None
+        try:
+            safe = GovernedMCPError(
+                candidate if type(candidate) is str else "governance_failed"
+            )
+        except (TypeError, ValueError):
+            safe = GovernedMCPError("governance_failed")
         return {
             "error": {
-                "code": error.code,
+                "code": safe.code,
                 "message": "Governed workflow request refused.",
             },
             "is_error": True,

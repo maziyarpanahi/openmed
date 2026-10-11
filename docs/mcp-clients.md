@@ -239,6 +239,10 @@ service resolves the existing action, policy and purpose from its own custody.
 MCP callers cannot upload a grant, purpose ticket, approval token, consent
 receipt, reviewer identity, role claim or credential. Unknown fields, including
 inline authority, return `invalid_arguments` without echoing their values.
+Canonical workflow identifiers use the existing 512-character bound. Raw handler
+operation selection is fixed when the tool is registered; caller arguments cannot
+select another service method. Public errors discard foreign diagnostic fields
+and private exception contexts.
 
 Results use `openmed.mcp.governance_result.v1` and contain only bound run/workflow
 references, action/state digests, phase/outcome codes, closed decisions for
