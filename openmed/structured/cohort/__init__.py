@@ -1,5 +1,14 @@
 """Declarative, local-first cohort phenotyping over grounded OMOP tables."""
 
+from .circe import (
+    CIRCE_DOMAINS,
+    CIRCE_MAPPING_VERSION,
+    CirceConversion,
+    CirceInputError,
+    CirceLimitError,
+    export_circe_expression,
+    import_circe_expression,
+)
 from .dsl import (
     PHENOTYPE_SCHEMA_VERSION,
     AssertionFilter,
@@ -69,6 +78,13 @@ from .saved import (
 )
 
 __all__ = [
+    "CIRCE_DOMAINS",
+    "CIRCE_MAPPING_VERSION",
+    "CirceConversion",
+    "CirceInputError",
+    "CirceLimitError",
+    "export_circe_expression",
+    "import_circe_expression",
     "COHORT_ADVISORY",
     "COHORT_EXCHANGE_COMPATIBILITY_POLICY",
     "COHORT_EXCHANGE_SCHEMA_NAME",
