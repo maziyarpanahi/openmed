@@ -228,6 +228,18 @@ def _route_template(scope: Scope) -> str:
     route_path = getattr(route, "path", None)
     if isinstance(route_path, str) and route_path:
         return route_path
+    if scope.get("app") is not None:
+        # Lazy included routers may leave the request's route path empty.
+        # Resolve only a registered effective template; never log raw targets.
+        from starlette.requests import Request
+
+        from .auth import route_key_for_request
+
+        try:
+            _, template = route_key_for_request(Request(scope))
+            return template or "unknown"
+        except Exception:
+            return "unknown"
     return "unknown"
 
 
