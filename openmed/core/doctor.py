@@ -116,6 +116,7 @@ def clinical_brief_readiness() -> list[dict[str, Any]]:
         get_default_nli_model,
         get_default_pii_model,
         resolve_summarizer_model,
+        resolve_summarizer_package,
     )
 
     def check(name: str, available: bool, ready: str, missing: str, hint: str):
@@ -166,6 +167,13 @@ def clinical_brief_readiness() -> list[dict[str, Any]]:
             "Provision the registered pinned Maple revision before offline use.",
         ),
         check(
+            "brief_summarizer_package",
+            resolve_summarizer_package("mlx") is not None,
+            "summarizer_pin_registered",
+            "summarizer_package_unpinned",
+            "Register the reviewed local package and its trusted immutable manifest pin at application startup; cache presence alone does not satisfy runtime admission.",
+        ),
+        check(
             "brief_raw_note_pii_cache",
             pii is not None and _brief_cached_artifact(pii, "main"),
             "default_pii_cached",
@@ -210,9 +218,11 @@ def _brief_cached_artifact(model_id: str, revision: str) -> bool:
         if any(present(name) for name in ("model.safetensors", "pytorch_model.bin")):
             return True
         index = snapshot / "model.safetensors.index.json"
-        if index.stat().st_size > 1_048_576:
+        with index.open("rb") as index_handle:
+            payload = index_handle.read(1_048_577)
+        if len(payload) > 1_048_576:
             return False
-        data = json.loads(index.read_text(encoding="utf-8"))
+        data = json.loads(payload)
         mapping = data.get("weight_map")
         if not isinstance(mapping, dict) or not mapping or len(mapping) > 100_000:
             return False
@@ -223,7 +233,7 @@ def _brief_cached_artifact(model_id: str, revision: str) -> bool:
             and present(name)
             for name in weights
         )
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return False
 
 
@@ -338,6 +348,27 @@ def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
                     "WARN",
                     f"{module_name} not installed",
                     hint_map.get(name),
+                )
+            )
+            continue
+        except Exception as exc:
+            # Subclass names, like exception messages, may contain private data.
+            family = "Exception"
+            for exception_type, label in (
+                (OSError, "OSError"),
+                (RuntimeError, "RuntimeError"),
+                (ValueError, "ValueError"),
+                (TypeError, "TypeError"),
+            ):
+                if issubclass(type(exc), exception_type):
+                    family = label
+                    break
+            checks.append(
+                _check(
+                    name,
+                    "WARN",
+                    f"{module_name} import failed ({family})",
+                    "Check this optional dependency's platform and binary compatibility.",
                 )
             )
             continue

@@ -12,7 +12,436 @@
         import Vision
     #endif
 
+    private final class ManifestPathURLProtocol: URLProtocol {
+        private static let lock = NSLock()
+        private static var files: [String: Data] = [:]
+        private static var paths: [String] = []
+        private static var beforeResponse: ((String) throws -> Void)?
+
+        static var requestedPaths: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return paths
+        }
+
+        static func install(files: [String: Data], beforeResponse: ((String) throws -> Void)?) {
+            lock.lock()
+            defer { lock.unlock() }
+            self.files = files
+            self.beforeResponse = beforeResponse
+            paths = []
+        }
+
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+        override func startLoading() {
+            guard let url = request.url else { return }
+            let path = url.path.components(separatedBy: "/resolve/main/").last ?? ""
+            Self.lock.lock()
+            Self.paths.append(path)
+            let data = Self.files[path]
+            let callback = Self.beforeResponse
+            Self.lock.unlock()
+            do {
+                try callback?(path)
+                let response = HTTPURLResponse(
+                    url: url, statusCode: data == nil ? 404 : 200,
+                    httpVersion: nil, headerFields: nil)!
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data ?? Data())
+                client?.urlProtocolDidFinishLoading(self)
+            } catch { client?.urlProtocol(self, didFailWithError: error) }
+        }
+        override func stopLoading() {}
+    }
+
     final class OpenMedMLXTests: XCTestCase {
+
+        func testCacheRejectsEscapingManifestBeforeMarkingReady() throws {
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: cacheRoot) }
+            let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            _ = try makeManifestOnlyArtifact(in: directory)
+            let manifestURL = directory.appending(path: "openmed-mlx.json")
+            var manifest = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+            manifest["config_path"] = "../../ESCAPED-config.json"
+            try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL)
+            try Data("{}".utf8).write(to: cacheRoot.appending(path: "ESCAPED-config.json"))
+            try Data().write(to: directory.appending(path: ".openmed-artifact-ready"))
+
+            XCTAssertThrowsError(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            ) { error in
+                guard case OpenMedModelStoreError.invalidManifestPath = error else {
+                    return XCTFail("Expected the typed manifest-path rejection")
+                }
+            }
+            XCTAssertFalse(
+                FileManager.default.fileExists(
+                    atPath: directory.appending(path: ".openmed-artifact-ready").path))
+        }
+
+        func testDownloadsRejectEveryUnsafeManifestPathBeforeArtifactRequests() async throws {
+            let template = try makeManifestOnlyArtifact()
+            defer { try? FileManager.default.removeItem(at: template) }
+            let object = try manifestObject(at: template)
+            let fields = [
+                "config_path", "label_map_path", "available_weights", "preferred_weights",
+                "fallback_weights", "tokenizer_path", "tokenizer_file", "segmenter",
+            ]
+            let invalidPaths = [
+                "", ".", "..", "../../ESCAPED-secret.json", "/absolute-secret.json",
+                "nested/../secret.json", "nested/./secret.json", "nested//secret.json", "nested/",
+                "nested\\secret.json", "secret\0.json",
+            ]
+            for field in fields {
+                for path in invalidPaths where !(field == "tokenizer_path" && path == ".") {
+                    let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+                    defer { try? FileManager.default.removeItem(at: cacheRoot) }
+                    let manifest = modifiedManifest(object, field: field, path: path)
+                    let session = manifestSession(files: [
+                        "openmed-mlx.json": try JSONSerialization.data(withJSONObject: manifest)
+                    ])
+                    defer { session.invalidateAndCancel() }
+                    do {
+                        _ = try await OpenMedModelStore.downloadMLXModel(
+                            repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot, session: session)
+                        XCTFail("Unsafe declaration accepted: \(field)")
+                    } catch {
+                        assertPathRejection(error)
+                    }
+                    XCTAssertEqual(ManifestPathURLProtocol.requestedPaths, ["openmed-mlx.json"], field)
+                    let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+                    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [])
+                    XCTAssertFalse(
+                        FileManager.default.fileExists(
+                            atPath: cacheRoot.appending(path: "ESCAPED-secret.json").path))
+                }
+            }
+        }
+
+        func testCacheAndLoaderRejectEveryUnsafeManifestField() throws {
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: cacheRoot) }
+            let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            _ = try makeManifestOnlyArtifact(in: directory)
+            let object = try manifestObject(at: directory)
+            for field in [
+                "config_path", "label_map_path", "available_weights", "preferred_weights",
+                "fallback_weights", "tokenizer_path", "tokenizer_file", "segmenter",
+            ] {
+                let manifest = modifiedManifest(object, field: field, path: "../../secret.json")
+                try JSONSerialization.data(withJSONObject: manifest)
+                    .write(to: directory.appending(path: "openmed-mlx.json"))
+                try Data().write(to: directory.appending(path: ".openmed-artifact-ready"))
+                XCTAssertThrowsError(
+                    try OpenMedModelStore.mlxModelCacheState(
+                        repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot), field
+                ) { self.assertPathRejection($0) }
+                XCTAssertFalse(
+                    FileManager.default.fileExists(
+                        atPath: directory.appending(path: ".openmed-artifact-ready").path))
+                XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory), field) {
+                    self.assertPathRejection($0)
+                }
+            }
+        }
+
+        func testNestedManifestAssetsDownloadAndLoadWithoutNetwork() async throws {
+            let template = try makeManifestOnlyArtifact()
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer {
+                try? FileManager.default.removeItem(at: template)
+                try? FileManager.default.removeItem(at: cacheRoot)
+            }
+            var manifest = try manifestObject(at: template)
+            manifest["label_map_path"] = "labels/id2label.json"
+            manifest["available_weights"] = ["weights/model%2e.safetensors"]
+            manifest["preferred_weights"] = "weights/model%2e.safetensors"
+            manifest["fallback_weights"] = [] as [String]
+            manifest["tokenizer"] = ["path": "tokenizer", "files": ["tokenizer.json"]]
+            let session = manifestSession(files: [
+                "openmed-mlx.json": try JSONSerialization.data(withJSONObject: manifest),
+                "config.json": try Data(contentsOf: template.appending(path: "config.json")),
+                "labels/id2label.json": try Data(contentsOf: template.appending(path: "id2label.json")),
+                "weights/model%2e.safetensors": Data(),
+                "tokenizer/tokenizer.json": Data("{}".utf8),
+            ])
+            defer { session.invalidateAndCancel() }
+            let directory = try await OpenMedModelStore.downloadMLXModel(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot, session: session)
+            XCTAssertEqual(ManifestPathURLProtocol.requestedPaths.count, 5)
+            XCTAssertEqual(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot), .ready)
+            let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+            XCTAssertEqual(artifact.tokenizerDirectoryURL, directory.appending(path: "tokenizer"))
+            XCTAssertEqual(artifact.id2label[1], "B-NAME")
+            XCTAssertEqual(artifact.weightCandidateURLs, [directory.appending(path: "weights/model%2e.safetensors")])
+            _ = try await OpenMedModelStore.downloadMLXModel(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot, session: session)
+            XCTAssertEqual(ManifestPathURLProtocol.requestedPaths.count, 5)
+        }
+
+        func testLegacyRootLayoutStillDownloadsAndLoads() async throws {
+            let template = try makeManifestOnlyArtifact()
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer {
+                try? FileManager.default.removeItem(at: template)
+                try? FileManager.default.removeItem(at: cacheRoot)
+            }
+            let session = manifestSession(files: [
+                "config.json": try Data(contentsOf: template.appending(path: "config.json")),
+                "weights.safetensors": Data(), "tokenizer.json": Data("{}".utf8),
+                "tokenizer_config.json": Data("{}".utf8),
+            ])
+            defer { session.invalidateAndCancel() }
+            let directory = try await OpenMedModelStore.downloadMLXModel(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot, session: session)
+            XCTAssertEqual(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot), .ready)
+            let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+            XCTAssertEqual(artifact.manifest.tokenizer.path, ".")
+            XCTAssertEqual(artifact.id2label[1], "B-NAME")
+            XCTAssertNotNil(artifact.tokenizerDirectoryURL)
+            try FileManager.default.createSymbolicLink(
+                at: directory.appending(path: "chat_template.jinja"),
+                withDestinationURL: template.appending(path: "config.json"))
+            XCTAssertThrowsError(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            ) { self.assertPathRejection($0) }
+            XCTAssertFalse(
+                FileManager.default.fileExists(
+                    atPath:
+                        directory.appending(path: ".openmed-artifact-ready").path))
+        }
+
+        func testMissingDeclaredLabelMapCannotMarkCacheReady() throws {
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: cacheRoot) }
+            let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            _ = try makeManifestOnlyArtifact(in: directory)
+            try FileManager.default.removeItem(at: directory.appending(path: "id2label.json"))
+            XCTAssertEqual(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot), .partial)
+        }
+
+        func testSymlinkEscapeAndDanglingLinksCannotMakeCacheReady() throws {
+            for path in [
+                "openmed-mlx.json", "config.json", "id2label.json", "weights.safetensors",
+                "tokenizer.json", ".openmed-artifact-ready",
+            ] {
+                for dangling in [false, true] {
+                    let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+                    defer { try? FileManager.default.removeItem(at: cacheRoot) }
+                    let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    _ = try makeManifestOnlyArtifact(in: directory)
+                    let leaf = directory.appending(path: path)
+                    let outside = cacheRoot.appending(path: "outside")
+                    if !dangling {
+                        try Data("synthetic-outside".utf8).write(to: outside)
+                    }
+                    try? FileManager.default.removeItem(at: leaf)
+                    try FileManager.default.createSymbolicLink(at: leaf, withDestinationURL: outside)
+                    XCTAssertThrowsError(
+                        try OpenMedModelStore.mlxModelCacheState(
+                            repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+                    ) { self.assertPathRejection($0) }
+                    if !dangling { XCTAssertEqual(try Data(contentsOf: outside), Data("synthetic-outside".utf8)) }
+                }
+            }
+        }
+
+        func testDownloadRechecksSymlinkAfterResponseAndCleansItsPartialWrites() async throws {
+            let template = try makeManifestOnlyArtifact()
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer {
+                try? FileManager.default.removeItem(at: template)
+                try? FileManager.default.removeItem(at: cacheRoot)
+            }
+            var manifest = try manifestObject(at: template)
+            manifest["available_weights"] = ["weights/weights.safetensors"]
+            manifest["preferred_weights"] = "weights/weights.safetensors"
+            let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            let outside = cacheRoot.appending(path: "outside")
+            let session = manifestSession(
+                files: [
+                    "openmed-mlx.json": try JSONSerialization.data(withJSONObject: manifest),
+                    "config.json": try Data(contentsOf: template.appending(path: "config.json")),
+                    "id2label.json": Data("{}".utf8), "weights/weights.safetensors": Data(),
+                ],
+                beforeResponse: { path in
+                    if path == "weights/weights.safetensors" {
+                        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+                        try FileManager.default.createSymbolicLink(
+                            at: directory.appending(path: "weights"), withDestinationURL: outside)
+                    }
+                })
+            defer { session.invalidateAndCancel() }
+            do {
+                _ = try await OpenMedModelStore.downloadMLXModel(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot, session: session)
+                XCTFail("Post-response symlink escape accepted")
+            } catch { assertPathRejection(error) }
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: outside.path), [])
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["weights"])
+        }
+
+        func testInternalSymlinkAndTrustedCacheRootAliasRemainUsable() throws {
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            let alias = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer {
+                try? FileManager.default.removeItem(at: alias)
+                try? FileManager.default.removeItem(at: cacheRoot)
+            }
+            try FileManager.default.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: cacheRoot)
+            let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                repoID: "OpenMed/Synthetic", cacheDirectory: alias)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            _ = try makeManifestOnlyArtifact(in: directory)
+            try FileManager.default.moveItem(
+                at: directory.appending(path: "config.json"), to: directory.appending(path: "actual-config.json"))
+            try FileManager.default.createSymbolicLink(
+                at: directory.appending(path: "config.json"), withDestinationURL: directory.appending(path: "actual-config.json"))
+            XCTAssertEqual(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: alias), .ready)
+            XCTAssertEqual(try OpenMedMLXArtifact(modelDirectoryURL: directory).configuration.modelType, "bert")
+            try FileManager.default.createSymbolicLink(
+                at: directory.appending(path: "tokenizer"), withDestinationURL: directory)
+            var manifest = try manifestObject(at: directory)
+            manifest["tokenizer"] = ["path": "tokenizer", "files": ["tokenizer.json", "tokenizer_config.json"]]
+            try JSONSerialization.data(withJSONObject: manifest)
+                .write(to: directory.appending(path: "openmed-mlx.json"))
+            XCTAssertEqual(
+                try OpenMedModelStore.mlxModelCacheState(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: alias), .ready)
+            XCTAssertNotNil(try OpenMedMLXArtifact(modelDirectoryURL: directory).tokenizerDirectoryURL)
+        }
+
+        func testUnlistedTokenizerDiscoveryCannotReadEscapingSymlinks() throws {
+            for nested in [false, true] {
+                for file in ["config.json", "chat_template.jinja", "chat_template.json"] {
+                    let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+                    defer { try? FileManager.default.removeItem(at: cacheRoot) }
+                    let directory = try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    _ = try makeManifestOnlyArtifact(in: directory)
+                    var manifest = try manifestObject(at: directory)
+                    let tokenizerDirectory = nested ? directory.appending(path: "tokenizer") : directory
+                    if nested {
+                        try FileManager.default.createDirectory(at: tokenizerDirectory, withIntermediateDirectories: true)
+                        for name in ["tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"] {
+                            try FileManager.default.copyItem(
+                                at: directory.appending(path: name),
+                                to: tokenizerDirectory.appending(path: name))
+                        }
+                        manifest["tokenizer"] = ["path": "tokenizer", "files": ["tokenizer.json", "tokenizer_config.json"]]
+                    }
+                    try JSONSerialization.data(withJSONObject: manifest)
+                        .write(to: directory.appending(path: "openmed-mlx.json"))
+                    let outside = cacheRoot.appending(path: "outside")
+                    try Data(contentsOf: directory.appending(path: "config.json")).write(to: outside)
+                    try? FileManager.default.removeItem(at: tokenizerDirectory.appending(path: file))
+                    try FileManager.default.createSymbolicLink(
+                        at: tokenizerDirectory.appending(path: file), withDestinationURL: outside)
+                    XCTAssertThrowsError(
+                        try OpenMedModelStore.mlxModelCacheState(
+                            repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+                    ) { self.assertPathRejection($0) }
+                    XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { self.assertPathRejection($0) }
+                }
+            }
+        }
+
+        func testSnapshotSymlinksAndDotCacheComponentsAreRejected() throws {
+            let cacheRoot = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: cacheRoot) }
+            try FileManager.default.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+            let outside = cacheRoot.appending(path: "outside")
+            try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(
+                at: cacheRoot.appending(path: "OpenMed__Synthetic"), withDestinationURL: outside)
+            XCTAssertThrowsError(
+                try OpenMedModelStore.cachedMLXModelDirectory(
+                    repoID: "OpenMed/Synthetic", cacheDirectory: cacheRoot)
+            ) { self.assertPathRejection($0) }
+            for component in ["", ".", "..", "secret\\path"] {
+                XCTAssertThrowsError(
+                    try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: component, cacheDirectory: cacheRoot)
+                ) { self.assertPathRejection($0) }
+                XCTAssertThrowsError(
+                    try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: "OpenMed/Other", revision: component, cacheDirectory: cacheRoot)
+                ) { self.assertPathRejection($0) }
+            }
+        }
+
+        private func manifestObject(at directory: URL) throws -> [String: Any] {
+            try XCTUnwrap(
+                JSONSerialization.jsonObject(
+                    with: Data(contentsOf: directory.appending(path: "openmed-mlx.json"))) as? [String: Any])
+        }
+
+        private func modifiedManifest(_ object: [String: Any], field: String, path: String) -> [String: Any] {
+            var result = object
+            switch field {
+            case "available_weights", "fallback_weights": result[field] = ["weights.safetensors", path]
+            case "tokenizer_path": result["tokenizer"] = ["path": path, "files": ["tokenizer.json"]]
+            case "tokenizer_file": result["tokenizer"] = ["path": "tokenizer", "files": [path]]
+            case "segmenter":
+                result["segmenter"] = [
+                    "format_version": 1, "id": "openmed-han-v1", "scripts": ["Han"], "license": "MIT",
+                    "resource_files": [
+                        [
+                            "path": path, "sha256": String(repeating: "0", count: 64),
+                            "role": "han_dictionary", "license": "MIT", "size_bytes": 0,
+                        ]
+                    ], "total_size_bytes": 0, "size_budget_bytes": 65536,
+                ]
+            default: result[field] = path
+            }
+            return result
+        }
+
+        private func assertPathRejection(_ error: Error, file: StaticString = #filePath, line: UInt = #line) {
+            guard case OpenMedModelStoreError.invalidManifestPath(let reason) = error else {
+                return XCTFail("Expected typed snapshot-path rejection", file: file, line: line)
+            }
+            XCTAssertTrue(
+                ["invalid_relative_path", "unsafe_symlink", "root_changed", "outside_snapshot", "invalid_root"]
+                    .contains(reason), file: file, line: line)
+            XCTAssertEqual(error.localizedDescription, "MLX artifact path rejected by snapshot confinement.", file: file, line: line)
+            let description = String(describing: error)
+            for secret in ["secret", "ESCAPED", "OpenMed", "https://", "/private/", "../../"] {
+                XCTAssertFalse(description.contains(secret), file: file, line: line)
+            }
+        }
+
+        private func manifestSession(files: [String: Data], beforeResponse: ((String) throws -> Void)? = nil) -> URLSession {
+            ManifestPathURLProtocol.install(files: files, beforeResponse: beforeResponse)
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [ManifestPathURLProtocol.self]
+            return URLSession(configuration: configuration)
+        }
 
         func testArtifactLoadsManifestAndTokenizerAssets() throws {
             let directory = try makeManifestOnlyArtifact()
@@ -745,42 +1174,9 @@
             func testSampleClinicalDocumentGLiNERMedicationCoverageAtDemoThreshold() async throws {
                 try requireUsableMLXRuntime()
 
-                let repoID = "OpenMed/gliner-multi-pii-v1-mlx"
-                let artifactURL: URL
-                if let artifactPath = ProcessInfo.processInfo.environment["OPENMED_GLINER_SPAN_ARTIFACT"],
-                    !artifactPath.isEmpty
-                {
-                    artifactURL = URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
-                } else if let homeDirectory = FileManager.default.homeDirectoryForCurrentUser as URL? {
-                    let localCacheArtifactURL =
-                        homeDirectory
-                        .appending(path: ".cache")
-                        .appending(path: "openmed-mlx")
-                        .appending(path: "OpenMed")
-                        .appending(path: "gliner-multi-pii-v1-mlx")
-                        .appending(path: "main")
-                    if FileManager.default.fileExists(
-                        atPath: localCacheArtifactURL.appending(path: "openmed-mlx.json").path
-                    ) {
-                        artifactURL = localCacheArtifactURL
-                    } else {
-                        let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-                        guard cacheState == .ready else {
-                            throw XCTSkip(
-                                "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
-                            )
-                        }
-                        artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
-                    }
-                } else {
-                    let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-                    guard cacheState == .ready else {
-                        throw XCTSkip(
-                            "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
-                        )
-                    }
-                    artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
-                }
+                // Keep SDK release validation separate from optional model qualification:
+                // an unrelated home cache must not silently select the artifact under test.
+                let artifactURL = try localArtifactURL(from: "OPENMED_GLINER_SPAN_ARTIFACT")
 
                 let labels = [
                     "symptom",

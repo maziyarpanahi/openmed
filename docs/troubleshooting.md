@@ -44,7 +44,12 @@ hint when needed. These checks do not include private paths, filenames or tokens
 - `brief_mlx_platform`: the built-in MLX alias requires Apple silicon on macOS.
 - `brief_mlx_runtime`: the MLX, MLX-LM and Hub packages are discoverable.
 - `brief_summarizer_cache`: the registered pinned Maple revision has non-empty
-  config/tokenizer files and weights (all indexed shards when sharded).
+  config/tokenizer files and weights (all indexed shards when sharded) in the
+  distribution cache. This inventory does not satisfy runtime admission.
+- `brief_summarizer_package`: the application has registered a local package
+  with a trusted immutable manifest pin. Registration does not verify files;
+  the runtime still verifies its complete provisioned package before loading.
+  The default remains a warning until the host registers a reviewed package.
 - `brief_raw_note_pii_cache`: the default English PII artifact is cached. Its
   local `main` reference must resolve to a complete snapshot; this is not an
   immutable pin or verification of another language/model chosen by the caller.
@@ -52,8 +57,10 @@ hint when needed. These checks do not include private paths, filenames or tokens
   warning `caller_nli_provider_required` explains the caller-supplied option.
 
 `PASS` means the named prerequisite was observed, not that inference succeeded
-or that a model is clinically qualified. The checks do not validate cache contents
-as model code, calibration quality, a review packet, or sufficient device memory.
+or that a model is clinically qualified. The checks do not validate cache or
+provisioned package contents as model code, calibration quality, a review packet,
+or sufficient device memory. Cache index reads are bounded to 1 MiB; malformed
+or deeply nested indexes are reported as missing without parser diagnostics.
 Supply a reviewed context and a calibrated local NLI provider to compose a brief;
 training a new model is optional and is not a release requirement.
 

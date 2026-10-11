@@ -441,3 +441,48 @@ def test_risk_assess_policy_failure_matches_value_free_contract(
     }
     assert captured.err == ""
     assert str(rejected_path) not in captured.out
+
+
+@pytest.mark.parametrize("reason", ["cancelled", "deadline_exceeded"])
+def test_interrupted_brief_has_refused_envelope_and_no_output_files(
+    monkeypatch, tmp_path, capsys, reason
+):
+    from openmed.cli import brief
+
+    response = {
+        "status": "refused",
+        "refusal_reason": reason,
+        "summary_characters": 0,
+        "digest": "sha256:" + "0" * 64,
+        "summary": "",
+    }
+    monkeypatch.setattr(brief, "brief_response", lambda *a, **k: dict(response))
+    source = tmp_path / "source.txt"
+    source.write_text("Synthetic note", encoding="utf-8")
+    summary = tmp_path / "summary.txt"
+    review = tmp_path / "review.json"
+    result = cli_main(
+        [
+            "brief",
+            str(source),
+            "--model",
+            "extractive",
+            "--summary-output",
+            str(summary),
+            "--review-output",
+            str(review),
+            "--json",
+        ]
+    )
+    envelope = json.loads(capsys.readouterr().out)
+    assert result == 1
+    assert envelope == {
+        "ok": True,
+        "command": "brief",
+        "outcome": "refused",
+        "data": {
+            key: response[key]
+            for key in ("status", "refusal_reason", "summary_characters", "digest")
+        },
+    }
+    assert not summary.exists() and not review.exists()

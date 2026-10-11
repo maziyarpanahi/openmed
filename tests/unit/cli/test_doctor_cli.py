@@ -511,3 +511,72 @@ def test_doctor_json_command_is_registered(monkeypatch, capsys):
     assert payload["ok"] is True
     assert payload["command"] == "doctor"
     assert payload["data"]["checks"] == diagnostics
+
+
+def test_brief_cache_deep_json_is_missing_without_exception_context(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    (snapshot / "model.safetensors.index.json").write_text(
+        "[" * 2000 + "0" + "]" * 2000
+    )
+    assert doctor_module._brief_cached_artifact(model, revision) is False
+
+
+def test_brief_cache_bounds_read_even_when_stat_size_is_stale(monkeypatch, tmp_path):
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = "synthetic/model", "b" * 40
+    snapshot = _fake_brief_cache(tmp_path, model, revision)
+    (snapshot / "model.safetensors").unlink()
+    (snapshot / "shard-1.safetensors").write_text("synthetic")
+    index = snapshot / "model.safetensors.index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "weight_map": {"weight": "shard-1.safetensors"},
+                "padding": "x" * 1_048_576,
+            }
+        )
+    )
+    original_stat = Path.stat
+    monkeypatch.setattr(
+        Path,
+        "stat",
+        lambda path, *a, **k: (
+            SimpleNamespace(st_size=100)
+            if path == index
+            else original_stat(path, *a, **k)
+        ),
+    )
+    assert doctor_module._brief_cached_artifact(model, revision) is False
+
+
+@pytest.mark.parametrize("registered", [False, True])
+def test_readiness_reports_package_registration_separately_from_cache(
+    monkeypatch, tmp_path, registered
+):
+    from openmed.core import model_registry
+
+    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
+    model, revision = model_registry.resolve_summarizer_model()
+    _fake_brief_cache(tmp_path, model, revision)
+    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+    if registered:
+        model_registry.register_summarizer_package(
+            "mlx", package_root=tmp_path / "private-package", manifest_digest="0" * 64
+        )
+    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
+    assert checks["brief_summarizer_cache"]["status"] == "PASS"
+    package = checks["brief_summarizer_package"]
+    assert package["status"] == ("PASS" if registered else "WARN")
+    assert package["code"] == (
+        "summarizer_pin_registered" if registered else "summarizer_package_unpinned"
+    )
+    assert str(tmp_path) not in json.dumps(checks)
+    assert "private-package" not in json.dumps(checks)
