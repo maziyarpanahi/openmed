@@ -20,6 +20,78 @@ from openmed.service.app import create_app
 LOOPBACK_BASE_URL = "http://127.0.0.1"
 
 
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/analyze",
+        "/pii/extract",
+        "/pii/extract/stream",
+        "/pii/deidentify",
+        "/pii/deidentify/stream",
+        "/jobs",
+    ],
+)
+def test_unserved_models_are_rejected_without_filesystem_or_loader_access(
+    monkeypatch, endpoint, caplog
+):
+    from pathlib import Path
+
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_SERVED_MODELS", "synthetic/served-model")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError("request-selected model reached an unsafe boundary")
+
+        monkeypatch.setattr(app.state.runtime, "get_model_loader", forbidden)
+        exists = Path.exists
+        probed = []
+
+        def spy_exists(path):
+            probed.append(str(path))
+            return exists(path)
+
+        monkeypatch.setattr(Path, "exists", spy_exists)
+        envelopes = []
+        for name in (
+            "/etc",
+            "/missing-SYNTHETIC_SENTINEL",
+            "~/.ssh",
+            "../SYNTHETIC_SENTINEL",
+            "C:\\SYNTHETIC_SENTINEL",
+            "unlisted/model",
+        ):
+            payload = {"text": "synthetic", "model_name": name}
+            if endpoint == "/jobs":
+                payload = {"documents": [{"text": "synthetic"}], "model_name": name}
+            response = client.post(
+                endpoint,
+                json=payload,
+                headers={"X-Request-ID": "12345678-1234-1234-1234-123456789abc"},
+            )
+            assert response.status_code == 422
+            assert response.json()["error"]["code"] == "model_not_served"
+            envelopes.append(response.content)
+        assert len(set(envelopes)) == 1
+        assert not any(
+            "SYNTHETIC_SENTINEL" in path or path in {"/etc", "~/.ssh"}
+            for path in probed
+        )
+    assert "SYNTHETIC_SENTINEL" not in caplog.text
+
+
+def test_served_models_and_production_policy_are_observable_without_loader(monkeypatch):
+    from openmed.core.config import OpenMedConfig
+
+    runtime = service_runtime.ServiceRuntime(profile="prod", config=OpenMedConfig())
+    assert runtime.model_policy_report()["findings"] == ["served_models_not_explicit"]
+    runtime.served_models = ("synthetic/model",)
+    assert runtime.validate_served_model("synthetic/model") == "synthetic/model"
+    assert runtime.loaded_models()["served_models"] == ["synthetic/model"]
+    assert runtime.model_policy_report()["findings"] == []
+
+
 @pytest.fixture(autouse=True)
 def clear_security_env(monkeypatch):
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
@@ -263,13 +335,13 @@ def test_analyze_invalid_confidence_threshold_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.confidence_threshold"
 
 
-def test_analyze_invalid_model_name_returns_validation_error(client):
+def test_analyze_invalid_model_name_returns_controlled_policy_error(client):
     response = client.post(
         "/analyze", json={"text": "sample", "model_name": "bad model"}
     )
 
-    payload = _assert_error_payload(response, 422, "validation_error")
-    assert payload["error"]["details"][0]["field"] == "body.model_name"
+    payload = _assert_error_payload(response, 422, "model_not_served")
+    assert payload["error"]["details"] is None
 
 
 def test_analyze_invalid_aggregation_strategy_returns_validation_error(client):
@@ -724,11 +796,12 @@ def test_pii_extract_rejects_attacker_controlled_privacy_filter_model_name(
     fake_loader_cls,
 ):
     """CVE-2026-47117 regression: a request with an attacker-controlled
-    repo name whose path contains "privacy-filter" must NOT route through
+    explicitly served repo whose path contains "privacy-filter" must NOT route through
     the privacy-filter dispatcher (which would otherwise load with
     trust_remote_code=True). It should fall through to the standard PII
     loader, which never enables custom-code execution.
     """
+    client.app.state.runtime.served_models = ("attacker/foo-privacy-filter-bar",)
     monkeypatch.setattr(
         openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result()
     )
@@ -762,6 +835,7 @@ def test_pii_deidentify_rejects_attacker_controlled_privacy_filter_model_name(
 ):
     """CVE-2026-47117 regression: same as the /pii/extract case but for the
     /pii/deidentify endpoint, which reaches the same vulnerable code path."""
+    client.app.state.runtime.served_models = ("attacker/foo-privacy-filter-bar",)
     monkeypatch.setattr(
         openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result()
     )
@@ -931,6 +1005,11 @@ def test_manual_unload_all_endpoint_releases_cached_pipelines(
     monkeypatch,
     fake_loader_cls,
 ):
+    client.app.state.runtime.served_models = (
+        "disease_detection_superclinical",
+        "OpenMed/model-two",
+    )
+
     def fake_analyze(*args, **kwargs):
         kwargs["loader"].create_pipeline(
             kwargs["model_name"],

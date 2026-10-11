@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4678843
+    "json": 4686688
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4678843
+    "docs/search/search_index.json": 4686688
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -112,6 +112,7 @@
     "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
-    "Runtime model downloads in the opt-in browser demo are excluded."
+    "Runtime model downloads in the opt-in browser demo are excluded.",
+    "After integrating the service authority and safe reference-launcher documentation, the staged artifact measures 56215320 total bytes, 55850807 unique payload bytes and a 4685002-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
   ]
 }

@@ -7901,6 +7901,7 @@ def _handle_config_show(args: argparse.Namespace) -> int:
             raise CliError(str(e), code="invalid_profile", exit_code=EXIT_USAGE)
 
     payload = config.to_dict()
+    payload["hf_token_present"] = bool(config.hf_token)
     payload["_source"] = source
     return emit(args, payload, human=json.dumps(payload, indent=2))
 
