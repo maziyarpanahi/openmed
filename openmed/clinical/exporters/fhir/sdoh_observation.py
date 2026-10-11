@@ -18,6 +18,8 @@ from itertools import islice
 from typing import Any
 from urllib.parse import urlsplit
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 from ...sdoh_evidence import (
     ASSERTION_STATUSES,
     EVIDENCE_TYPES,
@@ -162,11 +164,11 @@ def _effective(value: Any) -> tuple[str, date | datetime]:
     if type(value) is str:
         try:
             if _DATE.fullmatch(value):
-                parsed = date.fromisoformat(value)
+                parsed = parse_iso_date(value)
                 normalized = parsed.isoformat()
             elif _DATETIME.fullmatch(value):
-                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                parsed = parsed.astimezone(timezone.utc)
+                timestamp: datetime = parse_iso_datetime(value)
+                parsed = timestamp.astimezone(timezone.utc)
                 normalized = parsed.isoformat().replace("+00:00", "Z")
         except (ValueError, OverflowError):
             pass
