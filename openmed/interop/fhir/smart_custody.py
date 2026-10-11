@@ -12,12 +12,14 @@ import secrets
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import cast
 from urllib.parse import urlsplit
 
 from openmed.interop.smart_scope_audit import (
     audit_smart_scope_preflight,
     parse_smart_scope_preflight,
 )
+from openmed.interop.smart_scope_grammar import SmartScope, parse_smart_scope
 
 _BEARER_TOKEN = re.compile(r"[A-Za-z0-9._~+/-]+={0,}\Z")
 _REASONS = frozenset(
@@ -55,7 +57,14 @@ class ScopeEvidence:
     scopes: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "scopes", _scopes(self.scopes))
+        normalized = _scopes(self.scopes)
+        evidence = []
+        for name in normalized:
+            parsed = parse_smart_scope(name)
+            if not isinstance(parsed, SmartScope):
+                raise SmartCustodyError("invalid_scopes")
+            evidence.append(parsed.evidence_value)
+        object.__setattr__(self, "scopes", tuple(evidence))
 
     def to_dict(self) -> dict[str, list[str]]:
         """Export scope evidence without a handle, audience, or credential."""
@@ -161,7 +170,7 @@ class SmartTokenCustody:
     ) -> str:
         """Return a random opaque handle for a scoped, unexpired credential."""
 
-        token = _token(access_token)
+        token = cast(str, _token(access_token))
         refresh = _token(refresh_token, optional=True)
         target = _audience(audience)
         normalized = _scopes(scopes)

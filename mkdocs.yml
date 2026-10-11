@@ -71,6 +71,9 @@ nav:
       - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
+      - Runtime Authority Revocation: agent/runtime-revocation.md
+      - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+      - Effect Admission and Emergency Stop: agent/effect-admission.md
       - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
       - Agent Action Ledger: agent/action-ledger.md
       - Deterministic Agent Replay: agent/deterministic-replay.md
@@ -123,6 +126,7 @@ nav:
       - Guarded Clinical Intelligence:
           - Brief and Summarization:
               - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Local Backends and Typed Outcomes: clinical/local-backends.md
               - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
               - Section-Preserving Summary Planning: clinical/summary-section-planning.md
               - Synthetic Brief Walkthrough: demo/clinical-brief.md
@@ -590,6 +594,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
