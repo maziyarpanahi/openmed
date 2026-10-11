@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+
+- Add an offline synthetic SDOH/temporal/timeline example with explicit reference
+  time, authored event axes and controlled labels/offsets/states-only output;
+  smoke tests reject API drift, external arguments and source/date output (#3760).
+- Registered SDOH extraction scoring with independently authored synthetic gold,
+  a reproducible counts-only baseline, retained known misses and an eval-only
+  native SHAC status view that reports unavailable data without zero scores.
+- Add explicit language-aware SDOH extraction with per-category unsupported,
+  processed, skipped and failed outcomes. Declare English support for packaged
+  cue tables and built-in extractors, retain legacy English dispatch, and keep
+  audit output limited to category metadata, counts and offsets (#3797).
 - Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
   exact span lineage, vocabulary snapshot checks and rollback evidence.
   Replacement proposals preserve prior pipeline digests and explicitly review
@@ -127,6 +138,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Explain SDOH extraction, registered determinants, custom extractors and cue
+  table loading with runnable offline synthetic examples and source-value limits.
+
 - Document clinical brief trust boundaries across Python, CLI, REST, MCP and
   OpenMedKit, with existing mitigation tests and explicit residual risks;
   validate mitigation test links and source citations offline (#3752).
@@ -233,6 +247,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Add the offline agent governance self-check and `openmed agent self-check`
+  command. Independently verify the actual schema catalog, bundled golden
+  summaries, closed fields, outcomes, correlations, timing and commitments,
+  returning deterministic value-free reports with negative controls.
+- Include the existing MIT-licensed JSON Schema validator in the base install
+  so the governance self-check needs no development extra. Keep the license
+  inventory, SBOM closure and standalone manifest aligned with that dependency.
+- Bundle seven metadata-only agent run-summary golden vectors with strict,
+  offline validation of canonical JSON, Markdown digests and commitments (#3044).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
   agent outcome, correlation, timing and run-summary records.
 - Added the offline `openmed models slm-verify` command, which verifies a local

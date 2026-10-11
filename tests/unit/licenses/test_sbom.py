@@ -149,7 +149,32 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
     component_names = {component["name"] for component in document["components"]}
     # The SBOM is a universal closure, including the conditional Python 3.10
     # TOML backport even when this test runs on a newer interpreter.
-    assert component_names == {"faker", "jieba", "pysbd", "pyyaml", "tomli", "tzdata"}
+    assert component_names == {
+        "attrs",
+        "faker",
+        "jieba",
+        "jsonschema",
+        "jsonschema-specifications",
+        "pysbd",
+        "pyyaml",
+        "referencing",
+        "rpds-py",
+        "tomli",
+        "typing-extensions",
+        "tzdata",
+    }
+    components = {c["name"]: c for c in document["components"]}
+    for name in (
+        "attrs",
+        "jsonschema",
+        "jsonschema-specifications",
+        "referencing",
+        "rpds-py",
+    ):
+        assert components[name]["licenses"] == [{"license": {"id": "MIT"}}]
+    assert components["typing-extensions"]["licenses"] == [
+        {"license": {"id": "PSF-2.0"}}
+    ]
     root_ref = document["metadata"]["component"]["bom-ref"]
     root_dependencies = next(
         entry for entry in document["dependencies"] if entry["ref"] == root_ref
@@ -159,6 +184,7 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
     ] == [
         "faker",
         "jieba",
+        "jsonschema",
         "pysbd",
         "pyyaml",
         "tomli",
