@@ -111,6 +111,101 @@ or callback arguments. Applications may record `error.evidence.to_dict()` and
 must not log the rejected ticket or request. A denial envelope is evidence that
 this local check failed, not a complete audit ledger.
 
+## Authorize tool results before downstream use
+
+Request authorization does not authorize whatever a tool returns. The Python
+`openmed.agent.permissions.result_scope` boundary uses the existing ticket,
+`RecordSelector`, `ArtifactReference` and minimum-data projection contracts.
+It owns result authorization; it does not resolve identities, scan arguments,
+judge clinical correctness or grant permission to perform clinical actions.
+This slice targets the existing Python agent ticket API; it adds no Swift or
+Apple Foundation Models execution path.
+
+Construct a trusted expected `ResultScope` with four separate selector kinds:
+patient, encounter, namespace and evidence snapshot. Include **exactly those
+four selectors** in the read's `AccessTicketRequest`. The issuer may grant a
+broader ticket, but results must match this narrower request. Use stable
+application-owned selector kinds and the same local keyed mapping for expected
+and observed identities. The snapshot selector must bind its exact version or
+digest; a namespace selector must distinguish tenants/sources even when their
+local patient identifiers coincide. Missing dimensions and repeated kinds fail
+closed. A workflow without encounter or snapshot evidence cannot use this
+boundary; do not invent placeholder identities.
+
+A trusted local adapter independently derives `ResultScope` from authoritative
+resource metadata on **each** `ToolResultPage`, `ToolResultRecord` and nested
+record in `children`. Do not trust scope asserted by a model, copy request scope
+onto returned records, inherit parent/page scope or hide independent resources
+inside ordinary field values. Nested structured values in `fields` are governed
+by the reviewed schema; independent resource records belong in `children` and
+each requires its own scope and evidence identity. This module compares supplied
+evidence, rather than proving that an adapter's metadata is authentic.
+
+The per-record output schema uses the same annotations as
+[minimum-data projections](minimum-data-projections.md). The gate derives its
+projection using the request's purpose and data classes. Declared containers
+do not authorize arbitrary descendants: objects are closed, nested properties
+must be declared and arrays follow their `items` schema. Extra fields quarantine
+the **whole batch**, rather than silently dropping unauthorized content. Missing
+fields, incompatible shapes, opaque object values and non-finite numbers also
+fail closed. This is an authorization projection, not a complete JSON Schema or
+clinical validator.
+
+```python
+from openmed.agent.permissions import dispatch_with_authorized_results
+
+# expected_scope, output_schema and local_read are reviewed local bindings.
+# request.record_selectors exactly covers expected_scope.selectors().
+result = dispatch_with_authorized_results(
+    ticket,
+    request,
+    AccessTicketVerifier(),
+    scope=expected_scope,
+    schema=output_schema,
+    read=local_read,
+    consume=screen_then_run_next_step,
+)
+```
+
+The local `read` returns a tuple of all collected pages, in contiguous zero-based
+order, with `final=True` only on the last page. The adapter must establish source
+pagination completeness; the boundary cannot discover omitted pages or fetch
+continuation URLs. Lazy batches, partial batches and missing scope on even an
+empty page fail closed. No first-page streaming occurs. Limits are 64 pages,
+10,000 traversed record/value nodes and depth 32. The reviewed schema is copied
+before invoking the adapter; later caller-side schema mutation cannot expand it.
+Ticket validity is checked before reading, after reading and immediately before
+release using the verifier's clock. Explicit `now` is for deterministic replay.
+
+Accepted results receive fresh nested field dictionaries/lists and retain their
+original scope and `ArtifactReference` object, including its opaque identity and
+digest. The reference identifies **original evidence**, not the newly projected
+field encoding. Every record needs an evidence reference; duplicate artifact IDs
+in one batch fail closed rather than guessing record custody. No new evidence
+digest or model output is fabricated.
+
+On rejection, `consume` is never invoked and no partial result is returned.
+Record only `ResultQuarantinedError.to_dict()` in an action trace. It contains a
+fixed schema version and controlled reason code, with no payloads, unexpected
+field names, selector digests or provider exception messages. Read failures also
+discard the original exception context before raising the controlled quarantine
+error. Existing ticket and projection errors retain their own value-free
+diagnostics. Quarantine means
+withholding output: this library does not log, cache, save or otherwise persist
+rejected content. Applications must keep protected inputs outside audit traces
+and must not capture exception traceback locals.
+
+Authorization and privacy screening are independent. Correct patient scope can
+still contain PHI or hostile instructions; `consume` must apply the application's
+separate privacy preflight/injection guards before model context or subsequent
+actions. Conversely, a PHI-free result for the wrong patient is still rejected.
+No network call, identity resolver, mandatory dependency or cloud fallback is
+added.
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/permissions/test_result_scope.py tests/integration/agent/test_result_scope_boundary.py -q
+```
+
 ## Relationship to capability grants
 
 A signed capability-grant manifest answers whether the agent may request an
@@ -128,4 +223,92 @@ Run the focused offline tests with:
 
 ```text
 .venv/bin/python -m pytest tests/unit/agent/permissions/test_access_tickets.py -q
+```
+
+## Verify FHIR write references before preview
+
+`FHIRWriteScopeVerifier` uses the same ticket authority to reject wrong-patient
+references in a proposed create, update or transaction Bundle before a local
+preview callback runs. This Python agent/FHIR boundary does not execute writes
+or replace preview, approval, provenance, read-side scope or clinical review.
+
+Configure it with the issuer's patient and encounter selector kinds, the same
+local HMAC selector key, an exact FHIR server base and an injected
+`ReferenceScopeResolver`. Direct `Patient/id` and `Encounter/id` references,
+including same-base absolute URLs and versioned references, map the unversioned
+**id** through `RecordSelector.from_value()` and must match the active ticket.
+A transaction URN targeting a Patient or Encounter with an id uses that same
+mapping. The ticket issuer must establish the patient/encounter relationship;
+the verifier does not perform identity discovery.
+
+For other resource types, contained fragments and URN targets without stable
+ids, `resolver.resolve(reference, resource=target)` returns a sequence of
+candidate scopes. A scope is a tuple of keyed `RecordSelector` objects. The
+resolver receives the exact local target for internal references, or `None`
+for existing server resources. It must independently establish ownership;
+presence in the proposed Bundle, a contained id, or a proposed subject claim is
+not permission. One candidate must contain exactly one patient selector and,
+when the ticket contains an encounter selector, exactly one encounter selector.
+Every returned selector must belong to the active ticket. Zero candidates,
+multiple candidates, missing scope evidence and resolver exceptions fail closed.
+The injected resolver must remain local-first and never log its transient inputs.
+
+```python
+from openmed.agent.permissions import (
+    FHIRWriteScopeVerifier,
+    preview_with_fhir_write_scope,
+)
+
+# resolver, selector_key, ticket, request, and proposed_resource are provided
+# by the trusted local application. The payload and resolver are synthetic
+# in tests; no model inference or server connection is required.
+guard = FHIRWriteScopeVerifier(
+    selector_key=selector_key,
+    patient_selector_kind="selector:org.example/patient@1.0.0",
+    encounter_selector_kind="selector:org.example/encounter@1.0.0",
+    server_base="https://synthetic.example/fhir",
+    resolver=resolver,
+)
+preview = preview_with_fhir_write_scope(
+    proposed_resource,
+    ticket,
+    request,
+    guard,
+    lambda: render_local_preview(proposed_resource),
+)
+```
+
+The wrapper verifies the full run, purpose, expiry, projection, selector and
+write tool/action request before walking every reference, including transaction
+entries, contained resources, extension `valueReference` elements and nested
+R5 CodeableReferences. In-scope inputs and callback results pass unchanged.
+Internal `urn:uuid` targets must be unique transaction entries; fragment targets
+must be unique within the referring resource's contained collection. Cross-entry
+fragments cannot borrow another entry's contained resource. Only transaction
+`POST`/`PUT` entries are supported; other Bundle types and operations fail closed.
+
+`FHIRWriteScopeError.findings` contains only `path` and `code`. Logical
+identifier-only references produce `identifier_only_reference`; foreign bases
+produce `foreign_base_reference`; unresolved targets produce
+`unresolvable_reference`; ambiguous identities/candidates produce
+`ambiguous_reference`. Invalid syntax, absent scope evidence and unauthorized
+selectors produce `invalid_reference`, `scope_evidence_missing` and
+`selector_out_of_scope` respectively. Structural/configuration failures use
+`invalid_payload`/`invalid_configuration`. Unknown profile keys become positional
+`field[index]` paths so arbitrary input key text cannot enter diagnostics. Do not
+log payloads, tickets, resolver inputs, keys, tracebacks with captured locals or
+selector values. Resolver exception messages are discarded.
+
+This is a reference-scope guard, not complete FHIR schema validation or
+execution authorization. Run schema/type checks separately. The shared
+reference-integrity walker visits unknown profile fields; explicit Reference
+objects and identifier-only wrappers are checked conservatively, while known
+resource-specific reference fields are also checked for malformed values.
+Payloads are limited to 64 nesting levels and 100,000 visited values, and cycles
+or non-JSON shapes fail closed. The application must preview the verified payload
+without mutation and bind that exact payload to its later approval/provenance
+checks; verification does not create an approval receipt or authorize execution.
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/permissions/test_fhir_write_scope.py tests/unit/interop/test_fhir_reference_integrity.py tests/integration/agent/test_fhir_write_scope_boundary.py -q
 ```
