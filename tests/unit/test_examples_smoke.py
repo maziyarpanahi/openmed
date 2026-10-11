@@ -27,166 +27,134 @@ from examples import (
     onboarding_china_mirrors,
     onboarding_india_dpdp,
     v30_nli_relations,
+    v30_sdoh_timeline,
 )
 
 deid_demo = importlib.import_module("examples.spaces.deid_demo.app")
 
 
-def _assert_nli_relation_demo_output(output: str) -> None:
+def _assert_sdoh_timeline_demo_output(output: str) -> None:
     records = [json.loads(line) for line in output.splitlines()]
-    assert len(records) == 9
+    assert len(records) == 12
     assert records[0] == {
         "record": "demonstration",
-        "synthetic": True,
-        "clinical_validation": False,
-        "requires_human_review": True,
-        "autonomous_decision": False,
+        "data": "synthetic",
+        "clinical_validation": "not_validated",
+        "review": "required",
     }
-    expected_nli = (
-        ("heuristic-development-only", "heuristic", 0, "entailment", 1.0, False, False),
+    assert records[1:4] == [
+        {
+            "record": "sdoh",
+            "category": "employment",
+            "status": "unemployed",
+            "span": [45, 55],
+        },
+        {
+            "record": "sdoh",
+            "category": "food_insecurity",
+            "status": "current",
+            "span": [70, 85],
+        },
+        {
+            "record": "sdoh",
+            "category": "living_status",
+            "status": "lives_alone",
+            "span": [57, 68],
+        },
+    ]
+    assert records[4:8] == [
+        {"record": "temporal", "kind": "DATE", "span": [121, 131], "state": "anchored"},
+        {"record": "temporal", "kind": "DATE", "span": [139, 144], "state": "anchored"},
+        {
+            "record": "temporal",
+            "kind": "DATE",
+            "span": [160, 170],
+            "state": "ambiguous",
+        },
+        {"record": "temporal", "kind": "DATE", "span": [197, 206], "state": "anchored"},
+    ]
+    assert [
         (
-            "heuristic-development-only",
-            "heuristic",
-            1,
-            "contradiction",
-            0.96,
-            True,
-            False,
-        ),
-        ("heuristic-development-only", "heuristic", 2, "neutral", 0.5, False, False),
-        (
-            "synthetic-calibration-double",
-            "synthetic-calibrated-double",
-            0,
-            "entailment",
-            1.0,
-            False,
-            False,
-        ),
-        (
-            "synthetic-calibration-double",
-            "synthetic-calibrated-double",
-            1,
-            "contradiction",
-            1.0,
-            True,
-            False,
-        ),
-        (
-            "synthetic-calibration-double",
-            "synthetic-calibrated-double",
-            2,
-            "abstention",
-            1.0,
-            False,
-            True,
-        ),
-    )
-    for row, expected in zip(records[1:7], expected_nli, strict=True):
-        usage, backend, index, label, score, contradicted, review = expected
-        assert row == {
-            "record": "nli",
-            "usage": usage,
-            "backend_id": backend,
-            "claim_index": index,
-            "label": label,
-            "score": score,
-            "contradicted": contradicted,
-            "review_required": review,
+            row["kind"],
+            row["span"],
+            row["temporality"],
+            row["certainty"],
+            row["time_state"],
+        )
+        for row in records[8:]
+    ] == [
+        ("symptom", [115, 120], "historical", "certain", "anchored"),
+        ("symptom", [133, 138], "recent", "certain", "anchored"),
+        ("symptom", [146, 153], "recent", "uncertain", "relative_or_unknown"),
+        ("event", [187, 196], "hypothetical", "uncertain", "anchored"),
+    ]
+    for row in records[8:]:
+        assert set(row) == {
+            "record",
+            "kind",
+            "span",
+            "temporality",
+            "certainty",
+            "negation",
+            "experiencer",
+            "time_state",
+            "review",
         }
-    expected_relations = (
-        (
-            "diagnosis_to_treatment",
-            [21, 30],
-            [44, 55],
-            [[31, 43]],
-            0.851064,
-            2,
-            "sha256:693240d2d0dd94f2ec5cff33c1b7ab7184d20c09fd0d488ee9c7bc568e322f7d",
-            "sha256:1b7d83c996a793f155b13741f9dad37b42493b2ed48e15c6414f54589573942b",
-        ),
-        (
-            "procedure_to_indication",
-            [63, 69],
-            [93, 102],
-            [[70, 83]],
-            0.769231,
-            1,
-            "sha256:6c4adb5554cd0596723effb4f6442727aa7ed965a89125cd65e6544482674b37",
-            "sha256:b44293d43afad1e093641eda2cbe31c7fff2e9450fcd261e65d07fdbab6c612a",
-        ),
-    )
-    for row, expected in zip(records[7:], expected_relations, strict=True):
-        (
-            relation,
-            head,
-            tail,
-            evidence,
-            confidence,
-            score,
-            evidence_digest,
-            binding_digest,
-        ) = expected
-        assert row == {
-            "record": "relation",
-            "relation_type": relation,
-            "assertion_state": "uncertain",
-            "confidence": confidence,
-            "head_span": head,
-            "tail_span": tail,
-            "evidence_spans": evidence,
-            "evidence_digests": [evidence_digest],
-            "binding_digest": binding_digest,
-            "requires_clinician_review": True,
-            "autonomous_decision": False,
-            "review_band": "band_b",
-            "policy_score": score,
-            "clinical_urgency_inferred": False,
-        }
+        assert row["record"] == "timeline"
+        assert row["negation"] == "affirmed"
+        assert row["experiencer"] == "patient"
+        assert row["review"] == "required"
     for surface in (
-        v30_nli_relations.SYNTHETIC_NOTE,
-        *v30_nli_relations.SYNTHETIC_CLAIMS,
-        "pneumonia",
-        "ceftriaxone",
-        "biopsy",
-        "lung mass",
-        "synthetic:relations",
+        v30_sdoh_timeline.SYNTHETIC_NOTE,
+        "retired teacher",
+        "fever",
+        "cough",
+        "fatigue",
+        "follow-up",
+        "03/04/2026",
+        "2026-06-12",
+        "2026-06-15",
+        "2026-06-17",
+        "3 days ago",
+        "in 2 days",
     ):
         assert surface not in output
 
 
 @pytest.fixture
-def forbid_nli_relation_model_loading(monkeypatch):
+def forbid_sdoh_timeline_model_loading(monkeypatch):
     from openmed.core.models import ModelLoader
 
     def fail(*args, **kwargs):
-        raise AssertionError("synthetic relation example attempted model loading")
+        raise AssertionError("synthetic example attempted model loading")
 
     monkeypatch.setattr(ModelLoader, "load_model", fail)
     monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
 
 
-def test_nli_relation_example_is_import_safe(capsys, forbid_nli_relation_model_loading):
-    namespace = runpy.run_path(v30_nli_relations.__file__, run_name="example_import")
+def test_sdoh_timeline_example_is_import_safe(
+    capsys, forbid_sdoh_timeline_model_loading
+):
+    namespace = runpy.run_path(v30_sdoh_timeline.__file__, run_name="example_import")
     assert callable(namespace["build_demo_records"])
     assert capsys.readouterr() == ("", "")
 
 
-def test_nli_relation_example_runs_public_calls_offline(
-    capsys, forbid_nli_relation_model_loading
+def test_sdoh_timeline_example_runs_real_public_calls_offline(
+    capsys, forbid_sdoh_timeline_model_loading
 ):
-    records = v30_nli_relations.build_demo_records()
-    assert v30_nli_relations.build_demo_records() == records
-    assert v30_nli_relations.main([]) == 0
+    first = v30_sdoh_timeline.build_demo_records()
+    assert v30_sdoh_timeline.build_demo_records() == first
+    assert v30_sdoh_timeline.main([]) == 0
     captured = capsys.readouterr()
     assert captured.err == ""
-    _assert_nli_relation_demo_output(captured.out)
+    _assert_sdoh_timeline_demo_output(captured.out)
 
 
-def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
+def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
-        [sys.executable, "-m", "examples.v30_nli_relations"],
+        [sys.executable, "-m", "examples.v30_sdoh_timeline"],
         cwd=root,
         env={
             **os.environ,
@@ -202,116 +170,91 @@ def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
     )
     assert result.stderr == ""
     assert "EXTERNAL_NOTE_MUST_NOT_BE_READ" not in result.stdout
-    _assert_nli_relation_demo_output(result.stdout)
+    _assert_sdoh_timeline_demo_output(result.stdout)
 
 
 @pytest.mark.parametrize(
     "arguments",
     [["PRIVATE_ARGUMENT_SENTINEL"], ["--note", "PRIVATE_ARGUMENT_SENTINEL"]],
 )
-def test_nli_relation_example_refuses_arguments_without_echo(
+def test_sdoh_timeline_example_refuses_arguments_without_echo(
     arguments, monkeypatch, capsys
 ):
     def fail():
-        pytest.fail("argument refusal ran the relation demonstration")
+        pytest.fail("argument refusal ran extraction")
 
-    monkeypatch.setattr(v30_nli_relations, "build_demo_records", fail)
-    assert v30_nli_relations.main(arguments) == 2
-    assert capsys.readouterr() == (
-        "",
-        "synthetic_relation_example_accepts_no_arguments\n",
-    )
+    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", fail)
+    assert v30_sdoh_timeline.main(arguments) == 2
+    assert capsys.readouterr() == ("", "synthetic_example_accepts_no_arguments\n")
 
 
 @pytest.mark.parametrize(
     "public_call",
-    [
-        "verify",
-        "evaluate_nli",
-        "detect_sections",
-        "generate_diagnosis_treatment_candidates",
-        "generate_procedure_indication_candidates",
-        "bind_relation_evidence",
-        "assign_review_priority",
-    ],
+    ["detect_sections", "extract_sdoh", "normalize_temporal", "build_timeline"],
 )
-def test_nli_relation_example_reports_failure_without_partial_output(
+def test_sdoh_timeline_example_reports_api_failure_without_partial_output(
     public_call, monkeypatch, capsys
 ):
     def fail(*args, **kwargs):
         raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
 
-    monkeypatch.setattr(v30_nli_relations, public_call, fail)
-    assert v30_nli_relations.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+    monkeypatch.setattr(v30_sdoh_timeline, public_call, fail)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
 
 
-def test_nli_relation_example_blocks_python_network_attempts(monkeypatch, capsys):
-    def network(*args, **kwargs):
-        socket.create_connection(("example.invalid", 443))
-        pytest.fail("example's offline guard permitted an outbound socket")
-
-    monkeypatch.setattr(v30_nli_relations, "verify", network)
-    assert v30_nli_relations.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+def test_sdoh_timeline_example_detects_section_scope_drift(monkeypatch, capsys):
+    monkeypatch.setattr(v30_sdoh_timeline, "detect_sections", lambda _: [])
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
 
 
-def test_nli_relation_example_detects_missing_candidates(monkeypatch, capsys):
-    monkeypatch.setattr(
-        v30_nli_relations,
-        "generate_diagnosis_treatment_candidates",
-        lambda *args, **kwargs: (),
-    )
-    assert v30_nli_relations.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+def test_sdoh_timeline_example_detects_normalization_drift(monkeypatch, capsys):
+    normalize = v30_sdoh_timeline.normalize_temporal
+
+    def changed(*args, **kwargs):
+        from dataclasses import replace
+
+        values = list(normalize(*args, **kwargs))
+        values[0] = replace(values[0], value="1900-01-01")
+        return tuple(values)
+
+    monkeypatch.setattr(v30_sdoh_timeline, "normalize_temporal", changed)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
 
 
-def test_nli_relation_example_projects_only_known_nli_fields(monkeypatch, capsys):
-    verify = v30_nli_relations.verify
-
-    def extra(*args, **kwargs):
-        return [
-            {**row, "source": "PRIVATE_SOURCE_SENTINEL"}
-            for row in verify(*args, **kwargs)
-        ]
-
-    monkeypatch.setattr(v30_nli_relations, "verify", extra)
-    assert v30_nli_relations.main([]) == 0
-    captured = capsys.readouterr()
-    assert captured.err == ""
-    assert "PRIVATE_SOURCE_SENTINEL" not in captured.out
-    _assert_nli_relation_demo_output(captured.out)
-
-
-@pytest.mark.parametrize(
-    "field,value",
-    (
-        ("score", object()),
-        ("score", float("nan")),
-        ("score", "PRIVATE_SOURCE_SENTINEL"),
-        ("backend_id", "PRIVATE_SOURCE_SENTINEL"),
-    ),
-)
-def test_nli_relation_example_closes_scalar_and_serialization_drift(
-    field, value, monkeypatch, capsys
-):
-    verify = v30_nli_relations.verify
-
-    def malformed(*args, **kwargs):
-        records = verify(*args, **kwargs)
-        records[0][field] = value
-        return records
-
-    monkeypatch.setattr(v30_nli_relations, "verify", malformed)
-    assert v30_nli_relations.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
-
-
-def test_nli_relation_output_check_rejects_changed_evidence_digest():
-    records = v30_nli_relations.build_demo_records()
-    records[7]["evidence_digests"] = ["sha256:" + "0" * 64]
+def test_sdoh_timeline_output_check_rejects_unprojected_temporal_values():
+    records = v30_sdoh_timeline.build_demo_records()
+    records[4]["value"] = "2026-06-12"
     with pytest.raises(AssertionError):
-        _assert_nli_relation_demo_output("\n".join(json.dumps(row) for row in records))
+        _assert_sdoh_timeline_demo_output("\n".join(json.dumps(row) for row in records))
+
+
+@pytest.mark.parametrize("drift", ["object", "private_kind", "nonfinite", "alias"])
+def test_sdoh_timeline_cli_refuses_scalar_drift_before_any_output(
+    drift, monkeypatch, capsys
+):
+    records = v30_sdoh_timeline.build_demo_records()
+    if drift == "object":
+        records[4]["kind"] = object()
+    elif drift == "private_kind":
+        records[4]["kind"] = "PRIVATE_PROVIDER_KIND"
+    elif drift == "nonfinite":
+        records[4]["span"][0] = float("nan")
+    else:
+
+        class Impersonator(str):
+            def __eq__(self, other):
+                return other == "unemployed"
+
+            def __hash__(self):
+                return hash("unemployed")
+
+        records[1]["status"] = Impersonator("PRIVATE_PROVIDER_STATUS")
+    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", lambda: records)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():
@@ -993,3 +936,285 @@ def test_deid_demo_readme_has_local_run_instructions():
 
     assert "python -m pip install -r requirements.txt" in readme
     assert "python app.py" in readme
+
+
+def _assert_nli_relation_demo_output(output: str) -> None:
+    records = [json.loads(line) for line in output.splitlines()]
+    assert len(records) == 9
+    assert records[0] == {
+        "record": "demonstration",
+        "synthetic": True,
+        "clinical_validation": False,
+        "requires_human_review": True,
+        "autonomous_decision": False,
+    }
+    expected_nli = (
+        ("heuristic-development-only", "heuristic", 0, "entailment", 1.0, False, False),
+        (
+            "heuristic-development-only",
+            "heuristic",
+            1,
+            "contradiction",
+            0.96,
+            True,
+            False,
+        ),
+        ("heuristic-development-only", "heuristic", 2, "neutral", 0.5, False, False),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            0,
+            "entailment",
+            1.0,
+            False,
+            False,
+        ),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            1,
+            "contradiction",
+            1.0,
+            True,
+            False,
+        ),
+        (
+            "synthetic-calibration-double",
+            "synthetic-calibrated-double",
+            2,
+            "abstention",
+            1.0,
+            False,
+            True,
+        ),
+    )
+    for row, expected in zip(records[1:7], expected_nli, strict=True):
+        usage, backend, index, label, score, contradicted, review = expected
+        assert row == {
+            "record": "nli",
+            "usage": usage,
+            "backend_id": backend,
+            "claim_index": index,
+            "label": label,
+            "score": score,
+            "contradicted": contradicted,
+            "review_required": review,
+        }
+    expected_relations = (
+        (
+            "diagnosis_to_treatment",
+            [21, 30],
+            [44, 55],
+            [[31, 43]],
+            0.851064,
+            2,
+            "sha256:693240d2d0dd94f2ec5cff33c1b7ab7184d20c09fd0d488ee9c7bc568e322f7d",
+            "sha256:1b7d83c996a793f155b13741f9dad37b42493b2ed48e15c6414f54589573942b",
+        ),
+        (
+            "procedure_to_indication",
+            [63, 69],
+            [93, 102],
+            [[70, 83]],
+            0.769231,
+            1,
+            "sha256:6c4adb5554cd0596723effb4f6442727aa7ed965a89125cd65e6544482674b37",
+            "sha256:b44293d43afad1e093641eda2cbe31c7fff2e9450fcd261e65d07fdbab6c612a",
+        ),
+    )
+    for row, expected in zip(records[7:], expected_relations, strict=True):
+        (
+            relation,
+            head,
+            tail,
+            evidence,
+            confidence,
+            score,
+            evidence_digest,
+            binding_digest,
+        ) = expected
+        assert row == {
+            "record": "relation",
+            "relation_type": relation,
+            "assertion_state": "uncertain",
+            "confidence": confidence,
+            "head_span": head,
+            "tail_span": tail,
+            "evidence_spans": evidence,
+            "evidence_digests": [evidence_digest],
+            "binding_digest": binding_digest,
+            "requires_clinician_review": True,
+            "autonomous_decision": False,
+            "review_band": "band_b",
+            "policy_score": score,
+            "clinical_urgency_inferred": False,
+        }
+    for surface in (
+        v30_nli_relations.SYNTHETIC_NOTE,
+        *v30_nli_relations.SYNTHETIC_CLAIMS,
+        "pneumonia",
+        "ceftriaxone",
+        "biopsy",
+        "lung mass",
+        "synthetic:relations",
+    ):
+        assert surface not in output
+
+
+@pytest.fixture
+def forbid_nli_relation_model_loading(monkeypatch):
+    from openmed.core.models import ModelLoader
+
+    def fail(*args, **kwargs):
+        raise AssertionError("synthetic relation example attempted model loading")
+
+    monkeypatch.setattr(ModelLoader, "load_model", fail)
+    monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
+
+
+def test_nli_relation_example_is_import_safe(capsys, forbid_nli_relation_model_loading):
+    namespace = runpy.run_path(v30_nli_relations.__file__, run_name="example_import")
+    assert callable(namespace["build_demo_records"])
+    assert capsys.readouterr() == ("", "")
+
+
+def test_nli_relation_example_runs_public_calls_offline(
+    capsys, forbid_nli_relation_model_loading
+):
+    records = v30_nli_relations.build_demo_records()
+    assert v30_nli_relations.build_demo_records() == records
+    assert v30_nli_relations.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    _assert_nli_relation_demo_output(captured.out)
+
+
+def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [sys.executable, "-m", "examples.v30_nli_relations"],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(root),
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
+        },
+        input="EXTERNAL_NOTE_MUST_NOT_BE_READ\n",
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
+    )
+    assert result.stderr == ""
+    assert "EXTERNAL_NOTE_MUST_NOT_BE_READ" not in result.stdout
+    _assert_nli_relation_demo_output(result.stdout)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [["PRIVATE_ARGUMENT_SENTINEL"], ["--note", "PRIVATE_ARGUMENT_SENTINEL"]],
+)
+def test_nli_relation_example_refuses_arguments_without_echo(
+    arguments, monkeypatch, capsys
+):
+    def fail():
+        pytest.fail("argument refusal ran the relation demonstration")
+
+    monkeypatch.setattr(v30_nli_relations, "build_demo_records", fail)
+    assert v30_nli_relations.main(arguments) == 2
+    assert capsys.readouterr() == (
+        "",
+        "synthetic_relation_example_accepts_no_arguments\n",
+    )
+
+
+@pytest.mark.parametrize(
+    "public_call",
+    [
+        "verify",
+        "evaluate_nli",
+        "detect_sections",
+        "generate_diagnosis_treatment_candidates",
+        "generate_procedure_indication_candidates",
+        "bind_relation_evidence",
+        "assign_review_priority",
+    ],
+)
+def test_nli_relation_example_reports_failure_without_partial_output(
+    public_call, monkeypatch, capsys
+):
+    def fail(*args, **kwargs):
+        raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+    monkeypatch.setattr(v30_nli_relations, public_call, fail)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_example_blocks_python_network_attempts(monkeypatch, capsys):
+    def network(*args, **kwargs):
+        socket.create_connection(("example.invalid", 443))
+        pytest.fail("example's offline guard permitted an outbound socket")
+
+    monkeypatch.setattr(v30_nli_relations, "verify", network)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_example_detects_missing_candidates(monkeypatch, capsys):
+    monkeypatch.setattr(
+        v30_nli_relations,
+        "generate_diagnosis_treatment_candidates",
+        lambda *args, **kwargs: (),
+    )
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_example_projects_only_known_nli_fields(monkeypatch, capsys):
+    verify = v30_nli_relations.verify
+
+    def extra(*args, **kwargs):
+        return [
+            {**row, "source": "PRIVATE_SOURCE_SENTINEL"}
+            for row in verify(*args, **kwargs)
+        ]
+
+    monkeypatch.setattr(v30_nli_relations, "verify", extra)
+    assert v30_nli_relations.main([]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert "PRIVATE_SOURCE_SENTINEL" not in captured.out
+    _assert_nli_relation_demo_output(captured.out)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("score", object()),
+        ("score", float("nan")),
+        ("score", "PRIVATE_SOURCE_SENTINEL"),
+        ("backend_id", "PRIVATE_SOURCE_SENTINEL"),
+    ),
+)
+def test_nli_relation_example_closes_scalar_and_serialization_drift(
+    field, value, monkeypatch, capsys
+):
+    verify = v30_nli_relations.verify
+
+    def malformed(*args, **kwargs):
+        records = verify(*args, **kwargs)
+        records[0][field] = value
+        return records
+
+    monkeypatch.setattr(v30_nli_relations, "verify", malformed)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
+def test_nli_relation_output_check_rejects_changed_evidence_digest():
+    records = v30_nli_relations.build_demo_records()
+    records[7]["evidence_digests"] = ["sha256:" + "0" * 64]
+    with pytest.raises(AssertionError):
+        _assert_nli_relation_demo_output("\n".join(json.dumps(row) for row in records))
