@@ -153,7 +153,9 @@ def _bounded(
     try:
         result = tuple(islice(values, limit + 1))
     except Exception:
-        raise NlpOmopStagingError("invalid_input") from None
+        result = None
+    if result is None:
+        raise NlpOmopStagingError("invalid_input")
     if len(result) > limit:
         raise NlpOmopStagingError("input_too_large")
     return result
@@ -472,6 +474,14 @@ def _validate_preview_metadata(preview: OmopMutationPreview) -> None:
         )
         if (
             type(preview.operation_counts) is not tuple
+            or any(
+                type(item) is not tuple
+                or len(item) != 2
+                or type(item[0]) is not str
+                or item[0] not in {"insert", "tombstone"}
+                or not _integer(item[1], 1, MAX_BATCH_MUTATIONS)
+                for item in preview.operation_counts
+            )
             or preview.operation_counts != counts
         ):
             raise ValueError
@@ -497,7 +507,11 @@ def _validate_preview_metadata(preview: OmopMutationPreview) -> None:
             ):
                 raise ValueError
     except Exception:
-        raise NlpOmopStagingError("invalid_preview") from None
+        invalid = True
+    else:
+        invalid = False
+    if invalid:
+        raise NlpOmopStagingError("invalid_preview")
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -548,7 +562,8 @@ class NlpOmopStagedBatch:
         try:
             return json.loads(self._rollback_materials[mutation_ordinal])
         except Exception:
-            raise NlpOmopStagingError("invalid_rollback") from None
+            pass
+        raise NlpOmopStagingError("invalid_rollback")
 
     @property
     def rollback_requirements(self) -> tuple[OmopRollbackInstruction, ...]:
@@ -599,7 +614,8 @@ class NlpOmopStagedBatch:
                 raise NlpOmopStagingError("invalid_rollback")
             return manifest
         except Exception:
-            raise NlpOmopStagingError("invalid_rollback") from None
+            pass
+        raise NlpOmopStagingError("invalid_rollback")
 
     def preview(self, rollback_manifest: OmopRollbackManifest) -> NlpOmopStagedPreview:
         """Preflight exact lineage, target vocabulary, references and rollback."""
@@ -611,7 +627,11 @@ class NlpOmopStagedBatch:
             if rebuilt != rollback_manifest:
                 raise NlpOmopStagingError("invalid_rollback")
         except Exception:
-            raise NlpOmopStagingError("invalid_rollback") from None
+            invalid = True
+        else:
+            invalid = False
+        if invalid:
+            raise NlpOmopStagingError("invalid_rollback")
         # The existing gate rejects an empty mapping collection. Represent that
         # refusal in the preview rather than misclassifying it as rollback drift.
         gate = (
@@ -681,7 +701,8 @@ class NlpOmopStagedBatch:
                 approval_receipt_digest=_normalize_digest(approval_receipt_digest),
             )
         except Exception:
-            raise NlpOmopStagingError("invalid_preview") from None
+            pass
+        raise NlpOmopStagingError("invalid_preview")
 
 
 def _copy_tables(value: OmopCdmTables) -> dict[str, tuple[dict[str, Scalar], ...]]:
@@ -1075,7 +1096,9 @@ def stage_nlp_omop_tables(
             existing_tables=existing_tables,
             existing_pipeline_digests=existing_pipeline_digests,
         )
-    except NlpOmopStagingError:
-        raise
+    except NlpOmopStagingError as error:
+        stored = vars(error).get("code") if type(error) is NlpOmopStagingError else None
+        code = stored if type(stored) is str and stored in _CODES else "invalid_input"
     except Exception:
-        raise NlpOmopStagingError("invalid_input") from None
+        code = "invalid_input"
+    raise NlpOmopStagingError(code)

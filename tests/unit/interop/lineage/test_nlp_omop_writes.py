@@ -601,3 +601,119 @@ def test_forged_public_preview_cannot_echo_private_metadata(kind):
     with pytest.raises(NlpOmopStagingError, match="invalid_preview") as exc:
         replace(packet, batch_preview=changed)
     assert CANARY not in str(exc.value)
+
+
+@pytest.mark.parametrize("boundary", ["staging", "lineage", "rollback", "evidence"])
+def test_private_iterator_exceptions_do_not_remain_in_public_context(boundary):
+    from openmed.interop.omop import OmopMutationBatch, OmopMutationError
+
+    def failing():
+        raise RuntimeError(CANARY)
+        yield
+
+    stage = staged()
+    with pytest.raises((NlpOmopStagingError, OmopMutationError)) as caught:
+        if boundary == "staging":
+            staged(vocabulary_mappings=failing())
+        elif boundary == "lineage":
+            NlpOmopWriteLineage(failing())
+        elif boundary == "rollback":
+            stage.build_rollback_manifest(failing())
+        else:
+            OmopMutationBatch(stage.batch.mutations, evidence_digests=failing())
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert CANARY not in str(caught.value)
+
+
+@pytest.mark.parametrize("boundary", ["preview", "binding"])
+def test_private_preflight_failures_do_not_remain_in_public_context(
+    monkeypatch, boundary
+):
+    import openmed.interop.lineage.nlp_omop_writes as module
+    from openmed.interop.omop import OmopMutationBatch
+
+    stage = staged()
+    packet, manifest = preview(stage)
+
+    def failing(*args, **kwargs):
+        raise RuntimeError(CANARY)
+
+    if boundary == "preview":
+        monkeypatch.setattr(module, "validate_omop_rollback_manifest", failing)
+    else:
+        monkeypatch.setattr(OmopMutationBatch, "bind_approval", failing)
+    with pytest.raises(NlpOmopStagingError) as caught:
+        if boundary == "preview":
+            stage.preview(manifest)
+        else:
+            stage.bind_approval(
+                packet,
+                manifest,
+                approved_preview_digest=packet.preview_digest,
+                approval_receipt_digest=RECEIPT,
+            )
+    assert caught.value.__context__ is None
+    assert CANARY not in str(caught.value)
+
+
+def test_private_invalid_rollback_json_has_no_public_exception_context():
+    stage = staged()
+    changed = replace(
+        stage, _rollback_materials=(CANARY, *stage._rollback_materials[1:])
+    )
+    with pytest.raises(NlpOmopStagingError) as caught:
+        changed.rollback_material(0)
+    assert caught.value.__context__ is None
+
+
+def test_private_note_unicode_failure_has_no_public_exception_context():
+    source = tables()
+    rows = copy.deepcopy(source.tables)
+    rows["note"][0]["note_text"] += "\ud800" + CANARY
+    with pytest.raises(NlpOmopStagingError) as caught:
+        staged(tables=replace(source, tables=rows))
+    assert caught.value.__context__ is None
+
+
+def test_foreign_staging_error_is_not_forwarded_or_inspected():
+    getter_calls = []
+
+    class ForeignError(NlpOmopStagingError):
+        def __init__(self):
+            ValueError.__init__(self, CANARY)
+
+        @property
+        def code(self):
+            getter_calls.append(True)
+            return CANARY
+
+    def failing():
+        raise ForeignError()
+        yield
+
+    source = tables()
+    rows = dict(source.tables)
+    rows["note"] = failing()
+    with pytest.raises(NlpOmopStagingError) as caught:
+        staged(tables=replace(source, tables=rows))
+    assert type(caught.value) is NlpOmopStagingError
+    assert caught.value.__context__ is None
+    assert not getter_calls
+    assert CANARY not in str(caught.value)
+
+
+def test_operation_count_string_subclasses_cannot_impersonate_closed_metadata():
+    class Impersonator(str):
+        def __eq__(self, other):
+            return other == "insert"
+
+        def __hash__(self):
+            return hash("insert")
+
+    packet, _ = preview(staged())
+    counts = ((Impersonator(CANARY), packet.batch_preview.operation_counts[0][1]),)
+    with pytest.raises(NlpOmopStagingError):
+        replace(
+            packet, batch_preview=replace(packet.batch_preview, operation_counts=counts)
+        )

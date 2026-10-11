@@ -538,7 +538,9 @@ class OmopMutationBatch:
         try:
             evidence = tuple(islice(evidence_digests, 17))
         except Exception:
-            raise OmopMutationError("invalid_evidence_collection") from None
+            evidence = None
+        if evidence is None:
+            raise OmopMutationError("invalid_evidence_collection")
         if len(evidence) > 16:
             raise OmopMutationError("too_many_evidence_digests")
         for digest in evidence:

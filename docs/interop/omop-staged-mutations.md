@@ -134,6 +134,8 @@ references and bidirectional domain-event links. Staging also checks patient,
 visit, source-hash and concept consistency and requires one mapping row per
 span. Rows are bounded to 10,000 per snapshot and per proposed batch. Unexpected
 columns and invalid inputs produce closed error codes without row values.
+Public failures discard private exception contexts, and preview operation
+counts require exact built-in scalar types rather than caller-defined aliases.
 
 `replace_by_note` requires an explicit complete `existing_tables` snapshot.
 Replacement is scoped to patient plus source-note identity, so another patient
