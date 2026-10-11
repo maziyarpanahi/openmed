@@ -156,7 +156,8 @@ class WorkflowCLIRequest:
                 value["schema_version"],
             )
         except Exception:
-            raise WorkflowCLIError("input_invalid") from None
+            pass
+        raise WorkflowCLIError("input_invalid")
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -361,7 +362,8 @@ def workflow_cli_receipt_digest(receipt: ApprovalReceipt) -> str:
             "sha256:" + hashlib.sha256(restored.to_json().encode("utf-8")).hexdigest()
         )
     except Exception:
-        raise WorkflowCLIError("receipt_invalid") from None
+        pass
+    raise WorkflowCLIError("receipt_invalid")
 
 
 def _call(service: WorkflowCLIGovernanceService, operation: str, *args, **kwargs):
@@ -376,9 +378,14 @@ def _call(service: WorkflowCLIGovernanceService, operation: str, *args, **kwargs
                 raise NotImplementedError()
             return method(*args, **kwargs)
     except NotImplementedError:
-        raise WorkflowCLIError("adapter_unavailable", 7) from None
-    except BaseException:
-        raise WorkflowCLIError("service_failed", 1) from None
+        error = WorkflowCLIError("adapter_unavailable", 7)
+    except BaseException as exc:
+        error = (
+            WorkflowCLIError(exc.code, exc.exit_code)
+            if type(exc) is WorkflowCLIError
+            else WorkflowCLIError("service_failed", 1)
+        )
+    raise error
 
 
 def _view(value: Any, request: WorkflowCLIRequest) -> WorkflowCLIView:
@@ -407,13 +414,6 @@ def _now(clock: Callable[[], int]) -> int:
         raise WorkflowCLIError("service_failed", 1) from None
 
 
-def _receipt_time(receipt: ApprovalReceipt, now: int) -> None:
-    if now < receipt.consumed_at:
-        raise WorkflowCLIError("receipt_future", 4)
-    if now >= receipt.expires_at:
-        raise WorkflowCLIError("receipt_expired", 4)
-
-
 def _execute(
     args: argparse.Namespace,
     service: WorkflowCLIGovernanceService | None,
@@ -430,7 +430,7 @@ def _execute(
             raise WorkflowCLIError("receipt_invalid") from None
         if not hmac.compare_digest(receipt.action_digest, request.action_digest):
             raise WorkflowCLIError("receipt_conflict", 6)
-        _receipt_time(receipt, _now(clock))
+        _now(clock)
     if service is None:
         raise WorkflowCLIError("adapter_unavailable", 7)
     if args.operation in ("plan", "preview", "inspect"):
@@ -460,7 +460,6 @@ def _execute(
         return current
     if receipt is not None:
         now = _now(clock)
-        _receipt_time(receipt, now)
         verified = _call(service, "verify_receipt", request, receipt, now=now)
         try:
             if type(verified) is not WorkflowCLIReceiptVerification:
@@ -477,7 +476,6 @@ def _execute(
         ):
             raise WorkflowCLIError("receipt_conflict", 6)
         now = _now(clock)
-        _receipt_time(receipt, now)
         result = _view(_call(service, "resume", request, receipt, now=now), request)
     else:
         result = _view(
@@ -527,7 +525,10 @@ class _Parser(argparse.ArgumentParser):
 
 
 def _add_commands(agents: argparse.ArgumentParser) -> None:
+    from .agent_admission import _add_admission_subcommands
+
     groups = agents.add_subparsers(dest="agent_group", parser_class=_Parser)
+    _add_admission_subcommands(groups)
     workflow = groups.add_parser(
         "workflow", help="Governed workflow previews and explicit recovery."
     )
@@ -635,7 +636,9 @@ def run_governed_workflow_cli(
         return 0 if exc.code == 0 else 2
     except Exception as exc:
         error = (
-            exc if type(exc) is WorkflowCLIError else WorkflowCLIError("input_invalid")
+            WorkflowCLIError(exc.code, exc.exit_code)
+            if type(exc) is WorkflowCLIError
+            else WorkflowCLIError("input_invalid")
         )
         exit_code = error.exit_code
         envelope = {

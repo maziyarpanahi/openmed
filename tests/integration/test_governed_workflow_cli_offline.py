@@ -42,9 +42,7 @@ def test_console_entry_offline_preview_review_and_explicit_resume(tmp_path):
         action,
         state,
     )
-    receipt = ApprovalReceipt(
-        action, "role:org.example/reviewer", "sha256:" + "c" * 64, 0, 4_102_444_800
-    )
+    receipt = ApprovalReceipt(action, "sha256:" + "c" * 64)
     _private(request_path, request.to_dict())
     _private(receipt_path, receipt.to_dict())
     code = r"""
@@ -66,6 +64,7 @@ class Service:
     def __init__(self):
         self.view = WorkflowCLIView(request.run_id, request.workflow_id, request.action_digest, request.expected_state_digest, ActionPhase.WAITING_REVIEW, WorkflowCLIStatus.REVIEW_REQUIRED, 1)
         self.calls = []
+        self.receipt_expiry = 4_102_444_800
     def preview(self, bound):
         self.calls.append("preview")
         return replace(self.view, status=WorkflowCLIStatus.READY, phase=ActionPhase.READY)
@@ -78,10 +77,11 @@ class Service:
         raise AssertionError("Cancellation was not requested")
     def verify_receipt(self, bound, given, *, now):
         self.calls.append("verify_receipt")
+        assert now < self.receipt_expiry
         return WorkflowCLIReceiptVerification(bound.action_digest, workflow_cli_receipt_digest(given), self.view.state_digest, given == receipt)
     def resume(self, bound, given, *, now):
         self.calls.append("resume")
-        assert bound.expected_state_digest == self.view.state_digest and given == receipt and now < given.expires_at
+        assert bound.expected_state_digest == self.view.state_digest and given == receipt and now < self.receipt_expiry
         fd = os.open(marker_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as stream:
             stream.write("synthetic effect only")

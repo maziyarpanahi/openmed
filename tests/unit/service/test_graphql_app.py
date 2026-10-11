@@ -24,6 +24,87 @@ LOOPBACK_BASE_URL = "http://127.0.0.1"
 SYNTHETIC_TEXT = "Paciente: Maria Garcia"
 
 
+@pytest.mark.parametrize(
+    "selection",
+    [
+        'analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
+        'alias: deidentify(input: {text: "SYNTHETIC_FORBIDDEN"}) { deidentifiedText }',
+        'entityTypes { label } hidden: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text }',
+        "...Secret",
+    ],
+)
+def test_graphql_authorizes_complete_document_before_resolvers(
+    monkeypatch, selection, caplog
+):
+    import json
+
+    from openmed.service.auth import hash_api_key
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [{"key_hash": hash_api_key("synthetic-key"), "scopes": ["models:read"]}]
+        ),
+    )
+    app = create_app()
+    query = "query { " + selection + " }"
+    if selection == "...Secret":
+        query += ' fragment Secret on Query { alias: analyze(input: {text: "SYNTHETIC_FORBIDDEN"}) { text } }'
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/graphql", json={"query": query}, headers={"X-API-Key": "synthetic-key"}
+        )
+    result = response.json()
+    assert result["data"] is None
+    assert any(
+        error.get("extensions", {}).get("code") == "OPENMED_FORBIDDEN"
+        for error in result["errors"]
+    )
+    assert app.state.runtime._loader is None
+    assert "SYNTHETIC_FORBIDDEN" not in response.text + caplog.text
+
+
+def test_graphql_allowed_scope_preserves_results_and_rejects_unserved_models(
+    monkeypatch,
+):
+    import json
+
+    from openmed.service.auth import hash_api_key
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [{"key_hash": hash_api_key("synthetic-key"), "scopes": ["analyze:*"]}]
+        ),
+    )
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    monkeypatch.setattr(openmed, "analyze_text", lambda *a, **kw: _prediction_result())
+    query = "query($input: AnalyzeInput!) { analyze(input: $input) { spans { label start } } entityTypes { label } }"
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        allowed = client.post(
+            "/graphql",
+            json={"query": query, "variables": {"input": {"text": "synthetic"}}},
+            headers={"X-API-Key": "synthetic-key"},
+        )
+        denied = client.post(
+            "/graphql",
+            json={
+                "query": query,
+                "variables": {
+                    "input": {"text": "synthetic", "modelName": "/SYNTHETIC_UNSERVED"}
+                },
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert allowed.json()["data"]["analyze"]["spans"] == [
+        {"label": "NAME", "start": 10}
+    ]
+    assert denied.json()["errors"][0]["extensions"]["code"] == "model_not_served"
+    assert "SYNTHETIC_UNSERVED" not in denied.text
+
+
 class FakeLoader:
     """Minimal model loader used to verify shared runtime wiring."""
 
@@ -263,3 +344,29 @@ def test_schema_is_read_only() -> None:
     assert "type Query" in sdl
     assert "type Mutation" not in sdl
     assert "type Subscription" not in sdl
+
+
+def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
+    import json
+
+    from openmed.service.auth import hash_api_key
+    from openmed.service.graphql_schema import GRAPHQL_FIELD_SCOPES
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps([{"key_hash": hash_api_key("synthetic-key"), "scopes": ["*"]}]),
+    )
+    monkeypatch.delitem(GRAPHQL_FIELD_SCOPES, "analyze")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/graphql",
+            json={
+                "query": 'query { analyze(input: {text: "synthetic"}) { text } entityTypes { label } }'
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert response.json()["data"] is None
+    assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
+    assert app.state.runtime._loader is None

@@ -131,12 +131,14 @@ commands require it. The request refers to clinical inputs already held by the
 service, rather than embedding values, FHIR resources or OMOP rows.
 
 `--receipt` accepts only the existing metadata-only `ApprovalReceipt` schema.
-A receipt file is not authority by itself. Resume checks exact action binding,
-receipt consumption/expiry, the current snapshot and a typed verification result
-from trusted durable service custody. The verification must bind the same action,
-receipt digest and state digest. Expiry is checked again after verification.
-Changing a receipt's role, token digest or expiry changes its receipt digest and
-cannot establish verification. No bearer approval token is accepted or consumed.
+The v2 receipt has only action/token digests, the `approved` code and its schema
+version; it carries no reviewer role or timestamps and cannot establish authority.
+Resume checks exact action binding, the current snapshot and a typed verification
+result from trusted durable service custody. Verification binds the same action,
+receipt digest and state digest. The service owns consumption, role, expiry and
+replay checks, and checks them again at dispatch using a fresh trusted clock.
+Changing the token digest cannot establish verification; added role or timestamp
+fields are rejected. No bearer approval token is accepted or consumed.
 
 The service must atomically compare the expected state/action and reverify receipt
 custody and expiry at dispatch, including policy roles and replay/idempotency
@@ -239,3 +241,9 @@ the contracts tracked by #2766, #2767, #2768, #2771, #2773, #2774, #2775,
 ledger evidence, replay verification, single-use approval receipts, previews,
 FHIR conditional/concurrency/compensation/subscription behavior, staged OMOP
 batches and rollback manifests, action graphs, and action lifecycle phases.
+
+Existing `agents status`, `agents stop` and `agents resume` admission commands
+remain available alongside `agents workflow`. Workflow commands do not implicitly
+enable admission. A failed or malformed acknowledgement does not prove that an
+effect was absent: inspect durable service state and reconcile before requesting
+any further mutation. The CLI never retries a mutation automatically.

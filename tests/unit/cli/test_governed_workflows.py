@@ -18,6 +18,7 @@ from openmed.cli import main
 from openmed.cli.governed_workflows import (
     WORKFLOW_CLI_EXIT_CODES,
     WORKFLOW_CLI_SCHEMA_VERSION,
+    WorkflowCLIError,
     WorkflowCLIReceiptVerification,
     WorkflowCLIRequest,
     WorkflowCLIStatus,
@@ -51,9 +52,7 @@ def _request(**changes):
 
 def _receipt(**changes):
     return replace(
-        ApprovalReceipt(
-            ACTION, "role:org.example/reviewer", "sha256:" + "e" * 64, 10, 30
-        ),
+        ApprovalReceipt(ACTION, "sha256:" + "e" * 64),
         **changes,
     )
 
@@ -88,6 +87,8 @@ class _Service:
         self.stored_receipt = workflow_cli_receipt_digest(_receipt())
         self.verified = True
         self.race = False
+        self.consumed_at = 10
+        self.expires_at = 30
 
     def preview(self, request):
         self.calls.append("preview")
@@ -126,6 +127,7 @@ class _Service:
 
     def verify_receipt(self, request, receipt, *, now):
         self.calls.append("verify_receipt")
+        self.check_receipt_time(now)
         proof = WorkflowCLIReceiptVerification(
             request.action_digest,
             workflow_cli_receipt_digest(receipt),
@@ -137,14 +139,18 @@ class _Service:
             self.view = replace(self.view, state_digest=NEXT_STATE)
         return proof
 
+    def check_receipt_time(self, now):
+        if now < self.consumed_at:
+            raise WorkflowCLIError("receipt_future", 4)
+        if now >= self.expires_at:
+            raise WorkflowCLIError("receipt_expired", 4)
+
     def resume(self, request, receipt, *, now):
         self.calls.append("resume")
         if request.expected_state_digest != self.view.state_digest:
             return replace(self.view, status=WorkflowCLIStatus.CONFLICT)
-        if (
-            now >= receipt.expires_at
-            or workflow_cli_receipt_digest(receipt) != self.stored_receipt
-        ):
+        self.check_receipt_time(now)
+        if workflow_cli_receipt_digest(receipt) != self.stored_receipt:
             return replace(self.view, status=WorkflowCLIStatus.DENIED)
         self.effects += 1
         self.view = replace(
@@ -253,8 +259,6 @@ def test_edited_unsigned_receipt_cannot_resume(tmp_path, capsys):
         (_request(action_digest=OTHER), _receipt(), 6, "receipt_conflict"),
         (_request(expected_state_digest=OTHER), _receipt(), 6, "state_conflict"),
         (_request(expected_state_digest=None), _receipt(), 6, "state_conflict"),
-        (_request(), _receipt(expires_at=20), 4, "receipt_expired"),
-        (_request(), _receipt(consumed_at=21), 4, "receipt_future"),
     ],
 )
 def test_stale_mismatched_or_expired_custody_never_dispatches(
@@ -280,7 +284,10 @@ def test_expiry_is_rechecked_after_service_verification(tmp_path, capsys):
         tmp_path, "resume", capsys, service=service, clock=lambda: next(times)
     )
     assert code == 4 and result["error"]["code"] == "receipt_expired"
-    assert service.calls == ["inspect", "verify_receipt"] and service.effects == 0
+    assert (
+        service.calls == ["inspect", "verify_receipt", "resume"]
+        and service.effects == 0
+    )
 
 
 @pytest.mark.parametrize("field", ["action_digest", "state_digest", "receipt_digest"])
@@ -777,3 +784,80 @@ def test_typer_parser_errors_also_omit_inline_values(tmp_path):
     assert str(req) not in result.output
     assert json.loads(result.stdout)["error"]["code"] == "input_invalid"
     assert service.calls == []
+
+
+@pytest.mark.parametrize(
+    "field,value,reason",
+    [("expires_at", 20, "receipt_expired"), ("consumed_at", 21, "receipt_future")],
+)
+def test_receipt_time_authority_remains_in_service_custody(
+    tmp_path, capsys, field, value, reason
+):
+    service = _Service()
+    setattr(service, field, value)
+    code, result = _run(tmp_path, "resume", capsys, service=service)
+    assert code == 4 and result["error"]["code"] == reason
+    assert service.effects == 0 and "resume" not in service.calls
+    assert set(_receipt().to_dict()) == {
+        "action_digest",
+        "token_digest",
+        "code",
+        "schema_version",
+    }
+
+
+@pytest.mark.parametrize("operation", ["status", "stop", "resume"])
+def test_production_parser_preserves_existing_admission_commands(operation):
+    import importlib
+
+    cli_module = importlib.import_module("openmed.cli.main")
+    args = cli_module.build_parser().parse_args(["agents", operation])
+    assert args.admission_operation == operation
+    assert args.handler.__name__ == "_handle_admission"
+
+
+def test_production_admission_status_is_not_intercepted_by_workflow_service(capsys):
+    service = _Service()
+    assert main(["agents", "status"], governance_service=service) == 0
+    assert "admission_disabled" in capsys.readouterr().out
+    assert service.calls == []
+
+
+def test_callback_mutated_diagnostic_is_sanitized(tmp_path, capsys):
+    service = _Service()
+    error = WorkflowCLIError("service_failed", 1)
+    error.code = SENTINEL
+    error.exit_code = 99
+
+    def invalid(*args, **kwargs):
+        raise error
+
+    service.preview = invalid
+    code, result = _run(tmp_path, "preview", capsys, service=service)
+    assert 1 <= code <= 7
+    assert SENTINEL not in json.dumps(result)
+
+
+@pytest.mark.parametrize("boundary", ["request", "receipt"])
+def test_public_metadata_parsers_drop_private_exception_context(monkeypatch, boundary):
+    def private_failure(*args, **kwargs):
+        raise UnicodeDecodeError("utf-8", SENTINEL.encode(), 0, 1, "invalid")
+
+    if boundary == "request":
+        monkeypatch.setattr(RunId, "parse", private_failure)
+        payload = {
+            "schema_version": "openmed.cli.workflow_request.v1",
+            "run_id": "run_" + "a" * 32,
+            "workflow_id": "workflow:org.example/synthetic@1.0.0",
+            "action_digest": ACTION,
+            "expected_state_digest": STATE,
+        }
+        invoke = lambda: WorkflowCLIRequest.from_dict(payload)
+    else:
+        receipt = _receipt()
+        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+        invoke = lambda: workflow_cli_receipt_digest(receipt)
+    with pytest.raises(WorkflowCLIError) as caught:
+        invoke()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+    assert SENTINEL not in str(caught.value)
