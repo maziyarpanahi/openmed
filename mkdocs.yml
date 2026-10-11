@@ -535,6 +535,7 @@ nav:
       - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
       - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
       - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
+      - FHIR Subscription Notification Intake: interop/fhir-subscription-notifications.md
       - SMART Scope Audit Examples: interop/smart-scope-audit.md
       - SMART Token Custody: interop/smart-token-custody.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md

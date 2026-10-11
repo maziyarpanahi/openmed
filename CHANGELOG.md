@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Interoperability
+
+- Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
+  value-free event metadata and sequence reconciliation findings. Keep control
+  notifications out of new workflow events and require an authorized read for
+  missing event content; no resources, credentials or identifiers are returned
+  (#3772).
+
 ### Added
 
 - Opt-in local NLI verification for summarization and grounding, with retained
