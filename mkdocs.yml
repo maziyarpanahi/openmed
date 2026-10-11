@@ -64,6 +64,7 @@ nav:
       - Agent Run Completion Invariants: agent/run-invariants.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
+      - Offline Agent Governance Self-check: agent/self-check.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
       - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
@@ -370,6 +371,7 @@ nav:
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
