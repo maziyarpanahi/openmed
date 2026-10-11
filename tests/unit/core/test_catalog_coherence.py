@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from openmed.core.catalog_coherence import manifest_label_errors
+from openmed.core.catalog_coherence import main, manifest_label_errors
 from openmed.core.labels import CANONICAL_LABELS, OTHER, is_recognized_label
 from openmed.core.model_registry import load_manifest_rows
 from scripts.manifest import regenerate_surfaces
@@ -55,6 +55,43 @@ def test_clean_manifest_passes(tmp_path: Path) -> None:
         {"repo_id": "acme/ok", "canonical_labels": ["DISEASE", "CHEM", "OTHER"]},
     )
     assert manifest_label_errors(manifest_path=manifest) == []
+
+
+@pytest.mark.parametrize(
+    "value", [[], [1], "synthetic-private-row", 42, 0.5, True, False, None]
+)
+def test_non_object_rows_report_physical_line_without_value_or_path(tmp_path, value):
+    manifest = tmp_path / "synthetic-private-path.jsonl"
+    manifest.write_text("\n{}\n\n" + json.dumps(value) + "\n", encoding="utf-8")
+    assert manifest_label_errors(manifest_path=manifest) == [
+        "manifest line 4: expected a JSON object"
+    ]
+
+
+def test_cli_reports_non_object_as_normal_failure_without_traceback(tmp_path, capsys):
+    manifest = tmp_path / "synthetic-private-path.jsonl"
+    manifest.write_text('"synthetic-private-row"\n', encoding="utf-8")
+    assert main(["--manifest", str(manifest)]) == 1
+    output = capsys.readouterr()
+    assert "Catalog coherence check failed" in output.out
+    assert "manifest line 1: expected a JSON object" in output.out
+    assert "synthetic-private" not in output.out + output.err
+    assert "Traceback" not in output.out + output.err
+
+
+def test_empty_objects_and_blank_lines_remain_valid(tmp_path):
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text("\n{}\n\n", encoding="utf-8")
+    assert manifest_label_errors(manifest_path=manifest) == []
+    assert main(["--manifest", str(manifest)]) == 0
+
+
+def test_malformed_json_keeps_existing_diagnostic_path(tmp_path):
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text("\n{invalid\n", encoding="utf-8")
+    errors = manifest_label_errors(manifest_path=manifest)
+    assert len(errors) == 1
+    assert "line 2" in errors[0]
 
 
 def test_non_list_canonical_labels_is_flagged(tmp_path: Path) -> None:

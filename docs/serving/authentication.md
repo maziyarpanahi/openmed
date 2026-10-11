@@ -30,7 +30,9 @@ nulls, `NaN`, or infinities. `OPENMED_SERVICE_AUTH_JWT_LEEWAY_SECONDS` allows
 a finite non-negative clock skew. The production profile defaults
 `OPENMED_SERVICE_AUTH_JWT_MAX_LIFETIME_SECONDS` to 3600; when a lifetime bound
 is active, `iat` is mandatory and `exp - iat` cannot exceed that bound.
-Other profiles can opt into the same setting. There is no unlimited sentinel
+Invalid/non-finite validation clocks fail closed; decoder failures discard
+private credential bytes and their exception contexts. Other profiles can opt
+into the same setting. There is no unlimited sentinel
 value; configure a reviewed finite bound for longer-lived tokens.
 
 ```bash

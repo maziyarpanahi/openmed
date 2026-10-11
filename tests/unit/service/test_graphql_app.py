@@ -344,3 +344,29 @@ def test_schema_is_read_only() -> None:
     assert "type Query" in sdl
     assert "type Mutation" not in sdl
     assert "type Subscription" not in sdl
+
+
+def test_graphql_missing_field_policy_denies_even_wildcard_principal(monkeypatch):
+    import json
+
+    from openmed.service.auth import hash_api_key
+    from openmed.service.graphql_schema import GRAPHQL_FIELD_SCOPES
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps([{"key_hash": hash_api_key("synthetic-key"), "scopes": ["*"]}]),
+    )
+    monkeypatch.delitem(GRAPHQL_FIELD_SCOPES, "analyze")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.post(
+            "/graphql",
+            json={
+                "query": 'query { analyze(input: {text: "synthetic"}) { text } entityTypes { label } }'
+            },
+            headers={"X-API-Key": "synthetic-key"},
+        )
+    assert response.json()["data"] is None
+    assert response.json()["errors"][0]["extensions"]["code"] == "OPENMED_FORBIDDEN"
+    assert app.state.runtime._loader is None

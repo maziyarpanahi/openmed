@@ -5,13 +5,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from threading import Event
-from typing import Any
+from typing import Any, Callable, ParamSpec, TypeVar
 
 import httpx
 
@@ -30,13 +32,42 @@ from .smart_backend import (
     SMARTBackendIngestionSummary,
 )
 
+_PATH_CODES = frozenset(
+    {"bulk_paths_disabled", "path_invalid", "path_exists", "path_outside_root"}
+)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
 
 class BulkPathError(ValueError):
     """Controlled rejection of untrusted service-side filesystem authority."""
 
     def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
+        self.code = (
+            code if type(code) is str and code in _PATH_CODES else "path_invalid"
+        )
+        super().__init__(self.code)
+
+
+def _private_path_errors(callback: Callable[_P, _R]) -> Callable[_P, _R]:
+    @wraps(callback)
+    def guarded(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        code = "path_invalid"
+        try:
+            return callback(*args, **kwargs)
+        except BulkPathError as error:
+            if (
+                type(error) is BulkPathError
+                and type(error.code) is str
+                and error.code in _PATH_CODES
+            ):
+                code = error.code
+        except Exception:
+            pass
+        # Filesystem exceptions retain private filenames even with `from None`.
+        raise BulkPathError(code)
+
+    return guarded
 
 
 @dataclass(frozen=True)
@@ -57,6 +88,7 @@ class BulkStoragePolicy:
         output = os.getenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT")
         return cls(roots, Path(output).expanduser().resolve() if output else None)
 
+    @_private_path_errors
     def prepare(
         self,
         *,
@@ -68,6 +100,12 @@ class BulkStoragePolicy:
         """Validate all inputs, then reserve a new private job-owned output."""
         if self.output_root is None or (input_dir is not None and not self.input_roots):
             raise BulkPathError("bulk_paths_disabled")
+        if (
+            type(job_id) is not str
+            or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", job_id)
+            or ".." in job_id
+        ):
+            raise BulkPathError("path_invalid")
         if checkpoint_path is not None:
             raise BulkPathError("path_invalid")
         output_parts = _relative_path_parts(output_dir)

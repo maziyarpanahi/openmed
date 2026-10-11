@@ -26,7 +26,9 @@ running any resolver: `analyze` requires `analyze:write`, `deidentify` requires
 no additional field scope. Aliases, fragment spreads, and mixed-field requests
 cannot bypass this check. A denied document returns `data: null` and the
 value-free `OPENMED_FORBIDDEN` extension code, without partial results.
-Authentication-disabled local development behavior is unchanged.
+A root field missing its explicit scope declaration also fails closed, even
+for wildcard principals; standard schema introspection keeps its existing
+separate policy. Authentication-disabled local development behavior is unchanged.
 
 ## Select only the fields you need
 

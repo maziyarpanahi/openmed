@@ -120,7 +120,7 @@ for entity in result.entities:
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -472,7 +472,7 @@ OpenMed بر پایهٔ کارهای عالیِ متن‌باز ساخته شد�
 
 </div>
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

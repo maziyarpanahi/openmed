@@ -18,6 +18,10 @@ EXPIRES_AT = 2_000_000_000
 NOW = EXPIRES_AT - 100
 
 EXPECTED_FAILURES = (
+    ("not_yet_valid", "not_yet_valid"),
+    ("lifetime_exceeded", "lifetime_exceeded"),
+    ("unknown_key", "unknown_key"),
+    ("legacy_disabled", "legacy_token_disabled"),
     ("expiry", "expired"),
     ("replay", "replayed"),
     ("wrong_action_digest", "action_mismatch"),
@@ -46,7 +50,7 @@ def _approval_api() -> ModuleType:
 
 
 def _token(api: ModuleType, nonce_digit: str) -> Any:
-    return api.ApprovalTokenSigner(KEY).issue(
+    return api.ApprovalTokenSigner(KEY, clock=lambda: NOW).issue(
         action_digest=ACTION_DIGEST,
         reviewer_role=REVIEWER_ROLE,
         expires_at=EXPIRES_AT,
@@ -150,11 +154,82 @@ def _unsupported_schema_version_failure(api: ModuleType) -> FailureResult:
     )
 
 
+def _v2_policy_failures(api: ModuleType) -> tuple[FailureResult, ...]:
+    future = api.ApprovalTokenSigner(KEY, clock=lambda: NOW + 31).issue(
+        action_digest=ACTION_DIGEST,
+        reviewer_role=REVIEWER_ROLE,
+        expires_at=EXPIRES_AT,
+        nonce="nonce_" + "5" * 32,
+    )
+    token = _token(api, "6")
+    legacy = token.to_dict()
+    legacy.pop("key_id")
+    legacy.pop("issued_at")
+    legacy["schema_version"] = api.LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION
+    # Use the original five-claim HMAC format for the migration example.
+    import hashlib
+    import hmac
+    import json
+
+    legacy.pop("signature")
+    encoded = json.dumps(legacy, sort_keys=True, separators=(",", ":")).encode()
+    legacy["signature"] = (
+        "hmac-sha256:" + hmac.new(KEY, encoded, hashlib.sha256).hexdigest()
+    )
+    scenarios = (
+        (
+            "not_yet_valid",
+            "not_yet_valid",
+            future,
+            api.ApprovalTokenVerifier(
+                KEY, api.InMemoryApprovalNonceStore(), clock_skew_seconds=30
+            ),
+        ),
+        (
+            "lifetime_exceeded",
+            "lifetime_exceeded",
+            token,
+            api.ApprovalTokenVerifier(
+                KEY, api.InMemoryApprovalNonceStore(), max_lifetime_seconds=99
+            ),
+        ),
+        (
+            "unknown_key",
+            "unknown_key",
+            token,
+            api.ApprovalTokenVerifier(
+                api.MappingApprovalKeyProvider({}), api.InMemoryApprovalNonceStore()
+            ),
+        ),
+        (
+            "legacy_disabled",
+            "legacy_token_disabled",
+            legacy,
+            api.ApprovalTokenVerifier(KEY, api.InMemoryApprovalNonceStore()),
+        ),
+    )
+    return tuple(
+        _expect_failure(
+            scenario=scenario,
+            reason=reason,
+            error_type=api.ApprovalTokenError,
+            operation=lambda candidate=candidate, verifier=verifier: verifier.consume(
+                candidate,
+                action_digest=ACTION_DIGEST,
+                reviewer_role=REVIEWER_ROLE,
+                now=NOW,
+            ),
+        )
+        for scenario, reason, candidate, verifier in scenarios
+    )
+
+
 def run_examples() -> tuple[FailureResult, ...]:
-    """Run five deterministic failures without dispatching an action."""
+    """Run nine deterministic failures without dispatching an action."""
 
     api = _approval_api()
     results = (
+        *_v2_policy_failures(api),
         _expiry_failure(api),
         _replay_failure(api),
         _wrong_action_digest_failure(api),

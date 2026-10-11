@@ -1329,3 +1329,5 @@ class BriefResponse(_StrictModel):
     provenance: dict[str, Any]
     profile_digest: Optional[str]
     backend_id: Optional[str]
+    generation_contract: Optional[dict[str, Any]] = None
+    claim_bindings: Optional[list[dict[str, Any]]] = None

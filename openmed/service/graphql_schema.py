@@ -57,8 +57,10 @@ class FieldScopeExtension(SchemaExtension):
                 def enter_field(self, node, *_):
                     parent = self.context.get_parent_type()
                     if parent is not None and parent.name == "Query":
-                        required = GRAPHQL_FIELD_SCOPES.get(node.name.value, ())
-                        if not scopes_satisfy(granted, required):
+                        required = GRAPHQL_FIELD_SCOPES.get(node.name.value)
+                        if node.name.value in {"__schema", "__type", "__typename"}:
+                            required = ()
+                        if required is None or not scopes_satisfy(granted, required):
                             self.report_error(
                                 GraphQLError(
                                     "Operation is not permitted.",

@@ -257,3 +257,23 @@ def test_bulk_safe_relative_paths_reserve_exclusive_output_and_checkpoint(tmp_pa
             checkpoint_path=None,
             job_id="synthetic",
         )
+
+
+def test_bulk_path_io_failure_drops_private_exception_context(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from openmed.service.bulk_data import BulkPathError, BulkStoragePolicy
+
+    marker = "".join(("SYNTHETIC", "_PRIVATE", "_PATH"))
+
+    def fail(*args, **kwargs):
+        raise OSError(13, "permission denied", marker)
+
+    monkeypatch.setattr(Path, "mkdir", fail)
+    with pytest.raises(BulkPathError) as caught:
+        BulkStoragePolicy((), tmp_path).prepare(
+            input_dir=None, output_dir="new", checkpoint_path=None, job_id="synthetic"
+        )
+    assert caught.value.code == "path_invalid"
+    assert caught.value.__context__ is caught.value.__cause__ is None
+    assert marker not in str(caught.value)

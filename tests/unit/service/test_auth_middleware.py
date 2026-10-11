@@ -560,3 +560,26 @@ def test_heavy_routes_share_throttle_and_drain(monkeypatch, method, path):
         app.state.shutting_down = True
         _assert_error_payload(client.request(method, path), 503, "not_ready")
         assert client.get("/livez").status_code == 200
+
+
+def test_invalid_utf8_jwt_payload_drops_private_decoder_context():
+    import base64
+
+    from openmed.service.auth import AuthError, _decode_json_segment
+
+    marker = b"SYNTHETIC_PRIVATE_CREDENTIAL"
+    token = base64.urlsafe_b64encode(marker + b"\xff").decode().rstrip("=")
+    with pytest.raises(AuthError) as caught:
+        _decode_json_segment(token)
+    assert caught.value.code == "invalid_credentials"
+    assert caught.value.__context__ is caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("now", [float("nan"), float("inf"), -float("inf"), True])
+def test_jwt_validator_refuses_invalid_clock_values(now):
+    from openmed.service.auth import AuthError, ServiceAuthConfig, validate_jwt_claims
+
+    with pytest.raises(AuthError, match="credentials are invalid"):
+        validate_jwt_claims(
+            {"exp": 2_000_000_060, "iat": 1_999_999_990}, ServiceAuthConfig(), now=now
+        )

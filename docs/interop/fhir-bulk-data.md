@@ -124,7 +124,9 @@ caller-selected `checkpoint_path` are rejected. Output directories must not
 already exist: each accepted job exclusively reserves a private directory
 and derives its checkpoint name from the generated job id. Reusing an output
 directory returns `path_exists`, never overwrites another job's files.
-Other controlled codes are `bulk_paths_disabled`, `path_invalid`, and
+Filesystem errors are reconstructed outside handlers without retaining private
+filename contexts. The generated checkpoint identity is bounded and cannot
+contain path components. Other controlled codes are `bulk_paths_disabled`, `path_invalid`, and
 `path_outside_root`; none echoes the submitted path. The same output policy
 applies to `/fhir/smart-backend/ingestions`.
 

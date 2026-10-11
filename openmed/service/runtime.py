@@ -736,7 +736,7 @@ class ServiceRuntime:
     profile: str
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
-    served_models: Optional[Tuple[str, ...]] = None
+    served_models: Optional[Tuple[str, ...]] = field(default=None, kw_only=True)
     max_resident_models: Optional[int] = None
     model_memory_budget_bytes: Optional[int] = None
     default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
@@ -1001,7 +1001,7 @@ class ServiceRuntime:
     def loaded_models(self) -> Dict[str, Any]:
         """Return cache and keep-alive status for the service runtime."""
         if self._warm_pool is None and self._loader is None:
-            result = {
+            result: Dict[str, Any] = {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
                 "memory_budget_bytes": self.model_memory_budget_bytes,

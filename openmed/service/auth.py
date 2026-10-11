@@ -177,7 +177,7 @@ class ServiceAuthConfig:
     jwt_issuer: Optional[str] = None
     jwt_audiences: tuple[str, ...] = ()
     jwt_leeway_seconds: float = 0.0
-    jwt_max_lifetime_seconds: Optional[float] = None
+    jwt_max_lifetime_seconds: Optional[float] = field(default=None, kw_only=True)
     route_scopes: Mapping[tuple[str, str], tuple[str, ...]] = field(
         default_factory=lambda: dict(DEFAULT_ROUTE_SCOPES)
     )
@@ -737,13 +737,14 @@ def _decode_jwt(
 
 
 def _decode_json_segment(segment: str) -> Mapping[str, Any]:
+    payload = None
     try:
         payload = json.loads(
             _b64url_decode(segment).decode("utf-8"),
             parse_constant=_reject_json_constant,
         )
     except (UnicodeDecodeError, ValueError):
-        raise invalid_credentials() from None
+        pass
     if not isinstance(payload, Mapping):
         raise invalid_credentials()
     return payload
@@ -850,6 +851,15 @@ def validate_jwt_claims(
     now: float,
 ) -> None:
     """Validate finite JWT NumericDates and configured issuer/audience bounds."""
+    numeric_now = None
+    if type(now) in {int, float}:
+        try:
+            numeric_now = float(now)
+        except (OverflowError, ValueError):
+            pass
+    if numeric_now is None or not math.isfinite(numeric_now):
+        raise invalid_credentials()
+    now = numeric_now
     exp = _numeric_claim(payload, "exp", required=True)
     if exp is None:
         raise invalid_credentials()
@@ -890,13 +900,14 @@ def _numeric_claim(
     value = payload[name]
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise invalid_credentials()
+    numeric = None
     try:
         numeric = float(value)
-        if not math.isfinite(numeric):
-            raise invalid_credentials()
-        return numeric
     except (OverflowError, TypeError, ValueError):
-        raise invalid_credentials() from None
+        pass
+    if numeric is None or not math.isfinite(numeric):
+        raise invalid_credentials()
+    return numeric
 
 
 def _claim_audiences(raw_value: Any) -> set[str]:
