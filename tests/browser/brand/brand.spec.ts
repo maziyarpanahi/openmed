@@ -1146,6 +1146,56 @@ test("docs drawer traps focus and returns it on Escape", async ({
   expectCleanAudit(audit);
 });
 
+for (const width of [390, 1440]) {
+  test(`governed-agent docs connect lifecycle routes at ${width}px`, async ({
+    baseURL,
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await prepareTheme(page, "light");
+    const audit = monitorPage(page, baseURL);
+    await page.goto("/docs/agent-usage/", { waitUntil: "domcontentloaded" });
+    if (width === 390) {
+      await page.locator("[data-openmed-drawer]").click();
+      await page
+        .locator(".md-sidebar--primary label.md-nav__title")
+        .filter({ hasText: /Core Guides/ })
+        .click();
+      await page
+        .locator(".md-sidebar--primary")
+        .getByRole("link", { name: "Governed Agents", exact: true })
+        .click();
+    } else {
+      await page
+        .locator(".md-tabs")
+        .getByRole("link", { name: "Governed Agents", exact: true })
+        .click();
+    }
+    await expect(page).toHaveURL(new URL("/docs/agent/", baseURL).href);
+    await expectAccessible(page);
+    const routes = [
+      ["Signed capability grants", "/docs/agent/capability-grants/"],
+      ["Single-use approval tokens", "/docs/agent/human-approval-tokens/"],
+      ["Staged OMOP mutations", "/docs/interop/omop-staged-mutations/"],
+      ["Run summaries", "/docs/agent/run-summaries/"],
+      ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
+      ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
+      ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
+    ];
+    for (const [name, route] of routes) {
+      await page
+        .locator(".md-content")
+        .getByRole("link", { name, exact: true })
+        .click();
+      await expect(page).toHaveURL(new URL(route, baseURL).href);
+      await expect(page.locator("h1")).toBeVisible();
+      await expectNoPageOverflow(page);
+      await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
+    }
+    expectCleanAudit(audit);
+  });
+}
+
 test("docs clinical topics expose the previously unlisted guide routes", async ({
   baseURL,
   page,
