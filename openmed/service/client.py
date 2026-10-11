@@ -16,10 +16,17 @@ from openmed.structured.decision import (
     decision_request_schema,
 )
 
+from .governed_workflows import WorkflowReference, WorkflowView
 from .journey_client_generated import (
     JourneyResourceType,
     JourneyWorkflowClientMixin,
     JourneyWorkflowName,
+)
+from .workflow_client import (
+    WorkflowClientError,
+    WorkflowClientMixin,
+    WorkflowPollPolicy,
+    WorkflowReadOptions,
 )
 
 JsonDict = dict[str, Any]
@@ -184,7 +191,29 @@ def _request_field_names(request_type: type[Any]) -> frozenset[str]:
     return frozenset(field.name for field in fields(request_type))
 
 
+_WORKFLOW_REFERENCE_FIELDS = _request_field_names(WorkflowReference) | {
+    "schema_version"
+}
+
+
 CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
+    "workflow_preflight": ClientEndpoint(
+        "POST", "/v1/workflows/preflight", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_preview": ClientEndpoint(
+        "POST", "/v1/workflows/preview", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_status": ClientEndpoint(
+        "POST", "/v1/workflows/status", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_submit_receipt": ClientEndpoint(
+        "POST",
+        "/v1/workflows/review-receipts",
+        _WORKFLOW_REFERENCE_FIELDS | {"receipt"},
+    ),
+    "workflow_cancel": ClientEndpoint(
+        "POST", "/v1/workflows/cancel", _WORKFLOW_REFERENCE_FIELDS
+    ),
     "brief": ClientEndpoint(
         method="POST", path="/brief", request_fields=_request_field_names(BriefRequest)
     ),
@@ -254,11 +283,13 @@ class OpenMedAPIError(RuntimeError):
         super().__init__(f"{status_code} {code}: {message}{suffix}")
 
 
-class OpenMedClient(JourneyWorkflowClientMixin):
+class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
     """Small typed sync client for the OpenMed REST service.
 
     Non-2xx responses, including unfollowed redirects, raise
     :class:`OpenMedAPIError` for both JSON and streaming requests.
+    Governed workflow operations use :class:`WorkflowClientError`, immutable
+    native metadata and explicit single-attempt state changes.
     """
 
     def brief(
@@ -676,4 +707,9 @@ __all__ = [
     "PIIDeidentifyRequest",
     "PIIExtractRequest",
     "PIIExtractStreamRequest",
+    "WorkflowClientError",
+    "WorkflowPollPolicy",
+    "WorkflowReadOptions",
+    "WorkflowReference",
+    "WorkflowView",
 ]

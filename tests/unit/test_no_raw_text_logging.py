@@ -131,6 +131,7 @@ def test_pii_processing_and_service_paths_do_not_log_raw_phi(
     monkeypatch.setattr(openmed, "deidentify", _fake_deidentify)
     monkeypatch.setattr(service_runtime, "ModelLoader", _NoopLoader)
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_SERVED_MODELS", "test-pii-model")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
