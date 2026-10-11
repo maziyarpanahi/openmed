@@ -57,6 +57,7 @@ RESTRICTED_LICENSES: Final = frozenset(
 _REQUIRED_REQUIREMENTS: Final = {
     "faker": "faker>=22.0",
     "jieba": "jieba>=0.42.1,<0.43",
+    "jsonschema": "jsonschema>=4.18,<5",
     "pysbd": "pysbd>=0.3.4,<0.4",
     "pyyaml": "pyyaml>=6.0",
     "tomli": "tomli>=2.0; python_version < '3.11'",
@@ -763,6 +764,12 @@ _REQUIRED_DEPENDENCIES: Final = (
         requirement=_REQUIRED_REQUIREMENTS["jieba"],
         license="MIT",
         purpose="Local sentence and token handling for supported Chinese text.",
+    ),
+    DependencySpec(
+        name="jsonschema",
+        requirement=_REQUIRED_REQUIREMENTS["jsonschema"],
+        license="MIT",
+        purpose="Offline validation of bundled agent governance JSON Schemas.",
     ),
     DependencySpec(
         name="pysbd",
