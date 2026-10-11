@@ -7,8 +7,9 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -44,7 +45,13 @@ from openmed.structured.decision import (
 )
 from openmed.utils.validation import validate_model_name
 
-from .auth import ServiceAuth, parse_service_auth_config
+from .auth import (
+    ROUTE_POLICIES,
+    ServiceAuth,
+    parse_service_auth_config,
+    request_needs_admission,
+    validate_route_policies,
+)
 from .batcher import (
     BackpressureError,
     BatchPriorityHandle,
@@ -52,7 +59,12 @@ from .batcher import (
     DynamicBatcher,
     normalize_priority,
 )
-from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
+from .bulk_data import (
+    BulkPathError,
+    BulkStoragePolicy,
+    FHIRBulkJobConfig,
+    FHIRBulkJobManager,
+)
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
@@ -151,23 +163,9 @@ _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
 _MODEL_BACKED_PATHS = frozenset(
-    {
-        "/graphql",
-        "/analyze",
-        "/ground",
-        "/brief",
-        "/pii/extract",
-        "/pii/extract/stream",
-        "/pii/deidentify",
-        "/pii/deidentify/stream",
-        "/jobs",
-        _PRIVACY_GATEWAY_PATH,
-        _SMART_BACKEND_START_PATH,
-        _FHIR_BULK_EXPORT_PATH,
-        _FHIR_BULK_IMPORT_PATH,
-        _DECISION_PATH,
-        OPENHIM_MEDIATOR_PATH,
-    }
+    path
+    for (_, path), policy in ROUTE_POLICIES.items()
+    if policy.admission in {"model", "heavy"}
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -755,6 +753,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
+        validate_route_policies(fastapi_app)
         runtime = ServiceRuntime.from_env(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
@@ -819,6 +818,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
+    app.state.bulk_storage = BulkStoragePolicy.from_env()
     if security_config.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -854,8 +854,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
-        path = request.url.path
-        if path in _MODEL_BACKED_PATHS:
+        if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
                 return _error_response(
@@ -1032,6 +1031,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+        from .runtime import ModelNotServedError
+
+        if isinstance(exc, ModelNotServedError):
+            return _error_response(
+                422,
+                "model_not_served",
+                "Requested model is not served",
+                details=None,
+            )
+        if isinstance(exc, BulkPathError):
+            return _error_response(
+                400, exc.code, "Bulk storage request is not permitted", details=None
+            )
         del exc
         return _error_response(
             400,
@@ -1370,6 +1382,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         request: Request,
     ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
 
         async def _events():
             async for event in runtime.stream_pii_extract(
@@ -1721,10 +1734,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         request: Request,
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
         config = _smart_backend_config_from_payload(payload)
+        job_id = uuid.uuid4().hex
+        _, output, checkpoint = request.app.state.bulk_storage.prepare(
+            input_dir=None,
+            output_dir=payload.output_dir,
+            checkpoint_path=payload.checkpoint_path,
+            job_id=job_id,
+        )
+        config = replace(config, output_dir=output, checkpoint_path=checkpoint)
         deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(config, deidentifier=deidentifier).to_dict()
+        return manager.start(config, deidentifier=deidentifier, job_id=job_id).to_dict()
 
     @app.get("/fhir/smart-backend/ingestions/{job_id}")
     async def smart_backend_ingestion_status(
@@ -1779,7 +1801,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         payload: DeidentifyJobRequest,
         request: Request,
     ) -> Dict[str, Any]:
-        _get_service_runtime(request)
+        _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
         record = queue.submit(payload)
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
@@ -1826,6 +1848,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
     )
+    validate_route_policies(app)
     return app
 
 
@@ -2383,7 +2406,9 @@ def _fhir_bulk_config_from_payload(
 ) -> FHIRBulkJobConfig:
     """Convert a validated route payload without retaining request metadata."""
 
-    input_dir = payload.input_dir or payload.source_dir
+    input_dir = (
+        payload.input_dir if payload.input_dir is not None else payload.source_dir
+    )
     return FHIRBulkJobConfig(
         input_dir=input_dir,
         output_dir=payload.output_dir,
@@ -2409,11 +2434,28 @@ def _start_fhir_bulk_job(
     request: Request,
 ):
     runtime = _get_service_runtime(request)
+    runtime.validate_served_model(payload.model_name)
     manager = _get_fhir_bulk_manager(request)
     config = _fhir_bulk_config_from_payload(payload)
+    if payload.input_dir is not None and payload.source_dir is not None:
+        raise BulkPathError("path_invalid")
+    if not config.is_local:
+        config.to_smart_config()
+    job_id = uuid.uuid4().hex
+    source, output, checkpoint = request.app.state.bulk_storage.prepare(
+        input_dir=payload.input_dir
+        if payload.input_dir is not None
+        else payload.source_dir,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        job_id=job_id,
+    )
+    config = replace(
+        config, input_dir=source, output_dir=output, checkpoint_path=checkpoint
+    )
     configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
     deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
-    return manager.start(config, deidentifier=deidentifier)
+    return manager.start(config, deidentifier=deidentifier, job_id=job_id)
 
 
 def _fhir_bulk_deidentifier(

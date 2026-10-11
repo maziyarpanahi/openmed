@@ -575,6 +575,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include ranked grounding alternatives in MedMentions top-k accuracy without
   crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
