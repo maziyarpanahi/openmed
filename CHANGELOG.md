@@ -185,6 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
+  for the OMOP quality bridge, with value-free diagnostics, strict version and
+  table allowlists, and synthetic leakage and status regression fixtures (#3799).
+
 - Record purpose-ticket allow and deny decisions as value-free access events,
   with injectable sinks, a local append-only digest chain, and aggregate counts
   that exclude record selectors and values (#3793).
