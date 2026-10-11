@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4757800
+    "json": 4769840
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4757800
+    "docs/search/search_index.json": 4769840
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -122,6 +122,7 @@
     "The reviewed SMART refresh, private custody and narrowed scope guide measures 4726940 search bytes, an increase of 6775 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed PDF annotation mapping and private refusal guide measures 4731639 search bytes, an increase of 4699 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed passive SDOH FHIR export guide measures 4740258 search bytes, an increase of 8619 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
-    "The reviewed offline clinical CLI contracts and local summary/NLI guides measure 4756114 search bytes, an increase of 15856 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged."
+    "The reviewed offline clinical CLI contracts and local summary/NLI guides measure 4756114 search bytes, an increase of 15856 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed staged NLP lineage, SQLite transaction and independent approval composition guide measures 4768154 search bytes, an increase of 12040 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
   ]
 }
