@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an offline synthetic NLI/guarded-relation example with explicit
+  development and calibration-double backends, evidence bindings and
+  human-review priorities; smoke checks guard projections and API drift (#3761).
+
 - Opt-in local NLI verification for summarization and grounding, with retained
   contradiction and abstention outcomes, offset- and digest-bound audit records,
   typed backend refusals and unchanged default serialization. Source and claim
