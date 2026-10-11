@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4710709
+    "json": 4741944
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4710709
+    "docs/search/search_index.json": 4741944
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -117,6 +117,10 @@
     "After integrating multilingual privacy, structured header coverage and service authority documentation, the staged artifact measures 56225479 total bytes, 55860966 unique payload bytes and a 4689232-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed governed workflow CLI recovery guide measures 4697064 search bytes, an increase of 7832 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed native governance, receipt custody and Python/Swift parity guide measures 4702312 search bytes, an increase of 5248 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
-    "The reviewed MCP preflight, preview, status and human-review guide measures 4709023 search bytes, an increase of 6711 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
+    "The reviewed MCP preflight, preview, status and human-review guide measures 4709023 search bytes, an increase of 6711 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The combined governed REST and typed workflow client guides measure 4720165 search bytes, an increase of 11142 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed SMART refresh, private custody and narrowed scope guide measures 4726940 search bytes, an increase of 6775 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed PDF annotation mapping and private refusal guide measures 4731639 search bytes, an increase of 4699 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed passive SDOH FHIR export guide measures 4740258 search bytes, an increase of 8619 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged."
   ]
 }
