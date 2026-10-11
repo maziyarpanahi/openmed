@@ -26,6 +26,19 @@ class PrivacySafeGraphQLRouter(GraphQLRouter):
         result: ExecutionResult,
     ) -> GraphQLHTTPResponse:
         """Return GraphQL data while removing exception-derived messages."""
+        if result.errors and any(
+            error.extensions.get("code") == "OPENMED_FORBIDDEN"
+            for error in result.errors
+        ):
+            return {
+                "data": None,
+                "errors": [
+                    {
+                        "message": "Operation is not permitted.",
+                        "extensions": {"code": "OPENMED_FORBIDDEN"},
+                    }
+                ],
+            }
         response: dict[str, Any] = {"data": result.data}
         if result.errors:
             response["errors"] = [
@@ -67,6 +80,11 @@ def mount_graphql(
 
 def _safe_formatted_error(error: Any) -> dict[str, Any]:
     formatted = dict(error.formatted)
+    if error.extensions.get("code") == "model_not_served":
+        return {
+            "message": "Requested model is not served",
+            "extensions": {"code": "model_not_served"},
+        }
     if error.original_error is None:
         return formatted
 

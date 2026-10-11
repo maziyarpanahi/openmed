@@ -88,6 +88,151 @@ agent action lifecycle. Adapter integrations should map their action phase into
 the nearest checkpoint boundary while preserving the lifecycle's own transition
 validation.
 
+## Governed workflow CLI
+
+The console entry and the Typer application expose the same guarded command
+boundary. `plan` and `preview` are aliases for read-only plan inspection;
+`inspect` reads run status. `submit-review`, `cancel` and `resume` are explicit
+mutating requests to an injected service. No command approves an action or
+enables a clinical effect adapter by default.
+
+```bash
+openmed agents workflow --help
+openmed agents workflow preview --request request.json
+openmed agents workflow inspect --request request.json
+openmed agents workflow submit-review --request request.json
+openmed agents workflow cancel --request request.json
+openmed agents workflow resume --request request.json --receipt receipt.json
+```
+
+Inputs are caller-owned local regular files. On POSIX they must belong to the
+current user and have no group/other permissions, such as mode `0600`. Final
+symlinks and FIFOs are refused, reads are bounded to 64 KiB, and changing files,
+duplicate JSON keys, non-finite values, deep documents and unknown fields are
+refused. Platforms without `O_NOFOLLOW` return a controlled protection failure.
+Do not pass tokens, credentials, identities or clinical payloads as command-line
+arguments. Global configuration overrides are not accepted on this surface.
+
+A request has exactly these fields:
+
+```json
+{
+  "schema_version": "openmed.cli.workflow_request.v1",
+  "run_id": "run_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "workflow_id": "workflow:org.example/synthetic@1.0.0",
+  "action_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "expected_state_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}
+```
+
+Use the exact action/preview digest and current state digest from the caller's
+service. `expected_state_digest` may be `null` for read-only commands; mutating
+commands require it. The request refers to clinical inputs already held by the
+service, rather than embedding values, FHIR resources or OMOP rows.
+
+`--receipt` accepts only the existing metadata-only `ApprovalReceipt` schema.
+The v2 receipt has only action/token digests, the `approved` code and its schema
+version; it carries no reviewer role or timestamps and cannot establish authority.
+Resume checks exact action binding, the current snapshot and a typed verification
+result from trusted durable service custody. Verification binds the same action,
+receipt digest and state digest. The service owns consumption, role, expiry and
+replay checks, and checks them again at dispatch using a fresh trusted clock.
+Changing the token digest cannot establish verification; added role or timestamp
+fields are rejected. No bearer approval token is accepted or consumed.
+
+The service must atomically compare the expected state/action and reverify receipt
+custody and expiry at dispatch, including policy roles and replay/idempotency
+rules. CLI inspection alone cannot close a race between inspection and dispatch.
+The injected service owns authority enforcement, effect execution and recovery;
+these commands do not duplicate the workflow executor, FHIR or OMOP adapters.
+
+Every operational response is one value-free JSON document with
+`schema_version="openmed.cli.governed_workflow.v1"`, including refusals.
+`--json` is accepted for consistency; JSON is also the default. Responses contain
+opaque run identifiers, trusted developer workflow names, digests, categorical
+phase/status and bounded effect counts. Receipt roles, reviewer identities,
+tokens, source values and private paths are omitted. Adapter output on standard
+output/error is suppressed, but adapters remain trusted code and must implement
+their own value-free logging; this is not a callback sandbox.
+
+| Exit | Meaning |
+| --- | --- |
+| 0 | Ready preview or acknowledged completed resume |
+| 1 | Service failure or invalid service acknowledgement |
+| 2 | Invalid, malformed, unreadable or unprotected input |
+| 3 | Denied authority or an unverified receipt |
+| 4 | Review required, requested review, future receipt or expired receipt |
+| 5 | Acknowledged cancellation |
+| 6 | Action/state/receipt conflict or terminal resume |
+| 7 | No configured adapter or an unsupported adapter operation |
+
+A successful review request still exits `4`, because the action needs human
+review. An acknowledged cancellation exits `5` with `ok=true`. If a service
+fails or returns a malformed acknowledgement after a mutation, its commit state
+may be unknown: reconcile through the existing recovery protocol. The CLI never
+automatically retries, rolls back or compensates an effect.
+
+### Offline service injection
+
+Applications inject a trusted local service through
+`openmed.cli.main(argv, governance_service=service)`,
+`build_app(governance_service=service)` for Typer, or
+`run_governed_workflow_cli(argv, service=service, clock=clock)`.
+The protocol is `WorkflowCLIGovernanceService`; the clock is an injected Unix
+second function, never a command-line override. No service is dynamically loaded
+from request JSON or environment variables.
+
+This synthetic example creates a private temporary metadata request and invokes
+the actual CLI boundary offline. The preview service executes no effects:
+
+```python
+from openmed.agent.action_phases import ActionPhase
+from openmed.agent.correlation import RunId
+from openmed.agent.identifiers import WorkflowId
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from openmed.cli.governed_workflows import (
+    WorkflowCLIRequest, WorkflowCLIStatus, WorkflowCLIView,
+    run_governed_workflow_cli,
+)
+
+request = WorkflowCLIRequest(
+    RunId("run_" + "a" * 32),
+    WorkflowId("workflow:org.example/synthetic@1.0.0"),
+    "sha256:" + "a" * 64,
+)
+
+class PreviewOnly:
+    def preview(self, request):
+        return WorkflowCLIView(
+            request.run_id, request.workflow_id, request.action_digest,
+            "sha256:" + "b" * 64,
+            ActionPhase.READY, WorkflowCLIStatus.READY,
+            proposed_effect_count=1,
+        )
+
+view = PreviewOnly().preview(request)
+assert view.status is WorkflowCLIStatus.READY
+assert view.committed_effect_count == 0
+
+with TemporaryDirectory() as directory:
+    path = Path(directory) / "request.json"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        json.dump(request.to_dict(), stream)
+    assert run_governed_workflow_cli(
+        ["workflow", "preview", "--request", str(path)],
+        service=PreviewOnly(),
+    ) == 0
+```
+
+With protected request files, the same adapter can be supplied to the console
+entry for preview. Its unsupported operations return exit `7`; the example
+does not provide approval, execution or recovery capabilities. Without injection,
+valid operational CLI requests also return `adapter_unavailable` with exit `7`.
+
 ## Open integration dependencies
 
 The generic journal and reconciliation engine intentionally do not duplicate
@@ -96,3 +241,9 @@ the contracts tracked by #2766, #2767, #2768, #2771, #2773, #2774, #2775,
 ledger evidence, replay verification, single-use approval receipts, previews,
 FHIR conditional/concurrency/compensation/subscription behavior, staged OMOP
 batches and rollback manifests, action graphs, and action lifecycle phases.
+
+Existing `agents status`, `agents stop` and `agents resume` admission commands
+remain available alongside `agents workflow`. Workflow commands do not implicitly
+enable admission. A failed or malformed acknowledgement does not prove that an
+effect was absent: inspect durable service state and reconcile before requesting
+any further mutation. The CLI never retries a mutation automatically.
