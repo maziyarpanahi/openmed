@@ -185,6 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an opt-in, exporter-free agent OpenTelemetry bridge with validated
+  value-free phase spans, aggregate event counters and latency, omitted or
+  hashed run IDs, and synthetic in-memory privacy/determinism tests (#3792).
+
 - Added a locally signed native-measure evidence adapter with aggregate counts,
   pinned definition, value-set and engine custody, time-boundary conversion,
   and explicit drift-comparator parity and differences (#3789).
