@@ -12,9 +12,9 @@ import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from enum import Enum
-from functools import lru_cache
+from functools import lru_cache, wraps
 from itertools import islice
-from typing import Any
+from typing import Any, ParamSpec, TypeVar
 
 from ..omop_rollback_manifest import (
     OmopRollbackManifest,
@@ -111,6 +111,32 @@ class OmopDatabaseStatus(str, Enum):
     DENIED = "denied"
     FAILED = "failed"
     UNKNOWN = "unknown"
+
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _private_database_errors(function: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Drop private parser, iterator and driver context at public boundaries."""
+
+    @wraps(function)
+    def guarded(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        code = "invalid_input"
+        try:
+            return function(*args, **kwargs)
+        except OmopDatabaseError as error:
+            if type(error) is OmopDatabaseError:
+                code = error.code
+        except OmopRollbackManifestError:
+            code = "invalid_rollback"
+        except VocabularyWriteGateError:
+            code = "incompatible_vocabulary"
+        except Exception:
+            pass
+        raise OmopDatabaseError(code)
+
+    return guarded
 
 
 def _json(value: Any) -> str:
@@ -392,6 +418,7 @@ class OmopDatabaseResult:
         }
 
 
+@_private_database_errors
 def initialize_omop_commit_metadata(
     con: sqlite3.Connection, snapshot: VocabularySnapshot
 ) -> str:
@@ -448,6 +475,7 @@ def initialize_omop_commit_metadata(
         raise OmopDatabaseError("database_unavailable") from None
 
 
+@_private_database_errors
 def preview_omop_database(
     con: sqlite3.Connection,
     batch: OmopMutationBatch,
@@ -587,6 +615,7 @@ class SQLiteOmopBatchCommitter:
         rollback_ready: Required protected-custody readiness verifier.
     """
 
+    @_private_database_errors
     def __init__(
         self,
         batch: OmopMutationBatch,
@@ -763,7 +792,13 @@ class SQLiteOmopBatchCommitter:
             self.last_result = result
             return result
         except Exception as exc:
-            code = exc.code if type(exc) is OmopDatabaseError else "transaction_failed"
+            code = (
+                exc.code
+                if type(exc) is OmopDatabaseError
+                and type(exc.code) is str
+                and exc.code in _CODES
+                else "transaction_failed"
+            )
             status = (
                 OmopDatabaseStatus.DENIED
                 if code
@@ -818,7 +853,11 @@ class SQLiteOmopBatchCommitter:
                 )
             return result
         except Exception as exc:
-            if type(exc) is OmopDatabaseError and exc.code == "authorization_denied":
+            if (
+                type(exc) is OmopDatabaseError
+                and type(exc.code) is str
+                and exc.code == "authorization_denied"
+            ):
                 return self._result(
                     approval, OmopDatabaseStatus.DENIED, "authorization_denied"
                 )

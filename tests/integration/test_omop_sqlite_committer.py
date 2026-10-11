@@ -564,3 +564,93 @@ def test_recovery_refuses_an_unauthorized_receipt(database):
         and result.code == "authorization_denied"
     )
     assert row_counts(database) == (2, 1, 1, 1, 1, 1, 1, 1)
+
+
+@pytest.mark.parametrize("operation", ["initialize", "preview"])
+def test_public_database_failures_drop_driver_exception_context(database, operation):
+    class PrivateDriver(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            raise UnicodeDecodeError("utf-8", CANARY.encode(), 0, 1, "synthetic")
+
+    con = sqlite3.connect(database, factory=PrivateDriver)
+    try:
+        with pytest.raises(OmopDatabaseError) as caught:
+            if operation == "initialize":
+                initialize_omop_commit_metadata(con, vocab())
+            else:
+                proposal = batch()
+                preview_omop_database(
+                    con,
+                    proposal,
+                    vocabulary_snapshot=vocab(),
+                    vocabulary_mappings=mappings(),
+                    rollback_manifest=rollback(proposal),
+                )
+        assert caught.value.__context__ is None
+        assert caught.value.__cause__ is None
+        assert CANARY not in str(caught.value)
+    finally:
+        con.close()
+
+
+def test_constructor_mapping_iterator_error_has_no_private_context(database):
+    adapter, approval, packet = prepared(database)
+
+    def private_mappings():
+        raise UnicodeDecodeError("utf-8", CANARY.encode(), 0, 1, "synthetic")
+        yield
+
+    with pytest.raises(OmopDatabaseError, match="invalid_input") as caught:
+        SQLiteOmopBatchCommitter(
+            adapter.batch,
+            packet,
+            vocabulary_snapshot=vocab(),
+            vocabulary_mappings=private_mappings(),
+            rollback_manifest=adapter._manifest,
+            connection_factory=lambda: pytest.fail("Connection opened"),
+            authorize=lambda *args: True,
+            admit=lambda *args: True,
+            rollback_ready=lambda *args: True,
+        )
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_mutated_callback_error_code_cannot_escape_closed_result(database):
+    error = OmopDatabaseError("authorization_denied")
+    error.code = CANARY
+
+    def callback(*args):
+        raise error
+
+    adapter, approval, _ = prepared(database, authorize=callback)
+    result = adapter.submit(approval)
+    assert result.status is OmopDatabaseStatus.FAILED
+    assert result.code == "transaction_failed"
+    assert CANARY not in json.dumps(result.to_dict())
+    assert row_counts(database) == (0,) * 8
+
+
+def test_recovery_does_not_compare_foreign_callback_error_code_values(database):
+    class PrivateComparison:
+        def __eq__(self, other):
+            raise UnicodeDecodeError("utf-8", CANARY.encode(), 0, 1, "synthetic")
+
+    error = OmopDatabaseError("authorization_denied")
+    error.code = PrivateComparison()
+    allowed = [True]
+
+    def callback(*args):
+        if allowed[0]:
+            return True
+        raise error
+
+    adapter, approval, _ = prepared(database, authorize=callback)
+    assert adapter.submit(approval).status is OmopDatabaseStatus.COMMITTED
+    before = row_counts(database)
+    allowed[0] = False
+    result = adapter.recover(approval)
+    assert result.status is OmopDatabaseStatus.UNKNOWN
+    assert result.code == "database_unavailable"
+    assert CANARY not in json.dumps(result.to_dict())
+    assert row_counts(database) == before

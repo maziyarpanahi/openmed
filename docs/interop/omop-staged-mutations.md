@@ -217,6 +217,9 @@ and failure outcomes. Use `submit` to retain the richer states; after a protocol
 failure, `adapter.last_result` preserves any unknown outcome. The adapter disables
 SQLite trace callbacks before queries and never copies SQL parameters, patient
 values, connection details or driver exception text into results or receipts.
+Public provisioning, preview and constructor failures also raise fresh closed
+errors without retaining private driver or iterator exception chains. Callback
+error codes outside the declared vocabulary become `transaction_failed`.
 Its factory supplies a fresh connection for each operation, which the adapter
 closes. Database, journal, receipt and rollback storage require the deployment's
 normal protection, retention and independent backup controls. Restoring or

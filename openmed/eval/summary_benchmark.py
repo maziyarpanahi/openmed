@@ -44,7 +44,11 @@ def run_summary_benchmark(model: str, *, seeds, thresholds) -> BenchmarkReport:
     benchmark. Fact retention requires the exact assertion-bearing sentence.
     Paraphrases are unresolved rather than guessed to be supported.
     """
-    if model not in {"extractive", "mlx"} or not seeds or len(seeds) > 100:
+    if (
+        model not in {"extractive", "extractive-baseline", "mlx"}
+        or not seeds
+        or len(seeds) > 100
+    ):
         raise ValueError("invalid summary benchmark configuration")
     outcomes = []
     source_hashes = []
@@ -75,8 +79,57 @@ def run_summary_benchmark(model: str, *, seeds, thresholds) -> BenchmarkReport:
             value = DeidentificationResult(
                 fixture.text, masked, pii, "mask", datetime(2026, 1, 1)
             )
+            sources = segment_summary_claims(masked).segments
+            backend = model
+            if model == "extractive":
+                from openmed.clinical.extractive_selection import ExtractiveFact
+                from openmed.clinical.summarize_backends import (
+                    ExtractiveSummarizerBackend,
+                )
+                from openmed.clinical.summary_length_budget import (
+                    build_summary_length_budget,
+                )
+                from openmed.clinical.summary_omission_budget import (
+                    ImportanceClassPolicy,
+                )
+
+                # Synthetic source-sentence offsets are evaluation inputs, not
+                # inferred clinical facts or adjudication. Scoring below is unchanged.
+                class_id = digest("synthetic-summary-required-facts-v1")
+                selection_facts = []
+                demands = {}
+                for i, s in enumerate(sources):
+                    labels = {
+                        span.label for span in fixture.gold_spans if span.text in s.text
+                    }
+                    length_class = (
+                        "active_problems"
+                        if "CONDITION" in labels
+                        else "medications"
+                        if "MEDICATION" in labels
+                        else "follow_up"
+                        if "CARE_PLAN" in labels
+                        else "key_findings"
+                    )
+                    selection_facts.append(
+                        ExtractiveFact(
+                            digest(i), class_id, s.start, s.end, length_class
+                        )
+                    )
+                    demands[length_class] = (
+                        demands.get(length_class, 0)
+                        + len(s.text.encode("utf-8"))
+                        + bool(i)
+                    )
+                backend = ExtractiveSummarizerBackend(
+                    evidence=tuple(selection_facts),
+                    importance_classes=(
+                        ImportanceClassPolicy(class_id, 1, mandatory=True),
+                    ),
+                    length_budget=build_summary_length_budget(2048, demands),
+                )
             try:
-                summary = summarize_deidentified(value, model=model).summary
+                summary = summarize_deidentified(value, model=backend).summary
             except Exception:
                 outcomes.append(
                     [
@@ -91,7 +144,6 @@ def run_summary_benchmark(model: str, *, seeds, thresholds) -> BenchmarkReport:
                 continue
             generated_count += 1
             output_hashes.append(digest(summary))
-            sources = segment_summary_claims(masked).segments
             targets = segment_summary_claims(summary).segments
             evidence = [
                 {"evidence_id": "e" + str(i), "start": s.start, "end": s.end}
@@ -235,7 +287,11 @@ def verify_summary_report(report: dict, *, thresholds=None) -> bool:
 def main(argv=None) -> int:
     """Generate actual local evidence or verify committed reports fail closed."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=("extractive", "mlx"), default="extractive")
+    parser.add_argument(
+        "--model",
+        choices=("extractive", "extractive-baseline", "mlx"),
+        default="extractive",
+    )
     parser.add_argument("--baseline", type=Path, default=Path("gates/baseline.json"))
     parser.add_argument(
         "--fixtures",
