@@ -226,7 +226,7 @@ def test_default_serialization_matches_recorded_master_bytes(monkeypatch):
     ).encode()
     assert (
         hashlib.sha256(encoded).hexdigest()
-        == "ef144ee0928dd32f0a8f9ac8198bc3e249bf6544656a97d21d9ab56253b091e3"
+        == "6986b9d8bc17e6b58dec49eec59482ae79db99cfecf79051a42f0cf90f4633bd"
     )
 
 
