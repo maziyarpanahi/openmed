@@ -40,6 +40,7 @@ dependencies = [
   "faker>=22.0",
   "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
+  "jsonschema>=4.18,<5",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -57,7 +58,6 @@ dev = [
   "pytest-cov>=4.0",
   "pytest-timeout>=2.3",
   "huggingface-hub>=0.30",
-  "jsonschema>=4.0",
   "jinja2>=3.1.6",
   "mcp>=1.27,<2",
   "mypy==2.3.0",

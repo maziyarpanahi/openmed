@@ -1,0 +1,206 @@
+{
+  "schema_version": "openmed.eval.agent_run_summary_fixture.v1",
+  "run_summary_schema_version": "openmed.agent.run_summary.v1",
+  "outcome_schema_version": "openmed.agent.outcome.v1",
+  "commitment_version": "openmed.agent.run_commitment.v1",
+  "cases": [
+    {
+      "case_id": "empty",
+      "events": [],
+      "expected_json": "{\"artifact_digests\":[],\"duration_seconds\":0.0,\"outcome_counts\":{\"abstained\":0,\"failed\":0,\"policy_denied\":0,\"review_required\":0,\"success\":0},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":0,\"workflow_ids\":[]}",
+      "expected_markdown_digest": "sha256:5c14bbb664437de09799e11336653c3899beb9e15b5dbdbac8c3eb1258e87453",
+      "expected_commitment": "sha256:1868266566d00dcf44ab1807d4ec4127eb67faad32a828eec8cb0097e3a4917e"
+    },
+    {
+      "case_id": "success",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "success",
+            "reason_code": "completed"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"],\"duration_seconds\":0.125,\"outcome_counts\":{\"abstained\":0,\"failed\":0,\"policy_denied\":0,\"review_required\":0,\"success\":1},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":1,\"workflow_ids\":[\"wf_11111111111111111111111111111111\"]}",
+      "expected_markdown_digest": "sha256:07331f9427671d76e976a7b4fd64ddd19d6104921424fea48586f33d4e7eaa13",
+      "expected_commitment": "sha256:5bb19699471b006db62b8c0a0318a3d0b72e9c5202d62a5ad2256790eed5b654"
+    },
+    {
+      "case_id": "abstention",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "abstained",
+            "reason_code": "insufficient_evidence"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"],\"duration_seconds\":0.125,\"outcome_counts\":{\"abstained\":1,\"failed\":0,\"policy_denied\":0,\"review_required\":0,\"success\":0},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":1,\"workflow_ids\":[\"wf_11111111111111111111111111111111\"]}",
+      "expected_markdown_digest": "sha256:7239eadf46c616d93df5b76f3d7b7c9eef1b25eb083bbad3e16cd4782eeab5d6",
+      "expected_commitment": "sha256:764c69d95d8c6a325ad1ab73ee3d1bfb48328981085040b92b15972d72796ba1"
+    },
+    {
+      "case_id": "denial",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "policy_denied",
+            "reason_code": "phi_policy"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"],\"duration_seconds\":0.125,\"outcome_counts\":{\"abstained\":0,\"failed\":0,\"policy_denied\":1,\"review_required\":0,\"success\":0},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":1,\"workflow_ids\":[\"wf_11111111111111111111111111111111\"]}",
+      "expected_markdown_digest": "sha256:bf1ec6e37aa868298e3cbbb4cec0bd140e273884571f7eb9c43758346d2180be",
+      "expected_commitment": "sha256:b2673a563d6705e801f0b1b70db62da9b4adbea0d464fbd39986296e6c79fc53"
+    },
+    {
+      "case_id": "review",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "review_required",
+            "reason_code": "human_gate"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"],\"duration_seconds\":0.125,\"outcome_counts\":{\"abstained\":0,\"failed\":0,\"policy_denied\":0,\"review_required\":1,\"success\":0},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":1,\"workflow_ids\":[\"wf_11111111111111111111111111111111\"]}",
+      "expected_markdown_digest": "sha256:710843c65357966489c1fca07e96585ed9dd46b488d628d3a4032a0db9b0dc14",
+      "expected_commitment": "sha256:a543bad9e58c2caf4be54dc4d1260b6f7144e3a1ecb40939107311a68f4b7c94"
+    },
+    {
+      "case_id": "failure",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "failed",
+            "reason_code": "tool_error"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"],\"duration_seconds\":0.125,\"outcome_counts\":{\"abstained\":0,\"failed\":1,\"policy_denied\":0,\"review_required\":0,\"success\":0},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":1,\"workflow_ids\":[\"wf_11111111111111111111111111111111\"]}",
+      "expected_markdown_digest": "sha256:ba2619e619df585be324abdbac84b28a5238a10fddc3ab313e3005a6df974489",
+      "expected_commitment": "sha256:d82db90d3fd4ff6505431f464465221461dba50ea18bc7b084714822fe8249b5"
+    },
+    {
+      "case_id": "mixed",
+      "events": [
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "success",
+            "reason_code": "completed"
+          },
+          "tool_call_count": 1,
+          "duration_seconds": 0.125,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        },
+        {
+          "workflow_id": "wf_22222222222222222222222222222222",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "abstained",
+            "reason_code": "insufficient_evidence"
+          },
+          "tool_call_count": 2,
+          "duration_seconds": 0.25,
+          "artifact_digests": [
+            "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          ]
+        },
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "policy_denied",
+            "reason_code": "phi_policy"
+          },
+          "tool_call_count": 3,
+          "duration_seconds": 0.375,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        },
+        {
+          "workflow_id": "wf_22222222222222222222222222222222",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "review_required",
+            "reason_code": "human_gate"
+          },
+          "tool_call_count": 4,
+          "duration_seconds": 0.5,
+          "artifact_digests": [
+            "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          ]
+        },
+        {
+          "workflow_id": "wf_11111111111111111111111111111111",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "failed",
+            "reason_code": "tool_error"
+          },
+          "tool_call_count": 5,
+          "duration_seconds": 0.625,
+          "artifact_digests": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ]
+        },
+        {
+          "workflow_id": "wf_22222222222222222222222222222222",
+          "outcome": {
+            "schema_version": "openmed.agent.outcome.v1",
+            "outcome_class": "success",
+            "reason_code": "completed"
+          },
+          "tool_call_count": 6,
+          "duration_seconds": 0.75,
+          "artifact_digests": [
+            "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+          ]
+        }
+      ],
+      "expected_json": "{\"artifact_digests\":[\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"sha256:2222222222222222222222222222222222222222222222222222222222222222\"],\"duration_seconds\":2.625,\"outcome_counts\":{\"abstained\":1,\"failed\":1,\"policy_denied\":1,\"review_required\":1,\"success\":2},\"schema_version\":\"openmed.agent.run_summary.v1\",\"tool_call_count\":21,\"workflow_ids\":[\"wf_11111111111111111111111111111111\",\"wf_22222222222222222222222222222222\"]}",
+      "expected_markdown_digest": "sha256:39b60b9b67e0824bc6af75ab52ad6011b769e1998e1dee95834251a9f7f5fe6b",
+      "expected_commitment": "sha256:f7fbe5fa866dab2e9348ddd93595ca9a532315213417279329c147389044323b"
+    }
+  ]
+}
