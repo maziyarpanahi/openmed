@@ -199,6 +199,7 @@ classification:
     - model-loader.md
     - models/bundled-offline.md
     - clinical/clinical-brief.md
+    - clinical/local-backends.md
     - clinical/summary-output-normalization.md
     - clinical/summary-section-planning.md
     - demo/clinical-brief.md
@@ -655,6 +656,7 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
