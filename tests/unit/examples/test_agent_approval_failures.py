@@ -18,6 +18,10 @@ def _approval_contract_available() -> bool:
 
 def test_failure_matrix_is_closed_and_stable() -> None:
     assert example.EXPECTED_FAILURES == (
+        ("not_yet_valid", "not_yet_valid"),
+        ("lifetime_exceeded", "lifetime_exceeded"),
+        ("unknown_key", "unknown_key"),
+        ("legacy_disabled", "legacy_token_disabled"),
         ("expiry", "expired"),
         ("replay", "replayed"),
         ("wrong_action_digest", "action_mismatch"),

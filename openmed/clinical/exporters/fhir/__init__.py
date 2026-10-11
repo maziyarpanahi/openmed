@@ -7,6 +7,13 @@ from .allergy_intolerance import (
     ALLERGY_VERIFICATION_STATUS_SYSTEM,
     to_allergy_intolerance,
 )
+from .brief_document import (
+    BRIEF_DOCUMENT_SUBSET,
+    BriefDocumentError,
+    BriefFHIRDocument,
+    export_brief_document,
+    import_brief_document,
+)
 from .bundle import to_bundle
 from .codeable_concept import (
     GROUNDED_CODE_PROVENANCE_EXTENSION_URL,
@@ -116,6 +123,11 @@ from .validate import (
 )
 
 __all__ = [
+    "BRIEF_DOCUMENT_SUBSET",
+    "BriefDocumentError",
+    "BriefFHIRDocument",
+    "export_brief_document",
+    "import_brief_document",
     "ALLERGY_CLINICAL_STATUS_SYSTEM",
     "ALLERGY_VERIFICATION_STATUS_SYSTEM",
     "CONDITION_CLINICAL_SYSTEM",

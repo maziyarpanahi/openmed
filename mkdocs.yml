@@ -32,6 +32,7 @@ nav:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
       - Agent Artifact References: agent/artifact-references.md
+      - Clinical Side-Effect Previews: agent/side-effect-previews.md
       - Agent Action Execution Phases: agent/action-phases.md
       - Signed Agent Capability Grants: agent/capability-grants.md
       - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
@@ -49,13 +50,17 @@ nav:
       - Agent Event Attributes: agent/event-attributes.md
       - Agent Event Sequences: agent/event-sequences.md
       - Agent Outcome Reason Codes: agent/outcome-reasons.md
+      - Agent Governance JSON Schemas: agent/json-schemas.md
       - Reviewer Handoff Packets: agent/reviewer-handoffs.md
+      - Escalation Circuit Breakers: agent/escalation-circuit-breakers.md
+      - Per-run Agent Resource Budgets: agent/resource-budgets.md
       - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
       - Single-use Human Approval Tokens: agent/human-approval-tokens.md
       - Privacy-safe Agent Run Summaries: agent/run-summaries.md
       - Deterministic Agent Run Commitments: agent/run-commitments.md
       - Privacy-safe Agent Run Diffs: agent/run-diffs.md
       - Workflow Run Rollups: agent/workflow-rollups.md
+      - Agent Run Completion Invariants: agent/run-invariants.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
@@ -66,6 +71,12 @@ nav:
       - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Durable Workflow Recovery: agent/workflow-recovery.md
+      - Runtime Authority Revocation: agent/runtime-revocation.md
+      - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+      - Effect Admission and Emergency Stop: agent/effect-admission.md
+      - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
+      - Agent Action Ledger: agent/action-ledger.md
+      - Deterministic Agent Replay: agent/deterministic-replay.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -115,6 +126,7 @@ nav:
       - Guarded Clinical Intelligence:
           - Brief and Summarization:
               - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Local Backends and Typed Outcomes: clinical/local-backends.md
               - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
               - Section-Preserving Summary Planning: clinical/summary-section-planning.md
               - Synthetic Brief Walkthrough: demo/clinical-brief.md
@@ -508,7 +520,15 @@ nav:
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
       - Synthetic FHIR Capability Fixtures: interop/fhir-capability-fixtures.md
       - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
+      - Bounded Approved FHIR Transactions: interop/fhir-transactions.md
+      - FHIR Write Origin Labels: interop/fhir-write-labels.md
+      - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+      - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
+      - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
+      - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
+      - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
       - SMART Scope Audit Examples: interop/smart-scope-audit.md
+      - SMART Token Custody: interop/smart-token-custody.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
@@ -574,6 +594,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
