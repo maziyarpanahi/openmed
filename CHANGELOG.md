@@ -12,6 +12,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an offline synthetic NLI/guarded-relation example with explicit
   development and calibration-double backends, evidence bindings and
   human-review priorities; smoke checks guard projections and API drift (#3761).
+- Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
+  exact span lineage, vocabulary snapshot checks and rollback evidence.
+  Replacement proposals preserve prior pipeline digests and explicitly review
+  tombstones before inserts; row values remain in protected local memory.
+- Add an explicit local SQLite OMOP batch committer with row-state-bound
+  previews, mandatory injected approval/admission/custody checks, atomic
+  idempotency receipts and read-only recovery of unknown commit outcomes.
+
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
+
+- Add offline `clinical sdoh`, `clinical relations` and `clinical timeline`
+  commands over validated analyzed spans. Emit value-free review records,
+  require explicit temporal references and links, and reserve new private
+  output files without loading NER models or downloading artifacts.
+### Security
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches
+  (#3773).
+
+### Added
+
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
+- Default-disabled, authenticated REST workflow inspection, receipt submission
+  and cancellation intent over an injected custody service, with bounded
+  governance schemas and content-free responses (#3668).
+
+### Added
+
+- Offline `summarize` and `nli verify` CLI commands with bounded local inputs,
+  value-free console results, explicit baseline selection, and exclusive private
+  summary/metadata destinations (#3801).
 
 ### Added
 
@@ -567,6 +608,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
 - Route Thai and Hebrew to their native packs and fail closed on unsupported
