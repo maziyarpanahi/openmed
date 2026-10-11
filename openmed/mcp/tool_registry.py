@@ -21,6 +21,11 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.mcp.governed_workflows import (
+    GOVERNED_MCP_OPERATIONS,
+    GOVERNED_MCP_REQUEST_SCHEMA,
+    GOVERNED_MCP_RESULT_SCHEMA,
+)
 from openmed.service.brief import brief_response_schema
 from openmed.service.journey_workflows import (
     JOURNEY_WORKFLOW_DEFINITIONS,
@@ -1898,6 +1903,31 @@ def _decision_tool_spec() -> ToolSpec:
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    *(
+        _tool_spec(
+            name=name,
+            title="Governed Workflow " + operation.replace("_", " ").title(),
+            description=(
+                "Observe service-custodied workflow metadata without approval "
+                "tokens, reviewer claims or clinical values. "
+                + (
+                    "Request a human handoff with server-held, single-use consent; "
+                    "this does not approve or execute an action."
+                    if operation == "request_review"
+                    else "This operation performs no writes."
+                )
+            ),
+            read_only_hint=operation != "request_review",
+            destructive_hint=False,
+            idempotent_hint=operation != "request_review",
+            open_world_hint=False,
+            parameters=(
+                _parameter("request", GOVERNED_MCP_REQUEST_SCHEMA, dict[str, Any]),
+            ),
+            output_schema=GOVERNED_MCP_RESULT_SCHEMA,
+        )
+        for name, operation in GOVERNED_MCP_OPERATIONS.items()
+    ),
     _tool_spec(
         name="openmed_brief",
         title="Build Guarded Clinical Brief",
