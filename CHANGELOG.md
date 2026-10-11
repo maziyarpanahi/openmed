@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
+
 - Add versioned synthetic multilingual full-pipeline clinical-brief regressions
   for Latin, RTL, Indic and code-switched evidence, public surface/native packet
   parity, protected-span offset round trips and governed conflict refusals.
