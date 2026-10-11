@@ -122,6 +122,15 @@ from .reference_types import (
     validate_reference_types,
 )
 from .references import deterministic_fullurl
+from .reviewed_relations import (
+    DEFAULT_RELATION_CODE_SYSTEMS,
+    RelationFHIRExport,
+    RelationFHIRExportError,
+    RelationFHIRLoss,
+    ReviewedFHIRRelation,
+    export_reviewed_relations,
+    relation_fhir_review_fingerprint,
+)
 from .sdoh_observation import (
     SDOH_FHIR_IG_VERSION,
     SDOH_FHIR_US_CORE_VERSION,
@@ -142,6 +151,13 @@ from .validate import (
 )
 
 __all__ = [
+    "DEFAULT_RELATION_CODE_SYSTEMS",
+    "RelationFHIRExport",
+    "RelationFHIRExportError",
+    "RelationFHIRLoss",
+    "ReviewedFHIRRelation",
+    "export_reviewed_relations",
+    "relation_fhir_review_fingerprint",
     "GovernedWriteAction",
     "GovernedWriteAuditAttempt",
     "GovernedWriteAuditError",
