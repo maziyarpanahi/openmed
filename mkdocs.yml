@@ -31,6 +31,7 @@ nav:
   - Core Guides:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
+      - Bounded Agent Scheduling: agent/bounded-scheduling.md
       - Agent Artifact References: agent/artifact-references.md
       - Clinical Side-Effect Previews: agent/side-effect-previews.md
       - Agent Action Execution Phases: agent/action-phases.md
@@ -40,6 +41,7 @@ nav:
       - Tool Argument Classification: agent/tool-argument-classification.md
       - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
       - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+      - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
       - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
       - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
       - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
@@ -371,6 +373,7 @@ nav:
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
       - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
+      - Offline Planner Qualification: evaluation/planner-qualification.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
@@ -381,6 +384,7 @@ nav:
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
