@@ -13,8 +13,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contradiction and abstention outcomes, offset- and digest-bound audit records,
   typed backend refusals and unchanged default serialization. Source and claim
   text are omitted from verification metadata; no trained model is required
-  for explicit synthetic heuristic checks.
+  for explicit synthetic heuristic checks (#3987).
 
+- Report exact package/version exposure for the core install and each optional
+  extra in the vulnerability gate, with offline uv exports, value-free scanner
+  diagnostics and a static import guard for reviewed extra-only packages.
+  Exposure informs review without changing severity thresholds or CVE waivers (#3758).
+
+- Added a bounded, offline pure-Python Circe cohort-expression mapper with
+  digest-bound exchange custody, explicit semantic loss reports, synthetic
+  membership round trips, and no SQL or bundled vocabulary (#3804).
+
+- Added fail-closed Python evaluation sessions composing sealed manifest and
+  holdout verification, injected execution/scoring, overlap forensics, blinded
+  review and budgeted feedback, with content-free durable checkpoints and
+  at-most-once feedback claims (#3777).
+
+- Added action-class approval quorum policies over live consumed authorizations,
+  distinct-role and requester exclusions, value-free decisions, and durable local partial
+  approvals with expiry, replay protection and action-change resets (#3781).
+
+
+
+- Added bounded identifier-only agent scheduling with explicit read concurrency,
+  exclusive effects, resource admission, cooperative cancellation and conservative
+  restart checkpoints through an injected guarded dispatcher (#3672).
+
+
+- Bound five governance JSON readers before decoding and return their existing
+  typed malformed-input errors for excessive nesting, oversized input and
+  invalid JSON. Cover every public governance JSON reader with bounded property
+  tests and verify consent rejection through the MCP error envelope (#3779).
+
+- Added offline chart-abstraction scoring with synthetic gold fields, separate
+  abstention errors, fact-bound source-support counts, field-type slices and
+  deterministic value-free Wilson intervals (#3788).
+
+- Added local Journey-to-chart-abstraction evidence production with explicit
+  source-origin declarations, digest-bound review receipts, and persistent,
+  value-free coverage blockers for missing, unsupported or conflicting evidence
+  (#3778).
 
 
 - Add an offline synthetic SDOH/temporal/timeline example with explicit reference
@@ -162,6 +200,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline exact-source v3.1 agent candidate manifest runner,
+  `openmed gates agent-release` and a release script with deterministic
+  HMAC-signed, content-free gate decisions and fail-closed source checks (#3776).
+
+- Added content-free v3.1 release-gate adapters for executed adversarial and
+  recovery reports and versioned replay, reference-server and clinician-agreement
+  inputs, with canonical source digests and fail-closed coverage checks (#3775).
+
+- Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
+  for the OMOP quality bridge, with value-free diagnostics, strict version and
+  table allowlists, and synthetic leakage and status regression fixtures (#3799).
+
+- Record purpose-ticket allow and deny decisions as value-free access events,
+  with injectable sinks, a local append-only digest chain, and aggregate counts
+  that exclude record selectors and values (#3793).
+
+- Added an opt-in, exporter-free agent OpenTelemetry bridge with validated
+  value-free phase spans, aggregate event counters and latency, omitted or
+  hashed run IDs, and synthetic in-memory privacy/determinism tests (#3792).
+
+- Added a locally signed native-measure evidence adapter with aggregate counts,
+  pinned definition, value-set and engine custody, time-boundary conversion,
+  and explicit drift-comparator parity and differences (#3789).
+
+- Add offline qualification of caller-supplied local planners against synthetic
+  grant, schema, minimum-data, review-stop and hostile-result scenarios, with
+  counts-only reports and non-compensable critical gates (#3790).
+
+- Added local revisioned agent-handoff storage with bounded review leases,
+  atomic competing-decision refusals, exact action/evidence commitments and
+  append-only opaque decision receipts preserved across restart (#3666).
+
+- Added fail-closed purpose-ticket authorization for complete typed tool-result
+  batches, with independent patient/encounter/namespace/snapshot scope checks,
+  strict nested field projections, original evidence identity and content-free
+  quarantine diagnostics. Privacy scanning remains a separate boundary (#3671).
+
+- Added local, sealed blinded-review result import for summary evaluation, with
+  exact artifact/rubric binding, citation and reviewer-agreement metrics, explicit
+  incomplete/disputed states and synthetic-only release refusal (#3655).
+
+- Added explicit, confirmation-bound terminal recovery journal retirement, sealed
+  digest/count records, non-resumable retired dispositions, and restart-safe
+  checkpoint cleanup with summary anchor verification (#3791).
+
+- Added Doccano relation-extraction JSONL import and export for the versioned
+  annotation envelope, with de-identification digest binding, declared loss for
+  unsupported fields, review states and embeddings, controlled label and
+  relation normalization, and `--format doccano` CLI support (#3807).
+
 - Add governed workflow CLI plan/preview, inspection, human-review request,
   cancellation and explicit resume over caller-injected local services. Bind
   resume to exact action/state/receipt custody, keep inputs protected and outputs
@@ -251,6 +339,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Added an offline Draft 2020-12 catalog for approval tokens and receipts,
+  reviewer handoff packets, capability grant manifests and workflow recovery
+  checkpoints and decisions, with local references, bounded fields, version,
+  enum and digest drift tests (#3783).
+
 - Add the offline agent governance self-check and `openmed agent self-check`
   command. Independently verify the actual schema catalog, bundled golden
   summaries, closed fields, outcomes, correlations, timing and commitments,
@@ -274,6 +367,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Require review of empty cohort populations with value-free source coverage,
+  explicit unknown counts, and typed warnings across saved runs, local
+  DuckDB/Parquet resolution, and existing Journey reads. Read legacy saved
+  executions without rewriting their immutable storage bytes (#3798).
+
+- Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
+  agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
+  exemptions with coded-element paths and content-free offset findings (#3769).
 - Normalize SMART v1 read/write/all permissions, wildcard resources, granular
   queries and non-clinical identity/launch/session scopes in offline scope
   audits. Compare constraints conservatively and report malformed input without
