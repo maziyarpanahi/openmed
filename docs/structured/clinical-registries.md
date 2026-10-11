@@ -201,6 +201,10 @@ All values are validated in memory before writing a new file with mode `0600`.
 Existing files and final-component symlinks are refused. A failed write removes
 only the newly created inode. The receipt contains counts, digests and indexed
 losses, never XML, patient/fact identifiers, output paths or clinical values.
+Public failures discard private exception context and never evaluate error
+getters on foreign subclasses. Cases, mappings and dictionary items are copied
+once into bounded snapshots before validation; reported lengths cannot waive
+the limits. Schema option codes require exact built-in strings.
 Identical inputs and HMAC secret produce stable XML bytes without a wall-clock
 timestamp. The XML file itself contains protected clinical values and requires
 the caller's privacy controls.

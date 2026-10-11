@@ -13,6 +13,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field, replace
 from datetime import date
+from itertools import islice
 from types import MappingProxyType
 from typing import Any
 
@@ -124,6 +125,29 @@ def _safe_code(code: str, cls=NAACCRProjectionError, case=None, index=None):
     return cls(code, case, index)
 
 
+def _public_failure(exc, code, cls):
+    # Read stored fields only on exact native errors; foreign getters are never used.
+    if type(exc) in (NAACCRProjectionError, NAACCRDictionaryError, NAACCRValueError):
+        stored = vars(exc)
+        if cls is NAACCRProjectionError and type(exc) is NAACCRValueError:
+            cls = NAACCRValueError
+        return cls(
+            stored.get("code", code),
+            stored.get("case_index"),
+            stored.get("field_index"),
+        )
+    return cls(code)
+
+
+def _snapshot(values, limit, code):
+    if isinstance(values, (str, bytes)) or len(values) > limit:
+        raise _safe_code(code)
+    owned = tuple(islice(iter(values), limit + 1))
+    if len(owned) > limit:
+        raise _safe_code(code)
+    return owned
+
+
 def _uri(value: Any) -> str:
     if (
         type(value) is not str
@@ -164,6 +188,7 @@ class NAACCRItemDefinition:
             or self.data_type not in _TYPES
             or type(self.record_types) is not tuple
             or not self.record_types
+            or len(self.record_types) > 4
             or any(
                 type(v) is not str or v not in ("A", "M", "C", "I")
                 for v in self.record_types
@@ -189,6 +214,13 @@ class NAACCRDictionary:
     source_digest: str
 
     def __post_init__(self):
+        try:
+            return self._initialize()
+        except Exception as exc:
+            failure = _public_failure(exc, "dictionary_invalid", NAACCRDictionaryError)
+        raise failure from None
+
+    def _initialize(self):
         object.__setattr__(self, "uri", _uri(self.uri))
         if type(
             self.specification_version
@@ -205,11 +237,14 @@ class NAACCRDictionary:
             raise _safe_code("dictionary_invalid", NAACCRDictionaryError)
         items: dict[str, NAACCRItemDefinition] = {}
         nums = set()
-        for key, item in self.items.items():
+        supplied = tuple(islice(self.items.items(), 8193))
+        if not 1 <= len(supplied) <= 8192:
+            raise _safe_code("dictionary_invalid", NAACCRDictionaryError)
+        for key, item in supplied:
             if type(item) is not NAACCRItemDefinition:
                 raise _safe_code("dictionary_invalid", NAACCRDictionaryError)
             item = replace(item)
-            if key != item.naaccr_id or item.naaccr_num in nums:
+            if type(key) is not str or key != item.naaccr_id or item.naaccr_num in nums:
                 raise _safe_code("dictionary_invalid", NAACCRDictionaryError)
             if (
                 item.data_type == "dateTime" and self.specification_version != "1.8"
@@ -291,10 +326,8 @@ def parse_naaccr_dictionary(value: bytes | str) -> NAACCRDictionary:
             "sha256:" + hashlib.sha256(value).hexdigest(),
         )
     except Exception as exc:
-        code = (
-            exc.code if isinstance(exc, NAACCRDictionaryError) else "dictionary_invalid"
-        )
-        raise NAACCRDictionaryError(code) from None
+        failure = _public_failure(exc, "dictionary_invalid", NAACCRDictionaryError)
+    raise failure from None
 
 
 @dataclass(frozen=True)
@@ -530,6 +563,7 @@ def _write(path: Any, payload: bytes) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         fd = None
+        return
     except Exception:
         if fd is not None:
             try:
@@ -543,7 +577,7 @@ def _write(path: Any, payload: bytes) -> None:
                     os.unlink(path)
             except OSError:
                 pass
-        raise _safe_code("output_refused") from None
+    raise _safe_code("output_refused") from None
 
 
 def write_naaccr_xml(
@@ -597,14 +631,8 @@ def write_naaccr_xml(
             record_type,
         )
     except Exception as exc:
-        if isinstance(exc, NAACCRProjectionError):
-            cls = (
-                NAACCRValueError
-                if isinstance(exc, NAACCRValueError)
-                else NAACCRProjectionError
-            )
-            raise cls(exc.code, exc.case_index, exc.field_index) from None
-        raise _safe_code("input_invalid") from None
+        failure = _public_failure(exc, "input_invalid", NAACCRProjectionError)
+    raise failure from None
 
 
 def _project(
@@ -620,9 +648,9 @@ def _project(
     secret,
     record_type,
 ):
+    cases = _snapshot(cases, 128, "input_limit")
     if (
-        isinstance(cases, (str, bytes))
-        or not 1 <= len(cases) <= 128
+        not cases
         or any(type(c) is not RegistryCase for c in cases)
         or type(definition) is not RegistryDefinitionVersion
         or type(authorization) is not RegistryExportAuthorization
@@ -631,7 +659,10 @@ def _project(
         or not callable(resolver)
         or type(secret) is not bytes
         or not 32 <= len(secret) <= 4096
+        or type(record_type) is not str
         or record_type not in ("A", "M", "C", "I")
+        or type(key_item) is not str
+        or _ID.fullmatch(key_item) is None
     ):
         raise _safe_code("input_invalid")
     dictionary = replace(dictionary)
@@ -663,11 +694,8 @@ def _project(
         or envelope.export_policy_digest != workflow.export_policy_digest
     ):
         raise _safe_code("custody_invalid")
-    if (
-        isinstance(mappings, (str, bytes))
-        or len(mappings) > 512
-        or any(type(m) is not NAACCRFieldMapping for m in mappings)
-    ):
+    mappings = _snapshot(mappings, 512, "mapping_invalid")
+    if any(type(m) is not NAACCRFieldMapping for m in mappings):
         raise _safe_code("mapping_invalid")
     mappings = tuple(replace(m) for m in mappings)
     by_field = {m.field_id: m for m in mappings}

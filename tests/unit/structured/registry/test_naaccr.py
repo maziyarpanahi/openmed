@@ -811,3 +811,104 @@ def test_aggregate_values_are_bounded_before_large_xml_allocation(tmp_path):
         _write(tmp_path, batch, items=(_item(length=1_048_576),))
     assert exc.value.code == "input_limit"
     assert not (tmp_path / "protected.xml").exists()
+
+
+@pytest.mark.parametrize("boundary", ["parse", "resolver", "write", "dictionary"])
+def test_naaccr_public_failures_discard_private_context(
+    tmp_path, monkeypatch, boundary
+):
+    from openmed.structured.registry import naaccr
+
+    if boundary == "parse":
+        call = lambda: parse_naaccr_dictionary(b"\xffPRIVATE_SOURCE")
+    elif boundary == "dictionary":
+
+        class PrivateMapping(dict):
+            def __len__(self):
+                raise RuntimeError("PRIVATE_SOURCE")
+
+        call = lambda: naaccr.NAACCRDictionary(
+            "urn:synthetic:test", "1.8", PrivateMapping(), "sha256:" + "a" * 64
+        )
+    elif boundary == "write":
+
+        def fail(*args):
+            raise OSError("PRIVATE_SOURCE")
+
+        monkeypatch.setattr(os, "fsync", fail)
+        call = lambda: _write(tmp_path)
+    else:
+        batch, _ = _batch()
+
+        def fail(*args):
+            raise RuntimeError("PRIVATE_SOURCE")
+
+        batch["resolver"] = fail
+        call = lambda: _write(tmp_path, batch)
+    with pytest.raises(NAACCRProjectionError) as caught:
+        call()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("boundary", ["parse", "project"])
+def test_foreign_error_getters_are_not_evaluated(tmp_path, monkeypatch, boundary):
+    from openmed.structured.registry import naaccr
+
+    class Foreign(NAACCRDictionaryError):
+        @property
+        def code(self):
+            raise RuntimeError("PRIVATE_GETTER")
+
+        @code.setter
+        def code(self, value):
+            pass
+
+    def fail(*args, **kwargs):
+        raise Foreign("dictionary_invalid")
+
+    if boundary == "parse":
+        monkeypatch.setattr(naaccr.ET, "fromstring", fail)
+        call = lambda: parse_naaccr_dictionary(_dictionary((_item(),)))
+    else:
+        monkeypatch.setattr(naaccr, "build_registry_export", fail)
+        call = lambda: _write(tmp_path)
+    with pytest.raises(NAACCRProjectionError) as caught:
+        call()
+    assert caught.value.__context__ is None
+    assert "PRIVATE" not in json.dumps(caught.value.to_dict())
+
+
+@pytest.mark.parametrize(
+    "option,allowed", [("record_type", "I"), ("patient_key_item", "opaquePatient")]
+)
+def test_xml_schema_options_refuse_private_scalar_alias(tmp_path, option, allowed):
+    class PrivateCode(str):
+        def __new__(cls):
+            return super().__new__(cls, "PRIVATE_SOURCE")
+
+        def __eq__(self, other):
+            return other == allowed
+
+        def __hash__(self):
+            return hash(allowed)
+
+    with pytest.raises(NAACCRProjectionError):
+        _write(tmp_path, **{option: PrivateCode()})
+    assert not (tmp_path / "protected.xml").exists()
+
+
+def test_case_provider_is_enumerated_once(tmp_path):
+    class Once(list):
+        iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            if self.iterations > 1:
+                raise RuntimeError("PRIVATE_SOURCE")
+            return super().__iter__()
+
+    batch, _ = _batch()
+    cases = Once(batch["cases"])
+    batch["cases"] = cases
+    assert _write(tmp_path, batch).file_written
+    assert cases.iterations == 1
