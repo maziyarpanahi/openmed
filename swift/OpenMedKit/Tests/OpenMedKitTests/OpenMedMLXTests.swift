@@ -745,42 +745,9 @@
             func testSampleClinicalDocumentGLiNERMedicationCoverageAtDemoThreshold() async throws {
                 try requireUsableMLXRuntime()
 
-                let repoID = "OpenMed/gliner-multi-pii-v1-mlx"
-                let artifactURL: URL
-                if let artifactPath = ProcessInfo.processInfo.environment["OPENMED_GLINER_SPAN_ARTIFACT"],
-                    !artifactPath.isEmpty
-                {
-                    artifactURL = URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
-                } else if let homeDirectory = FileManager.default.homeDirectoryForCurrentUser as URL? {
-                    let localCacheArtifactURL =
-                        homeDirectory
-                        .appending(path: ".cache")
-                        .appending(path: "openmed-mlx")
-                        .appending(path: "OpenMed")
-                        .appending(path: "gliner-multi-pii-v1-mlx")
-                        .appending(path: "main")
-                    if FileManager.default.fileExists(
-                        atPath: localCacheArtifactURL.appending(path: "openmed-mlx.json").path
-                    ) {
-                        artifactURL = localCacheArtifactURL
-                    } else {
-                        let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-                        guard cacheState == .ready else {
-                            throw XCTSkip(
-                                "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
-                            )
-                        }
-                        artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
-                    }
-                } else {
-                    let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-                    guard cacheState == .ready else {
-                        throw XCTSkip(
-                            "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
-                        )
-                    }
-                    artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
-                }
+                // Keep SDK release validation separate from optional model qualification:
+                // an unrelated home cache must not silently select the artifact under test.
+                let artifactURL = try localArtifactURL(from: "OPENMED_GLINER_SPAN_ARTIFACT")
 
                 let labels = [
                     "symptom",
