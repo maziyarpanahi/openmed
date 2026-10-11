@@ -49,6 +49,8 @@ class PIIPattern:
     - context_required: Require nearby context for semantic-only recognition
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
+    - context_normalizer: Optional language-scoped context-key folding; never
+      used to rewrite source text or returned entity surfaces
 
     Example:
         PIIPattern(
@@ -77,6 +79,7 @@ class PIIPattern:
     safety_sweep_requires_context: bool = False
     reject_on_validation_failure: bool = False
     match_normalizer: Optional[Callable[[str], OffsetMappedText]] = None
+    context_normalizer: Optional[Callable[[str], str]] = None
 
 
 def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int, int]]:
@@ -588,6 +591,7 @@ def find_context_words(
     context_window: int = 100,
     *,
     require_boundaries: bool = False,
+    normalizer: Optional[Callable[[str], str]] = None,
 ) -> bool:
     """Check if context words appear near the matched entity.
 
@@ -619,11 +623,15 @@ def find_context_words(
     window_start = max(0, start - context_window)
     window_end = min(len(text), end + context_window)
     context_text = text[window_start:window_end].lower()
+    if normalizer is not None:
+        context_text = normalizer(context_text)
 
     # Simple lemmatization: strip common suffixes and check
     # More sophisticated would use spaCy/nltk lemmatizer
     for word in context_words:
         word_lower = word.lower()
+        if normalizer is not None:
+            word_lower = normalizer(word_lower)
 
         # Direct match
         if not require_boundaries and word_lower in context_text:
@@ -691,6 +699,7 @@ def find_semantic_units(
                     start,
                     end,
                     pii_pattern.context_words,
+                    normalizer=pii_pattern.context_normalizer,
                 )
             )
             if pii_pattern.requires_context:
@@ -700,6 +709,7 @@ def find_semantic_units(
                     end,
                     pii_pattern.context_words,
                     require_boundaries=True,
+                    normalizer=pii_pattern.context_normalizer,
                 )
                 if not has_required_context:
                     continue
