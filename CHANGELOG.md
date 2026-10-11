@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add five runnable, offline synthetic clinical workflow evidence examples,
+  with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
+
 - Add an offline synthetic NLI/guarded-relation example with explicit
   development and calibration-double backends, evidence bindings and
   human-review priorities; smoke checks guard projections and API drift (#3761).
