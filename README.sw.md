@@ -145,7 +145,7 @@ Kwenye maunzi ya Apple yanayoungwa mkono, OpenMed inaweza kutumia **MLX** na **[
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -193,11 +193,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Kisha tumia toleo lisilobadilika la OpenMed `v2.5.0`:
+Kisha tumia toleo lisilobadilika la OpenMed `v3.0.0`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.5.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
 }
 ```
 
@@ -324,7 +324,7 @@ Mfano wa matokeo:
 **Huduma ya REST**
 
 ```bash
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 ```
 
 `GET /health` · `POST /analyze` · `POST /pii/extract` ·
@@ -491,7 +491,7 @@ pamoja wa pipeline na majibu ya hitilafu yaliyounganishwa.
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # au kwa Docker
 docker build -t openmed:local .
@@ -528,7 +528,7 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Maelezo ya Toleo la OpenMed 2.5.0](docs/release/v2.5.0.md) | [Maelezo ya Toleo la OpenMed 2.2.0](docs/release/v2.2.0.md) | [Mifano](docs/examples.md) |
+| [Mwongozo wa Uhamiaji wa OpenMed 3.0.0](docs/migration/2.5-to-3.0.md) | [Maelezo ya Toleo la OpenMed 2.2.0](docs/release/v2.2.0.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
 | [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Upanuzi](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |
@@ -610,7 +610,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

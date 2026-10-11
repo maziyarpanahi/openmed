@@ -143,7 +143,7 @@ python examples/v30_clinical_brief.py
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -186,11 +186,11 @@ dependencyResolutionManagement {
 }
 ```
 
-फिर immutable OpenMed `v2.5.0` release उपयोग करें:
+फिर immutable OpenMed `v3.0.0` release उपयोग करें:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.5.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
 }
 ```
 
@@ -322,7 +322,7 @@ print([(e.label, e.text) for e in result.entities])
 **REST सेवा**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -612,7 +612,7 @@ Request validation, shared pipeline preload और unified error envelopes व�
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -649,7 +649,7 @@ v1.8 में API-key/JWT auth, no-PHI request logging, tracing, gRPC, async jo
 request coalescing, rate और concurrency limits, `/livez`, `/readyz` और opt-in metrics भी शामिल हैं:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -681,7 +681,7 @@ strict MkDocs build के दौरान दोनों को मौजू�
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [बैच processing](https://openmed.life/docs/batch-processing) |
 | [Configuration profiles](https://openmed.life/docs/profiles) | [REST सेवा](docs/rest-service.md) | [MLX बैकएंड](docs/mlx-backend.md) |
 | [Transformers.js एक्सपोर्ट](docs/export-transformersjs.md) | [FHIR interop](docs/fhir-interop.md) | [HL7 v2 डी-आइडेंटिफिकेशन](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.5.0 release notes](docs/release/v2.5.0.md) | [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [उदाहरण](docs/examples.md) |
+| [OpenMed 3.0.0 माइग्रेशन गाइड](docs/migration/2.5-to-3.0.md) | [OpenMed 2.2.0 release notes](docs/release/v2.2.0.md) | [उदाहरण](docs/examples.md) |
 | [Release streams](docs/release/semver-and-channels.md) | [Generative model नीति](docs/generative-model-policy.md) | [योगदान](docs/contributing.md) |
 | [सुरक्षा नीति](SECURITY.md) | [Compliance posture](docs/compliance.md) | [एक्सटेंशन प्लगइन SDK](docs/plugin-sdk.md) |
 | [v1 से v2 migration](docs/migration.md) | [MCP client connections](docs/mcp-clients.md) | [अफ़्रीकी डेवलपर ऑनबोर्डिंग](docs/africa-onboarding.md) |
@@ -750,7 +750,7 @@ OpenMed SDK का स्रोत [Apache-2.0 License](LICENSE) के अं�
 
 यदि OpenMed आपके लिए उपयोगी है, तो एक star दूसरों को इसे खोजने में मदद करता है।
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

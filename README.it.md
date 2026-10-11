@@ -102,7 +102,7 @@ Sull’hardware Apple supportato, OpenMed può usare **MLX** e **[OpenMedKit](sw
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -166,7 +166,7 @@ analyze_text(
 **Servizio REST**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -312,7 +312,7 @@ Un servizio FastAPI compatibile con Docker, con validazione delle richieste, pre
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -393,7 +393,7 @@ Se OpenMed ti è utile nella tua ricerca, ti preghiamo di citarlo:
 
 Se OpenMed ti è utile, una stella aiuta altri a scoprirlo.
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

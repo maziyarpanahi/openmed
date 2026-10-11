@@ -42,6 +42,7 @@ from ..indic_name_match import (
 )
 from ..labels import normalize_label
 from ..language_pack import get_language_pack
+from ..locale_formats import date_order_for_locale
 from ..name_order import CJK_LANGUAGES, normalize_person_span
 from ..script_detect import detect_script
 from .format_preserve import (
@@ -53,6 +54,7 @@ from .format_preserve import (
 )
 from .locales import resolve_faker_backend_locale, resolve_locale
 from .providers import register_clinical_providers
+from .registry import _DAY_FIRST_LOCALES as _FORMAT_PRESERVE_DAY_FIRST_LOCALES
 from .registry import resolve_label_generator
 
 # ---------------------------------------------------------------------------
@@ -464,12 +466,11 @@ class Anonymizer:
                     return african_surrogate
             return preserve_phone_format(original_value, rng=faker.random)
         if canonical in _FORMAT_PRESERVE_DATE_LABELS:
-            day_first = effective_locale in _FORMAT_PRESERVE_DAY_FIRST_LOCALES
             return _non_identical_surrogate(
                 original_value,
                 lambda: preserve_date_format(
                     original_value,
-                    day_first=day_first,
+                    date_order=date_order_for_locale(effective_locale),
                     rng=faker.random,
                 ),
             )
@@ -507,33 +508,6 @@ _FORMAT_PRESERVE_GENERIC_ID_LABELS = frozenset(
         L.VEHICLE_REGISTRATION,
         L.VIN,
         L.ZIPCODE,
-    }
-)
-
-_FORMAT_PRESERVE_DAY_FIRST_LOCALES = frozenset(
-    {
-        "fr_FR",
-        "de_DE",
-        "it_IT",
-        "es_ES",
-        "nl_NL",
-        "as_IN",
-        "hi_IN",
-        "ur_IN",
-        "ml_IN",
-        "pa_IN",
-        "en_IN",
-        "or_IN",
-        "ta_IN",
-        "pt_PT",
-        "pt_BR",
-        "uk_UA",
-        "cs_CZ",
-        "sw",
-        "zu_ZA",
-        "xh_ZA",
-        "el_GR",
-        "vi_VN",
     }
 )
 

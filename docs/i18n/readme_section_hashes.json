@@ -42,15 +42,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
+          "source_sha256": "3172ca77bdbbf8c9cee4a3735ee97e8140ca3b5c0f133be8e289caef04696c0d",
           "translation_heading": "Apple डिवाइस पर: Swift, MLX और iOS",
-          "translation_sha256": "a97adadb5cf320d8f41d96fc010bc7a9ac92b764b380d592c8e746218104a00e"
+          "translation_sha256": "29b7bff53b494c78e837665f73a940976de5c09f141d3644376c09650608dba5"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
+          "source_sha256": "944d8a887476bd865cf240acaa97f86750a3e50a14f94d03bd0f2a96b1c9f5b2",
           "translation_heading": "Android डिवाइस पर — Kotlin और ONNX Runtime Mobile",
-          "translation_sha256": "2e0fc2c6bbe568f636baee73b16e7f3e643b115a4f37d27238e04623a29b7991"
+          "translation_sha256": "18eea71171c5884ae43892ea18c3aec82cea85f6755a3c6f9df3af4573c4c491"
         },
         {
           "source_heading": "How it works",
@@ -66,9 +66,9 @@
         },
         {
           "source_heading": "Quick start",
-          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "source_sha256": "1a644df850589ef34c3f8c0cc77fce3f1331e79c27f73a2be4022c6edd63eee0",
           "translation_heading": "त्वरित शुरुआत",
-          "translation_sha256": "7dee75d9c6c2cdd858481f02fc2d3c36fd02ab9fb70c70632a4595dacf172259"
+          "translation_sha256": "5ed1872b70e54948d0baa31e74acc297c22144d103cd6e9dfb476a73e73036c7"
         },
         {
           "source_heading": "Models",
@@ -90,15 +90,15 @@
         },
         {
           "source_heading": "REST API",
-          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "source_sha256": "95c200fb16ae5759b0ac51db6ee8016e13f1ae39cea6f1aef0c7e4b02c61565e",
           "translation_heading": "REST API",
-          "translation_sha256": "2fa58dccd8ed66c654664d0996482be96839d4dc9a72e717ce2ca29db2dc12b2"
+          "translation_sha256": "72b93279ace5e941128cad8de1c7728a62d7f6897260698501bc751671e7a6a4"
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
+          "source_sha256": "ac0796989e4f8b5af09150fe66cb060decb42fe51d5987ca873f12594faafa9c",
           "translation_heading": "दस्तावेज़ीकरण",
-          "translation_sha256": "79a4f06e4f8f484743ad2e2ae973e692bc6ad315b500088f668d0788bc990853"
+          "translation_sha256": "0d075f6e7cb5e02d0dd56701a2655e3aacf923e709d63910d235cf39943a7881"
         },
         {
           "source_heading": "Meet the mascot",
@@ -138,9 +138,9 @@
         },
         {
           "source_heading": "Star History",
-          "source_sha256": "9ae063033f4a7921a1712676e343aaa39612f9225d83e1b30e61492c9948a3c5",
+          "source_sha256": "f89465213d8ecb2334c916071131bd19106f220a40cebe8247ac498bd339a1e2",
           "translation_heading": "स्टार इतिहास",
-          "translation_sha256": "56150ad7bf11325476bf654afc4284326495d8bcfaab56af9a81513dfa85ed7e"
+          "translation_sha256": "0323019d1015c97403ee546438ec10ab24dc52127e61ee74ceb520fcb9ac6f5c"
         }
       ]
     },
@@ -184,15 +184,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
+          "source_sha256": "3172ca77bdbbf8c9cee4a3735ee97e8140ca3b5c0f133be8e289caef04696c0d",
           "translation_heading": "Kwenye kifaa cha Apple: Swift, MLX na iOS",
-          "translation_sha256": "7fccb58ae21874bd9817f86c1a6a6919d455b0bf545625e382bf03e9c1b2dbcd"
+          "translation_sha256": "5c62e945d1a5311830d4fa348167bd2e8846fd774983a888e4d63cb4d0e18c40"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
+          "source_sha256": "944d8a887476bd865cf240acaa97f86750a3e50a14f94d03bd0f2a96b1c9f5b2",
           "translation_heading": "Kwenye kifaa cha Android — Kotlin na ONNX Runtime Mobile",
-          "translation_sha256": "eb5579417375a9bb4fb007ac16225c6508daeacf92e840ab352a3ba1fed6ca1b"
+          "translation_sha256": "939235431f02f040772fb1679ddbdc001e0309afefd18ec15ecc309b3a0defe1"
         },
         {
           "source_heading": "How it works",
@@ -208,9 +208,9 @@
         },
         {
           "source_heading": "Quick start",
-          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "source_sha256": "1a644df850589ef34c3f8c0cc77fce3f1331e79c27f73a2be4022c6edd63eee0",
           "translation_heading": "Anza haraka",
-          "translation_sha256": "b949670f043de40e9e4893a62e11c0842c028002a7b59ef938d3d6cb049b86ea"
+          "translation_sha256": "ce9a2f522ad8e95c22f281a1e84f6675fe48d1736b55f356b72240f4bcc20847"
         },
         {
           "source_heading": "Models",
@@ -232,15 +232,15 @@
         },
         {
           "source_heading": "REST API",
-          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "source_sha256": "95c200fb16ae5759b0ac51db6ee8016e13f1ae39cea6f1aef0c7e4b02c61565e",
           "translation_heading": "REST API",
-          "translation_sha256": "8b9db8b2bc6373c2722a12316fa61e970fd33934cf148d86ea33a8c40b916c31"
+          "translation_sha256": "2c965d619055498d015d751896a553d6b02fcf6bfd5ea3fe03b497666736c711"
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
+          "source_sha256": "ac0796989e4f8b5af09150fe66cb060decb42fe51d5987ca873f12594faafa9c",
           "translation_heading": "Nyaraka",
-          "translation_sha256": "4a21720f593b46ed57c4f56ca38920be8e21585fe64158f038f0adf3cf5ffe6d"
+          "translation_sha256": "353be56fe6df39a5ecbeaa3df02d9dae3dd75bd3f768f272a5d46a34c18ee2e7"
         },
         {
           "source_heading": "Meet the mascot",
@@ -280,9 +280,9 @@
         },
         {
           "source_heading": "Star History",
-          "source_sha256": "9ae063033f4a7921a1712676e343aaa39612f9225d83e1b30e61492c9948a3c5",
+          "source_sha256": "f89465213d8ecb2334c916071131bd19106f220a40cebe8247ac498bd339a1e2",
           "translation_heading": "Historia ya nyota",
-          "translation_sha256": "a8578b2deebe8585fbd2abd64e563ea7bf29d88151cc022d912f7932e54a3a56"
+          "translation_sha256": "bca00ae03579f49a56078a357513b8de92f2baf0a432e69e3652c645d822e98f"
         }
       ]
     },
@@ -326,15 +326,15 @@
         },
         {
           "source_heading": "On-device on Apple: Swift, MLX & iOS",
-          "source_sha256": "f6f0910147b3b13cae6ca3b8f807002f595f4c06be9fd303f0848527b6e0691c",
+          "source_sha256": "3172ca77bdbbf8c9cee4a3735ee97e8140ca3b5c0f133be8e289caef04696c0d",
           "translation_heading": "在 Apple 设备上本地运行：Swift、MLX 与 iOS",
-          "translation_sha256": "0a1e8d9a84d9dd24aeccc5a409d540c59bad04a75a8f34ef83253838320710d2"
+          "translation_sha256": "b6ce434f2ce28b2edafbc13cd7c42b0d77c8951964d84c0992e4516202b2e550"
         },
         {
           "source_heading": "On-device on Android — Kotlin & ONNX Runtime Mobile",
-          "source_sha256": "bcb7fb1d78d175c5289f041e6be0a0cc62b9bd72e09152ae07528ac953787805",
+          "source_sha256": "944d8a887476bd865cf240acaa97f86750a3e50a14f94d03bd0f2a96b1c9f5b2",
           "translation_heading": "在 Android 设备上本地运行：Kotlin 与 ONNX Runtime Mobile",
-          "translation_sha256": "e0f045da7709844013a479e6198fec5a8369398734ee0f2404bd2a6c2a2b32da"
+          "translation_sha256": "72afd5bcafef9d59685fefea0c9b7744fa8a0a1c5d5db5dec30b3a2af067c923"
         },
         {
           "source_heading": "How it works",
@@ -350,9 +350,9 @@
         },
         {
           "source_heading": "Quick start",
-          "source_sha256": "14e50e90737993456b40dab561dd522481d0ba8fbf67abc18d2440867f05ffbc",
+          "source_sha256": "1a644df850589ef34c3f8c0cc77fce3f1331e79c27f73a2be4022c6edd63eee0",
           "translation_heading": "快速开始",
-          "translation_sha256": "6acba51b6a1c22d304b741c4ba1b9338e56af1f741099e7ef8eb1f412c8f8048"
+          "translation_sha256": "6e4df8e64a71ac5e2168124a3113ae11e350176f5904d2e316cf7603b38d314d"
         },
         {
           "source_heading": "Models",
@@ -374,15 +374,15 @@
         },
         {
           "source_heading": "REST API",
-          "source_sha256": "742c0ede424e154c510afa069d98cb78fd48510323bdc0bd9eec7251bbdc6c87",
+          "source_sha256": "95c200fb16ae5759b0ac51db6ee8016e13f1ae39cea6f1aef0c7e4b02c61565e",
           "translation_heading": "REST API",
-          "translation_sha256": "d03e9b055db8062d3185ac28786444fad04af083eaa7e8412ef1c6abcc448677"
+          "translation_sha256": "e72d5e51b1808095dabd54dfe5c02cb2687851dfa66a6b6c0faeddfa292c5e99"
         },
         {
           "source_heading": "Documentation",
-          "source_sha256": "998e1106ecd1a649bc94289d46a307d165ceb77aa7ab4b180fae102737360437",
+          "source_sha256": "ac0796989e4f8b5af09150fe66cb060decb42fe51d5987ca873f12594faafa9c",
           "translation_heading": "文档",
-          "translation_sha256": "10bafea334c4e5758c0c601430c7c3b5fd96430a9a869f6a2ccd6b0b2b03bdbe"
+          "translation_sha256": "034dd9e76ca851ca641c6426d622756135c2b86dda8f5fa4595382eac161e996"
         },
         {
           "source_heading": "Meet the mascot",
@@ -422,9 +422,9 @@
         },
         {
           "source_heading": "Star History",
-          "source_sha256": "9ae063033f4a7921a1712676e343aaa39612f9225d83e1b30e61492c9948a3c5",
+          "source_sha256": "f89465213d8ecb2334c916071131bd19106f220a40cebe8247ac498bd339a1e2",
           "translation_heading": "Star 历史",
-          "translation_sha256": "5089a7ad6acb38abf7ab9a5464642a0bdb8e4a83f6c955d5ac2d1fdfd79f7560"
+          "translation_sha256": "d3658bcd804c26302e7cee0880bcbdbdc10f6e6363a982dc21822067914d041d"
         }
       ]
     }

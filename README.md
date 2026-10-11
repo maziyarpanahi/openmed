@@ -142,7 +142,7 @@ On supported Apple hardware, OpenMed can use **MLX** and **[OpenMedKit](swift/Op
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -186,11 +186,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the immutable OpenMed `v2.5.0` release:
+Then use the immutable OpenMed `v3.0.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v2.5.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
 }
 ```
 
@@ -326,7 +326,7 @@ Example output:
 **REST service**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -602,7 +602,7 @@ A Docker-friendly FastAPI service with request validation, shared pipeline prelo
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -641,7 +641,7 @@ async jobs, webhooks, warm pools, dynamic batching, request coalescing, rate
 and concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -674,7 +674,7 @@ MkDocs build.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 2.5.0 Release Notes](docs/release/v2.5.0.md) | [OpenMed 2.2.0 Release Notes](docs/release/v2.2.0.md) | [Examples](docs/examples.md) |
+| [OpenMed 3.0.0 Migration Guide](docs/migration/2.5-to-3.0.md) | [OpenMed 2.2.0 Release Notes](docs/release/v2.2.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Extension Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |
@@ -745,7 +745,7 @@ papers, posters, and derived documentation.
 
 If OpenMed is useful to you, a star helps others discover it.
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

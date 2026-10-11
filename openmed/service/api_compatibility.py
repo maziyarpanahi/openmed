@@ -37,6 +37,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "authentication_required",
     "backpressure",
     "bad_request",
+    "bulk_paths_disabled",
     "circuit_breaker_open",
     "forbidden",
     "grounding_invalid_request",
@@ -51,12 +52,16 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "inbound_unsupported_response",
     "internal_error",
     "invalid_credentials",
+    "model_not_served",
     "not_ready",
     "offline_snapshot_unavailable",
     "payload_too_large",
     "outbound_privacy_error",
     "outbound_redaction_failed",
     "outbound_redactor_required",
+    "path_exists",
+    "path_invalid",
+    "path_outside_root",
     "privacy_gateway_blocked",
     "privacy_gateway_error",
     "privacy_gateway_not_configured",
@@ -717,6 +722,10 @@ def _error_categories_from_ast(tree: ast.AST) -> set[str]:
         )
         if function_name == "_error_response" and len(node.args) > 1:
             value = node.args[1]
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                categories.add(value.value)
+        if function_name == "BulkPathError" and node.args:
+            value = node.args[0]
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 categories.add(value.value)
         if function_name in {"AuthError", "_error_response"}:
