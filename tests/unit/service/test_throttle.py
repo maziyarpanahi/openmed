@@ -325,10 +325,11 @@ def _model_request(mode: str, text: str) -> tuple[str, dict[str, Any]]:
 
 @pytest.mark.parametrize("mode", ["rest", "batch", "graphql"])
 @pytest.mark.parametrize("worker_fails", [False, True])
+@pytest.mark.parametrize("limit", [0, 1])
 def test_timeout_retains_capacity_until_model_work_finishes(
-    monkeypatch: pytest.MonkeyPatch, caplog, mode: str, worker_fails: bool
+    monkeypatch: pytest.MonkeyPatch, caplog, mode: str, worker_fails: bool, limit: int
 ) -> None:
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", str(limit))
     monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "0.01")
     monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_RETRY_MAX_ATTEMPTS", "1")
@@ -384,9 +385,10 @@ def test_timeout_retains_capacity_until_model_work_finishes(
                     assert "SYNTHETIC_PRIVATE_INPUT" not in first.text
                     assert _orphaned_work(app) == 1
                     assert app.state.inflight == 1
-                    for _ in range(2):
-                        busy = await client.post(path, json=body)
-                        _assert_error_payload(busy, 503, "service_busy")
+                    if limit:
+                        for _ in range(2):
+                            busy = await client.post(path, json=body)
+                            _assert_error_payload(busy, 503, "service_busy")
                     assert state == {"active": 1, "peak": 1, "calls": 1}
                 finally:
                     release.set()

@@ -296,7 +296,15 @@ class ServiceThrottle:
 
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         """Apply rate and concurrency gates around one HTTP request."""
-        if not self._should_throttle(request.url.path):
+        from .auth import request_needs_admission
+
+        should_throttle = (
+            request_needs_admission(request)
+            if self._limited_paths is not None
+            else self._should_throttle(request.url.path)
+        )
+        # Drain and orphaned-work accounting also apply with no throttle limits.
+        if not should_throttle:
             return await call_next(request)
 
         key = client_identity(request, self.config.key_by)

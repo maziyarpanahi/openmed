@@ -819,6 +819,10 @@
         "kind": "class",
         "signature": "(experiencer, cue, cue_offset, source)"
       },
+      "ExtractiveSummarizerBackend": {
+        "kind": "class",
+        "signature": "(kw:evidence=..., kw:importance_classes=..., kw:length_budget=...)"
+      },
       "FAMILY_EXPERIENCER": {
         "kind": "constant",
         "signature": null
@@ -911,6 +915,10 @@
         "kind": "type_alias",
         "signature": null
       },
+      "LocalSummarizerError": {
+        "kind": "class",
+        "signature": "(message=..., kw:reason=...)"
+      },
       "MEASUREMENT_NORMALIZATION_ADVISORY": {
         "kind": "constant",
         "signature": null
@@ -930,6 +938,10 @@
       "MEDICATION_SIG_ADVISORY": {
         "kind": "constant",
         "signature": null
+      },
+      "MLXSummarizerBackend": {
+        "kind": "class",
+        "signature": "(model=..., kw:memory_budget_bytes=...)"
       },
       "MULTILINGUAL_RELATION_ADVISORY": {
         "kind": "constant",
@@ -1146,6 +1158,10 @@
       "RelationCandidateRule": {
         "kind": "class",
         "signature": "(relation_type, source_relation, head_labels, tail_labels, cues, max_character_distance=...)"
+      },
+      "RemoteSummarizerError": {
+        "kind": "class",
+        "signature": "(message=..., kw:reason=...)"
       },
       "ResolvedTimeline": {
         "kind": "class",
@@ -1614,6 +1630,10 @@
       "resolve_span_context": {
         "kind": "function",
         "signature": "(span, modifier_hits=..., language=...)"
+      },
+      "resolve_summarizer_backend": {
+        "kind": "function",
+        "signature": "(model=...)"
       },
       "resolve_temporality": {
         "kind": "function",
