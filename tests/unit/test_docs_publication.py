@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import posixpath
 import re
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -259,6 +261,87 @@ def _markdown_targets(source: str, *, published: set[str]) -> set[str]:
     }
 
 
+def _migration_python_examples(markdown: str) -> list[tuple[bool, str]]:
+    examples = re.findall(r"(?ms)^```python\n(.*?)^```\s*$", markdown)
+    if not examples:
+        raise ValueError("migration guide has no Python examples")
+    classified: list[tuple[bool, str]] = []
+    for source in examples:
+        marker = source.splitlines()[0]
+        if not marker.startswith(("# Runnable:", "# Fragment:")):
+            raise ValueError("migration example needs a Runnable or Fragment marker")
+        compile(source, "migration_example.py", "exec")
+        classified.append((marker.startswith("# Runnable:"), source))
+    return classified
+
+
+def test_v31_migration_examples_run_offline_without_models_or_source_output(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from openmed.core.models import ModelLoader
+    from openmed.core.offline import HF_OFFLINE_ENV_VARS, network_blocked_if_offline
+
+    def reject_model_load(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("migration examples must not load a model")
+
+    monkeypatch.setattr(ModelLoader, "load_model", reject_model_load)
+    for name in HF_OFFLINE_ENV_VARS:
+        monkeypatch.setenv(name, "1")
+    markdown = (DOCS / "migration" / "3.0-to-3.1.md").read_text(encoding="utf-8")
+    examples = _migration_python_examples(markdown)
+    assert any(runnable for runnable, _ in examples)
+    assert any(not runnable for runnable, _ in examples)
+
+    with network_blocked_if_offline(local_only=True):
+        for runnable, source in examples:
+            if runnable:
+                exec(compile(source, "migration_example.py", "exec"), {})
+
+    output = capsys.readouterr().out
+    results = [ast.literal_eval(line) for line in output.splitlines()]
+    assert results == [
+        {"refused": True, "compatible": True},
+        {"projected_fields": 1, "insufficient_scope_denied": True},
+        {
+            "concept": 1,
+            "person": 1,
+            "visit_occurrence": 1,
+            "note": 1,
+            "note_nlp": 0,
+            "condition_occurrence": 0,
+            "drug_exposure": 0,
+            "measurement": 0,
+            "procedure_occurrence": 0,
+            "observation": 0,
+            "source_to_concept_map": 0,
+        },
+        {"operation_counts": {"insert": 1}, "duplicate_denied": True},
+        {"bundle_type": "transaction", "entry_count": 1},
+    ]
+    assert "synthetic-" not in output
+    assert "org.example" not in output
+
+
+@pytest.mark.parametrize(
+    "markdown",
+    ["No examples.", "```python\nprint('unclassified')\n```\n"],
+)
+def test_migration_examples_require_explicit_execution_classification(
+    markdown: str,
+) -> None:
+    with pytest.raises(ValueError):
+        _migration_python_examples(markdown)
+
+
+def test_migration_fragment_compiles_without_executing_application_effects() -> None:
+    examples = _migration_python_examples(
+        "```python\n# Fragment: not executed.\n"
+        "raise RuntimeError('must never run')\n```\n"
+    )
+    assert examples[0][0] is False
+
+
 def test_publication_classifies_every_default_markdown_page_exactly_once() -> None:
     config = _load_yaml(MKDOCS, base=True)
     publication = _load_yaml(PUBLICATION)
@@ -281,6 +364,69 @@ def test_publication_classifies_every_default_markdown_page_exactly_once() -> No
         "website/**",
         "demo/web/README.md",
     ]
+
+
+def _governance_navigation() -> set[str]:
+    config = _load_yaml(MKDOCS, base=True)
+    sections = [
+        item["Governed Agents"] for item in config["nav"] if "Governed Agents" in item
+    ]
+    assert len(sections) == 1
+    paths = _nav_paths(sections[0])
+    assert len(paths) == len(set(paths))
+    return set(paths)
+
+
+def _assert_governance_links_once(text: str, expected: set[str]) -> None:
+    counts = Counter(
+        _resolve_docs_link("agent/index.md", href, published=expected)
+        for href in re.findall(r"\[[^\]]+\]\(([^\s)]+)\)", text)
+    )
+    incorrect = {path: counts[path] for path in sorted(expected) if counts[path] != 1}
+    assert not incorrect, f"governance links: {incorrect}"
+
+
+def test_governance_overview_covers_each_existing_contract_once() -> None:
+    paths = _governance_navigation()
+    assert {
+        path.relative_to(DOCS).as_posix() for path in (DOCS / "agent").glob("*.md")
+    } <= paths
+    assert {
+        "interop/fhir-write-preflight.md",
+        "interop/smart-scope-audit.md",
+        "interop/omop-staged-mutations.md",
+        "interop/omop-vocabulary-write-gates.md",
+        "interop/fhir-omop-write-lineage.md",
+        "interop/omop-rollback-manifests.md",
+        "interop/omop-rollback-schema.md",
+        "interop/fhir-capability-fixtures.md",
+        "evaluation/governed-agent-fixtures.md",
+        "evaluation/sealed-workflow-manifests.md",
+        "evaluation/v3.1-agent-gates.md",
+        "security/agent-threat-model.md",
+        "compliance/v3.1-agent-assurance.md",
+    } <= paths
+    paths.remove("agent/index.md")
+    _assert_governance_links_once((DOCS / "agent/index.md").read_text(), paths)
+    publication = _load_yaml(PUBLICATION)
+    assert "docs/agent/index.html" in publication["expected_routes"]
+
+
+@pytest.mark.parametrize("mutation", ("missing", "duplicate", "anchor_duplicate"))
+def test_governance_overview_link_guard_rejects_missing_or_repeated_contracts(
+    mutation: str,
+) -> None:
+    paths = _governance_navigation() - {"agent/index.md"}
+    text = (DOCS / "agent/index.md").read_text()
+    if mutation == "missing":
+        text = re.sub(r"(?m)^- \[Signed capability grants\].*\n", "", text)
+    else:
+        target = "capability-grants.md" + (
+            "#verify" if mutation == "anchor_duplicate" else ""
+        )
+        text += f"\n[Repeated contract]({target})\n"
+    with pytest.raises(AssertionError, match="governance links"):
+        _assert_governance_links_once(text, paths)
 
 
 def test_docs_build_excludes_local_demo_payloads() -> None:
