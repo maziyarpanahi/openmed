@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bound five governance JSON readers before decoding and return their existing
+  typed malformed-input errors for excessive nesting, oversized input and
+  invalid JSON. Cover every public governance JSON reader with bounded property
+  tests and verify consent rejection through the MCP error envelope (#3779).
+
+- Added offline chart-abstraction scoring with synthetic gold fields, separate
+  abstention errors, fact-bound source-support counts, field-type slices and
+  deterministic value-free Wilson intervals (#3788).
+
+- Added local Journey-to-chart-abstraction evidence production with explicit
+  source-origin declarations, digest-bound review receipts, and persistent,
+  value-free coverage blockers for missing, unsupported or conflicting evidence
+  (#3778).
+
 
 - Add an offline synthetic SDOH/temporal/timeline example with explicit reference
   time, authored event axes and controlled labels/offsets/states-only output;
@@ -159,6 +173,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exact artifact/rubric binding, citation and reviewer-agreement metrics, explicit
   incomplete/disputed states and synthetic-only release refusal (#3655).
 
+- Added explicit, confirmation-bound terminal recovery journal retirement, sealed
+  digest/count records, non-resumable retired dispositions, and restart-safe
+  checkpoint cleanup with summary anchor verification (#3791).
+
+- Added Doccano relation-extraction JSONL import and export for the versioned
+  annotation envelope, with de-identification digest binding, declared loss for
+  unsupported fields, review states and embeddings, controlled label and
+  relation normalization, and `--format doccano` CLI support (#3807).
+
 - Add governed workflow CLI plan/preview, inspection, human-review request,
   cancellation and explicit resume over caller-injected local services. Bind
   resume to exact action/state/receipt custody, keep inputs protected and outputs
@@ -248,6 +271,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Added an offline Draft 2020-12 catalog for approval tokens and receipts,
+  reviewer handoff packets, capability grant manifests and workflow recovery
+  checkpoints and decisions, with local references, bounded fields, version,
+  enum and digest drift tests (#3783).
+
+- Add the offline agent governance self-check and `openmed agent self-check`
+  command. Independently verify the actual schema catalog, bundled golden
+  summaries, closed fields, outcomes, correlations, timing and commitments,
+  returning deterministic value-free reports with negative controls.
+- Include the existing MIT-licensed JSON Schema validator in the base install
+  so the governance self-check needs no development extra. Keep the license
+  inventory, SBOM closure and standalone manifest aligned with that dependency.
+- Bundle seven metadata-only agent run-summary golden vectors with strict,
+  offline validation of canonical JSON, Markdown digests and commitments (#3044).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
   agent outcome, correlation, timing and run-summary records.
 - Added the offline `openmed models slm-verify` command, which verifies a local
@@ -262,6 +299,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
+  agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
+  exemptions with coded-element paths and content-free offset findings (#3769).
 - Normalize SMART v1 read/write/all permissions, wildcard resources, granular
   queries and non-clinical identity/launch/session scopes in offline scope
   audits. Compare constraints conservatively and report malformed input without
