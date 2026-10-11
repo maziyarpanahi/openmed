@@ -375,6 +375,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Report explicit CLI refusal and check outcomes, including cancelled briefs;
+  inspect bounded local cache metadata and report summarizer package pin readiness
+  without downloading artifacts or constructing models (#3755, #3759).
+
 - Require review of empty cohort populations with value-free source coverage,
   explicit unknown counts, and typed warnings across saved runs, local
   DuckDB/Parquet resolution, and existing Journey reads. Read legacy saved
