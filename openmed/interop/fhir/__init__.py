@@ -170,6 +170,21 @@ _BULK_EXPORTS = frozenset(
     }
 )
 
+_SMART_REFRESH_EXPORTS = frozenset(
+    {
+        "SMARTCredential",
+        "SMARTCredentialCustody",
+        "SMARTRefreshConfig",
+        "SMARTRefreshLease",
+        "SMARTRefreshReport",
+        "SMARTCredentialRefresher",
+        "SMARTTokenRequest",
+        "SMARTTokenResponse",
+        "SMARTTokenValidationError",
+        "validate_smart_token_response",
+    }
+)
+
 _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
     {
         "FHIR_JOURNEY_COMPATIBILITY_POLICY",
@@ -388,6 +403,16 @@ __all__ = [
     "validate_sdc",
     "validate_sdc_response",
     "write_checkpoint",
+    "SMARTCredential",
+    "SMARTCredentialCustody",
+    "SMARTRefreshConfig",
+    "SMARTRefreshLease",
+    "SMARTRefreshReport",
+    "SMARTCredentialRefresher",
+    "SMARTTokenRequest",
+    "SMARTTokenResponse",
+    "SMARTTokenValidationError",
+    "validate_smart_token_response",
 ]
 
 
@@ -396,6 +421,8 @@ def __getattr__(name: str) -> Any:
 
     if name in _BULK_EXPORTS:
         return getattr(import_module(".bulk", __name__), name)
+    if name in _SMART_REFRESH_EXPORTS:
+        return getattr(import_module(".smart_refresh", __name__), name)
     if name in _JOURNEY_ROUNDTRIP_EXPORTS:
         return getattr(import_module(".journey_roundtrip", __name__), name)
     if name in _WRITE_CLIENT_EXPORTS:
