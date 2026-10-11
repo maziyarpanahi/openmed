@@ -20,6 +20,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   processed, skipped and failed outcomes. Declare English support for packaged
   cue tables and built-in extractors, retain legacy English dispatch, and keep
   audit output limited to category metadata, counts and offsets (#3797).
+- Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
+  exact span lineage, vocabulary snapshot checks and rollback evidence.
+  Replacement proposals preserve prior pipeline digests and explicitly review
+  tombstones before inserts; row values remain in protected local memory.
+- Add an explicit local SQLite OMOP batch committer with row-state-bound
+  previews, mandatory injected approval/admission/custody checks, atomic
+  idempotency receipts and read-only recovery of unknown commit outcomes.
+
 - Export aligned SDOH evidence as passive R4 Observations and offset-linked
   Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
   preliminary review states, explicit losses and preserved sensitive-use labels.
