@@ -38,6 +38,11 @@ FOCUSED_CASE_IDS = frozenset(
         "negative-insufficient-tool-scope",
         "negative-oversized-payload",
         "negative-unapproved-state-change",
+        "positive-governance-preflight",
+        "positive-governance-preview",
+        "positive-governance-status",
+        "positive-governance-review",
+        "negative-governance-review",
     }
 )
 
@@ -48,7 +53,7 @@ def test_manifest_is_versioned_synthetic_and_covers_required_boundaries() -> Non
     assert DEFAULT_FIXTURE_PATH.is_file()
     assert manifest.schema_version == AUTHORIZATION_CONFORMANCE_SCHEMA_VERSION
     assert manifest.synthetic is True
-    assert len(manifest.cases) == 10
+    assert len(manifest.cases) == 15
     assert {case.kind for case in manifest.cases} == {"positive", "negative"}
     assert {case.expected_failure for case in manifest.cases if case.is_negative} == {
         "wrong_audience",

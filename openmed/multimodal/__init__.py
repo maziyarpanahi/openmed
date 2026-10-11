@@ -110,12 +110,14 @@ from .code_regions import (
 )
 from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
+    DicomDeidentificationError,
     DicomHeaderAction,
     DicomHeaderDeidPolicy,
     DicomHeaderDeidResult,
     DicomPixelFinding,
     DicomPixelRedactionPolicy,
     DicomPixelRedactionResult,
+    DicomPixelStatus,
     DicomResidualTextReport,
     deidentify_dicom_headers,
     redact_dicom_pixels,
@@ -474,6 +476,8 @@ __all__ = [
     "parse_xform_path",
     "redact_chw_form",
     "redact_contacts_calendar",
+    "DicomDeidentificationError",
+    "DicomPixelStatus",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
