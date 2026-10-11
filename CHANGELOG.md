@@ -244,6 +244,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Bundle seven metadata-only agent run-summary golden vectors with strict,
+  offline validation of canonical JSON, Markdown digests and commitments (#3044).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
   agent outcome, correlation, timing and run-summary records.
 - Added the offline `openmed models slm-verify` command, which verifies a local
