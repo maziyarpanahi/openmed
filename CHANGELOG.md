@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in local NLI verification for summarization and grounding, with retained
+  contradiction and abstention outcomes, offset- and digest-bound audit records,
+  typed backend refusals and unchanged default serialization. Source and claim
+  text are omitted from verification metadata; no trained model is required
+  for explicit synthetic heuristic checks.
+
+- Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
+  exact span lineage, vocabulary snapshot checks and rollback evidence.
+  Replacement proposals preserve prior pipeline digests and explicitly review
+  tombstones before inserts; row values remain in protected local memory.
+- Add an explicit local SQLite OMOP batch committer with row-state-bound
+  previews, mandatory injected approval/admission/custody checks, atomic
+  idempotency receipts and read-only recovery of unknown commit outcomes.
+
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
+
+- Add offline `clinical sdoh`, `clinical relations` and `clinical timeline`
+  commands over validated analyzed spans. Emit value-free review records,
+  require explicit temporal references and links, and reserve new private
+  output files without loading NER models or downloading artifacts.
+### Security
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches
+  (#3773).
+
+### Added
+
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
+- Default-disabled, authenticated REST workflow inspection, receipt submission
+  and cancellation intent over an injected custody service, with bounded
+  governance schemas and content-free responses (#3668).
+
+### Added
+
+- Offline `summarize` and `nli verify` CLI commands with bounded local inputs,
+  value-free console results, explicit baseline selection, and exclusive private
+  summary/metadata destinations (#3801).
+
+### Added
+
+- Metadata-only MCP governed workflow preflight, preview, status and human-review
+  request tools. Server-held single-use consent protects handoff creation; no
+  approval token or reviewer claim crosses MCP and no tool executes an effect
+  (#3762).
+
+### Added
+
+- OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
+  and run-evidence parsers with shared Python conformance vectors. Local custody
+  hooks record typed receipt observations and reject replay/changed actions;
+  parsed evidence never grants clinical execution authority (#3669).
+
 ### Security fixes
 
 - Align Python and OpenMedKit summary leakage guards for Unicode variants,
@@ -15,6 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared synthetic brief/refusal parity controls (#3729).
 
 ### Changed
+
+- Map reviewed brief profile fields to existing evidence-class budgets, bind
+  value-free estimates into audit records and distinguish length overflow from
+  unavailable local models. Export controlled summarizer errors and preserve
+  their typed reason codes without private exception contexts. Use script-aware
+  first-three-sentence boundaries for explicit comparison extraction; retain
+  reviewed fact-coverage selection and native unloaded-model refusal
+  (#3746, #3747, #3749, #3750).
 
 - Select explicit extractive brief sentences by unique reviewed fact coverage,
   independent omission rules and existing length allocations. Preserve ordered
@@ -41,6 +113,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Registered MLX summarizers now require a provisioned, symlink-free package
+  with a trusted manifest pin before model construction. Admission verifies
+  every file, refuses undeclared members, and derives task support, context
+  limits and quantization from digest-bound metadata. Package failures expose
+  controlled reason codes; unprovisioned aliases fail closed without fallback.
+
+- Confine OpenMedKit MLX manifest paths during download, cache inspection and
+  local loading. Reject traversal and escaping symlinks with value-free errors,
+  remove stale ready markers and confined partial writes on rejection, and retain
+  root and nested tokenizer layouts (#3728).
+
 - Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
   pins and retain lockfile SARIF diagnostics after image-build failures.
 
@@ -50,17 +133,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Document clinical brief trust boundaries across Python, CLI, REST, MCP and
+  OpenMedKit, with existing mitigation tests and explicit residual risks;
+  validate mitigation test links and source citations offline (#3752).
+
+- Explain local summarizer/NLI configuration, pre-load artifact admission and
+  reviewed brief context wiring with executable synthetic doubles and drift
+  checks for every public backend error and brief refusal (#3751).
+
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
   examples. Group clinical navigation by area and expose four previously
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
 
-- Opt-in local NLI verification for summarization and grounding, with retained
-  contradiction and abstention outcomes, offset- and digest-bound audit records,
-  typed backend refusals and unchanged default serialization. Source and claim
-  text are omitted from verification metadata; no trained model is required
-  for explicit synthetic heuristic checks.
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
 
 - Add versioned synthetic multilingual full-pipeline clinical-brief regressions
   for Latin, RTL, Indic and code-switched evidence, public surface/native packet
@@ -520,8 +611,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
+- Route Thai and Hebrew to their native packs and fail closed on unsupported
+  letter-bearing scripts unless an explicit fallback is configured (#3738).
+- Share offset-safe decimal-digit and bidi-control normalization across both
+  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
+  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
+- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
+  surrogate order from the shared locale table (#3740, #3743).
+- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
+  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
+  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
 - Preserve tokenizer-provided subword offsets from any standard `Mapping`
@@ -544,6 +648,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include ranked grounding alternatives in MedMentions top-k accuracy without
   crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
