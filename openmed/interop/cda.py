@@ -87,6 +87,29 @@ DEFAULT_PHI_ELEMENT_MAP: tuple[PhiElementRule, ...] = (
         "null_flavor",
     ),
     PhiElementRule(".//hl7:custodian//hl7:assignedPerson/hl7:name", "null_flavor"),
+    *(
+        PhiElementRule(xpath, "null_flavor", attribute=attribute, label=label)
+        for xpath, attribute, label in (
+            (".//hl7:patient/hl7:guardian/hl7:guardianPerson/hl7:name", None, "PERSON"),
+            (".//hl7:patient/hl7:guardian/hl7:addr", None, "ADDRESS"),
+            (".//hl7:patient/hl7:guardian/hl7:telecom", "value", "PHONE"),
+            (".//hl7:patient/hl7:birthplace/hl7:place/hl7:addr", None, "ADDRESS"),
+            (
+                ".//hl7:participant/hl7:associatedEntity/hl7:associatedPerson/hl7:name",
+                None,
+                "PERSON",
+            ),
+            (".//hl7:participant/hl7:associatedEntity/hl7:addr", None, "ADDRESS"),
+            (".//hl7:participant/hl7:associatedEntity/hl7:telecom", "value", "PHONE"),
+            (
+                ".//hl7:informant/hl7:relatedEntity/hl7:relatedPerson/hl7:name",
+                None,
+                "PERSON",
+            ),
+            (".//hl7:informant/hl7:relatedEntity/hl7:addr", None, "ADDRESS"),
+            (".//hl7:informant/hl7:relatedEntity/hl7:telecom", "value", "PHONE"),
+        )
+    ),
     PhiElementRule(".//hl7:effectiveTime", "shift_date", attribute="value"),
     PhiElementRule(".//hl7:effectiveTime/hl7:low", "shift_date", attribute="value"),
     PhiElementRule(".//hl7:effectiveTime/hl7:high", "shift_date", attribute="value"),
@@ -170,6 +193,7 @@ def redact_cda(
     keep_year: bool = False,
     hash_salt: str = "",
     encoding: str = "unicode",
+    coverage_report: dict[str, Any] | None = None,
 ) -> str | bytes:
     """Redact PHI from a CDA/C-CDA XML document.
 
@@ -184,6 +208,10 @@ def redact_cda(
         keep_year: Preserve original years while shifting month/day values.
         hash_salt: Optional salt for hashed identifier attributes.
         encoding: Passed through to :func:`xml.etree.ElementTree.tostring`.
+        coverage_report: Optional output mapping with counts and controlled paths
+            of populated, unmapped person-name, address and telecom elements.
+            This inventory is not a proof that a document is free of PHI.
+            It refuses depth above 64 or more than 10,000 XML elements.
 
     Returns:
         Redacted XML as ``str`` for ``encoding="unicode"``, otherwise ``bytes``.
@@ -201,6 +229,8 @@ def redact_cda(
 
     rules = tuple(element_map or DEFAULT_PHI_ELEMENT_MAP)
     namespaces = _namespace_map(root)
+    if coverage_report is not None:
+        coverage_report.update(_unmapped_header_elements(root, rules, namespaces))
     surfaces = _collect_phi_surfaces(root, rules, namespaces)
     shift_days = date_shift_days if date_shift_days is not None else _nonzero_shift()
     date_cache: dict[str, str] = {}
@@ -220,6 +250,90 @@ def redact_cda(
         _redact_narrative(narrative, surfaces, text_redactor=text_redactor)
 
     return ET.tostring(root, encoding=encoding)
+
+
+def _unmapped_header_elements(
+    root: ET.Element, rules: Sequence[PhiElementRule], namespaces: dict[str, str]
+) -> dict[str, Any]:
+    """Inventory potential gaps without exposing text, attributes or custom tags."""
+    pending = [(root, 0)]
+    element_count = 0
+    while pending:
+        element, depth = pending.pop()
+        element_count += 1
+        if depth > 64 or element_count + len(pending) + len(element) > 10_000:
+            raise ValueError("CDA coverage limit exceeded")
+        pending.extend((child, depth + 1) for child in element)
+
+    mapped = {
+        descendant
+        for rule in rules
+        for element in root.findall(rule.xpath, namespaces)
+        for descendant in element.iter()
+    }
+    person_tags = {
+        "person",
+        "patient",
+        "assignedPerson",
+        "associatedPerson",
+        "guardianPerson",
+        "relatedPerson",
+    }
+    path_names = person_tags | {
+        "ClinicalDocument",
+        "recordTarget",
+        "patientRole",
+        "guardian",
+        "birthplace",
+        "place",
+        "participant",
+        "associatedEntity",
+        "informant",
+        "relatedEntity",
+        "author",
+        "assignedAuthor",
+        "authenticator",
+        "legalAuthenticator",
+        "assignedEntity",
+        "custodian",
+        "assignedCustodian",
+        "name",
+        "addr",
+        "telecom",
+    }
+    unmapped: dict[str, int] = {}
+    counts = {"person": 0, "address": 0, "telecom": 0}
+
+    def visit(element: ET.Element, parent_name: str, path: str) -> None:
+        name = _local_name(element.tag)
+        safe_name = (
+            name
+            if name in path_names and _namespace_uri(element.tag) == namespaces["hl7"]
+            else "element"
+        )
+        current = path + "/" + safe_name
+        kind = {"addr": "address", "telecom": "telecom"}.get(name)
+        if name == "name" and parent_name in person_tags:
+            kind = "person"
+        populated = kind is not None and (
+            any(piece.strip() for piece in element.itertext())
+            or any(
+                key != "nullFlavor" and value for key, value in element.attrib.items()
+            )
+        )
+        if kind and element not in mapped and populated:
+            unmapped[current] = unmapped.get(current, 0) + 1
+            counts[kind] += 1
+        for child in element:
+            visit(child, name, current)
+
+    visit(root, "", "")
+    return {
+        "unmapped_elements": [
+            {"path": path, "count": count} for path, count in sorted(unmapped.items())
+        ],
+        "unmapped_counts": counts,
+    }
 
 
 def _redact_document_handler(

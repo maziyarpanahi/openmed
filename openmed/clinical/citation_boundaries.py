@@ -834,13 +834,20 @@ def _coerce_replacement_spec(
         pair = _offset_pair(post_pair)
         if pair is not None:
             explicit_post_start, explicit_post_end = pair
-    replacement = _field(
-        value,
-        ("replacement", "redacted_text", "post_text", "surrogate"),
-    )
-    if replacement is _MISSING:
-        replacement = None
-    elif replacement is not None and not isinstance(replacement, str):
+    # PIIEntity exposes both redacted_text and an optional surrogate. An unset
+    # alias is not conflicting replacement evidence; populated aliases must
+    # still agree. Do not relax offset/digest alias consistency.
+    replacement_values = [
+        item
+        for name in ("replacement", "redacted_text", "post_text", "surrogate")
+        if (item := _field(value, (name,), None)) is not None
+    ]
+    if replacement_values and any(
+        item != replacement_values[0] for item in replacement_values
+    ):
+        _raise(INVALID_OFFSET_MAP)
+    replacement = replacement_values[0] if replacement_values else None
+    if replacement is not None and not isinstance(replacement, str):
         _raise(INVALID_OFFSET_MAP)
     if (
         source_start is _MISSING
