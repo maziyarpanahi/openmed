@@ -74,6 +74,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
+    "service/workflow_client.py": (
+        "explicit bounded workflow calls over the caller-configured REST client; "
+        "no background polling, automatic mutation retries or telemetry"
+    ),
     "service/backends/remote_inference.py": (
         "opt-in user-configured KServe V2 remote inference"
     ),
