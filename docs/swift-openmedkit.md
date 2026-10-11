@@ -30,6 +30,17 @@ byte-identical protected response for that fixed output. This proves wire and
 guard interoperability, not independent Swift reimplementation of all Python
 metrics or model-quality equivalence.
 
+The fixture also tests source-identifier matching, including two-character Han
+names, unspaced scripts, recognized Hangul particles and full-width, confusable,
+canonical and zero-width variants. Native matching preserves whitespace parts,
+its existing punctuation-separated components of at least three characters,
+and word boundaries for spaced scripts. The shared fixture records native-only
+component matches explicitly; Python retains its whitespace-part contract.
+Its confusable mappings mirror the
+existing Python detector inventory; the shared controls cover every mapping.
+See [summarization](clinical/summarization.md) for the remaining risks from
+inflected names and unrecognized suffixes. This guard complements `privacyCheck`.
+
 OpenMedKit is the Swift package for running OpenMed models in **macOS**,
 **iOS**, **iPadOS**, **watchOS**, and **visionOS** apps.
 
@@ -329,6 +340,24 @@ Behavior:
 - returns a local directory URL ready for `OpenMedBackend.mlx`
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
+
+The model store validates every manifest path before requesting artifact files,
+including all weight candidates and segmenter resources. Paths must be relative
+to the snapshot, with no empty, `.` or `..` components, backslashes or escaping
+symlinks. The exact tokenizer directory `"."` remains supported as the root
+layout used by the OpenMed exporter; tokenizer filenames still require valid
+relative paths. Nested directories such as `tokenizer/tokenizer.json` work.
+
+Cache inspection and local artifact loading use the same boundary, including
+standard tokenizer files discovered implicitly (config and chat templates). A declared
+label map must exist before the snapshot becomes ready. Path rejection throws
+`OpenMedModelStoreError.invalidManifestPath` with a controlled reason code and a
+fixed message containing no input path, URL or repository content. Rejection
+removes a stale ready marker and files newly written by that download where
+their parents remain confined; it never follows an escaping link during cleanup.
+The downloader repeats the check after each response and before writing. This
+does not provide synchronization against another process concurrently replacing
+filesystem entries; applications should keep their cache private to the app.
 
 ## Offline Tokenizer Assets
 
