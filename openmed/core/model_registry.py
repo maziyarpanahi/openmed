@@ -1813,13 +1813,79 @@ def resolve_summarizer_model(model_key: str = "mlx") -> tuple[str, str]:
     """Resolve a reviewed summarizer alias to a model and immutable revision.
 
     This is a runtime selection, not a clinical-quality certification. Artifacts
-    must already be cached; the summarizer never downloads or follows URLs.
+    must be provisioned with a trusted manifest pin; this function selects
+    the model identity and does not attest to files in a cache.
     """
     from openmed.mlx.lm import MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
 
     if model_key in {"mlx", "maple", "maple-preview", MAPLE_MLX_MODEL}:
         return MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
     raise ValueError("unregistered local summarizer alias")
+
+
+_SUMMARIZER_PACKAGES: dict[tuple[str, str], tuple[Path, str]] = {}
+
+
+def register_summarizer_package(
+    model_key: str,
+    *,
+    package_root: str | Path,
+    manifest_digest: str,
+) -> None:
+    """Bind a registered summarizer revision to a trusted local package pin.
+
+    Configure this at application startup from reviewed deployment metadata.
+    The digest must come from a trusted channel, independently of package
+    contents. Registration performs no I/O, download or runtime loading.
+    Aliases selecting the same model and revision share the binding.
+
+    Args:
+        model_key: An existing registered summarizer alias or model identifier.
+        package_root: Absolute directory of provisioned regular package files.
+        manifest_digest: Trusted canonical SHA-256 manifest digest.
+
+    Raises:
+        ValueError: If the alias, directory form or digest is invalid.
+    """
+    invalid = False
+    try:
+        identity = resolve_summarizer_model(model_key)
+        root = Path(package_root)
+        if (
+            not root.is_absolute()
+            or type(manifest_digest) is not str
+            or re.fullmatch(r"(?:sha256:)?[0-9a-fA-F]{64}", manifest_digest) is None
+        ):
+            invalid = True
+    except Exception:
+        invalid = True
+    if invalid:
+        raise ValueError("invalid summarizer package registration")
+    _SUMMARIZER_PACKAGES[identity] = (
+        root,
+        "sha256:" + manifest_digest.removeprefix("sha256:").lower(),
+    )
+
+
+def resolve_summarizer_package(model_key: str = "mlx") -> tuple[Path, str] | None:
+    """Return a deployment's package and digest for a registered alias.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+
+    Returns:
+        Absolute package root and trusted digest, or ``None`` if unprovisioned.
+    """
+    return _SUMMARIZER_PACKAGES.get(resolve_summarizer_model(model_key))
+
+
+def clear_summarizer_package(model_key: str = "mlx") -> None:
+    """Remove a deployment binding without changing its local package files.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+    """
+    _SUMMARIZER_PACKAGES.pop(resolve_summarizer_model(model_key), None)
 
 
 def get_default_nli_model() -> Optional[str]:

@@ -1,5 +1,8 @@
 # SDOH Sensitive-Use Labels
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 SDOH fields can affect high-impact decisions. `label_sdoh_output()` wraps every
 exported field in an envelope with machine-readable allowed purposes,
 prohibited automated uses, and a mandatory human-review flag.
