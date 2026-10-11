@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Group multimodal guides into a dedicated workflow-ordered section with an
+  overview of supported contracts and experimental surfaces, preserving all
+  existing page URLs (#3845).
+
 ### Added
 
 - Opt-in local NLI verification for summarization and grounding, with retained
