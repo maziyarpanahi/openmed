@@ -71,6 +71,10 @@ def load_cmeee(
     OpenMed does not bundle CMeEE corpus text. Pass a local path to data you
     are licensed to use, or set ``OPENMED_CMEEE_PATH``. Synthetic smoke
     fixtures may opt into ``allow_repo_path=True`` in tests.
+
+    A named-split directory must contain the requested split; another split
+    is never silently substituted. Explicit files and generic record
+    directories retain their existing loading behavior.
     """
 
     configured_path = configured_cmeee_path(path)
@@ -160,13 +164,17 @@ def _select_split_source(path: Path | None, *, split: str) -> Path | None:
     split_aliases = {split.lower()}
     if split.lower() in {"dev", "val", "validation"}:
         split_aliases.update({"dev", "val", "validation"})
-    candidates = [
+    named_sources = [
         candidate
         for candidate in sorted(path.rglob("*"))
         if candidate.is_file()
         and candidate.suffix.lower() in {".json", ".jsonl", ".ndjson"}
         and "cmeee" in candidate.name.lower()
-        and any(
+    ]
+    candidates = [
+        candidate
+        for candidate in named_sources
+        if any(
             alias in candidate.stem.lower().replace("-", "_").split("_")
             for alias in split_aliases
         )
@@ -174,7 +182,15 @@ def _select_split_source(path: Path | None, *, split: str) -> Path | None:
     if len(candidates) > 1:
         names = ", ".join(candidate.name for candidate in candidates)
         raise ValueError(f"multiple CMeEE {split!r} sources found: {names}")
-    return candidates[0] if candidates else path
+    if candidates:
+        return candidates[0]
+    known_splits = {"train", "dev", "val", "validation", "test"}
+    if any(
+        known_splits.intersection(candidate.stem.lower().replace("-", "_").split("_"))
+        for candidate in named_sources
+    ):
+        raise ValueError("CMeEE named split directory has no requested split source")
+    return path
 
 
 __all__ = [

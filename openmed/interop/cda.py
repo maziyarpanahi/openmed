@@ -211,6 +211,7 @@ def redact_cda(
         coverage_report: Optional output mapping with counts and controlled paths
             of populated, unmapped person-name, address and telecom elements.
             This inventory is not a proof that a document is free of PHI.
+            It refuses depth above 64 or more than 10,000 XML elements.
 
     Returns:
         Redacted XML as ``str`` for ``encoding="unicode"``, otherwise ``bytes``.
@@ -252,9 +253,18 @@ def redact_cda(
 
 
 def _unmapped_header_elements(
-    root: ET.Element, rules: Sequence[PhiElementRule], namespaces: Mapping[str, str]
+    root: ET.Element, rules: Sequence[PhiElementRule], namespaces: dict[str, str]
 ) -> dict[str, Any]:
     """Inventory potential gaps without exposing text, attributes or custom tags."""
+    pending = [(root, 0)]
+    element_count = 0
+    while pending:
+        element, depth = pending.pop()
+        element_count += 1
+        if depth > 64 or element_count + len(pending) + len(element) > 10_000:
+            raise ValueError("CDA coverage limit exceeded")
+        pending.extend((child, depth + 1) for child in element)
+
     mapped = {
         descendant
         for rule in rules

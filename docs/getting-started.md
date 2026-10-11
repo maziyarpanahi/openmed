@@ -77,6 +77,9 @@ counts) and `unmapped_counts` for person names, addresses and telecoms. Reports
 never include values, attributes or custom element names. Unmapped structures
 still require local profile review; these defaults are not a guarantee of
 complete de-identification or a conformance validation.
+The optional inventory refuses documents deeper than 64 levels or containing
+more than 10,000 elements with `CDA coverage limit exceeded`, before updating
+the output mapping. This bounds controlled paths and avoids partial reports.
 
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
