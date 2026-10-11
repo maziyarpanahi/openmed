@@ -159,6 +159,9 @@ The script accepts no external input or arguments and loads no model. It calls
 selective NLI gate. Neither is a qualified clinical model or empirical
 calibration result. The standalone `review_required` flag denotes abstention;
 a false flag or heuristic neutral label does not authorize clinical action.
+The fixed verdict metadata is checked and every record is serialized before
+printing, so malformed scalar values or serialization drift produce one fixed
+error without source values or partial JSONL output.
 
 It generates diagnosis/treatment and procedure/indication candidates from
 explicit local cue language, binds endpoint/linking evidence with an uncertain

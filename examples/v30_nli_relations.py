@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sys
 from collections.abc import Sequence
 from typing import Any
@@ -135,6 +136,30 @@ def build_demo_records() -> list[dict[str, Any]]:
             ),
         ):
             verdicts = verify(SYNTHETIC_CLAIMS, SYNTHETIC_PREMISE, backend=backend)
+            expected_backend = (
+                "heuristic"
+                if usage == "heuristic-development-only"
+                else "synthetic-calibrated-double"
+            )
+            if type(verdicts) is not list or len(verdicts) != len(expected):
+                raise RuntimeError("synthetic_nli_contract_drift")
+            for index, verdict in enumerate(verdicts):
+                if (
+                    type(verdict) is not dict
+                    or type(verdict.get("label")) is not str
+                    or type(verdict.get("backend_id")) is not str
+                    or verdict["backend_id"] != expected_backend
+                    or type(verdict.get("claim_index")) is not int
+                    or verdict["claim_index"] != index
+                    or type(verdict.get("score")) not in (int, float)
+                    or not 0 <= verdict["score"] <= 1
+                    or not math.isfinite(verdict["score"])
+                    or type(verdict.get("contradicted")) is not bool
+                    or verdict["contradicted"] != (expected[index] == "contradiction")
+                    or type(verdict.get("review_required")) is not bool
+                    or verdict["review_required"] != (expected[index] == "abstention")
+                ):
+                    raise RuntimeError("synthetic_nli_contract_drift")
             if tuple(item["label"] for item in verdicts) != expected:
                 raise RuntimeError("synthetic_nli_contract_drift")
             records.extend(
@@ -225,13 +250,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     failed = False
     try:
         records = build_demo_records()
+        rendered = "\n".join(
+            json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            for record in records
+        )
     except Exception:
         failed = True
     if failed:
         print("synthetic_relation_example_contract_failed", file=sys.stderr)
         return 1
-    for record in records:
-        print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+    print(rendered)
     return 0
 
 

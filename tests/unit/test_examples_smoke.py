@@ -283,6 +283,30 @@ def test_nli_relation_example_projects_only_known_nli_fields(monkeypatch, capsys
     _assert_nli_relation_demo_output(captured.out)
 
 
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("score", object()),
+        ("score", float("nan")),
+        ("score", "PRIVATE_SOURCE_SENTINEL"),
+        ("backend_id", "PRIVATE_SOURCE_SENTINEL"),
+    ),
+)
+def test_nli_relation_example_closes_scalar_and_serialization_drift(
+    field, value, monkeypatch, capsys
+):
+    verify = v30_nli_relations.verify
+
+    def malformed(*args, **kwargs):
+        records = verify(*args, **kwargs)
+        records[0][field] = value
+        return records
+
+    monkeypatch.setattr(v30_nli_relations, "verify", malformed)
+    assert v30_nli_relations.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+
+
 def test_nli_relation_output_check_rejects_changed_evidence_digest():
     records = v30_nli_relations.build_demo_records()
     records[7]["evidence_digests"] = ["sha256:" + "0" * 64]
