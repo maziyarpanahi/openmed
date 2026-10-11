@@ -21,7 +21,7 @@ The requested decisions are `confirm_abstention`, `review_evidence`,
 the question for a human reviewer; they are not approval tokens.
 
 ```python
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from openmed.agent import (
     ArtifactKind,
@@ -32,7 +32,7 @@ from openmed.agent import (
     WorkflowId,
 )
 
-issued_at = datetime.now(UTC).replace(microsecond=0)
+issued_at = datetime.now(timezone.utc).replace(microsecond=0)
 packet = ReviewerHandoffPacket(
     run_id=RunId.generate(),
     workflow_id=WorkflowId("workflow:org.example/document-review@1.0.0"),

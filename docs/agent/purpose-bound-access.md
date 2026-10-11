@@ -154,11 +154,12 @@ clinical validator.
 ```python
 from openmed.agent.permissions import dispatch_with_authorized_results
 
-# expected_scope, output_schema and local_read are reviewed local bindings.
-# request.record_selectors exactly covers expected_scope.selectors().
+# result_ticket, result_request, expected_scope, output_schema and local_read
+# come from the trusted host. This distinct result request covers exactly
+# expected_scope.selectors(); the earlier single-selector request does not.
 result = dispatch_with_authorized_results(
-    ticket,
-    request,
+    result_ticket,
+    result_request,
     AccessTicketVerifier(),
     scope=expected_scope,
     schema=output_schema,
@@ -259,7 +260,7 @@ from openmed.agent.permissions import (
     preview_with_fhir_write_scope,
 )
 
-# resolver, selector_key, ticket, request, and proposed_resource are provided
+# resolver, selector_key, write_ticket, write_request, and proposed_resource are provided
 # by the trusted local application. The payload and resolver are synthetic
 # in tests; no model inference or server connection is required.
 guard = FHIRWriteScopeVerifier(
@@ -271,8 +272,8 @@ guard = FHIRWriteScopeVerifier(
 )
 preview = preview_with_fhir_write_scope(
     proposed_resource,
-    ticket,
-    request,
+    write_ticket,
+    write_request,
     guard,
     lambda: render_local_preview(proposed_resource),
 )

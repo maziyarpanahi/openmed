@@ -321,6 +321,7 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
@@ -535,6 +536,7 @@ nav:
       - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
       - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
       - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
+      - FHIR Subscription Notification Intake: interop/fhir-subscription-notifications.md
       - SMART Scope Audit Examples: interop/smart-scope-audit.md
       - SMART Token Custody: interop/smart-token-custody.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md

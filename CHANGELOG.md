@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Interoperability
+
+- Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
+  value-free event metadata and sequence reconciliation findings. Keep control
+  notifications out of new workflow events and require an authorized read for
+  missing event content; no resources, credentials or identifiers are returned
+  (#3772).
+
 ### Added
+
+- Add five runnable, offline synthetic clinical workflow evidence examples,
+  with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
+
+- Export deterministic, self-contained private-training JSON Schemas with stable
+  IDs, bounded metadata, privacy-safe metric conditions and offline validation
+  guidance (#3054).
+
+- Detect GIF, WebP and BMP media types in bounded multimodal preflight (#3833).
+- Add an offline synthetic NLI/guarded-relation example with explicit
+  development and calibration-double backends, evidence bindings and
+  human-review priorities; smoke checks guard projections and API drift (#3761).
 
 - Opt-in local NLI verification for summarization and grounding, with retained
   contradiction and abstention outcomes, offset- and digest-bound audit records,
@@ -96,6 +116,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependencies reaching legacy FHIR/OpenMRS write-back paths. Keep narrative
   extraction independent of legacy writer modules while preserving their public
   parser imports (#3780).
+- Project export-ready clinical registry cases to protected local NAACCR XML
+  files using a caller-supplied dictionary, field map and Journey fact resolver.
+  Verify exact export and fact custody, validate declared types and lengths,
+  report omitted fields, and use opaque patient keys without submitting records
+  or bundling registry dictionaries or edits (#3809).
+
+- Project reviewed, evidence-bound clinical relations into offline FHIR R4
+  reason links and relative-owned FamilyMemberHistory conditions, with
+  source-free Provenance, reference checks and explicit projection losses.
+
 - Typed Python and TypeScript workflow clients with strict metadata validation,
   bounded inspection retries and polling, one-attempt mutations and shared
   offline contract vectors (#3670).
@@ -187,6 +217,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permission-result handling (CVE-2026-107727 and CVE-2026-107728).
 
 ### Documentation
+
+- Execute governed-agent Python documentation blocks offline with per-page
+  synthetic context. Require explicit, content-bound exceptions for application
+  adapter sketches, and fail on API drift or attempted external effects (#3795).
 
 - Explain SDOH extraction, registered determinants, custom extractors and cue
   table loading with runnable offline synthetic examples and source-value limits.
@@ -743,6 +777,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Retain service concurrency permits and drain tokens until timed-out model
+  work actually finishes, including GraphQL and batched requests. Add a
+  value-free orphaned-work gauge and bound parallel GraphQL resolver work
+  without changing REST timeout envelopes. Drain and orphaned-work accounting
+  also cover deployments without concurrency or rate limits (#3902).
 - Reuse Windows process-memory API types and bindings during streaming-table
   RSS sampling so the sampler does not retain a new ctypes pointer type per
   batch. Actual current-memory readings and unchanged overflow limits remain
