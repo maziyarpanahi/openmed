@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an offline synthetic SDOH/temporal/timeline example with explicit reference
   time, authored event axes and controlled labels/offsets/states-only output;
   smoke tests reject API drift, external arguments and source/date output (#3760).
+- Registered SDOH extraction scoring with independently authored synthetic gold,
+  a reproducible counts-only baseline, retained known misses and an eval-only
+  native SHAC status view that reports unavailable data without zero scores.
+- Add explicit language-aware SDOH extraction with per-category unsupported,
+  processed, skipped and failed outcomes. Declare English support for packaged
+  cue tables and built-in extractors, retain legacy English dispatch, and keep
+  audit output limited to category metadata, counts and offsets (#3797).
 - Export aligned SDOH evidence as passive R4 Observations and offset-linked
   Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
   preliminary review states, explicit losses and preserved sensitive-use labels.
@@ -111,6 +118,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permission-result handling (CVE-2026-107727 and CVE-2026-107728).
 
 ### Documentation
+
+- Explain SDOH extraction, registered determinants, custom extractors and cue
+  table loading with runnable offline synthetic examples and source-value limits.
 
 - Document clinical brief trust boundaries across Python, CLI, REST, MCP and
   OpenMedKit, with existing mitigation tests and explicit residual risks;
