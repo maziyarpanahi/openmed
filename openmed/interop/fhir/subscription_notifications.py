@@ -13,7 +13,7 @@ import math
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from .versions import FHIRVersion
 
@@ -150,7 +150,11 @@ class SubscriptionNotificationFinding:
         _require_count(self.count)
         if (self.first_missing is None) != (self.last_missing is None):
             raise SubscriptionNotificationError("invalid_metadata")
-        if self.first_missing is not None and self.last_missing < self.first_missing:
+        if (
+            self.first_missing is not None
+            and self.last_missing is not None
+            and self.last_missing < self.first_missing
+        ):
             raise SubscriptionNotificationError("invalid_metadata")
 
     def to_dict(self) -> dict[str, Any]:
@@ -580,7 +584,7 @@ def parse_subscription_notification(
         "5.0.0": SubscriptionNotificationVersion.R5,
     }
     raw_version = (
-        version.value
+        cast(SubscriptionNotificationVersion | FHIRVersion, version).value
         if type(version) in (SubscriptionNotificationVersion, FHIRVersion)
         else version
     )
@@ -746,18 +750,18 @@ def parse_subscription_notification(
             finding(SubscriptionFindingCode.OUT_OF_ORDER, index)
         seen.add(event.event_number)
     if not global_event_numbers:
-        cursor = 0
+        relative_cursor = 0
         for number in sorted(seen):
-            if number > cursor + 1:
+            if number > relative_cursor + 1:
                 findings.append(
                     SubscriptionNotificationFinding(
                         SubscriptionFindingCode.GAP,
-                        count=number - cursor - 1,
-                        first_missing=cursor + 1,
+                        count=number - relative_cursor - 1,
+                        first_missing=relative_cursor + 1,
                         last_missing=number - 1,
                     )
                 )
-            cursor = number
+            relative_cursor = number
     if global_event_numbers:
         if (
             since is not None
