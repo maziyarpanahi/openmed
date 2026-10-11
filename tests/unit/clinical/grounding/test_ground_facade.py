@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import socket
 import time
@@ -54,6 +55,185 @@ def _loader(tmp_path: Path) -> VocabLoader:
         local_only=True,
         registry=registry,
     )
+
+
+def test_default_grounding_serialization_matches_master_bytes(
+    tmp_path: Path, monkeypatch
+):
+    from openmed.clinical import nli_backends
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("default grounding resolved NLI")
+
+    monkeypatch.setattr(nli_backends, "resolve_nli_backend", forbidden)
+    result = ground("metformin 500 mg", systems=["rxnorm"], snapshot=_loader(tmp_path))
+    assert result.verification is None
+    assert "verification" not in result.to_dict()
+    encoded = json.dumps(
+        result.to_dict(), sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert (
+        hashlib.sha256(encoded).hexdigest()
+        == "052bcfec217c403a0c8ca294b52716bf2bcb9b1270be491a9db45ee95bad9c24"
+    )
+
+
+def _nli_loader(tmp_path: Path) -> VocabLoader:
+    path = tmp_path / "synthetic-nli.jsonl"
+    rows = [
+        {"aliases": ["No fever"], "canonical_term": "Fever", "concept_id": "SYNTH-1"},
+        {"aliases": ["Cough"], "canonical_term": "Cough", "concept_id": "SYNTH-2"},
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
+    return VocabLoader(
+        cache_dir=tmp_path / "cache",
+        local_only=True,
+        registry={
+            "icd10cm": VocabSource(
+                system="icd10cm", path=path, version="synthetic-nli-v1"
+            ),
+        },
+    )
+
+
+def test_ground_hook_checks_exact_offsets_and_retains_contradiction(tmp_path: Path):
+    source = "Cough. No fever."
+    result = ground(
+        source, systems=["icd10cm"], snapshot=_nli_loader(tmp_path), verify="heuristic"
+    )
+    assert [concept.display for concept in result.concepts] == ["Cough", "Fever"]
+    assert [check.label for check in result.verification] == [
+        "entailment",
+        "contradiction",
+    ]
+    assert [source[slice(*check.source_offset)] for check in result.verification] == [
+        "Cough",
+        "No fever",
+    ]
+    assert result.verification[1].review_required
+    assert len(result) == 2
+    assert (
+        "fever"
+        not in json.dumps([check.to_dict() for check in result.verification]).lower()
+    )
+    restored = GroundingResult.from_dict(result.to_dict())
+    assert restored.verification == result.verification
+    assert restored.to_dict() == result.to_dict()
+
+
+def test_ground_hook_unresolvable_entity_inputs_abstain_without_inference(
+    tmp_path: Path,
+):
+    calls = []
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            calls.append((premise, hypothesis))
+            return {"label": "entailment", "score": 1.0}
+
+    result = ground(
+        [{"text": "No fever", "start": 4, "end": 12}],
+        systems=["icd10cm"],
+        snapshot=_nli_loader(tmp_path),
+        verify=Backend(),
+    )
+    assert not calls
+    assert result.verification[0].label == "abstention"
+    assert result.verification[0].source_offset is None
+    assert result.verification[0].source_digest is None
+    assert result.concepts[0].code == "SYNTH-1"
+
+
+def test_ground_hook_receives_slices_not_entire_document(tmp_path: Path):
+    calls = []
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            calls.append((premise, hypothesis))
+            return {"label": "abstention", "score": 0.2}
+
+    result = ground(
+        "Cough. No fever.",
+        systems=["icd10cm"],
+        snapshot=_nli_loader(tmp_path),
+        verify=Backend(),
+    )
+    assert calls == [("Cough", "Cough"), ("No fever", "Fever")]
+    assert all(check.review_required for check in result.verification)
+
+
+def test_ground_hook_unknown_alias_refuses_even_when_source_unresolved(tmp_path: Path):
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    with pytest.raises(LocalNLIError, match="not registered"):
+        ground(
+            [{"text": "Cough", "start": 0, "end": 5}],
+            systems=["icd10cm"],
+            snapshot=_nli_loader(tmp_path),
+            verify="missing-synthetic-checkpoint",
+        )
+
+
+@pytest.mark.parametrize("mutation", ["offset", "display", "surface"])
+def test_ground_verification_cannot_be_rebound_to_other_claim_data(
+    tmp_path: Path, mutation
+):
+    result = ground(
+        "Cough.",
+        systems=["icd10cm"],
+        snapshot=_nli_loader(tmp_path),
+        verify="heuristic",
+    )
+    payload = result.to_dict()
+    concept = payload["concepts"][0]
+    if mutation == "offset":
+        concept["span"] = {"start": 1, "end": 6}
+    elif mutation == "display":
+        concept["display"] = "Changed synthetic claim"
+    else:
+        concept["surface_text"] = "Changed synthetic source"
+    with pytest.raises(ValueError, match="invalid grounding verification metadata"):
+        GroundingResult.from_dict(payload)
+
+
+def test_ground_true_selects_configured_local_backend(tmp_path: Path, monkeypatch):
+    import importlib
+
+    module = importlib.import_module("openmed.clinical.nli")
+    monkeypatch.setattr(module, "DEFAULT_NLI_BACKEND", "heuristic")
+    result = ground(
+        "Cough.", systems=["icd10cm"], snapshot=_nli_loader(tmp_path), verify=True
+    )
+    assert result.verification[0].label == "entailment"
+
+
+def test_ground_out_of_bounds_offsets_abstain_even_if_surface_matches(
+    tmp_path: Path, monkeypatch
+):
+    import importlib
+
+    from openmed.clinical.grounding.results import ConceptSpan, GroundedConcept
+
+    module = importlib.import_module("openmed.clinical.grounding.api")
+    fabricated = GroundingResult(
+        concepts=(
+            GroundedConcept(
+                ConceptSpan(0, 500), "Cough", "icd10cm", "SYNTH-2", "Cough", 1.0
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        GroundingResult, "from_spans", lambda *args, **kwargs: fabricated
+    )
+    result = module.ground(
+        "Cough", systems=["icd10cm"], snapshot=_nli_loader(tmp_path), verify="heuristic"
+    )
+    assert result.verification[0].label == "abstention"
+    assert result.verification[0].source_offset is None
 
 
 def test_text_and_entity_inputs_return_typed_results(tmp_path: Path) -> None:

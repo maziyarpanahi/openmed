@@ -11,6 +11,8 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   pull_request:
     branches: [main, master, develop]
@@ -22,6 +24,8 @@ on:
       - "uv.lock"
       - "deploy/security/cve-allowlist.yaml"
       - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/unit/security/test_vulnerability_scan_gate.py"
+      - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   workflow_dispatch:
     inputs:
@@ -73,7 +77,7 @@ jobs:
         run: |
           mkdir -p vulnerability-reports
           set +e
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report tests/fixtures/security/trivy-high-vulnerability.json \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/seeded-high-summary.json
@@ -99,7 +103,7 @@ jobs:
               expires: 2099-12-31
               reason: Synthetic waiver used only to prove active waivers suppress matching seeded findings.
           YAML
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report "$RUNNER_TEMP/trivy-high-without-fix.json" \
             --allowlist "$RUNNER_TEMP/cve-allowlist-seeded.yaml" \
             --output vulnerability-reports/seeded-allowlisted-summary.json
@@ -124,9 +128,12 @@ jobs:
 
       - name: Enforce vulnerability gate
         run: |
-          uv run python scripts/security/vulnerability_scan_gate.py \
+          uv run --no-sync python scripts/security/vulnerability_scan_gate.py \
             --report vulnerability-reports/trivy-image.json \
             --report vulnerability-reports/trivy-lockfile.json \
+            --lock-report vulnerability-reports/trivy-lockfile.json \
+            --lockfile uv.lock \
+            --review-extra-only nltk=nltk \
             --allowlist deploy/security/cve-allowlist.yaml \
             --output vulnerability-reports/vulnerability-scan-summary.json
 
