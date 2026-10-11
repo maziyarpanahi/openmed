@@ -356,6 +356,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Require review of empty cohort populations with value-free source coverage,
+  explicit unknown counts, and typed warnings across saved runs, local
+  DuckDB/Parquet resolution, and existing Journey reads. Read legacy saved
+  executions without rewriting their immutable storage bytes (#3798).
+
 - Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
   agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
   exemptions with coded-element paths and content-free offset findings (#3769).
