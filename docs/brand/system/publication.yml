@@ -117,6 +117,7 @@ classification:
     - agent/minimum-data-projections.md
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
+    - agent/exchange-record-schemas.md
     - agent/tool-inventory-schema.md
     - agent/tool-catalog-diffs.md
     - agent/side-effect-previews.md
@@ -177,7 +178,6 @@ classification:
     - security/agent-threat-model.md
     - compliance/v3.1-agent-assurance.md
     - agent-usage.md
-    - agent/exchange-record-schemas.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md

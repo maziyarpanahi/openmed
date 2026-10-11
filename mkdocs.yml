@@ -42,6 +42,7 @@ nav:
           - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
           - Tool Argument Classification: agent/tool-argument-classification.md
           - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
+          - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
           - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
           - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
       - Approvals and Previews:
@@ -109,7 +110,6 @@ nav:
           - v3.1 Agent Deployment Assurance: compliance/v3.1-agent-assurance.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
-      - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -727,6 +727,9 @@ plugins:
           build: true
           nav:
             - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - China Onboarding: onboarding-china.md
           nav_translations:
             Overview: 概览
             Welcome: 欢迎
@@ -741,6 +744,9 @@ plugins:
           build: true
           nav:
             - Overview:
+                - Welcome: index.md
+                - Quick Start: getting-started.md
+                - India Onboarding: onboarding-india.md
           nav_translations:
             Overview: अवलोकन
             Welcome: स्वागत

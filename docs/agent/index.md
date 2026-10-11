@@ -53,6 +53,7 @@ the reviewed surface; they do not grant authority by themselves.
 - [Minimum-data projections](minimum-data-projections.md): plan field materialization before reading a record.
 - [Tool argument classification](tool-argument-classification.md): apply trusted path rules to structured arguments before invocation.
 - [Tool inventory](tool-inventory.md): retain canonical tool metadata and closed side-effect classes.
+- [Exchange record JSON Schemas](exchange-record-schemas.md): validate portable controlled exchange metadata without conferring authority.
 - [Tool inventory JSON Schema](tool-inventory-schema.md): validate the portable inventory structure locally.
 - [Tool catalog diffs](tool-catalog-diffs.md): review content-free changes to the registered tool surface.
 
