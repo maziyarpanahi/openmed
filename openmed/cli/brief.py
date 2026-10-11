@@ -120,8 +120,20 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             cancellation.check()
         except Exception:
             response = brief_response("", cancellation=cancellation)
-            emit(args, response, human=response["refusal_reason"])
-            return 1
+            return emit(
+                args,
+                {
+                    key: response[key]
+                    for key in (
+                        "status",
+                        "refusal_reason",
+                        "summary_characters",
+                        "digest",
+                    )
+                },
+                human=response["refusal_reason"],
+                outcome="refused",
+            )
         raise CliError("Brief request or output failed.", code="brief_failed")
     return emit(
         args,
