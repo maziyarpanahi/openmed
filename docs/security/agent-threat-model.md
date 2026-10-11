@@ -102,6 +102,32 @@ reports only under the workflow's audit retention and access controls.
 
 ## Fail-closed fixture handling
 
+### Governance JSON readers
+
+`WorkflowOutcome`, `ActionCorrelation`, `CompatibilityResult`,
+`QualityMeasureEvidencePacket` and `ConsentReceipt` reject inputs above 64 MiB
+or 64 container levels before invoking the JSON decoder. Text size is measured
+in UTF-8 bytes; byte inputs retain the standard decoder's UTF-8, UTF-16 and
+UTF-32 support. Quoted and escaped delimiters do not count as nesting.
+
+Duplicate keys and non-finite constants are rejected. Malformed input produces
+the reader's existing typed error without retaining a decoder exception as
+its cause or context. Valid record schemas, signatures and canonical output
+remain unchanged. A deeply nested consent receipt maps to
+`invalid_consent_receipt` in the MCP error envelope. Transport limits and
+authorization checks remain independent gates.
+
+The all-reader nightly sweep also verifies that `EventAttributes` maps a
+decoder depth refusal to `malformed_json` below its existing byte limit. Its
+allowlist, serialized schema and size ceiling are unchanged.
+
+The offline property suite explicitly inventories every public governance
+`from_json` reader and checks random bytes, nested input, duplicate keys,
+non-finite numbers and large synthetic records under the existing bounded and
+nightly fuzz profiles. It fails if a new public reader lacks a target.
+
+### Adversarial fixture snapshots
+
 Fixture IDs, governance identifiers, payload shapes, nesting depth, string
 length, corpus size, and JSON scalar types are bounded and validated. Payload
 mappings and sequences are recursively snapshotted into immutable containers
