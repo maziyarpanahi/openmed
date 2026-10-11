@@ -185,6 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Record purpose-ticket allow and deny decisions as value-free access events,
+  with injectable sinks, a local append-only digest chain, and aggregate counts
+  that exclude record selectors and values (#3793).
+
 - Added an opt-in, exporter-free agent OpenTelemetry bridge with validated
   value-free phase spans, aggregate event counters and latency, omitted or
   hashed run IDs, and synthetic in-memory privacy/determinism tests (#3792).
