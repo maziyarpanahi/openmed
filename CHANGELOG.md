@@ -185,6 +185,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a locally signed native-measure evidence adapter with aggregate counts,
+  pinned definition, value-set and engine custody, time-boundary conversion,
+  and explicit drift-comparator parity and differences (#3789).
+
 - Add offline qualification of caller-supplied local planners against synthetic
   grant, schema, minimum-data, review-stop and hostile-result scenarios, with
   counts-only reports and non-compensable critical gates (#3790).
