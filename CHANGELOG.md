@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
+- Export deterministic, self-contained private-training JSON Schemas with stable
+  IDs, bounded metadata, privacy-safe metric conditions and offline validation
+  guidance (#3054).
+
+- Detect GIF, WebP and BMP media types in bounded multimodal preflight (#3833).
 - Add an offline synthetic NLI/guarded-relation example with explicit
   development and calibration-double backends, evidence bindings and
   human-review priorities; smoke checks guard projections and API drift (#3761).
@@ -767,6 +772,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Retain service concurrency permits and drain tokens until timed-out model
+  work actually finishes, including GraphQL and batched requests. Add a
+  value-free orphaned-work gauge and bound parallel GraphQL resolver work
+  without changing REST timeout envelopes. Drain and orphaned-work accounting
+  also cover deployments without concurrency or rate limits (#3902).
 - Reuse Windows process-memory API types and bindings during streaming-table
   RSS sampling so the sampler does not retain a new ctypes pointer type per
   batch. Actual current-memory readings and unchanged overflow limits remain
