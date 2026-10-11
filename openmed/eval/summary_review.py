@@ -602,7 +602,8 @@ def _import(bundle, sealed, key, claims, evidence, summary, source, minimum):
             for state in ("accepted", "missing", "incomplete", "disputed", "unclear")
         }
     )
-    accepted, agreement_rows = [], []
+    accepted = []
+    agreement_rows: list[ReviewerDecision] = []
     for ref, edge in sorted(edges.items()):
         rows = grouped[ref]
         labels = {row["label"] for row in rows}
