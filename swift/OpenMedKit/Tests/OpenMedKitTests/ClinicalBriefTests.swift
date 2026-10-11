@@ -4,6 +4,29 @@ import XCTest
 @testable import OpenMedKit
 
 final class ClinicalBriefTests: XCTestCase {
+    #if canImport(MLX) && canImport(MLXLMCommon) && canImport(MLXLLM) && canImport(MLXNN) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        func testUnloadedRuntimeHasTypedUnavailableRefusal() async {
+            let runtime = OpenMedMaple(container: nil)
+            await runtime.unload()
+            do {
+                _ = try await runtime.brief(
+                    source: "Synthetic evidence.", originalIdentifiers: [],
+                    evaluate: { _, _ in
+                        XCTFail("Unavailable runtime must not call evaluation")
+                        return Data()
+                    },
+                    privacyCheck: { _ in
+                        XCTFail("Unavailable runtime must not call privacy detector")
+                        return true
+                    })
+                XCTFail("Unavailable runtime must refuse")
+            } catch {
+                XCTAssertEqual(error as? ClinicalBriefError, .modelUnavailable)
+                XCTAssertEqual(error.localizedDescription, "model_unavailable")
+            }
+        }
+    #endif
+
     func testMultilingualSyntheticComposerPacketsPreserveScalarOffsetsAndRefusals() throws {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { root.deleteLastPathComponent() }
