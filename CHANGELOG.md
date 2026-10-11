@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
 ### Security
 
 - Refresh explicitly configured SMART credentials through atomic injected custody,

@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4733325
+    "json": 4741944
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4733325
+    "docs/search/search_index.json": 4741944
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -120,6 +120,7 @@
     "The reviewed MCP preflight, preview, status and human-review guide measures 4709023 search bytes, an increase of 6711 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The combined governed REST and typed workflow client guides measure 4720165 search bytes, an increase of 11142 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed SMART refresh, private custody and narrowed scope guide measures 4726940 search bytes, an increase of 6775 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
-    "The reviewed PDF annotation mapping and private refusal guide measures 4731639 search bytes, an increase of 4699 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
+    "The reviewed PDF annotation mapping and private refusal guide measures 4731639 search bytes, an increase of 4699 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed passive SDOH FHIR export guide measures 4740258 search bytes, an increase of 8619 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged."
   ]
 }
