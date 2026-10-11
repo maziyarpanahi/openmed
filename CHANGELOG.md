@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added fail-closed Python evaluation sessions composing sealed manifest and
+  holdout verification, injected execution/scoring, overlap forensics, blinded
+  review and budgeted feedback, with content-free durable checkpoints and
+  at-most-once feedback claims (#3777).
+
 - Added action-class approval quorum policies over live consumed authorizations,
   distinct-role and requester exclusions, value-free decisions, and durable local partial
   approvals with expiry, replay protection and action-change resets (#3781).
