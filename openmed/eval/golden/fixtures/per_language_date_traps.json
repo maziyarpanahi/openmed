@@ -3,6 +3,104 @@
   "synthetic": true,
   "fixtures": [
     {
+      "id": "golden-locale-date-he-prefixed",
+      "language": "he",
+      "text": "נולד ב-15.01.1980, ביקורת 15 בינואר 2026.",
+      "gold_spans": [
+        {
+          "start": 7,
+          "end": 17,
+          "label": "DATE",
+          "text": "15.01.1980"
+        },
+        {
+          "start": 26,
+          "end": 40,
+          "label": "DATE",
+          "text": "15 בינואר 2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "expected_output": {
+          "method": "mask",
+          "text": "נולד ב-[DATE], ביקורת [DATE]."
+        }
+      }
+    },
+    {
+      "id": "golden-locale-date-th-native",
+      "language": "th",
+      "text": "เกิด ๑๕.๐๑.๑๙๘๐",
+      "gold_spans": [
+        {
+          "start": 5,
+          "end": 15,
+          "label": "DATE",
+          "text": "๑๕.๐๑.๑๙๘๐"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "expected_output": {
+          "method": "mask",
+          "text": "เกิด [DATE]"
+        }
+      }
+    },
+    {
+      "id": "golden-locale-date-fa-imported",
+      "language": "fa",
+      "text": "تولد 15.01.1980",
+      "gold_spans": [
+        {
+          "start": 5,
+          "end": 15,
+          "label": "DATE",
+          "text": "15.01.1980"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "expected_output": {
+          "method": "mask",
+          "text": "تولد [DATE]"
+        }
+      }
+    },
+    {
+      "id": "golden-locale-date-pl-interval",
+      "language": "pl",
+      "text": "Przyjęty 11.10.2026, wypisany 13.10.2026.",
+      "gold_spans": [
+        {
+          "start": 9,
+          "end": 19,
+          "label": "DATE",
+          "text": "11.10.2026"
+        },
+        {
+          "start": 30,
+          "end": 40,
+          "label": "DATE",
+          "text": "13.10.2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "expected_output": {
+          "method": "mask",
+          "text": "Przyjęty [DATE], wypisany [DATE]."
+        },
+        "date_shift_days": 1,
+        "expected_shift": "Przyjęty 12.10.2026, wypisany 14.10.2026."
+      }
+    },
+    {
       "id": "golden-per-language-date-trap-en",
       "language": "en",
       "text": "Synthetic chart: visit on 03/14/2026, follow-up on 07/20/2026, final review on 11/05/2026.",

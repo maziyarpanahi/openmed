@@ -71,6 +71,10 @@ class FakeLoader:
 def service_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_SERVED_MODELS",
+        "disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1,test-pii-model,test-model",
+    )
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
