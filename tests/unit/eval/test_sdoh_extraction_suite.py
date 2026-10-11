@@ -565,3 +565,51 @@ def test_documented_examples_execute_offline_without_models(monkeypatch, capsys)
     assert output.err == ""
     assert "shac_not_configured" in output.out
     assert "PRIVATE" not in output.out
+
+
+@pytest.mark.parametrize("field", ["category", "status"])
+def test_gold_string_subclasses_cannot_impersonate_closed_labels(field):
+    allowed = "tobacco" if field == "category" else "current"
+
+    class Impersonator(str):
+        def __eq__(self, other):
+            return other == allowed
+
+        def __hash__(self):
+            return hash(allowed)
+
+    values = {"category": "tobacco", "status": "current", "start": 0, "end": 4}
+    values[field] = Impersonator("PRIVATE_LABEL")
+    with pytest.raises(SDOHBenchmarkError):
+        SDOHGoldFinding(**values)
+
+
+@pytest.mark.parametrize("boundary", ["case", "runner"])
+def test_private_fixture_iterators_have_fixed_errors_without_context(boundary):
+    def failing():
+        raise RuntimeError("PRIVATE_FIXTURE")
+        yield
+
+    with pytest.raises(SDOHBenchmarkError) as caught:
+        if boundary == "case":
+            SDOHBenchmarkCase("synthetic", failing())
+        else:
+            run_sdoh_extraction_benchmark(failing())
+    assert caught.value.__context__ is None
+    assert "PRIVATE" not in str(caught.value)
+
+
+def test_private_unicode_source_is_refused_before_digest_failure():
+    with pytest.raises(SDOHBenchmarkError) as caught:
+        run_sdoh_extraction_benchmark([SDOHBenchmarkCase("PRIVATE_NOTE\ud800", ())])
+    assert caught.value.__context__ is None
+    assert "PRIVATE" not in str(caught.value)
+
+
+@pytest.mark.parametrize("boundary", ["gold", "prediction"])
+def test_excessive_window_findings_refuse_without_partial_scores(boundary):
+    with pytest.raises(SDOHBenchmarkError):
+        if boundary == "gold":
+            _case(*([SDOHGoldFinding("tobacco", "current", 0, 4)] * 257))
+        else:
+            _metrics(_case(), [_finding()] * 257)

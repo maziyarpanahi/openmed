@@ -12,6 +12,7 @@ import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import Enum
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,10 @@ _STATUSES = {
     "food_insecurity": frozenset({"current", "past", "none", "unknown"}),
 }
 SDOHExtractor = Callable[[str], Iterable[SDOHFinding]]
+_MAX_CASES = 10_000
+_MAX_FINDINGS = 256
+_MAX_TEXT_BYTES = 1_048_576
+_MAX_MANIFEST_BYTES = 16 * 1_048_576
 
 
 class SDOHBenchmarkError(ValueError):
@@ -116,17 +121,14 @@ class SDOHGoldFinding:
 
     def __post_init__(self) -> None:
         if (
-            not isinstance(self.category, str)
-            or not isinstance(self.status, str)
+            type(self.category) is not str
+            or type(self.status) is not str
             or self.category not in _STATUSES
             or self.status not in _STATUSES[self.category]
         ):
             raise SDOHBenchmarkError("sdoh_label_invalid")
         if (
-            any(
-                isinstance(x, bool) or not isinstance(x, int)
-                for x in (self.start, self.end)
-            )
+            any(type(x) is not int for x in (self.start, self.end))
             or not 0 <= self.start < self.end
         ):
             raise SDOHBenchmarkError("sdoh_span_invalid")
@@ -149,15 +151,24 @@ class SDOHBenchmarkCase:
 
     def __post_init__(self) -> None:
         if (
-            not isinstance(self.text, str)
+            type(self.text) is not str
             or not self.text
             or type(self.synthetic) is not bool
         ):
             raise SDOHBenchmarkError("sdoh_case_invalid")
-        object.__setattr__(self, "gold", tuple(self.gold))
+        invalid = False
+        try:
+            if len(self.text.encode("utf-8")) > _MAX_TEXT_BYTES:
+                raise ValueError
+            gold = tuple(islice(self.gold, _MAX_FINDINGS + 1))
+        except Exception:
+            invalid = True
+            gold = ()
+        if invalid or len(gold) > _MAX_FINDINGS:
+            raise SDOHBenchmarkError("sdoh_case_invalid")
+        object.__setattr__(self, "gold", gold)
         if any(
-            not isinstance(x, SDOHGoldFinding) or x.end > len(self.text)
-            for x in self.gold
+            type(x) is not SDOHGoldFinding or x.end > len(self.text) for x in self.gold
         ):
             raise SDOHBenchmarkError("sdoh_gold_invalid")
 
@@ -195,10 +206,11 @@ def load_sdoh_extraction_fixtures(
     failed = False
     cases: list[SDOHBenchmarkCase] = []
     try:
-        payload = json.loads(
-            Path(path or SDOH_GOLD_PATH).read_text(encoding="utf-8"),
-            object_pairs_hook=_unique_object,
-        )
+        with Path(path or SDOH_GOLD_PATH).open("rb") as stream:
+            data = stream.read(_MAX_MANIFEST_BYTES + 1)
+        if len(data) > _MAX_MANIFEST_BYTES:
+            raise ValueError
+        payload = json.loads(data.decode("utf-8"), object_pairs_hook=_unique_object)
         if (
             not isinstance(payload, dict)
             or set(payload)
@@ -210,7 +222,7 @@ def load_sdoh_extraction_fixtures(
         ):
             raise ValueError
         rows = payload["cases"]
-        if not isinstance(rows, list) or not rows:
+        if not isinstance(rows, list) or not 1 <= len(rows) <= _MAX_CASES:
             raise ValueError
         for row in rows:
             if (
@@ -350,8 +362,8 @@ def _score(
         failed = False
         try:
             with network_blocked_if_offline(local_only=True):
-                for item in extractor(case.text):
-                    if not isinstance(item, SDOHFinding):
+                for item in islice(extractor(case.text), _MAX_FINDINGS + 1):
+                    if type(item) is not SDOHFinding or len(predicted) >= _MAX_FINDINGS:
                         raise ValueError
                     if not isinstance(item.status, str):
                         raise ValueError
@@ -473,10 +485,20 @@ def run_sdoh_extraction_benchmark(
     Raises:
         SDOHBenchmarkError: Content-free refusal on invalid inputs or predictions.
     """
-    cases = list(load_sdoh_extraction_fixtures() if fixtures is None else fixtures)
-    if any(
-        not isinstance(case, SDOHBenchmarkCase) or not case.synthetic for case in cases
-    ):
+    failed = False
+    try:
+        cases = list(
+            islice(
+                load_sdoh_extraction_fixtures() if fixtures is None else fixtures,
+                _MAX_CASES + 1,
+            )
+        )
+    except Exception:
+        failed = True
+        cases = []
+    if failed or len(cases) > _MAX_CASES:
+        raise SDOHBenchmarkError("sdoh_synthetic_cases_required")
+    if any(type(case) is not SDOHBenchmarkCase or not case.synthetic for case in cases):
         raise SDOHBenchmarkError("sdoh_synthetic_cases_required")
     return _score(
         cases,
@@ -487,8 +509,10 @@ def run_sdoh_extraction_benchmark(
 
 
 def _shac_cases(path: str | Path | None) -> list[SDOHBenchmarkCase]:
-    cases = []
+    cases: list[SDOHBenchmarkCase] = []
     for fixture in load_shac(path):
+        if len(cases) >= _MAX_CASES:
+            raise SDOHBenchmarkError("shac_gold_unsupported")
         if fixture.language != "en":
             raise SDOHBenchmarkError("shac_gold_unsupported")
         # Keep distinct event IDs even when native events share a trigger. In

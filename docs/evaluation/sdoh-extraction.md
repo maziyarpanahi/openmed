@@ -52,6 +52,13 @@ slices include gold/prediction counts, overlap/status/exact numerator counts
 and false positives/negatives. Zero denominators produce `None`, not successful
 scores. Empty case lists are refused.
 
+Each run accepts at most 10,000 windows, with at most 256 gold and 256 predicted
+findings per window and at most 1 MiB of UTF-8 source text per window. Synthetic
+JSON manifests are bounded to 16 MiB. Exceeding a limit refuses the complete run;
+findings are never silently truncated. Gold labels and offsets require exact
+built-in scalar types, and private input-iterator failures become fixed public
+codes without retained exception contexts.
+
 ## Reproduce the synthetic baseline
 
 ```python
