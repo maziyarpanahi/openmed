@@ -3300,9 +3300,8 @@ def main(
 
         return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
-    from .multimodal_inference import protect_multimodal_diagnostics
-
     from .clinical import parse_clinical_args
+    from .multimodal_inference import protect_multimodal_diagnostics
 
     protect_multimodal_diagnostics(parser, arguments)
     args = parse_clinical_args(parser, arguments)
