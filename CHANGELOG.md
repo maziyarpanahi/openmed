@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add five runnable, offline synthetic clinical workflow evidence examples,
+  with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
+
 - Export deterministic, self-contained private-training JSON Schemas with stable
   IDs, bounded metadata, privacy-safe metric conditions and offline validation
   guidance (#3054).
