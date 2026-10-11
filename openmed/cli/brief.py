@@ -73,8 +73,20 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             cancellation=cancellation,
         )
         if response["refusal_reason"] in {"cancelled", "deadline_exceeded"}:
-            emit(args, response, human=response["refusal_reason"])
-            return 1
+            return emit(
+                args,
+                {
+                    key: response[key]
+                    for key in (
+                        "status",
+                        "refusal_reason",
+                        "summary_characters",
+                        "digest",
+                    )
+                },
+                human=response["refusal_reason"],
+                outcome="refused",
+            )
         summary = response.pop("summary")
         audit = json.dumps(response, sort_keys=True, indent=2) + "\n"
         # Reserve both paths before writing content; exclusive creation also
@@ -111,7 +123,7 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             emit(args, response, human=response["refusal_reason"])
             return 1
         raise CliError("Brief request or output failed.", code="brief_failed")
-    emit(
+    return emit(
         args,
         {
             "status": response["status"],
@@ -120,5 +132,5 @@ def handle_brief(args: argparse.Namespace, *, context_provider=None) -> int:
             "digest": response["digest"],
         },
         human="Clinical brief outputs written; human review is required.",
+        outcome="refused" if response["status"] == "refused" else "completed",
     )
-    return 1 if response["status"] == "refused" else 0

@@ -100,7 +100,16 @@ from .profile_declarations import (
     check_profile_declarations,
     validate_profile_declarations,
 )
-from .provenance import to_audit_event, to_provenance
+from .provenance import (
+    GovernedWriteAction,
+    GovernedWriteAuditAttempt,
+    GovernedWriteAuditError,
+    GovernedWriteOutcome,
+    GovernedWriteReviewerRole,
+    to_audit_event,
+    to_governed_write_audit_event,
+    to_provenance,
+)
 from .reference_types import (
     FHIR_R4_REFERENCE_TARGETS,
     FHIR_R5_REFERENCE_TARGETS,
@@ -133,6 +142,12 @@ from .validate import (
 )
 
 __all__ = [
+    "GovernedWriteAction",
+    "GovernedWriteAuditAttempt",
+    "GovernedWriteAuditError",
+    "GovernedWriteOutcome",
+    "GovernedWriteReviewerRole",
+    "to_governed_write_audit_event",
     "SDOH_FHIR_IG_VERSION",
     "SDOH_FHIR_US_CORE_VERSION",
     "SDOHFHIRCode",
