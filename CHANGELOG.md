@@ -277,6 +277,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
+  agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
+  exemptions with coded-element paths and content-free offset findings (#3769).
 - Normalize SMART v1 read/write/all permissions, wildcard resources, granular
   queries and non-clinical identity/launch/session scopes in offline scope
   audits. Compare constraints conservatively and report malformed input without
