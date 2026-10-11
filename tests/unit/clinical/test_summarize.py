@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +20,74 @@ from openmed.clinical.summarize import (
 from openmed.core.pii import DeidentificationResult, PIIEntity
 
 summarize_module = import_module("openmed.clinical.summarize")
+
+
+def _leakage_parity_cases():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/clinical/brief_parity/verified.json"
+    )
+    return json.loads(path.read_text())["leakage_cases"]
+
+
+@pytest.mark.parametrize("case", _leakage_parity_cases(), ids=lambda case: case["id"])
+def test_shared_unicode_leakage_backend_cases(case):
+    surface = case["surface"]
+    source = DeidentificationResult(
+        original_text=surface,
+        deidentified_text="[NAME] improved.",
+        pii_entities=[
+            PIIEntity(
+                text=surface,
+                label="NAME",
+                start=0,
+                end=len(surface),
+                confidence=0.99,
+                redacted_text="[NAME]",
+            )
+        ],
+        method="mask",
+        timestamp=datetime(2026, 1, 1),
+    )
+    if case["leaked"]:
+        with pytest.raises(SummarizationLeakageError) as raised:
+            summarize_deidentified(source, model=lambda _: case["candidate"])
+        check = raised.value.check
+        assert check.checked_token_count == check.leaked_token_count == 1
+        assert len(check.leaked_token_hashes[0]) == 64
+        expected_digest = hashlib.sha256(" ".join(surface.split()).encode()).hexdigest()
+        assert check.to_dict() == {
+            "passed": False,
+            "checked_token_count": 1,
+            "leaked_token_count": 1,
+            "leaked_token_hashes": [expected_digest],
+        }
+        assert (
+            str(raised.value)
+            == "summary leakage guard rejected backend output: 1 source token(s) detected"
+        )
+        assert case["candidate"] not in json.dumps(check.to_dict(), ensure_ascii=False)
+    else:
+        result = summarize_deidentified(source, model=lambda _: case["candidate"])
+        assert result.leakage_check.passed
+
+
+def test_shared_native_normalization_mirrors_existing_detector_defenses():
+    from openmed.core.script_detect import _CONFUSABLE_FOLD
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/clinical/brief_parity/verified.json"
+    )
+    cases = json.loads(path.read_text())["normalization_cases"]
+    assert {"x" + char + "y" for char in _CONFUSABLE_FOLD} <= {
+        case["input"] for case in cases
+    }
+    for case in cases:
+        assert (
+            summarize_module._normalize_leakage_text(case["input"])
+            == case["normalized"]
+        )
 
 
 SYNTHETIC_NOTE = (
@@ -138,3 +209,217 @@ def test_result_can_be_unpacked_as_summary_and_leakage_check():
 
     assert summary.startswith("Patient [NAME]")
     assert check.passed is True
+
+
+def test_default_serialization_matches_recorded_master_bytes(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("default summary resolved NLI")
+
+    from openmed.clinical import nli_backends
+
+    monkeypatch.setattr(nli_backends, "resolve_nli_backend", forbidden)
+    result = summarize(_deidentified_result(), model="extractive")
+    assert result.verification is None
+    assert "verification" not in result.to_dict()
+    encoded = json.dumps(
+        result.to_dict(), sort_keys=True, separators=(",", ":")
+    ).encode()
+    assert (
+        hashlib.sha256(encoded).hexdigest()
+        == "6986b9d8bc17e6b58dec49eec59482ae79db99cfecf79051a42f0cf90f4633bd"
+    )
+
+
+def _nli_source() -> DeidentificationResult:
+    return DeidentificationResult(
+        original_text="The patient has pneumonia.",
+        deidentified_text="The patient has pneumonia.",
+        pii_entities=[],
+        method="mask",
+        timestamp=datetime(2026, 1, 1),
+    )
+
+
+def test_summary_hook_retains_entailed_and_contradicted_claims():
+    text = "The patient has pneumonia. The patient has no pneumonia."
+    result = summarize(_nli_source(), model=lambda _: text, verify="heuristic")
+    assert result.summary == text
+    assert [check.label for check in result.verification] == [
+        "entailment",
+        "contradiction",
+    ]
+    assert result.verification[1].contradicted
+    assert result.verification[1].review_required
+    assert [text[slice(*check.claim_offset)] for check in result.verification] == [
+        "The patient has pneumonia.",
+        "The patient has no pneumonia.",
+    ]
+    for check in result.verification:
+        assert check.source_offset == (0, len(_nli_source().deidentified_text))
+        assert "pneumonia" not in json.dumps(check.to_dict())
+        assert check.source_digest.startswith("sha256:")
+
+
+def test_raw_summary_verification_receives_only_deidentified_source(monkeypatch):
+    calls = []
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            calls.append((premise, hypothesis))
+            assert "Casey" not in premise + hypothesis
+            return {"label": "abstention", "score": 0.0, "source": SYNTHETIC_NOTE}
+
+    monkeypatch.setattr(
+        summarize_module, "deidentify", lambda *args, **kwargs: _deidentified_result()
+    )
+    result = summarize(SYNTHETIC_NOTE, model="extractive", verify=Backend())
+    assert calls
+    assert all(
+        check.label == "abstention" and check.review_required
+        for check in result.verification
+    )
+    assert "Casey" not in json.dumps([check.to_dict() for check in result.verification])
+
+
+def test_leakage_is_rejected_before_nli_is_called():
+    class ForbiddenBackend:
+        def predict(self, *args):
+            raise AssertionError("NLI saw a leaking summary")
+
+    with pytest.raises(SummarizationLeakageError):
+        summarize(
+            _deidentified_result(),
+            model=lambda _: "Casey Example",
+            verify=ForbiddenBackend(),
+        )
+
+
+def test_true_uses_configured_backend_and_missing_backend_is_typed(monkeypatch):
+    import importlib
+
+    nli_module = importlib.import_module("openmed.clinical.nli")
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    monkeypatch.setattr(nli_module, "DEFAULT_NLI_BACKEND", "heuristic")
+    result = summarize(_nli_source(), model="extractive", verify=True)
+    assert result.verification[0].label == "entailment"
+    with pytest.raises(LocalNLIError, match="not registered"):
+        summarize(
+            _nli_source(), model="extractive", verify="missing-synthetic-checkpoint"
+        )
+
+
+@pytest.mark.parametrize("option", [None, 0, 1, "https://private.invalid/payload"])
+def test_invalid_verify_option_is_not_silently_treated_as_off(option):
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    with pytest.raises(LocalNLIError) as raised:
+        summarize(_nli_source(), model="extractive", verify=option)
+    assert "private.invalid" not in str(raised.value)
+
+
+def test_verification_backend_cannot_use_network_and_error_is_value_free():
+    import socket
+
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            socket.create_connection(("example.invalid", 443))
+            raise AssertionError("network must be blocked")
+
+    with pytest.raises(LocalNLIError, match="local NLI inference failed") as raised:
+        summarize(_nli_source(), model="extractive", verify=Backend())
+    assert "pneumonia" not in str(raised.value)
+
+
+def test_unsegmentable_summary_claim_preserves_review_marker():
+    result = summarize(
+        _nli_source(),
+        model=lambda _: "Pneumonia and fever.",
+        verify=lambda *_: {"label": "entailment", "score": 0.9},
+    )
+    assert result.verification[0].label == "entailment"
+    assert result.verification[0].review_required
+
+
+def test_summary_verification_cannot_be_rebound_to_changed_claims():
+    from dataclasses import replace
+
+    result = summarize(_nli_source(), model="extractive", verify="heuristic")
+    with pytest.raises(ValueError, match="invalid summary verification metadata"):
+        replace(result, summary="A different synthetic claim.")
+
+
+def test_true_with_unavailable_default_retains_local_nli_refusal(monkeypatch):
+    from openmed.clinical import nli_backends
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    monkeypatch.setattr(nli_backends, "get_default_nli_model", lambda: None)
+    with pytest.raises(LocalNLIError, match="no released local NLI checkpoint"):
+        summarize(_nli_source(), model="extractive", verify=True)
+
+
+@pytest.mark.parametrize("failure", ["resolve", "infer", "identity"])
+def test_verification_provider_properties_cannot_leak_exception_text(failure, capsys):
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    private = "Synthetic private source and claim text"
+
+    class Backend:
+        accesses = 0
+
+        @property
+        def predict(self):
+            self.accesses += 1
+            if failure == "resolve" or (failure == "infer" and self.accesses > 1):
+                raise RuntimeError(private)
+            return lambda *_: {"label": "entailment", "score": 0.9}
+
+        @property
+        def backend_id(self):
+            raise LocalNLIError(private)
+
+    with pytest.raises(LocalNLIError) as raised:
+        summarize(_nli_source(), model="extractive", verify=Backend())
+    assert private not in str(raised.value)
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None
+    captured = capsys.readouterr()
+    assert private not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_summary_nli_cancellation_stops_remaining_claims_and_discards_late_result(
+    failure,
+):
+    from openmed.clinical.brief_cancellation import BriefCancellation, BriefInterrupted
+    from openmed.clinical.summarize import summarize_deidentified
+
+    request = BriefCancellation()
+    calls = []
+
+    class Backend:
+        backend_id = "synthetic-nli"
+
+        def predict(self, premise, hypothesis):
+            calls.append(1)
+            request.cancel()
+            if failure:
+                raise RuntimeError("synthetic-private-sentinel")
+            return {"label": "entailment", "score": 0.9}
+
+    with pytest.raises(BriefInterrupted) as caught:
+        summarize_deidentified(
+            _nli_source(),
+            model=lambda _: "The patient has pneumonia. The patient has no pneumonia.",
+            verify=Backend(),
+            cancellation=request,
+        )
+    assert calls == [1]
+    assert caught.value.__context__ is None
+    assert "synthetic-private-sentinel" not in str(caught.value)
