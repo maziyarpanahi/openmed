@@ -108,6 +108,32 @@ reports only under the workflow's audit retention and access controls.
 
 ## Fail-closed fixture handling
 
+### Governance JSON readers
+
+`WorkflowOutcome`, `ActionCorrelation`, `CompatibilityResult`,
+`QualityMeasureEvidencePacket` and `ConsentReceipt` reject inputs above 64 MiB
+or 64 container levels before invoking the JSON decoder. Text size is measured
+in UTF-8 bytes; byte inputs retain the standard decoder's UTF-8, UTF-16 and
+UTF-32 support. Quoted and escaped delimiters do not count as nesting.
+
+Duplicate keys and non-finite constants are rejected. Malformed input produces
+the reader's existing typed error without retaining a decoder exception as
+its cause or context. Valid record schemas, signatures and canonical output
+remain unchanged. A deeply nested consent receipt maps to
+`invalid_consent_receipt` in the MCP error envelope. Transport limits and
+authorization checks remain independent gates.
+
+The all-reader nightly sweep also verifies that `EventAttributes` maps a
+decoder depth refusal to `malformed_json` below its existing byte limit. Its
+allowlist, serialized schema and size ceiling are unchanged.
+
+The offline property suite explicitly inventories every public governance
+`from_json` reader and checks random bytes, nested input, duplicate keys,
+non-finite numbers and large synthetic records under the existing bounded and
+nightly fuzz profiles. It fails if a new public reader lacks a target.
+
+### Adversarial fixture snapshots
+
 Fixture IDs, governance identifiers, payload shapes, nesting depth, string
 length, corpus size, and JSON scalar types are bounded and validated. Payload
 mappings and sequences are recursively snapshotted into immutable containers
@@ -131,5 +157,95 @@ must extend the corpus when a new attack surface or policy reason is added.
 Run the focused gate with:
 
 ```text
-.venv/bin/python -m pytest tests/unit/agent/security tests/integration/agent/test_hostile_tool_boundaries.py -q
+.venv/bin/python -m pytest tests/unit/agent/security tests/integration/agent/test_hostile_tool_boundaries.py tests/integration/agent/test_fhir_input_boundary.py -q
+```
+
+## FHIR input screening
+
+`InjectionGuard.guard_fhir_input(resource)` screens untrusted FHIR reads and
+Subscription payloads before they become agent context. The default strict mode
+raises `PromptInjectionDetected` before dispatch on an injection finding or an
+attachment quarantine. `guard_input` also detects nested objects containing
+`resourceType`, including resources inside Bundles. Applications must pass their
+FHIR input through this boundary; fetching a resource alone does not screen it.
+This Python agent/FHIR boundary does not change the Swift document intake API.
+
+```python
+from openmed.agent.security import InjectionGuard
+
+# The transport and resource remain application-owned.
+resource = fhir_client.get_resource("Observation", "synthetic-observation")
+prepared = InjectionGuard().guard_fhir_input(resource)
+agent_context = prepared.value
+# Record prepared.finding_dicts(), never prepared.value or the resource.
+```
+
+The shared narrative parser in `openmed.interop.fhir_server` removes markup,
+decodes character and numeric entities, and maps each visible character back to
+its original XHTML span. The guard scans both source and visible text. Returned
+narratives are rebuilt as escaped visible text in an XHTML `div`: hidden script,
+style and template bodies, comments, attributes and remote references are not
+forwarded. In allow mode, matching text is replaced with inert quarantine
+markers; source-markup findings quarantine the entire narrative.
+
+FHIR findings add `element_path` to the existing controlled pattern ID, severity,
+and half-open `start`/`end` character offsets. Narrative offsets address the
+original XHTML, ordinary strings address the original element value, and decoded
+attachment findings address decoded UTF-8 text (HTML attachment findings address
+its decoded source markup). Attachment quarantine offsets cover the encoded
+value; unavailable/empty values use the sentinel span `[0, 1)`. Unknown property
+names become opaque `element_<digest>` path components. No source text, attachment
+bytes, arbitrary key names or external URLs enter findings, exceptions or logs.
+`GuardedInput` and `InjectionScan` representations omit their payloads. Use
+`finding_dicts()` for evidence, not general dataclass serialization.
+
+Attachments are screened entirely in memory. Only UTF-8 `text/plain`,
+`text/markdown`, `text/html` and `application/xhtml+xml` are accepted, with absent,
+UTF-8 or US-ASCII charset declarations. Data must be strict base64 and at most
+65,536 decoded bytes. The encoded length and predicted decoded size are checked
+before decoding. Non-text, oversized, invalid-base64, invalid-UTF-8,
+unsupported-charset, missing-data and remote-only attachments become empty
+objects with controlled findings. In allow mode these objects may be forwarded,
+but their original data and URL never are. No URL is fetched. Accepted embedded
+attachments are scanned, then encoded from the screened text; external URLs and
+stale size/hash metadata are removed from that copy.
+
+FHIR input has no arbitrary key-name exemptions. Explicit resource-relative
+coded paths exempt coded primitives (such as `Patient.gender`,
+`Observation.status`, and `Bundle.type`) and the `system`, `version`, `code`,
+`display`, `userSelected` leaves in declared `coding[]` paths:
+
+| Resource | CodeableConcept paths |
+| --- | --- |
+| Observation | `code`, `category[]`, `interpretation[]`, `component[].code` |
+| Condition | `code`, `category[]`, `clinicalStatus`, `verificationStatus` |
+| DiagnosticReport | `code`, `category[]`, `conclusionCode[]` |
+| DocumentReference | `type`, `category[]` |
+| Procedure | `code`, `category[]` |
+| MedicationRequest | `medicationCodeableConcept` |
+| AllergyIntolerance | `code`, `clinicalStatus`, `verificationStatus` |
+
+`DocumentReference.content[].format` is a direct Coding path with the same
+exempt leaves. Concept `text`, unexpected children, strings under `category`,
+and unknown paths are still scanned. A dotted or indexed JSON property name
+cannot impersonate a structured coded path. Only the root, contained resources,
+Bundle entry resources and the supported Subscription notification resource
+slots can establish a new resource-relative coded path; an unexpected nested
+`resourceType` declaration does not create an exemption.
+The implementation is conservative for other resource types;
+this path table is not a complete FHIR schema validator or an authorization
+policy. Coded values still require the application's FHIR validation and context
+projection. Resource traversal is limited to 10,000 nodes and depth 64; ordinary
+text values to 131,072 characters. Exceeding those bounds quarantines the input.
+
+`FHIR_ADVERSARIAL_FIXTURES` is part of the default offline corpus. It contains all
+five reported evasions and eight synthetic benign clinical narratives. The fixed
+false-positive budget is **0 flagged benign cases out of those 8**, with all five
+attacks denied in strict mode. This is a deterministic regression budget for that
+small corpus, not a measured clinical population rate, model benchmark or
+release qualification. Non-English cue packs, OCR regions and result-scope
+authorization remain separate boundaries.
+
+```text
+.venv/bin/python -m pytest tests/unit/interop/test_fhir_screening.py tests/unit/agent/test_injection_guard.py tests/unit/agent/security tests/unit/interop/test_fhir_server.py tests/integration/agent/test_hostile_tool_boundaries.py tests/integration/agent/test_fhir_input_boundary.py -q
 ```

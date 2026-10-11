@@ -1,5 +1,8 @@
 # Relation review priority policy
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+to inspect review bands alongside evidence bindings and mandatory clinician review.
+
 `assign_review_priority()` maps three controlled metadata fields to a configured
 human-review queue band:
 
