@@ -471,17 +471,23 @@ struct OpenMedMLXArtifact: Sendable {
     let family: OpenMedMLXFamily
 
     init(modelDirectoryURL: URL) throws {
-        let manifestURL = modelDirectoryURL.appending(path: "openmed-mlx.json")
+        let boundary = try OpenMedMLXPathBoundary(directoryURL: modelDirectoryURL)
+        let manifestURL = try boundary.fileURL("openmed-mlx.json")
+
+        // Refuse every declared path before any manifest-driven local read.
+        let declaredManifest =
+            try FileManager.default.fileExists(atPath: manifestURL.path)
+            ? JSONDecoder().decode(OpenMedMLXManifest.self, from: Data(contentsOf: manifestURL)) : nil
+        if let declaredManifest { try boundary.validate(declaredManifest) }
 
         let decoder = JSONDecoder()
-        let configURL = modelDirectoryURL.appending(path: "config.json")
+        let configURL = try boundary.fileURL("config.json")
         let configData = try Data(contentsOf: configURL)
         let configuration = try decoder.decode(OpenMedMLXBertConfiguration.self, from: configData)
 
         let manifest: OpenMedMLXManifest
-        if FileManager.default.fileExists(atPath: manifestURL.path) {
-            let manifestData = try Data(contentsOf: manifestURL)
-            manifest = try decoder.decode(OpenMedMLXManifest.self, from: manifestData)
+        if let declaredManifest {
+            manifest = declaredManifest
             guard manifest.format == "openmed-mlx" else {
                 throw OpenMedMLXArtifactError.invalidManifestFormat(manifest.format)
             }
@@ -491,6 +497,7 @@ struct OpenMedMLXArtifact: Sendable {
                 configuration: configuration
             )
         }
+        try boundary.validate(manifest)
 
         guard
             let task = OpenMedMLXTask(manifestValue: manifest.task),
@@ -500,12 +507,12 @@ struct OpenMedMLXArtifact: Sendable {
             throw OpenMedMLXArtifactError.unsupportedArchitecture(manifest.family)
         }
 
-        let tokenizerDirectoryURL = modelDirectoryURL.appending(path: manifest.tokenizer.path)
+        let tokenizerDirectoryURL =
+            try manifest.tokenizer.path == "."
+            ? boundary.rootURL : boundary.fileURL(manifest.tokenizer.path)
         let listedTokenizerFiles = manifest.tokenizer.files
-        let hasListedTokenizerAssets = listedTokenizerFiles.allSatisfy { fileName in
-            FileManager.default.fileExists(
-                atPath: tokenizerDirectoryURL.appending(path: fileName).path
-            )
+        let hasListedTokenizerAssets = try listedTokenizerFiles.allSatisfy { fileName in
+            try boundary.containsFile(boundary.tokenizerPath(base: manifest.tokenizer.path, file: fileName))
         }
         let discoveredTokenizerFiles = Self.discoverTokenizerFiles(in: tokenizerDirectoryURL)
 
@@ -535,7 +542,7 @@ struct OpenMedMLXArtifact: Sendable {
 
         let labelMap: [Int: String]
         if let labelMapPath = manifest.labelMapPath {
-            let labelURL = modelDirectoryURL.appending(path: labelMapPath)
+            let labelURL = try boundary.fileURL(labelMapPath)
             let data = try Data(contentsOf: labelURL)
             let raw = try decoder.decode([String: String].self, from: data)
             labelMap = Dictionary(
@@ -546,7 +553,7 @@ struct OpenMedMLXArtifact: Sendable {
             labelMap = configuration.id2label
         }
 
-        self.directoryURL = modelDirectoryURL
+        self.directoryURL = boundary.rootURL
         self.manifest = manifest
         self.configuration = configuration
         self.id2label = labelMap

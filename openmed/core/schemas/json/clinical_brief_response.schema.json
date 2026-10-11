@@ -1,0 +1,2982 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_brief_response.schema.json",
+  "title": "OpenMed clinical brief response record",
+  "schema_version": 1,
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "backend_id",
+    "citations",
+    "digest",
+    "envelope",
+    "metrics",
+    "profile_digest",
+    "provenance",
+    "refusal_reason",
+    "review_packet",
+    "schema_version",
+    "stages",
+    "status",
+    "summary",
+    "summary_characters",
+    "summary_digest",
+    "verdicts"
+  ],
+  "properties": {
+    "backend_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/citation"
+      }
+    },
+    "claim_bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/claim_binding"
+      }
+    },
+    "digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "envelope": {
+      "$ref": "#/$defs/envelope"
+    },
+    "generation_contract": {
+      "$ref": "#/$defs/generation_contract"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "profile_digest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/digest"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provenance": {
+      "$ref": "#/$defs/guarded_provenance"
+    },
+    "refusal_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/refusal_reason"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_packet": {
+      "$ref": "#/$defs/review_packet"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "needs_review",
+        "refused"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "summary_characters": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "summary_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verdict"
+      }
+    }
+  },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_index",
+        "output_end",
+        "output_start",
+        "source_end",
+        "source_start"
+      ],
+      "properties": {
+        "claim_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_start": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requires_human_review"
+      ],
+      "properties": {
+        "disclaimer": {
+          "const": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment."
+        },
+        "human_review_mode": {
+          "type": "boolean"
+        },
+        "is_diagnostic": {
+          "const": false
+        },
+        "provenance": {
+          "$ref": "#/$defs/envelope_provenance"
+        },
+        "refusal_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires_human_review": {
+          "const": true
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "refused"
+          ]
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/envelope_summary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "envelope_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary_digest"
+      ],
+      "properties": {
+        "summary_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "citation_support": {
+          "$ref": "#/$defs/citation_support"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "demographics": {
+          "$ref": "#/$defs/demographics"
+        },
+        "extractive_selection": {
+          "$ref": "#/$defs/extractive_selection"
+        },
+        "leakage": {
+          "$ref": "#/$defs/leakage"
+        },
+        "reviewed_evidence": {
+          "$ref": "#/$defs/reviewed_local_evidence"
+        },
+        "temporal_order": {
+          "$ref": "#/$defs/temporal_order"
+        },
+        "unsupported_claims": {
+          "$ref": "#/$defs/unsupported_claims"
+        },
+        "length_budget": {
+          "$ref": "#/$defs/length_budget"
+        }
+      }
+    },
+    "refusal_reason": {
+      "enum": [
+        "cancelled",
+        "deadline_exceeded",
+        "empty_evidence",
+        "invalid_evidence",
+        "invalid_input",
+        "invalid_reviewed_evidence",
+        "length_budget_exceeded",
+        "model_unavailable",
+        "nli_rejected",
+        "nli_unavailable",
+        "privacy",
+        "review_authority_unavailable",
+        "review_policy_changed",
+        "review_receipt_expired",
+        "review_receipt_mismatched",
+        "review_receipt_missing",
+        "review_receipt_revoked",
+        "review_required",
+        "review_source_changed",
+        "review_source_unavailable",
+        "stage_failed",
+        "unsupported_claim"
+      ]
+    },
+    "review_citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_id",
+        "source"
+      ],
+      "properties": {
+        "citation_id": {
+          "type": "string",
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+        },
+        "locator": {
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
+        },
+        "metadata": {
+          "$ref": "#/$defs/review_metadata"
+        },
+        "protected_text_available": {
+          "const": true
+        },
+        "published": {
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
+        },
+        "relevance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "claim",
+                "condition",
+                "entity",
+                "finding",
+                "lab_result",
+                "measurement",
+                "medication",
+                "medication_review",
+                "procedure",
+                "relation",
+                "renal_function_measure",
+                "source",
+                "synthetic_finding"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^label:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "source_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "title": {
+          "type": "string",
+          "pattern": "^hash:sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "review_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "finding_id",
+        "label",
+        "status"
+      ],
+      "properties": {
+        "attributes": {
+          "$ref": "#/$defs/review_metadata"
+        },
+        "citation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+          }
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "finding_id": {
+          "type": "string",
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "enum": [
+                "claim",
+                "condition",
+                "entity",
+                "finding",
+                "lab_result",
+                "measurement",
+                "medication",
+                "medication_review",
+                "procedure",
+                "relation",
+                "renal_function_measure",
+                "source",
+                "synthetic_finding"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^label:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "protected_text_available": {
+          "const": true
+        },
+        "source_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_offset": {
+          "$ref": "#/$defs/source_offset"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        }
+      }
+    },
+    "review_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "blocking",
+        "gate_id",
+        "passed",
+        "reason",
+        "severity"
+      ],
+      "properties": {
+        "blocking": {
+          "type": "boolean"
+        },
+        "citation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+          }
+        },
+        "details": {
+          "$ref": "#/$defs/review_metadata"
+        },
+        "gate_id": {
+          "type": "string",
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "blocked",
+            "failed",
+            "ok",
+            "passed",
+            "protected",
+            "provided",
+            "requires_review",
+            "review_required",
+            "unspecified"
+          ]
+        },
+        "reason_hash": {
+          "$ref": "#/$defs/digest"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        }
+      }
+    },
+    "review_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory",
+        "citations",
+        "findings",
+        "gate_results",
+        "packet_id",
+        "privacy",
+        "review_status",
+        "schema_version",
+        "summary"
+      ],
+      "properties": {
+        "advisory": {
+          "const": "Human-review packets are assistive evidence summaries, not clinical decisions, release approvals, or compliance certifications."
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review_citation"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review_finding"
+          }
+        },
+        "gate_results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review_gate"
+          }
+        },
+        "packet_id": {
+          "type": "string",
+          "pattern": "^(?:identifier:)?sha256:[0-9a-f]{64}$"
+        },
+        "privacy": {
+          "$ref": "#/$defs/review_privacy"
+        },
+        "review_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "approved",
+                "blocked",
+                "blocking",
+                "critical",
+                "deferred",
+                "error",
+                "failed",
+                "high",
+                "info",
+                "low",
+                "needs_review",
+                "normal",
+                "not_evaluated",
+                "passed",
+                "protected",
+                "ready_for_review",
+                "rejected",
+                "review_required",
+                "uncertain",
+                "unknown",
+                "unsupported",
+                "warning"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^status:sha256:[0-9a-f]{64}$"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": "openmed.clinical.review_packet.v1"
+        },
+        "summary": {
+          "$ref": "#/$defs/review_summary"
+        }
+      }
+    },
+    "review_privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protected_text_available",
+        "protected_text_included",
+        "protected_text_policy"
+      ],
+      "properties": {
+        "protected_text_available": {
+          "type": "boolean"
+        },
+        "protected_text_included": {
+          "const": false
+        },
+        "protected_text_policy": {
+          "const": "explicit_local_opt_in"
+        }
+      }
+    },
+    "review_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "citation_count",
+        "failed_gate_count",
+        "finding_count",
+        "gate_count",
+        "review_required"
+      ],
+      "properties": {
+        "citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed_gate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "finding_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_required": {
+          "const": true
+        }
+      }
+    },
+    "source_offset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "end",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_index",
+        "label"
+      ],
+      "properties": {
+        "claim_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "guarded_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenizer_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenizer_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model_fingerprint",
+        "model_id",
+        "revision",
+        "tokenizer_fingerprint",
+        "tokenizer_id"
+      ]
+    },
+    "guarded_transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "from_state": {
+          "enum": [
+            "abstained",
+            "approved",
+            "in_review",
+            "needs_revision",
+            "queued",
+            "rejected",
+            "reopened"
+          ]
+        },
+        "to_state": {
+          "enum": [
+            "abstained",
+            "approved",
+            "in_review",
+            "needs_revision",
+            "queued",
+            "rejected",
+            "reopened"
+          ]
+        },
+        "reviewer_fingerprint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+        }
+      },
+      "required": [
+        "from_state",
+        "reason_code",
+        "reviewer_fingerprint",
+        "sequence",
+        "to_state"
+      ]
+    },
+    "guarded_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_offsets": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/source_offset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_hash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+        }
+      },
+      "required": [
+        "evidence_hash",
+        "evidence_id",
+        "kind",
+        "source_offsets"
+      ]
+    },
+    "guarded_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "missing_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_evidence_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/digest"
+          }
+        },
+        "changed_evidence_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/digest"
+          }
+        },
+        "input_checked": {
+          "type": "boolean"
+        },
+        "input_changed": {
+          "type": "boolean"
+        },
+        "output_checked": {
+          "type": "boolean"
+        },
+        "output_changed": {
+          "type": "boolean"
+        },
+        "model_present": {
+          "type": "boolean"
+        },
+        "policy_present": {
+          "type": "boolean"
+        },
+        "input_present": {
+          "type": "boolean"
+        },
+        "output_present": {
+          "type": "boolean"
+        },
+        "manifest_hash_valid": {
+          "type": "boolean"
+        },
+        "record_hash_valid": {
+          "type": "boolean"
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "changed_evidence_count",
+        "changed_evidence_ids",
+        "input_changed",
+        "input_checked",
+        "input_present",
+        "manifest_hash_valid",
+        "missing_evidence_count",
+        "missing_evidence_ids",
+        "model_present",
+        "output_changed",
+        "output_checked",
+        "output_present",
+        "policy_present",
+        "reason_codes",
+        "record_hash_valid"
+      ]
+    },
+    "guarded_provenance": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "required": []
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "record_type": {
+              "const": "openmed.clinical.guarded_output_provenance"
+            },
+            "record_id": {
+              "$ref": "#/$defs/digest"
+            },
+            "output_kind": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+            },
+            "input_hash": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/digest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "output_hash": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/digest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "$ref": "#/$defs/guarded_model"
+            },
+            "policy_fingerprint": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/digest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/digest"
+              }
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/guarded_evidence"
+              }
+            },
+            "review": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "required": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "enum": [
+                    "abstained",
+                    "approved",
+                    "in_review",
+                    "needs_revision",
+                    "queued",
+                    "rejected",
+                    "reopened"
+                  ]
+                },
+                "transitions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/guarded_transition"
+                  }
+                }
+              },
+              "required": [
+                "required",
+                "status",
+                "transitions"
+              ]
+            },
+            "review_required": {
+              "type": "boolean"
+            },
+            "review_status": {
+              "enum": [
+                "abstained",
+                "approved",
+                "in_review",
+                "needs_revision",
+                "queued",
+                "rejected",
+                "reopened"
+              ]
+            },
+            "review_transitions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/guarded_transition"
+              }
+            },
+            "integrity": {
+              "$ref": "#/$defs/guarded_integrity"
+            },
+            "record_hash": {
+              "$ref": "#/$defs/digest"
+            },
+            "disclaimer": {
+              "const": "Guarded clinical-output provenance is value-free assistive metadata for human review; it is not a clinical decision, compliance certification, diagnosis, or treatment recommendation."
+            }
+          },
+          "required": [
+            "disclaimer",
+            "evidence",
+            "evidence_ids",
+            "input_hash",
+            "integrity",
+            "model",
+            "output_hash",
+            "output_kind",
+            "policy_fingerprint",
+            "record_hash",
+            "record_id",
+            "record_type",
+            "review",
+            "review_required",
+            "review_status",
+            "review_transitions",
+            "schema_version"
+          ]
+        }
+      ]
+    },
+    "envelope_provenance": {
+      "type": "object",
+      "propertyNames": {
+        "allOf": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+          },
+          {
+            "not": {
+              "enum": [
+                "address",
+                "date",
+                "deidentified_text",
+                "email",
+                "entities",
+                "mapping",
+                "name",
+                "original",
+                "original_text",
+                "path",
+                "phone",
+                "pii_entities",
+                "raw",
+                "source_path",
+                "source_text",
+                "text",
+                "value"
+              ]
+            }
+          }
+        ]
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "review_metadata_string": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:hash:)?sha256:[0-9a-f]{64}$"
+        },
+        {
+          "enum": [
+            "[PROTECTED_TEXT_OMITTED]",
+            "approved",
+            "blocked",
+            "blocking",
+            "claim",
+            "condition",
+            "critical",
+            "deferred",
+            "entity",
+            "error",
+            "failed",
+            "finding",
+            "high",
+            "info",
+            "lab_result",
+            "low",
+            "measurement",
+            "medication",
+            "medication_review",
+            "needs_review",
+            "normal",
+            "not_evaluated",
+            "ok",
+            "passed",
+            "procedure",
+            "protected",
+            "provided",
+            "ready_for_review",
+            "rejected",
+            "relation",
+            "renal_function_measure",
+            "requires_review",
+            "review_required",
+            "source",
+            "synthetic_finding",
+            "uncertain",
+            "unknown",
+            "unspecified",
+            "unsupported",
+            "warning"
+          ]
+        }
+      ]
+    },
+    "review_metadata_value": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/review_metadata_string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/review_metadata"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/review_metadata_value"
+          }
+        }
+      ]
+    },
+    "review_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[cC][aA][tT][eE][gG][oO][rR][yY]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[cC][lL][aA][sS][sS]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[cC][oO][dD][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[cC][oO][nN][fF][iI][dD][eE][nN][cC][eE]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[cC][oO][uU][nN][tT]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[dD][iI][rR][eE][cC][tT][iI][oO][nN]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[fF][oO][rR][mM][aA][tT]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[iI][dD]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[iI][dD][eE][nN][tT][iI][fF][iI][eE][rR]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[kK][iI][nN][dD]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[lL][aA][bB][eE][lL]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[lL][aA][nN][gG][uU][aA][gG][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[lL][eE][vV][eE][lL]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[mM][eE][tT][rR][iI][cC]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[mM][oO][dD][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[nN][aA][mM][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[pP][oO][lL][iI][cC][yY]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[pP][rR][iI][oO][rR][iI][tT][yY]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[rR][eE][aA][sS][oO][nN][_-]?[cC][oO][dD][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[sS][cC][oO][rR][eE]$": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review_metadata_value"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "^[sS][eE][vV][eE][rR][iI][tT][yY]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[sS][oO][uU][rR][cC][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[sS][tT][aA][gG][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[sS][tT][aA][tT][uU][sS]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[sS][yY][sS][tT][eE][mM]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[tT][yY][pP][eE]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[uU][nN][iI][tT]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        },
+        "^[vV][eE][rR][sS][iI][oO][nN]$": {
+          "$ref": "#/$defs/review_metadata_value"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "summary_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cited_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omission_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omissions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_facts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_source_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_source_fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_evidence_available": {
+          "type": "boolean"
+        },
+        "fail_closed": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "failure_reasons": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "duplicate_source_fact",
+              "invalid_source_evidence",
+              "missing_source_evidence",
+              "missing_summary_citation",
+              "omitted_source_fact",
+              "unknown_citation",
+              "unsupported_summary_fact"
+            ]
+          }
+        }
+      },
+      "required": [
+        "cited_fact_count",
+        "duplicate_source_fact_count",
+        "fail_closed",
+        "failure_reasons",
+        "invalid_citation_count",
+        "invalid_source_fact_count",
+        "missing_citation_count",
+        "omission_count",
+        "omissions",
+        "passed",
+        "recall",
+        "schema_version",
+        "source_evidence_available",
+        "source_evidence_count",
+        "source_fact_count",
+        "summary_fact_count",
+        "unsupported_fact_count",
+        "unsupported_facts"
+      ]
+    },
+    "leakage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "checked_token_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "leaked_token_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "leaked_token_hashes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/digest"
+          }
+        }
+      },
+      "required": [
+        "checked_token_count",
+        "leaked_token_count",
+        "leaked_token_hashes",
+        "passed"
+      ]
+    },
+    "demographic_class": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attribute_class_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "reason_code": {
+          "const": "not_allowed_for_purpose"
+        },
+        "removed_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "attribute_class_id",
+        "reason_code",
+        "removed_count"
+      ]
+    },
+    "demographics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "input_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "purpose_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "removed_classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/demographic_class"
+          }
+        },
+        "removed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "allowed_count",
+        "input_count",
+        "purpose_id",
+        "removed_classes",
+        "removed_count",
+        "schema_version"
+      ]
+    },
+    "temporal_order": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            "validated",
+            "review_required"
+          ]
+        },
+        "review_required": {
+          "type": "boolean"
+        },
+        "reference_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "enum": [
+                  "duplicate_reference",
+                  "insufficient_references",
+                  "order_inversion",
+                  "order_unresolved",
+                  "unknown_event"
+                ]
+              },
+              "reference_indexes": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "advisory": {
+          "const": "Temporal-order validation is a deterministic review aid. Invalid or ambiguous ordering requires review and does not rewrite the clinical claim."
+        }
+      },
+      "required": [
+        "advisory",
+        "findings",
+        "reference_count",
+        "review_required",
+        "schema_version",
+        "status"
+      ]
+    },
+    "bootstrap_ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "point": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lower": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "upper": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "n_resamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alpha": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "degenerate": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "alpha",
+        "degenerate",
+        "lower",
+        "n_resamples",
+        "point",
+        "upper"
+      ]
+    },
+    "claim_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "approved_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cited_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matching_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "claim_class": {
+          "enum": [
+            "allergy",
+            "diagnosis",
+            "finding",
+            "history",
+            "lab",
+            "medication",
+            "other",
+            "overall",
+            "procedure",
+            "symptom",
+            "treatment",
+            "vital"
+          ]
+        },
+        "review_required": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "supported",
+            "contradicted",
+            "unresolved",
+            "uncited"
+          ]
+        }
+      },
+      "required": [
+        "approved_evidence_count",
+        "cited_evidence_count",
+        "claim_class",
+        "matching_evidence_count",
+        "review_required",
+        "state"
+      ]
+    },
+    "claim_class_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supported_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contradicted_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolved_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uncited_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bootstrap_ci": {
+          "$ref": "#/$defs/bootstrap_ci"
+        },
+        "claim_class": {
+          "enum": [
+            "allergy",
+            "diagnosis",
+            "finding",
+            "history",
+            "lab",
+            "medication",
+            "other",
+            "overall",
+            "procedure",
+            "symptom",
+            "treatment",
+            "vital"
+          ]
+        },
+        "counts": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "contradicted",
+              "supported",
+              "uncited",
+              "unresolved"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "unsupported_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "bootstrap_ci",
+        "claim_class",
+        "claim_count",
+        "contradicted_count",
+        "counts",
+        "supported_count",
+        "uncited_count",
+        "unresolved_count",
+        "unsupported_count",
+        "unsupported_rate"
+      ]
+    },
+    "unsupported_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approved_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "n_resamples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_required_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alpha": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "assessments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/claim_assessment"
+          }
+        },
+        "by_claim_class": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "allergy",
+              "diagnosis",
+              "finding",
+              "history",
+              "lab",
+              "medication",
+              "other",
+              "overall",
+              "procedure",
+              "symptom",
+              "treatment",
+              "vital"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/claim_class_metrics"
+          }
+        },
+        "disclaimer": {
+          "const": "Unsupported-claim rates are evaluation evidence only; they are not a clinical decision, compliance certification, or faithfulness guarantee."
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "human_review_required": {
+          "const": true
+        },
+        "overall": {
+          "$ref": "#/$defs/claim_class_metrics"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "suite": {
+          "const": "summary_unsupported_claims"
+        },
+        "unsupported_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "alpha",
+        "approved_evidence_count",
+        "assessments",
+        "by_claim_class",
+        "claim_count",
+        "disclaimer",
+        "evidence_count",
+        "evidence_digest",
+        "human_review_required",
+        "n_resamples",
+        "overall",
+        "review_required_count",
+        "schema_version",
+        "seed",
+        "suite",
+        "unsupported_count",
+        "unsupported_rate"
+      ]
+    },
+    "citation_span_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid_claim_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_claim_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_claim_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid_evidence_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_evidence_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_evidence_span_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "claim_span_validity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence_span_validity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "citation_span_validity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "invalid_citation_reasons": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "citation_outside_evidence",
+              "invalid_citation_span",
+              "invalid_evidence_span",
+              "missing_claim",
+              "missing_evidence",
+              "source_mismatch"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "citation_count",
+        "citation_span_validity",
+        "claim_span_count",
+        "claim_span_validity",
+        "duplicate_citation_count",
+        "evidence_span_count",
+        "evidence_span_validity",
+        "invalid_citation_count",
+        "invalid_citation_reasons",
+        "invalid_claim_span_count",
+        "invalid_evidence_span_count",
+        "missing_claim_span_count",
+        "missing_evidence_span_count",
+        "passed",
+        "valid_citation_count",
+        "valid_claim_span_count",
+        "valid_evidence_span_count"
+      ]
+    },
+    "clinician_adjudication": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adjudicated_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unadjudicated_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "adjudicated_claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unadjudicated_claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supporting_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contradicting_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "irrelevant_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unclear_citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supported_claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unmatched_adjudication_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflicting_adjudication_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "citation_precision": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "support_recall": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "adjudication_coverage": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "not_available"
+          ]
+        },
+        "label_counts": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "contradicts",
+              "irrelevant",
+              "supports",
+              "unclear"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "adjudicated_citation_count",
+        "adjudicated_claim_count",
+        "adjudication_coverage",
+        "available",
+        "citation_precision",
+        "conflicting_adjudication_count",
+        "contradicting_citation_count",
+        "irrelevant_citation_count",
+        "label_counts",
+        "status",
+        "support_recall",
+        "supported_claim_count",
+        "supporting_citation_count",
+        "unadjudicated_citation_count",
+        "unadjudicated_claim_count",
+        "unclear_citation_count",
+        "unmatched_adjudication_count"
+      ]
+    },
+    "citation_support": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "citation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "orphan_claim_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unused_evidence_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "orphan_claim_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "unused_evidence_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "citation_precision": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "support_recall": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suite": {
+          "const": "citation_support_metrics"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "deterministic_span_checks": {
+          "$ref": "#/$defs/citation_span_checks"
+        },
+        "clinician_adjudication": {
+          "$ref": "#/$defs/clinician_adjudication"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "claim_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "evidence_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "adjudication_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "input_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "adjudication_digest",
+            "claim_digest",
+            "evidence_digest",
+            "input_digest"
+          ]
+        },
+        "human_review_required": {
+          "const": true
+        },
+        "disclaimer": {
+          "const": "Claim-level citation metrics are evaluation evidence only; they are not a clinical decision, compliance certification, or guarantee of clinical truth. Qualified human review remains required before clinical use."
+        }
+      },
+      "required": [
+        "citation_count",
+        "citation_precision",
+        "claim_count",
+        "clinician_adjudication",
+        "deterministic_span_checks",
+        "disclaimer",
+        "evidence_count",
+        "human_review_required",
+        "orphan_claim_count",
+        "orphan_claim_rate",
+        "provenance",
+        "schema_version",
+        "suite",
+        "support_recall",
+        "unused_evidence_count",
+        "unused_evidence_rate"
+      ]
+    },
+    "reviewed_local_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "offset_convention",
+        "policy_digest",
+        "provenance_class",
+        "references",
+        "review_receipt",
+        "schema_version",
+        "source_digest",
+        "source_id",
+        "source_length"
+      ],
+      "properties": {
+        "kind": {
+          "const": "reviewed_local_evidence"
+        },
+        "offset_convention": {
+          "const": "unicode_scalar_half_open"
+        },
+        "policy_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "provenance_class": {
+          "const": "reviewed_local"
+        },
+        "references": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/reviewed_local_reference"
+          }
+        },
+        "review_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/reviewed_local_receipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "source_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^source:[0-9a-f]{64}$"
+        },
+        "source_length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "reviewed_local_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_id",
+        "evidence_digest",
+        "expires_at",
+        "issued_at",
+        "receipt_id"
+      ],
+      "properties": {
+        "authority_id": {
+          "type": "string",
+          "pattern": "^authority:[0-9a-f]{64}$"
+        },
+        "evidence_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expires_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "issued_at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^receipt:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "reviewed_local_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "end",
+        "reference_id",
+        "start"
+      ],
+      "properties": {
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "reference_id": {
+          "type": "string",
+          "pattern": "^ref:[0-9a-f]{64}$"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    },
+    "extractive_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "charged_tokens",
+        "citations",
+        "coverage",
+        "status"
+      ],
+      "properties": {
+        "charged_tokens": {
+          "type": "integer",
+          "const": 0
+        },
+        "citations": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "omission_budget": {
+          "$ref": "#/$defs/extractive_omission_budget"
+        },
+        "status": {
+          "enum": [
+            "empty_evidence",
+            "invalid_evidence",
+            "insufficient_budget",
+            "selection_limit_exceeded"
+          ]
+        }
+      }
+    },
+    "extractive_omission_class": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class_id",
+        "fact_count",
+        "mandatory",
+        "omission_limit",
+        "omitted_count",
+        "passed",
+        "severity_weight",
+        "weighted_budget",
+        "weighted_omissions"
+      ],
+      "properties": {
+        "class_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mandatory": {
+          "type": "boolean"
+        },
+        "omission_limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "severity_weight": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "weighted_budget": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_omissions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "extractive_omission_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classes",
+        "fact_count",
+        "omitted_count",
+        "passed",
+        "refusal_code",
+        "schema_version",
+        "weighted_budget",
+        "weighted_omissions"
+      ],
+      "properties": {
+        "classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/extractive_omission_class"
+          }
+        },
+        "fact_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitted_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "refusal_code": {
+          "enum": [
+            null,
+            "mandatory_class_omitted",
+            "class_omission_budget_exceeded"
+          ]
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "weighted_budget": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted_omissions": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "generation_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schema_version"
+      ],
+      "properties": {
+        "kind": {
+          "const": "explicit_evidence"
+        },
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        }
+      }
+    },
+    "claim_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_index",
+        "reference_digest"
+      ],
+      "properties": {
+        "claim_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "reference_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "length_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mapping_id",
+        "estimator_id",
+        "budget"
+      ],
+      "properties": {
+        "mapping_id": {
+          "const": "brief-profile-evidence-classes-v1"
+        },
+        "estimator_id": {
+          "const": "utf8-byte-upper-bound-v1"
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "policy_id",
+            "max_tokens",
+            "requested_tokens",
+            "allocated_tokens",
+            "unused_tokens",
+            "allocations",
+            "truncation",
+            "requires_clinician_review",
+            "autonomous_decision",
+            "disclaimer"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "policy_id": {
+              "const": "clinical_summary_v1"
+            },
+            "max_tokens": {
+              "const": 2048
+            },
+            "requested_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1048640
+            },
+            "allocated_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2048
+            },
+            "unused_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2048
+            },
+            "allocations": {
+              "type": "array",
+              "minItems": 7,
+              "maxItems": 7,
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "active_problems"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 192
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "follow_up"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "key_findings"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 160
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "medications"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "pending_items"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "procedures"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "safety"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "items": false
+            },
+            "truncation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "occurred",
+                "deferred_tokens",
+                "deferred_evidence_classes"
+              ],
+              "properties": {
+                "occurred": {
+                  "type": "boolean"
+                },
+                "deferred_tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1048640
+                },
+                "deferred_evidence_classes": {
+                  "type": "array",
+                  "maxItems": 7,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "active_problems",
+                      "follow_up",
+                      "key_findings",
+                      "medications",
+                      "pending_items",
+                      "procedures",
+                      "safety"
+                    ]
+                  }
+                }
+              }
+            },
+            "requires_clinician_review": {
+              "const": true
+            },
+            "autonomous_decision": {
+              "const": false
+            },
+            "disclaimer": {
+              "const": "Clinical summary length budgets are deterministic assistive review artifacts, not clinical decisions or autonomous summaries. Qualified clinical review is required."
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependentRequired": {
+    "generation_contract": [
+      "claim_bindings"
+    ],
+    "claim_bindings": [
+      "generation_contract"
+    ]
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "generation_contract"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "needs_review"
+          },
+          "refusal_reason": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

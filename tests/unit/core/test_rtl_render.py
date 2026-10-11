@@ -59,6 +59,17 @@ def _span_of(text: str, token: str) -> tuple[int, int]:
     return start, start + len(token)
 
 
+def test_redaction_orphan_cleanup_preserves_balanced_pairs_and_plain_text():
+    from openmed.core.rtl_render import strip_unbalanced_bidi_controls
+
+    assert strip_unbalanced_bidi_controls("stable [ID]") == "stable [ID]"
+    assert strip_unbalanced_bidi_controls("\u202e[ID] stable") == "[ID] stable"
+    assert strip_unbalanced_bidi_controls("stable [ID]\u202c") == "stable [ID]"
+    for start, end in (("\u202e", "\u202c"), ("\u2067", "\u2069")):
+        text = start + "stable [ID]" + end
+        assert strip_unbalanced_bidi_controls(text) == text
+
+
 # --- Base direction ----------------------------------------------------------
 
 

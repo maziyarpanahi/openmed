@@ -91,6 +91,26 @@ from .sdc_privacy import (
     project_questionnaire_response_with_manifest,
     project_questionnaire_response_with_summary,
 )
+from .server_validation import (
+    MAX_SERVER_VALIDATION_ISSUES,
+    MAX_SERVER_VALIDATION_RESOURCE_BYTES,
+    FHIRServerValidationIssue,
+    FHIRServerValidationReason,
+    FHIRServerValidationResult,
+    FHIRServerValidationStatus,
+    FHIRValidationResponse,
+    FHIRValidationTransport,
+    preflight_server_validation,
+)
+from .transactions import (
+    ApprovedWriteEntry,
+    AssembledTransaction,
+    TransactionApproval,
+    TransactionAssemblyError,
+    TransactionLimits,
+    TransactionReviewerRole,
+    assemble_transaction,
+)
 from .validation import (
     FHIRValidationResult,
     validate,
@@ -116,6 +136,14 @@ from .versions import (
     r4_to_r5,
     r5_to_r4,
 )
+from .write_labels import (
+    FHIRWriteLabelPolicy,
+    NormalizedFHIRWrite,
+    WriteLabelError,
+    WriteLabelFinding,
+    normalize_proposed_resource,
+    validate_proposed_resource,
+)
 
 _BULK_EXPORTS = frozenset(
     {
@@ -139,6 +167,21 @@ _BULK_EXPORTS = frozenset(
         "deidentify_ndjson_async",
         "deidentify_ndjson_stream",
         "iter_ndjson",
+    }
+)
+
+_SMART_REFRESH_EXPORTS = frozenset(
+    {
+        "SMARTCredential",
+        "SMARTCredentialCustody",
+        "SMARTRefreshConfig",
+        "SMARTRefreshLease",
+        "SMARTRefreshReport",
+        "SMARTCredentialRefresher",
+        "SMARTTokenRequest",
+        "SMARTTokenResponse",
+        "SMARTTokenValidationError",
+        "validate_smart_token_response",
     }
 )
 
@@ -171,7 +214,54 @@ _JOURNEY_ROUNDTRIP_EXPORTS = frozenset(
     }
 )
 
+_WRITE_CLIENT_EXPORTS = frozenset(
+    {
+        "FHIRCredentialCustody",
+        "FHIRHTTPResponse",
+        "FHIRPreparedWrite",
+        "FHIRTransportRequest",
+        "FHIRWriteClient",
+        "FHIRWriteError",
+        "FHIRWriteLedger",
+        "FHIRWriteLimits",
+        "FHIRWriteOutcome",
+        "FHIRWriteStatus",
+    }
+)
+
 __all__ = [
+    "MAX_SERVER_VALIDATION_ISSUES",
+    "MAX_SERVER_VALIDATION_RESOURCE_BYTES",
+    "FHIRServerValidationIssue",
+    "FHIRServerValidationReason",
+    "FHIRServerValidationResult",
+    "FHIRServerValidationStatus",
+    "FHIRValidationResponse",
+    "FHIRValidationTransport",
+    "preflight_server_validation",
+    "FHIRCredentialCustody",
+    "FHIRHTTPResponse",
+    "FHIRPreparedWrite",
+    "FHIRTransportRequest",
+    "FHIRWriteClient",
+    "FHIRWriteError",
+    "FHIRWriteLedger",
+    "FHIRWriteLimits",
+    "FHIRWriteOutcome",
+    "FHIRWriteStatus",
+    "ApprovedWriteEntry",
+    "AssembledTransaction",
+    "TransactionApproval",
+    "TransactionAssemblyError",
+    "TransactionLimits",
+    "TransactionReviewerRole",
+    "assemble_transaction",
+    "FHIRWriteLabelPolicy",
+    "NormalizedFHIRWrite",
+    "WriteLabelError",
+    "WriteLabelFinding",
+    "normalize_proposed_resource",
+    "validate_proposed_resource",
     "BULK_DATA_VERSION",
     "BULK_CHECKPOINT_MANIFEST_VERSION",
     "CHECKPOINT_MANIFEST_VERSION",
@@ -313,6 +403,16 @@ __all__ = [
     "validate_sdc",
     "validate_sdc_response",
     "write_checkpoint",
+    "SMARTCredential",
+    "SMARTCredentialCustody",
+    "SMARTRefreshConfig",
+    "SMARTRefreshLease",
+    "SMARTRefreshReport",
+    "SMARTCredentialRefresher",
+    "SMARTTokenRequest",
+    "SMARTTokenResponse",
+    "SMARTTokenValidationError",
+    "validate_smart_token_response",
 ]
 
 
@@ -321,6 +421,10 @@ def __getattr__(name: str) -> Any:
 
     if name in _BULK_EXPORTS:
         return getattr(import_module(".bulk", __name__), name)
+    if name in _SMART_REFRESH_EXPORTS:
+        return getattr(import_module(".smart_refresh", __name__), name)
     if name in _JOURNEY_ROUNDTRIP_EXPORTS:
         return getattr(import_module(".journey_roundtrip", __name__), name)
+    if name in _WRITE_CLIENT_EXPORTS:
+        return getattr(import_module(".write_client", __name__), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
