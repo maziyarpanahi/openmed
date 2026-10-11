@@ -13,6 +13,7 @@ import json
 import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import Any, Callable
 
 from openmed.clinical.brief_cancellation import (
@@ -62,6 +63,28 @@ STAGES = (
     "provenance",
 )
 
+_BUDGET_MAPPING_ID = "brief-profile-evidence-classes-v1"
+_BUDGET_ESTIMATOR_ID = "utf8-byte-upper-bound-v1"
+_PROFILE_EVIDENCE_CLASSES = MappingProxyType(
+    {
+        "active_problems": "active_problems",
+        "admission_reason": "active_problems",
+        "assessment": "active_problems",
+        "background": "key_findings",
+        "current_situation": "key_findings",
+        "discharge_condition": "key_findings",
+        "discharge_diagnoses": "active_problems",
+        "discharge_medications": "medications",
+        "follow_up": "follow_up",
+        "hospital_course": "key_findings",
+        "key_findings": "key_findings",
+        "pending_items": "pending_items",
+        "plan": "follow_up",
+        "procedures": "procedures",
+        "safety_concerns": "safety",
+    }
+)
+
 
 class BriefRefusal(str, Enum):
     """Stable, value-free failure categories."""
@@ -74,6 +97,9 @@ class BriefRefusal(str, Enum):
     NLI_UNAVAILABLE = "nli_unavailable"
     NLI_REJECTED = "nli_rejected"
     PRIVACY = "privacy"
+    LENGTH_BUDGET_EXCEEDED = "length_budget_exceeded"
+    MODEL_UNAVAILABLE = "model_unavailable"
+
     INVALID_REVIEWED_EVIDENCE = "invalid_reviewed_evidence"
     REVIEW_RECEIPT_MISSING = "review_receipt_missing"
     REVIEW_RECEIPT_EXPIRED = "review_receipt_expired"
@@ -245,6 +271,8 @@ def build_clinical_brief(
     from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.review_packet_privacy import ReviewPacketPrivacyBlocked
     from openmed.clinical.summarize import SummarizationLeakageError
+    from openmed.clinical.summarize_backends import LocalSummarizerError
+    from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
     completed: list[str] = []
@@ -275,6 +303,19 @@ def build_clinical_brief(
         )
     except (SummarizationLeakageError, ReviewPacketPrivacyBlocked):
         reason = BriefRefusal.PRIVACY
+    except MissingOptionalDependencyError:
+        if completed and completed[-1] in {"deidentification", "generation"}:
+            reason = BriefRefusal.MODEL_UNAVAILABLE
+    except LocalSummarizerError as error:
+        if (
+            completed
+            and completed[-1] in {"deidentification", "generation"}
+            and type(error) is LocalSummarizerError
+            and type(error.reason) is str
+            and error.reason
+            in {"unregistered_alias", "artifact_not_cached", "runtime_unavailable"}
+        ):
+            reason = BriefRefusal.MODEL_UNAVAILABLE
     except Exception:
         pass
     try:
@@ -477,14 +518,23 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
     stage("section_plan")
     require_summary_section_plan(rows)
     stage("length_budget")
-    budget = build_summary_length_budget(
-        2048, {"key_findings": sum(r.end - r.start for r in refs)}
-    )
-    if (
-        budget.deferred_evidence_classes
-        and type(backend) is not ExtractiveSummarizerBackend
-    ):
-        raise _Stop(BriefRefusal.INVALID_INPUT)
+    # Use reviewed profile fields, never generated content, to classify demand.
+    # UTF-8 bytes plus separators conservatively upper-bound byte-token demand;
+    # this is a bounded estimate, not a tokenizer-specific measurement.
+    demand: dict[str, int] = {}
+    for ref in refs:
+        evidence_class = _PROFILE_EVIDENCE_CLASSES.get(
+            facts[ref.reference_id].profile_field
+        )
+        if evidence_class is None:
+            raise _Stop(BriefRefusal.INVALID_EVIDENCE)
+        count = len(text[ref.start : ref.end].encode("utf-8"))
+        demand[evidence_class] = (
+            demand.get(evidence_class, 0) + count + (1 if demand else 0)
+        )
+    budget = build_summary_length_budget(2048, demand)
+    if budget.deferred_evidence_classes:
+        raise _Stop(BriefRefusal.LENGTH_BUDGET_EXCEEDED)
     stage("profile")
     profile = get_summary_profile(profile_name)
     if any(f.profile_field not in profile.field_names for f in facts.values()):
@@ -510,15 +560,21 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
         for r in refs:
             end = start + r.end - r.start
             selection_facts.append(
-                ExtractiveFact(_digest(r.reference_id), class_id, start, end)
+                ExtractiveFact(
+                    _digest(r.reference_id),
+                    class_id,
+                    start,
+                    end,
+                    length_class=_PROFILE_EVIDENCE_CLASSES[
+                        facts[r.reference_id].profile_field
+                    ],
+                )
             )
             start = end + 1
         backend = ExtractiveSummarizerBackend(
             evidence=tuple(selection_facts),
             importance_classes=(ImportanceClassPolicy(class_id, 1, mandatory=True),),
-            length_budget=build_summary_length_budget(
-                budget.max_tokens, {"key_findings": len(admitted.encode("utf-8"))}
-            ),
+            length_budget=budget,
         )
     bound = None
     generation_backend = backend
@@ -831,6 +887,11 @@ def _compose(value, model, profile_name, context, completed, cancellation=None):
         ],
         verdicts=verdicts,
         metrics={
+            "length_budget": {
+                "mapping_id": _BUDGET_MAPPING_ID,
+                "estimator_id": _BUDGET_ESTIMATOR_ID,
+                "budget": budget.to_dict(),
+            },
             **(
                 {"reviewed_evidence": packet.to_dict()}
                 if type(packet) is ReviewedLocalEvidence
