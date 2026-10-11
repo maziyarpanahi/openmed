@@ -37,7 +37,9 @@ from openmed.structured.decision import (
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
-    validate_model_name,
+)
+from openmed.utils.validation import (
+    validate_model_name as validate_model_name,
 )
 
 from .keep_alive import parse_keep_alive
@@ -79,7 +81,9 @@ def _normalize_pii_language(value: Any) -> str:
 
 
 def _normalize_model_name(value: str) -> str:
-    return validate_model_name(value)
+    # The service runtime enforces its operator-declared served set. Request
+    # parsing must never expand or probe caller-selected filesystem paths.
+    return value
 
 
 def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
@@ -308,6 +312,11 @@ if PYDANTIC_V2:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -317,6 +326,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -347,6 +361,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -407,6 +426,11 @@ if PYDANTIC_V2:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -675,6 +699,10 @@ else:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
@@ -683,6 +711,10 @@ else:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -711,6 +743,10 @@ else:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -763,6 +799,10 @@ else:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -1289,3 +1329,5 @@ class BriefResponse(_StrictModel):
     provenance: dict[str, Any]
     profile_digest: Optional[str]
     backend_id: Optional[str]
+    generation_contract: Optional[dict[str, Any]] = None
+    claim_bindings: Optional[list[dict[str, Any]]] = None

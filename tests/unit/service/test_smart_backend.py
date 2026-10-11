@@ -580,6 +580,7 @@ def test_service_routes_start_status_and_summary_without_echoing_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path))
     app = create_app()
     manager = _FakeManager()
     app.state.smart_backend_jobs = manager
@@ -588,7 +589,7 @@ def test_service_routes_start_status_and_summary_without_echoing_secrets(
         "token_url": "https://auth.example.test/token",
         "client_id": "route-client",
         "private_key_pem": "route-private-key-secret",
-        "output_dir": str(tmp_path / "route-out"),
+        "output_dir": "route-out",
         "max_inflight_downloads": 1,
     }
 

@@ -69,6 +69,18 @@ from openmed.interop.cda import redact_cda
 redacted_xml = redact_cda("synthetic_ccda.xml", date_shift_days=30)
 ```
 
+C-CDA default header rules cover patient, guardian, next-of-kin and informant
+names/addresses/telecom values, plus birthplace addresses. Those known values
+also seed the narrative surface sweep. Pass `coverage_report={}` to
+`redact_cda` to collect `unmapped_elements` (controlled element paths and
+counts) and `unmapped_counts` for person names, addresses and telecoms. Reports
+never include values, attributes or custom element names. Unmapped structures
+still require local profile review; these defaults are not a guarantee of
+complete de-identification or a conformance validation.
+The optional inventory refuses documents deeper than 64 levels or containing
+more than 10,000 elements with `CDA coverage limit exceeded`, before updating
+the output mapping. This bounds controlled paths and avoids partial reports.
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash

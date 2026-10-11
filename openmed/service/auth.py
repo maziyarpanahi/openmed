@@ -7,6 +7,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import math
 import os
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -16,6 +17,7 @@ from typing import Any, Optional
 
 from fastapi import Request
 from starlette.responses import Response
+from starlette.routing import Match
 
 from .throttle import TokenBucketRateLimiter, client_identity, format_retry_after
 
@@ -27,6 +29,7 @@ SERVICE_AUTH_JWKS_FILE_ENV_VAR = "OPENMED_SERVICE_AUTH_JWKS_FILE"
 SERVICE_AUTH_JWT_ISSUER_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_ISSUER"
 SERVICE_AUTH_JWT_AUDIENCE_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_AUDIENCE"
 SERVICE_AUTH_JWT_LEEWAY_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_LEEWAY_SECONDS"
+SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR = "OPENMED_SERVICE_AUTH_JWT_MAX_LIFETIME_SECONDS"
 SERVICE_AUTH_ROUTE_SCOPES_ENV_VAR = "OPENMED_SERVICE_AUTH_ROUTE_SCOPES"
 SERVICE_AUTH_FAILURE_RPS_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS"
 SERVICE_AUTH_FAILURE_BURST_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST"
@@ -45,14 +48,114 @@ DEFAULT_AUTH_EXEMPT_PATHS = frozenset(
         "/redoc",
     }
 )
-DEFAULT_ROUTE_SCOPES = {
-    ("GET", "/models/loaded"): ("models:read",),
-    ("POST", "/models/unload"): ("models:write",),
-    ("POST", "/analyze"): ("analyze:write",),
-    ("POST", "/pii/extract"): ("pii:read",),
-    ("POST", "/pii/deidentify"): ("pii:write",),
-    ("POST", "/pii/deidentify/stream"): ("pii:write",),
+
+
+@dataclass(frozen=True)
+class RoutePolicy:
+    """One route's authorization and request-admission contract."""
+
+    scopes: tuple[str, ...]
+    admission: str
+
+
+ROUTE_POLICIES = {
+    ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
+    ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
+    ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),
+    ("POST", "/pii/extract"): RoutePolicy(("pii:read",), "model"),
+    ("POST", "/pii/extract/stream"): RoutePolicy(("pii:read",), "model"),
+    ("POST", "/pii/deidentify"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/pii/deidentify/stream"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/privacy-gateway/complete"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/openhim/deidentify"): RoutePolicy(("pii:write",), "model"),
+    ("POST", "/omop/load"): RoutePolicy(("omop:write",), "heavy"),
+    ("POST", "/profile"): RoutePolicy(("profile:write",), "heavy"),
+    ("POST", "/cohort/resolve"): RoutePolicy(("cohort:read",), "heavy"),
+    ("GET", "/v1/journey/resources"): RoutePolicy(("journey:read",), "heavy"),
+    ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
+    ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
+    ("POST", "/ground"): RoutePolicy(("ground:write",), "model"),
+    ("POST", "/jobs"): RoutePolicy(("jobs:write",), "model"),
+    ("GET", "/jobs/{job_id}"): RoutePolicy(("jobs:read",), "control"),
+    # GraphQL authorizes the selected operation's fields before execution.
+    ("GET", "/graphql"): RoutePolicy((), "model"),
+    ("POST", "/graphql"): RoutePolicy((), "model"),
+    ("WEBSOCKET", "/graphql"): RoutePolicy((), "control"),
 }
+for _path in (
+    *DEFAULT_AUTH_EXEMPT_PATHS,
+    "/docs/oauth2-redirect",
+    "/openhim/heartbeat",
+):
+    for _method in ("GET", "HEAD"):
+        ROUTE_POLICIES[(_method, _path)] = RoutePolicy((), "probe")
+for _path in (
+    "/fhir/bulk/exports",
+    "/fhir/bulk/imports",
+    "/fhir/smart-backend/ingestions",
+):
+    ROUTE_POLICIES[("POST", _path)] = RoutePolicy(("bulk:write",), "heavy")
+    ROUTE_POLICIES[("DELETE", _path + "/{job_id}")] = RoutePolicy(
+        ("bulk:write",), "control"
+    )
+    for _suffix in (
+        "/{job_id}",
+        "/{job_id}/manifest",
+        "/{job_id}/report",
+        "/{job_id}/summary",
+    ):
+        ROUTE_POLICIES[("GET", _path + _suffix)] = RoutePolicy(
+            ("bulk:read",), "control"
+        )
+DEFAULT_ROUTE_SCOPES = {key: policy.scopes for key, policy in ROUTE_POLICIES.items()}
+
+
+def _policy_routes(app: Any) -> Any:
+    """Use effective route contexts when FastAPI stores included routers lazily."""
+    from fastapi import routing
+
+    iterator = getattr(routing, "iter_route_contexts", None)
+    return iterator(app.routes) if callable(iterator) else iter(app.routes)
+
+
+def _policy_path(route: Any) -> str:
+    """Read the effective template, including included WebSocket prefixes."""
+    path = getattr(route, "path", None)
+    if not path:
+        # Some FastAPI contexts keep WebSocket paths on their compiled
+        # Starlette route; the original route would lose include-time prefixes.
+        path = getattr(getattr(route, "starlette_route", None), "path", None)
+    return path if type(path) is str else ""
+
+
+def route_key_for_request(request: Request) -> tuple[str, str]:
+    """Resolve a route template with the application's own router matcher."""
+    partial = None
+    for route in _policy_routes(request.app):
+        match, _ = route.matches(request.scope)
+        if match == Match.FULL:
+            return request.method.upper(), _policy_path(route)
+        if match == Match.PARTIAL and partial is None:
+            partial = _policy_path(route)
+    return request.method.upper(), partial or ""
+
+
+def request_needs_admission(request: Request) -> bool:
+    """Return whether the matched route needs heavy/model admission controls."""
+    policy = ROUTE_POLICIES.get(route_key_for_request(request))
+    return policy is not None and policy.admission in {"model", "heavy"}
+
+
+def validate_route_policies(app: Any) -> None:
+    """Fail closed when a registered HTTP or WebSocket route is undeclared."""
+    for route in _policy_routes(app):
+        path = _policy_path(route)
+        if not path:
+            raise ValueError("Service route has no declared security policy")
+        for method in getattr(route, "methods", None) or ("WEBSOCKET",):
+            if (method, path) not in ROUTE_POLICIES:
+                raise ValueError("Service route has no declared security policy")
+
 
 _BOOLEAN_TRUE_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BOOLEAN_FALSE_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -95,6 +198,7 @@ class ServiceAuthConfig:
     jwt_issuer: Optional[str] = None
     jwt_audiences: tuple[str, ...] = ()
     jwt_leeway_seconds: float = 0.0
+    jwt_max_lifetime_seconds: Optional[float] = field(default=None, kw_only=True)
     route_scopes: Mapping[tuple[str, str], tuple[str, ...]] = field(
         default_factory=lambda: dict(DEFAULT_ROUTE_SCOPES)
     )
@@ -171,6 +275,16 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             env_var=SERVICE_AUTH_JWT_LEEWAY_ENV_VAR,
             default=0.0,
         ),
+        jwt_max_lifetime_seconds=(
+            parse_non_negative_float(
+                os.getenv(SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR),
+                env_var=SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR,
+                default=3600.0,
+            )
+            if os.getenv(SERVICE_AUTH_JWT_MAX_LIFETIME_ENV_VAR) is not None
+            or os.getenv("OPENMED_PROFILE", "prod") == "prod"
+            else None
+        ),
         route_scopes=route_scopes,
         failure_rate_limit_rps=parse_non_negative_float(
             os.getenv(SERVICE_AUTH_FAILURE_RPS_ENV_VAR),
@@ -213,7 +327,7 @@ def parse_non_negative_float(
         parsed = float(raw_value)
     except ValueError as exc:
         raise ValueError(f"{env_var} must be a non-negative number") from exc
-    if parsed < 0:
+    if not math.isfinite(parsed) or parsed < 0:
         raise ValueError(f"{env_var} must be greater than or equal to 0")
     return parsed
 
@@ -307,6 +421,8 @@ def parse_route_scopes(
 
     for route, scopes in payload.items():
         method, path = _parse_route_key(str(route))
+        if (method, path) not in ROUTE_POLICIES:
+            raise ValueError("Unknown service route scope override")
         route_scopes[(method, path)] = _normalize_scopes(scopes)
     return route_scopes
 
@@ -375,7 +491,7 @@ def authenticate_jwt(
     else:
         raise invalid_credentials()
 
-    _validate_jwt_claims(payload, config, now=time.time() if now is None else now)
+    validate_jwt_claims(payload, config, now=time.time() if now is None else now)
     subject = payload.get("sub") or payload.get("client_id") or "jwt"
     return AuthPrincipal(
         subject=str(subject),
@@ -431,7 +547,7 @@ class ServiceAuth:
         path = request.url.path
         if path in self.config.exempt_paths:
             return None
-        route_key = (request.method.upper(), path)
+        route_key = route_key_for_request(request)
         if route_key in self.config.route_scopes:
             return self.config.route_scopes[route_key]
         if self.config.deny_by_default:
@@ -642,13 +758,21 @@ def _decode_jwt(
 
 
 def _decode_json_segment(segment: str) -> Mapping[str, Any]:
+    payload = None
     try:
-        payload = json.loads(_b64url_decode(segment).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        raise invalid_credentials() from None
+        payload = json.loads(
+            _b64url_decode(segment).decode("utf-8"),
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, ValueError):
+        pass
     if not isinstance(payload, Mapping):
         raise invalid_credentials()
     return payload
+
+
+def _reject_json_constant(_: str) -> None:
+    raise invalid_credentials()
 
 
 def _b64url_decode(value: str) -> bytes:
@@ -741,16 +865,26 @@ def _verify_pkcs1v15_sha256(encoded: bytes, digest: bytes) -> bool:
     return hmac.compare_digest(encoded[separator_index + 1 :], expected)
 
 
-def _validate_jwt_claims(
+def validate_jwt_claims(
     payload: Mapping[str, Any],
     config: ServiceAuthConfig,
     *,
     now: float,
 ) -> None:
+    """Validate finite JWT NumericDates and configured issuer/audience bounds."""
+    numeric_now = None
+    if type(now) in {int, float}:
+        try:
+            numeric_now = float(now)
+        except (OverflowError, ValueError):
+            pass
+    if numeric_now is None or not math.isfinite(numeric_now):
+        raise invalid_credentials()
+    now = numeric_now
     exp = _numeric_claim(payload, "exp", required=True)
     if exp is None:
         raise invalid_credentials()
-    if now > exp + config.jwt_leeway_seconds:
+    if now >= exp + config.jwt_leeway_seconds:
         raise invalid_credentials()
 
     nbf = _numeric_claim(payload, "nbf", required=False)
@@ -759,6 +893,10 @@ def _validate_jwt_claims(
 
     iat = _numeric_claim(payload, "iat", required=False)
     if iat is not None and now + config.jwt_leeway_seconds < iat:
+        raise invalid_credentials()
+    if config.jwt_max_lifetime_seconds is not None and (
+        iat is None or exp < iat or exp - iat > config.jwt_max_lifetime_seconds
+    ):
         raise invalid_credentials()
 
     if config.jwt_issuer is not None and payload.get("iss") != config.jwt_issuer:
@@ -776,15 +914,21 @@ def _numeric_claim(
     *,
     required: bool,
 ) -> Optional[float]:
-    value = payload.get(name)
-    if value is None:
+    if name not in payload:
         if required:
             raise invalid_credentials()
         return None
+    value = payload[name]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise invalid_credentials()
+    numeric = None
     try:
-        return float(value)
-    except (TypeError, ValueError):
-        raise invalid_credentials() from None
+        numeric = float(value)
+    except (OverflowError, TypeError, ValueError):
+        pass
+    if numeric is None or not math.isfinite(numeric):
+        raise invalid_credentials()
+    return numeric
 
 
 def _claim_audiences(raw_value: Any) -> set[str]:
