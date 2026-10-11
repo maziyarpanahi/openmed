@@ -93,7 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Import-free effect-path inventory and local/CI guards for unclassified
   HTTP/database effect candidates and built-in MCP, REST, CLI and Journey
-  dependencies reaching legacy FHIR/OpenMRS write-back paths.
+  dependencies reaching legacy FHIR/OpenMRS write-back paths. Keep narrative
+  extraction independent of legacy writer modules while preserving their public
+  parser imports (#3780).
 - Typed Python and TypeScript workflow clients with strict metadata validation,
   bounded inspection retries and polling, one-attempt mutations and shared
   offline contract vectors (#3670).

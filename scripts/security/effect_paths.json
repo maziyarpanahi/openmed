@@ -579,6 +579,106 @@
       "classification": "operational",
       "function": "TerminologyCache.get_or_compute",
       "module": "openmed.structured.terminology_cache"
+    },
+    {
+      "module": "openmed.agent.approvals.quorum",
+      "function": "SQLiteApprovalQuorumStore.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.approvals.quorum",
+      "function": "SQLiteApprovalQuorumStore.collect",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.handoff_store",
+      "function": "SQLiteHandoffStore.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.handoff_store",
+      "function": "SQLiteHandoffStore._transaction",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.handoff_store",
+      "function": "SQLiteHandoffStore.acquire",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.handoff_store",
+      "function": "SQLiteHandoffStore.decide",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.handoff_store",
+      "function": "SQLiteHandoffStore.publish",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.workflows.scheduler",
+      "function": "ActionScheduler.run",
+      "classification": "governed"
+    },
+    {
+      "module": "openmed.eval.workflows.session",
+      "function": "SQLiteSessionStore.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.eval.workflows.session",
+      "function": "SQLiteSessionStore.claim_release",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.eval.workflows.session",
+      "function": "SQLiteSessionStore.finish_release",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.eval.workflows.session",
+      "function": "SQLiteSessionStore.save",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "SQLiteOmopBatchCommitter.recover",
+      "classification": "governed"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "SQLiteOmopBatchCommitter.submit",
+      "classification": "governed"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "_check_schema",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "_descriptor",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "_expected_schema",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "initialize_omop_commit_metadata",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.omop.sqlite_committer",
+      "function": "preview_omop_database",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.structured.cohort.resolver",
+      "function": "CohortResolver._count",
+      "classification": "operational"
     }
   ],
   "schema_version": 1

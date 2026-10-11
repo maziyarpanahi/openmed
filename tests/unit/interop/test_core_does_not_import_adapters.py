@@ -254,6 +254,60 @@ def test_lint_cli_refuses_unexpected_private_arguments_without_echo(
     assert captured.err == "effect_arguments_invalid\n"
 
 
+def test_legacy_narrative_exports_preserve_read_only_parser_identity():
+    from openmed.interop import fhir_screening, fhir_server
+
+    assert fhir_server.NarrativeText is fhir_screening.NarrativeText
+    assert fhir_server.extract_narrative_text is fhir_screening.extract_narrative_text
+    source = "<div>A&amp;B<script>PRIVATE_PAYLOAD</script></div>"
+    result = fhir_server.extract_narrative_text(source)
+    assert result.text == "A&B "
+    assert result.source_spans[1] == (6, 11)
+    assert "PRIVATE_PAYLOAD" not in repr(result)
+
+
+def test_fresh_builtin_surfaces_do_not_import_legacy_writer_modules():
+    import os
+
+    root = Path(__file__).resolve().parents[3]
+    code = """
+import importlib.abc
+import socket
+import sys
+
+class DenyLegacy(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in {'openmed.interop.fhir_server', 'openmed.interop.openmrs'}:
+            raise AssertionError('legacy_writer_imported')
+
+def deny_network(*args, **kwargs):
+    raise AssertionError('unexpected_network')
+
+sys.meta_path.insert(0, DenyLegacy())
+socket.socket.connect = deny_network
+socket.create_connection = deny_network
+from openmed.cli.main import build_parser
+from openmed.mcp.server import build_mcp_tool_handlers
+from openmed.service.app import create_app
+
+assert build_parser()
+assert build_mcp_tool_handlers(None)
+assert create_app()
+print('builtins_isolated')
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=root,
+        env={**os.environ, "OPENMED_OFFLINE": "1"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "builtins_isolated"
+
+
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "apache_beam",
     "duckdb",
