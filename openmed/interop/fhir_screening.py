@@ -15,7 +15,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, cast
 
 from openmed.agent.security.injection_guard import (
     GuardedInput,
@@ -90,9 +90,10 @@ class _NarrativeTextParser(HTMLParser):
         elif tag == "br" and not self.hidden:
             start = self._offset()
             self.parts.append(" ")
-            self.spans.append((start, start + len(self.get_starttag_text())))
+            # HTMLParser sets the cached text before dispatching this callback.
+            self.spans.append((start, start + len(cast(str, self.get_starttag_text()))))
         elif tag in self._BLOCK_TAGS and not self.hidden:
-            self._block_boundary(len(self.get_starttag_text()))
+            self._block_boundary(len(cast(str, self.get_starttag_text())))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "br":
