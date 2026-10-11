@@ -403,13 +403,15 @@ def _sections(data: bytes | None, text: str) -> list[dict[str, Any]] | None:
 
 
 def _reference(value: str | None) -> date | datetime | None:
+    from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
     if value is None:
         return None
     try:
         if _DATE.fullmatch(value):
-            return date.fromisoformat(value)
+            return parse_iso_date(value)
         if _DATETIME.fullmatch(value):
-            stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            stamp = parse_iso_datetime(value)
             if stamp.utcoffset() is not None:
                 return stamp
     except ValueError:
