@@ -150,10 +150,13 @@ def test_ac01_zero_width_split_card_is_recovered_by_normalize_then_sweep():
     )
     text = f"card {obfuscated}"
 
-    # The raw sweep alone is bypassed -- this is *why* the normalize layer exists.
-    assert "credit_debit_card" not in _swept_labels(safety_sweep(text, []))
+    # Every sweep entrypoint now applies the offset-preserving detection view.
+    swept = safety_sweep(text, [])
+    assert "credit_debit_card" in _swept_labels(swept)
+    card = next(span for span in swept if span.label == "credit_debit_card")
+    assert text[card.start : card.end] == obfuscated
 
-    # The documented mitigation chain recovers it.
+    # Explicit normalization remains supported as well.
     assert "credit_debit_card" in _sweep_after_normalize(text)
 
 
