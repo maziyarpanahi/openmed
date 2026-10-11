@@ -510,3 +510,82 @@ def test_documented_sdoh_example_runs_offline_without_models(monkeypatch, capsys
     captured = capsys.readouterr()
     assert captured.out == "{'exported_count': 1, 'status': 'preliminary'}\n"
     assert captured.err == ""
+
+
+class _PrivateCodeAlias(str):
+    def __new__(cls, allowed):
+        value = super().__new__(cls, "SYNTHETIC_PRIVATE_VALUE")
+        value.allowed = allowed
+        return value
+
+    def __eq__(self, other):
+        return other == self.allowed
+
+    def __hash__(self):
+        return hash(self.allowed)
+
+
+@pytest.mark.parametrize("axis", ["temporal", "experiencer"])
+def test_export_refuses_private_code_aliases(axis):
+    record = _record()
+    with pytest.raises(SDOHFHIRExportError) as caught:
+        if axis == "temporal":
+            record = replace(
+                record,
+                temporal=replace(
+                    record.temporal, temporal_class=_PrivateCodeAlias("current")
+                ),
+            )
+        else:
+            record = replace(
+                record,
+                experiencer=replace(
+                    record.experiencer, experiencer=_PrivateCodeAlias("patient")
+                ),
+            )
+        _export([record])
+    assert caught.value.code == "invalid_record"
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("stage", ["len", "items", "get"])
+def test_private_terminology_mapping_refusals_are_fresh(stage):
+    from collections.abc import Mapping
+
+    class PrivateMapping(Mapping):
+        def __len__(self):
+            if stage == "len":
+                raise RuntimeError(_PRIVATE)
+            return 1
+
+        def __iter__(self):
+            return iter((0,))
+
+        def __getitem__(self, key):
+            return _BINDING
+
+        def items(self):
+            if stage == "items":
+                raise RuntimeError(_PRIVATE)
+            return [(0, _BINDING)]
+
+        def get(self, key, default=None):
+            if stage == "get":
+                raise RuntimeError(_PRIVATE)
+            return _BINDING
+
+    if stage == "get":
+        # Only the validated snapshot may be read; a later provider getter
+        # must never be called after the binding has already been inspected.
+        result = _export([_record()], terminology=PrivateMapping())
+        assert result.observations[0]["status"] == "final"
+    else:
+        with pytest.raises(SDOHFHIRExportError) as caught:
+            _export([_record()], terminology=PrivateMapping())
+        assert caught.value.code == "invalid_terminology"
+        assert caught.value.__context__ is None
+
+
+def test_effective_time_rejects_offset_minute_overflow():
+    with pytest.raises(SDOHFHIRExportError, match="invalid_effective_time"):
+        _record(start="2026-01-01T00:00:00+01:60")

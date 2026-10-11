@@ -249,7 +249,10 @@ The caller must apply required date shifting/disclosure controls before passing
 clinical dates. The injected clock supplies only technical `Provenance.recorded`,
 is called once per exported batch and is skipped when all records are excluded.
 
-At most 512 typed records and 512 indexed bindings are accepted. Errors use
+At most 512 typed records and 512 indexed bindings are accepted. Terminology
+mappings are inspected once into a bounded local snapshot; projection never
+reinvokes provider getters. Exported qualifier codes must be exact built-in
+strings, and malformed UTC offset minutes are refused before normalization. Errors use
 fixed codes and suppress raw clock/calendar exceptions. Identical inputs and
 recorded instants produce identical resources; retain that instant for replay.
 Observation IDs bind the emitted metadata; Provenance IDs also bind recorded

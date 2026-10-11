@@ -14,10 +14,17 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from itertools import islice
 from typing import Any
 from urllib.parse import urlsplit
 
-from ...sdoh_evidence import SDOHEvidence
+from ...sdoh_evidence import (
+    ASSERTION_STATUSES,
+    EVIDENCE_TYPES,
+    REVIEW_STATUSES,
+    SOURCE_SECTIONS,
+    SDOHEvidence,
+)
 from ...sdoh_experiencer import SDOHExperiencerEvidence
 from ...sdoh_sensitive_use import (
     ProhibitedAutomatedUse,
@@ -53,7 +60,7 @@ _CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 _DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
 _DATETIME = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-    r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})\Z"
+    r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])\Z"
 )
 
 
@@ -202,6 +209,24 @@ class SDOHFHIRRecord:
             or type(self.temporal) is not SDOHTemporalEvidence
             or type(self.use_label) is not SDOHSensitiveUseLabel
             or self.use_label.field_name != "sdoh"
+        ):
+            raise SDOHFHIRExportError("invalid_record")
+        closed = (
+            (self.evidence.evidence_type, EVIDENCE_TYPES),
+            (self.evidence.assertion, ASSERTION_STATUSES),
+            (self.evidence.source_section, SOURCE_SECTIONS),
+            (self.evidence.review_status, REVIEW_STATUSES),
+            (
+                self.experiencer.experiencer,
+                ("patient", "household", "family", "unknown"),
+            ),
+            (
+                self.temporal.temporal_class,
+                ("current", "historical", "future", "unknown"),
+            ),
+        )
+        if any(
+            type(value) is not str or value not in allowed for value, allowed in closed
         ):
             raise SDOHFHIRExportError("invalid_record")
         spans = (
@@ -369,17 +394,26 @@ def to_sdoh_observations(
             raise SDOHFHIRExportError("invalid_reference")
     if len({subject_reference, source_reference, software_reference}) != 3:
         raise SDOHFHIRExportError("invalid_reference")
-    if (
-        not isinstance(terminology, Mapping)
-        or len(terminology) > 512
-        or any(
-            type(key) is not int
-            or not 0 <= key < len(records)
-            or type(value) is not SDOHObservationBinding
-            for key, value in terminology.items()
-        )
-    ):
+    copied: dict[int, SDOHObservationBinding] = {}
+    failed = False
+    try:
+        if not isinstance(terminology, Mapping) or len(terminology) > 512:
+            raise ValueError
+        for key, value in islice(terminology.items(), 513):
+            if (
+                type(key) is not int
+                or not 0 <= key < len(records)
+                or key in copied
+                or type(value) is not SDOHObservationBinding
+                or len(copied) >= 512
+            ):
+                raise ValueError
+            copied[key] = value
+    except Exception:
+        failed = True
+    if failed:
         raise SDOHFHIRExportError("invalid_terminology")
+    terminology = copied
     losses: list[dict[str, Any]] = []
     selected = []
     for index, record in enumerate(records):
