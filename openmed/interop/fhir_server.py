@@ -720,11 +720,129 @@ def _deidentify_narrative(
     return (result, parser.changed) if parser.changed else (div, False)
 
 
-class _NarrativeRedactor(HTMLParser):
+class _NarrativeParser(HTMLParser):
+    """Shared non-fetching XHTML parser for local FHIR transformations."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+
+
+@dataclass(frozen=True)
+class NarrativeText:
+    """Visible text with one original XHTML span per decoded character."""
+
+    text: str = field(repr=False)
+    source_spans: tuple[tuple[int, int], ...] = field(repr=False)
+
+
+def extract_narrative_text(div: str) -> NarrativeText:
+    """Remove XHTML markup and decode entities with original character offsets.
+
+    Script, style and template bodies are excluded. No URL is resolved and no
+    source content is included in diagnostics or representations.
+    """
+    if not isinstance(div, str):
+        raise TypeError("FHIR narrative must be text")
+    parser = _NarrativeTextParser(div)
+    try:
+        parser.feed(div)
+        parser.close()
+    except Exception:
+        raise ValueError("FHIR narrative parsing failed") from None
+    return NarrativeText("".join(parser.parts), tuple(parser.spans))
+
+
+class _NarrativeTextParser(_NarrativeParser):
+    _BLOCK_TAGS = {
+        "div",
+        "p",
+        "li",
+        "ul",
+        "ol",
+        "table",
+        "tr",
+        "td",
+        "th",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "blockquote",
+        "pre",
+    }
+
+    def __init__(self, source: str) -> None:
+        super().__init__()
+        self.source = source
+        self.line_starts = [0] + [
+            index + 1 for index, char in enumerate(source) if char == "\n"
+        ]
+        self.parts: list[str] = []
+        self.spans: list[tuple[int, int]] = []
+        self.hidden: list[str] = []
+
+    def _offset(self) -> int:
+        line, column = self.getpos()
+        return self.line_starts[line - 1] + column
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "template"}:
+            self.hidden.append(tag)
+        elif tag == "br" and not self.hidden:
+            start = self._offset()
+            self.parts.append(" ")
+            self.spans.append((start, start + len(self.get_starttag_text())))
+        elif tag in self._BLOCK_TAGS and not self.hidden:
+            self._block_boundary(len(self.get_starttag_text()))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.hidden and self.hidden[-1] == tag:
+            self.hidden.pop()
+        elif tag in self._BLOCK_TAGS and not self.hidden:
+            start = self._offset()
+            end = self.source.find(">", start)
+            self._block_boundary(end - start + 1 if end >= start else 1)
+
+    def _block_boundary(self, length: int) -> None:
+        if self.parts and self.parts[-1] and not self.parts[-1][-1].isspace():
+            start = self._offset()
+            self.parts.append(" ")
+            self.spans.append((start, start + length))
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            start = self._offset()
+            self.parts.append(data)
+            self.spans.extend((start + i, start + i + 1) for i in range(len(data)))
+
+    def _entity(self, token: str) -> None:
+        if self.hidden:
+            return
+        start = self._offset()
+        if self.source[start + len(token) : start + len(token) + 1] == ";":
+            token += ";"
+        decoded = html.unescape(token)
+        self.parts.append(decoded)
+        self.spans.extend((start, start + len(token)) for _ in decoded)
+
+    def handle_entityref(self, name: str) -> None:
+        self._entity("&" + name)
+
+    def handle_charref(self, name: str) -> None:
+        self._entity("&#" + name)
+
+
+class _NarrativeRedactor(_NarrativeParser):
     """Rebuild XHTML while de-identifying visible text and safe attributes."""
 
     def __init__(self, deid: Callable[[str], str]) -> None:
-        super().__init__(convert_charrefs=False)
+        super().__init__()
         self._deid = deid
         self._parts: list[str] = []
         self._text_parts: list[tuple[int, str]] = []
@@ -821,8 +939,10 @@ __all__ = [
     "FHIRServerClient",
     "FHIRServerConfig",
     "FHIRWriteResult",
+    "NarrativeText",
     "de_identify_bundle",
     "de_identify_resource",
     "deidentify_bundle",
     "deidentify_resource",
+    "extract_narrative_text",
 ]
