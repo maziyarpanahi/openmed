@@ -254,7 +254,9 @@ def test_edge_sbc_extra_is_local_only_and_excludes_heavy_frameworks() -> None:
 
     edge = extras["edge-sbc"]
     normalized = {requirement.split(">=", 1)[0] for requirement in edge}
-    assert normalized == {"numpy", "onnxruntime", "tokenizers"}
+    # Lightweight filesystem/sandbox floors secure the tokenizer's transitive
+    # dependency path without adding model frameworks or a Hub download surface.
+    assert normalized == {"numpy", "onnxruntime", "tokenizers", "fsspec", "jinja2"}
     assert all("torch" not in requirement for requirement in edge)
     assert all("transformers" not in requirement for requirement in edge)
     assert all("huggingface-hub" not in requirement for requirement in edge)

@@ -1,4 +1,16 @@
 {
+  "synthetic_only": true,
+  "model_validation": false,
+  "providers": "fixture-ner-and-nli-not-deployable",
+  "deidentified_digest": "sha256:3615cc2268185f79ea48e9d5d8af5fc345d4325d934943af64589557b74da1d8",
+  "extraction_count": 1,
+  "grounding": [
+    {
+      "start": 83,
+      "end": 92,
+      "candidate_count": 1
+    }
+  ],
   "brief": {
     "backend_id": "deterministic-extractive",
     "citations": [
@@ -24,7 +36,6 @@
         "source_start": 133
       }
     ],
-    "digest": "sha256:192d8d3371641858c373e70aff44ed5ec9736a6007aca14d648a4869ca52570f",
     "envelope": {
       "disclaimer": "This summary is for human review only. It is not a diagnosis, medical advice, or a substitute for qualified clinical judgment.",
       "human_review_mode": true,
@@ -150,7 +161,7 @@
       },
       "length_budget": {
         "budget": {
-          "allocated_tokens": 115,
+          "allocated_tokens": 116,
           "allocations": [
             {
               "allocated_tokens": 75,
@@ -167,10 +178,10 @@
               "status": "empty"
             },
             {
-              "allocated_tokens": 40,
+              "allocated_tokens": 41,
               "deferred_tokens": 0,
               "evidence_class": "key_findings",
-              "requested_tokens": 40,
+              "requested_tokens": 41,
               "status": "included"
             },
             {
@@ -206,7 +217,7 @@
           "disclaimer": "Clinical summary length budgets are deterministic assistive review artifacts, not clinical decisions or autonomous summaries. Qualified clinical review is required.",
           "max_tokens": 2048,
           "policy_id": "clinical_summary_v1",
-          "requested_tokens": 115,
+          "requested_tokens": 116,
           "requires_clinician_review": true,
           "schema_version": 1,
           "truncation": {
@@ -214,7 +225,7 @@
             "deferred_tokens": 0,
             "occurred": false
           },
-          "unused_tokens": 1933
+          "unused_tokens": 1932
         },
         "estimator_id": "utf8-byte-upper-bound-v1",
         "mapping_id": "brief-profile-evidence-classes-v1"
@@ -519,7 +530,6 @@
       "provenance"
     ],
     "status": "needs_review",
-    "summary": "The admission problem was pneumonia. The discharge diagnosis was pneumonia. Symptoms improved after supportive care.",
     "summary_characters": 116,
     "summary_digest": "sha256:4a364670e1a65f8055fee66781fee836538c5bffdc0e51a25dfd7f960f65a5cc",
     "verdicts": [
@@ -535,18 +545,8 @@
         "claim_index": 2,
         "label": "entailment"
       }
-    ]
-  },
-  "deidentified_digest": "sha256:3615cc2268185f79ea48e9d5d8af5fc345d4325d934943af64589557b74da1d8",
-  "extraction_count": 1,
-  "grounding": [
-    {
-      "candidate_count": 1,
-      "end": 92,
-      "start": 83
-    }
-  ],
-  "model_validation": false,
-  "providers": "fixture-ner-and-nli-not-deployable",
-  "synthetic_only": true
+    ],
+    "digest": "sha256:b0ac5eb45fbaa28dad62bb62fe1275ba7df5c573e528256d65fdfcd5c7ca97d0",
+    "summary": "The admission problem was pneumonia. The discharge diagnosis was pneumonia. Symptoms improved after supportive care."
+  }
 }

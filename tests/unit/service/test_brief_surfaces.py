@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import stat
 from types import SimpleNamespace
 
@@ -78,6 +79,28 @@ def test_rest_python_mcp_and_schema_parity(caplog):
     assert "dehydration" not in json.dumps(records)
 
 
+def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
+    from jsonschema import Draft202012Validator
+
+    from openmed.clinical.brief import build_clinical_brief
+    from tests.unit.clinical.test_brief_bindings import SyntheticBoundGenerator
+
+    value, context = fixture_context()
+    expected = build_clinical_brief(
+        value, context=context, model=SyntheticBoundGenerator()
+    ).to_response()
+    Draft202012Validator(brief_response_schema()).validate(expected)
+    monkeypatch.setattr(
+        "openmed.service.brief.brief_response", lambda *a, **kw: expected
+    )
+    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+        response = client.post(
+            "/brief", json={"text": "Synthetic note", "model": "extractive"}
+        )
+    assert response.status_code == 200
+    assert response.json() == expected
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -138,7 +161,14 @@ def test_cli_separates_protected_content_and_private_audit(tmp_path, capsys):
     assert "dehydration" not in args.review_output.read_text()
     assert "dehydration" not in capsys.readouterr().out
     for path in (args.summary_output, args.review_output):
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert path.is_file() and not path.is_symlink()
+        if os.name != "nt":
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        else:
+            # Windows stat exposes read/write attributes, not Unix ACLs.
+            mode = stat.S_IMODE(path.stat().st_mode)
+            assert mode & stat.S_IREAD
+            assert mode & stat.S_IWRITE
 
 
 @pytest.mark.parametrize("collision", ["existing", "same", "symlink"])

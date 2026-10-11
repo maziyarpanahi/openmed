@@ -786,6 +786,7 @@
         public func brief(
             source: String,
             originalIdentifiers: [String],
+            cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
             evaluate: @Sendable (String, String) async throws -> Data,
             privacyCheck: @Sendable (String) throws -> Bool
         ) async throws -> ClinicalBrief {
@@ -796,15 +797,14 @@
             guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024 else {
                 throw ClinicalBriefError.invalidPacket
             }
-            do {
-                let result = try await complete(OpenMedMapleRequest(task: .brief, document: source))
-                guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
-                let packet = try await evaluate(source, summary)
-                return try ClinicalBrief.validate(
-                    evaluationJSON: packet, source: source,
-                    generatedSummary: summary, originalIdentifiers: originalIdentifiers,
-                    privacyCheck: privacyCheck)
-            } catch let error as ClinicalBriefError { throw error } catch is CancellationError { throw CancellationError() } catch { throw ClinicalBriefError.invalidPacket }
+            return try await ClinicalBrief.compose(
+                source: source, originalIdentifiers: originalIdentifiers,
+                cancellation: cancellation,
+                generate: { source in
+                    let result = try await self.complete(OpenMedMapleRequest(task: .brief, document: source))
+                    guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
+                    return summary
+                }, evaluate: evaluate, privacyCheck: privacyCheck)
         }
 
         /// Releases model ownership. Call before switching to another large

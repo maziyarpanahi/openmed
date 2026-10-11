@@ -821,7 +821,7 @@
       },
       "ExtractiveSummarizerBackend": {
         "kind": "class",
-        "signature": "()"
+        "signature": "(kw:evidence=..., kw:importance_classes=..., kw:length_budget=...)"
       },
       "FAMILY_EXPERIENCER": {
         "kind": "constant",
