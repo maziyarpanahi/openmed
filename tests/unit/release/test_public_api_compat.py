@@ -55,6 +55,141 @@ def test_current_surface_matches_committed_baseline():
     assert failures == [], [change.detail for change in failures]
 
 
+def _assert_multimodal_baseline_coverage(baseline, current):
+    baseline_modules = {snapshot.module for snapshot in baseline}
+    missing = {
+        snapshot.module
+        for snapshot in current
+        if snapshot.module.startswith(api.MULTIMODAL_PACKAGE + ".")
+        and snapshot.module not in baseline_modules
+    }
+    assert not missing, (
+        f"Missing multimodal baseline packages: {sorted(missing)}; "
+        "run scripts/release/check_public_api.py --update"
+    )
+
+
+def test_public_multimodal_subpackages_are_in_committed_baseline():
+    _assert_multimodal_baseline_coverage(
+        api.load_baseline(BASELINE), api.capture_surface()
+    )
+
+
+@pytest.fixture
+def nested_public_package(tmp_path, monkeypatch):
+    sources = {
+        "__init__.py": "__all__ = []\n",
+        "multimodal/__init__.py": "__all__ = []\n",
+        "multimodal/streaming/__init__.py": "__all__ = []\n",
+        "multimodal/streaming/speech/__init__.py": (
+            "def transcribe(audio, *, language='en'):\n    return None\n"
+            "__all__: tuple[str, ...] = ('transcribe',)\n"
+        ),
+        "multimodal/vision/__init__.py": "# Namespace without exports.\n",
+        "multimodal/vision/runtime/__init__.py": (
+            "Plan = 1\n__all__ = list(('Plan',))\n"
+        ),
+        "multimodal/_private/__init__.py": (
+            "raise AssertionError('private package imported')\n__all__ = ['hidden']\n"
+        ),
+        "multimodal/_private/child/__init__.py": "__all__ = ['hidden']\n",
+        "multimodal/no_exports/__init__.py": (
+            "raise AssertionError('internal package imported')\n"
+        ),
+        "multimodal/optional/__init__.py": (
+            "raise ModuleNotFoundError('synthetic missing extra')\n__all__ = ['Extra']\n"
+        ),
+        "multimodal/optional/child/__init__.py": "__all__ = ['Extra']\n",
+        "multimodal/invalid/__init__.py": "not valid Python!\n",
+        "multimodal/helper.py": (
+            "raise AssertionError('non-package imported')\n__all__ = ['helper']\n"
+        ),
+    }
+    package = tmp_path / "api_fixture"
+    for relative, source in sources.items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    monkeypatch.setattr(api, "ROOT", tmp_path)
+    monkeypatch.setattr(api, "MULTIMODAL_PACKAGE", "api_fixture.multimodal")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        yield package
+    finally:
+        for name in list(sys.modules):
+            if name == "api_fixture" or name.startswith("api_fixture."):
+                sys.modules.pop(name)
+
+
+def _capture_fixture():
+    return api.capture_surface(
+        top_level="api_fixture",
+        subpackages=("api_fixture.multimodal", "api_fixture.multimodal.streaming"),
+    )
+
+
+def test_nested_public_packages_are_captured_without_optional_or_private_modules(
+    nested_public_package,
+):
+    expected = {
+        "api_fixture",
+        "api_fixture.multimodal",
+        "api_fixture.multimodal.streaming",
+        "api_fixture.multimodal.streaming.speech",
+        "api_fixture.multimodal.vision.runtime",
+    }
+    first = _capture_fixture()
+    assert {snapshot.module for snapshot in first} == expected
+    assert len(first) == len(expected)  # Explicit/discovered packages are deduplicated.
+    assert api.surface_to_document(first) == api.surface_to_document(_capture_fixture())
+    document = api.surface_to_document(first)["modules"]
+    assert document["api_fixture.multimodal.streaming.speech"]["transcribe"] == {
+        "kind": "function",
+        "signature": "(audio, kw:language=...)",
+    }
+    assert (
+        document["api_fixture.multimodal.vision.runtime"]["Plan"]["kind"] == "constant"
+    )
+    assert "api_fixture.multimodal.no_exports" not in sys.modules
+    assert "api_fixture.multimodal._private" not in sys.modules
+
+
+def test_discovery_does_not_import_candidates(nested_public_package, monkeypatch):
+    def unexpected_import(name):
+        pytest.fail(f"Discovery imported {name}")
+
+    monkeypatch.setattr(api.importlib, "import_module", unexpected_import)
+    candidates = api.discover_public_subpackages(api.MULTIMODAL_PACKAGE)
+    assert candidates == tuple(sorted(candidates))
+    assert "api_fixture.multimodal.streaming.speech" in candidates
+    assert "api_fixture.multimodal.optional" in candidates
+    assert not any("._private" in name or ".no_exports" in name for name in candidates)
+
+
+def test_nested_export_removal_is_breaking(nested_public_package):
+    baseline = _capture_fixture()
+    module_name = "api_fixture.multimodal.streaming.speech"
+    sys.modules[module_name].__all__ = []
+    # Static exports take precedence, so mutate the synthetic declaration too.
+    path = nested_public_package / "multimodal/streaming/speech/__init__.py"
+    path.write_text("__all__ = []\n", encoding="utf-8")
+    failures = api.unannounced_breaks(
+        api.diff_surface(baseline, _capture_fixture()), set()
+    )
+    assert [(change.location, change.kind) for change in failures] == [
+        (module_name + ".transcribe", "removed")
+    ]
+
+
+def test_baseline_coverage_rejects_missing_nested_packages(nested_public_package):
+    current = _capture_fixture()
+    # Even an empty public package needs coverage, before its first export lands.
+    baseline = [s for s in current if s.module != "api_fixture.multimodal.streaming"]
+    with pytest.raises(AssertionError, match="api_fixture.multimodal.streaming"):
+        _assert_multimodal_baseline_coverage(baseline, current)
+    _assert_multimodal_baseline_coverage(current, current)
+
+
 def test_run_check_passes_against_committed_baseline():
     assert api.run_check(BASELINE, ALLOWLIST) == 0
 

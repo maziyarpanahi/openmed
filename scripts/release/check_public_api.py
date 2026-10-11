@@ -51,6 +51,7 @@ if root_string in sys.path:
 sys.path.insert(0, root_string)
 
 TOP_LEVEL_PACKAGE = "openmed"
+MULTIMODAL_PACKAGE = "openmed.multimodal"
 
 # Public subpackages whose ``__all__`` exports form part of the supported
 # surface. Private helpers, backend shims, and dependency-heavy internals are
@@ -248,14 +249,64 @@ def capture_module(module_name: str) -> SurfaceSnapshot | None:
     return SurfaceSnapshot(module=module_name, members=tuple(members))
 
 
+def discover_public_subpackages(package_name: str) -> tuple[str, ...]:
+    """Find nested packages declaring ``__all__`` without importing them.
+
+    Only checkout-local packages with an ``__init__.py`` are candidates. A
+    private path component excludes its entire subtree. Packages without an
+    export declaration are not imported, even while discovering their children.
+    Optional-dependency availability is handled later by ``capture_module``.
+
+    Args:
+        package_name: Dotted name of the package tree to inspect.
+
+    Returns:
+        Public candidate package names in deterministic order.
+    """
+
+    package_path = ROOT.joinpath(*package_name.split("."))
+    candidates: list[str] = []
+    for init_path in sorted(package_path.rglob("__init__.py")):
+        parts = init_path.parent.relative_to(package_path).parts
+        if not parts or any(part.startswith("_") for part in parts):
+            continue
+        try:
+            tree = ast.parse(init_path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        declares_exports = any(
+            (
+                isinstance(statement, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == "__all__"
+                    for target in statement.targets
+                )
+            )
+            or (
+                isinstance(statement, ast.AnnAssign)
+                and isinstance(statement.target, ast.Name)
+                and statement.target.id == "__all__"
+                and statement.value is not None
+            )
+            for statement in tree.body
+        )
+        if declares_exports:
+            candidates.append(".".join((package_name, *parts)))
+    return tuple(candidates)
+
+
 def capture_surface(
     top_level: str = TOP_LEVEL_PACKAGE,
     subpackages: Sequence[str] = PUBLIC_SUBPACKAGES,
 ) -> list[SurfaceSnapshot]:
     """Capture the whole public surface as an ordered list of snapshots."""
 
+    module_names = list(dict.fromkeys([top_level, *subpackages]))
+    if MULTIMODAL_PACKAGE in module_names:
+        module_names.extend(discover_public_subpackages(MULTIMODAL_PACKAGE))
+
     snapshots: list[SurfaceSnapshot] = []
-    for module_name in [top_level, *subpackages]:
+    for module_name in dict.fromkeys(module_names):
         snapshot = capture_module(module_name)
         if snapshot is not None:
             snapshots.append(snapshot)
