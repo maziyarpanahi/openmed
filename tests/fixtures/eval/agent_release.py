@@ -176,3 +176,127 @@ def critical_failure_report():
     return evaluate_agent_release_gates(
         critical_failure_evidence(), candidate_digest=CANDIDATE_DIGEST
     )
+
+
+def executed_adversarial_report():
+    """Execute the existing synthetic corpus through a conforming boundary."""
+    from openmed.agent.security.adversarial import (
+        DEFAULT_ADVERSARIAL_FIXTURES,
+        AttackClass,
+        BoundaryVerdict,
+        run_adversarial_suite,
+    )
+
+    reasons = {
+        fixture.attack_class: fixture.expected_reason_code
+        for fixture in DEFAULT_ADVERSARIAL_FIXTURES
+    }
+
+    def boundary(attempt, dispatch):
+        if attempt.attack_class is AttackClass.BENIGN_CONTROL:
+            dispatch()
+            return BoundaryVerdict.allow()
+        return BoundaryVerdict.deny(reasons[attempt.attack_class])
+
+    return run_adversarial_suite(boundary)
+
+
+def executed_recovery_cases():
+    """Execute synthetic absent-effect recovery in each checkpoint phase.
+
+    Golden expectations are declared independently of recover_workflow outputs.
+    """
+    from openmed.agent.correlation import ActionId, RunId
+    from openmed.agent.identifiers import ToolId, WorkflowId
+    from openmed.agent.workflows.recovery import (
+        CompensationLimit,
+        EffectKind,
+        EffectObservation,
+        EffectRecord,
+        EffectState,
+        ObservationState,
+        RecoveryCheckpoint,
+        RecoveryDecision,
+        RecoveryDisposition,
+        RecoveryPhase,
+        RecoveryReason,
+        recover_workflow,
+    )
+    from openmed.eval.suites.agent_release_adapters import RecoveryEvidenceCase
+
+    cases = []
+    for index, phase in enumerate(RecoveryPhase):
+        run_id = RunId(f"run_{index + 1:032x}")
+        effect = EffectRecord.create(
+            ordinal=0,
+            run_id=run_id,
+            action_id=ActionId(f"act_{index + 1:032x}"),
+            tool_id=ToolId("tool:org.openmed/recovery-fixture@1.0.0"),
+            kind=EffectKind.LOCAL_TOOL,
+            operation_digest=digest("operation"),
+            approval_required=True,
+            compensation_limit=CompensationLimit.NONE,
+        )
+        terminal = phase is RecoveryPhase.COMPLETED
+        if terminal:
+            effect = replace(
+                effect,
+                state=EffectState.COMMITTED,
+                commit_evidence_digest=digest("commit"),
+            )
+        approved = phase is not RecoveryPhase.PLANNED
+        checkpoint = RecoveryCheckpoint.create(
+            workflow_id=WorkflowId("workflow:org.openmed/recovery-fixture@1.0.0"),
+            run_id=run_id,
+            sequence=0,
+            phase=phase,
+            plan_digest=digest("plan"),
+            effects=(effect,),
+            approval_action_digest=digest("plan") if approved else None,
+            approval_receipt_digest=digest("receipt") if approved else None,
+            approval_expires_at=100 if approved else None,
+        )
+        observation = EffectObservation(
+            action_id=effect.action_id,
+            operation_digest=effect.operation_digest,
+            idempotency_key=effect.idempotency_key,
+            state=ObservationState.COMMITTED if terminal else ObservationState.ABSENT,
+            commit_evidence_digest=digest("commit") if terminal else None,
+        )
+        if phase is RecoveryPhase.PLANNED:
+            disposition, reason = (
+                RecoveryDisposition.REVIEW_REQUIRED,
+                RecoveryReason.APPROVAL_MISSING,
+            )
+        elif phase is RecoveryPhase.ABORTED:
+            disposition, reason = (
+                RecoveryDisposition.REVIEW_REQUIRED,
+                RecoveryReason.WORKFLOW_ABORTED,
+            )
+        elif terminal:
+            disposition, reason = (
+                RecoveryDisposition.COMPLETE,
+                RecoveryReason.ALREADY_COMPLETE,
+            )
+        else:
+            disposition, reason = (
+                RecoveryDisposition.RESUME,
+                RecoveryReason.SAFE_TO_RESUME,
+            )
+        retry = disposition is RecoveryDisposition.RESUME
+        expected = RecoveryDecision.create(
+            disposition=disposition,
+            reason=reason,
+            source_checkpoint_digest=checkpoint.checkpoint_digest,
+            retry_effect_ids=(effect.action_id.serialize(),) if retry else (),
+            retry_idempotency_keys=(effect.idempotency_key,) if retry else (),
+        )
+        cases.append(
+            RecoveryEvidenceCase(
+                digest("recovery_" + phase.value),
+                checkpoint,
+                recover_workflow((checkpoint,), (observation,), now=10),
+                expected,
+            )
+        )
+    return tuple(cases)

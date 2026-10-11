@@ -19,6 +19,12 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from openmed.clinical.journey_contracts import canonical_digest, canonical_json
+from openmed.structured.cohort.resolver import (
+    CohortCoverage,
+    CohortResult,
+    empty_population_warnings,
+)
+from openmed.structured.cohort.saved import CohortExecution
 
 JOURNEY_RESOURCE_SCHEMA_VERSION: Final = "1.0.0"
 JOURNEY_RESOURCE_COMPATIBILITY: Final = "same_major"
@@ -102,7 +108,16 @@ RESOURCE_FIELDS: Final[Mapping[JourneyResourceKind, frozenset[str]]] = MappingPr
         JourneyResourceKind.JOURNEY: frozenset(
             {"subject_id", "snapshot_id", "event_count"}
         ),
-        JourneyResourceKind.COHORT: frozenset({"cohort_id", "status", "member_count"}),
+        JourneyResourceKind.COHORT: frozenset(
+            {
+                "cohort_id",
+                "status",
+                "member_count",
+                "coverage",
+                "warnings",
+                "review_required",
+            }
+        ),
         JourneyResourceKind.DATASET: frozenset(
             {"dataset_id", "snapshot_hash", "row_count"}
         ),
@@ -128,7 +143,15 @@ RESOURCE_FIELDS: Final[Mapping[JourneyResourceKind, frozenset[str]]] = MappingPr
             {"source_id", "target_id", "mapping_type"}
         ),
         JourneyResourceKind.COHORT_RUN: frozenset(
-            {"cohort_id", "status", "member_count", "run_at"}
+            {
+                "cohort_id",
+                "status",
+                "member_count",
+                "run_at",
+                "coverage",
+                "warnings",
+                "review_required",
+            }
         ),
         JourneyResourceKind.DATASET_MANIFEST: frozenset(
             {"dataset_id", "snapshot_hash", "row_count", "license_id"}
@@ -171,11 +194,89 @@ class JourneyResourceRecord:
             raise ValueError("Journey resource data contains an unsupported field")
         if state is not JourneyResourceState.SUCCESS and normalized_data:
             raise ValueError("non-success Journey resources cannot carry data")
+        if state is JourneyResourceState.SUCCESS and resource_type in {
+            JourneyResourceKind.COHORT,
+            JourneyResourceKind.COHORT_RUN,
+        }:
+            data = dict(normalized_data)
+            count = data.get("member_count")
+            if count is not None and (type(count) is not int or count < 0):
+                raise ValueError("cohort member count must be non-negative")
+            coverage = (
+                CohortCoverage.from_dict(data["coverage"])
+                if "coverage" in data
+                else CohortCoverage()
+            )
+            warnings = (
+                []
+                if count is None
+                else [
+                    item.to_dict()
+                    for item in empty_population_warnings(count, coverage)
+                ]
+            )
+            if "warnings" in data and _plain(data["warnings"]) != warnings:
+                raise ValueError("cohort resource warnings differ")
+            review = data.get("review_required", False)
+            if type(review) is not bool:
+                raise ValueError("cohort resource review state must be boolean")
+            data.update(
+                {
+                    "coverage": coverage.to_dict(),
+                    "warnings": warnings,
+                    "review_required": review or bool(warnings),
+                }
+            )
+            normalized_data = _freeze_mapping(data, "data")
         normalized_extensions = _freeze_mapping(self.extensions, "extensions")
         object.__setattr__(self, "resource_type", resource_type)
         object.__setattr__(self, "state", state)
         object.__setattr__(self, "data", normalized_data)
         object.__setattr__(self, "extensions", normalized_extensions)
+
+    @classmethod
+    def from_cohort_result(
+        cls,
+        result: CohortResult | CohortExecution,
+        *,
+        resource_id: str,
+        cohort_id: str,
+        namespace: str = "default",
+        run_at: str | None = None,
+    ) -> "JourneyResourceRecord":
+        """Expose count-only execution context through existing cohort-run reads.
+
+        Args:
+            result: Local resolver result or integrity-checked saved execution.
+            resource_id: Caller-supplied opaque resource identifier.
+            cohort_id: Caller-supplied opaque cohort identifier.
+            namespace: Policy-controlled resource namespace.
+            run_at: Optional caller-supplied run timestamp.
+
+        Returns:
+            A cohort-run record without patient identifiers or evidence values.
+        """
+
+        if not isinstance(result, (CohortResult, CohortExecution)):
+            raise TypeError("cohort result must be a typed local result")
+        if not isinstance(cohort_id, str) or _OPAQUE_ID_RE.fullmatch(cohort_id) is None:
+            raise ValueError("cohort_id must be an opaque identifier")
+        count = (
+            len(result.patient_ids)
+            if isinstance(result, CohortResult)
+            else result.member_count
+        )
+        data = {
+            "cohort_id": cohort_id,
+            "status": "complete",
+            "member_count": count,
+            "coverage": result.coverage.to_dict(),
+            "warnings": [item.to_dict() for item in result.warnings],
+            "review_required": result.review_required,
+        }
+        if run_at is not None:
+            data["run_at"] = run_at
+        return cls(JourneyResourceKind.COHORT_RUN, resource_id, namespace, data)
 
     def to_dict(self, *, fields: Sequence[str] | None = None) -> dict[str, Any]:
         """Return a deterministic, optionally field-projected representation."""
@@ -497,6 +598,11 @@ class JourneyAccessPolicy:
             return self._denied(query, "attribute_denied")
         allowed = self.fields_by_resource.get(query.resource_type, frozenset())
         selected = query.fields or tuple(sorted(allowed))
+        if query.resource_type in {
+            JourneyResourceKind.COHORT,
+            JourneyResourceKind.COHORT_RUN,
+        }:
+            selected = tuple(sorted(set(selected) | {"warnings", "review_required"}))
         if not set(selected).issubset(allowed):
             return self._denied(query, "field_denied")
         decision_id, request_digest = _policy_decision_identity(
