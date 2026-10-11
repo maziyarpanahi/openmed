@@ -519,3 +519,35 @@ def test_no_network_sleeps_models_or_config_reads(
 def test_parser_has_depth_and_node_budgets(payload: str) -> None:
     with pytest.raises(ValueError, match="invalid_json_bounds"):
         check._bounded_json(payload)
+
+
+@pytest.mark.parametrize("site", ["construction", "json", "text"])
+def test_cli_private_processing_error_discards_exception_chain(monkeypatch, site):
+    from openmed.cli._output import CliError
+
+    class Report:
+        passed = True
+
+        def to_dict(self):
+            if site == "json":
+                raise RuntimeError(_MARKER)
+            return {}
+
+        def to_text(self):
+            if site == "text":
+                raise RuntimeError(_MARKER)
+            return "Synthetic report"
+
+    def provider():
+        if site == "construction":
+            raise RuntimeError(_MARKER)
+        return Report()
+
+    monkeypatch.setattr(check, "run_agent_self_check", provider)
+    args = build_parser().parse_args(["agent", "self-check", "--json"])
+    with pytest.raises(CliError) as raised:
+        run_from_args(args, stdout=io.StringIO())
+    assert raised.value.code == "agent_self_check_unavailable"
+    assert _MARKER not in str(raised.value)
+    assert raised.value.__context__ is None
+    assert raised.value.__cause__ is None

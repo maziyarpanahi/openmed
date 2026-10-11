@@ -76,3 +76,6 @@ fallback definitions in this runner.
 
 This command is an offline contract check. It is not certification, clinical
 validation, a sealed evaluation or a replacement for the full test suite.
+
+Unexpected report-construction or serialization failures produce a closed CLI
+error without retaining the original private exception context or cause.

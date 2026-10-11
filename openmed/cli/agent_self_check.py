@@ -37,6 +37,10 @@ def run_from_args(args: argparse.Namespace, *, stdout: TextIO | None = None) -> 
         report = run_agent_self_check()
         data, human, passed = report.to_dict(), report.to_text(), report.passed
     except Exception:
+        failed = True
+    else:
+        failed = False
+    if failed:
         raise CliError(
             "Agent self-check could not complete.",
             code="agent_self_check_unavailable",
