@@ -164,6 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added explicit, confirmation-bound terminal recovery journal retirement, sealed
+  digest/count records, non-resumable retired dispositions, and restart-safe
+  checkpoint cleanup with summary anchor verification (#3791).
+
 - Added Doccano relation-extraction JSONL import and export for the versioned
   annotation envelope, with de-identification digest binding, declared loss for
   unsupported fields, review states and embeddings, controlled label and

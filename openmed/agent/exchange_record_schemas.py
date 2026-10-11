@@ -530,6 +530,18 @@ def _recovery_decision_schema() -> dict[str, Any]:
         ),
         "allOf": [
             _if_then(
+                _on_field("disposition", RecoveryDisposition.RETIRED.value),
+                {
+                    "properties": {
+                        "reason": {"const": RecoveryReason.JOURNAL_RETIRED.value},
+                        "retry_effect_ids": {"maxItems": 0},
+                        "retry_idempotency_keys": {"maxItems": 0},
+                        "compensation_effect_ids": {"maxItems": 0},
+                        "committed_effects": {"maxItems": 0},
+                    }
+                },
+            ),
+            _if_then(
                 _on_field("disposition", RecoveryDisposition.RESUME.value),
                 {
                     "properties": {

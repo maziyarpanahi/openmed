@@ -80,7 +80,9 @@ contracts:
 - a resumable decision names the effects to retry and compensates none, a
   completing decision retries and compensates none, and a review decision
   retries none; both retry identifiers and idempotency keys must be empty in
-  completing and review decisions;
+  completing and review decisions. A `retired` decision requires
+  `journal_retired` and empty retry identifiers, retry keys, compensation
+  identifiers and committed-effect lists; it cannot authorize resume;
 - evidence references are bounded by the public handoff limit, a grant carries
   at least one unique constraint, and a checkpoint carries at least one effect.
 
