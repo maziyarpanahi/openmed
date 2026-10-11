@@ -1,5 +1,8 @@
 # Clinical NLI verification
 
+See [local backends and typed outcomes](local-backends.md) for executable
+synthetic provider wiring and the complete exception/refusal tables.
+
 OpenMed exposes a small, backend-neutral natural-language-inference (NLI)
 stage for checking whether a generated or grounded claim is supported by a
 source span:

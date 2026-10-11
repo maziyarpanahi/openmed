@@ -241,21 +241,29 @@ def test_valid_api_key_succeeds_and_principal_is_attached(
     )
     monkeypatch.setenv(
         "OPENMED_SERVICE_AUTH_ROUTE_SCOPES",
-        json.dumps({"GET /whoami": ["custom:read"]}),
+        json.dumps({"GET /models/loaded": ["custom:read"]}),
     )
     app = create_app()
+    original_endpoint = next(
+        route for route in app.routes if route.path == "/models/loaded"
+    )
 
-    @app.get("/whoami")
     async def whoami(request: Request) -> dict[str, Any]:
         principal = request.state.auth_principal
         return {"subject": principal.subject, "scopes": list(principal.scopes)}
+
+    from fastapi.routing import APIRoute
+
+    app.routes[app.routes.index(original_endpoint)] = APIRoute(
+        "/models/loaded", whoami, methods=["GET"]
+    )
 
     with TestClient(
         app,
         base_url=LOOPBACK_BASE_URL,
         raise_server_exceptions=False,
     ) as client:
-        response = client.get("/whoami", headers={"X-API-Key": "test-secret"})
+        response = client.get("/models/loaded", headers={"X-API-Key": "test-secret"})
 
     assert response.status_code == 200
     assert response.json() == {
@@ -388,3 +396,243 @@ def test_failed_auth_attempts_are_rate_limited(
     _assert_error_payload(first, 401, "authentication_required")
     _assert_error_payload(second, 429, "auth_rate_limited")
     assert int(second.headers["Retry-After"]) >= 1
+
+
+@pytest.mark.parametrize("claim", ["exp", "iat", "nbf"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        float("nan"),
+        float("inf"),
+        -float("inf"),
+        "nan",
+        "2000000060",
+        True,
+        False,
+        None,
+        10**400,
+    ],
+)
+def test_jwt_dates_require_finite_json_numbers(claim, value):
+    from openmed.service.auth import AuthError, ServiceAuthConfig, authenticate_jwt
+
+    claims = {"exp": 2_000_000_060, "iat": 1_999_999_990, "nbf": 1_999_999_990}
+    claims[claim] = value
+    config = ServiceAuthConfig(jwks=tuple(json.loads(_jwks())["keys"]))
+    with pytest.raises(AuthError) as error:
+        authenticate_jwt(_jwt_hs256(claims), config, now=2_000_000_000)
+    assert error.value.code == "invalid_credentials"
+    assert error.value.message == "Authentication credentials are invalid"
+
+
+def test_jwt_lifetime_and_leeway_keep_valid_tokens():
+    from openmed.service.auth import AuthError, ServiceAuthConfig, authenticate_jwt
+
+    config = ServiceAuthConfig(
+        jwks=tuple(json.loads(_jwks())["keys"]),
+        jwt_max_lifetime_seconds=60,
+        jwt_leeway_seconds=5,
+    )
+    for claims in ({"exp": 105, "iat": 50}, {"exp": 105, "iat": 105, "nbf": 105}):
+        assert (
+            authenticate_jwt(_jwt_hs256(claims), config, now=100).credential_type
+            == "jwt"
+        )
+    for claims in (
+        {"exp": 161, "iat": 100},
+        {"exp": 150},
+        {"exp": 150, "iat": 106},
+        {"exp": 95, "iat": 50},
+    ):
+        with pytest.raises(AuthError):
+            authenticate_jwt(_jwt_hs256(claims), config, now=100)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "scope"),
+    [
+        ("POST", "/pii/extract/stream", "pii:read"),
+        ("POST", "/jobs", "jobs:write"),
+        ("POST", "/fhir/bulk/exports", "bulk:write"),
+        ("POST", "/fhir/bulk/imports", "bulk:write"),
+        ("POST", "/fhir/smart-backend/ingestions", "bulk:write"),
+        ("GET", "/jobs/synthetic", "jobs:read"),
+        ("POST", "/omop/load", "omop:write"),
+        ("POST", "/profile", "profile:write"),
+        ("POST", "/cohort/resolve", "cohort:read"),
+        ("GET", "/v1/journey/resources", "journey:read"),
+    ],
+)
+def test_all_phi_routes_deny_before_handlers(monkeypatch, method, path, scope):
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        _api_key_config("synthetic-secret", scopes=["models:read"]),
+    )
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        response = client.request(
+            method, path, headers={"X-API-Key": "synthetic-secret"}, json={}
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["details"] == {"required_scopes": [scope]}
+    assert app.state.runtime._loader is None
+
+
+def test_route_override_matches_template_and_unknown_routes_fail(monkeypatch):
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        _api_key_config("synthetic-secret", scopes=["jobs:read"]),
+    )
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_ROUTE_SCOPES",
+        json.dumps({"GET /jobs/{job_id}": ["jobs:admin"]}),
+    )
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        response = client.get(
+            "/jobs/synthetic", headers={"X-API-Key": "synthetic-secret"}
+        )
+    assert response.status_code == 403
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_ROUTE_SCOPES", json.dumps({"GET /unknown": []})
+    )
+    with pytest.raises(ValueError, match="Unknown service route"):
+        create_app()
+
+
+def test_route_registry_is_complete_and_marks_heavy_work():
+    from openmed.service.auth import ROUTE_POLICIES, validate_route_policies
+
+    app = create_app()
+    validate_route_policies(app)
+    for key in (
+        ("POST", "/omop/load"),
+        ("POST", "/profile"),
+        ("POST", "/cohort/resolve"),
+        ("GET", "/v1/journey/resources"),
+    ):
+        assert ROUTE_POLICIES[key].admission == "heavy"
+    app.get("/undeclared")(lambda: {})
+    with pytest.raises(ValueError, match="no declared security policy"):
+        validate_route_policies(app)
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("POST", "/omop/load"),
+        ("POST", "/profile"),
+        ("POST", "/cohort/resolve"),
+        ("GET", "/v1/journey/resources"),
+    ],
+)
+def test_heavy_routes_share_throttle_and_drain(monkeypatch, method, path):
+    from fastapi.routing import APIRoute
+
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "0.01")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
+    calls = []
+
+    async def handler(request: Request):
+        calls.append(request.app.state.inflight)
+        return {"ok": True}
+
+    app = create_app()
+    for index, route in enumerate(app.routes):
+        if route.path == path and method in (getattr(route, "methods", None) or ()):
+            app.router.routes[index] = APIRoute(path, handler, methods=[method])
+            break
+    else:
+        pytest.fail("Declared route must exist")
+
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        assert client.request(method, path).status_code == 200
+        assert calls == [1]
+        assert app.state.inflight == 0
+        _assert_error_payload(client.request(method, path), 429, "rate_limited")
+        assert calls == [1]
+
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS")
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST")
+    app = create_app()
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+        app.state.shutting_down = True
+        _assert_error_payload(client.request(method, path), 503, "not_ready")
+        assert client.get("/livez").status_code == 200
+
+
+def test_invalid_utf8_jwt_payload_drops_private_decoder_context():
+    import base64
+
+    from openmed.service.auth import AuthError, _decode_json_segment
+
+    marker = b"SYNTHETIC_PRIVATE_CREDENTIAL"
+    token = base64.urlsafe_b64encode(marker + b"\xff").decode().rstrip("=")
+    with pytest.raises(AuthError) as caught:
+        _decode_json_segment(token)
+    assert caught.value.code == "invalid_credentials"
+    assert caught.value.__context__ is caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("now", [float("nan"), float("inf"), -float("inf"), True])
+def test_jwt_validator_refuses_invalid_clock_values(now):
+    from openmed.service.auth import AuthError, ServiceAuthConfig, validate_jwt_claims
+
+    with pytest.raises(AuthError, match="credentials are invalid"):
+        validate_jwt_claims(
+            {"exp": 2_000_000_060, "iat": 1_999_999_990}, ServiceAuthConfig(), now=now
+        )
+
+
+def test_nested_router_policies_use_effective_prefixed_templates():
+    from fastapi import APIRouter, FastAPI
+    from starlette.requests import Request
+
+    from openmed.service.auth import route_key_for_request, validate_route_policies
+
+    child = APIRouter()
+    child.get("/{job_id}")(lambda: {})
+    parent = APIRouter()
+    parent.include_router(child, prefix="/jobs")
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(parent)
+    validate_route_policies(app)
+    for method in ("GET", "POST"):
+        request = Request(
+            {
+                "type": "http",
+                "method": method,
+                "path": "/jobs/synthetic",
+                "root_path": "",
+                "app": app,
+            }
+        )
+        assert route_key_for_request(request) == (method, "/jobs/{job_id}")
+    app.include_router(child, prefix="/undeclared")
+    with pytest.raises(ValueError, match="no declared security policy"):
+        validate_route_policies(app)
+
+
+def test_nested_websocket_registry_retains_effective_prefix(monkeypatch):
+    from fastapi import APIRouter, FastAPI
+
+    from openmed.service.auth import (
+        ROUTE_POLICIES,
+        RoutePolicy,
+        validate_route_policies,
+    )
+
+    child = APIRouter()
+    child.websocket("/{job_id}")(lambda: None)
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(child, prefix="/jobs")
+    monkeypatch.setitem(
+        ROUTE_POLICIES,
+        ("WEBSOCKET", "/jobs/{job_id}"),
+        RoutePolicy(("jobs:read",), "control"),
+    )
+    validate_route_policies(app)
+    app.include_router(child, prefix="/undeclared")
+    with pytest.raises(ValueError, match="no declared security policy"):
+        validate_route_policies(app)

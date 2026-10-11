@@ -15,11 +15,23 @@ from __future__ import annotations
 import hashlib
 import inspect
 import re
+import unicodedata
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from openmed.clinical.brief_cancellation import (
+    BriefCancellation,
+    BriefInterrupted,
+    call_with_cancellation,
+    check_cancellation,
+)
 from openmed.core.pii import DeidentificationResult, deidentify
+from openmed.core.script_detect import (
+    ZERO_WIDTH_CHARS,
+    normalize_for_pii_detection,
+    segment_by_script,
+)
 
 DEFAULT_SUMMARIZATION_MODE = "bhc"
 SUMMARIZATION_ADVISORY = (
@@ -29,6 +41,55 @@ SUMMARIZATION_ADVISORY = (
 )
 
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|\n{2,}")
+
+# Bounded suffixes, not morphological inference. Keep a boundary after the
+# suffix so a longer Hangul word does not become a source-name match.
+_HANGUL_PARTICLES = (
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "의",
+    "에",
+    "에서",
+    "에게",
+    "에게서",
+    "께",
+    "께서",
+    "한테",
+    "한테서",
+    "와",
+    "과",
+    "랑",
+    "이랑",
+    "하고",
+    "도",
+    "만",
+    "부터",
+    "까지",
+    "보다",
+    "처럼",
+    "으로",
+    "로",
+    "으로서",
+    "로서",
+    "으로써",
+    "로써",
+    "이라고",
+    "라고",
+    "이나",
+    "나",
+    "든지",
+    "이든지",
+    "조차",
+    "마저",
+    "밖에",
+    "뿐",
+    "님",
+    "씨",
+)
 
 __all__ = [
     "DEFAULT_SUMMARIZATION_MODE",
@@ -203,15 +264,19 @@ def summarize(
     if not isinstance(text, str):
         raise TypeError("text must be a string or DeidentificationResult")
     from openmed.clinical.summarize_backends import (
+        ExtractiveSummarizerBackend,
         LocalSummarizerError,
         MLXSummarizerBackend,
         _require_runtime,
+        _validate_input,
         resolve_summarizer_backend,
     )
     from openmed.core.config import OpenMedConfig
     from openmed.core.offline import network_blocked_if_offline
 
     backend = resolve_summarizer_backend(model)
+    if type(backend) in {ExtractiveSummarizerBackend, MLXSummarizerBackend}:
+        _validate_input(text, normalized_mode)
     if isinstance(backend, MLXSummarizerBackend):
         _require_runtime()
     failed = False
@@ -223,9 +288,7 @@ def summarize(
     except Exception:
         failed = True
     if failed:
-        raise LocalSummarizerError(
-            "local de-identification failed; prepare cached PII artifacts"
-        )
+        raise LocalSummarizerError(reason="deidentification_unavailable")
     return summarize_deidentified(result, mode=normalized_mode, model=backend)
 
 
@@ -233,6 +296,8 @@ def summarize_deidentified(
     deidentified: DeidentificationResult,
     mode: str = DEFAULT_SUMMARIZATION_MODE,
     model: object | None = None,
+    *,
+    cancellation: BriefCancellation | None = None,
 ) -> SummarizationResult:
     """Run the guarded summarization stage on a de-identification result.
 
@@ -245,6 +310,7 @@ def summarize_deidentified(
         deidentified: Result produced by the de-identification stage.
         mode: Summarization mode forwarded to compatible backends.
         model: Optional local/on-device summarizer backend.
+        cancellation: Optional cooperative brief interruption context.
 
     Returns:
         A summary paired with a passing leakage check.
@@ -255,6 +321,7 @@ def summarize_deidentified(
         SummarizationLeakageError: If the backend emits a source token.
     """
 
+    check_cancellation(cancellation)
     normalized_mode = _normalize_mode(mode)
     source = _require_deidentification_result(deidentified)
     source_check = _build_leakage_check(source, source.deidentified_text)
@@ -267,12 +334,15 @@ def summarize_deidentified(
     from openmed.clinical.summarize_backends import resolve_summarizer_backend
 
     backend = resolve_summarizer_backend(model)
-    summary = _invoke_backend(backend, source.deidentified_text, normalized_mode)
+    summary = _invoke_backend(
+        backend, source.deidentified_text, normalized_mode, cancellation
+    )
     leakage_check = _build_leakage_check(source, summary)
+    check_cancellation(cancellation)
     if not leakage_check.passed:
         raise SummarizationLeakageError(leakage_check)
 
-    return SummarizationResult(
+    result = SummarizationResult(
         summary=summary,
         leakage_check=leakage_check,
         mode=normalized_mode,
@@ -283,6 +353,8 @@ def summarize_deidentified(
             else None
         ),
     )
+    check_cancellation(cancellation)
+    return result
 
 
 def _normalize_mode(mode: str) -> str:
@@ -315,30 +387,53 @@ def _require_deidentification_result(value: object) -> DeidentificationResult:
     return value
 
 
-def _invoke_backend(model: object | None, text: str, mode: str) -> str:
+def _invoke_backend(
+    model: object | None, text: str, mode: str, cancellation=None
+) -> str:
+    from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
+        LocalSummarizerPackageError,
         MLXSummarizerBackend,
     )
     from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
-    failed = False
+    reason = "execution_failed"
+    package_code = None
     try:
         with network_blocked_if_offline(local_only=True):
-            return _call_backend(model, text, mode)
+            return _call_backend(model, text, mode, cancellation)
+    except BriefInterrupted:
+        raise
+    except LocalSummarizerPackageError as error:
+        if (
+            type(model) is MLXSummarizerBackend
+            and type(error) is LocalSummarizerPackageError
+        ):
+            package_code = error.code
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
-        failed = True
+        reason = "runtime_unavailable"
+    except ExtractiveSelectionError:
+        from openmed.clinical.summarize_backends import ExtractiveSummarizerBackend
+
+        if type(model) is ExtractiveSummarizerBackend:
+            raise
+    except LocalSummarizerError as error:
+        # Reconstruct a closed, value-free error outside the handler instead
+        # of retaining a third-party exception or its chained source payload.
+        if type(error) is LocalSummarizerError:
+            reason = error.reason
     except Exception:
-        failed = True
-    if failed:
-        raise LocalSummarizerError("local summarizer execution failed")
-    raise AssertionError("unreachable summarizer state")
+        pass
+    if package_code is not None:
+        raise LocalSummarizerPackageError(package_code)
+    raise LocalSummarizerError(reason=reason)
 
 
-def _call_backend(model: object | None, text: str, mode: str) -> str:
+def _call_backend(model: object | None, text: str, mode: str, cancellation=None) -> str:
     if model is None:
         return _extractive_summary(text)
 
@@ -348,8 +443,12 @@ def _call_backend(model: object | None, text: str, mode: str) -> str:
     if not callable(callback):
         raise TypeError("model must be callable or expose a callable summarize method")
 
+    original_callback = callback
+    callback = lambda *args, **kwargs: call_with_cancellation(
+        original_callback, *args, cancellation=cancellation, **kwargs
+    )
     try:
-        parameters = inspect.signature(callback).parameters
+        parameters = inspect.signature(original_callback).parameters
     except (TypeError, ValueError):
         output = callback(text, mode=mode)
     else:
@@ -368,19 +467,28 @@ def _call_backend(model: object | None, text: str, mode: str) -> str:
         else:
             output = callback(text)
 
-    if not isinstance(output, str) or len(output.encode("utf-8")) > 8192:
-        raise TypeError("summarizer backend must return a string")
+    from openmed.clinical.summarize_backends import (
+        MAX_OUTPUT_BYTES,
+        LocalSummarizerError,
+        _utf8_size,
+    )
+
+    if not isinstance(output, str):
+        raise LocalSummarizerError(reason="invalid_output")
+    if _utf8_size(output) > MAX_OUTPUT_BYTES:
+        raise LocalSummarizerError(reason="output_limit_exceeded")
     return output.strip()
 
 
 def _extractive_summary(text: str) -> str:
-    """Return a deterministic, local, first-three-sentence stub summary."""
+    """Select the first three source sentences with local script-aware boundaries."""
+    from openmed.processing import segment_text
 
-    normalized = " ".join(text.split())
-    if not normalized:
+    if not text.strip():
         return ""
-    sentences = [part.strip() for part in _SENTENCE_BOUNDARY.split(normalized)]
-    return " ".join(sentences[:3])
+    sentences = [text[span.start : span.end].strip() for span in segment_text(text)]
+    selected = [sentence for sentence in sentences if sentence][:3]
+    return " ".join(selected)
 
 
 def _backend_name(model: object | None) -> str:
@@ -433,10 +541,18 @@ def _source_phi_surfaces(deidentified: Any) -> tuple[str, ...]:
 
 def _build_leakage_check(deidentified: Any, candidate: str) -> LeakageCheck:
     surfaces = _source_phi_surfaces(deidentified)
+    normalized_candidate = _normalize_leakage_text(candidate)
     leaked_hashes: list[str] = []
     for surface in surfaces:
         pattern = _surface_pattern(surface)
-        if pattern is not None and pattern.search(candidate):
+        if pattern is not None and any(
+            all(
+                _hangul_suffix_is_allowed(suffix)
+                for suffix in match.groupdict().values()
+                if suffix is not None
+            )
+            for match in pattern.finditer(normalized_candidate)
+        ):
             leaked_hashes.append(_surface_hash(surface))
     return LeakageCheck(
         passed=not leaked_hashes,
@@ -447,19 +563,63 @@ def _build_leakage_check(deidentified: Any, candidate: str) -> LeakageCheck:
 
 
 def _surface_pattern(surface: str) -> re.Pattern[str] | None:
-    parts = surface.split()
-    if not parts:
+    alternatives = set()
+    for index, raw_part in enumerate(dict.fromkeys((surface, *surface.split()))):
+        normalized = _normalize_leakage_text(raw_part)
+        words = normalized.split()
+        if not words:
+            continue
+        literal = r"\s+".join(re.escape(word) for word in words)
+        scripts = {script for _, _, script in segment_by_script(raw_part)}
+        unspaced = bool(scripts & {"Han", "Hiragana/Katakana", "Thai"}) or any(
+            0x0E80 <= ord(char) <= 0x0EFF  # Lao
+            or 0x1780 <= ord(char) <= 0x17FF  # Khmer
+            or 0x1000 <= ord(char) <= 0x109F  # Myanmar
+            or 0xA9E0 <= ord(char) <= 0xA9FF
+            or 0xAA60 <= ord(char) <= 0xAA7F
+            for char in raw_part
+        )
+        if unspaced:
+            alternatives.add(literal)
+        elif "Hangul" in scripts:
+            # Capture a bounded-script run, then segment known suffixes with DP.
+            # Repeated overlapping regex alternatives can otherwise backtrack
+            # exponentially on an adversarial longer word.
+            suffix = (
+                rf"(?P<hangul_suffix_{index}>"
+                r"[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f"
+                r"\uac00-\ud7af\ud7b0-\ud7ff]*)"
+            )
+            alternatives.add(r"(?<!\w)" + literal + suffix + r"(?!\w)")
+        else:
+            alternatives.add(r"(?<!\w)" + literal + r"(?!\w)")
+    if not alternatives:
         return None
+    return re.compile("(?:" + "|".join(sorted(alternatives)) + ")", re.IGNORECASE)
 
-    alternatives = {
-        r"\s+".join(re.escape(part) for part in parts),
-        *(re.escape(part) for part in parts),
-    }
-    ordered_alternatives = sorted(alternatives, key=len, reverse=True)
-    return re.compile(
-        r"(?<!\w)(?:" + "|".join(ordered_alternatives) + r")(?!\w)",
-        re.IGNORECASE,
-    )
+
+def _hangul_suffix_is_allowed(suffix: str) -> bool:
+    reachable = [False] * (len(suffix) + 1)
+    reachable[0] = True
+    for index in range(len(suffix)):
+        if reachable[index]:
+            for particle in _HANGUL_PARTICLES:
+                if suffix.startswith(particle, index):
+                    reachable[index + len(particle)] = True
+    return reachable[-1]
+
+
+def _normalize_leakage_text(text: str) -> str:
+    # Expose combining marks before the detector's mark-stripping defense.
+    # Recompose after it, so Hangul particle matching still sees syllables.
+    # Remove supported invisible controls first; normalize comparisons only.
+    visible = "".join(char for char in text if char not in ZERO_WIDTH_CHARS)
+    decomposed = unicodedata.normalize("NFD", visible)
+    defended = normalize_for_pii_detection(decomposed).text
+    folded = unicodedata.normalize("NFC", defended).casefold()
+    # Preserve the prior Python IGNORECASE equivalence for the i-family in
+    # the native comparison too. This is separate from the confusable map.
+    return folded.replace("\u0131", "i")
 
 
 def _surface_hash(surface: str) -> str:
