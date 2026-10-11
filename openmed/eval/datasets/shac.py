@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -41,6 +42,7 @@ SHAC_ENTITY_TO_CANONICAL: Mapping[str, str] = {
     "amount": OTHER,
     "drug": OTHER,
     "drug_use": OTHER,
+    "degree": OTHER,
     "duration": OTHER,
     "employment": OCCUPATION,
     "employment_status": OTHER,
@@ -50,7 +52,11 @@ SHAC_ENTITY_TO_CANONICAL: Mapping[str, str] = {
     "living": OTHER,
     "living_situation": OTHER,
     "living_status": OTHER,
+    "livingstatus": OTHER,
+    "method": OTHER,
     "status": OTHER,
+    "statusemploy": OTHER,
+    "statustime": OTHER,
     "temporality": OTHER,
     "tobacco": OTHER,
     "tobacco_status": OTHER,
@@ -58,6 +64,7 @@ SHAC_ENTITY_TO_CANONICAL: Mapping[str, str] = {
     "substance": OTHER,
     "substance_use": OTHER,
     "type": OTHER,
+    "typeliving": OTHER,
 }
 SHAC_RELATION_TO_CANONICAL: Mapping[str, str] = {
     "amount": "HAS_AMOUNT",
@@ -81,10 +88,32 @@ _DETERMINANT_ALIASES = {
     "job": "employment",
     "living": "living",
     "living_status": "living",
+    "livingstatus": "living",
     "housing": "living",
     "tobacco": "tobacco",
     "tobacco_use": "tobacco",
     "smoking": "tobacco",
+}
+
+_LABELED_ARGUMENTS = {
+    "statustime": ("statustimeval", frozenset({"none", "current", "past", "future"})),
+    "statusemploy": (
+        "statusemployval",
+        frozenset(
+            {
+                "employed",
+                "unemployed",
+                "retired",
+                "on_disability",
+                "student",
+                "homemaker",
+            }
+        ),
+    ),
+    "typeliving": (
+        "typelivingval",
+        frozenset({"alone", "with_family", "with_others", "homeless"}),
+    ),
 }
 
 
@@ -100,7 +129,12 @@ def load_shac(path: str | Path | None = None) -> list[RelationTaskFixture]:
     fixtures: list[RelationTaskFixture] = []
     for source in _files(root, _JSON_SUFFIXES):
         for row_number, row in enumerate(
-            load_json_rows(source, dataset=SHAC, authority=SHAC_AUTHORITY),
+            load_json_rows(
+                source,
+                dataset=SHAC,
+                authority=SHAC_AUTHORITY,
+                object_pairs_hook=_unique_shac_object,
+            ),
             start=1,
         ):
             fixtures.append(
@@ -197,6 +231,7 @@ def _fixture_from_row(
     entities = _entities_from_rows(
         entity_rows, text=text, source_name="credentialed source"
     )
+    _apply_attributes(entities, row.get("attributes", []))
     relations = _relations_from_rows(
         row.get("relations") or row.get("gold_relations") or [],
         entities=entities,
@@ -244,9 +279,16 @@ def _fixture_from_brat(
     entities: dict[str, EvalSpan] = {}
     relation_rows: list[Mapping[str, Any]] = []
     event_rows: list[Mapping[str, Any]] = []
+    attribute_rows: list[Mapping[str, Any]] = []
+    annotation_ids: set[str] = set()
     for line_number, line in enumerate(
         annotation_path.read_text(encoding="utf-8").splitlines(), start=1
     ):
+        if line.startswith(("T", "R", "E", "A", "M")):
+            identity = line.partition("\t")[0]
+            if identity in annotation_ids:
+                raise ValueError("duplicate SHAC BRAT annotation id")
+            annotation_ids.add(identity)
         if line.startswith("T"):
             columns = line.split("\t", 2)
             if len(columns) != 3:
@@ -258,6 +300,7 @@ def _fixture_from_brat(
                     "end": end,
                     "label": label,
                     "text": columns[2],
+                    "discontinuous": ";" in columns[1],
                 },
                 text=text,
                 source_name="credentialed source",
@@ -281,6 +324,16 @@ def _fixture_from_brat(
             )
         elif line.startswith("E"):
             event_rows.append(_brat_event_row(line, line_number=line_number))
+        elif line.startswith(("A", "M")):
+            columns = line.split("\t", 1)
+            values = columns[1].split() if len(columns) == 2 else []
+            if len(values) != 3:
+                raise ValueError("malformed SHAC BRAT attribute")
+            attribute_rows.append(
+                {"name": values[0], "target": values[1], "value": values[2]}
+            )
+
+    _apply_attributes(entities, attribute_rows)
 
     relations = _relations_from_rows(
         relation_rows,
@@ -362,12 +415,16 @@ def _event_relations(
     fixture_id: str,
 ) -> list[EvalRelation]:
     relations: list[EvalRelation] = []
+    event_ids: set[str] = set()
     for event_index, raw_event in enumerate(events, start=1):
         if not isinstance(raw_event, Mapping):
             raise ValueError("SHAC event rows must be objects")
         event_id = str(
             raw_event.get("id") or raw_event.get("event_id") or f"E{event_index}"
         )
+        if event_id in event_ids:
+            raise ValueError("duplicate SHAC event id")
+        event_ids.add(event_id)
         category = _determinant_category(
             str(
                 raw_event.get("type")
@@ -441,6 +498,7 @@ def _event_relations(
                         "event_type": str(raw_event.get("type") or category),
                         "sdoh_category": category,
                         "source_relation_type": source_role,
+                        "source_event_id": event_id,
                     },
                 )
             )
@@ -530,8 +588,74 @@ def _span_from_mapping(
         end=end,
         label=map_shac_entity_label(source_label),
         text=span_text,
-        metadata={"source_label": source_label},
+        metadata={
+            "source_label": source_label,
+            "source_subtype": _source_subtype(item, source_label),
+            "discontinuous": item.get("discontinuous", False) is True,
+        },
     )
+
+
+def _source_subtype(item: Mapping[str, Any], source_label: str) -> str | None:
+    specification = _LABELED_ARGUMENTS.get(_mapping_key(source_label))
+    if specification is None:
+        return None
+    attribute_name, allowed = specification
+    values = []
+    if item.get("subtype") is not None:
+        values.append(item["subtype"])
+    attributes = item.get("attributes", {})
+    if not isinstance(attributes, Mapping):
+        raise ValueError("SHAC entity attributes must be an object")
+    values.extend(
+        value
+        for key, value in attributes.items()
+        if _mapping_key(str(key)) == attribute_name
+    )
+    if not values:
+        return None
+    if any(not isinstance(value, str) or value not in allowed for value in values):
+        raise ValueError("invalid SHAC labeled argument subtype")
+    if len(set(values)) != 1:
+        raise ValueError("conflicting SHAC labeled argument subtypes")
+    return values[0]
+
+
+def _unique_shac_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate SHAC JSON key")
+        result[key] = value
+    return result
+
+
+def _apply_attributes(entities: dict[str, EvalSpan], rows: Any) -> None:
+    if not isinstance(rows, list):
+        raise ValueError("SHAC attributes must be a list")
+    by_name = {value[0]: (key, value[1]) for key, value in _LABELED_ARGUMENTS.items()}
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("SHAC attribute rows must be objects")
+        name = _mapping_key(str(row.get("name") or row.get("type") or ""))
+        if name not in by_name:
+            continue  # Other native SHAC attributes are outside this scoring view.
+        target = row.get("target")
+        if not isinstance(target, str) or target not in entities:
+            raise ValueError("SHAC labeled attribute references unknown entity")
+        label, allowed = by_name[name]
+        span = entities[target]
+        if _mapping_key(str(span.metadata.get("source_label", ""))) != label:
+            raise ValueError("SHAC labeled attribute has incompatible entity type")
+        value = row.get("value")
+        if not isinstance(value, str) or value not in allowed:
+            raise ValueError("invalid SHAC labeled argument subtype")
+        previous = span.metadata.get("source_subtype")
+        if previous is not None and previous != value:
+            raise ValueError("conflicting SHAC labeled argument subtypes")
+        entities[target] = replace(
+            span, metadata={**span.metadata, "source_subtype": value}
+        )
 
 
 def _resolve_entity(
@@ -677,12 +801,11 @@ def _mapping_key(value: str) -> str:
 
 
 def _integer(value: Any) -> int:
-    if isinstance(value, bool):
-        raise ValueError("SHAC span offsets must be integers")
-    try:
+    if type(value) is int:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
         return int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("SHAC span offsets must be integers") from exc
+    raise ValueError("SHAC span offsets must be integers")
 
 
 def _validate_unique_fixture_ids(fixtures: list[RelationTaskFixture]) -> None:
