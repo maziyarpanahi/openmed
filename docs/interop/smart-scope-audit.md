@@ -238,8 +238,8 @@ invalid clock also revokes it.
 resource wildcards and identical query restrictions. It does not interpret FHIR
 search predicates: different filters cannot substitute for one another. Scope
 values and filters remain private. `audit_granted_smart_scopes` reports only
-counts and narrowing/expansion flags. The original synthetic planning helper
-above retains its concrete-resource-only behavior and detailed synthetic output.
+counts and narrowing/expansion flags. The existing planning and preflight APIs
+retain the shared grammar and value-free findings described above.
 
 Refresh reports contain closed codes, counts and flags, with no token, assertion,
 endpoint, client identity or scope/filter values. Secret-bearing DTOs suppress
