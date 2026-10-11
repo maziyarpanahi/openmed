@@ -394,6 +394,32 @@ def test_private_assertion_builder_error_is_value_free(tmp_path):
     with pytest.raises(SMARTBackendError, match="token endpoint unavailable") as exc:
         asyncio.run(ingestor.run())
     assert "private" not in str(exc.value) and not server.requests
+    assert exc.value.__context__ is None and exc.value.__cause__ is None
+
+
+def test_bounded_token_stream_stops_reading_before_export(tmp_path):
+    class TokenStream(httpx.AsyncByteStream):
+        def __init__(self):
+            self.reads = 0
+            self.closed = False
+
+        async def __aiter__(self):
+            for _ in range(100):
+                self.reads += 1
+                yield b"x" * 8192
+
+        async def aclose(self):
+            self.closed = True
+
+    server = _FakeBulkServer(resource_counts=[1])
+    stream = TokenStream()
+    server.token_reply = httpx.Response(200, stream=stream)
+    with pytest.raises(SMARTBackendError, match="token response invalid") as caught:
+        _run_ingestion(_config(tmp_path, server), server)
+    assert stream.reads <= 9 and stream.closed
+    assert server.requests == [server.token_url]
+    assert not server.file_gets
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
 
 
 def test_expired_token_never_dispatches_another_poll(tmp_path):

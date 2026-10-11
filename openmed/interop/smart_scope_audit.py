@@ -282,7 +282,9 @@ def _granted_scope_tokens(values: Iterable[str]) -> tuple[str, ...]:
     try:
         tokens = tuple(islice(values, 129))
     except Exception:
-        raise ValueError("Invalid SMART scope collection.") from None
+        tokens = None
+    if tokens is None:
+        raise ValueError("Invalid SMART scope collection.")
     if len(tokens) > 128 or any(
         type(token) is not str or _OAUTH_SCOPE_TOKEN.fullmatch(token) is None
         for token in tokens

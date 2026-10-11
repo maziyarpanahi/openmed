@@ -574,3 +574,69 @@ def test_backend_grant_reuses_existing_assertion_builder(monkeypatch, tmp_path):
             store, exchange, backend_config=replace(backend, client_id="other-client")
         )
     assert cfg.token_endpoint not in repr(backend)
+
+
+@pytest.mark.parametrize(
+    "boundary", ("json", "config", "scope_iterator", "request_mapping")
+)
+def test_private_context_does_not_cross_refresh_validation(boundary):
+    def private_scopes():
+        raise ValueError("private-scope-iterator-canary")
+        yield "unused"
+
+    calls = {
+        "json": lambda: validate_smart_token_response(
+            SMARTTokenResponse(200, b'{"private-response-canary":'),
+            requested_scopes=SCOPES,
+            issued_at=100,
+        ),
+        "config": lambda: replace(
+            config(), token_endpoint="https://auth.example:private-port-canary/token"
+        ),
+        "scope_iterator": lambda: smart_scopes_cover(private_scopes(), SCOPES),
+        "request_mapping": lambda: SMARTTokenRequest(
+            "https://auth.example/token", private_scopes()
+        ),
+    }
+    with pytest.raises(ValueError) as caught:
+        calls[boundary]()
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert "canary" not in str(caught.value)
+
+
+@pytest.mark.parametrize("foreign", (False, True))
+def test_untrusted_refresh_exception_diagnostics_are_never_read(foreign):
+    class ForeignValidationError(SMARTTokenValidationError):
+        def __init__(self):
+            ValueError.__init__(self, "private-transport-canary")
+
+        @property
+        def code(self):
+            pytest.fail("private diagnostic getter was evaluated")
+
+    error = ForeignValidationError() if foreign else SMARTTokenValidationError()
+    if not foreign:
+        error.code = "private-transport-canary"
+    store = Custody(config())
+
+    def transport(_):
+        raise error
+
+    report = refresher(store, transport).ensure_ready(HANDLE)
+    assert report.code == "invalid_response"
+    assert report.revocation_confirmed and store.current is None
+    assert "canary" not in str(report.to_dict())
+
+
+def test_closed_token_error_rejects_diagnostic_string_subclasses():
+    class PrivateCode(str):
+        def __hash__(self):
+            return hash("invalid_grant")
+
+        def __eq__(self, other):
+            return other == "invalid_grant"
+
+    error = SMARTTokenValidationError(PrivateCode("private-code-canary"))
+    assert type(error.code) is str and error.code == "invalid_response"
+    assert "canary" not in str(error)

@@ -436,12 +436,15 @@ class SMARTBackendBulkIngestor:
     async def _fetch_access_token(self, client: httpx.AsyncClient) -> str:
         self._token_expires_at = 0
         self._assert_allowed_url(self.config.token_url)
+        failure = None
+        token_response = None
         try:
             issued_at = _clock_now(self._clock)
             requested = _granted_scope_tokens(self.config.scope.split(" "))
             assertion = self._client_assertion_builder(self.config)
             with _token_http_log_guard():
-                response = await client.post(
+                async with client.stream(
+                    "POST",
                     self.config.token_url,
                     headers={
                         "Accept": "application/json",
@@ -453,32 +456,51 @@ class SMARTBackendBulkIngestor:
                         "client_assertion_type": CLIENT_ASSERTION_TYPE,
                         "client_assertion": assertion,
                     },
-                )
+                ) as response:
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        if len(body) + len(chunk) > 65536:
+                            raise SMARTTokenValidationError()
+                        body.extend(chunk)
+                    token_response = SMARTTokenResponse(
+                        response.status_code, bytes(body)
+                    )
         except asyncio.CancelledError:
             raise
+        except SMARTTokenValidationError:
+            failure = "token response invalid"
         except Exception:
-            raise SMARTBackendError("token endpoint unavailable") from None
+            failure = "token endpoint unavailable"
+        if failure is not None:
+            raise SMARTBackendError(failure)
+        if token_response is None:
+            raise SMARTBackendError("token endpoint unavailable")
         try:
             credential, audit = validate_smart_token_response(
-                SMARTTokenResponse(response.status_code, response.content),
+                token_response,
                 requested_scopes=requested,
                 issued_at=issued_at,
             )
             if audit.narrowed:
-                raise SMARTBackendError("token scope narrowed and insufficient")
+                failure = "token scope narrowed and insufficient"
         except SMARTTokenValidationError:
-            raise SMARTBackendError("token response invalid") from None
+            failure = "token response invalid"
+        if failure is not None:
+            raise SMARTBackendError(failure)
         self._token_expires_at = credential.expires_at
         self._token_issued_at = issued_at
         self._assert_token_current()
         return credential.access_token
 
     def _assert_token_current(self) -> None:
+        invalid_clock = False
         try:
             now = _clock_now(self._clock)
         except ValueError:
+            invalid_clock = True
+        if invalid_clock:
             self._token_expires_at = 0
-            raise SMARTBackendError("token clock invalid") from None
+            raise SMARTBackendError("token clock invalid")
         if now < self._token_issued_at or now >= self._token_expires_at:
             self._token_expires_at = 0
             raise SMARTBackendError("token expired")
@@ -861,10 +883,13 @@ def build_client_assertion(
 ) -> str:
     """Build a signed SMART Backend Services JWT client assertion."""
 
+    invalid_clock = False
     try:
         now = _clock_now(clock)
     except ValueError:
-        raise SMARTBackendError("client assertion clock invalid") from None
+        invalid_clock = True
+    if invalid_clock:
+        raise SMARTBackendError("client assertion clock invalid")
     header: dict[str, Any] = {"alg": "RS384", "typ": "JWT"}
     if config.key_id:
         header["kid"] = config.key_id

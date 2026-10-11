@@ -70,10 +70,24 @@ class SMARTTokenValidationError(ValueError):
     def __init__(self, code: str = "invalid_response") -> None:
         self.code = (
             code
-            if code in {"invalid_grant", "invalid_response", "scope_expansion"}
+            if type(code) is str
+            and code in {"invalid_grant", "invalid_response", "scope_expansion"}
             else "invalid_response"
         )
         super().__init__(self.code)
+
+
+def _validation_code(error: SMARTTokenValidationError) -> str:
+    """Read only an exact local exception's closed, stored diagnostic code."""
+    if type(error) is SMARTTokenValidationError:
+        code = vars(error).get("code")
+        if type(code) is str and code in {
+            "invalid_grant",
+            "invalid_response",
+            "scope_expansion",
+        }:
+            return code
+    return "invalid_response"
 
 
 def _integer(value: Any, low: int, high: int) -> bool:
@@ -95,7 +109,8 @@ def _clock_now(clock: Callable[[], float]) -> int:
             raise ValueError
         return math.floor(value)
     except Exception:
-        raise _ClockError("invalid_clock") from None
+        pass
+    raise _ClockError("invalid_clock")
 
 
 @dataclass(frozen=True, repr=False)
@@ -146,7 +161,8 @@ class SMARTRefreshConfig:
                 )
             )
         except Exception:
-            raise ValueError("Invalid SMART refresh configuration.") from None
+            valid = False
+            scopes = ()
         if not valid:
             raise ValueError("Invalid SMART refresh configuration.")
         object.__setattr__(self, "requested_scopes", scopes)
@@ -199,7 +215,8 @@ class SMARTCredential:
             )
             scopes = _granted_scope_tokens(self.granted_scopes)
         except Exception:
-            raise ValueError("Invalid SMART credential.") from None
+            valid = False
+            scopes = ()
         if not valid:
             raise ValueError("Invalid SMART credential.")
         object.__setattr__(self, "granted_scopes", scopes)
@@ -276,7 +293,13 @@ class SMARTTokenRequest:
     form: Mapping[str, str]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "form", MappingProxyType(dict(self.form)))
+        try:
+            form = dict(self.form)
+        except Exception:
+            form = None
+        if form is None:
+            raise ValueError("Invalid SMART token request.")
+        object.__setattr__(self, "form", MappingProxyType(form))
 
 
 @dataclass(frozen=True, repr=False)
@@ -376,7 +399,8 @@ def _payload(response: SMARTTokenResponse) -> dict[str, Any]:
             raise SMARTTokenValidationError()
         return value
     except Exception:
-        raise SMARTTokenValidationError() from None
+        pass
+    raise SMARTTokenValidationError()
 
 
 def validate_smart_token_response(
@@ -465,10 +489,11 @@ def validate_smart_token_response(
         if "refresh_token" in payload and payload["refresh_token"] is None:
             raise SMARTTokenValidationError()
         return credential, audit
-    except SMARTTokenValidationError:
-        raise
+    except SMARTTokenValidationError as error:
+        failure_code = _validation_code(error)
     except Exception:
-        raise SMARTTokenValidationError() from None
+        failure_code = "invalid_response"
+    raise SMARTTokenValidationError(failure_code)
 
 
 class SMARTCredentialRefresher:
@@ -519,7 +544,7 @@ class SMARTCredentialRefresher:
             ):
                 valid = False
         except Exception:
-            raise ValueError("Invalid SMART refresh dependencies.") from None
+            valid = False
         if not valid:
             raise ValueError("Invalid SMART refresh dependencies.")
         self._config = config
@@ -652,7 +677,7 @@ class SMARTCredentialRefresher:
                 )
             )
         except SMARTTokenValidationError as exc:
-            return self._revoke(handle, exc.code)
+            return self._revoke(handle, _validation_code(exc))
         except Exception:
             return self._revoke(handle, "transport_unavailable")
         try:
@@ -672,7 +697,7 @@ class SMARTCredentialRefresher:
             if credential.expires_at <= completed + self._config.refresh_margin_seconds:
                 return self._revoke(handle, "invalid_response")
         except SMARTTokenValidationError as exc:
-            return self._revoke(handle, exc.code)
+            return self._revoke(handle, _validation_code(exc))
         except _ClockError:
             return self._revoke(handle, "invalid_clock")
         rotated = credential.refresh_token is not None and (

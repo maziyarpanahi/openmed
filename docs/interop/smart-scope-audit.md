@@ -247,7 +247,11 @@ their representations and must never be serialized with generic dataclass
 helpers, persisted to evidence, printed or logged. Injected transports, assertion
 builders and custody adapters are trusted code responsible for their own logging.
 The built-in bulk reader suppresses HTTPX/HTTPcore token-exchange logs in that
-task's context while retaining unrelated request logging.
+task's context while retaining unrelated request logging. Validation failures
+raise fresh, fixed errors without retaining private decoder, iterator, endpoint
+or callback exception context. Only exact local validation exceptions with a
+closed stored code influence the refresh report; callback diagnostic getters
+and free-text codes are never used.
 
 Credential readiness carries no clinical-action approval. A governed writer must
 separately validate its exact approved action and recheck current custody,
@@ -259,6 +263,8 @@ The existing bulk-export reader now validates all required SMART token response
 fields, rejects narrower grants insufficient for its configured request, and
 checks expiry before export, each poll and each new file download. An expired
 token stops the run; the legacy reader does not implicitly renew credentials.
+Token responses stream into a bounded 64 KiB buffer; an oversized response stops
+the read and closes its stream before export or file retrieval can begin.
 
 This behavior follows the published
 [SMART Backend Services STU 2.2 token response contract](https://hl7.org/fhir/smart-app-launch/STU2.2/backend-services.html),
