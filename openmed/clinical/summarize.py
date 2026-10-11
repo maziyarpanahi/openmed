@@ -393,17 +393,25 @@ def _invoke_backend(
     from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
+        LocalSummarizerPackageError,
         MLXSummarizerBackend,
     )
     from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
     reason = "execution_failed"
+    package_code = None
     try:
         with network_blocked_if_offline(local_only=True):
             return _call_backend(model, text, mode, cancellation)
     except BriefInterrupted:
         raise
+    except LocalSummarizerPackageError as error:
+        if (
+            type(model) is MLXSummarizerBackend
+            and type(error) is LocalSummarizerPackageError
+        ):
+            package_code = error.code
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
@@ -420,6 +428,8 @@ def _invoke_backend(
             reason = error.reason
     except Exception:
         pass
+    if package_code is not None:
+        raise LocalSummarizerPackageError(package_code)
     raise LocalSummarizerError(reason=reason)
 
 

@@ -49,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Registered MLX summarizers now require a provisioned, symlink-free package
+  with a trusted manifest pin before model construction. Admission verifies
+  every file, refuses undeclared members, and derives task support, context
+  limits and quantization from digest-bound metadata. Package failures expose
+  controlled reason codes; unprovisioned aliases fail closed without fallback.
+
 - Confine OpenMedKit MLX manifest paths during download, cache inspection and
   local loading. Reject traversal and escaping symlinks with value-free errors,
   remove stale ready markers and confined partial writes on rejection, and retain
