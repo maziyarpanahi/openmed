@@ -58,6 +58,7 @@ nav:
           - Bounded Approved FHIR Transactions: interop/fhir-transactions.md
           - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
           - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
+          - Bounded Agent Scheduling: agent/bounded-scheduling.md
           - Agent Action Graphs: agent/action-graphs.md
           - Agent Action Execution Phases: agent/action-phases.md
           - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
@@ -103,10 +104,12 @@ nav:
           - Sealed Workflow Manifests: evaluation/sealed-workflow-manifests.md
           - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
       - Assurance:
+          - Offline Agent Governance Self-check: agent/self-check.md
           - Agent Boundary Threat Model: security/agent-threat-model.md
           - v3.1 Agent Deployment Assurance: compliance/v3.1-agent-assurance.md
   - Core Guides:
       - Building with an Agent: agent-usage.md
+      - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
       - Agent Skill Installation: agent-skills/install.md
       - Agent Skill Validation: agent-skills/validation.md
       - De-identification Policy Setup: agent-skills/setup.md
@@ -210,6 +213,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
@@ -222,6 +226,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
@@ -396,6 +401,8 @@ nav:
       - Comparator Benchmark Harness: evaluation/comparator-harness.md
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
+      - Offline Planner Qualification: evaluation/planner-qualification.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
@@ -404,6 +411,7 @@ nav:
       - Adaptive Benchmark Feedback Budgets: evaluation/feedback-budgets.md
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
+      - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
@@ -539,6 +547,7 @@ nav:
       - FHIR Profile Declarations: fhir/profile-declarations.md
       - Observation Extension Validation: fhir/observation-extensions.md
       - FHIR Bulk Data Privacy Gateway: interop/fhir-bulk-data.md
+      - FHIR Subscription Notification Intake: interop/fhir-subscription-notifications.md
       - FHIR-to-OMOP Round-trip Conformance: interop/fhir-omop-matrix.md
       - Clinical Fact Projection to OMOP 5.4: interop/omop-fact-projection.md
       - OMOP Quality Bridge and Synthetic Reconciliation: interop/omop-quality-bridge.md
@@ -718,9 +727,6 @@ plugins:
           build: true
           nav:
             - Overview:
-                - Welcome: index.md
-                - Quick Start: getting-started.md
-                - China Onboarding: onboarding-china.md
           nav_translations:
             Overview: 概览
             Welcome: 欢迎
@@ -735,9 +741,6 @@ plugins:
           build: true
           nav:
             - Overview:
-                - Welcome: index.md
-                - Quick Start: getting-started.md
-                - India Onboarding: onboarding-india.md
           nav_translations:
             Overview: अवलोकन
             Welcome: स्वागत

@@ -4054,8 +4054,11 @@
             "items": {
               "enum": [
                 "cohort_id",
+                "coverage",
                 "member_count",
-                "status"
+                "review_required",
+                "status",
+                "warnings"
               ],
               "type": "string"
             },

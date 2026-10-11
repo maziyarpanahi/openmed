@@ -81,6 +81,7 @@ sends a resource. Legacy direct FHIR/OpenMRS writers remain outside the complete
 governed lifecycle. Applications must compose the reviewed authority and
 approval boundary around any production writer.
 
+- [Bounded scheduling](bounded-scheduling.md): checkpoint bounded scheduling and retain review-required outcomes under an injected dispatcher.
 - [Action graphs](action-graphs.md): validate dependencies and deterministic ordering without scheduling or execution.
 - [Action execution phases](action-phases.md): validate metadata-only lifecycle transitions without running the action.
 - [FHIR write capability preflight](../interop/fhir-write-preflight.md): check a plan against a cached R4 CapabilityStatement.
@@ -163,6 +164,7 @@ The deployment owner verifies that the composed boundary actually guards every
 effect. Conformance tests and assurance packs provide technical evidence;
 they do not provide certification or autonomous clinical authority.
 
+- [Offline governance self-check](self-check.md): run synthetic contract probes without qualifying production authority.
 - [Agent boundary threat model](../security/agent-threat-model.md): exercise a caller-composed policy boundary against synthetic adversarial attempts.
 - [Agent deployment assurance](../compliance/v3.1-agent-assurance.md): bind revision, deployment, candidate and gate-report evidence in a bounded adoption pack.
 

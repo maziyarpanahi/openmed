@@ -131,6 +131,7 @@ classification:
     - interop/fhir-transactions.md
     - interop/fhir-conditional-writes.md
     - interop/fhir-concurrency.md
+    - agent/bounded-scheduling.md
     - agent/action-graphs.md
     - agent/action-phases.md
     - interop/fhir-write-preflight.md
@@ -172,9 +173,11 @@ classification:
     - interop/fhir-capability-fixtures.md
     - evaluation/sealed-workflow-manifests.md
     - evaluation/v3.1-agent-gates.md
+    - agent/self-check.md
     - security/agent-threat-model.md
     - compliance/v3.1-agent-assurance.md
     - agent-usage.md
+    - agent/exchange-record-schemas.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -273,6 +276,7 @@ classification:
     - clinical/nli-cascade.md
     - clinical/nli-abstention.md
     - models/clinical-nli.md
+    - clinical/sdoh-extraction.md
     - clinical/sdoh-temporal-qualifiers.md
     - clinical/sdoh-section-scope.md
     - clinical/sdoh-evidence-deduplication.md
@@ -285,6 +289,7 @@ classification:
     - clinical/sdoh-evidence.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
+    - evaluation/sdoh-extraction.md
     - clinical/medication-change-relations.md
     - clinical/laboratory-result-relations.md
     - clinical/procedure-indication-relations.md
@@ -454,6 +459,8 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
+    - evaluation/agent-run-summary-fixtures.md
+    - evaluation/planner-qualification.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
@@ -462,6 +469,7 @@ classification:
     - evaluation/feedback-budgets.md
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
+    - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
@@ -596,6 +604,7 @@ classification:
     - fhir/profile-declarations.md
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
+    - interop/fhir-subscription-notifications.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
