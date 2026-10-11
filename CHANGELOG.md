@@ -213,6 +213,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Add a governed-agent lifecycle overview and organize existing authority,
+  approval, write-back, evidence, recovery, evaluation and assurance guides
+  into one navigation section while preserving their public URLs (#3784).
 - Execute governed-agent Python documentation blocks offline with per-page
   synthetic context. Require explicit, content-bound exceptions for application
   adapter sketches, and fail on API drift or attempted external effects (#3795).
