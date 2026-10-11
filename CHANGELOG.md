@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+
+- Add explicit language-aware SDOH extraction with per-category unsupported,
+  processed, skipped and failed outcomes. Declare English support for packaged
+  cue tables and built-in extractors, retain legacy English dispatch, and keep
+  audit output limited to category metadata, counts and offsets (#3797).
 - Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
   exact span lineage, vocabulary snapshot checks and rollback evidence.
   Replacement proposals preserve prior pipeline digests and explicitly review
