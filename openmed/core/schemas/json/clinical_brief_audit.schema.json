@@ -243,6 +243,9 @@
         },
         "unsupported_claims": {
           "$ref": "#/$defs/unsupported_claims"
+        },
+        "length_budget": {
+          "$ref": "#/$defs/length_budget"
         }
       }
     },
@@ -254,6 +257,8 @@
         "invalid_evidence",
         "invalid_input",
         "invalid_reviewed_evidence",
+        "length_budget_exceeded",
+        "model_unavailable",
         "nli_rejected",
         "nli_unavailable",
         "privacy",
@@ -2554,6 +2559,391 @@
         },
         "reference_digest": {
           "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "length_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mapping_id",
+        "estimator_id",
+        "budget"
+      ],
+      "properties": {
+        "mapping_id": {
+          "const": "brief-profile-evidence-classes-v1"
+        },
+        "estimator_id": {
+          "const": "utf8-byte-upper-bound-v1"
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "policy_id",
+            "max_tokens",
+            "requested_tokens",
+            "allocated_tokens",
+            "unused_tokens",
+            "allocations",
+            "truncation",
+            "requires_clinician_review",
+            "autonomous_decision",
+            "disclaimer"
+          ],
+          "properties": {
+            "schema_version": {
+              "const": 1
+            },
+            "policy_id": {
+              "const": "clinical_summary_v1"
+            },
+            "max_tokens": {
+              "const": 2048
+            },
+            "requested_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1048640
+            },
+            "allocated_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2048
+            },
+            "unused_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2048
+            },
+            "allocations": {
+              "type": "array",
+              "minItems": 7,
+              "maxItems": 7,
+              "prefixItems": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "active_problems"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 192
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "follow_up"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "key_findings"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 160
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "medications"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "pending_items"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "procedures"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 96
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "evidence_class",
+                    "requested_tokens",
+                    "allocated_tokens",
+                    "deferred_tokens",
+                    "status"
+                  ],
+                  "properties": {
+                    "evidence_class": {
+                      "const": "safety"
+                    },
+                    "requested_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "allocated_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 128
+                    },
+                    "deferred_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 1048640
+                    },
+                    "status": {
+                      "enum": [
+                        "empty",
+                        "included",
+                        "deferred",
+                        "truncated"
+                      ]
+                    }
+                  }
+                }
+              ],
+              "items": false
+            },
+            "truncation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "occurred",
+                "deferred_tokens",
+                "deferred_evidence_classes"
+              ],
+              "properties": {
+                "occurred": {
+                  "type": "boolean"
+                },
+                "deferred_tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1048640
+                },
+                "deferred_evidence_classes": {
+                  "type": "array",
+                  "maxItems": 7,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "active_problems",
+                      "follow_up",
+                      "key_findings",
+                      "medications",
+                      "pending_items",
+                      "procedures",
+                      "safety"
+                    ]
+                  }
+                }
+              }
+            },
+            "requires_clinician_review": {
+              "const": true
+            },
+            "autonomous_decision": {
+              "const": false
+            },
+            "disclaimer": {
+              "const": "Clinical summary length budgets are deterministic assistive review artifacts, not clinical decisions or autonomous summaries. Qualified clinical review is required."
+            }
+          }
         }
       }
     }

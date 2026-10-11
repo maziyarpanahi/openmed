@@ -264,15 +264,19 @@ def summarize(
     if not isinstance(text, str):
         raise TypeError("text must be a string or DeidentificationResult")
     from openmed.clinical.summarize_backends import (
+        ExtractiveSummarizerBackend,
         LocalSummarizerError,
         MLXSummarizerBackend,
         _require_runtime,
+        _validate_input,
         resolve_summarizer_backend,
     )
     from openmed.core.config import OpenMedConfig
     from openmed.core.offline import network_blocked_if_offline
 
     backend = resolve_summarizer_backend(model)
+    if type(backend) in {ExtractiveSummarizerBackend, MLXSummarizerBackend}:
+        _validate_input(text, normalized_mode)
     if isinstance(backend, MLXSummarizerBackend):
         _require_runtime()
     failed = False
@@ -284,9 +288,7 @@ def summarize(
     except Exception:
         failed = True
     if failed:
-        raise LocalSummarizerError(
-            "local de-identification failed; prepare cached PII artifacts"
-        )
+        raise LocalSummarizerError(reason="deidentification_unavailable")
     return summarize_deidentified(result, mode=normalized_mode, model=backend)
 
 
@@ -397,7 +399,7 @@ def _invoke_backend(
     from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
-    failed = False
+    reason = "execution_failed"
     package_code = None
     try:
         with network_blocked_if_offline(local_only=True):
@@ -410,25 +412,25 @@ def _invoke_backend(
             and type(error) is LocalSummarizerPackageError
         ):
             package_code = error.code
-        else:
-            failed = True
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
-        failed = True
+        reason = "runtime_unavailable"
     except ExtractiveSelectionError:
         from openmed.clinical.summarize_backends import ExtractiveSummarizerBackend
 
         if type(model) is ExtractiveSummarizerBackend:
             raise
-        failed = True
+    except LocalSummarizerError as error:
+        # Reconstruct a closed, value-free error outside the handler instead
+        # of retaining a third-party exception or its chained source payload.
+        if type(error) is LocalSummarizerError:
+            reason = error.reason
     except Exception:
-        failed = True
+        pass
     if package_code is not None:
         raise LocalSummarizerPackageError(package_code)
-    if failed:
-        raise LocalSummarizerError("local summarizer execution failed")
-    raise AssertionError("unreachable summarizer state")
+    raise LocalSummarizerError(reason=reason)
 
 
 def _call_backend(model: object | None, text: str, mode: str, cancellation=None) -> str:
@@ -465,19 +467,28 @@ def _call_backend(model: object | None, text: str, mode: str, cancellation=None)
         else:
             output = callback(text)
 
-    if not isinstance(output, str) or len(output.encode("utf-8")) > 8192:
-        raise TypeError("summarizer backend must return a string")
+    from openmed.clinical.summarize_backends import (
+        MAX_OUTPUT_BYTES,
+        LocalSummarizerError,
+        _utf8_size,
+    )
+
+    if not isinstance(output, str):
+        raise LocalSummarizerError(reason="invalid_output")
+    if _utf8_size(output) > MAX_OUTPUT_BYTES:
+        raise LocalSummarizerError(reason="output_limit_exceeded")
     return output.strip()
 
 
 def _extractive_summary(text: str) -> str:
-    """Return a deterministic, local, first-three-sentence stub summary."""
+    """Select the first three source sentences with local script-aware boundaries."""
+    from openmed.processing import segment_text
 
-    normalized = " ".join(text.split())
-    if not normalized:
+    if not text.strip():
         return ""
-    sentences = [part.strip() for part in _SENTENCE_BOUNDARY.split(normalized)]
-    return " ".join(sentences[:3])
+    sentences = [text[span.start : span.end].strip() for span in segment_text(text)]
+    selected = [sentence for sentence in sentences if sentence][:3]
+    return " ".join(selected)
 
 
 def _backend_name(model: object | None) -> str:

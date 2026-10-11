@@ -52,9 +52,38 @@ MAX_RESPONSE_BYTES = 32_768
 MAX_CONTEXT_TOKENS = 8192
 MAX_OUTPUT_TOKENS = 2048
 
+_FAILURE_MESSAGES = {
+    "execution_failed": "local summarizer execution failed",
+    "unsupported_mode": "unsupported summarization mode",
+    "input_limit_exceeded": "summarizer input limit exceeded",
+    "invalid_memory_budget": "invalid summarizer memory budget",
+    "unregistered_alias": "unregistered local summarizer alias",
+    "artifact_not_cached": "local summarizer artifact is not cached",
+    "invalid_configuration": "invalid local summarizer configuration",
+    "capability_unsupported": "unsupported summarizer capability",
+    "memory_budget_exceeded": "summarizer memory budget exceeded",
+    "context_exceeded": "summarizer input context exceeded",
+    "invalid_output": "invalid summarizer output",
+    "output_limit_exceeded": "summary output limit exceeded",
+    "deidentification_unavailable": "local de-identification is unavailable",
+    "runtime_unavailable": "local summarizer runtime is unavailable",
+    "remote_backend": "remote summarizer backends are prohibited",
+    "invalid_backend": "invalid local summarizer backend",
+}
+
 
 class LocalSummarizerError(RuntimeError):
     """Content-free failure to resolve, admit, or run local summarization."""
+
+    def __init__(self, message: str = "", *, reason: str = "execution_failed") -> None:
+        # Retain the positional constructor for existing callers, but never
+        # incorporate a caller-supplied message into an exception or traceback.
+        self.reason = (
+            reason
+            if type(reason) is str and reason in _FAILURE_MESSAGES
+            else "execution_failed"
+        )
+        super().__init__(_FAILURE_MESSAGES[self.reason])
 
 
 class RemoteSummarizerError(LocalSummarizerError):
@@ -101,7 +130,8 @@ class LocalSummarizerPackageError(LocalSummarizerError):
             if type(code) is str and code in _PACKAGE_REASON_CODES
             else "package_invalid"
         )
-        super().__init__(self.code)
+        super().__init__(reason="execution_failed")
+        RuntimeError.__init__(self, self.code)
 
 
 @dataclass(frozen=True)
@@ -196,7 +226,7 @@ def _utf8_size(text: str) -> int:
         except UnicodeEncodeError:
             pass
     # A decoder exception retains its input even if its message omits it.
-    raise LocalSummarizerError("invalid summarizer text")
+    raise LocalSummarizerError(reason="invalid_output")
 
 
 class ExtractiveSummarizerBackend:
@@ -210,7 +240,7 @@ class ExtractiveSummarizerBackend:
     """
 
     backend_id = "deterministic-extractive"
-    template_digest = compute_template_digest("extractive-first-three-sentences-v1")
+    template_digest = compute_template_digest("extractive-script-aware-first-three-v2")
 
     def __init__(
         self,
@@ -272,9 +302,9 @@ class ExtractiveSummarizerBackend:
 
 def _validate_input(text: str, mode: str) -> None:
     if mode != "bhc":
-        raise LocalSummarizerError("unsupported summarization mode")
+        raise LocalSummarizerError(reason="unsupported_mode")
     if _utf8_size(text) > MAX_INPUT_BYTES:
-        raise LocalSummarizerError("summarizer input limit exceeded")
+        raise LocalSummarizerError(reason="input_limit_exceeded")
 
 
 def _require_runtime() -> None:
@@ -338,14 +368,14 @@ class MLXSummarizerBackend:
         self, model: str = "mlx", *, memory_budget_bytes: int = 16 * 1024**3
     ) -> None:
         if type(memory_budget_bytes) is not int or not 0 < memory_budget_bytes <= 2**50:
-            raise LocalSummarizerError("invalid summarizer memory budget")
+            raise LocalSummarizerError(reason="invalid_memory_budget")
         failed = False
         try:
             self._model_id, self._revision = resolve_summarizer_model(model)
         except (TypeError, ValueError):
             failed = True
         if failed:
-            raise LocalSummarizerError("unregistered local summarizer alias")
+            raise LocalSummarizerError(reason="unregistered_alias")
         self._budget = memory_budget_bytes
         from openmed.mlx.maple import build_maple_task_messages
 
@@ -368,7 +398,7 @@ class MLXSummarizerBackend:
         _validate_input(text, mode)
         _require_runtime()
         result: str | None = None
-        failed = False
+        reason = None
         package_code = None
         try:
             with network_blocked_if_offline(local_only=True):
@@ -379,7 +409,7 @@ class MLXSummarizerBackend:
             if type(error) is LocalSummarizerPackageError:
                 package_code = error.code
             else:
-                failed = True
+                reason = "execution_failed"
         except ClinicalSLMManifestError as error:
             if type(error) in {
                 ClinicalSLMManifestError,
@@ -390,15 +420,20 @@ class MLXSummarizerBackend:
             }:
                 package_code = error.code
             else:
-                failed = True
+                reason = "execution_failed"
+        except LocalSummarizerError as error:
+            if type(error) is LocalSummarizerError:
+                reason = error.reason
+            else:
+                reason = "execution_failed"
         except Exception:
-            failed = True
+            reason = "execution_failed"
         check_cancellation(cancellation)
         if package_code is not None:
             raise LocalSummarizerPackageError(package_code)
-        if failed:
+        if reason is not None:
             # Raise outside the handler: upstream exceptions can contain PHI.
-            raise LocalSummarizerError("local summarizer admission or inference failed")
+            raise LocalSummarizerError(reason=reason)
         assert result is not None
         return result
 
@@ -460,7 +495,7 @@ class MLXSummarizerBackend:
             prompt_bound > manifest.context_limits["max_input_tokens"]
             or prompt_bound + output_tokens > context
         ):
-            raise LocalSummarizerError("summarizer input context exceeded")
+            raise LocalSummarizerError(reason="context_exceeded")
         capability = probe_clinical_slm_capabilities(
             {
                 **manifest.to_dict(),
@@ -474,10 +509,10 @@ class MLXSummarizerBackend:
             raise LocalSummarizerPackageError("capability_unsupported")
         weights = manifest.weights
         if not weights or len(weights) > 256:
-            raise LocalSummarizerError("missing or unbounded model weights")
+            raise LocalSummarizerError(reason="invalid_configuration")
         weights_bytes = sum(item.size_bytes for item in weights)
         if weights_bytes <= 0:
-            raise LocalSummarizerError("empty model weights")
+            raise LocalSummarizerError(reason="invalid_configuration")
         memory = preflight_clinical_slm_memory(
             {"weights_bytes": weights_bytes},
             ClinicalSLMRuntimeProfile(
@@ -491,7 +526,7 @@ class MLXSummarizerBackend:
             ),
         )
         if not memory.accepted:
-            raise LocalSummarizerError("summarizer memory budget exceeded")
+            raise LocalSummarizerError(reason="memory_budget_exceeded")
         check_cancellation(cancellation)
         runner = _load_model(path)
         try:
@@ -502,7 +537,7 @@ class MLXSummarizerBackend:
                 len(tokens) > manifest.context_limits["max_input_tokens"]
                 or len(tokens) + output_tokens > context
             ):
-                raise LocalSummarizerError("summarizer token budget exceeded")
+                raise LocalSummarizerError(reason="context_exceeded")
             check_cancellation(cancellation)
             output = runner.generate(
                 prompt=prompt,
@@ -512,16 +547,19 @@ class MLXSummarizerBackend:
                 speculative=False,
             )
             check_cancellation(cancellation)
-            if (
-                not isinstance(output, str)
-                or len(output.encode("utf-8")) > MAX_RESPONSE_BYTES
-            ):
-                raise LocalSummarizerError("invalid summarizer output")
-            parsed = parse_maple_task_response("summarize", output, text)
+            if not isinstance(output, str) or _utf8_size(output) > MAX_RESPONSE_BYTES:
+                raise LocalSummarizerError(reason="invalid_output")
+            parsed = None
+            try:
+                parsed = parse_maple_task_response("summarize", output, text)
+            except (TypeError, ValueError):
+                pass
+            if parsed is None:
+                raise LocalSummarizerError(reason="invalid_output")
             if not parsed.evidence or not parsed.answer:
-                raise LocalSummarizerError("summary evidence is required")
-            if len(parsed.answer.encode("utf-8")) > MAX_OUTPUT_BYTES:
-                raise LocalSummarizerError("summary output limit exceeded")
+                raise LocalSummarizerError(reason="invalid_output")
+            if _utf8_size(parsed.answer) > MAX_OUTPUT_BYTES:
+                raise LocalSummarizerError(reason="output_limit_exceeded")
             return parsed.answer
         finally:
             # This runner is created for this call; never unload caller-owned providers.
@@ -547,7 +585,7 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
             "azure",
             "bedrock",
         }:
-            raise RemoteSummarizerError("remote summarizer backends are prohibited")
+            raise RemoteSummarizerError(reason="remote_backend")
         return MLXSummarizerBackend(model)
     if (
         callable(model)
@@ -555,4 +593,4 @@ def resolve_summarizer_backend(model: object | None = None) -> object:
         or callable(getattr(model, "generate_brief", None))
     ):
         return model
-    raise LocalSummarizerError("invalid local summarizer backend")
+    raise LocalSummarizerError(reason="invalid_backend")

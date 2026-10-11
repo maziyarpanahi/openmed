@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Map reviewed brief profile fields to existing evidence-class budgets, bind
+  value-free estimates into audit records and distinguish length overflow from
+  unavailable local models. Export controlled summarizer errors and preserve
+  their typed reason codes without private exception contexts. Use script-aware
+  first-three-sentence boundaries for explicit comparison extraction; retain
+  reviewed fact-coverage selection and native unloaded-model refusal
+  (#3746, #3747, #3749, #3750).
+
 - Select explicit extractive brief sentences by unique reviewed fact coverage,
   independent omission rules and existing length allocations. Preserve ordered
   citations and expose insufficient-budget/resource-limit diagnostics without
@@ -46,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every file, refuses undeclared members, and derives task support, context
   limits and quantization from digest-bound metadata. Package failures expose
   controlled reason codes; unprovisioned aliases fail closed without fallback.
+
+- Confine OpenMedKit MLX manifest paths during download, cache inspection and
+  local loading. Reject traversal and escaping symlinks with value-free errors,
+  remove stale ready markers and confined partial writes on rejection, and retain
+  root and nested tokenizer layouts (#3728).
 
 - Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
   pins and retain lockfile SARIF diagnostics after image-build failures.
