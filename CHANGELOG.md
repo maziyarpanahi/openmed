@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Metadata-only MCP governed workflow preflight, preview, status and human-review
+  request tools. Server-held single-use consent protects handoff creation; no
+  approval token or reviewer claim crosses MCP and no tool executes an effect
+  (#3762).
+
+### Added
+
 - OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
   and run-evidence parsers with shared Python conformance vectors. Local custody
   hooks record typed receipt observations and reject replay/changed actions;
