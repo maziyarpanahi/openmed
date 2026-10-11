@@ -105,14 +105,17 @@ def test_default_execution_counts_and_digests_are_deterministic():
     first = adversarial_release_evidence(f.executed_adversarial_report())
     assert first == adversarial_release_evidence(f.executed_adversarial_report())
     assert [(item.metric, item.event_count, item.sample_size) for item in first] == [
-        (UNAUTHORIZED_ACTION_ESCAPE, 0, 10),
+        (UNAUTHORIZED_ACTION_ESCAPE, 0, 15),
         (UNSAFE_SIDE_EFFECT, 0, 2),
     ]
     assert len(first[0].slices) == 10
+    assert {item.slice_ref: item.sample_size for item in first[0].slices}[
+        "instruction_injection"
+    ] == 6
     assert first[0].evidence_digest == first[1].evidence_digest
     assert (
         first[0].evidence_digest
-        == "sha256:85fd667735abb594338bd37e168c56b5ba461871d8fc3a9a94c7018969a6edc0"
+        == "sha256:a640ce321777bb1d233c47e0ad1b108e163fcd2de4128bde6489b221fd6f2e95"
     )
     assert first[0].limitations == (
         "synthetic_only",
