@@ -476,6 +476,147 @@ def test_preflight_order_is_enforced(local_runner, monkeypatch):
     assert calls == ["runtime", "cache", "capability", "memory", "load", "generate"]
 
 
+@pytest.mark.parametrize(
+    ("model", "reason"),
+    [("not-a-registered-alias", "unregistered_alias"), (123, "invalid_backend")],
+)
+def test_backend_resolution_reasons_are_typed(model, reason):
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        backends.resolve_summarizer_backend(model)
+    assert caught.value.reason == reason
+
+
+def test_builtin_mode_rejected_before_deidentification(monkeypatch):
+    import importlib
+
+    module = importlib.import_module("openmed.clinical.summarize")
+    monkeypatch.setattr(
+        module, "deidentify", lambda *a, **kw: pytest.fail("must not deidentify")
+    )
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize("synthetic-private-note", mode="unsupported", model="extractive")
+    assert caught.value.reason == "unsupported_mode"
+    assert "synthetic-private" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("failure", "reason"),
+    [
+        ("cache", "artifact_not_cached"),
+        ("memory", "memory_budget_exceeded"),
+        ("context", "context_exceeded"),
+        ("capability", "capability_unsupported"),
+        ("output", "invalid_output"),
+    ],
+)
+def test_local_failures_preserve_safe_reasons(
+    local_runner, monkeypatch, failure, reason
+):
+    _, state = local_runner
+    backend = backends.MLXSummarizerBackend()
+    if failure == "cache":
+
+        def fail_cache(*args):
+            raise OSError("synthetic-private-cache-path")
+
+        monkeypatch.setattr(backends, "_cached_artifact", fail_cache)
+    elif failure == "memory":
+        backend = backends.MLXSummarizerBackend(memory_budget_bytes=100)
+    elif failure == "context":
+        state["tokens"] = 8192
+    elif failure == "capability":
+        monkeypatch.setattr(
+            backends,
+            "probe_clinical_slm_capabilities",
+            lambda *a, **kw: SimpleNamespace(supported=False),
+        )
+    elif failure == "output":
+        state["answer"] = None
+
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize_deidentified(deidentified(), model=backend)
+    assert caught.value.reason == reason
+    assert caught.value.__context__ is None
+    assert "synthetic-private" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("output", "reason"),
+    [(object(), "invalid_output"), ("x" * 8193, "output_limit_exceeded")],
+)
+def test_custom_type_and_size_failures_are_distinct(output, reason):
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize_deidentified(deidentified(), model=lambda _: output)
+    assert caught.value.reason == reason
+    assert caught.value.__context__ is None
+
+
+def test_uncontrolled_error_message_and_reason_never_escape():
+    marker = "synthetic-private-error"
+
+    def backend(_):
+        raise backends.LocalSummarizerError(marker, reason=marker)
+
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize_deidentified(deidentified(), model=backend)
+    assert caught.value.reason == "execution_failed"
+    assert marker not in str(caught.value)
+    assert caught.value.__context__ is None
+
+
+def test_summarizer_types_are_public_without_loading_models():
+    from openmed import clinical
+
+    for name in (
+        "LocalSummarizerError",
+        "RemoteSummarizerError",
+        "ExtractiveSummarizerBackend",
+        "MLXSummarizerBackend",
+        "resolve_summarizer_backend",
+    ):
+        assert getattr(clinical, name) is getattr(backends, name)
+
+
+@pytest.mark.parametrize(
+    "sentences",
+    [
+        ["咳嗽持续。", "开始治疗。", "病情好转。", "随后出院。"],
+        ["咳が続く。", "薬を投与した。", "改善した。", "退院した。"],
+        ["खांसी है।", "उपचार दिया।", "सुधार हुआ।", "छुट्टी मिली।"],
+        ["له سعال.", "تناول العلاج.", "تحسن.", "خرج."],
+        [
+            "Dr. Example assessed a cough.",
+            "The value was 3.5.",
+            "Stable.",
+            "Discharged.",
+        ],
+    ],
+)
+def test_extractive_script_boundaries_keep_three_exact_source_sentences(sentences):
+    note = " ".join(sentences)
+    result = backends.ExtractiveSummarizerBackend().summarize(note)
+    assert result == " ".join(sentences[:3])
+    assert all(sentence in note for sentence in sentences[:3])
+    assert sentences[3] not in result
+
+
+def test_long_cjk_note_has_a_bounded_extractive_summary():
+    note = "咳嗽持续。开始治疗。病情好转。随后出院。" * 170
+    assert 8192 < len(note.encode("utf-8")) <= backends.MAX_INPUT_BYTES
+    summary = backends.ExtractiveSummarizerBackend().summarize(note)
+    assert summary == "咳嗽持续。 开始治疗。 病情好转。"
+    assert len(summary.encode("utf-8")) <= backends.MAX_OUTPUT_BYTES
+
+
+def test_extractive_algorithm_has_a_versioned_template_digest():
+    from openmed.models.clinical_slm_templates import compute_template_digest
+
+    assert (
+        backends.ExtractiveSummarizerBackend.template_digest
+        == compute_template_digest("extractive-script-aware-first-three-v2")
+    )
+
+
 @pytest.mark.parametrize("boundary", ["load", "generate", "failure", "success"])
 def test_owned_mlx_runner_released_at_all_terminal_boundaries(
     local_runner, monkeypatch, boundary
@@ -517,3 +658,58 @@ def test_owned_mlx_runner_released_at_all_terminal_boundaries(
             )
     assert len(owned) == 1
     assert owned[0].model is owned[0].tokenizer is None
+
+
+@pytest.mark.parametrize("surface", ["summary", "mlx", "brief"])
+def test_foreign_reason_property_is_not_read_or_retained(monkeypatch, surface):
+    from openmed import clinical
+    from tests.unit.clinical.test_brief import fixture_context
+
+    reads = []
+    marker = "".join(("SYNTHETIC", "_PRIVATE", "_REASON"))
+
+    class ForeignError(backends.LocalSummarizerError):
+        def __init__(self):
+            RuntimeError.__init__(self, marker)
+
+        @property
+        def reason(self):
+            reads.append(1)
+            raise RuntimeError(marker)
+
+    def fail(*args, **kwargs):
+        raise ForeignError()
+
+    if surface == "brief":
+        monkeypatch.setattr(clinical, "summarize_deidentified", fail)
+        value, context = fixture_context()
+        brief = clinical.build_clinical_brief(
+            value, context=context, model="extractive"
+        )
+        assert brief.refusal_reason.value == "stage_failed"
+        assert brief.summary == ""
+        assert marker not in json.dumps(brief.to_dict())
+    else:
+        if surface == "mlx":
+            monkeypatch.setattr(backends, "_require_runtime", lambda: None)
+            backend = backends.MLXSummarizerBackend()
+            monkeypatch.setattr(backend, "_generate", fail)
+            invoke = lambda: backend.summarize("Synthetic evidence.")
+        else:
+            invoke = lambda: summarize_deidentified(deidentified(), model=fail)
+        with pytest.raises(backends.LocalSummarizerError) as caught:
+            invoke()
+        assert type(caught.value) is backends.LocalSummarizerError
+        assert caught.value.reason == "execution_failed"
+        assert caught.value.__context__ is caught.value.__cause__ is None
+        assert marker not in str(caught.value)
+    assert reads == []
+
+
+def test_invalid_unicode_output_has_no_retained_decoder_input():
+    marker = "".join(("SYNTHETIC", "_PRIVATE", "_OUTPUT"))
+    with pytest.raises(backends.LocalSummarizerError) as caught:
+        summarize_deidentified(deidentified(), model=lambda _: marker + "\ud800")
+    assert caught.value.reason == "invalid_output"
+    assert caught.value.__context__ is caught.value.__cause__ is None
+    assert marker not in str(caught.value)

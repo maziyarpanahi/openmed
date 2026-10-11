@@ -458,12 +458,18 @@ labels/scores). Do not relabel all such cases as `LocalNLIError`. The standalone
 
 `build_clinical_brief()` returns a `ClinicalBrief` with a typed refusal and an
 empty summary, rather than exposing backend exceptions. The table covers every
-`BriefRefusal` member. A backend-resolution exception, including a remote or
-missing summarizer, currently becomes `STAGE_FAILED`; there is no distinct
-missing-summarizer refusal. Likewise, exceptions raised by an NLI callback may
-become `STAGE_FAILED`, while a missing/incompatible callback or calibration ID
-reaches `NLI_UNAVAILABLE`. Record the enum and controlled stage trace, not raw
-provider errors. The trace records entered stages, not proof that each passed.
+`BriefRefusal` member. Missing runtime packages, unknown local aliases and
+uncached local artifacts become `MODEL_UNAVAILABLE` at de-identification or
+generation. Remote providers remain prohibited; other unexpected exceptions,
+including NLI callback failures, become `STAGE_FAILED`. A missing/incompatible
+NLI callback or calibration ID reaches `NLI_UNAVAILABLE`. Record the enum and
+controlled stage trace, not raw provider errors. The trace records entered
+stages, not proof that each passed.
+
+`LocalSummarizerError.reason` carries the closed reason vocabulary described in
+[Summarization](summarization.md). Built-in errors preserve their fixed code;
+foreign subclasses and callback errors become a fresh `execution_failed`
+without reading foreign reason properties or retaining private exception chains.
 
 | Member | Value | Current trigger | Remediation |
 |---|---|---|---|
@@ -475,7 +481,9 @@ provider errors. The trace records entered stages, not proof that each passed.
 | `NLI_UNAVAILABLE` | `nli_unavailable` | Missing/incompatible probability callback, thresholds or calibration binding | Supply a qualified local three-probability adapter and matching thresholds |
 | `NLI_REJECTED` | `nli_rejected` | A claim does not pass selective entailment, including contradiction or abstention | Retain human review; do not force entailment or relax thresholds silently |
 | `PRIVACY` | `privacy` | Leakage or final privacy validation rejects output | Discard output and investigate with protected handling and synthetic reproduction |
-| `STAGE_FAILED` | `stage_failed` | Other exception or incomplete stage contract, including unavailable summarizer | Inspect controlled configuration/stage information and restore the missing local contract |
+| `LENGTH_BUDGET_EXCEEDED` | `length_budget_exceeded` | Reviewed evidence exceeds a mapped class allocation before generation | Reduce admitted evidence with independent review; keep policy caps intact |
+| `MODEL_UNAVAILABLE` | `model_unavailable` | A local alias, runtime package or cached artifact is unavailable at generation/de-identification | Provision the approved local runtime/artifact separately; do not substitute a remote provider |
+| `STAGE_FAILED` | `stage_failed` | Other unexpected exception or incomplete stage contract | Inspect controlled configuration/stage information and restore the missing local contract |
 | `INVALID_REVIEWED_EVIDENCE` | `invalid_reviewed_evidence` | The separately versioned local evidence contract is malformed | Obtain bounded exact reviewed evidence; do not reuse a malformed record |
 | `REVIEW_RECEIPT_MISSING` | `review_receipt_missing` | No independently stored matching review receipt is available | Resolve the receipt through the trusted review store |
 | `REVIEW_RECEIPT_EXPIRED` | `review_receipt_expired` | The receipt is outside its exclusive validity interval | Obtain fresh independent review |

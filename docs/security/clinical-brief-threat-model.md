@@ -78,6 +78,16 @@ review-required state, provenance, local artifact integrity and compute
 availability. Audit consumers receive counts, offsets, fixed vocabulary and
 digests rather than note or summary text.
 
+Reviewed profile fields map to fixed evidence classes before generation. UTF-8
+byte estimates and joining separators charged to the following class enforce
+the existing caps;
+`length_budget_exceeded` cannot silently relax them. Value-free budget provenance
+is bound into the brief digest. An absent runtime, unknown alias or uncached
+artifact returns `model_unavailable`; arbitrary callback subclasses are never
+trusted to supply a public reason property. Sanitized errors are raised outside
+handlers so private exception contexts cannot escape. OpenMedKit refuses an
+unloaded model before evaluation and avoids GPU cleanup when no model was loaded.
+
 The composer must never manufacture review history, silently change backends,
 return partial unsafe generation, or convert a passed gate into clinical
 authorization. Only uniquely aligned reviewed claims with accepted NLI outcomes
