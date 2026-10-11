@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approval token or reviewer claim crosses MCP and no tool executes an effect
   (#3762).
 
+### Added
+
+- OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
+  and run-evidence parsers with shared Python conformance vectors. Local custody
+  hooks record typed receipt observations and reject replay/changed actions;
+  parsed evidence never grants clinical execution authority (#3669).
+
 ### Security fixes
 
 - Align Python and OpenMedKit summary leakage guards for Unicode variants,
@@ -89,6 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
+
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
 
 - Add versioned synthetic multilingual full-pipeline clinical-brief regressions
   for Latin, RTL, Indic and code-switched evidence, public surface/native packet

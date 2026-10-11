@@ -577,9 +577,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    from .agent_admission import add_argparse_admission_commands
+    from .governed_workflows import add_governed_workflow_commands
 
-    add_argparse_admission_commands(subparsers)
+    add_governed_workflow_commands(subparsers)
+
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_batch_run_command(subparsers)
@@ -3261,8 +3262,33 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     load_parser.set_defaults(handler=_handle_eval_load_test)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(
+    argv: Optional[Sequence[str]] = None, *, governance_service: Any = None
+) -> int:
     """CLI entry point invoked by the console script."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    command_position = 0
+    while command_position < len(arguments):
+        argument = arguments[command_position]
+        if argument == "--config-path":
+            command_position += 2
+        elif argument.startswith("--config-path="):
+            command_position += 1
+        else:
+            break
+    if command_position > 0 and arguments[command_position : command_position + 2] == [
+        "agents",
+        "workflow",
+    ]:
+        from .governed_workflows import run_governed_workflow_cli
+
+        # This surface accepts only explicit injected services, never ambient
+        # configuration or inline authority. Keep usage failures value-free.
+        return run_governed_workflow_cli(["invalid"], service=governance_service)
+    if arguments[:2] == ["agents", "workflow"]:
+        from .governed_workflows import run_governed_workflow_cli
+
+        return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
     args = parser.parse_args(argv)
 
