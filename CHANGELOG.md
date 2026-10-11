@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
+- Default-disabled, authenticated REST workflow inspection, receipt submission
+  and cancellation intent over an injected custody service, with bounded
+  governance schemas and content-free responses (#3668).
+
 ### Security fixes
 
 - Align Python and OpenMedKit summary leakage guards for Unicode variants,
@@ -83,12 +95,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Strict Python and TypeScript workflow clients with native evidence validation,
-  bounded inspection retries/polling, caller cancellation, fixed refusal
-  diagnostics and explicit single-attempt state changes (#3670).
-- Default-disabled, authenticated REST workflow inspection, receipt submission
-  and cancellation intent over an injected custody service, with bounded
-  governance schemas and content-free responses (#3668).
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
 
 - Add versioned synthetic multilingual full-pipeline clinical-brief regressions
   for Latin, RTL, Indic and code-switched evidence, public surface/native packet
@@ -550,6 +561,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   misspelled limits (#3509).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
+- Route Thai and Hebrew to their native packs and fail closed on unsupported
+  letter-bearing scripts unless an explicit fallback is configured (#3738).
+- Share offset-safe decimal-digit and bidi-control normalization across both
+  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
+  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
+- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
+  surrogate order from the shared locale table (#3740, #3743).
+- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
+  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
+  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
 - Preserve tokenizer-provided subword offsets from any standard `Mapping`

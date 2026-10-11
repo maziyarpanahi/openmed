@@ -16,6 +16,73 @@ from openmed.interop.hl7v2 import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.mark.parametrize("message_type", ["ADT^A40", "ORU^R01"])
+def test_default_map_covers_relatives_aliases_prior_ids_and_visit_ids(message_type):
+    import json
+
+    source_fields = {
+        6: "MaternalSynthetic",
+        9: "AliasSynthetic",
+        14: "555-0139",
+        20: "LicenseSynthetic",
+        21: "MotherIDSynthetic",
+    }
+    message = "\r".join(
+        [
+            f"MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||{message_type}|SYNTHETIC|P|2.5",
+            segment("PID", 21, source_fields),
+            segment("MRG", 7, {i: f"PriorSynthetic{i}" for i in range(1, 8)}),
+            segment("PV1", 19, {19: "VisitSynthetic"}),
+            "ZPX|CustomPrivateValue|otherSynthetic",
+            "OBX|1|NM|LAB^SYNTHETIC||7.1|mg/dL",
+        ]
+    )
+    report = {}
+    result = redact_hl7v2(message, date_shift_days=1, coverage_report=report)
+    for value in (
+        *source_fields.values(),
+        *(f"PriorSynthetic{i}" for i in range(1, 8)),
+        "VisitSynthetic",
+    ):
+        assert value not in result
+    assert parse_hl7v2(result).encoding == parse_hl7v2(message).encoding
+    assert "7.1|mg/dL" in result
+    assert "ZPX|CustomPrivateValue|otherSynthetic" in result
+    assert "CustomPrivateValue" not in json.dumps(report)
+    assert {
+        row["field"] for row in report["unmapped_fields"] if row["segment"] == "ZPX"
+    } == {1, 2}
+    assert all(
+        set(row) == {"segment_index", "segment", "field", "length"}
+        for row in report["unmapped_fields"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("segment_name", "position"), [("PID", 11), ("NK1", 4), ("GT1", 5), ("IN1", 19)]
+)
+def test_xad_components_keep_type_shape_and_repetitions(segment_name, position):
+    import re
+
+    address = "123 Synthetic Street^Apartment 24^SourceCity^CA^94105-1234^US^H"
+    message = (
+        "MSH|^~\\&|TEST|TEST|TEST|TEST|202610031200||ADT^A40|SYNTHETIC|P|2.5\r"
+        + segment(segment_name, position, {position: address + "~" + address})
+    )
+    output = redact_hl7v2(message, date_shift_days=1, seed=32)
+    value = parse_hl7v2(output).segments[1].get_field(position)
+    first, second = value.split("~")
+    assert first == second
+    parts = first.split("^")
+    assert len(parts) == 7
+    assert all(a != b for a, b in zip(parts[:6], address.split("^")[:6]))
+    assert not any(char.isdigit() for char in parts[2])
+    assert re.fullmatch(r"[A-Z]{2}", parts[3])
+    assert re.fullmatch(r"[0-9]{5}-[0-9]{4}", parts[4])
+    assert re.fullmatch(r"[A-Z]{2}", parts[5])
+    assert parts[6] == "H"
+
+
 def fake_deidentifier(text: str, **kwargs):
     assert kwargs["method"] == "mask"
     redacted = (
