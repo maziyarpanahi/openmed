@@ -94,6 +94,12 @@ with its scopes and admission class; adding an undeclared route fails the
 registry validation. Model and heavy routes share rate/concurrency and drain
 controls, including OMOP, profiling, cohorts and Journey reads.
 
+Lazy included routers use FastAPI's effective route contexts, including HTTP
+and WebSocket prefixes. Older flat route lists retain their original matcher.
+An unsupported route representation fails registry validation instead of
+skipping scope checks; nested routes and method mismatches have regression
+controls, including the current reference-container FastAPI runtime.
+
 Migration from earlier releases: credentials that previously accessed these
 routes with an unrelated scope must receive the matching grant. `*` and
 `namespace:*` still work. The deny-by-default setting remains available for

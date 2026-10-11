@@ -110,15 +110,33 @@ for _path in (
 DEFAULT_ROUTE_SCOPES = {key: policy.scopes for key, policy in ROUTE_POLICIES.items()}
 
 
+def _policy_routes(app: Any) -> Any:
+    """Use effective route contexts when FastAPI stores included routers lazily."""
+    from fastapi import routing
+
+    iterator = getattr(routing, "iter_route_contexts", None)
+    return iterator(app.routes) if callable(iterator) else iter(app.routes)
+
+
+def _policy_path(route: Any) -> str:
+    """Read the effective template, including included WebSocket prefixes."""
+    path = getattr(route, "path", None)
+    if not path:
+        # Some FastAPI contexts keep WebSocket paths on their compiled
+        # Starlette route; the original route would lose include-time prefixes.
+        path = getattr(getattr(route, "starlette_route", None), "path", None)
+    return path if type(path) is str else ""
+
+
 def route_key_for_request(request: Request) -> tuple[str, str]:
     """Resolve a route template with the application's own router matcher."""
     partial = None
-    for route in request.app.routes:
+    for route in _policy_routes(request.app):
         match, _ = route.matches(request.scope)
         if match == Match.FULL:
-            return request.method.upper(), route.path
+            return request.method.upper(), _policy_path(route)
         if match == Match.PARTIAL and partial is None:
-            partial = route.path
+            partial = _policy_path(route)
     return request.method.upper(), partial or ""
 
 
@@ -130,9 +148,12 @@ def request_needs_admission(request: Request) -> bool:
 
 def validate_route_policies(app: Any) -> None:
     """Fail closed when a registered HTTP or WebSocket route is undeclared."""
-    for route in app.routes:
+    for route in _policy_routes(app):
+        path = _policy_path(route)
+        if not path:
+            raise ValueError("Service route has no declared security policy")
         for method in getattr(route, "methods", None) or ("WEBSOCKET",):
-            if (method, route.path) not in ROUTE_POLICIES:
+            if (method, path) not in ROUTE_POLICIES:
                 raise ValueError("Service route has no declared security policy")
 
 

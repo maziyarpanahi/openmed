@@ -583,3 +583,56 @@ def test_jwt_validator_refuses_invalid_clock_values(now):
         validate_jwt_claims(
             {"exp": 2_000_000_060, "iat": 1_999_999_990}, ServiceAuthConfig(), now=now
         )
+
+
+def test_nested_router_policies_use_effective_prefixed_templates():
+    from fastapi import APIRouter, FastAPI
+    from starlette.requests import Request
+
+    from openmed.service.auth import route_key_for_request, validate_route_policies
+
+    child = APIRouter()
+    child.get("/{job_id}")(lambda: {})
+    parent = APIRouter()
+    parent.include_router(child, prefix="/jobs")
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(parent)
+    validate_route_policies(app)
+    for method in ("GET", "POST"):
+        request = Request(
+            {
+                "type": "http",
+                "method": method,
+                "path": "/jobs/synthetic",
+                "root_path": "",
+                "app": app,
+            }
+        )
+        assert route_key_for_request(request) == (method, "/jobs/{job_id}")
+    app.include_router(child, prefix="/undeclared")
+    with pytest.raises(ValueError, match="no declared security policy"):
+        validate_route_policies(app)
+
+
+def test_nested_websocket_registry_retains_effective_prefix(monkeypatch):
+    from fastapi import APIRouter, FastAPI
+
+    from openmed.service.auth import (
+        ROUTE_POLICIES,
+        RoutePolicy,
+        validate_route_policies,
+    )
+
+    child = APIRouter()
+    child.websocket("/{job_id}")(lambda: None)
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.include_router(child, prefix="/jobs")
+    monkeypatch.setitem(
+        ROUTE_POLICIES,
+        ("WEBSOCKET", "/jobs/{job_id}"),
+        RoutePolicy(("jobs:read",), "control"),
+    )
+    validate_route_policies(app)
+    app.include_router(child, prefix="/undeclared")
+    with pytest.raises(ValueError, match="no declared security policy"):
+        validate_route_policies(app)
