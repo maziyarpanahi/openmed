@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and cancellation intent over an injected custody service, with bounded
   governance schemas and content-free responses (#3668).
 
+### Added
+
+- OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
+  and run-evidence parsers with shared Python conformance vectors. Local custody
+  hooks record typed receipt observations and reject replay/changed actions;
+  parsed evidence never grants clinical execution authority (#3669).
+
 ### Security fixes
 
 - Align Python and OpenMedKit summary leakage guards for Unicode variants,
