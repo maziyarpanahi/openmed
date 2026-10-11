@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added offline chart-abstraction scoring with synthetic gold fields, separate
+  abstention errors, fact-bound source-support counts, field-type slices and
+  deterministic value-free Wilson intervals (#3788).
+
+- Added local Journey-to-chart-abstraction evidence production with explicit
+  source-origin declarations, digest-bound review receipts, and persistent,
+  value-free coverage blockers for missing, unsupported or conflicting evidence
+  (#3778).
+
 
 - Add an offline synthetic SDOH/temporal/timeline example with explicit reference
   time, authored event axes and controlled labels/offsets/states-only output;
@@ -272,6 +281,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
+  agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
+  exemptions with coded-element paths and content-free offset findings (#3769).
 - Normalize SMART v1 read/write/all permissions, wildcard resources, granular
   queries and non-clinical identity/launch/session scopes in offline scope
   audits. Compare constraints conservatively and report malformed input without
