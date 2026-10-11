@@ -211,6 +211,16 @@ controls required by the surrounding workflow.
 
 ## Explicit SQLite transactional adapter
 
+When composing this adapter with `stage_nlp_omop_tables`, preserve the reviewed
+lineage and protected rollback custody, then obtain a fresh database preview.
+The host approval service must independently review and bind both the complete
+staging packet and the database outer preview. A receipt that approves only the
+staging digest does not authorize database effects. Bind the database packet's
+inner batch preview for submission; an existing stage binding is usable only
+when its inner reference state agrees and the host also authorizes the exact
+current database outer preview. Digests and local fixture callbacks do not
+establish reviewer authority, protected storage or production qualification.
+
 `SQLiteOmopBatchCommitter` implements the batch protocol for the exact eleven
 loader-owned SQLite tables. It supports complete-row inserts, non-key updates
 and tombstones within a vocabulary-checked batch. Custom tables, explicit
