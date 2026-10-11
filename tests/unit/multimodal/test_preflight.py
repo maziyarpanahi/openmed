@@ -120,6 +120,19 @@ def test_synthetic_happy_paths_are_accepted(data, source, modality, profile, det
     assert report.digest == AssetDigest(sha(source), len(source))
 
 
+@pytest.mark.parametrize("preamble", [b"BM", b"GIF87a", b"GIF89a"])
+def test_dicom_with_image_signature_preamble_is_accepted(preamble):
+    source = preamble + DICOM[len(preamble) :]
+    data = manifest(source, "application/dicom", width=4, height=4, frames=2)
+
+    report = preflight_asset(data, source)
+
+    assert report.status is PreflightStatus.ACCEPT
+    assert report.detected_media_type == "application/dicom"
+    assert report.media_type_status is MediaTypeStatus.MATCH
+    assert report.digest == AssetDigest(sha(source), len(source))
+
+
 def test_accepted_image_report_serialises_byte_stably():
     report = preflight_asset(IMAGE_MANIFEST, PNG)
     expected = (
