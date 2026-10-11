@@ -9,7 +9,7 @@ import time
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -137,18 +137,23 @@ class CorrelationIdMiddleware:
         app: ASGIApp,
         *,
         log_config: Optional[ServiceLogConfig] = None,
+        minimal_log_paths: Sequence[str] = (),
     ) -> None:
         self.app = app
         self.log_config = log_config or service_log_config_from_env()
         self.logger = logging.getLogger(ACCESS_LOGGER_NAME)
         self.logger.setLevel(self.log_config.level)
+        self.minimal_log_paths = frozenset(minimal_log_paths)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        request_id = _request_id_from_scope(scope)
+        minimal_log = scope.get("path") in self.minimal_log_paths
+        # Experimental binary intake must not echo/log caller metadata carried
+        # in a request ID, even if an ingress supplied it.
+        request_id = str(uuid.uuid4()) if minimal_log else _request_id_from_scope(scope)
         request_token = _REQUEST_ID.set(request_id)
         start_time = time.perf_counter()
         status_code = 500
@@ -189,6 +194,14 @@ class CorrelationIdMiddleware:
                         }
                     )
                 payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
+                if minimal_log:
+                    payload = {
+                        "route": scope["path"],
+                        "outcome": scope.get("openmed.preflight_outcome", "rejected"),
+                        "reason_codes": scope.get(
+                            "openmed.preflight_reason_codes", (f"http_{status_code}",)
+                        ),
+                    }
                 emit_access_log(
                     self.logger,
                     self.log_config,
@@ -245,6 +258,11 @@ def _route_template(scope: Scope) -> str:
 
 def _format_access_log(payload: Mapping[str, Any], config: ServiceLogConfig) -> str:
     if config.fmt == "plain":
+        if "outcome" in payload:
+            return (
+                f"{payload['route']} outcome={payload['outcome']} "
+                f"reason_codes={','.join(payload['reason_codes'])}"
+            )
         rendered = (
             f"{payload.get('method', '')} {payload.get('route', 'unknown')} "
             f"{payload.get('status_code', 0)} "

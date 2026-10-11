@@ -5008,5 +5008,61 @@
         "x-required-scope": "workflow:read"
       }
     }
+  },
+  "x-openmed-experimental-paths": {
+    "/experimental/multimodal/preflight": {
+      "post": {
+        "description": "Disabled by default. Supply a strict AssetManifest JSON object in X-OpenMed-Manifest (at most 8192 bytes) and raw asset bytes as application/octet-stream. Returns the unchanged core PreflightReport JSON using desktop-v1 limits. No decoding, inference or clinical action is performed.",
+        "operationId": "multimodal_preflight_experimental_multimodal_preflight_post",
+        "parameters": [
+          {
+            "description": "Strict AssetManifest JSON; opaque references only",
+            "in": "header",
+            "name": "X-OpenMed-Manifest",
+            "required": true,
+            "schema": {
+              "maxLength": 8192,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Byte-stable core PreflightReport JSON"
+          },
+          "413": {
+            "description": "Request body exceeds the configured ceiling"
+          },
+          "415": {
+            "description": "unsupported_media_type error envelope"
+          },
+          "422": {
+            "description": "malformed_manifest or digest mismatch envelope"
+          }
+        },
+        "summary": "Experimental single-asset multimodal preflight",
+        "tags": [
+          "Experimental"
+        ],
+        "x-enabled-by-default": false,
+        "x-experimental": true
+      }
+    }
   }
 }

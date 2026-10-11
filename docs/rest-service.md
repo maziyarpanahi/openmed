@@ -68,6 +68,101 @@ Keep this loopback bind for local use. Before exposing the service on a network,
 configure [authentication](serving/authentication.md), TLS at the ingress or
 reverse proxy, and an exact trusted-host allowlist.
 
+## Experimental multimodal preflight
+
+The single-asset `POST /experimental/multimodal/preflight` route is absent from
+both routing and runtime OpenAPI unless explicitly enabled. Opt in locally:
+
+```bash
+OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT=1 \
+  python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+An embedding host can instead call
+`create_app(experimental_multimodal_preflight=True)`; explicit `False` overrides
+the environment. Unset, `0`, or `false` disables the route; `1` or `true` enables
+it. Other flag values fail configuration without echoing their contents. The
+committed [OpenAPI catalog](api/openapi.json) lists this opt-in operation under
+`x-openmed-experimental-paths`, with `x-experimental: true` and
+`x-enabled-by-default: false`. Its main `paths` map describes the default service
+for existing clients. An enabled running app includes the route in its normal
+OpenAPI `paths`; the default running app omits it.
+
+Send raw bytes as `Content-Type: application/octet-stream`. Supply exactly one
+`X-OpenMed-Manifest` header containing a strict
+[asset manifest](multimodal/asset-manifests.md) JSON object, at most 8192 UTF-8
+bytes. Unknown fields, duplicate JSON keys, duplicate headers, paths, free-text
+metadata and malformed values are rejected. Use a caller-generated opaque
+`asset_id`, never a filename or patient identifier. This transport avoids
+multipart upload spooling and requires no upload dependency.
+
+For example, this caller builds a manifest for a synthetic PNG prefix in memory:
+
+```python
+import hashlib
+import json
+import requests
+
+payload = b"\x89PNG\r\n\x1a\n" + b"synthetic"
+manifest = {
+    "asset_id": "synthetic-asset-1",
+    "media_type": "image/png",
+    "sha256": hashlib.sha256(payload).hexdigest(),
+    "byte_size": len(payload),
+    "width": 8,
+    "height": 8,
+}
+response = requests.post(
+    "http://127.0.0.1:8080/experimental/multimodal/preflight",
+    headers={
+        "Content-Type": "application/octet-stream",
+        "X-OpenMed-Manifest": json.dumps(manifest),
+    },
+    data=payload,
+    timeout=30,
+)
+response.raise_for_status()
+assert response.json()["status"] == "accept"
+```
+
+A successful transport returns HTTP 200 with the exact bytes from
+`preflight_asset(manifest, payload).to_json()`, using the core desktop-v1 limit
+profile. This includes ordinary `abstain` reports: HTTP 200 does not mean asset
+acceptance. In particular, the current PDF manifest cannot express raster pixel
+budgets, so PDF can abstain with `insufficient_metadata`; REST preserves that
+result. Preflight checks declarations, a bounded media signature and integrity;
+it does not decode, redact, validate clinical content or qualify a provider.
+
+Errors use the existing `{"error":{"code":...,"message":...,"details":...}}`
+envelope, without input or exception details:
+
+| HTTP | Code | Trigger |
+| --- | --- | --- |
+| 413 | `request_size_exceeded` | Global `OPENMED_SERVICE_MAX_REQUEST_BYTES` ceiling |
+| 413 | `payload_too_large` | Route body ceiling (`max_request_body_bytes` factory override) |
+| 400 | `request_size_invalid` | Invalid declared request length |
+| 415 | `unsupported_media_type` | Transport is not raw octet-stream |
+| 422 | `malformed_manifest` | Missing, duplicate, oversized or invalid manifest header |
+| 422 | `byte_count_mismatch` | Declared byte count differs from received source |
+| 422 | `sha256_mismatch` | Source digest differs from the manifest |
+
+Both body ceilings apply before preflight, including chunked bodies and bodies
+with incorrect `Content-Length`. The smaller ceiling wins. Source bytes remain
+in memory for the request; the adapter writes no temporary files, caches or
+artifacts. It loads no models, calls no providers and adds no network calls.
+The route follows existing service authentication settings and requires
+`pii:read` when authentication is enabled. Its service access
+logs contain only the fixed route, outcome and controlled reason codes, in both
+JSON and plain formats. Caller request IDs are replaced with generated IDs for
+this route, so failure responses and logs cannot echo identifier-bearing header
+values. Configure ingress/client logging separately to avoid recording headers
+or bodies.
+
+This experimental adapter is REST-only. Batch preflight, inference, SDK changes,
+authentication policy changes and autonomous clinical action are outside this
+surface. The report is non-diagnostic; any later consequential workflow must
+obtain explicit reviewer confirmation before acting on its outputs.
+
 The reference launcher configures `StructuredJsonLogFormatter` for
 `openmed.service.access` and disables `uvicorn.access`. It emits exactly one
 structured record per request (method, route template, status, duration,

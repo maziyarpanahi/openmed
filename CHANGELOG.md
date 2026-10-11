@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in experimental single-asset REST preflight with in-memory binary intake,
+  core report byte parity, bounded manifests and bodies, and content-free errors
+  and access logs (#3835).
+
 - Added fail-closed Python evaluation sessions composing sealed manifest and
   holdout verification, injected execution/scoring, overlap forensics, blinded
   review and budgeted feedback, with content-free durable checkpoints and
