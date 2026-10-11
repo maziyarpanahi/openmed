@@ -62,6 +62,7 @@ from ._output import (
     wants_json,
 )
 from .active_learning import add_active_learning_command
+from .agent_self_check import add_agent_self_check_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
 from .benchmark import (
@@ -577,6 +578,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    add_agent_self_check_command(subparsers)
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
@@ -599,11 +601,16 @@ def build_parser() -> argparse.ArgumentParser:
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
     from .brief import add_brief_command
+    from .clinical import add_clinical_command
 
     add_brief_command(subparsers)
+    add_clinical_command(subparsers)
     from .nli_qualification import add_nli_qualification_command
 
     add_nli_qualification_command(subparsers)
+    from .clinical_review import add_clinical_review_commands
+
+    add_clinical_review_commands(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -3290,7 +3297,9 @@ def main(
 
         return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    from .clinical import parse_clinical_args
+
+    args = parse_clinical_args(parser, argv)
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
@@ -5630,8 +5639,12 @@ def _handle_fhir_validate(args: argparse.Namespace) -> int:
         "outcome": outcome,
     }
     human = json.dumps(outcome, indent=2, sort_keys=True)
-    return_code = emit(args, payload, human=human)
-    return 1 if blocking else return_code
+    return emit(
+        args,
+        payload,
+        human=human,
+        outcome="check_failed" if blocking else "completed",
+    )
 
 
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
@@ -7869,12 +7882,12 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         if item.get("hint"):
             human_lines.append(f"      Hint: {item['hint']}")
 
-    emit(
+    return emit(
         args,
         {"checks": results, "has_failure": has_fail},
         human="\n".join(human_lines),
+        outcome="check_failed" if has_fail else "completed",
     )
-    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:

@@ -107,6 +107,7 @@ classification:
     - onboarding-india.md
     - agent-usage.md
     - agent/action-graphs.md
+    - agent/bounded-scheduling.md
     - agent/artifact-references.md
     - agent/side-effect-previews.md
     - agent/action-phases.md
@@ -116,6 +117,7 @@ classification:
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
     - agent/tool-inventory-schema.md
+    - agent/exchange-record-schemas.md
     - agent/tool-catalog-diffs.md
     - agent/minimum-data-contracts.md
     - agent/minimum-data-projections.md
@@ -139,6 +141,7 @@ classification:
     - agent/run-invariants.md
     - agent/schema-compatibility.md
     - agent/timing-metadata.md
+    - agent/self-check.md
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
     - agent/prior-auth-completeness.md
@@ -251,6 +254,7 @@ classification:
     - clinical/nli-cascade.md
     - clinical/nli-abstention.md
     - models/clinical-nli.md
+    - clinical/sdoh-extraction.md
     - clinical/sdoh-temporal-qualifiers.md
     - clinical/sdoh-section-scope.md
     - clinical/sdoh-evidence-deduplication.md
@@ -263,6 +267,7 @@ classification:
     - clinical/sdoh-evidence.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
+    - evaluation/sdoh-extraction.md
     - clinical/medication-change-relations.md
     - clinical/laboratory-result-relations.md
     - clinical/procedure-indication-relations.md
@@ -433,6 +438,8 @@ classification:
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
     - evaluation/governed-agent-fixtures.md
+    - evaluation/agent-run-summary-fixtures.md
+    - evaluation/planner-qualification.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
@@ -443,6 +450,7 @@ classification:
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
+    - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
@@ -592,6 +600,7 @@ classification:
     - interop/fhir-concurrency.md
     - interop/fhir-transaction-compensation.md
     - interop/fhir-subscription-checkpoints.md
+    - interop/fhir-subscription-notifications.md
     - interop/smart-scope-audit.md
     - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
