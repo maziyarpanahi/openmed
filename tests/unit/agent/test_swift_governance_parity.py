@@ -20,6 +20,7 @@ from openmed.agent.approval_evidence import (
     ReceiptAuthority,
 )
 from openmed.agent.approvals.tokens import (
+    ApprovalAuthorization,
     ApprovalReceipt,
     ApprovalTokenSigner,
     ApprovalTokenVerifier,
@@ -46,9 +47,11 @@ def _canonical(value: Any) -> str:
     )
 
 
-def _receipt(action_digest: str = ACTION) -> ApprovalReceipt:
+def _authorization(action_digest: str = ACTION) -> ApprovalAuthorization:
     # Synthetic test issuance only; no token, key or issuance API in Swift/examples.
-    token = ApprovalTokenSigner(b"synthetic-unit-test-only-key-000000").issue(
+    token = ApprovalTokenSigner(
+        b"synthetic-unit-test-only-key-000000", clock=lambda: UNIX
+    ).issue(
         action_digest=action_digest,
         reviewer_role=ROLE,
         expires_at=UNIX + 60,
@@ -58,7 +61,20 @@ def _receipt(action_digest: str = ACTION) -> ApprovalReceipt:
         b"synthetic-unit-test-only-key-000000",
         InMemoryApprovalNonceStore(),
         clock=lambda: UNIX,
-    ).consume(token, action_digest=action_digest, reviewer_role=ROLE)
+    ).consume_authorization(token, action_digest=action_digest, reviewer_role=ROLE)
+
+
+def _receipt(action_digest: str = ACTION) -> ApprovalReceipt:
+    return _authorization(action_digest).receipt
+
+
+def _custody(authorization: ApprovalAuthorization) -> Any:
+    known = (
+        "sha256:" + hashlib.sha256(authorization.receipt.to_json().encode()).hexdigest()
+    )
+    return lambda digest: (
+        authorization if digest == known else ReceiptAuthority.UNRECOGNIZED
+    )
 
 
 def _parse(kind: str, raw: str) -> Any:
@@ -79,7 +95,8 @@ def _parse(kind: str, raw: str) -> Any:
 
 def make_fixture() -> dict[str, Any]:
     """Regenerate synthetic vectors from the actual Python producer contracts."""
-    receipt = _receipt()
+    authorization = _authorization()
+    receipt = authorization.receipt
     reference = ArtifactReference.from_dict(
         {
             "artifact_id": "art_" + "b" * 32,
@@ -124,7 +141,7 @@ def make_fixture() -> dict[str, Any]:
         }
     )
     verified = LocalApprovalEvidenceVerifier(
-        lambda _: ReceiptAuthority.RECOGNIZED, clock=lambda: UNIX
+        _custody(_authorization()), clock=lambda: UNIX
     ).verify(receipt, action_digest=ACTION, reviewer_role=ROLE)
     objects = [
         ("artifact", reference),
@@ -255,10 +272,19 @@ def make_fixture() -> dict[str, Any]:
         ("expires_at", 1 << 63),
         ("reviewer_role", "role:org.openmed/reviewer@01.0.0"),
         ("action_digest", OTHER_ACTION.upper()),
+        ("code", "denied"),
     ]:
         fields = copy.deepcopy(by_kind["receipt"])
         fields[key] = value
-        reject("receipt", key + "-invalid", fields)
+        reject(
+            "receipt",
+            key + "-invalid",
+            fields,
+            "invalid_fields"
+            if key in {"consumed_at", "expires_at", "reviewer_role"}
+            and not (key == "expires_at" and value == 1 << 63)
+            else "invalid_metadata",
+        )
     for key, value in [
         ("workflow_ids", ["z", "a"]),
         ("workflow_ids", ["a", "a"]),
@@ -378,10 +404,14 @@ def make_fixture() -> dict[str, Any]:
     for scenario in scenarios:
         authority = scenario["authority"]
 
-        def custody(_: str) -> ReceiptAuthority:
+        def custody(_: str) -> ApprovalAuthorization | ReceiptAuthority:
             if authority == "throw":
                 raise RuntimeError("SYNTHETIC_SECRET_SENTINEL")
-            return ReceiptAuthority(authority)
+            return (
+                authorization
+                if authority == "recognized"
+                else ReceiptAuthority(authority)
+            )
 
         verifier = LocalApprovalEvidenceVerifier(custody, clock=lambda: scenario["now"])
         scenario["expected_json"] = [
@@ -444,13 +474,12 @@ def test_native_preview_and_receipt_binding_rejects_a_changed_batch() -> None:
     )
     changed = parse_omop_review_preview(fixture["changed_preview_json"])
     receipt = ApprovalReceipt.from_json(fixture["bound_preview_receipt_json"])
+    authorization = _authorization(preview.preview_digest)
     digest = "sha256:" + hashlib.sha256(receipt.to_json().encode()).hexdigest()
     assert receipt.action_digest == preview.preview_digest
     verifier = LocalApprovalEvidenceVerifier(
         lambda value: (
-            ReceiptAuthority.RECOGNIZED
-            if value == digest
-            else ReceiptAuthority.UNRECOGNIZED
+            authorization if value == digest else ReceiptAuthority.UNRECOGNIZED
         ),
         clock=lambda: UNIX,
     )
@@ -469,23 +498,16 @@ def test_native_preview_and_receipt_binding_rejects_a_changed_batch() -> None:
 
 
 def test_local_custody_whitelist_checks_exact_canonical_receipt_digest() -> None:
-    receipt = _receipt()
+    authorization = _authorization()
+    receipt = authorization.receipt
     digest = "sha256:" + hashlib.sha256(receipt.to_json().encode()).hexdigest()
     verifier = LocalApprovalEvidenceVerifier(
         lambda value: (
-            ReceiptAuthority.RECOGNIZED
-            if value == digest
-            else ReceiptAuthority.UNRECOGNIZED
+            authorization if value == digest else ReceiptAuthority.UNRECOGNIZED
         ),
         clock=lambda: UNIX,
     )
-    changed = ApprovalReceipt(
-        receipt.action_digest,
-        receipt.reviewer_role,
-        receipt.token_digest,
-        receipt.consumed_at - 1,
-        receipt.expires_at,
-    )
+    changed = ApprovalReceipt(receipt.action_digest, "sha256:" + "0" * 64)
     assert (
         verifier.verify(changed, action_digest=ACTION, reviewer_role=ROLE).reason_code
         is ApprovalEvidenceReason.UNRECOGNIZED_RECEIPT
@@ -499,7 +521,7 @@ def test_local_custody_whitelist_checks_exact_canonical_receipt_digest() -> None
 def test_atomic_concurrent_presentation_has_one_observation() -> None:
     receipt = _receipt()
     verifier = LocalApprovalEvidenceVerifier(
-        lambda _: ReceiptAuthority.RECOGNIZED, clock=lambda: UNIX
+        _custody(_authorization()), clock=lambda: UNIX
     )
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(
@@ -519,7 +541,7 @@ def test_atomic_concurrent_presentation_has_one_observation() -> None:
 def test_expiry_is_rechecked_after_local_authority_lookup() -> None:
     values = iter([UNIX, UNIX + 60])
     verifier = LocalApprovalEvidenceVerifier(
-        lambda _: ReceiptAuthority.RECOGNIZED, clock=lambda: next(values)
+        _custody(_authorization()), clock=lambda: next(values)
     )
     assert (
         verifier.verify(
@@ -546,7 +568,9 @@ def test_unavailable_clock_is_typed_and_value_free(clock: Any) -> None:
     assert "SYNTHETIC_SECRET_SENTINEL" not in repr(result)
 
 
-@pytest.mark.parametrize("answer", [True, "recognized", None])
+@pytest.mark.parametrize(
+    "answer", [True, "recognized", None, ReceiptAuthority.RECOGNIZED]
+)
 def test_untyped_authority_result_fails_closed(answer: Any) -> None:
     result = LocalApprovalEvidenceVerifier(lambda _: answer, clock=lambda: UNIX).verify(
         _receipt(), action_digest=ACTION, reviewer_role=ROLE
@@ -563,7 +587,7 @@ def test_replay_store_failure_remains_explicit(answer: Any) -> None:
             return answer
 
     result = LocalApprovalEvidenceVerifier(
-        lambda _: ReceiptAuthority.RECOGNIZED, replay_store=Store(), clock=lambda: UNIX
+        _custody(_authorization()), replay_store=Store(), clock=lambda: UNIX
     ).verify(_receipt(), action_digest=ACTION, reviewer_role=ROLE)
     assert result.reason_code is ApprovalEvidenceReason.NONCE_STORE_UNAVAILABLE
 
@@ -583,3 +607,28 @@ def test_malformed_expected_metadata_has_value_free_diagnostics() -> None:
             _receipt(), action_digest="SYNTHETIC_SECRET_SENTINEL", reviewer_role=ROLE
         )
     assert "SYNTHETIC_SECRET_SENTINEL" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "parse", [ApprovalEvidenceResult.from_json, parse_omop_review_preview]
+)
+def test_private_parser_context_is_discarded(parse: Any) -> None:
+    with pytest.raises(ApprovalEvidenceError) as caught:
+        parse('{"private":"PRIVATE-CANARY\\ud800"}'.replace("\\ud800", "\ud800"))
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_closed_error_code_discards_private_values() -> None:
+    error = ApprovalEvidenceError("PRIVATE-CANARY")
+    assert "PRIVATE-CANARY" not in str(error)
+    assert error.code == "invalid_metadata"
+
+
+def test_custody_for_another_receipt_cannot_verify_this_presentation() -> None:
+    receipt = _receipt()
+    other = _authorization(OTHER_ACTION)
+    verifier = LocalApprovalEvidenceVerifier(lambda _: other, clock=lambda: UNIX)
+    result = verifier.verify(receipt, action_digest=ACTION, reviewer_role=ROLE)
+    assert result.reason_code is ApprovalEvidenceReason.UNRECOGNIZED_RECEIPT
+    assert result.authorizes_clinical_action is False

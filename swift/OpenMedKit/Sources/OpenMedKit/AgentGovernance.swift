@@ -102,24 +102,18 @@ public struct AgentReviewerHandoff: Equatable, Sendable, CustomStringConvertible
 
 /// Exact existing Python ApprovalReceipt metadata, never proof of custody alone.
 public struct AgentApprovalReceipt: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
-    public static let schemaVersion = "openmed.agent.approval_receipt.v1"
+    public static let schemaVersion = "openmed.agent.approval_receipt.v2"
     public let actionDigest: String
-    public let reviewerRole: String
     public let tokenDigest: String
-    public let consumedAt: Int64
-    public let expiresAt: Int64
     private let metadata: AgentJSON
 
     public static func parse(_ data: Data) throws -> Self {
-        let fields = try AgentJSON.parse(data, maximum: 65_536).object(fields: ["schema_version", "action_digest", "reviewer_role", "token_digest", "consumed_at", "expires_at"])
+        let fields = try AgentJSON.parse(data, maximum: 65_536).object(fields: ["schema_version", "action_digest", "token_digest", "code"])
         try agentVersion(fields["schema_version"], expected: schemaVersion)
         let action = try fields["action_digest"]!.string(pattern: agentDigestPattern)
-        let role = try fields["reviewer_role"]!.string(pattern: agentRolePattern)
         let token = try fields["token_digest"]!.string(pattern: agentDigestPattern)
-        let consumed = try fields["consumed_at"]!.integer()
-        let expires = try fields["expires_at"]!.integer()
-        guard consumed < expires else { throw AgentGovernanceError.invalidMetadata }
-        return Self(actionDigest: action, reviewerRole: role, tokenDigest: token, consumedAt: consumed, expiresAt: expires, metadata: .object(fields))
+        guard fields["code"] == .string("approved") else { throw AgentGovernanceError.invalidMetadata }
+        return Self(actionDigest: action, tokenDigest: token, metadata: .object(fields))
     }
 
     public var authorizesClinicalAction: Bool { false }
@@ -301,7 +295,34 @@ public struct AgentOMOPPreview: Equatable, Sendable, CustomStringConvertible, Cu
 }
 
 /// A caller-owned custody lookup response, never supplied by packet contents.
-public enum AgentReceiptAuthority: Sendable { case recognized, unrecognized, unsupported }
+public enum AgentReceiptAuthority: Sendable {
+    case recognized(AgentReceiptCustody)
+    case unrecognized, unsupported
+}
+
+/// A trusted host's local observation of previously consumed approval custody.
+/// Role and validity come from its protected store; no wire decoder is provided.
+/// This observation grants no authority to execute a clinical action.
+public struct AgentReceiptCustody: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    public let receiptDigest: String
+    public let reviewerRole: String
+    public let consumedAt: Int64
+    public let expiresAt: Int64
+
+    public init(receiptDigest: String, reviewerRole: String, consumedAt: Int64, expiresAt: Int64) throws {
+        _ = try AgentJSON.string(receiptDigest).string(pattern: agentDigestPattern)
+        _ = try AgentJSON.string(reviewerRole).string(pattern: agentRolePattern)
+        guard consumedAt >= 0, consumedAt < expiresAt else { throw AgentGovernanceError.invalidMetadata }
+        self.receiptDigest = receiptDigest
+        self.reviewerRole = reviewerRole
+        self.consumedAt = consumedAt
+        self.expiresAt = expiresAt
+    }
+
+    public var authorizesClinicalAction: Bool { false }
+    public var description: String { "AgentReceiptCustody(<local>)" }
+    public var debugDescription: String { description }
+}
 
 /// Atomic extra replay protection for local receipt presentation.
 /// Application-wide dispatch still requires its original durable nonce custody.
@@ -358,29 +379,25 @@ public final class AgentLocalApprovalEvidenceVerifier: Sendable, CustomStringCon
         func result(_ reason: AgentApprovalEvidenceReason) -> AgentApprovalEvidenceResult {
             AgentApprovalEvidenceResult(reasonCode: reason, actionDigest: receipt.actionDigest, receiptDigest: receipt.receiptDigest)
         }
-        func timeRefusal() -> AgentApprovalEvidenceReason? {
-            guard let now = try? clock(), now >= 0 else { return .clockUnavailable }
-            if now >= receipt.expiresAt { return .expired }
-            if now < receipt.consumedAt { return .futureReceipt }
-            return nil
-        }
-        if let refusal = timeRefusal() { return result(refusal) }
+        guard let initialTime = try? clock(), initialTime >= 0 else { return result(.clockUnavailable) }
         guard let authority else { return result(.unsupportedAuthority) }
         let decision: AgentReceiptAuthority
         do { decision = try authority(receipt.receiptDigest) } catch { return result(.authorityUnavailable) }
+        let custody: AgentReceiptCustody
         switch decision {
         case .unrecognized: return result(.unrecognizedReceipt)
         case .unsupported: return result(.unsupportedAuthority)
-        case .recognized: break
+        case .recognized(let recognized): custody = recognized
         }
+        guard custody.receiptDigest == receipt.receiptDigest else { return result(.unrecognizedReceipt) }
         guard let now = try? clock(), now >= 0 else { return result(.clockUnavailable) }
-        if now >= receipt.expiresAt { return result(.expired) }
-        if now < receipt.consumedAt { return result(.futureReceipt) }
+        if now >= custody.expiresAt { return result(.expired) }
+        if now < custody.consumedAt { return result(.futureReceipt) }
         let claimed: Bool
-        do { claimed = try replayStore.claim(tokenDigest: receipt.tokenDigest, expiresAt: receipt.expiresAt, now: now) } catch { return result(.nonceStoreUnavailable) }
+        do { claimed = try replayStore.claim(tokenDigest: receipt.tokenDigest, expiresAt: custody.expiresAt, now: now) } catch { return result(.nonceStoreUnavailable) }
         guard claimed else { return result(.replayed) }
         guard receipt.actionDigest == actionDigest else { return result(.actionMismatch) }
-        guard receipt.reviewerRole == reviewerRole else { return result(.reviewerRoleMismatch) }
+        guard custody.reviewerRole == reviewerRole else { return result(.reviewerRoleMismatch) }
         return result(.verified)
     }
 }

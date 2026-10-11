@@ -22,7 +22,11 @@ from openmed.interop.omop.mutation_batch import (
     _validate_identifier,
 )
 
-from .approval_evidence import ApprovalEvidenceError
+from .approval_evidence import (
+    ApprovalEvidenceError,
+    _controlled_failure,
+    _validate_json_shape,
+)
 
 _MAX_BYTES = 1_048_576
 _FIELDS = frozenset(
@@ -47,6 +51,7 @@ _ISSUE_CODES = frozenset(
 )
 
 
+@_controlled_failure
 def parse_omop_review_preview(payload: str | bytes | bytearray) -> OmopMutationPreview:
     """Decode exact native preview fields and recompute their binding digest.
 
@@ -70,6 +75,7 @@ def parse_omop_review_preview(payload: str | bytes | bytearray) -> OmopMutationP
         raise
     except (ValueError, TypeError, UnicodeError, RecursionError):
         raise ApprovalEvidenceError("invalid_json") from None
+    _validate_json_shape(fields)
     _exact(fields, _FIELDS)
     if fields["schema"] != MUTATION_BATCH_SCHEMA:
         raise ApprovalEvidenceError("unsupported_version")

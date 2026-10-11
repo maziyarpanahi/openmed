@@ -15,6 +15,12 @@ final class AgentGovernanceTests: XCTestCase {
         return values
     }
 
+    private func localCustody(_ receipt: AgentApprovalReceipt, now: Int64) throws -> AgentReceiptCustody {
+        try AgentReceiptCustody(
+            receiptDigest: receipt.receiptDigest,
+            reviewerRole: "role:org.openmed/reviewer@1.0.0", consumedAt: now, expiresAt: now + 60)
+    }
+
     private func canonical(kind: String, data: Data, now: Int64) throws -> Data {
         switch kind {
         case "artifact": return try AgentArtifactReference.parse(data).canonicalJSON()
@@ -62,7 +68,7 @@ final class AgentGovernanceTests: XCTestCase {
         let values = try fixture()
         let now = try XCTUnwrap(values["now"] as? Int64)
         let rows = try XCTUnwrap(values["negative"] as? [[String: Any]])
-        XCTAssertEqual(rows.count, 65)
+        XCTAssertEqual(rows.count, 66)
         for row in rows {
             let kind = try XCTUnwrap(row["kind"] as? String)
             let raw = Data(try XCTUnwrap(row["json"] as? String).utf8)
@@ -76,6 +82,7 @@ final class AgentGovernanceTests: XCTestCase {
     func testSharedLocalVerificationRefusalsAndBurnedPresentationsHavePythonParity() throws {
         let values = try fixture()
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
+        let custody = try localCustody(receipt, now: XCTUnwrap(values["now"] as? Int64))
         for row in try XCTUnwrap(values["verification_scenarios"] as? [[String: Any]]) {
             let mode = try XCTUnwrap(row["authority"] as? String)
             let now = try XCTUnwrap(row["now"] as? Int64)
@@ -85,7 +92,7 @@ final class AgentGovernanceTests: XCTestCase {
             let verifier = AgentLocalApprovalEvidenceVerifier(
                 authority: { _ in
                     switch mode {
-                    case "recognized": return .recognized
+                    case "recognized": return .recognized(custody)
                     case "unrecognized": return .unrecognized
                     case "unsupported": return .unsupported
                     default: throw TestFailure.privateText
@@ -106,7 +113,7 @@ final class AgentGovernanceTests: XCTestCase {
         let now = try XCTUnwrap(values["now"] as? Int64)
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
         let verifier = AgentLocalApprovalEvidenceVerifier(clock: { now })
-        let result = try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole)
+        let result = try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0")
         XCTAssertEqual(result.reasonCode, .unsupportedAuthority)
         XCTAssertFalse(result.authorizesClinicalAction)
     }
@@ -120,10 +127,11 @@ final class AgentGovernanceTests: XCTestCase {
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["bound_preview_receipt_json"] as? String).utf8))
         XCTAssertEqual(receipt.actionDigest, preview.previewDigest)
         let digest = receipt.receiptDigest
-        let now = receipt.consumedAt
-        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { $0 == digest ? .recognized : .unrecognized }, clock: { now })
-        XCTAssertEqual(try verifier.verify(receipt, actionDigest: changed.previewDigest, reviewerRole: receipt.reviewerRole).reasonCode, .actionMismatch)
-        XCTAssertEqual(try verifier.verify(receipt, actionDigest: preview.previewDigest, reviewerRole: receipt.reviewerRole).reasonCode, .replayed)
+        let now = try XCTUnwrap(values["now"] as? Int64)
+        let custody = try localCustody(receipt, now: now)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { $0 == digest ? .recognized(custody) : .unrecognized }, clock: { now })
+        XCTAssertEqual(try verifier.verify(receipt, actionDigest: changed.previewDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .actionMismatch)
+        XCTAssertEqual(try verifier.verify(receipt, actionDigest: preview.previewDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .replayed)
     }
 
     func testCustodyReceivesOnlyCanonicalDigestAndRejectsChangedReceipt() throws {
@@ -132,28 +140,32 @@ final class AgentGovernanceTests: XCTestCase {
         let data = Data(try XCTUnwrap(values["receipt_json"] as? String).utf8)
         let receipt = try AgentApprovalReceipt.parse(data)
         let known = receipt.receiptDigest
-        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { $0 == known ? .recognized : .unrecognized }, clock: { now })
+        let custody = try localCustody(receipt, now: now)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { $0 == known ? .recognized(custody) : .unrecognized }, clock: { now })
         var fields = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        fields["consumed_at"] = now - 1
+        fields["token_digest"] = "sha256:" + String(repeating: "0", count: 64)
         let changed = try AgentApprovalReceipt.parse(JSONSerialization.data(withJSONObject: fields))
-        XCTAssertEqual(try verifier.verify(changed, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole).reasonCode, .unrecognizedReceipt)
-        XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole).reasonCode, .verified)
+        XCTAssertEqual(try verifier.verify(changed, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .unrecognizedReceipt)
+        XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .verified)
     }
 
     func testExpiryIsCheckedAgainAfterCustodyLookup() throws {
         let values = try fixture()
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
-        let clock = StepClock([receipt.consumedAt, receipt.expiresAt])
-        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized }, clock: { clock.next() })
-        XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole).reasonCode, .expired)
+        let now = try XCTUnwrap(values["now"] as? Int64)
+        let clock = StepClock([now, now + 60])
+        let custody = try localCustody(receipt, now: now)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized(custody) }, clock: { clock.next() })
+        XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .expired)
     }
 
     func testReplayStoreFailuresDoNotExposePrivateExceptions() throws {
         let values = try fixture()
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
-        let now = receipt.consumedAt
-        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized }, replayStore: FailedStore(), clock: { now })
-        let result = try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole)
+        let now = try XCTUnwrap(values["now"] as? Int64)
+        let custody = try localCustody(receipt, now: now)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized(custody) }, replayStore: FailedStore(), clock: { now })
+        let result = try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0")
         XCTAssertEqual(result.reasonCode, .nonceStoreUnavailable)
         XCTAssertFalse(result.description.contains("SYNTHETIC_SECRET_SENTINEL"))
     }
@@ -163,18 +175,19 @@ final class AgentGovernanceTests: XCTestCase {
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
         for clock: @Sendable () throws -> Int64 in [{ -1 }, { throw TestFailure.privateText }] {
             let verifier = AgentLocalApprovalEvidenceVerifier(clock: clock)
-            XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole).reasonCode, .clockUnavailable)
+            XCTAssertEqual(try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0").reasonCode, .clockUnavailable)
         }
     }
 
     func testConcurrentPresentationHasOneObservation() throws {
         let values = try fixture()
         let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
-        let now = receipt.consumedAt
-        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized }, clock: { now })
+        let now = try XCTUnwrap(values["now"] as? Int64)
+        let custody = try localCustody(receipt, now: now)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized(custody) }, clock: { now })
         let results = Results()
         DispatchQueue.concurrentPerform(iterations: 64) { _ in
-            if let result = try? verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: receipt.reviewerRole) { results.append(result.reasonCode) }
+            if let result = try? verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0") { results.append(result.reasonCode) }
         }
         XCTAssertEqual(results.values.filter { $0 == .verified }.count, 1)
         XCTAssertEqual(results.values.filter { $0 == .replayed }.count, 63)
@@ -219,6 +232,19 @@ final class AgentGovernanceTests: XCTestCase {
             XCTAssertFalse(description.contains("role:"))
             XCTAssertFalse(description.contains("art_"))
         }
+    }
+
+    func testCustodyForAnotherReceiptCannotVerifyThisPresentation() throws {
+        let values = try fixture()
+        let now = try XCTUnwrap(values["now"] as? Int64)
+        let receipt = try AgentApprovalReceipt.parse(Data(try XCTUnwrap(values["receipt_json"] as? String).utf8))
+        let other = try AgentReceiptCustody(
+            receiptDigest: "sha256:" + String(repeating: "0", count: 64),
+            reviewerRole: "role:org.openmed/reviewer@1.0.0", consumedAt: now, expiresAt: now + 60)
+        let verifier = AgentLocalApprovalEvidenceVerifier(authority: { _ in .recognized(other) }, clock: { now })
+        let result = try verifier.verify(receipt, actionDigest: receipt.actionDigest, reviewerRole: "role:org.openmed/reviewer@1.0.0")
+        XCTAssertEqual(result.reasonCode, .unrecognizedReceipt)
+        XCTAssertFalse(result.authorizesClinicalAction)
     }
 
     private enum TestFailure: Error, CustomStringConvertible {

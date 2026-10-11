@@ -8,7 +8,7 @@ OpenMedKit parses content-free agent metadata with strict, bounded JSON:
 | --- | --- |
 | `AgentArtifactReference` | `ArtifactReference`, envelope version `1` |
 | `AgentReviewerHandoff` | `openmed.agent.reviewer_handoff.v1` |
-| `AgentApprovalReceipt` | `openmed.agent.approval_receipt.v1` |
+| `AgentApprovalReceipt` | `openmed.agent.approval_receipt.v2` |
 | `AgentRunEvidence` | `openmed.agent.run_summary.v1` |
 | `AgentOMOPPreview` | `openmed.interop.omop.mutation_batch.v1` |
 | `AgentApprovalEvidenceResult` | `openmed.agent.approval_evidence.v1` |
@@ -31,16 +31,20 @@ version supports the native OMOP preview and opaque preview artifact references;
 it does not interpret other domain-specific preview envelopes or execute a
 mobile workflow.
 
-A parsed receipt or report is not approval authority. Configure a local custody
+A v2 receipt contains only its schema version, action/token digests and an `approved`
+code. Reviewer role and validity bounds stay in protected local custody. Legacy
+role or timestamp fields are rejected. A parsed receipt or report is not approval authority. Configure a local custody
 lookup only after the application has authenticated a reviewer and consumed the
 original approval in its own trusted store:
 
 ```swift
 // receiptJSON is previously consumed evidence from application-owned custody.
-// localCustody is the application's trusted set of canonical receipt digests.
+// localCustody is a protected local lookup established after approval consumption.
+// Its AgentReceiptCustody observations bind the exact digest, role and private validity.
 let receipt = try AgentApprovalReceipt.parse(receiptJSON)
 let verifier = AgentLocalApprovalEvidenceVerifier(authority: { digest in
-    localCustody.contains(digest) ? .recognized : .unrecognized
+    guard let custody = localCustody[digest] else { return .unrecognized }
+    return .recognized(custody)
 })
 let observation = try verifier.verify(
     receipt, actionDigest: currentlyReviewedActionDigest,
@@ -52,7 +56,11 @@ let observation = try verifier.verify(
 Omitting the lookup returns `unsupported_authority`. An unrecognized digest,
 failed lookup, expired/future receipt, changed action/role, replay, failed clock
 or unavailable replay store remains a typed refusal. Time is checked again
-after custody lookup. Recognized presentations are atomically claimed before
+after custody lookup against its private consumption time and exclusive expiry.
+The Python lookup returns an actual verifier-created `ApprovalAuthorization`;
+a bare recognized flag cannot supply custody. Swift hosts provide a local
+`AgentReceiptCustody` observation from their protected approval store. It has no
+JSON decoder or serializer and cannot authorize dispatch. Recognized presentations are atomically claimed before
 action/role comparison, so a changed-action presentation is burned and cannot
 be retried under the original action. The default replay store is thread-safe
 and process-local; applications sharing evidence across processes or launches

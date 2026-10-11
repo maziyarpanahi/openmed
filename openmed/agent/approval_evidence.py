@@ -14,9 +14,11 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Final
+from functools import wraps
+from typing import Any, Final, ParamSpec, TypeVar, cast
 
 from .approvals.tokens import (
+    ApprovalAuthorization,
     ApprovalNonceStore,
     ApprovalReceipt,
     ApprovalTokenValidationError,
@@ -64,8 +66,61 @@ class ApprovalEvidenceError(ValueError):
     """
 
     def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
+        self.code = (
+            code
+            if type(code) is str
+            and code
+            in {
+                "unsupported_version",
+                "unknown_reason",
+                "invalid_digest",
+                "invalid_json",
+                "json_too_large",
+                "invalid_fields",
+                "status_mismatch",
+                "invalid_receipt",
+                "invalid_expected_metadata",
+                "duplicate_field",
+                "invalid_metadata",
+                "digest_mismatch",
+            }
+            else "invalid_metadata"
+        )
+        super().__init__(self.code)
+
+
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _controlled_failure(function: Callable[_P, _R]) -> Callable[_P, _R]:
+    @wraps(function)
+    def controlled(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        code = "invalid_metadata"
+        try:
+            return function(*args, **kwargs)
+        except ApprovalEvidenceError as error:
+            if type(error) is ApprovalEvidenceError:
+                code = vars(error).get("code", "invalid_metadata")
+        except Exception:
+            pass
+        raise ApprovalEvidenceError(code)
+
+    return controlled
+
+
+def _validate_json_shape(value: Any) -> None:
+    stack = [(value, 0)]
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if depth > 16 or nodes > 200_000:
+            raise ApprovalEvidenceError("invalid_json")
+        if type(current) is dict:
+            stack.extend((child, depth + 1) for child in current.values())
+        elif type(current) is list:
+            stack.extend((child, depth + 1) for child in current)
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -84,6 +139,7 @@ class ApprovalEvidenceResult:
     receipt_digest: str
     schema_version: str = APPROVAL_EVIDENCE_SCHEMA_VERSION
 
+    @_controlled_failure
     def __post_init__(self) -> None:
         if self.schema_version != APPROVAL_EVIDENCE_SCHEMA_VERSION:
             raise ApprovalEvidenceError("unsupported_version")
@@ -119,6 +175,7 @@ class ApprovalEvidenceResult:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
 
     @classmethod
+    @_controlled_failure
     def from_json(cls, payload: str | bytes | bytearray) -> ApprovalEvidenceResult:
         """Parse a bounded report without trusting its recorded result.
 
@@ -142,6 +199,7 @@ class ApprovalEvidenceResult:
             raise
         except (ValueError, TypeError, UnicodeError, RecursionError):
             raise ApprovalEvidenceError("invalid_json") from None
+        _validate_json_shape(values)
         if not isinstance(values, Mapping) or set(values) != _FIELDS:
             raise ApprovalEvidenceError("invalid_fields")
         try:
@@ -167,7 +225,9 @@ class LocalApprovalEvidenceVerifier:
     """Observe application-custodied receipts with an atomic replay check.
 
     Args:
-        authority: Local lookup of a canonical receipt digest. Omission refuses.
+        authority: Trusted local lookup returning the verifier-created protected
+            authorization for a canonical receipt digest. Omission refuses.
+            Bare recognition flags cannot supply private role or expiry.
         replay_store: Atomic presentation store; default is process-local only.
         clock: Local whole-second Unix clock, injectable for offline checks.
 
@@ -178,7 +238,8 @@ class LocalApprovalEvidenceVerifier:
 
     def __init__(
         self,
-        authority: Callable[[str], ReceiptAuthority] | None = None,
+        authority: Callable[[str], ApprovalAuthorization | ReceiptAuthority]
+        | None = None,
         *,
         replay_store: ApprovalNonceStore | None = None,
         clock: Callable[[], int] = lambda: int(time.time()),
@@ -189,6 +250,7 @@ class LocalApprovalEvidenceVerifier:
         )
         self._clock = clock
 
+    @_controlled_failure
     def verify(
         self,
         receipt: ApprovalReceipt,
@@ -216,6 +278,7 @@ class LocalApprovalEvidenceVerifier:
             _validate_reviewer_role(reviewer_role)
         except ApprovalTokenValidationError:
             raise ApprovalEvidenceError("invalid_expected_metadata") from None
+        receipt = ApprovalReceipt.from_dict(receipt.to_dict())
         digest = "sha256:" + hashlib.sha256(receipt.to_json().encode()).hexdigest()
 
         def result(reason: ApprovalEvidenceReason) -> ApprovalEvidenceResult:
@@ -224,10 +287,6 @@ class LocalApprovalEvidenceVerifier:
         now = self._now()
         if now is None:
             return result(ApprovalEvidenceReason.CLOCK_UNAVAILABLE)
-        if now >= receipt.expires_at:
-            return result(ApprovalEvidenceReason.EXPIRED)
-        if now < receipt.consumed_at:
-            return result(ApprovalEvidenceReason.FUTURE_RECEIPT)
         if self._authority is None:
             return result(ApprovalEvidenceReason.UNSUPPORTED_AUTHORITY)
         try:
@@ -238,19 +297,40 @@ class LocalApprovalEvidenceVerifier:
             return result(ApprovalEvidenceReason.UNSUPPORTED_AUTHORITY)
         if authority is ReceiptAuthority.UNRECOGNIZED:
             return result(ApprovalEvidenceReason.UNRECOGNIZED_RECEIPT)
-        if authority is not ReceiptAuthority.RECOGNIZED:
+        if type(authority) is not ApprovalAuthorization:
             return result(ApprovalEvidenceReason.AUTHORITY_UNAVAILABLE)
-        # Recheck time after the lookup; a slow authority cannot extend expiry.
+        authorization = cast(ApprovalAuthorization, authority)
+        try:
+            if (
+                type(authorization.receipt) is not ApprovalReceipt
+                or authorization.receipt != receipt
+            ):
+                return result(ApprovalEvidenceReason.UNRECOGNIZED_RECEIPT)
+            _validate_reviewer_role(authorization.reviewer_role)
+            if (
+                type(authorization.consumed_at) is not int
+                or type(authorization.expires_at) is not int
+                or not (
+                    0
+                    <= authorization.consumed_at
+                    < authorization.expires_at
+                    <= (1 << 63) - 1
+                )
+            ):
+                return result(ApprovalEvidenceReason.AUTHORITY_UNAVAILABLE)
+        except Exception:
+            return result(ApprovalEvidenceReason.AUTHORITY_UNAVAILABLE)
+        # Recheck trusted custody time after lookup; wire metadata has no expiry.
         now = self._now()
         if now is None:
             return result(ApprovalEvidenceReason.CLOCK_UNAVAILABLE)
-        if now >= receipt.expires_at:
+        if now >= authorization.expires_at:
             return result(ApprovalEvidenceReason.EXPIRED)
-        if now < receipt.consumed_at:
+        if now < authorization.consumed_at:
             return result(ApprovalEvidenceReason.FUTURE_RECEIPT)
         try:
             claimed = self._store.claim(
-                receipt.token_digest, expires_at=receipt.expires_at, now=now
+                receipt.token_digest, expires_at=authorization.expires_at, now=now
             )
         except Exception:
             return result(ApprovalEvidenceReason.NONCE_STORE_UNAVAILABLE)
@@ -260,7 +340,7 @@ class LocalApprovalEvidenceVerifier:
             return result(ApprovalEvidenceReason.REPLAYED)
         if receipt.action_digest != action_digest:
             return result(ApprovalEvidenceReason.ACTION_MISMATCH)
-        if receipt.reviewer_role != reviewer_role:
+        if authorization.reviewer_role != reviewer_role:
             return result(ApprovalEvidenceReason.REVIEWER_ROLE_MISMATCH)
         return result(ApprovalEvidenceReason.VERIFIED)
 

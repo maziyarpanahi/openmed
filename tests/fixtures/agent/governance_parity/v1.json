@@ -17,9 +17,9 @@
     },
     {
       "kind": "receipt",
-      "json": "{\n  \"action_digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\n  \"consumed_at\": 1789905600,\n  \"expires_at\": 1789905660,\n  \"reviewer_role\": \"role:org.openmed/reviewer@1.0.0\",\n  \"schema_version\": \"openmed.agent.approval_receipt.v1\",\n  \"token_digest\": \"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"\n}",
-      "canonical_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-      "digest": "sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc"
+      "json": "{\n  \"action_digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\n  \"code\": \"approved\",\n  \"schema_version\": \"openmed.agent.approval_receipt.v2\",\n  \"token_digest\": \"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"\n}",
+      "canonical_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "digest": "sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd"
     },
     {
       "kind": "run",
@@ -41,9 +41,9 @@
     },
     {
       "kind": "verification",
-      "json": "{\n  \"action_digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\n  \"reason_code\": \"verified\",\n  \"receipt_digest\": \"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\n  \"schema_version\": \"openmed.agent.approval_evidence.v1\",\n  \"status\": \"verified\"\n}",
-      "canonical_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
-      "digest": "sha256:93c6b78e800e50a2ebb92af4eddb3e3a9d0141cea34f6c037e099307206db69f"
+      "json": "{\n  \"action_digest\": \"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\n  \"reason_code\": \"verified\",\n  \"receipt_digest\": \"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\n  \"schema_version\": \"openmed.agent.approval_evidence.v1\",\n  \"status\": \"verified\"\n}",
+      "canonical_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+      "digest": "sha256:08671bd769408ba8d4a5d7a5674521020c3368fd7bcb850e10c4c80ebe4e1d46"
     },
     {
       "kind": "artifact",
@@ -152,25 +152,25 @@
     {
       "kind": "receipt",
       "name": "unknown-content-field",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"private_payload\":\"SYNTHETIC_SECRET_SENTINEL\",\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"private_payload\":\"SYNTHETIC_SECRET_SENTINEL\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
       "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "unknown-version",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.unknown.v999\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"schema_version\":\"openmed.unknown.v999\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
       "swift_error": "unsupported_version"
     },
     {
       "kind": "receipt",
       "name": "missing-field",
-      "json": "{\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
+      "json": "{\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
       "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "duplicate-escaped-key",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\",\"\\u0061ction_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\",\"\\u0061ction_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"}",
       "swift_error": "duplicate_field"
     },
     {
@@ -224,25 +224,25 @@
     {
       "kind": "verification",
       "name": "unknown-content-field",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"private_payload\":\"SYNTHETIC_SECRET_SENTINEL\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"private_payload\":\"SYNTHETIC_SECRET_SENTINEL\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
       "swift_error": "invalid_fields"
     },
     {
       "kind": "verification",
       "name": "unknown-version",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.unknown.v999\",\"status\":\"verified\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.unknown.v999\",\"status\":\"verified\"}",
       "swift_error": "unsupported_version"
     },
     {
       "kind": "verification",
       "name": "missing-field",
-      "json": "{\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+      "json": "{\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
       "swift_error": "invalid_fields"
     },
     {
       "kind": "verification",
       "name": "duplicate-escaped-key",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\",\"\\u0061ction_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\",\"\\u0061ction_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\"}",
       "swift_error": "duplicate_field"
     },
     {
@@ -326,37 +326,43 @@
     {
       "kind": "receipt",
       "name": "consumed_at-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":true,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-      "swift_error": "invalid_metadata"
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"consumed_at\":true,\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "consumed_at-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1.0,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-      "swift_error": "invalid_metadata"
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"consumed_at\":1.0,\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "consumed_at-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905660,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-      "swift_error": "invalid_metadata"
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"consumed_at\":1789905660,\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "expires_at-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":9223372036854775808,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"expires_at\":9223372036854775808,\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
       "swift_error": "invalid_metadata"
     },
     {
       "kind": "receipt",
       "name": "reviewer_role-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@01.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-      "swift_error": "invalid_metadata"
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"reviewer_role\":\"role:org.openmed/reviewer@01.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "swift_error": "invalid_fields"
     },
     {
       "kind": "receipt",
       "name": "action_digest-invalid",
-      "json": "{\"action_digest\":\"SHA256:2222222222222222222222222222222222222222222222222222222222222222\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
+      "json": "{\"action_digest\":\"SHA256:2222222222222222222222222222222222222222222222222222222222222222\",\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+      "swift_error": "invalid_metadata"
+    },
+    {
+      "kind": "receipt",
+      "name": "code-invalid",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"denied\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
       "swift_error": "invalid_metadata"
     },
     {
@@ -440,19 +446,19 @@
     {
       "kind": "verification",
       "name": "status-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
       "swift_error": "invalid_metadata"
     },
     {
       "kind": "verification",
       "name": "reason_code-invalid",
-      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"execute\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+      "json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"execute\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
       "swift_error": "invalid_metadata"
     },
     {
       "kind": "verification",
       "name": "action_digest-invalid",
-      "json": "{\"action_digest\":\"SYNTHETIC_SECRET_SENTINEL\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+      "json": "{\"action_digest\":\"SYNTHETIC_SECRET_SENTINEL\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
       "swift_error": "invalid_metadata"
     },
     {
@@ -492,8 +498,8 @@
       "swift_error": "invalid_json"
     }
   ],
-  "receipt_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:37f16dcff088bffed0f6a3c37fd4f5e9e77786905f59518cbff9d18ef092dcbe\"}",
-  "bound_preview_receipt_json": "{\"action_digest\":\"sha256:ad40b40c255efba6c0589a2bfe8d38e96539cc352f222b27a920bd813ca9e684\",\"consumed_at\":1789905600,\"expires_at\":1789905660,\"reviewer_role\":\"role:org.openmed/reviewer@1.0.0\",\"schema_version\":\"openmed.agent.approval_receipt.v1\",\"token_digest\":\"sha256:c240ca23fa53243cd7a1766332086275c3d7b66b58dfef6c0d42ebab0264c9ec\"}",
+  "receipt_json": "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:a8820e0a1883a899e05eb64d6968c73d47b91dc5022855a40a3ea7492e834d03\"}",
+  "bound_preview_receipt_json": "{\"action_digest\":\"sha256:ad40b40c255efba6c0589a2bfe8d38e96539cc352f222b27a920bd813ca9e684\",\"code\":\"approved\",\"schema_version\":\"openmed.agent.approval_receipt.v2\",\"token_digest\":\"sha256:827a22d2e0132ddbecf25dbee3ffbbb9093a64125aae012295e3c08bb039d6d3\"}",
   "changed_preview_json": "{\"batch_digest\":\"sha256:35c5c390f434806f91822d1b9778ae6f7e3e860c4be7377b49580229372d9757\",\"is_valid\":true,\"issues\":[],\"mutation_count\":1,\"mutations\":[{\"field_names\":[\"gender_concept_id\",\"person_id\"],\"operation\":\"insert\",\"ordinal\":0,\"reference_count\":0,\"row_digest\":\"sha256:c7f0dc1ff04a7db2c53d8409c8d7c0130a216b6f3590bda63f7b2e14be2ce27e\",\"table\":\"person\"}],\"operation_counts\":{\"insert\":1},\"preview_digest\":\"sha256:408089db1601167a4c9d5c499cc6b341aa2d8bc353afefb0597eef58c044f9b7\",\"reference_snapshot_digest\":\"sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\",\"schema\":\"openmed.interop.omop.mutation_batch.v1\"}",
   "verification_scenarios": [
     {
@@ -507,7 +513,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}"
       ]
     },
     {
@@ -521,7 +527,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"unrecognized_receipt\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"unrecognized_receipt\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -535,7 +541,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"unsupported_authority\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"unsupported_authority\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -549,7 +555,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"authority_unavailable\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"authority_unavailable\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -565,8 +571,8 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"verified\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"verified\"}",
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -582,8 +588,8 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"action_mismatch\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"action_mismatch\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -599,8 +605,8 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"reviewer_role_mismatch\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"reviewer_role_mismatch\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}",
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"replayed\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -614,7 +620,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"expired\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"expired\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     },
     {
@@ -628,7 +634,7 @@
         "role:org.openmed/reviewer@1.0.0"
       ],
       "expected_json": [
-        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"future_receipt\",\"receipt_digest\":\"sha256:294134449846451f363f5b1a8dab5a693d4a4798f16e431794c0c39e621ef5cc\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
+        "{\"action_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"reason_code\":\"future_receipt\",\"receipt_digest\":\"sha256:444d883befb18796270fad802b87cc3fa971244a15174526403cf675d928a3dd\",\"schema_version\":\"openmed.agent.approval_evidence.v1\",\"status\":\"refused\"}"
       ]
     }
   ]
