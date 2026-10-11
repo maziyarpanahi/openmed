@@ -103,6 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Project reviewed, evidence-bound clinical relations into offline FHIR R4
+  reason links and relative-owned FamilyMemberHistory conditions, with
+  source-free Provenance, reference checks and explicit projection losses.
+
 - Typed Python and TypeScript workflow clients with strict metadata validation,
   bounded inspection retries and polling, one-attempt mutations and shared
   offline contract vectors (#3670).
