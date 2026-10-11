@@ -1,6 +1,6 @@
 {
   "brief_audit": {
-    "fingerprint": "sha256:1fa536e7c4325d126db51317feaea31fa49ea59a1a500f311120b7c07e99a20e",
+    "fingerprint": "sha256:285cb71e5f8d76be2149247267704b67452308098c942c6b361f453edb1d59ea",
     "properties": [
       "backend_id",
       "citations",
@@ -40,7 +40,7 @@
     "schema_version": 1
   },
   "brief_response": {
-    "fingerprint": "sha256:3a292f271f36ef121cce008e4f4fdea14df40f948d3288579e9db9fbcd9b6c16",
+    "fingerprint": "sha256:1d617eb86aa529c4e283c8188b09bb3f8ddde85c72be44ce9d21760cc11135d6",
     "properties": [
       "backend_id",
       "citations",
