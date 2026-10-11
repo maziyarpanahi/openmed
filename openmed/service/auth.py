@@ -75,6 +75,13 @@ ROUTE_POLICIES = {
     ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
     ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
     ("POST", "/ground"): RoutePolicy(("ground:write",), "model"),
+    ("POST", "/v1/workflows/preflight"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/preview"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/status"): RoutePolicy(("workflow:read",), "control"),
+    ("POST", "/v1/workflows/review-receipts"): RoutePolicy(
+        ("workflow:review",), "control"
+    ),
+    ("POST", "/v1/workflows/cancel"): RoutePolicy(("workflow:cancel",), "control"),
     ("POST", "/jobs"): RoutePolicy(("jobs:write",), "model"),
     ("GET", "/jobs/{job_id}"): RoutePolicy(("jobs:read",), "control"),
     # GraphQL authorizes the selected operation's fields before execution.
