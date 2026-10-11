@@ -71,17 +71,18 @@ class CustodiedService:
 
     def __init__(self):
         signing_key = b"synthetic-offline-approval-key-32!!"
-        token = ApprovalTokenSigner(signing_key).issue(
+        token = ApprovalTokenSigner(signing_key, clock=lambda: 100).issue(
             action_digest=ACTION,
             reviewer_role="role:test.example/reviewer",
             expires_at=200,
             nonce_source=lambda size: b"x" * size,
         )
-        self.receipt = ApprovalTokenVerifier(
+        self.authorization = ApprovalTokenVerifier(
             signing_key, InMemoryApprovalNonceStore(), clock=lambda: 100
-        ).consume(
+        ).consume_authorization(
             token, action_digest=ACTION, reviewer_role="role:test.example/reviewer"
         )
+        self.receipt = self.authorization.receipt
         effect = EffectRecord.create(
             ordinal=0,
             run_id=reference().run_id,
@@ -95,6 +96,9 @@ class CustodiedService:
         self.view = WorkflowView(
             reference(), STATE, ActionPhase.WAITING_REVIEW, (effect,)
         )
+        self.receipt_consumed_at = self.authorization.consumed_at
+        self.receipt_expires_at = self.authorization.expires_at
+        self.authority_valid = True
         self.lock = threading.Lock()
         self.ledger = {}
         self.mutations = 0
@@ -129,9 +133,15 @@ class CustodiedService:
 
     def _verify(self, principal, ref, receipt, now):
         self._owner(principal, ref)
-        if receipt != self.receipt:
+        if (
+            not self.authority_valid
+            or self.authorization.reviewer_role != "role:test.example/reviewer"
+            or receipt != self.receipt
+        ):
             raise WorkflowServiceError("workflow_receipt_unverified")
-        if now >= self.receipt.expires_at:
+        if now < self.receipt_consumed_at:
+            raise WorkflowServiceError("workflow_receipt_future")
+        if now >= self.receipt_expires_at:
             raise WorkflowServiceError("workflow_receipt_expired")
 
     def verify_receipt(self, principal, ref, receipt, *, now):
@@ -345,11 +355,11 @@ def test_actual_consumed_receipt_duplicate_ack_and_cancellation_intent():
 @pytest.mark.parametrize(
     "change,code",
     [
-        ({"reviewer_role": "role:test.example/admin"}, "workflow_receipt_unverified"),
+        ({"reviewer_role": "role:test.example/admin"}, "workflow_invalid_input"),
         ({"token_digest": NEXT_STATE}, "workflow_receipt_unverified"),
         ({"action_digest": NEXT_STATE}, "workflow_conflict"),
-        ({"consumed_at": 101}, "workflow_receipt_future"),
-        ({"expires_at": 100, "consumed_at": 99}, "workflow_receipt_expired"),
+        ({"consumed_at": 101}, "workflow_invalid_input"),
+        ({"expires_at": 100, "consumed_at": 99}, "workflow_invalid_input"),
         ({"expires_at": True}, "workflow_invalid_input"),
         ({"approved": True}, "workflow_invalid_input"),
     ],
@@ -371,7 +381,7 @@ def test_expiry_after_read_only_verification_prevents_submission():
     with client(service, clock=lambda: next(times)) as http:
         response = post(http, "review-receipts", review_payload(service))
     assert response.json()["error"]["code"] == "workflow_receipt_expired"
-    assert service.calls == ["verify"]
+    assert service.calls == ["verify", "submit"]
     assert service.mutations == 0
 
 
@@ -586,9 +596,7 @@ def test_receipt_commit_rechecks_custody_after_read_only_proof():
 
     def revoke_after_proof(principal, ref, receipt, *, now):
         proof = verify(principal, ref, receipt, now=now)
-        service.receipt = replace(
-            service.receipt, reviewer_role="role:test.example/revoked"
-        )
+        service.authority_valid = False
         return proof
 
     service.verify_receipt = revoke_after_proof
@@ -606,3 +614,53 @@ def test_cancellation_terminal_run_is_refused_without_compensation():
     assert response.json()["error"]["code"] == "workflow_terminal"
     assert service.mutations == 0
     service.compensate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "field,value,code",
+    [
+        ("receipt_expires_at", 100, "workflow_receipt_expired"),
+        ("receipt_consumed_at", 101, "workflow_receipt_future"),
+    ],
+)
+def test_receipt_time_is_verified_in_trusted_service_custody(field, value, code):
+    service = CustodiedService()
+    setattr(service, field, value)
+    with client(service) as http:
+        response = post(http, "review-receipts", review_payload(service))
+    assert response.json()["error"]["code"] == code
+    assert service.mutations == 0 and "submit" not in service.calls
+
+
+@pytest.mark.parametrize("kind", ["mutated", "foreign"])
+def test_untrusted_service_diagnostic_cannot_hide_unknown_mutation(kind):
+    service = CustodiedService()
+
+    class ForeignError(WorkflowServiceError):
+        def __init__(self, _code):
+            ValueError.__init__(self, "Foreign workflow diagnostic")
+
+        def __getattribute__(self, name):
+            if name == "code":
+                raise UnicodeDecodeError("utf-8", PRIVATE.encode(), 0, 1, "invalid")
+            return super().__getattribute__(name)
+
+    error = (
+        WorkflowServiceError("workflow_service_failed")
+        if kind == "mutated"
+        else ForeignError("workflow_service_failed")
+    )
+    if kind == "mutated":
+        error.code = PRIVATE
+
+    def uncertain(*args, **kwargs):
+        service.mutations += 1
+        raise error
+
+    service.cancel = uncertain
+    with client(service) as http:
+        response = post(http, "cancel")
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "workflow_mutation_unknown"
+    assert PRIVATE not in response.text
+    assert service.mutations == 1

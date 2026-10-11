@@ -24,7 +24,7 @@ Install the service extra and start Uvicorn:
 
 ```bash
 uv pip install -e ".[hf,service]"
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 The standalone Python snippets below use `requests`, which is intentionally not

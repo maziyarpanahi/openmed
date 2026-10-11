@@ -262,7 +262,16 @@ def mount_workflow_routes(
                 raise WorkflowServiceError("workflow_invalid_result")
             return JSONResponse(result.to_dict(), headers={"Cache-Control": "no-store"})
         except WorkflowServiceError as error:
-            return _error(error.code)
+            code = (
+                error.code
+                if type(error) is WorkflowServiceError
+                and type(error.code) is str
+                and error.code in WORKFLOW_ERROR_STATUSES
+                else "workflow_mutation_unknown"
+                if mutation
+                else "workflow_service_failed"
+            )
+            return _error(code)
         except Exception:
             return _error("workflow_service_failed")
 

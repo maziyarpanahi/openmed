@@ -459,7 +459,7 @@ print(result.deidentified_text)   # read output from .deidentified_text (not .te
 
 ```bash
 pip install "openmed[service]"
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Tune behavior with `OPENMED_SERVICE_*` variables, e.g. `OPENMED_PROFILE=dev`,
