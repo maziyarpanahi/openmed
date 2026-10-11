@@ -15,9 +15,11 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
+from functools import wraps
 from importlib import resources
+from itertools import islice
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final, ParamSpec, TypeVar, cast
 
 from openmed.clinical.journey import JourneyQuery, query_journey
 from openmed.clinical.journey_contracts import (
@@ -324,6 +326,27 @@ _PRIVACY_MAX_WITNESSES: Final = 512
 _PRIVACY_IDENTIFIER_LABELS: Final = frozenset({"PERSON", "ID_NUM"})
 
 
+_PrivacyArgs = ParamSpec("_PrivacyArgs")
+_PrivacyReturn = TypeVar("_PrivacyReturn")
+
+
+def _privacy_boundary(
+    operation: Callable[_PrivacyArgs, _PrivacyReturn],
+) -> Callable[_PrivacyArgs, _PrivacyReturn]:
+    @wraps(operation)
+    def guarded(
+        *args: _PrivacyArgs.args, **kwargs: _PrivacyArgs.kwargs
+    ) -> _PrivacyReturn:
+        try:
+            return operation(*args, **kwargs)
+        except Exception:
+            pass
+        raise GoldenJourneyError("invalid Journey privacy consistency inputs")
+
+    return guarded
+
+
+@_privacy_boundary
 def verify_journey_privacy_consistency(
     sources: Sequence[JourneyPrivacySource],
     *,
@@ -375,12 +398,19 @@ def verify_journey_privacy_consistency(
         or type(date_shift_max_days) is not int
         or not 1 <= date_shift_max_days <= 3650
         or not isinstance(processors, Mapping)
-        or any(
-            key not in _ADAPTERS or not callable(value)
-            for key, value in processors.items()
-        )
     ):
         raise GoldenJourneyError("invalid Journey privacy consistency inputs")
+    entries = tuple(islice(processors.items(), len(_ADAPTERS) + 1))
+    if (
+        len(entries) > len(_ADAPTERS)
+        or any(
+            type(key) is not str or key not in _ADAPTERS or not callable(value)
+            for key, value in entries
+        )
+        or len({key for key, _value in entries}) != len(entries)
+    ):
+        raise GoldenJourneyError("invalid Journey privacy consistency inputs")
+    processors = dict(entries)
     try:
         patient_bytes = patient_key.encode("utf-8")
         expected_offset = stable_offset_for(
@@ -429,6 +459,7 @@ def verify_journey_privacy_consistency(
     )
 
 
+@_privacy_boundary
 def verify_golden_journey_privacy(
     scenario: Mapping[str, Any],
     *,

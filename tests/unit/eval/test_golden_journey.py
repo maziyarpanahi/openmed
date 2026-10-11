@@ -228,6 +228,7 @@ def test_invalid_private_inputs_have_fixed_value_free_errors(field, value) -> No
     ) as captured:
         _privacy(**{field: value})
     assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
 
 
 @pytest.mark.parametrize(
@@ -295,3 +296,45 @@ def test_regeneration_defaults_to_read_only_check(
 
     assert captured.value.code == 0
     assert golden.read_bytes() == before
+
+
+@pytest.mark.parametrize("boundary", ["processors", "scenario"])
+def test_privacy_mapping_failures_drop_private_upstream_context(boundary):
+    class PrivateMapping(dict):
+        def items(self):
+            raise RuntimeError("synthetic-private-mapping-payload")
+
+        def __getitem__(self, key):
+            raise RuntimeError("synthetic-private-mapping-payload")
+
+        def get(self, key, default=None):
+            raise RuntimeError("synthetic-private-mapping-payload")
+
+    with pytest.raises(GoldenJourneyError) as caught:
+        if boundary == "processors":
+            _privacy(processors=PrivateMapping())
+        else:
+            verify_golden_journey_privacy(
+                PrivateMapping(),
+                patient_key=PATIENT_KEY,
+                date_shift_secret=SHIFT_SECRET,
+                proof_secret=PROOF_SECRET,
+                processors={},
+            )
+    assert str(caught.value) == "invalid Journey privacy consistency inputs"
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+def test_processor_snapshot_is_bounded_and_rejects_duplicate_entries():
+    observed = []
+
+    class RepeatedProcessors(dict):
+        def items(self):
+            for index in range(100):
+                observed.append(index)
+                yield "text", privacy_control_processor
+
+    with pytest.raises(GoldenJourneyError):
+        _privacy(processors=RepeatedProcessors())
+    assert observed == list(range(6))
