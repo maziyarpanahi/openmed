@@ -1,5 +1,8 @@
 # SDOH Negated-Need Resolution
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 SDOH extractors can surface the same determinant in an asserted need and in a
 screening denial.  `openmed.clinical.sdoh_negated_need` resolves each caller
 supplied finding in its own local sentence and clause so a denial for one

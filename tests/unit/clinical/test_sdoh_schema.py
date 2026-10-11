@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
+import pytest
+
+import openmed.clinical.sdoh as sdoh
 from openmed.clinical.sdoh import (
     SDOHFinding,
     available_determinant_extractors,
@@ -15,6 +20,119 @@ from openmed.clinical.sdoh import (
 from openmed.clinical.sections import detect_sections
 
 _SOCIAL_EXTRACTORS = frozenset({"employment", "food_insecurity", "living_status"})
+SDOH_GUIDE = (
+    Path(__file__).resolve().parents[3] / "docs" / "clinical" / "sdoh-extraction.md"
+)
+
+
+def _assert_documented_determinants(markdown: str) -> None:
+    heading = "## Built-in determinants and statuses\n"
+    assert heading in markdown, "SDOH determinant table is missing"
+    section = markdown.split(heading, 1)[1].split("\n## ", 1)[0]
+    categories = re.findall(r"(?m)^\| `([a-z_]+)` \|", section)
+    assert tuple(sorted(categories)) == available_determinant_extractors(), (
+        "documented SDOH determinants differ from the registry"
+    )
+
+
+def _run_documented_examples(markdown: str) -> list[dict[str, Any]]:
+    from openmed.core.offline import network_blocked_if_offline
+
+    examples = re.findall(r"```python\n(.*?)\n```", markdown, flags=re.DOTALL)
+    assert examples, "SDOH guide has no runnable Python examples"
+    namespaces = []
+    with network_blocked_if_offline(local_only=True):
+        for index, source in enumerate(examples):
+            namespace: dict[str, Any] = {"__name__": "__sdoh_docs_example__"}
+            exec(compile(source, f"<sdoh-doc-example-{index}>", "exec"), namespace)
+            namespaces.append(namespace)
+    return namespaces
+
+
+@pytest.fixture
+def isolated_documentation_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    registry = sdoh.DeterminantExtractorRegistry()
+    for name, extractor in sdoh._DETERMINANT_EXTRACTORS.items():
+        registry.register(name, extractor)
+    monkeypatch.setattr(sdoh, "_DETERMINANT_EXTRACTORS", registry)
+
+
+def test_sdoh_guide_lists_exactly_the_registered_determinants() -> None:
+    _assert_documented_determinants(SDOH_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_sdoh_guide_examples_run_offline_and_preserve_registry(
+    isolated_documentation_registry: None,
+) -> None:
+    before = sdoh._DETERMINANT_EXTRACTORS.items()
+    examples = _run_documented_examples(SDOH_GUIDE.read_text(encoding="utf-8"))
+    assert len(examples) == 3
+    assert examples[0]["summary"] == [
+        ("employment", "unemployed", (45, 55)),
+        ("food_insecurity", "current", (70, 85)),
+        ("living_status", "lives_alone", (57, 68)),
+    ]
+    assert len(examples[1]["custom_summary"]) == 1
+    assert examples[1]["custom_summary"][0][:2] == ("transportation", "unknown")
+    assert examples[2]["loaded"]["determinants"]["food_insecurity"]["cues"] == [
+        "synthetic pantry cue"
+    ]
+    assert not examples[2]["path"].exists()
+    assert sdoh._DETERMINANT_EXTRACTORS.items() == before
+
+
+def test_sdoh_guide_check_rejects_an_unlisted_new_determinant(
+    isolated_documentation_registry: None,
+) -> None:
+    sdoh.register_determinant_extractor("synthetic_new_determinant", lambda *_: [])
+    with pytest.raises(AssertionError, match="differ from the registry"):
+        _assert_documented_determinants(SDOH_GUIDE.read_text(encoding="utf-8"))
+
+
+def test_sdoh_guide_check_rejects_incorrect_table_labels() -> None:
+    markdown = SDOH_GUIDE.read_text(encoding="utf-8").replace(
+        "| `drug` |", "| `synthetic_unknown` |", 1
+    )
+    with pytest.raises(AssertionError, match="differ from the registry"):
+        _assert_documented_determinants(markdown)
+
+
+def test_sdoh_guide_check_rejects_duplicate_table_rows() -> None:
+    markdown = SDOH_GUIDE.read_text(encoding="utf-8").replace(
+        "| `drug` |", "| `drug` |\n| `drug` |", 1
+    )
+    with pytest.raises(AssertionError, match="differ from the registry"):
+        _assert_documented_determinants(markdown)
+
+
+def test_sdoh_guide_check_rejects_missing_table() -> None:
+    with pytest.raises(AssertionError, match="table is missing"):
+        _assert_documented_determinants("No determinant table.\n")
+
+
+def test_sdoh_guide_example_check_rejects_section_scope_drift(
+    isolated_documentation_registry: None,
+) -> None:
+    markdown = SDOH_GUIDE.read_text(encoding="utf-8").replace(
+        "sections=detect_sections(text)", "sections=[]", 1
+    )
+    with pytest.raises(AssertionError):
+        _run_documented_examples(markdown)
+
+
+def test_sdoh_guide_example_check_rejects_output_drift(
+    isolated_documentation_registry: None,
+) -> None:
+    markdown = SDOH_GUIDE.read_text(encoding="utf-8").replace(
+        "assert len(findings) == 3", "assert len(findings) == 4", 1
+    )
+    with pytest.raises(AssertionError):
+        _run_documented_examples(markdown)
+
+
+def test_sdoh_guide_example_check_rejects_missing_examples() -> None:
+    with pytest.raises(AssertionError, match="no runnable Python examples"):
+        _run_documented_examples("No Python example.\n")
 
 
 def test_sdoh_finding_round_trips_through_dict() -> None:
