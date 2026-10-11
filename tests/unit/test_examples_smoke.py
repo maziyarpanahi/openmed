@@ -229,6 +229,32 @@ def test_sdoh_timeline_output_check_rejects_unprojected_temporal_values():
         _assert_sdoh_timeline_demo_output("\n".join(json.dumps(row) for row in records))
 
 
+@pytest.mark.parametrize("drift", ["object", "private_kind", "nonfinite", "alias"])
+def test_sdoh_timeline_cli_refuses_scalar_drift_before_any_output(
+    drift, monkeypatch, capsys
+):
+    records = v30_sdoh_timeline.build_demo_records()
+    if drift == "object":
+        records[4]["kind"] = object()
+    elif drift == "private_kind":
+        records[4]["kind"] = "PRIVATE_PROVIDER_KIND"
+    elif drift == "nonfinite":
+        records[4]["span"][0] = float("nan")
+    else:
+
+        class Impersonator(str):
+            def __eq__(self, other):
+                return other == "unemployed"
+
+            def __hash__(self):
+                return hash("unemployed")
+
+        records[1]["status"] = Impersonator("PRIVATE_PROVIDER_STATUS")
+    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", lambda: records)
+    assert v30_sdoh_timeline.main([]) == 1
+    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+
+
 def test_clinical_ner_families_example_is_syntactically_valid():
     source = Path("examples/clinical_ner_families.py").read_text(encoding="utf-8")
 

@@ -27,6 +27,31 @@ SYNTHETIC_NOTE = (
 )
 REFERENCE_TIME = "2026-06-15"
 
+_CLOSED_FIELDS = {
+    "demonstration": {
+        "data": {"synthetic"},
+        "clinical_validation": {"not_validated"},
+        "review": {"required"},
+    },
+    "sdoh": {
+        "category": {"employment", "food_insecurity", "living_status"},
+        "status": {"unemployed", "current", "lives_alone"},
+    },
+    "temporal": {
+        "kind": {"DATE"},
+        "state": {"anchored", "ambiguous", "unanchored"},
+    },
+    "timeline": {
+        "kind": {"symptom", "event"},
+        "temporality": {"historical", "recent", "hypothetical"},
+        "certainty": {"certain", "uncertain"},
+        "negation": {"affirmed"},
+        "experiencer": {"patient"},
+        "time_state": {"anchored", "relative_or_unknown", "unanchored"},
+        "review": {"required"},
+    },
+}
+
 
 def _span(surface: str) -> tuple[int, int]:
     start = SYNTHETIC_NOTE.index(surface)
@@ -171,13 +196,50 @@ def main(argv: Sequence[str] | None = None) -> int:
     failed = False
     try:
         records = build_demo_records()
+        expected = [
+            "demonstration",
+            *(["sdoh"] * 3),
+            *(["temporal"] * 4),
+            *(["timeline"] * 4),
+        ]
+        if type(records) is not list or len(records) != len(expected):
+            raise ValueError
+        for record, kind in zip(records, expected, strict=True):
+            fields = _CLOSED_FIELDS[kind]
+            keys = {"record", *fields} | (
+                {"span"} if kind != "demonstration" else set()
+            )
+            if (
+                type(record) is not dict
+                or any(type(key) is not str for key in record)
+                or record.keys() != keys
+                or type(record["record"]) is not str
+                or record["record"] != kind
+                or any(
+                    type(record[key]) is not str or record[key] not in allowed
+                    for key, allowed in fields.items()
+                )
+            ):
+                raise ValueError
+            if kind != "demonstration":
+                span = record["span"]
+                if (
+                    type(span) is not list
+                    or len(span) != 2
+                    or any(type(value) is not int for value in span)
+                    or not 0 <= span[0] < span[1] <= len(SYNTHETIC_NOTE)
+                ):
+                    raise ValueError
+        lines = [
+            json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            for record in records
+        ]
     except Exception:
         failed = True
     if failed:
         print("synthetic_example_contract_failed", file=sys.stderr)
         return 1
-    for record in records:
-        print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+    print("\n".join(lines))
     return 0
 
 

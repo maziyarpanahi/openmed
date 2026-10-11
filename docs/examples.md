@@ -169,6 +169,10 @@ extraction. See the [SDOH evidence contract](clinical/sdoh-evidence.md),
 [temporal normalization](clinical/temporal-normalization.md) and
 [timeline buckets](clinical/timeline-buckets.md).
 
+All records require closed labels and exact built-in scalar types. The complete
+output is validated and serialized before printing, so malformed metadata causes
+a fixed failure without partial JSONL or provider diagnostic values.
+
 ## v1.7 multimodal, interop, and browser recipes
 
 The v1.7 examples are grouped around the main new public surfaces:
