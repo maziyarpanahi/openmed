@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4703998
+    "json": 4721851
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4703998
+    "docs/search/search_index.json": 4721851
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -116,6 +116,8 @@
     "After integrating the service authority and safe reference-launcher documentation, the staged artifact measures 56215320 total bytes, 55850807 unique payload bytes and a 4685002-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "After integrating multilingual privacy, structured header coverage and service authority documentation, the staged artifact measures 56225479 total bytes, 55860966 unique payload bytes and a 4689232-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
     "The reviewed governed workflow CLI recovery guide measures 4697064 search bytes, an increase of 7832 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
-    "The reviewed native governance, receipt custody and Python/Swift parity guide measures 4702312 search bytes, an increase of 5248 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
+    "The reviewed native governance, receipt custody and Python/Swift parity guide measures 4702312 search bytes, an increase of 5248 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed MCP preflight, preview, status and human-review guide measures 4709023 search bytes, an increase of 6711 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The combined governed REST and typed workflow client guides measure 4720165 search bytes, an increase of 11142 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged."
   ]
 }
