@@ -82,7 +82,7 @@ registered local package. There is no Hub cache lookup, download or automatic
 extraction fallback at inference time.
 
 Provision the exact registry-selected package before processing clinical input,
-using the [SLM manifest guide](../models/clinical_slm_manifest.md). Register its
+using the [SLM manifest guide](../models/clinical-slm-manifest.md). Register its
 absolute directory and the manifest digest from an independently trusted
 provisioning record with `register_summarizer_package`; deriving the trusted pin
 from an untrusted package defeats that trust boundary. Registration itself does
