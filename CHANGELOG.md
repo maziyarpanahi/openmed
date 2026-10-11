@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added bounded identifier-only agent scheduling with explicit read concurrency,
+  exclusive effects, resource admission, cooperative cancellation and conservative
+  restart checkpoints through an injected guarded dispatcher (#3672).
+
+
 - Bound five governance JSON readers before decoding and return their existing
   typed malformed-input errors for excessive nesting, oversized input and
   invalid JSON. Cover every public governance JSON reader with bounded property
