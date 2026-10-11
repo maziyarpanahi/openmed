@@ -298,3 +298,41 @@ def test_redact_document_pdf_reports_detected_rectangles(
     assert rectangles[0]["confidence"] == 0.93
     assert rectangles[0]["metadata"]["source_span_count"] == 2
     assert "text_sha256" in rectangles[0]["metadata"]
+
+
+@pytest.mark.parametrize("boundary", ["snapshot", "extract", "prepare", "detector"])
+def test_pdf_annotation_refusals_discard_private_exception_context(
+    monkeypatch, boundary
+):
+    from io import BytesIO
+
+    import openmed.multimodal.documents_pdf as pdf
+    from openmed.multimodal.base import ExtractedDocument
+
+    class PrivateSource(BytesIO):
+        def read(self, *args):
+            raise RuntimeError("synthetic private PDF source detail")
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("synthetic private annotation detail")
+
+    if boundary == "snapshot":
+        call = lambda: pdf._snapshot_pdf_source(PrivateSource())
+        code = "pdf_source_unreadable"
+    elif boundary == "extract":
+        call = lambda: pdf.extract_pdf(PrivateSource(), include_annotations=True)
+        code = "annotation_appearance_unmappable"
+    elif boundary == "prepare":
+        monkeypatch.setitem(sys.modules, "pikepdf", SimpleNamespace(open=fail))
+        call = lambda: pdf._prepare_annotation_source(BytesIO(b"synthetic"))
+        code = "annotation_appearance_unmappable"
+    else:
+        call = lambda: pdf._annotation_entities(
+            ExtractedDocument(text="", spans=()), fail, None
+        )
+        code = "annotation_detection_failed"
+    with pytest.raises(ValueError) as caught:
+        call()
+    assert str(caught.value) == code
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None

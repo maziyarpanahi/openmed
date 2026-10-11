@@ -336,6 +336,7 @@ def render_redacted_pdf(
     pdfplumber, pikepdf, image_draw = _import_render_stack()
     if annotation_detector is not None and not callable(annotation_detector):
         raise ValueError("annotation_detector_required")
+    source_failed = False
     try:
         content = _snapshot_pdf_source(source_path)
         prepared = _prepare_annotation_source(
@@ -346,6 +347,8 @@ def render_redacted_pdf(
     except ValueError:
         if annotation_detector is not None:
             raise
+        source_failed = True
+    if source_failed:
         raise RuntimeError("Source PDF could not be rendered safely") from None
     if annotation_detector is not None:
         try:
@@ -357,6 +360,8 @@ def render_redacted_pdf(
             )
             annotation_regions = project_text_spans(prepared.document, detections)
         except Exception:
+            annotation_regions = None
+        if annotation_regions is None:
             raise ValueError("annotation_detection_failed") from None
         normalized_regions = _normalize_regions(
             (*normalized_regions, *annotation_regions)

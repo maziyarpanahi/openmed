@@ -84,7 +84,8 @@ def _snapshot_pdf_source(source: str | Path | BinaryIO) -> bytes:
             raise TypeError
         return bytes(content)
     except Exception:
-        raise ValueError("pdf_source_unreadable") from None
+        pass
+    raise ValueError("pdf_source_unreadable") from None
 
 
 def extract_pdf(
@@ -132,6 +133,8 @@ def extract_pdf(
         try:
             content = _snapshot_pdf_source(path)
         except ValueError:
+            content = None
+        if content is None:
             raise ValueError("annotation_appearance_unmappable") from None
         prepared = _prepare_annotation_source(
             BytesIO(content), include_annotations=True
@@ -299,7 +302,7 @@ def _prepare_annotation_source(
                 annotations = tuple(page.obj.get("/Annots", ()))
                 if len(annotations) > 10_000:
                     raise ValueError("annotation_appearance_unmappable")
-                counts = Counter()
+                counts: Counter[str] = Counter()
                 for annotation_index, annotation in enumerate(annotations):
                     subtype = str(annotation.get("/Subtype", "")).lstrip("/")
                     subtype = subtype if subtype in _ANNOTATION_SUBTYPES else "Other"
@@ -347,12 +350,14 @@ def _prepare_annotation_source(
     except MissingDependencyError:
         raise
     except Exception:
-        raise ValueError("annotation_appearance_unmappable") from None
-    return _AnnotationSource(
-        content=output.getvalue(),
-        report=tuple(reports),
-        document=ExtractedDocument(text="".join(parts), spans=tuple(spans)),
-    )
+        pass
+    else:
+        return _AnnotationSource(
+            content=output.getvalue(),
+            report=tuple(reports),
+            document=ExtractedDocument(text="".join(parts), spans=tuple(spans)),
+        )
+    raise ValueError("annotation_appearance_unmappable") from None
 
 
 def _annotation_text_and_bbox(
@@ -717,13 +722,14 @@ def _annotation_entities(
                 or isinstance(end, bool)
                 or not isinstance(start, Integral)
                 or not isinstance(end, Integral)
-                or not 0 <= start < end <= len(document.text)
+                or not 0 <= int(start) < int(end) <= len(document.text)
                 or not project_text_spans(document, (entity,))
             ):
                 raise ValueError
         return entities
     except Exception:
-        raise ValueError("annotation_detection_failed") from None
+        pass
+    raise ValueError("annotation_detection_failed") from None
 
 
 def _resolve_detector(models: Any) -> Any:

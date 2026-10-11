@@ -967,3 +967,44 @@ def test_text_removal_fails_closed_when_source_region_has_no_text(tmp_path):
     assert not report.passed
     assert not report.regions[0].source_text_found
     assert report.regions[0].source_sha256 == ()
+
+
+@pytest.mark.parametrize("boundary", ["snapshot", "prepare", "detector"])
+def test_public_pdf_renderer_discards_private_annotation_context(
+    tmp_path, monkeypatch, boundary
+):
+    import openmed.multimodal.render_pdf as renderer
+
+    source = tmp_path / "synthetic.pdf"
+    source.write_bytes(_load_fixture_builder().original_pdf_bytes())
+    output = tmp_path / "redacted.pdf"
+
+    def fail(*args, **kwargs):
+        raise ValueError("synthetic private PDF or detector detail")
+
+    if boundary == "detector":
+        detector = fail
+        expected = ValueError
+        code = "annotation_detection_failed"
+    else:
+        monkeypatch.setattr(
+            renderer,
+            "_snapshot_pdf_source"
+            if boundary == "snapshot"
+            else "_prepare_annotation_source",
+            fail,
+        )
+        detector = None
+        expected = RuntimeError
+        code = "Source PDF could not be rendered safely"
+    with pytest.raises(expected) as caught:
+        renderer.render_redacted_pdf(
+            source,
+            output,
+            [{"page": 0, "bbox": (72, 62, 160, 82)}],
+            annotation_detector=detector,
+        )
+    assert str(caught.value) == code
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert not output.exists()

@@ -233,3 +233,6 @@ Scanned or image-only source PDFs are outside this API's text-removal proof:
 their redaction rectangles must come from the OCR pipeline, and residual text
 must be verified by re-OCR. PDF redaction is an assistive privacy control, not a
 diagnostic or clinical decision system.
+
+Annotation source and detector refusals use fixed diagnostics and discard underlying
+exception context, including document and provider error details.
