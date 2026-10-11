@@ -170,6 +170,15 @@ public struct MapleInsightsScreen: View {
                         .foregroundStyle(Color.omInk)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let verified = flow.clinicalBrief {
+                        ForEach(Array(verified.citations.enumerated()), id: \.offset) { _, citation in
+                            Text("Claim \(citation.claimIndex + 1) · source \(citation.sourceStart)–\(citation.sourceEnd)")
+                                .font(.om.mono(10))
+                                .foregroundStyle(Color.omFgSubtle)
+                        }
+                        Text("Verified evidence packet · human review required")
+                            .font(.om.mono(10))
+                    }
                 } else {
                     Text("Generate a concise synthesis of clinical facts, extracted relationships, uncertainty, and follow-up evidence.")
                         .font(.om.body(15))

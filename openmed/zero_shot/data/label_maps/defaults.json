@@ -208,6 +208,15 @@
     "Distribution",
     "Anatomy"
   ],
+  "wound_assessment": [
+    "WoundType",
+    "WoundLocation",
+    "WoundStage",
+    "WoundDimension",
+    "ExudateDescriptor",
+    "TissueType",
+    "DressingType"
+  ],
   "ophthalmology": [
     "EyeFinding",
     "VisualAcuity",
@@ -321,6 +330,14 @@
     "PainScore",
     "SkinAssessment"
   ],
+  "medical_device": [
+    "DeviceType",
+    "DeviceIdentifier",
+    "Manufacturer",
+    "ModelNumber",
+    "ImplantSite",
+    "DeviceStatus"
+  ],
   "functional_status": [
     "ADLActivity",
     "AssistanceLevel",
@@ -337,5 +354,32 @@
     "ObstetricEvent",
     "GynecologicFinding",
     "DeliveryMode"
+  ],
+  "substance_use_history": [
+    "Substance",
+    "UseStatus",
+    "UseQuantity",
+    "UseFrequency",
+    "UseDuration",
+    "QuitDate",
+    "PackYears"
+  ],
+  "immunology": [
+    "Allergen",
+    "AllergicReaction",
+    "Immunization",
+    "Antibody"
+  ],
+  "mental_health": [
+    "PsychiatricSymptom",
+    "Diagnosis",
+    "Medication",
+    "Therapy"
+  ],
+  "dentistry": [
+    "Tooth",
+    "DentalCondition",
+    "DentalProcedure",
+    "Restoration"
   ]
 }

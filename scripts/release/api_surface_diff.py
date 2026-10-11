@@ -621,11 +621,26 @@ def _module_symbols(
         raise ApiSurfaceError(f"could not parse {path}: {exc}") from exc
     exports = _static_all(tree)
     string_mappings = _static_string_mappings(tree)
+    exported_roots = (
+        None if exports is None else {name.partition(".")[0] for name in exports}
+    )
+
+    def selected_root(name: str) -> bool:
+        # Keep dotted member exports and __version__ semantics. Hidden local
+        # definitions cannot be resolved through the public surface anyway.
+        return (not name.startswith("_") or name == "__version__") and (
+            exported_roots is None or name in exported_roots
+        )
+
     local: dict[str, Symbol] = {}
     for statement in tree.body:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not selected_root(statement.name):
+                continue
             local[statement.name] = _function_symbol(statement, module, statement.name)
         elif isinstance(statement, ast.ClassDef):
+            if not selected_root(statement.name):
+                continue
             class_symbols = _class_symbols(statement, module)
             local[statement.name] = class_symbols[f"{module}.{statement.name}"]
             for full_name, symbol in class_symbols.items():
@@ -662,6 +677,7 @@ def _module_symbols(
                     source_target=alias.name,
                 )
         elif isinstance(statement, (ast.Assign, ast.AnnAssign)):
+            fingerprint: str | None = None
             targets = (
                 statement.targets
                 if isinstance(statement, ast.Assign)
@@ -669,14 +685,16 @@ def _module_symbols(
             )
             for target in targets:
                 for name in _assigned_names(target):
-                    if name == "__all__":
+                    if name == "__all__" or not selected_root(name):
                         continue
+                    if fingerprint is None:
+                        fingerprint = _fingerprint(statement, "data")
                     local[name] = Symbol(
                         name=f"{module}.{name}",
                         module=module,
                         qualname=name,
                         kind="data",
-                        fingerprint=_fingerprint(statement, "data"),
+                        fingerprint=fingerprint,
                     )
 
     lazy_attribute_names = string_mappings.get("_LAZY_ATTRIBUTE_NAMES", {})

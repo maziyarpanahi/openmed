@@ -21,9 +21,18 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Protocol, Tuple
 
 from .africa_context import rendered_pattern_entries
+
+
+class OffsetMappedText(Protocol):
+    """Normalized text that can map half-open spans back to its source."""
+
+    text: str
+
+    def remap_span(self, start: int, end: int) -> tuple[int, int]:
+        """Map a normalized half-open span to original-text offsets."""
 
 
 @dataclass
@@ -40,6 +49,8 @@ class PIIPattern:
     - context_required: Require nearby context for semantic-only recognition
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
+    - context_normalizer: Optional language-scoped context-key folding; never
+      used to rewrite source text or returned entity surfaces
 
     Example:
         PIIPattern(
@@ -67,6 +78,36 @@ class PIIPattern:
     context_required: bool = False
     safety_sweep_requires_context: bool = False
     reject_on_validation_failure: bool = False
+    match_normalizer: Optional[Callable[[str], OffsetMappedText]] = None
+    context_normalizer: Optional[Callable[[str], str]] = None
+
+
+def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int, int]]:
+    """Yield original-text spans for one optionally normalized pattern.
+
+    A language pack may canonicalize encoding variants before matching as long
+    as its normalizer returns an offset map. Validators and context checks still
+    receive the untouched source surface, so downstream spans never refer to a
+    normalized copy.
+    """
+
+    matching_text = text
+    remap_span: Callable[[int, int], tuple[int, int]] | None = None
+    if pii_pattern.match_normalizer is not None:
+        normalized = pii_pattern.match_normalizer(text)
+        matching_text = normalized.text
+        remap_span = normalized.remap_span
+
+    for match in re.finditer(
+        pii_pattern.pattern,
+        matching_text,
+        pii_pattern.flags,
+    ):
+        start, end = match.span()
+        if remap_span is not None:
+            start, end = remap_span(start, end)
+        if start < end:
+            yield start, end
 
 
 # ============================================================================
@@ -550,6 +591,7 @@ def find_context_words(
     context_window: int = 100,
     *,
     require_boundaries: bool = False,
+    normalizer: Optional[Callable[[str], str]] = None,
 ) -> bool:
     """Check if context words appear near the matched entity.
 
@@ -581,11 +623,15 @@ def find_context_words(
     window_start = max(0, start - context_window)
     window_end = min(len(text), end + context_window)
     context_text = text[window_start:window_end].lower()
+    if normalizer is not None:
+        context_text = normalizer(context_text)
 
     # Simple lemmatization: strip common suffixes and check
     # More sophisticated would use spaCy/nltk lemmatizer
     for word in context_words:
         word_lower = word.lower()
+        if normalizer is not None:
+            word_lower = normalizer(word_lower)
 
         # Direct match
         if not require_boundaries and word_lower in context_text:
@@ -632,36 +678,38 @@ def find_semantic_units(
     sorted_patterns = sorted(patterns, key=lambda p: p.priority, reverse=True)
 
     for pii_pattern in sorted_patterns:
-        for match in re.finditer(pii_pattern.pattern, text, pii_pattern.flags):
+        for start, end in iter_pattern_spans(text, pii_pattern):
             # Check for overlap with higher-priority existing units
             overlaps = False
             for existing in units:
                 existing_start, existing_end = existing[0], existing[1]
-                if match.start() < existing_end and match.end() > existing_start:
+                if start < existing_end and end > existing_start:
                     overlaps = True
                     break
 
             if overlaps:
                 continue
 
-            matched_text = text[match.start() : match.end()]
+            matched_text = text[start:end]
 
             has_context = bool(
                 pii_pattern.context_words
                 and find_context_words(
                     text,
-                    match.start(),
-                    match.end(),
+                    start,
+                    end,
                     pii_pattern.context_words,
+                    normalizer=pii_pattern.context_normalizer,
                 )
             )
             if pii_pattern.requires_context:
                 has_required_context = find_context_words(
                     text,
-                    match.start(),
-                    match.end(),
+                    start,
+                    end,
                     pii_pattern.context_words,
                     require_boundaries=True,
+                    normalizer=pii_pattern.context_normalizer,
                 )
                 if not has_required_context:
                     continue
@@ -688,8 +736,8 @@ def find_semantic_units(
 
             units.append(
                 (
-                    match.start(),
-                    match.end(),
+                    start,
+                    end,
                     pii_pattern.entity_type,
                     score,
                     pii_pattern,

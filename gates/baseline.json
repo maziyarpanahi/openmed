@@ -136,5 +136,12 @@
     },
     "schema_version": 1
   },
-  "schema_version": 1
+  "schema_version": 1,
+  "summary": {
+    "clinical_fact_recall_min": 0.95,
+    "fact_coverage_min": 0.95,
+    "unsupported_claim_rate_max": 0.0,
+    "citation_support_min": 1.0,
+    "leaked_identifier_count_max": 0
+  }
 }

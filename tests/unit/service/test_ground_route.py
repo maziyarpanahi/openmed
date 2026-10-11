@@ -68,6 +68,8 @@ def test_ground_route_matches_python_result_and_keeps_logs_phi_free(
     assert result["snapshot_provenance"]["icd10cm"]["version"] == (
         "synthetic-fixture-1"
     )
+    assert "calibrated_confidence" not in result
+    assert "confidence_band" not in result
 
     rendered = "\n".join(
         record.getMessage()

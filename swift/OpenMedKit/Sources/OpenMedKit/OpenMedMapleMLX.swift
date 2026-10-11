@@ -674,6 +674,13 @@
         ]
 
         private var container: ModelContainer?
+        private var modelDirectoryURL: URL?
+
+        /// Internal dependency injection for runtime lifecycle contract tests.
+        init(container: ModelContainer?, modelDirectoryURL: URL? = nil) {
+            self.container = container
+            self.modelDirectoryURL = modelDirectoryURL
+        }
 
         public init(modelDirectoryURL: URL) async throws {
             let missing = Self.missingRequiredFiles(in: modelDirectoryURL)
@@ -699,6 +706,7 @@
                 from: modelDirectoryURL,
                 using: OpenMedMapleTokenizerLoader()
             )
+            self.modelDirectoryURL = modelDirectoryURL
         }
 
         /// Returns whether all files needed for exact-head inference exist.
@@ -772,9 +780,37 @@
             )
         }
 
+        /// Generate and verify a local brief before exposing any output.
+        /// The evaluator must execute the complete reviewed-evidence/NLI pipeline
+        /// on-device. It must not call a cloud service or manufacture approvals.
+        public func brief(
+            source: String,
+            originalIdentifiers: [String],
+            cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
+            evaluate: @Sendable (String, String) async throws -> Data,
+            privacyCheck: @Sendable (String) throws -> Bool
+        ) async throws -> ClinicalBrief {
+            guard container != nil,
+                let modelDirectoryURL,
+                Self.isModelDirectoryReady(modelDirectoryURL)
+            else { throw ClinicalBriefError.modelUnavailable }
+            guard source.utf8.count <= 16_384, originalIdentifiers.count <= 1024 else {
+                throw ClinicalBriefError.invalidPacket
+            }
+            return try await ClinicalBrief.compose(
+                source: source, originalIdentifiers: originalIdentifiers,
+                cancellation: cancellation,
+                generate: { source in
+                    let result = try await self.complete(OpenMedMapleRequest(task: .brief, document: source))
+                    guard let summary = result.answer, !summary.isEmpty else { throw ClinicalBriefError.unsupportedClaim }
+                    return summary
+                }, evaluate: evaluate, privacyCheck: privacyCheck)
+        }
+
         /// Releases model ownership. Call before switching to another large
         /// on-device model.
         public func unload() {
+            guard container != nil else { return }
             container = nil
             OpenMed.clearRuntimeMemoryCache()
         }

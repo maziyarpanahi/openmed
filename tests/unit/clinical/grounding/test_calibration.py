@@ -188,6 +188,7 @@ def test_grounding_calibration_suite_reads_local_gold_and_writes_report(
     assert len(load_suite_fixtures(GROUNDING_CALIBRATION, path=gold_path)) == 2
     assert suite_metadata(GROUNDING_CALIBRATION, gold_path=gold_path) == {
         "suite": GROUNDING_CALIBRATION,
+        "task": "grounding_calibration",
         "offline": True,
         "gold_path": str(gold_path),
     }

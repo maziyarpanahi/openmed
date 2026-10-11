@@ -171,6 +171,210 @@
       "annotations": {
         "destructiveHint": false,
         "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Build Guarded Clinical Brief"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Build a local clinical brief from reviewed evidence; output requires human review.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "default": "mlx",
+            "enum": [
+              "mlx",
+              "extractive",
+              "maple",
+              "maple-preview"
+            ],
+            "type": "string"
+          },
+          "profile": {
+            "default": "bhc",
+            "enum": [
+              "bhc",
+              "brief_hospital_course",
+              "clinical_handoff",
+              "discharge_summary",
+              "problem_oriented"
+            ],
+            "type": "string"
+          },
+          "review_id": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_brief",
+      "output_schema": {
+        "additionalProperties": false,
+        "dependentRequired": {
+          "claim_bindings": [
+            "generation_contract"
+          ],
+          "generation_contract": [
+            "claim_bindings"
+          ]
+        },
+        "properties": {
+          "backend_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "citations": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "claim_bindings": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "claim_index": {
+                  "maximum": 63,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "reference_digest": {
+                  "pattern": "^sha256:[a-f0-9]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "claim_index",
+                "reference_digest"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "envelope": {
+            "type": "object"
+          },
+          "generation_contract": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "explicit_evidence"
+              },
+              "schema_version": {
+                "const": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "schema_version"
+            ],
+            "type": "object"
+          },
+          "metrics": {
+            "type": "object"
+          },
+          "profile_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provenance": {
+            "type": "object"
+          },
+          "refusal_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "review_packet": {
+            "type": "object"
+          },
+          "schema_version": {
+            "const": 1,
+            "type": "integer"
+          },
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "needs_review",
+              "refused"
+            ],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "summary_characters": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "summary_digest": {
+            "type": "string"
+          },
+          "verdicts": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "status",
+          "summary",
+          "refusal_reason",
+          "summary_digest",
+          "summary_characters",
+          "digest",
+          "stages",
+          "citations",
+          "verdicts",
+          "metrics",
+          "envelope",
+          "review_packet",
+          "provenance",
+          "profile_digest",
+          "backend_id"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
         "openWorldHint": true,
         "readOnlyHint": true,
         "title": "Plan Clinical Pipeline"
@@ -258,12 +462,16 @@
                         "DATE_OF_BIRTH",
                         "DEVELOPMENTAL_MILESTONE",
                         "DEVICE",
+                        "DEVICE_IDENTIFIER",
+                        "DEVICE_MODEL",
+                        "DEVICE_TYPE",
                         "DIALYSIS_MODALITY",
                         "DIET_TYPE",
                         "DISEASE",
                         "DNA",
                         "DOSAGE",
                         "DOSE_NUMBER",
+                        "DRESSING_TYPE",
                         "DRUG",
                         "DURATION",
                         "DYSPNEA_GRADE",
@@ -271,6 +479,7 @@
                         "ENDOSCOPIC_FINDING",
                         "ETHEREUM_ADDRESS",
                         "ETHNICITY",
+                        "EXUDATE_DESCRIPTOR",
                         "EYE_COLOR",
                         "FEEDING_ROUTE",
                         "FETAL_FINDING",
@@ -300,6 +509,8 @@
                         "IHC_STAIN",
                         "IMAGING_MODALITY",
                         "IMEI",
+                        "IMMUNIZATION",
+                        "IMPLANT_SITE",
                         "INDICATION",
                         "INSULIN_REGIMEN",
                         "INTAKE_OUTPUT",
@@ -332,6 +543,7 @@
                         "ORGANIZATION",
                         "OTHER",
                         "OXYGEN_SUPPORT",
+                        "PACK_YEARS",
                         "PASSWORD",
                         "PATHOLOGY",
                         "PERSON",
@@ -343,6 +555,7 @@
                         "PROCEDURE",
                         "PROTEIN",
                         "PROTEIN_CHANGE",
+                        "PSYCH_SYMPTOM",
                         "REACTION_MANIFESTATION",
                         "REACTION_SEVERITY",
                         "RECEPTOR_STATUS",
@@ -360,6 +573,7 @@
                         "STAGE_GROUP",
                         "STREET_ADDRESS",
                         "STRENGTH",
+                        "SUBSTANCE",
                         "SUSCEPTIBILITY",
                         "THYROID_MEASURE",
                         "TIME",
@@ -367,18 +581,23 @@
                         "TNM_M",
                         "TNM_N",
                         "TNM_T",
+                        "TOOTH",
                         "TUMOR_GRADE",
                         "UNIT",
                         "URINE_FINDING",
                         "URL",
                         "USERNAME",
                         "USER_AGENT",
+                        "USE_QUANTITY",
+                        "USE_STATUS",
                         "VACCINE_LOT",
                         "VACCINE_NAME",
                         "VACCINE_SERIES",
                         "VARIANT_DESCRIPTOR",
                         "VEHICLE_REGISTRATION",
                         "VIN",
+                        "WOUND_STAGE",
+                        "WOUND_TYPE",
                         "ZIPCODE",
                         "ZYGOSITY"
                       ],
@@ -1222,6 +1441,7 @@
               "no",
               "or",
               "pa",
+              "pl",
               "pt",
               "ro",
               "ru",
@@ -1541,12 +1761,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -1554,6 +1778,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -1583,6 +1808,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -1615,6 +1842,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -1626,6 +1854,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -1643,6 +1872,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -1650,18 +1880,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -1894,12 +2129,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -1907,6 +2146,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -1936,6 +2176,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -1968,6 +2210,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -1979,6 +2222,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -1996,6 +2240,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -2003,18 +2248,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -2205,6 +2455,7 @@
               "no",
               "or",
               "pa",
+              "pl",
               "pt",
               "ro",
               "ru",
@@ -2516,12 +2767,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -2529,6 +2784,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -2558,6 +2814,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -2590,6 +2848,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -2601,6 +2860,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -2618,6 +2878,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -2625,18 +2886,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -2883,12 +3149,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -2896,6 +3166,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -2925,6 +3196,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -2957,6 +3230,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -2968,6 +3242,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -2985,6 +3260,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -2992,18 +3268,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -3773,8 +4054,11 @@
             "items": {
               "enum": [
                 "cohort_id",
+                "coverage",
                 "member_count",
-                "status"
+                "review_required",
+                "status",
+                "warnings"
               ],
               "type": "string"
             },
@@ -7175,12 +7459,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -7188,6 +7476,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -7217,6 +7506,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -7249,6 +7540,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -7260,6 +7552,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -7277,6 +7570,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -7284,18 +7578,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -7524,12 +7823,16 @@
                     "DATE_OF_BIRTH",
                     "DEVELOPMENTAL_MILESTONE",
                     "DEVICE",
+                    "DEVICE_IDENTIFIER",
+                    "DEVICE_MODEL",
+                    "DEVICE_TYPE",
                     "DIALYSIS_MODALITY",
                     "DIET_TYPE",
                     "DISEASE",
                     "DNA",
                     "DOSAGE",
                     "DOSE_NUMBER",
+                    "DRESSING_TYPE",
                     "DRUG",
                     "DURATION",
                     "DYSPNEA_GRADE",
@@ -7537,6 +7840,7 @@
                     "ENDOSCOPIC_FINDING",
                     "ETHEREUM_ADDRESS",
                     "ETHNICITY",
+                    "EXUDATE_DESCRIPTOR",
                     "EYE_COLOR",
                     "FEEDING_ROUTE",
                     "FETAL_FINDING",
@@ -7566,6 +7870,8 @@
                     "IHC_STAIN",
                     "IMAGING_MODALITY",
                     "IMEI",
+                    "IMMUNIZATION",
+                    "IMPLANT_SITE",
                     "INDICATION",
                     "INSULIN_REGIMEN",
                     "INTAKE_OUTPUT",
@@ -7598,6 +7904,7 @@
                     "ORGANIZATION",
                     "OTHER",
                     "OXYGEN_SUPPORT",
+                    "PACK_YEARS",
                     "PASSWORD",
                     "PATHOLOGY",
                     "PERSON",
@@ -7609,6 +7916,7 @@
                     "PROCEDURE",
                     "PROTEIN",
                     "PROTEIN_CHANGE",
+                    "PSYCH_SYMPTOM",
                     "REACTION_MANIFESTATION",
                     "REACTION_SEVERITY",
                     "RECEPTOR_STATUS",
@@ -7626,6 +7934,7 @@
                     "STAGE_GROUP",
                     "STREET_ADDRESS",
                     "STRENGTH",
+                    "SUBSTANCE",
                     "SUSCEPTIBILITY",
                     "THYROID_MEASURE",
                     "TIME",
@@ -7633,18 +7942,23 @@
                     "TNM_M",
                     "TNM_N",
                     "TNM_T",
+                    "TOOTH",
                     "TUMOR_GRADE",
                     "UNIT",
                     "URINE_FINDING",
                     "URL",
                     "USERNAME",
                     "USER_AGENT",
+                    "USE_QUANTITY",
+                    "USE_STATUS",
                     "VACCINE_LOT",
                     "VACCINE_NAME",
                     "VACCINE_SERIES",
                     "VARIANT_DESCRIPTOR",
                     "VEHICLE_REGISTRATION",
                     "VIN",
+                    "WOUND_STAGE",
+                    "WOUND_TYPE",
                     "ZIPCODE",
                     "ZYGOSITY"
                   ],
@@ -8122,6 +8436,7 @@
               "no",
               "or",
               "pa",
+              "pl",
               "pt",
               "ro",
               "ru",
@@ -8373,6 +8688,794 @@
         "additionalProperties": true,
         "properties": {},
         "required": [],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Preflight"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 512,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_preflight",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Preview"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 512,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_preview",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Governed Workflow Request Review"
+      },
+      "authorization": {
+        "consent_receipt_required": true,
+        "state_changing": true
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. Request a human handoff with server-held, single-use consent; this does not approve or execute an action.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 512,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_request_review",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
+        "type": "object"
+      },
+      "stability": "stable",
+      "version": "1.0.0"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Governed Workflow Status"
+      },
+      "authorization": {
+        "consent_receipt_required": false,
+        "state_changing": false
+      },
+      "description": "Observe service-custodied workflow metadata without approval tokens, reviewer claims or clinical values. This operation performs no writes.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "additionalProperties": false,
+            "properties": {
+              "action_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "expected_state_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run_id": {
+                "pattern": "^run_[0-9a-f]{32}$",
+                "type": "string"
+              },
+              "schema_version": {
+                "const": "openmed.mcp.governance_request.v1",
+                "type": "string"
+              },
+              "workflow_id": {
+                "maxLength": 512,
+                "type": "string"
+              }
+            },
+            "required": [
+              "action_digest",
+              "expected_state_digest",
+              "run_id",
+              "schema_version",
+              "workflow_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "type": "object"
+      },
+      "name": "openmed_workflow_status",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "action_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "authority": {
+            "additionalProperties": false,
+            "properties": {
+              "grant": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "projection": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "purpose_ticket": {
+                "enum": [
+                  "allowed",
+                  "denied",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "grant",
+              "purpose_ticket",
+              "projection"
+            ],
+            "type": "object"
+          },
+          "committed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "phase": {
+            "enum": [
+              "queued",
+              "preflight",
+              "ready",
+              "running",
+              "waiting-review",
+              "completed",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "proposed_effect_count": {
+            "maximum": 1024,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "receipt_verification": {
+            "enum": [
+              "absent",
+              "unverified",
+              "verified",
+              "expired",
+              "conflict"
+            ],
+            "type": "string"
+          },
+          "review_request_digest": {
+            "anyOf": [
+              {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "pattern": "^run_[0-9a-f]{32}$",
+            "type": "string"
+          },
+          "schema_version": {
+            "const": "openmed.mcp.governance_result.v1",
+            "type": "string"
+          },
+          "state_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "denied",
+              "review_required",
+              "completed",
+              "cancelled",
+              "conflict",
+              "unavailable",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 512,
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "run_id",
+          "workflow_id",
+          "action_digest",
+          "state_digest",
+          "phase",
+          "status",
+          "authority",
+          "proposed_effect_count",
+          "committed_effect_count",
+          "receipt_verification",
+          "review_request_digest"
+        ],
         "type": "object"
       },
       "stability": "stable",
