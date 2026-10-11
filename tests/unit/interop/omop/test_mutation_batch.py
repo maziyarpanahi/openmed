@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -7,6 +9,7 @@ import pytest
 
 from openmed.interop.omop import OmopMutationBatch as PublicOmopMutationBatch
 from openmed.interop.omop.mutation_batch import (
+    MUTATION_BATCH_SCHEMA,
     CommitStatus,
     MutationOperation,
     OmopApprovalBinding,
@@ -17,6 +20,70 @@ from openmed.interop.omop.mutation_batch import (
 )
 
 RECEIPT_DIGEST = "sha256:" + "a" * 64
+
+
+def test_empty_evidence_preserves_legacy_batch_digest_and_preview_wire():
+    batch, existing = _valid_batch()
+    legacy = {
+        "schema": MUTATION_BATCH_SCHEMA,
+        "row_digests": [m.row_digest for m in batch.mutations],
+    }
+    canonical = json.dumps(legacy, sort_keys=True, separators=(",", ":"))
+    assert (
+        batch.batch_digest == "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+    )
+    explicit = OmopMutationBatch(batch.mutations, evidence_digests=())
+    assert explicit.preview(existing_rows=existing) == batch.preview(
+        existing_rows=existing
+    )
+    assert "evidence_digests" not in batch.preview(existing_rows=existing).to_dict()
+
+
+def test_evidence_is_canonical_immutable_and_invalidates_old_approval():
+    batch, existing = _valid_batch()
+    other = "sha256:" + "b" * 64
+    mutable = [other, RECEIPT_DIGEST, other]
+    bound = OmopMutationBatch(batch.mutations, evidence_digests=mutable)
+    mutable.clear()
+    same = OmopMutationBatch(batch.mutations, evidence_digests=(RECEIPT_DIGEST, other))
+    assert bound.evidence_digests == same.evidence_digests
+    assert bound.batch_digest == same.batch_digest != batch.batch_digest
+    legacy_preview = batch.preview(existing_rows=existing)
+    approval = batch.bind_approval(
+        legacy_preview,
+        approved_preview_digest=legacy_preview.preview_digest,
+        approval_receipt_digest=RECEIPT_DIGEST,
+    )
+    committer = _RecordingCommitter()
+    with pytest.raises(OmopMutationError, match="batch_changed"):
+        bound.commit(committer, approval=approval)
+    assert not committer.calls
+    current = bound.preview(existing_rows=existing)
+    with pytest.raises(OmopMutationError, match="evidence_changed"):
+        bound.bind_approval(
+            replace(current, evidence_digests=()),
+            approved_preview_digest=current.preview_digest,
+            approval_receipt_digest=RECEIPT_DIGEST,
+        )
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        "private-canary",
+        {"private-canary": 1},
+        (True,),
+        ("private-canary",),
+        (RECEIPT_DIGEST,) * 17,
+    ],
+)
+def test_invalid_evidence_has_closed_errors(evidence):
+    with pytest.raises(OmopMutationError) as exc:
+        OmopMutationBatch(
+            (OmopMutation.insert("person", {"person_id": 1}),),
+            evidence_digests=evidence,
+        )
+    assert "private-canary" not in str(exc.value)
 
 
 def test_batch_is_exported_from_omop_package() -> None:

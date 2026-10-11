@@ -138,6 +138,19 @@ _QUALITY_EXPORTS = frozenset(
     }
 )
 
+_NLP_STAGING_EXPORTS = frozenset(
+    {
+        "NLP_OMOP_STAGING_SCHEMA",
+        "NlpOmopLineageRecord",
+        "NlpOmopLineageReport",
+        "NlpOmopStagedBatch",
+        "NlpOmopStagedPreview",
+        "NlpOmopStagingError",
+        "NlpOmopWriteLineage",
+        "stage_nlp_omop_tables",
+    }
+)
+
 
 _SQLITE_COMMIT_EXPORTS = frozenset(
     {
@@ -159,6 +172,8 @@ def __getattr__(name: str) -> Any:
         module_name = ".fact_projection"
     elif name in _QUALITY_EXPORTS:
         module_name = ".quality"
+    elif name in _NLP_STAGING_EXPORTS:
+        module_name = "..lineage.nlp_omop_writes"
     elif name in _SQLITE_COMMIT_EXPORTS:
         module_name = ".sqlite_committer"
     else:
@@ -170,6 +185,14 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "NLP_OMOP_STAGING_SCHEMA",
+    "NlpOmopLineageRecord",
+    "NlpOmopLineageReport",
+    "NlpOmopStagedBatch",
+    "NlpOmopStagedPreview",
+    "NlpOmopStagingError",
+    "NlpOmopWriteLineage",
+    "stage_nlp_omop_tables",
     "OmopDatabaseError",
     "OmopDatabaseStatus",
     "OmopDatabasePreview",
