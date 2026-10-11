@@ -138,6 +138,7 @@ _QUALITY_EXPORTS = frozenset(
     }
 )
 
+_DQD_EXPORTS = frozenset({"DQD_SUPPORTED_VERSIONS", "normalize_dqd_results_file"})
 _NLP_STAGING_EXPORTS = frozenset(
     {
         "NLP_OMOP_STAGING_SCHEMA",
@@ -172,6 +173,8 @@ def __getattr__(name: str) -> Any:
         module_name = ".fact_projection"
     elif name in _QUALITY_EXPORTS:
         module_name = ".quality"
+    elif name in _DQD_EXPORTS:
+        module_name = ".dqd"
     elif name in _NLP_STAGING_EXPORTS:
         module_name = "..lineage.nlp_omop_writes"
     elif name in _SQLITE_COMMIT_EXPORTS:
@@ -185,6 +188,7 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "DQD_SUPPORTED_VERSIONS",
     "NLP_OMOP_STAGING_SCHEMA",
     "NlpOmopLineageRecord",
     "NlpOmopLineageReport",
@@ -299,6 +303,7 @@ __all__ = [
     "load_omop_fact_projection_schema",
     "load_omop_quality_report_schema",
     "normalize_omop_quality_output",
+    "normalize_dqd_results_file",
     "project_clinical_facts_to_omop",
     "projection_quality_checks",
     "reconcile_omop_aggregates",

@@ -111,6 +111,101 @@ or callback arguments. Applications may record `error.evidence.to_dict()` and
 must not log the rejected ticket or request. A denial envelope is evidence that
 this local check failed, not a complete audit ledger.
 
+## Authorize tool results before downstream use
+
+Request authorization does not authorize whatever a tool returns. The Python
+`openmed.agent.permissions.result_scope` boundary uses the existing ticket,
+`RecordSelector`, `ArtifactReference` and minimum-data projection contracts.
+It owns result authorization; it does not resolve identities, scan arguments,
+judge clinical correctness or grant permission to perform clinical actions.
+This slice targets the existing Python agent ticket API; it adds no Swift or
+Apple Foundation Models execution path.
+
+Construct a trusted expected `ResultScope` with four separate selector kinds:
+patient, encounter, namespace and evidence snapshot. Include **exactly those
+four selectors** in the read's `AccessTicketRequest`. The issuer may grant a
+broader ticket, but results must match this narrower request. Use stable
+application-owned selector kinds and the same local keyed mapping for expected
+and observed identities. The snapshot selector must bind its exact version or
+digest; a namespace selector must distinguish tenants/sources even when their
+local patient identifiers coincide. Missing dimensions and repeated kinds fail
+closed. A workflow without encounter or snapshot evidence cannot use this
+boundary; do not invent placeholder identities.
+
+A trusted local adapter independently derives `ResultScope` from authoritative
+resource metadata on **each** `ToolResultPage`, `ToolResultRecord` and nested
+record in `children`. Do not trust scope asserted by a model, copy request scope
+onto returned records, inherit parent/page scope or hide independent resources
+inside ordinary field values. Nested structured values in `fields` are governed
+by the reviewed schema; independent resource records belong in `children` and
+each requires its own scope and evidence identity. This module compares supplied
+evidence, rather than proving that an adapter's metadata is authentic.
+
+The per-record output schema uses the same annotations as
+[minimum-data projections](minimum-data-projections.md). The gate derives its
+projection using the request's purpose and data classes. Declared containers
+do not authorize arbitrary descendants: objects are closed, nested properties
+must be declared and arrays follow their `items` schema. Extra fields quarantine
+the **whole batch**, rather than silently dropping unauthorized content. Missing
+fields, incompatible shapes, opaque object values and non-finite numbers also
+fail closed. This is an authorization projection, not a complete JSON Schema or
+clinical validator.
+
+```python
+from openmed.agent.permissions import dispatch_with_authorized_results
+
+# expected_scope, output_schema and local_read are reviewed local bindings.
+# request.record_selectors exactly covers expected_scope.selectors().
+result = dispatch_with_authorized_results(
+    ticket,
+    request,
+    AccessTicketVerifier(),
+    scope=expected_scope,
+    schema=output_schema,
+    read=local_read,
+    consume=screen_then_run_next_step,
+)
+```
+
+The local `read` returns a tuple of all collected pages, in contiguous zero-based
+order, with `final=True` only on the last page. The adapter must establish source
+pagination completeness; the boundary cannot discover omitted pages or fetch
+continuation URLs. Lazy batches, partial batches and missing scope on even an
+empty page fail closed. No first-page streaming occurs. Limits are 64 pages,
+10,000 traversed record/value nodes and depth 32. The reviewed schema is copied
+before invoking the adapter; later caller-side schema mutation cannot expand it.
+Ticket validity is checked before reading, after reading and immediately before
+release using the verifier's clock. Explicit `now` is for deterministic replay.
+
+Accepted results receive fresh nested field dictionaries/lists and retain their
+original scope and `ArtifactReference` object, including its opaque identity and
+digest. The reference identifies **original evidence**, not the newly projected
+field encoding. Every record needs an evidence reference; duplicate artifact IDs
+in one batch fail closed rather than guessing record custody. No new evidence
+digest or model output is fabricated.
+
+On rejection, `consume` is never invoked and no partial result is returned.
+Record only `ResultQuarantinedError.to_dict()` in an action trace. It contains a
+fixed schema version and controlled reason code, with no payloads, unexpected
+field names, selector digests or provider exception messages. Read failures also
+discard the original exception context before raising the controlled quarantine
+error. Existing ticket and projection errors retain their own value-free
+diagnostics. Quarantine means
+withholding output: this library does not log, cache, save or otherwise persist
+rejected content. Applications must keep protected inputs outside audit traces
+and must not capture exception traceback locals.
+
+Authorization and privacy screening are independent. Correct patient scope can
+still contain PHI or hostile instructions; `consume` must apply the application's
+separate privacy preflight/injection guards before model context or subsequent
+actions. Conversely, a PHI-free result for the wrong patient is still rejected.
+No network call, identity resolver, mandatory dependency or cloud fallback is
+added.
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/permissions/test_result_scope.py tests/integration/agent/test_result_scope_boundary.py -q
+```
+
 ## Relationship to capability grants
 
 A signed capability-grant manifest answers whether the agent may request an
@@ -216,4 +311,83 @@ checks; verification does not create an approval receipt or authorize execution.
 
 ```text
 .venv/bin/python -m pytest tests/unit/agent/permissions/test_fhir_write_scope.py tests/unit/interop/test_fhir_reference_integrity.py tests/integration/agent/test_fhir_write_scope_boundary.py -q
+```
+
+## Record access decisions
+
+Every call to `AccessTicketVerifier.verify()` creates exactly one `AccessEvent`
+for the authorization decision, including missing, expired, mismatched and
+out-of-scope tickets. The default `MemoryAccessEventSink` retains events on
+`verifier.sink.events` for the lifetime of that verifier. Hosts should inject a
+sink with appropriate retention for long-running workflows. No network call or
+filesystem write is required by the default verifier.
+
+```python
+from openmed.agent.permissions import AccessTicketVerifier, LocalAccessEventSink
+
+# The host chooses a protected local directory; this is a synthetic path.
+sink = LocalAccessEventSink("synthetic-access-events.jsonl")
+verifier = AccessTicketVerifier(sink=sink, clock=lambda: 1_999_999_999)
+verifier.verify(ticket, request)
+head = sink.verify_chain()
+counts = sink.export_counts()
+assert counts["outcomes"] == {"allow": 1}
+```
+
+An injected `AccessEventSink` implements `emit(event)`. Verification calls it
+once, before returning authority or raising the original denial. A sink failure
+raises a value-free `AccessEventError("sink_unavailable")`, blocks dispatch and
+is never automatically retried. Hosts must avoid retrying a verification to
+repair an uncertain sink write: a custom sink may have persisted before raising.
+No transaction with the tool's data store is implied.
+
+The closed event schema contains only an opaque requesting run ID, a
+**developer-authored** purpose, requested data-class codes, requested selector
+count, developer-authored tool/action codes, `allow` or `deny`, the denial reason
+code and verification epoch seconds. Keep these governance codes free of patient
+identifiers and values. Events contain no ticket, selector kind, selector digest,
+record identifier, tool arguments, result, credential, or source payload.
+The event reflects the requested narrow scope, including rejected requests,
+rather than copying the ticket's wider authority. Malformed request objects
+produce `invalid_request` with absent scope metadata. Unavailable or invalid
+clock values produce a denial with `timestamp=None`; invalid requests also have
+no timestamp. Construction errors before verification and invalid dispatch
+callbacks are not verification decisions and do not produce access events.
+
+Events describe authorization, not proof that a tool returned data. A verified
+read that subsequently fails still has one `allow` event. Repeated verification
+calls each produce a distinct event. This Python verifier extension does not
+change the action ledger, Journey audit format, result authorization, or Swift
+contracts. It adds no cloud fallback or clinical action.
+
+### Local chain and aggregate export
+
+`LocalAccessEventSink` writes canonical JSON lines with an event, sequence,
+previous digest and SHA-256 digest. It verifies the entire existing chain before
+append, flushes and fsyncs before returning, and uses a POSIX advisory file lock
+for cooperating writers, including separate sink instances. New files use mode
+0600; symbolic links and non-regular files are refused. POSIX is required only
+for this durable sink. Hosts own directory protection, existing file permissions,
+retention and backups, and must prevent file replacement or rotation while
+writers are active. Diagnostics omit private log paths and parser payloads.
+
+`verify_chain()` returns the chain head or raises a controlled error for
+corruption, modification, interior deletion, reordering, duplicate entries or
+partial writes. To detect suffix truncation, compare with an independently saved
+head using `verify_chain(expected_head=head)`. Deeply nested malformed JSON also
+fails with a controlled code without retaining the parser exception.
+A plain digest chain cannot detect
+an attacker rewriting the whole log and recomputing all digests without that
+independent anchor. No signatures or compliance guarantee are supplied.
+
+`export_counts()` first verifies the chain, then returns event and selector
+counts, outcome counts, denial-reason counts, purpose counts, data-class counts
+and tool/action counts. It omits run IDs and per-record metadata. Data-class
+counts count decisions containing the class; selector counts sum requested
+selectors, including denied requests. These are not counts of returned records.
+
+Focused offline validation:
+
+```text
+.venv/bin/python -m pytest tests/unit/agent/permissions/test_access_tickets.py tests/unit/agent/permissions/test_access_events.py tests/integration/agent/test_access_event_log.py -q
 ```
