@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Map reviewed brief profile fields to existing evidence-class budgets, bind
+  value-free estimates into audit records and distinguish length overflow from
+  unavailable local models. Export controlled summarizer errors and preserve
+  their typed reason codes without private exception contexts. Use script-aware
+  first-three-sentence boundaries for explicit comparison extraction; retain
+  reviewed fact-coverage selection and native unloaded-model refusal
+  (#3746, #3747, #3749, #3750).
+
 - Select explicit extractive brief sentences by unique reviewed fact coverage,
   independent omission rules and existing length allocations. Preserve ordered
   citations and expose insufficient-budget/resource-limit diagnostics without
