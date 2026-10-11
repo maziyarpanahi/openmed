@@ -1,3 +1,6 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
 import {
   JOURNEY_WORKFLOW_RESOURCE_TYPES,
   type JourneyResourcePage,
@@ -107,6 +110,35 @@ export interface GroundRequest {
   systems?: string[];
   text?: string | null;
   top_k?: number;
+}
+
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
 }
 
 export interface PIIExtractRequest {
@@ -591,6 +623,7 @@ export class OpenMedApiError extends Error {
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
 
   constructor(options: OpenMedClientOptions) {
     const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
@@ -606,6 +639,7 @@ export class OpenMedClient {
     this.baseUrl = baseUrl;
     this.fetchImpl =
       options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
@@ -614,6 +648,30 @@ export class OpenMedClient {
 
   async ground(request: GroundRequest): Promise<GroundResponse> {
     return this.post("/ground", request);
+  }
+
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
   }
 
   async brief(request: BriefRequest): Promise<BriefResponse> {
