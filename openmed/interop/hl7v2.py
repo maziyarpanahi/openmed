@@ -211,6 +211,9 @@ class HL7FieldRule:
     Component labels are one-based HL7 component positions. They let XPN-style
     fields preserve the component layout while redacting family, given, and
     middle names with label-aware surrogates.
+
+    ``datatype="XAD"`` selects component-aware address surrogates so city,
+    region, postal code and country components keep their address semantics.
     """
 
     action: FieldAction
@@ -220,8 +223,11 @@ class HL7FieldRule:
     allowed_type_values: tuple[str, ...] = ()
     hash_salt: str = ""
     deidentify_kwargs: Mapping[str, Any] = field(default_factory=dict)
+    datatype: Literal["XAD"] | None = None
 
     def __post_init__(self) -> None:
+        if self.datatype not in {None, "XAD"}:
+            raise ValueError("unsupported HL7 surrogate datatype")
         raw_action = str(self.action).lower()
         normalized_action = {
             "date_shift": "date-shift",
@@ -253,16 +259,29 @@ DEFAULT_FIELD_MAP: Mapping[FieldKey, HL7FieldRule] = {
         component_labels={1: "LAST_NAME", 2: "FIRST_NAME", 3: "MIDDLE_NAME"},
     ),
     ("PID", 7): HL7FieldRule("date-shift", label="DATE_OF_BIRTH"),
-    ("PID", 11): HL7FieldRule("surrogate", label="STREET_ADDRESS"),
+    ("PID", 6): HL7FieldRule("surrogate", label="PERSON"),
+    ("PID", 9): HL7FieldRule("surrogate", label="PERSON"),
+    ("PID", 11): HL7FieldRule("surrogate", label="STREET_ADDRESS", datatype="XAD"),
     ("PID", 13): HL7FieldRule("hash", label="PHONE"),
+    ("PID", 14): HL7FieldRule("hash", label="PHONE"),
     ("PID", 19): HL7FieldRule("hash", label="SSN"),
+    ("PID", 20): HL7FieldRule("hash", label="DRIVERS_LICENSE"),
+    ("PID", 21): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 1): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 2): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 3): HL7FieldRule("hash", label="ACCOUNT_NUMBER"),
+    ("MRG", 4): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 5): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 6): HL7FieldRule("hash", label="ID_NUM"),
+    ("MRG", 7): HL7FieldRule("surrogate", label="PERSON"),
+    ("PV1", 19): HL7FieldRule("hash", label="ID_NUM"),
     ("PD1", 3): HL7FieldRule("surrogate", label="ORGANIZATION"),
     ("NK1", 2): HL7FieldRule(
         "surrogate",
         label="PERSON",
         component_labels={1: "LAST_NAME", 2: "FIRST_NAME", 3: "MIDDLE_NAME"},
     ),
-    ("NK1", 4): HL7FieldRule("surrogate", label="STREET_ADDRESS"),
+    ("NK1", 4): HL7FieldRule("surrogate", label="STREET_ADDRESS", datatype="XAD"),
     ("NK1", 5): HL7FieldRule("hash", label="PHONE"),
     ("NK1", 13): HL7FieldRule("surrogate", label="ORGANIZATION"),
     ("GT1", 3): HL7FieldRule(
@@ -270,7 +289,7 @@ DEFAULT_FIELD_MAP: Mapping[FieldKey, HL7FieldRule] = {
         label="PERSON",
         component_labels={1: "LAST_NAME", 2: "FIRST_NAME", 3: "MIDDLE_NAME"},
     ),
-    ("GT1", 5): HL7FieldRule("surrogate", label="STREET_ADDRESS"),
+    ("GT1", 5): HL7FieldRule("surrogate", label="STREET_ADDRESS", datatype="XAD"),
     ("GT1", 6): HL7FieldRule("hash", label="PHONE"),
     ("GT1", 12): HL7FieldRule("hash", label="SSN"),
     ("GT1", 13): HL7FieldRule("date-shift", label="DATE_OF_BIRTH"),
@@ -280,7 +299,7 @@ DEFAULT_FIELD_MAP: Mapping[FieldKey, HL7FieldRule] = {
         component_labels={1: "LAST_NAME", 2: "FIRST_NAME", 3: "MIDDLE_NAME"},
     ),
     ("IN1", 18): HL7FieldRule("date-shift", label="DATE_OF_BIRTH"),
-    ("IN1", 19): HL7FieldRule("surrogate", label="STREET_ADDRESS"),
+    ("IN1", 19): HL7FieldRule("surrogate", label="STREET_ADDRESS", datatype="XAD"),
     ("IN1", 36): HL7FieldRule("hash", label="ACCOUNT_NUMBER"),
     ("IN2", 1): HL7FieldRule("hash", label="ID_NUM"),
     ("IN2", 2): HL7FieldRule("hash", label="SSN"),
@@ -316,6 +335,7 @@ class _HL7V2Redactor:
         self.locale = locale
         self.seed = seed
         self._anonymizer: Any | None = None
+        self._xad_cache: dict[tuple[int, str], str] = {}
 
     def redact(self, message: HL7Message) -> HL7Message:
         """Apply configured rules in-place and return the message."""
@@ -356,6 +376,18 @@ class _HL7V2Redactor:
                 lambda leaf, component: self._hash_leaf(leaf, rule, component),
             )
         if rule.action == "surrogate":
+            if rule.datatype == "XAD":
+                return _transform_leaf_values(
+                    value,
+                    segment.encoding,
+                    lambda leaf, component: (
+                        leaf
+                        if component in {7, 11}
+                        else _escape_hl7_leaf(
+                            self._xad_leaf(leaf, component), segment.encoding
+                        )
+                    ),
+                )
             return _transform_leaf_values(
                 value,
                 segment.encoding,
@@ -375,6 +407,43 @@ class _HL7V2Redactor:
             )
 
         raise ValueError(f"unsupported HL7 field action: {rule.action}")
+
+    def _xad_leaf(self, value: str, component: int) -> str:
+        """Preserve XAD component types, empty slots, and coded qualifiers."""
+        if not value or component in {7, 11}:
+            return value
+        if component in {12, 13, 14}:
+            return self._date_shift_leaf(value)
+        key = (component, value)
+        if key in self._xad_cache:
+            return self._xad_cache[key]
+        anonymizer = self._anonymizer_or_default()
+        from openmed.core.anonymizer.format_preserve import preserve_id_pattern
+        from openmed.core.anonymizer.locales import resolve_locale
+
+        faker = anonymizer._get_faker(resolve_locale(self.lang, self.locale))
+        faker.seed_instance(anonymizer._derive_seed(f"XAD_{component}", value))
+        providers = {
+            1: "street_address",
+            2: "secondary_address",
+            3: "city",
+            4: "state_abbr" if len(value) == 2 else "state",
+            6: "country",
+            8: "city",
+        }
+        method = providers.get(component)
+        for _ in range(20):
+            if component == 6 and len(value) in {2, 3} and value.isalpha():
+                candidate = faker.country_code(representation=f"alpha-{len(value)}")
+            elif method and hasattr(faker, method):
+                candidate = str(getattr(faker, method)())
+            else:
+                candidate = preserve_id_pattern(value, rng=faker.random)
+            if candidate != value:
+                self._xad_cache[key] = candidate
+                return candidate
+        # Never leave an original value when a provider exhausts its domain.
+        raise ValueError("Unable to generate a distinct XAD component")
 
     def _hash_leaf(
         self,
@@ -475,6 +544,7 @@ def redact_hl7v2(
     lang: str = "en",
     locale: str | None = None,
     seed: int | None = 0,
+    coverage_report: dict[str, Any] | None = None,
 ) -> str:
     """Redact PHI from an HL7 v2 message or UTF-8 message file.
 
@@ -492,6 +562,9 @@ def redact_hl7v2(
         locale: Optional Faker locale override for surrogate generation.
         seed: Optional deterministic surrogate seed. The default keeps
             structured surrogates stable for repeatable pipelines.
+        coverage_report: Optional output mapping populated with unmapped segment
+            indexes, controlled segment codes, field positions and lengths only.
+            It is a coverage inventory, not a claim that unmapped data is safe.
 
     Returns:
         Redacted HL7 v2 message text preserving segment separators and
@@ -509,6 +582,26 @@ def redact_hl7v2(
         locale=locale,
         seed=seed,
     )
+    if coverage_report is not None:
+        unmapped = []
+        for index, segment in enumerate(message.segments):
+            for field_index, value in enumerate(segment.fields):
+                position = field_index + (2 if segment.name == "MSH" else 1)
+                rules = redactor.field_map.get((segment.name, position), ())
+                if value and not any(_rule_applies(segment, rule) for rule in rules):
+                    unmapped.append(
+                        {
+                            "segment_index": index,
+                            "segment": segment.name
+                            if re.fullmatch(r"[A-Z][A-Z0-9]{2}", segment.name)
+                            else "UNKNOWN",
+                            "field": position,
+                            "length": len(value),
+                        }
+                    )
+        coverage_report.update(
+            {"unmapped_fields": unmapped, "unmapped_field_count": len(unmapped)}
+        )
     return redactor.redact(message).serialize()
 
 
@@ -559,6 +652,22 @@ def _rule_applies(segment: HL7Segment, rule: HL7FieldRule) -> bool:
     value = segment.get_field(rule.type_field) or ""
     value_type = value.split(segment.encoding.component, 1)[0].upper()
     return value_type in set(rule.allowed_type_values)
+
+
+def _escape_hl7_leaf(value: str, encoding: HL7V2Encoding) -> str:
+    replacements = {
+        encoding.field: "F",
+        encoding.component: "S",
+        encoding.repetition: "R",
+        encoding.escape: "E",
+        encoding.subcomponent: "T",
+    }
+    return "".join(
+        encoding.escape + replacements[char] + encoding.escape
+        if char in replacements
+        else char
+        for char in value
+    )
 
 
 def _transform_leaf_values(

@@ -54,6 +54,33 @@ otherwise Hindi-first Devanagari route. Install
 runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
 routing is first requested, and do not download or bundle model weights.
 
+Thai and Hebrew script runs select `th` and `he`. Myanmar, Khmer, Lao,
+Sinhala, Thaana, Tibetan and other unregistered scripts are reported with
+`source="stdlib:unknown-script"`, `reason="unsupported_script"` and low
+confidence. `Pipeline(lang="auto")` rejects letter-bearing unsupported runs
+before model inference. If a caller has independently qualified a fallback,
+it can opt in with `LanguageRouter(fallback_pack="en")` passed as
+`language_router=`; this is not a claim of language support. Numeric-only and
+punctuation-only runs do not trigger that rejection. Routing diagnostics expose
+only scripts, codes, counts and offsets, never note text.
+
+Deterministic detection in both `deidentify()` and staged `Pipeline` folds all
+Unicode decimal digits to ASCII and removes invisible bidi formatting controls
+in an offset-mapped matching view. Validators see the folded values; redaction
+spans still cover the original characters. Persian and Urdu matching also
+folds declared Arabic keyboard kaf/yeh variants (and Urdu heh variants), without
+rewriting the output or changing Arabic-language normalization. Diagnostics
+contain normalization counts, not original or folded identifiers.
+
+Numeric Gregorian dates accept `.`, `/` and `-` separators and use the shared
+`LOCALE_DATE_ORDER` table for shifting and date surrogates. Valid year-first
+forms remain year-first; ambiguous numeric dates without a known locale are
+masked with `[DATE_SHIFTED]` rather than guessed. Hebrew attached prefixes are
+not included in the redacted date span. This does not add calendar conversion
+or model-quality qualification. The robustness operators `bidi_in_value` and
+`native_digit_substitution` can exercise these matching boundaries with a
+repeatable seed.
+
 !!! warning "Language-ID license boundary"
     This router deliberately excludes CLD3, which is outside this roadmap
     task's approved dependency scope. Non-commercial language-ID assets remain
