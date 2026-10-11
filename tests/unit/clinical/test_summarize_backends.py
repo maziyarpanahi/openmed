@@ -122,7 +122,7 @@ def forbid_backend_guide_model_loading(monkeypatch):
         raise AssertionError("backend documentation attempted external runtime work")
 
     monkeypatch.setattr(backends, "_require_runtime", fail)
-    monkeypatch.setattr(backends, "_cached_artifact", fail)
+    monkeypatch.setattr(backends, "verify_clinical_slm_package", fail)
     monkeypatch.setattr(backends, "_load_model", fail)
     monkeypatch.setattr(ModelLoader, "load_local_sequence_classifier", fail)
     monkeypatch.setattr(ModelLoader, "load_model", fail)

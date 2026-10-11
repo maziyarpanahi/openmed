@@ -71,33 +71,38 @@ protected handling. For diagnostics, project controlled backend identifiers,
 template digests and `leakage_check.to_dict()`; never log original text, prompts,
 model responses or arbitrary upstream exception messages.
 
-## Registered MLX and cache provisioning
+## Registered MLX package provisioning
 
 `model="mlx"`, `model="maple"` and the registered summarizer alias resolve to
 the same reviewed repository and immutable revision. `MLXSummarizerBackend`
 accepts a memory budget; arbitrary paths and unregistered model strings are
 rejected at this clinical entry point. Constructing it does not load weights.
-The first inference requires the optional MLX runtime and a pre-provisioned
-Hugging Face model snapshot; `snapshot_download(..., local_files_only=True)`
-performs cache lookup without downloading.
+The first inference requires the optional MLX runtime and an explicitly
+registered local package. There is no Hub cache lookup, download or automatic
+extraction fallback at inference time.
 
-Provision runtime packages and the exact registry-selected snapshot before
-processing clinical input, using the commands in the
-[summarization guide](summarization.md) and the
-[offline bootstrap guide](../models/bundled-offline.md). Preserve the immutable
-revision and the cache location selected by the deployment environment. The
-summarizer's Hugging Face snapshot cache and the PII loader's OpenMed cache are
-separate; placing a PII model in one does not provision summarizer weights in
-the other. A missing cache must not trigger a remote attempt or implicit
-extraction. No Hugging Face Space deployment or visibility change is involved.
+Provision the exact registry-selected package before processing clinical input,
+using the [SLM manifest guide](../models/clinical_slm_manifest.md). Register its
+absolute directory and the manifest digest from an independently trusted
+provisioning record with `register_summarizer_package`; deriving the trusted pin
+from an untrusted package defeats that trust boundary. Registration itself does
+not read files or contact a service. The PII loader's OpenMed cache remains a
+separate input; provisioning it does not register summarizer artifacts.
 
-Current MLX admission reads the cached config and weight sizes, checks declared
-capabilities and a conservative memory budget, then loads the local runtime.
-It reserves output context before loading and checks actual tokenizer length
-before generation. It does not establish model quality or measured peak memory.
-The generic artifact-manifest verifier is a separate caller-owned gate in the
-current released implementation; a cache pin alone does not verify every file's
-digest. Keep provisioned files immutable through admission and runtime loading.
+Before model construction, MLX admission verifies the trusted manifest digest,
+model identity and revision, the complete declared file inventory and every
+component's digest and size. Package files must be regular files; symlinks and
+undeclared files are refused. Config and template bytes are checked again when
+read. Manifest task, context, runtime-feature and quantization metadata must
+match the runtime contract. Unsupported secure local-read platforms fail closed.
+
+Admission reserves output context, enforces a conservative memory budget and
+checks actual tokenizer length before generation. Digest checks establish
+integrity against the supplied trusted pin; they do not establish model quality,
+provenance authenticity or measured peak memory. Keep provisioned files immutable
+through verification and runtime loading: an external writer is not locked out
+for the whole inference operation. No Hugging Face Space visibility change is
+involved.
 
 ## Local encoder NLI with an explicit class mapping
 
@@ -433,6 +438,7 @@ classes. Never serialize arbitrary exception objects or their upstream context.
 | `ExtractiveSelectionError` | Reviewed fact coverage cannot satisfy the independent omission/length rules, or bounded selection is exhausted | Inspect its value-free selection diagnostics and re-review the budget/evidence; no partial summary is returned |
 | `NLIQualificationError` | Invalid, unavailable, drifting or unqualified caller-owned artifact/receipt inputs | Reproduce the offline qualification protocol with trusted local inputs; do not promote an audit record into authority |
 | `BriefInterrupted` | Direct summarization reaches a cancelled or expired cooperative checkpoint | Discard the late result; inspect only `cancelled` or `deadline_exceeded` and start a new request if appropriate |
+| `LocalSummarizerPackageError` | Missing trusted package pin, unsafe or changed files, incompatible manifest/config/template metadata, or unsupported secure local reads | Inspect its fixed reason code; re-provision and register an independently trusted package before retrying; do not log upstream errors |
 | `LocalSummarizerError` | Unregistered/invalid backend, rejected admission or inference, invalid output, or trusted callback failure | Check fixed local configuration, artifact/runtime availability, limits and provider contract; keep the failure closed |
 | `RemoteSummarizerError` | A remote provider name or colon-bearing backend string at summarizer resolution | Select a registered local alias or trusted local callable; never send the note to that provider |
 | `SummarizationOrderError` | Guarded stage receives raw/invalid de-identification input or retained source identifiers | Complete and validate local de-identification before generation |
