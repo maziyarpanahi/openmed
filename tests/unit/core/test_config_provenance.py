@@ -138,3 +138,86 @@ def test_audit_helper_returns_only_provenance():
 
     assert "values" not in report
     assert report["keys"]["mode"]["conflict_category"] == CONFLICT_SAME_VALUE
+
+
+def test_config_credentials_never_serialize_or_persist(monkeypatch, tmp_path):
+    import os
+
+    from openmed.core import config as config_module
+
+    sentinel = "hf_SYNTHETIC_CONFIG_TOKEN_NEVER_SERIALIZE"
+    monkeypatch.setenv("HF_TOKEN", sentinel)
+    monkeypatch.setattr(config_module, "PROFILES_DIR", tmp_path / "profiles")
+    config = config_module.OpenMedConfig(timeout=77)
+    assert config.hf_token == sentinel
+    assert sentinel not in repr(config)
+    assert "hf_token" not in config.to_dict()
+    assert config.with_profile("test").hf_token == sentinel
+    saved = config_module.save_config_to_file(config, tmp_path / "config.toml")
+    profile = config_module.save_profile(
+        "synthetic", {"timeout": 77, "hf_token": sentinel}
+    )
+    for path in (saved, profile):
+        assert sentinel not in path.read_text()
+        if os.name != "nt":
+            assert path.stat().st_mode & 0o777 == 0o600
+    assert config_module.load_config_from_file(saved).timeout == 77
+
+
+@pytest.mark.parametrize("as_json", [True, False])
+def test_cli_config_show_and_set_do_not_expose_credentials(
+    monkeypatch, tmp_path, capsys, as_json
+):
+    from openmed.cli.main import main
+    from openmed.core import config as config_module
+
+    sentinel = "hf_SYNTHETIC_CLI_CONFIG_TOKEN"
+    monkeypatch.setenv("HF_TOKEN", sentinel)
+    monkeypatch.setenv("OPENMED_CONFIG", str(tmp_path / "config.toml"))
+    monkeypatch.setattr(config_module, "_config", config_module.OpenMedConfig())
+    options = ["--json"] if as_json else []
+    assert main(["config", "show", *options]) == 0
+    captured = capsys.readouterr()
+    assert sentinel not in captured.out + captured.err
+    assert "hf_token_present" in captured.out
+    assert main(["config", "set", "timeout", "77", *options]) == 0
+    captured = capsys.readouterr()
+    assert sentinel not in captured.out + captured.err
+    assert sentinel not in (tmp_path / "config.toml").read_text()
+
+
+def test_legacy_stored_credential_warns_and_doctor_never_prints_it(
+    monkeypatch, tmp_path
+):
+    from openmed.core import config as config_module
+    from openmed.core.doctor import _check_persisted_credentials
+
+    sentinel = "hf_SYNTHETIC_PERSISTED_TOKEN"
+    path = tmp_path / "config.toml"
+    path.write_text(f'hf_token = "{sentinel}"\ntimeout = 77\n')
+    monkeypatch.setenv("OPENMED_CONFIG", str(path))
+    monkeypatch.setattr(config_module, "PROFILES_DIR", tmp_path / "profiles")
+    with pytest.warns(UserWarning, match="persisted_credential") as warnings:
+        config = config_module.load_config_from_file(path)
+    assert config.hf_token == sentinel
+    assert sentinel not in str(warnings[0].message)
+    checks = []
+    _check_persisted_credentials(checks)
+    assert checks[0]["details"] == "persisted_credential"
+    assert sentinel not in json.dumps(checks)
+    config_module.save_config_to_file(config, path)
+    assert sentinel not in path.read_text()
+
+
+def test_saved_configuration_has_owner_only_posix_mode(tmp_path):
+    import os
+
+    from openmed.core.config import OpenMedConfig, save_config_to_file
+
+    if os.name == "nt":
+        pytest.skip("Windows confidentiality uses directory ACLs, not POSIX mode bits")
+    path = tmp_path / "config.toml"
+    path.write_text("timeout = 12\n")
+    path.chmod(0o644)
+    save_config_to_file(OpenMedConfig(timeout=77), path)
+    assert path.stat().st_mode & 0o777 == 0o600

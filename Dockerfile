@@ -21,11 +21,11 @@ RUN apt-get update \
         "libncursesw6=6.6+20260608-2" \
         "libreadline8t64=8.3-4" \
         "libsqlite3-0=3.53.4-2" \
-        "libssl3t64=3.6.4-1" \
+        "libssl3t64=3.6.5-1" \
         "libuuid1=2.42.4-1" \
         "netbase=6.6" \
-        "openssl=3.6.4-1" \
-        "openssl-provider-legacy=3.6.4-1" \
+        "openssl=3.6.5-1" \
+        "openssl-provider-legacy=3.6.5-1" \
         "readline-common=8.3-4" \
         "tzdata=2026c-1" \
         "zlib1g=1:1.3.dfsg+really1.3.2-3" \
@@ -53,4 +53,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import sys,urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3); sys.exit(0)"
 
-CMD ["uvicorn", "openmed.service.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "-m", "openmed.service.logging", "--host", "0.0.0.0", "--port", "8080"]

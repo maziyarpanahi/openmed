@@ -22,14 +22,14 @@ Enable in-process spans without exporting them:
 
 ```bash
 OPENMED_SERVICE_TRACING_ENABLED=true \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Enable OTLP export over HTTP:
 
 ```bash
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Setting `OPENMED_SERVICE_OTLP_ENDPOINT` is treated as an explicit tracing
@@ -41,7 +41,7 @@ Optional exporter settings:
 OPENMED_SERVICE_OTLP_HEADERS=Authorization=Bearer-token,X-Scope=clinic-a \
 OPENMED_SERVICE_OTLP_TIMEOUT_SECONDS=5 \
 OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 ## Span Shape
