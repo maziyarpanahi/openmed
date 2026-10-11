@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -17,6 +20,74 @@ from openmed.clinical.summarize import (
 from openmed.core.pii import DeidentificationResult, PIIEntity
 
 summarize_module = import_module("openmed.clinical.summarize")
+
+
+def _leakage_parity_cases():
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/clinical/brief_parity/verified.json"
+    )
+    return json.loads(path.read_text())["leakage_cases"]
+
+
+@pytest.mark.parametrize("case", _leakage_parity_cases(), ids=lambda case: case["id"])
+def test_shared_unicode_leakage_backend_cases(case):
+    surface = case["surface"]
+    source = DeidentificationResult(
+        original_text=surface,
+        deidentified_text="[NAME] improved.",
+        pii_entities=[
+            PIIEntity(
+                text=surface,
+                label="NAME",
+                start=0,
+                end=len(surface),
+                confidence=0.99,
+                redacted_text="[NAME]",
+            )
+        ],
+        method="mask",
+        timestamp=datetime(2026, 1, 1),
+    )
+    if case["leaked"]:
+        with pytest.raises(SummarizationLeakageError) as raised:
+            summarize_deidentified(source, model=lambda _: case["candidate"])
+        check = raised.value.check
+        assert check.checked_token_count == check.leaked_token_count == 1
+        assert len(check.leaked_token_hashes[0]) == 64
+        expected_digest = hashlib.sha256(" ".join(surface.split()).encode()).hexdigest()
+        assert check.to_dict() == {
+            "passed": False,
+            "checked_token_count": 1,
+            "leaked_token_count": 1,
+            "leaked_token_hashes": [expected_digest],
+        }
+        assert (
+            str(raised.value)
+            == "summary leakage guard rejected backend output: 1 source token(s) detected"
+        )
+        assert case["candidate"] not in json.dumps(check.to_dict(), ensure_ascii=False)
+    else:
+        result = summarize_deidentified(source, model=lambda _: case["candidate"])
+        assert result.leakage_check.passed
+
+
+def test_shared_native_normalization_mirrors_existing_detector_defenses():
+    from openmed.core.script_detect import _CONFUSABLE_FOLD
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "fixtures/clinical/brief_parity/verified.json"
+    )
+    cases = json.loads(path.read_text())["normalization_cases"]
+    assert {"x" + char + "y" for char in _CONFUSABLE_FOLD} <= {
+        case["input"] for case in cases
+    }
+    for case in cases:
+        assert (
+            summarize_module._normalize_leakage_text(case["input"])
+            == case["normalized"]
+        )
 
 
 SYNTHETIC_NOTE = (

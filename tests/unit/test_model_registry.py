@@ -3,6 +3,49 @@
 import pytest
 
 from openmed.core import model_registry
+
+
+def test_summarizer_package_registration_is_alias_and_revision_bound(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+    assert model_registry.resolve_summarizer_package() is None
+    model_registry.register_summarizer_package(
+        "maple", package_root=tmp_path, manifest_digest="A" * 64
+    )
+    assert model_registry.resolve_summarizer_package("mlx") == (
+        tmp_path,
+        "sha256:" + "a" * 64,
+    )
+    assert model_registry.resolve_summarizer_package(
+        "maple-preview"
+    ) == model_registry.resolve_summarizer_package("mlx")
+    model_registry.clear_summarizer_package("mlx")
+    assert model_registry.resolve_summarizer_package("maple") is None
+
+
+@pytest.mark.parametrize(
+    "alias,root,digest",
+    [
+        ("unregistered-private-name", "/opt/openmed/synthetic", "a" * 64),
+        ("mlx", "relative/private/path", "a" * 64),
+        ("mlx", "/opt/openmed/synthetic", "synthetic-private-token"),
+        ([], "/opt/openmed/synthetic", "a" * 64),
+    ],
+)
+def test_summarizer_registration_failure_drops_values_and_context(
+    alias, root, digest, monkeypatch
+):
+    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+    with pytest.raises(ValueError) as caught:
+        model_registry.register_summarizer_package(
+            alias, package_root=root, manifest_digest=digest
+        )
+    assert str(caught.value) == "invalid summarizer package registration"
+    assert caught.value.__context__ is None
+    assert not model_registry._SUMMARIZER_PACKAGES
+
+
 from openmed.core.labels import CANONICAL_LABELS
 
 
