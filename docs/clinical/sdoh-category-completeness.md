@@ -1,5 +1,8 @@
 # SDOH Category Completeness
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `audit_sdoh_completeness()` records what happened to every configured SDOH
 category. The controlled states are `processed`, `skipped`, `unsupported`, and
 `failed`.

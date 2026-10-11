@@ -135,6 +135,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Explain SDOH extraction, registered determinants, custom extractors and cue
+  table loading with runnable offline synthetic examples and source-value limits.
+
 - Document clinical brief trust boundaries across Python, CLI, REST, MCP and
   OpenMedKit, with existing mitigation tests and explicit residual risks;
   validate mitigation test links and source citations offline (#3752).
