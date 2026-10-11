@@ -60,6 +60,11 @@ from a partially trusted journal.
 
 ## Recovery sequence
 
+This adapter sketch requires an application journal, read-only effect-sink
+inspection and explicitly approved dispatch. It is not a standalone example.
+
+<!-- openmed-docs-fragment: workflow-recovery-adapters -->
+
 ```python
 lineage = journal.load()
 if isinstance(lineage, RetiredJournalRecord):

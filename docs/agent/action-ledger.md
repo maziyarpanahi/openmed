@@ -9,11 +9,14 @@ unknown files fail closed with stable, value-free error codes. Entry files are
 bounded to 16 KiB; malformed or deeply nested JSON also receives a fixed error,
 without exposing the submitted entry.
 
+Supply `ledger_directory` as a caller-owned private directory. The offline
+documentation check supplies an isolated synthetic temporary directory.
+
 ```python
 from openmed.agent.audit.action_ledger import ActionLedger, ActionState
 from openmed.agent.correlation import ActionId, RunId
 
-ledger = ActionLedger("/private/operator-owned/action-ledger")
+ledger = ActionLedger(ledger_directory)
 ledger.record(
     run_id=RunId.generate(),
     action_id=ActionId.generate(),

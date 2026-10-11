@@ -210,6 +210,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Execute governed-agent Python documentation blocks offline with per-page
+  synthetic context. Require explicit, content-bound exceptions for application
+  adapter sketches, and fail on API drift or attempted external effects (#3795).
+
 - Explain SDOH extraction, registered determinants, custom extractors and cue
   table loading with runnable offline synthetic examples and source-value limits.
 
