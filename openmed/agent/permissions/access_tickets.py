@@ -14,10 +14,13 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, TypeVar, cast
+from typing import TYPE_CHECKING, Final, TypeVar, cast
 
 from openmed.agent.correlation import RunId
 from openmed.agent.identifiers import GovernanceIdError, PurposeId, ToolId
+
+if TYPE_CHECKING:
+    from .access_events import AccessEventSink
 
 ACCESS_TICKET_DENIAL_SCHEMA_VERSION: Final = "openmed.agent.access_denial.v1"
 ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM: Final = "hmac-sha256"
@@ -280,10 +283,18 @@ class AccessTicketRequest:
 class AccessTicketVerifier:
     """Verify run binding, purpose, expiry, and exact ticket scope locally."""
 
-    def __init__(self, *, clock: Callable[[], int] = lambda: int(time.time())) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], int] = lambda: int(time.time()),
+        sink: AccessEventSink | None = None,
+    ) -> None:
+        from .access_events import MemoryAccessEventSink
+
         if not callable(clock):
             raise AccessTicketValidationError("invalid_clock", "ticket")
         self.clock = clock
+        self.sink = MemoryAccessEventSink() if sink is None else sink
 
     def verify(
         self,
@@ -292,41 +303,88 @@ class AccessTicketVerifier:
         *,
         now: int | None = None,
     ) -> AccessTicket:
-        """Return the ticket only when it authorizes the complete request."""
+        """Record exactly one decision before returning authority or denying it.
 
-        if ticket is None:
-            raise AccessTicketRequiredError("missing_ticket", "ticket")
-        if type(ticket) is not AccessTicket:
-            raise AccessTicketValidationError("invalid_ticket", "ticket")
-        if type(request) is not AccessTicketRequest:
-            raise AccessTicketValidationError("invalid_request", "request")
-        if now is None:
-            try:
-                current_time = self.clock()
-            except (KeyboardInterrupt, SystemExit):
-                raise
-            except BaseException:
-                raise AccessTicketValidationError(
-                    "clock_unavailable", "expires_at"
-                ) from None
+        Args:
+            ticket: Presented authority, or None to deny a missing ticket.
+            request: Validated request whose narrow metadata is recorded.
+            now: Optional verification epoch seconds for deterministic replay.
+
+        Returns:
+            The ticket when it authorizes the complete request.
+
+        Raises:
+            AccessTicketError: When authorization fails.
+            AccessEventError: When the injected sink fails; dispatch is blocked.
+        """
+        current_time = None
+        try:
+            if type(request) is not AccessTicketRequest:
+                raise AccessTicketValidationError("invalid_request", "request")
+            if now is None:
+                try:
+                    candidate_time = self.clock()
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except BaseException:
+                    candidate_time = None
+                if candidate_time is None:
+                    raise AccessTicketValidationError("clock_unavailable", "expires_at")
+            else:
+                candidate_time = now
+            current_time = _validate_timestamp(candidate_time, "expires_at")
+            if ticket is None:
+                raise AccessTicketRequiredError("missing_ticket", "ticket")
+            if type(ticket) is not AccessTicket:
+                raise AccessTicketValidationError("invalid_ticket", "ticket")
+            if current_time >= ticket.expires_at:
+                raise AccessTicketExpiredError("expired", "expires_at")
+            if request.run_id != ticket.run_id:
+                raise AccessTicketRunMismatchError("run_mismatch", "run_id")
+            if request.purpose != ticket.purpose:
+                raise AccessTicketPurposeMismatchError("purpose_mismatch", "purpose")
+            if not set(request.projection).issubset(ticket.permitted_data_classes):
+                raise AccessTicketProjectionError("projection_denied", "projection")
+            if not set(request.record_selectors).issubset(ticket.record_selectors):
+                raise AccessTicketSelectorError(
+                    "record_selector_denied", "record_selectors"
+                )
+            if request.tool_action not in ticket.permitted_tool_actions:
+                raise AccessTicketToolActionError("tool_action_denied", "tool_action")
+        except AccessTicketError as error:
+            # Leave the handler before calling the sink: a failed sink must not
+            # retain the denial exception or any provider exception as context.
+            denial = error
         else:
-            current_time = now
-        _validate_timestamp(current_time, "expires_at")
-        if current_time >= ticket.expires_at:
-            raise AccessTicketExpiredError("expired", "expires_at")
-        if request.run_id != ticket.run_id:
-            raise AccessTicketRunMismatchError("run_mismatch", "run_id")
-        if request.purpose != ticket.purpose:
-            raise AccessTicketPurposeMismatchError("purpose_mismatch", "purpose")
-        if not set(request.projection).issubset(ticket.permitted_data_classes):
-            raise AccessTicketProjectionError("projection_denied", "projection")
-        if not set(request.record_selectors).issubset(ticket.record_selectors):
-            raise AccessTicketSelectorError(
-                "record_selector_denied", "record_selectors"
-            )
-        if request.tool_action not in ticket.permitted_tool_actions:
-            raise AccessTicketToolActionError("tool_action_denied", "tool_action")
-        return ticket
+            self._emit(request, "allow", None, current_time)
+            return ticket
+        self._emit(request, "deny", denial.code, current_time)
+        raise denial
+
+    def _emit(
+        self,
+        request: AccessTicketRequest,
+        outcome: str,
+        reason_code: str | None,
+        timestamp: int | None,
+    ) -> None:
+        from .access_events import AccessEvent, AccessEventError
+
+        event = AccessEvent.for_request(
+            request,
+            outcome=outcome,
+            reason_code=reason_code,
+            timestamp=timestamp,
+        )
+        try:
+            self.sink.emit(event)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException:
+            pass
+        else:
+            return
+        raise AccessEventError("sink_unavailable")
 
 
 def dispatch_with_access_ticket(
@@ -402,13 +460,17 @@ def _validate_typed_tuple(
     if len(set(values)) != len(values):
         raise AccessTicketValidationError("duplicate_scope", field_name)
     typed_values = cast(tuple[RecordSelector | ToolAction, ...], values)
-    return tuple(sorted(typed_values, key=_typed_scope_sort_key))
+    return cast(
+        tuple[RecordSelector, ...] | tuple[ToolAction, ...],
+        tuple(sorted(typed_values, key=_typed_scope_sort_key)),
+    )
 
 
 def _typed_scope_sort_key(value: RecordSelector | ToolAction) -> tuple[str, str]:
     if type(value) is RecordSelector:
         return (value.kind, value.digest)
-    return (value.tool, value.action)
+    action = cast(ToolAction, value)
+    return (action.tool, action.action)
 
 
 def _validate_timestamp(value: object, field_name: str) -> int:
