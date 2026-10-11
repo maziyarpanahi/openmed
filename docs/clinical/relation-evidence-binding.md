@@ -193,6 +193,9 @@ clinical data requiring the caller's access controls.
 The bounds are 512 relations, 128 review transitions per relation, 1024 input
 resources, 4 MiB of serialized resource input, JSON depth 32 and 65,536 values.
 Coding concepts allow at most 16 codings from at most 64 declared systems.
+Collections are enumerated once into bounded snapshots; an inaccurate reported
+length cannot bypass these limits. Public failures discard private exception
+contexts, and loss codes require exact built-in strings.
 Local validation checks the bundled structural subset, including required
 FamilyMemberHistory fields and condition codes, plus declared R4 reference
 types. It does not certify implementation-guide profiles or complete FHIR

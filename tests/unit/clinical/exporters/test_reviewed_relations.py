@@ -721,3 +721,64 @@ def test_bounded_input_contract_has_source_free_errors(change):
         export_reviewed_relations(items, data, patient_reference=patient)
     assert str(caught.value) == "Invalid reviewed FHIR relation input."
     assert PRIVATE not in str(caught.value)
+
+
+@pytest.mark.parametrize("boundary", ["constructor", "fingerprint", "export"])
+def test_public_relation_errors_discard_private_exception_context(boundary):
+    class PrivateResources(list):
+        def __len__(self):
+            raise RuntimeError(PRIVATE)
+
+    if boundary == "constructor":
+        call = lambda: replace(candidate(), head_reference=PRIVATE)
+    elif boundary == "fingerprint":
+        call = lambda: relation_fhir_review_fingerprint(
+            candidate(), PrivateResources(), PATIENT
+        )
+    else:
+        call = lambda: project([candidate()], PrivateResources())
+    with pytest.raises(RelationFHIRExportError) as caught:
+        call()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+
+
+def test_loss_code_rejects_private_scalar_alias():
+    from openmed.clinical.exporters.fhir import RelationFHIRLoss
+
+    class PrivateCode(str):
+        def __new__(cls):
+            return super().__new__(cls, PRIVATE)
+
+        def __eq__(self, other):
+            return other == "unreviewed"
+
+        def __hash__(self):
+            return hash("unreviewed")
+
+    with pytest.raises(RelationFHIRExportError):
+        RelationFHIRLoss(0, PrivateCode())
+
+
+def test_relation_bound_uses_actual_snapshot_count():
+    class ShortList(list):
+        def __len__(self):
+            return 0
+
+    with pytest.raises(RelationFHIRExportError):
+        project(ShortList([candidate()] * 513), resources())
+
+
+def test_relation_provider_is_enumerated_once():
+    class Once(list):
+        iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            if self.iterations > 1:
+                raise RuntimeError(PRIVATE)
+            return super().__iter__()
+
+    items = Once([candidate()])
+    report = project(items, resources())
+    assert report.accepted_count == 0 and report.losses[0].code == "unreviewed"
+    assert items.iterations == 1

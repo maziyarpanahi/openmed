@@ -9,6 +9,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from itertools import islice
 from typing import Any
 
 from openmed.clinical.family_history import FamilyHistoryRecord
@@ -199,8 +200,10 @@ class ReviewedFHIRRelation:
                 if type(self.family_record) is not FamilyHistoryRecord:
                     raise _invalid()
                 object.__setattr__(self, "family_record", replace(self.family_record))
+            return
         except Exception:
-            raise _invalid() from None
+            pass
+        raise _invalid() from None
 
 
 @dataclass(frozen=True)
@@ -214,6 +217,7 @@ class RelationFHIRLoss:
         if (
             type(self.index) is not int
             or self.index < 0
+            or type(self.code) is not str
             or self.code not in _LOSS_CODES
         ):
             raise _invalid()
@@ -247,11 +251,18 @@ class RelationFHIRExport:
         }
 
 
-def _systems(values: Sequence[str]) -> tuple[str, ...]:
-    if isinstance(values, (str, bytes)) or len(values) > 64:
+def _snapshot(values: Any, limit: int) -> tuple[Any, ...]:
+    if isinstance(values, (str, bytes)) or len(values) > limit:
         raise _invalid()
-    result = []
-    for value in values:
+    owned = tuple(islice(iter(values), limit + 1))
+    if len(owned) > limit:
+        raise _invalid()
+    return owned
+
+
+def _systems(values: Sequence[str]) -> tuple[str, ...]:
+    result: list[str] = []
+    for value in _snapshot(values, 64):
         if type(value) is not str or len(value) > 256:
             raise _invalid()
         if (
@@ -267,9 +278,7 @@ def _systems(values: Sequence[str]) -> tuple[str, ...]:
 
 
 def _store(resources: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-    if isinstance(resources, (str, bytes)) or len(resources) > 1024:
-        raise _invalid()
-    encoded = json.dumps(resources, ensure_ascii=True, allow_nan=False)
+    encoded = json.dumps(_snapshot(resources, 1024), ensure_ascii=True, allow_nan=False)
     if len(encoded.encode()) > 4_194_304:
         raise _invalid()
     plain = json.loads(encoded)
@@ -359,7 +368,8 @@ def relation_fhir_review_fingerprint(
             raise _invalid()
         return _fingerprint(item, _store(resources), patient, _systems(code_systems))
     except Exception:
-        raise _invalid() from None
+        pass
+    raise _invalid() from None
 
 
 def _concept(value: Any, systems: tuple[str, ...]) -> dict[str, Any]:
@@ -548,7 +558,8 @@ def export_reviewed_relations(
             relations, resources, patient_reference, code_systems, review_policy, clock
         )
     except Exception:
-        raise _invalid() from None
+        pass
+    raise _invalid() from None
 
 
 def _export(
@@ -559,11 +570,10 @@ def _export(
     policy: Any,
     clock: Any,
 ) -> RelationFHIRExport:
-    if isinstance(relations, (str, bytes)) or len(relations) > 512:
+    supplied = _snapshot(relations, 512)
+    if any(type(item) is not ReviewedFHIRRelation for item in supplied):
         raise _invalid()
-    if any(type(item) is not ReviewedFHIRRelation for item in relations):
-        raise _invalid()
-    rows = tuple(replace(item) for item in relations)
+    rows = tuple(replace(item) for item in supplied)
     systems = _systems(code_systems)
     patient = _reference(patient)
     if not patient.startswith("Patient/"):
