@@ -185,17 +185,20 @@ def _read(path: str, limit: int) -> bytes:
     except CliError:
         raise
     except (OSError, ValueError):
-        raise _invalid("clinical_input_unavailable") from None
+        pass
     finally:
         if descriptor is not None:
-            os.close(descriptor)
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+    raise _invalid("clinical_input_unavailable")
 
 
 def _decode(data: bytes) -> str:
     try:
         return data.decode("utf-8")
     except UnicodeError:
-        raise _invalid("clinical_input_encoding") from None
+        pass
+    raise _invalid("clinical_input_encoding")
 
 
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -230,8 +233,11 @@ def _load_json(data: bytes) -> Any:
             elif isinstance(value, float) and not math.isfinite(value):
                 raise _invalid("clinical_json_invalid")
         return payload
+    except CliError:
+        raise
     except (ValueError, RecursionError):
-        raise _invalid("clinical_json_invalid") from None
+        pass
+    raise _invalid("clinical_json_invalid")
 
 
 def _offsets(start: Any, end: Any, length: int, code: str) -> tuple[int, int]:
@@ -243,7 +249,7 @@ def _offsets(start: Any, end: Any, length: int, code: str) -> tuple[int, int]:
 
 
 def _score(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in (int, float):
         raise _invalid("clinical_span_invalid")
     if not 0 <= value <= 1 or not math.isfinite(value):
         raise _invalid("clinical_span_invalid")
@@ -254,7 +260,7 @@ def _label(value: Any, language: str) -> str:
     from openmed.clinical.relations.multilingual import CMEIE_ENTITY_TYPES
     from openmed.core.labels import is_recognized_label
 
-    if not isinstance(value, str) or len(value) > 64:
+    if type(value) is not str or len(value) > 64:
         raise _invalid("clinical_label_unsupported")
     if value in CMEIE_ENTITY_TYPES:
         return value
@@ -295,7 +301,7 @@ def _context(row: dict[str, Any], metadata: dict[str, Any]) -> dict[str, str]:
             if alias in source
         ]
         if supplied:
-            if any(v not in allowed for v in supplied) or any(
+            if any(type(v) is not str or v not in allowed for v in supplied) or any(
                 v != supplied[0] for v in supplied
             ):
                 raise _invalid("clinical_span_invalid")
@@ -425,7 +431,7 @@ def _span_key(span: dict[str, Any]) -> tuple[int, int]:
 
 
 def _safe_code(value: Any, allowed: Sequence[str] | frozenset[str]) -> Any:
-    if value is not None and (not isinstance(value, str) or value not in allowed):
+    if value is not None and (type(value) is not str or value not in allowed):
         raise ValueError("unsupported projection code")
     return value
 
@@ -436,7 +442,8 @@ def _sdoh(text: str, spans: list[dict[str, Any]], sections: Any) -> dict[str, An
 
     records = []
     for finding in extract_sdoh(text, spans, sections=sections):
-        start, end = _offsets(*finding.span, len(text), "clinical_result_invalid")
+        start, end = finding.span
+        start, end = _offsets(start, end, len(text), "clinical_result_invalid")
         records.append(
             {
                 "span": [start, end],
@@ -453,11 +460,13 @@ def _sdoh(text: str, spans: list[dict[str, Any]], sections: Any) -> dict[str, An
 
 def _relation_span(span: Any, text: str, language: str) -> dict[str, Any]:
     start, end = _offsets(span.start, span.end, len(text), "clinical_result_invalid")
+    if type(span.derived) is not bool:
+        raise ValueError("unsupported derived flag")
     return {
         "start": start,
         "end": end,
         "label": _label(span.label, language),
-        "derived": bool(span.derived),
+        "derived": span.derived,
     }
 
 
@@ -545,9 +554,21 @@ def _timeline(
         {
             "start": event.start,
             "end": event.end,
-            "label": labels[_event_key(event)].popleft(),
-            "event_kind": event.event_kind,
-            "assertion": event.assertion.to_dict(),
+            "label": _label(labels[_event_key(event)].popleft(), language),
+            "event_kind": _safe_code(
+                event.event_kind,
+                (
+                    "condition",
+                    "diagnosis",
+                    "event",
+                    "finding",
+                    "medication",
+                    "observation",
+                    "procedure",
+                    "symptom",
+                ),
+            ),
+            "assertion": _context({"assertion": event.assertion.to_dict()}, {}),
             "time_state": "anchored" if event.normalized_time else "unanchored",
             "review_required": True,
         }
@@ -557,7 +578,7 @@ def _timeline(
         {
             "start": t.start,
             "end": t.end,
-            "type": t.timex_type,
+            "type": _safe_code(t.timex_type, ("DATE", "TIME", "DURATION", "SET")),
             "state": "unanchored"
             if "unanchored" in t.granularity_flags
             else "unresolved"
@@ -598,10 +619,12 @@ def _event_key(event: Any) -> tuple[Any, ...]:
 
 def _write_new(path: str, envelope: dict[str, Any]) -> None:
     descriptor = None
-    created = False
+    owned = None
+    succeeded = False
     try:
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        created = True
+        info = os.fstat(descriptor)
+        owned = (info.st_dev, info.st_ino)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             descriptor = None
             json.dump(
@@ -613,18 +636,25 @@ def _write_new(path: str, envelope: dict[str, Any]) -> None:
                 allow_nan=False,
             )
             stream.write("\n")
+        succeeded = True
     except Exception:
-        if created:
-            with contextlib.suppress(OSError):
-                os.unlink(path)
-        raise CliError(
-            "Clinical output could not be created.",
-            code="clinical_output_unavailable",
-            exit_code=EXIT_ERROR,
-        ) from None
+        pass
     finally:
         if descriptor is not None:
-            os.close(descriptor)
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+    if succeeded:
+        return
+    if owned is not None:
+        with contextlib.suppress(OSError):
+            current = os.lstat(path)
+            if (current.st_dev, current.st_ino) == owned:
+                os.unlink(path)
+    raise CliError(
+        "Clinical output could not be created.",
+        code="clinical_output_unavailable",
+        exit_code=EXIT_ERROR,
+    )
 
 
 def _handle_clinical(args: argparse.Namespace) -> int:
@@ -646,6 +676,7 @@ def _handle_clinical(args: argparse.Namespace) -> int:
     spans = _spans(_load_json(span_data), text, language)
     section_data = None if args.sections is None else _read(args.sections, _JSON_BYTES)
     sections = _sections(section_data, text)
+    processed = False
     try:
         with open(os.devnull, "w", encoding="utf-8") as sink:
             with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
@@ -655,29 +686,52 @@ def _handle_clinical(args: argparse.Namespace) -> int:
                     result = _relations(text, spans, sections, language)
                 else:
                     result = _timeline(text, spans, sections, language, reference)
+        expected_keys = {
+            "sdoh": {"findings"},
+            "relations": {"relations"},
+            "timeline": {"events", "temporal", "lanes", "reference_time_supplied"},
+        }
+        if type(result) is not dict or set(result) != expected_keys[name]:
+            raise ValueError("unsupported result projection")
+        payload = {
+            "schema_version": 1,
+            "language": language,
+            "source_digest": hashlib.sha256(note_data).hexdigest(),
+            "spans_digest": hashlib.sha256(span_data).hexdigest(),
+            "sections_digest": hashlib.sha256(section_data).hexdigest()
+            if section_data is not None
+            else None,
+            "input_span_count": len(spans),
+            "review_required": True,
+            **result,
+        }
+        envelope = {"ok": True, "command": command_path(args), "data": payload}
+        # Validate the complete output before creating a file or writing stdout.
+        stdout_payload = dict(payload)
+        if args.output is not None:
+            stdout_payload["output_written"] = True
+        stdout_envelope = {**envelope, "data": stdout_payload}
+        serialized = json.dumps(
+            stdout_envelope,
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+            allow_nan=False,
+        )
+        if len(serialized.encode("utf-8")) + 1 > _JSON_BYTES:
+            raise ValueError("output exceeds clinical envelope bound")
+        human = json.dumps(
+            stdout_payload, ensure_ascii=False, sort_keys=True, allow_nan=False
+        )
+        processed = True
     except Exception:
+        pass
+    if not processed:
         raise CliError(
             "Clinical processing failed.",
             code="clinical_processing_failed",
             exit_code=EXIT_ERROR,
-        ) from None
-    payload = {
-        "schema_version": 1,
-        "language": language,
-        "source_digest": hashlib.sha256(note_data).hexdigest(),
-        "spans_digest": hashlib.sha256(span_data).hexdigest(),
-        "sections_digest": hashlib.sha256(section_data).hexdigest()
-        if section_data is not None
-        else None,
-        "input_span_count": len(spans),
-        "review_required": True,
-        **result,
-    }
-    if args.output is not None:
-        _write_new(
-            args.output, {"ok": True, "command": command_path(args), "data": payload}
         )
-        payload["output_written"] = True
-    return emit(
-        args, payload, human=json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    )
+    if args.output is not None:
+        _write_new(args.output, envelope)
+    return emit(args, stdout_payload, human=human)

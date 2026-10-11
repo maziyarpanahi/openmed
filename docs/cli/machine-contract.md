@@ -143,10 +143,15 @@ support input binding; they are not an anonymization guarantee.
 
 `--output result.json` reserves a new file exclusively with mode `0600` and
 writes the same value-free envelope. Existing files and symlinks are refused;
-a failed write removes the newly created partial file. Stdout still contains
+a failed write removes the partial file only while its device and inode still
+match the file reserved by this invocation. A replacement is preserved. The
+complete envelope must serialize as finite JSON within 1 MiB before any file
+creation or stdout emission; larger results fail without truncation. Stdout still contains
 the value-free result with `output_written: true`, and never the output path.
 Without `--json`, stdout contains the value-free data object. Errors use fixed
-messages without note text, span surfaces, private paths or exception details.
+messages without note text, span surfaces, private paths or exception details,
+including retained exception context. Projection codes and scores must be exact
+built-in scalar types; custom scalar subclasses are refused.
 Processor writes to Python stdout and stderr are discarded. Registered custom
 extractors execute as trusted local code; this is not an execution sandbox.
 

@@ -661,3 +661,114 @@ def test_empty_note_and_spans_are_valid_offline(tmp_path, capsys, name):
     note, spans, _ = _files(tmp_path, "", [])
     code, envelope = _run(capsys, name, note, spans)
     assert code == 0 and envelope["data"]["input_span_count"] == 0
+
+
+@pytest.mark.parametrize("boundary", ["read", "decode", "json", "write", "processor"])
+def test_clinical_refusals_discard_private_exception_context(
+    tmp_path, monkeypatch, boundary
+):
+    from openmed.cli._output import CliError
+    from openmed.cli.main import build_parser
+
+    if boundary == "read":
+        call = lambda: clinical._read(str(tmp_path / "PRIVATE_SOURCE"), 16)
+    elif boundary == "decode":
+        call = lambda: clinical._decode(b"\xffPRIVATE_SOURCE")
+    elif boundary == "json":
+        call = lambda: clinical._load_json(b'{"PRIVATE_SOURCE":')
+    elif boundary == "write":
+
+        def fail(*args, **kwargs):
+            raise OSError("PRIVATE_OUTPUT_DETAIL")
+
+        monkeypatch.setattr(clinical.json, "dump", fail)
+        call = lambda: clinical._write_new(str(tmp_path / "output.json"), {})
+    else:
+        note, spans, _ = _files(tmp_path, "", [])
+        monkeypatch.setattr(
+            clinical,
+            "_sdoh",
+            Mock(side_effect=RuntimeError("PRIVATE_PROCESSOR_DETAIL")),
+        )
+        args = build_parser().parse_args(
+            ["clinical", "sdoh", "--note", str(note), "--spans", str(spans), "--json"]
+        )
+        call = lambda: clinical._handle_clinical(args)
+    with pytest.raises(CliError) as caught:
+        call()
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+
+
+class _PrivateClinicalCode(str):
+    def __new__(cls):
+        return super().__new__(cls, "PRIVATE_SOURCE_VALUE")
+
+    def __eq__(self, other):
+        return other == "tobacco"
+
+    def __hash__(self):
+        return hash("tobacco")
+
+
+def test_clinical_projection_rejects_private_scalar_alias(
+    tmp_path, capsys, monkeypatch
+):
+    from types import SimpleNamespace
+
+    import openmed.clinical.sdoh as sdoh
+
+    note, spans, _ = _files(tmp_path, "smokes", [])
+    finding = SimpleNamespace(
+        span=(0, 6),
+        category=_PrivateClinicalCode(),
+        status="current",
+        temporality="recent",
+        score=0.9,
+        extent=None,
+    )
+    monkeypatch.setattr(sdoh, "extract_sdoh", lambda *args, **kwargs: [finding])
+    code, envelope = _run(capsys, "sdoh", note, spans)
+    assert code == 1 and envelope["error"]["code"] == "clinical_processing_failed"
+    assert "PRIVATE" not in json.dumps(envelope)
+
+
+def test_partial_writer_cleanup_preserves_replaced_file(tmp_path, monkeypatch):
+    from openmed.cli._output import CliError
+
+    target = tmp_path / "output.json"
+
+    def replace_target(payload, stream, **kwargs):
+        target.unlink()
+        target.write_text("owner replacement")
+        raise OSError("PRIVATE_DETAIL")
+
+    monkeypatch.setattr(clinical.json, "dump", replace_target)
+    with pytest.raises(CliError):
+        clinical._write_new(str(target), {})
+    assert target.read_text() == "owner replacement"
+
+
+def test_custom_extractor_oversized_output_refused_before_file_creation(
+    tmp_path, capsys, monkeypatch
+):
+    from types import SimpleNamespace
+
+    import openmed.clinical.sdoh as sdoh
+
+    note, spans, _ = _files(tmp_path, "smokes", [])
+    finding = SimpleNamespace(
+        span=(0, 6),
+        category="tobacco",
+        status="current",
+        temporality="recent",
+        score=0.9,
+        extent=None,
+    )
+    monkeypatch.setattr(
+        sdoh, "extract_sdoh", lambda *args, **kwargs: [finding] * 10_000
+    )
+    target = tmp_path / "output.json"
+    code, envelope = _run(capsys, "sdoh", note, spans, "--output", str(target))
+    assert code == 1 and envelope["error"]["code"] == "clinical_processing_failed"
+    assert not target.exists()
