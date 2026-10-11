@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 
+- Registered SDOH extraction scoring with independently authored synthetic gold,
+  a reproducible counts-only baseline, retained known misses and an eval-only
+  native SHAC status view that reports unavailable data without zero scores.
 - Add explicit language-aware SDOH extraction with per-category unsupported,
   processed, skipped and failed outcomes. Declare English support for packaged
   cue tables and built-in extractors, retain legacy English dispatch, and keep
