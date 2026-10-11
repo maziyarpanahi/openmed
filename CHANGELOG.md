@@ -7,6 +7,128 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added fail-closed Python evaluation sessions composing sealed manifest and
+  holdout verification, injected execution/scoring, overlap forensics, blinded
+  review and budgeted feedback, with content-free durable checkpoints and
+  at-most-once feedback claims (#3777).
+
+- Added action-class approval quorum policies over live consumed authorizations,
+  distinct-role and requester exclusions, value-free decisions, and durable local partial
+  approvals with expiry, replay protection and action-change resets (#3781).
+
+
+
+- Added bounded identifier-only agent scheduling with explicit read concurrency,
+  exclusive effects, resource admission, cooperative cancellation and conservative
+  restart checkpoints through an injected guarded dispatcher (#3672).
+
+
+- Bound five governance JSON readers before decoding and return their existing
+  typed malformed-input errors for excessive nesting, oversized input and
+  invalid JSON. Cover every public governance JSON reader with bounded property
+  tests and verify consent rejection through the MCP error envelope (#3779).
+
+- Added offline chart-abstraction scoring with synthetic gold fields, separate
+  abstention errors, fact-bound source-support counts, field-type slices and
+  deterministic value-free Wilson intervals (#3788).
+
+- Added local Journey-to-chart-abstraction evidence production with explicit
+  source-origin declarations, digest-bound review receipts, and persistent,
+  value-free coverage blockers for missing, unsupported or conflicting evidence
+  (#3778).
+
+
+- Add an offline synthetic SDOH/temporal/timeline example with explicit reference
+  time, authored event axes and controlled labels/offsets/states-only output;
+  smoke tests reject API drift, external arguments and source/date output (#3760).
+- Registered SDOH extraction scoring with independently authored synthetic gold,
+  a reproducible counts-only baseline, retained known misses and an eval-only
+  native SHAC status view that reports unavailable data without zero scores.
+- Add explicit language-aware SDOH extraction with per-category unsupported,
+  processed, skipped and failed outcomes. Declare English support for packaged
+  cue tables and built-in extractors, retain legacy English dispatch, and keep
+  audit output limited to category metadata, counts and offsets (#3797).
+- Stage NLP-derived OMOP loader rows as ordered approval-bound batches with
+  exact span lineage, vocabulary snapshot checks and rollback evidence.
+  Replacement proposals preserve prior pipeline digests and explicitly review
+  tombstones before inserts; row values remain in protected local memory.
+- Add an explicit local SQLite OMOP batch committer with row-state-bound
+  previews, mandatory injected approval/admission/custody checks, atomic
+  idempotency receipts and read-only recovery of unknown commit outcomes.
+
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
+
+- Add offline `clinical sdoh`, `clinical relations` and `clinical timeline`
+  commands over validated analyzed spans. Emit value-free review records,
+  require explicit temporal references and links, and reserve new private
+  output files without loading NER models or downloading artifacts.
+### Security
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches
+  (#3773).
+
+### Added
+
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
+- Default-disabled, authenticated REST workflow inspection, receipt submission
+  and cancellation intent over an injected custody service, with bounded
+  governance schemas and content-free responses (#3668).
+
+### Added
+
+- Offline `summarize` and `nli verify` CLI commands with bounded local inputs,
+  value-free console results, explicit baseline selection, and exclusive private
+  summary/metadata destinations (#3801).
+
+### Added
+
+- Metadata-only MCP governed workflow preflight, preview, status and human-review
+  request tools. Server-held single-use consent protects handoff creation; no
+  approval token or reviewer claim crosses MCP and no tool executes an effect
+  (#3762).
+
+### Added
+
+- OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
+  and run-evidence parsers with shared Python conformance vectors. Local custody
+  hooks record typed receipt observations and reject replay/changed actions;
+  parsed evidence never grants clinical execution authority (#3669).
+
+### Security fixes
+
+- Align Python and OpenMedKit summary leakage guards for Unicode variants,
+  unspaced scripts, short identifiers and recognized Hangul suffixes. Reuse
+  detector normalization, retain value-free counts and source digests, and add
+  shared synthetic brief/refusal parity controls (#3729).
+
+### Changed
+
+- Map reviewed brief profile fields to existing evidence-class budgets, bind
+  value-free estimates into audit records and distinguish length overflow from
+  unavailable local models. Export controlled summarizer errors and preserve
+  their typed reason codes without private exception contexts. Use script-aware
+  first-three-sentence boundaries for explicit comparison extraction; retain
+  reviewed fact-coverage selection and native unloaded-model refusal
+  (#3746, #3747, #3749, #3750).
+
+- Select explicit extractive brief sentences by unique reviewed fact coverage,
+  independent omission rules and existing length allocations. Preserve ordered
+  citations and expose insufficient-budget/resource-limit diagnostics without
+  partial output; retain the first-three-sentence comparison baseline (#3653).
+  Recomputed synthetic summary reports retain missing-adjudication failures.
+
 ### Breaking Changes
 
 - `AggregateDPRelease` now emits release schema version 2 and removes the
@@ -26,6 +148,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Registered MLX summarizers now require a provisioned, symlink-free package
+  with a trusted manifest pin before model construction. Admission verifies
+  every file, refuses undeclared members, and derives task support, context
+  limits and quantization from digest-bound metadata. Package failures expose
+  controlled reason codes; unprovisioned aliases fail closed without fallback.
+
+- Confine OpenMedKit MLX manifest paths during download, cache inspection and
+  local loading. Reject traversal and escaping symlinks with value-free errors,
+  remove stale ready markers and confined partial writes on rejection, and retain
+  root and nested tokenizer layouts (#3728).
+
 - Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
   pins and retain lockfile SARIF diagnostics after image-build failures.
 
@@ -34,6 +167,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   permission-result handling (CVE-2026-107727 and CVE-2026-107728).
 
 ### Documentation
+
+- Explain SDOH extraction, registered determinants, custom extractors and cue
+  table loading with runnable offline synthetic examples and source-value limits.
+
+- Document clinical brief trust boundaries across Python, CLI, REST, MCP and
+  OpenMedKit, with existing mitigation tests and explicit residual risks;
+  validate mitigation test links and source citations offline (#3752).
+
+- Explain local summarizer/NLI configuration, pre-load artifact admission and
+  reviewed brief context wiring with executable synthetic doubles and drift
+  checks for every public backend error and brief refusal (#3751).
 
 - Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
   examples. Group clinical navigation by area and expose four previously
@@ -44,6 +188,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shared consent, capture interruption, language and policy abstention codes with
   strict stage gates and code-specific v2 wire versions. Legacy abstention and
   provider-result records retain byte-identical v1 serialization (#3834).
+
+- Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
+  for the OMOP quality bridge, with value-free diagnostics, strict version and
+  table allowlists, and synthetic leakage and status regression fixtures (#3799).
+
+- Record purpose-ticket allow and deny decisions as value-free access events,
+  with injectable sinks, a local append-only digest chain, and aggregate counts
+  that exclude record selectors and values (#3793).
+
+- Added an opt-in, exporter-free agent OpenTelemetry bridge with validated
+  value-free phase spans, aggregate event counters and latency, omitted or
+  hashed run IDs, and synthetic in-memory privacy/determinism tests (#3792).
+
+- Added a locally signed native-measure evidence adapter with aggregate counts,
+  pinned definition, value-set and engine custody, time-boundary conversion,
+  and explicit drift-comparator parity and differences (#3789).
+
+- Add offline qualification of caller-supplied local planners against synthetic
+  grant, schema, minimum-data, review-stop and hostile-result scenarios, with
+  counts-only reports and non-compensable critical gates (#3790).
+
+- Added local revisioned agent-handoff storage with bounded review leases,
+  atomic competing-decision refusals, exact action/evidence commitments and
+  append-only opaque decision receipts preserved across restart (#3666).
+
+- Added fail-closed purpose-ticket authorization for complete typed tool-result
+  batches, with independent patient/encounter/namespace/snapshot scope checks,
+  strict nested field projections, original evidence identity and content-free
+  quarantine diagnostics. Privacy scanning remains a separate boundary (#3671).
+
+- Added local, sealed blinded-review result import for summary evaluation, with
+  exact artifact/rubric binding, citation and reviewer-agreement metrics, explicit
+  incomplete/disputed states and synthetic-only release refusal (#3655).
+
+- Added explicit, confirmation-bound terminal recovery journal retirement, sealed
+  digest/count records, non-resumable retired dispositions, and restart-safe
+  checkpoint cleanup with summary anchor verification (#3791).
+
+- Added Doccano relation-extraction JSONL import and export for the versioned
+  annotation envelope, with de-identification digest binding, declared loss for
+  unsupported fields, review states and embeddings, controlled label and
+  relation normalization, and `--format doccano` CLI support (#3807).
+
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
+
+- Add versioned synthetic multilingual full-pipeline clinical-brief regressions
+  for Latin, RTL, Indic and code-switched evidence, public surface/native packet
+  parity, protected-span offset round trips and governed conflict refusals.
+  Reports separate contract parity from unsupported language capabilities and
+  unevaluated model quality. Accept unset optional replacement aliases without
+  weakening populated-alias consistency checks (#3659).
+
+- Added passive preliminary FHIR R4 clinical-brief documents in Python and
+  OpenMedKit, preserving evidence commitments, citation order, digests and
+  human-review limitations with closed-subset round trips, explicit conversion
+  losses and final narrative/metadata privacy gates (#3658).
+- Fixed-order clinical brief composition over explicitly reviewed synthetic
+  evidence, with local generation, calibrated NLI integration, exact citations,
+  rendered-packet privacy checks and value-free review/provenance output.
+
+- Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
+  empty interruption outcomes, CLI/service parity, and native late-result guards.
+
+- Add opt-in v1 explicit evidence bindings for paraphrased clinical brief claims,
+  bounded local generation, traceable offsets and unchanged verification/privacy
+  gates, with aligned OpenMedKit validation and synthetic offline tests (#3654).
 
 - Add offline qualification of caller-supplied clinical NLI artifacts,
   separate development/held-out evaluation, digest-bound receipts and a
@@ -106,6 +320,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Added an offline Draft 2020-12 catalog for approval tokens and receipts,
+  reviewer handoff packets, capability grant manifests and workflow recovery
+  checkpoints and decisions, with local references, bounded fields, version,
+  enum and digest drift tests (#3783).
+
+- Add the offline agent governance self-check and `openmed agent self-check`
+  command. Independently verify the actual schema catalog, bundled golden
+  summaries, closed fields, outcomes, correlations, timing and commitments,
+  returning deterministic value-free reports with negative controls.
+- Include the existing MIT-licensed JSON Schema validator in the base install
+  so the governance self-check needs no development extra. Keep the license
+  inventory, SBOM closure and standalone manifest aligned with that dependency.
+- Bundle seven metadata-only agent run-summary golden vectors with strict,
+  offline validation of canonical JSON, Markdown digests and commitments (#3044).
 - Export deterministic, import-light Draft 2020-12 JSON Schemas for public
   agent outcome, correlation, timing and run-summary records.
 - Added the offline `openmed models slm-verify` command, which verifies a local
@@ -120,6 +348,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Screen FHIR narrative markup/entities and bounded UTF-8 attachments before
+  agent dispatch, quarantine unsupported attachments, and replace FHIR key-name
+  exemptions with coded-element paths and content-free offset findings (#3769).
 - Normalize SMART v1 read/write/all permissions, wildcard resources, granular
   queries and non-clinical identity/launch/session scopes in offline scope
   audits. Compare constraints conservatively and report malformed input without
@@ -481,8 +712,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
+- Route Thai and Hebrew to their native packs and fail closed on unsupported
+  letter-bearing scripts unless an explicit fallback is configured (#3738).
+- Share offset-safe decimal-digit and bidi-control normalization across both
+  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
+  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
+- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
+  surrogate order from the shared locale table (#3740, #3743).
+- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
+  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
+  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
 - Preserve tokenizer-provided subword offsets from any standard `Mapping`
@@ -505,6 +749,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include ranked grounding alternatives in MedMentions top-k accuracy without
   crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).
