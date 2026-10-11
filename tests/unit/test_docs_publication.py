@@ -19,6 +19,109 @@ DOCS = ROOT / "docs"
 MKDOCS = ROOT / "mkdocs.yml"
 PUBLICATION = DOCS / "brand" / "system" / "publication.yml"
 LOCALES = ("hi", "zh")
+BRIEF_THREAT_MODEL = DOCS / "security" / "clinical-brief-threat-model.md"
+REPOSITORY_LINK = re.compile(
+    r"https://github\.com/maziyarpanahi/openmed/blob/master/"
+    r"(?P<path>[^\s)#]+)(?:#L(?P<start>\d+)(?:-L(?P<end>\d+))?)?"
+)
+
+
+def _brief_mitigation_rows(markdown: str) -> list[str]:
+    heading = "## Attack surface, mitigations and attacker stories\n"
+    assert heading in markdown, "clinical brief mitigation table is missing"
+    section = markdown.split(heading, 1)[1].split("\n## ", 1)[0]
+    rows = [line for line in section.splitlines() if re.match(r"^\| B\d+ \|", line)]
+    assert rows, "clinical brief mitigation table is missing"
+    return rows
+
+
+def _assert_brief_mitigation_test_links(markdown: str, *, root: Path) -> None:
+    for row in _brief_mitigation_rows(markdown):
+        paths = [match["path"] for match in REPOSITORY_LINK.finditer(row)]
+        tests = [
+            path
+            for path in paths
+            if (path.startswith("tests/") and path.endswith(".py"))
+            or (path.startswith("swift/OpenMedKit/Tests/") and path.endswith(".swift"))
+        ]
+        assert tests, "clinical brief mitigation row has no test evidence"
+        for path in tests:
+            relative = Path(path)
+            assert ".." not in relative.parts and not relative.is_absolute()
+            assert (root / relative).is_file(), f"missing mitigation test: {path}"
+
+
+def test_brief_threat_model_mitigations_link_to_existing_tests() -> None:
+    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+    _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+@pytest.mark.parametrize("surface", ["Python", "CLI", "REST", "MCP", "OpenMedKit"])
+def test_brief_threat_model_declares_each_surface_boundary(surface: str) -> None:
+    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+    boundaries = markdown.split("### Surface boundaries\n", 1)[-1].split("\n### ", 1)[0]
+    assert re.search(rf"(?m)^\| {surface} \|", boundaries)
+
+
+def test_brief_threat_model_repository_citations_resolve() -> None:
+    markdown = BRIEF_THREAT_MODEL.read_text(encoding="utf-8")
+    links = list(REPOSITORY_LINK.finditer(markdown))
+    assert links
+    for match in links:
+        path = ROOT / match["path"]
+        assert path.is_file(), f"missing threat-model source: {match['path']}"
+        if match["start"] is not None:
+            start = int(match["start"])
+            end = int(match["end"] or match["start"])
+            assert (
+                1 <= start <= end <= len(path.read_text(encoding="utf-8").splitlines())
+            )
+
+
+def test_brief_mitigation_check_rejects_missing_test_path() -> None:
+    markdown = (
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | [missing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief_missing.py) |\n"
+    )
+    with pytest.raises(AssertionError, match="missing mitigation test"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_requires_evidence_in_each_row() -> None:
+    markdown = (
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | [existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py) |\n"
+        "| B2 | No test evidence. |\n"
+    )
+    with pytest.raises(AssertionError, match="row has no test evidence"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_ignores_evidence_outside_the_table() -> None:
+    markdown = (
+        "[existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py)\n"
+        "## Attack surface, mitigations and attacker stories\n"
+        "| B1 | No test evidence. |\n"
+    )
+    with pytest.raises(AssertionError, match="row has no test evidence"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
+
+
+def test_brief_mitigation_check_rejects_missing_table() -> None:
+    with pytest.raises(AssertionError, match="table is missing"):
+        _assert_brief_mitigation_test_links("No mitigation table.\n", root=ROOT)
+
+
+def test_brief_mitigation_check_rejects_rows_without_the_section() -> None:
+    markdown = (
+        "| B1 | [existing test](https://github.com/maziyarpanahi/openmed/"
+        "blob/master/tests/unit/clinical/test_brief.py) |\n"
+    )
+    with pytest.raises(AssertionError, match="table is missing"):
+        _assert_brief_mitigation_test_links(markdown, root=ROOT)
 
 
 def _load_docs_hooks() -> Any:
