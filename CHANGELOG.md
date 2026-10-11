@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
 - Added a bounded, offline pure-Python Circe cohort-expression mapper with
   digest-bound exchange custody, explicit semantic loss reports, synthetic
   membership round trips, and no SQL or bundled vocabulary (#3804).
