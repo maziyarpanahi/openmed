@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add an explicit local SQLite OMOP batch committer with row-state-bound
+  previews, mandatory injected approval/admission/custody checks, atomic
+  idempotency receipts and read-only recovery of unknown commit outcomes.
+
+- Export aligned SDOH evidence as passive R4 Observations and offset-linked
+  Provenance, with caller-supplied per-record terminology, pinned HL7 categories,
+  preliminary review states, explicit losses and preserved sensitive-use labels.
+### Security
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches
+  (#3773).
+
+### Added
+
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
+- Default-disabled, authenticated REST workflow inspection, receipt submission
+  and cancellation intent over an injected custody service, with bounded
+  governance schemas and content-free responses (#3668).
+
+### Added
+
+- Metadata-only MCP governed workflow preflight, preview, status and human-review
+  request tools. Server-held single-use consent protects handoff creation; no
+  approval token or reviewer claim crosses MCP and no tool executes an effect
+  (#3762).
+
+### Added
+
+- OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
+  and run-evidence parsers with shared Python conformance vectors. Local custody
+  hooks record typed receipt observations and reject replay/changed actions;
+  parsed evidence never grants clinical execution authority (#3669).
+
 ### Security fixes
 
 - Align Python and OpenMedKit summary leakage guards for Unicode variants,
@@ -83,9 +126,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add an explicit local SQLite OMOP batch committer with row-state-bound
-  previews, mandatory injected approval/admission/custody checks, atomic
-  idempotency receipts and read-only recovery of unknown commit outcomes.
+- Add governed workflow CLI plan/preview, inspection, human-review request,
+  cancellation and explicit resume over caller-injected local services. Bind
+  resume to exact action/state/receipt custody, keep inputs protected and outputs
+  value-free, and distinguish denial, review, cancellation, conflict and missing
+  adapters with stable exit codes (#3667).
 
 - Add versioned synthetic multilingual full-pipeline clinical-brief regressions
   for Latin, RTL, Indic and code-switched evidence, public surface/native packet
@@ -545,8 +590,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
+- Route Thai and Hebrew to their native packs and fail closed on unsupported
+  letter-bearing scripts unless an explicit fallback is configured (#3738).
+- Share offset-safe decimal-digit and bidi-control normalization across both
+  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
+  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
+- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
+  surrogate order from the shared locale table (#3740, #3743).
+- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
+  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
+  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
 - Preserve tokenizer-provided subword offsets from any standard `Mapping`
@@ -569,6 +627,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include ranked grounding alternatives in MedMentions top-k accuracy without
   crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).

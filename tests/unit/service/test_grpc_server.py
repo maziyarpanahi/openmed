@@ -84,6 +84,31 @@ def _runtime(monkeypatch):
     return service_runtime.ServiceRuntime.from_env()
 
 
+def test_grpc_denies_request_selected_paths_before_loading(monkeypatch):
+    import pytest
+
+    from openmed.service.grpc_server import OpenMedGrpcServicer
+
+    runtime = _runtime(monkeypatch)
+
+    class Aborted(Exception):
+        pass
+
+    class Context:
+        def abort(self, code, details):
+            assert code == grpc.StatusCode.INVALID_ARGUMENT
+            assert details == "model_not_served"
+            raise Aborted()
+
+    for model in ("/etc", "~/.ssh", "../synthetic", "unknown/model"):
+        with pytest.raises(Aborted):
+            OpenMedGrpcServicer(runtime).Analyze(
+                openmed_pb2.AnalyzeRequest(text="synthetic", model_name=model),
+                Context(),
+            )
+    assert runtime._loader is None
+
+
 def _grpc_stub(runtime):
     server = create_grpc_server(runtime=runtime, max_workers=2)
     port = server.add_insecure_port("127.0.0.1:0")

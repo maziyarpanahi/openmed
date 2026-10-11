@@ -3,7 +3,9 @@
 import json
 import math
 import os
-from dataclasses import dataclass
+import tempfile
+import warnings
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Union
@@ -294,7 +296,7 @@ class OpenMedConfig:
     device: Optional[str] = None
 
     # Token for private models (if needed)
-    hf_token: Optional[str] = None
+    hf_token: Optional[str] = field(default=None, repr=False)
 
     # Logging level
     log_level: str = "INFO"
@@ -595,12 +597,11 @@ class OpenMedConfig:
         return cls.from_dict(profile_data)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert config to dictionary."""
+        """Convert non-secret settings to a serializable dictionary."""
         return {
             "default_org": self.default_org,
             "cache_dir": self.cache_dir,
             "device": self.device,
-            "hf_token": self.hf_token,
             "log_level": self.log_level,
             "timeout": self.timeout,
             "use_medical_tokenizer": self.use_medical_tokenizer,
@@ -646,7 +647,7 @@ class OpenMedConfig:
             ConfigValidationError: If one or more fields violate the schema.
         """
 
-        _validate_config_mapping(self.to_dict())
+        _validate_config_mapping({**self.to_dict(), "hf_token": self.hf_token})
 
     def with_profile(self, profile_name: str) -> "OpenMedConfig":
         """Return a new config with profile settings applied.
@@ -659,6 +660,7 @@ class OpenMedConfig:
         """
         # Start with current values
         current = self.to_dict()
+        current["hf_token"] = self.hf_token
 
         # Get profile settings
         if profile_name in PROFILE_PRESETS:
@@ -784,6 +786,12 @@ def _load_toml(path: Path) -> Dict[str, Any]:
             if not key:
                 continue
             data[key] = _parse_value(value)
+    if data.get("hf_token"):
+        warnings.warn(
+            "persisted_credential: remove hf_token from configuration and use HF_TOKEN",
+            UserWarning,
+            stacklevel=2,
+        )
     return data
 
 
@@ -807,6 +815,7 @@ def load_config_from_file(path: Optional[Union[str, Path]] = None) -> OpenMedCon
     file_data = _load_toml(config_path)
     _validate_config_mapping(file_data)
     merged = get_config().to_dict()
+    merged["hf_token"] = get_config().hf_token
 
     merged.update(file_data)
 
@@ -821,8 +830,21 @@ def save_config_to_file(
     config_path = resolve_config_path(path)
     ensure_config_directory(config_path)
     toml_content = _dump_toml(config.to_dict())
-    config_path.write_text(toml_content, encoding="utf-8")
+    _write_private_config(config_path, toml_content)
     return config_path
+
+
+def _write_private_config(path: Path, content: str) -> None:
+    """Atomically replace a configuration with a private, same-directory file."""
+    descriptor, temporary = tempfile.mkstemp(prefix=".openmed-config-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -867,6 +889,7 @@ def get_profile(profile_name: str) -> Dict[str, Any]:
     if profile_path.exists():
         profile_data = _load_toml(profile_path)
         _validate_config_mapping(profile_data, profile=True)
+        profile_data.pop("hf_token", None)
         return profile_data
 
     raise ValueError(f"Unknown profile: {profile_name}")
@@ -892,9 +915,11 @@ def save_profile(profile_name: str, settings: Dict[str, Any]) -> Path:
         "",
     ]
     for key, value in settings.items():
+        if key == "hf_token":
+            continue
         lines.append(f"{key} = {_format_value(value)}")
 
-    profile_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    _write_private_config(profile_path, "\n".join(lines) + "\n")
     return profile_path
 
 

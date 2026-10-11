@@ -5,6 +5,7 @@
 
 | Case | Protocol behavior | Boundary | Declared outcome |
 | --- | --- | --- | --- |
+| negative-governance-review | reject handoff without human-channel consent | state_change_policy | unapproved_state_change |
 | negative-insufficient-tool-scope | reject a tool call when its required scope is absent | tool_authorization | insufficient_tool_scope |
 | negative-invalid-pkce | reject an authorization code exchange with mismatched PKCE references | authorization_code_exchange | invalid_pkce |
 | negative-missing-resource-indicator | reject authorization without a protected resource indicator | authorization_request | missing_resource_indicator |
@@ -14,4 +15,8 @@
 | negative-unapproved-state-change | reject a state-changing tool call without explicit approval | state_change_policy | unapproved_state_change |
 | negative-wrong-audience | reject a token issued for another resource | token_validation | wrong_audience |
 | positive-approved-state-change | explicitly approved state-changing tool authorization | state_change_policy | pass |
+| positive-governance-preflight | read-only governed workflow preflight without inline authority | tool_authorization | pass |
+| positive-governance-preview | read-only governed workflow preview without inline authority | tool_authorization | pass |
+| positive-governance-review | human handoff with server-held single-use consent; no action approval | state_change_policy | pass |
+| positive-governance-status | read-only governed workflow status without inline authority | tool_authorization | pass |
 | positive-read-tool | valid read-only tool authorization | tool_authorization | pass |
