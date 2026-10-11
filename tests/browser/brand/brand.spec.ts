@@ -1181,6 +1181,7 @@ for (const width of [390, 1440]) {
       ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
       ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
       ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
+      ["Migrate from 3.0 to 3.1", "/docs/migration/3.0-to-3.1/"],
     ];
     for (const [name, route] of routes) {
       await page

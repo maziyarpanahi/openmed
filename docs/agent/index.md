@@ -169,6 +169,10 @@ they do not provide certification or autonomous clinical authority.
 - [Agent boundary threat model](../security/agent-threat-model.md): exercise a caller-composed policy boundary against synthetic adversarial attempts.
 - [Agent deployment assurance](../compliance/v3.1-agent-assurance.md): bind revision, deployment, candidate and gate-report evidence in a bounded adoption pack.
 
+## Migration
+
+- [Migrate from 3.0 to 3.1](../migration/3.0-to-3.1.md): map legacy callers to explicit governed adapters, retained compatibility and human-review boundaries.
+
 ## Maintaining this section
 
 Add a new governance guide to its relevant navigation subsection when the guide
