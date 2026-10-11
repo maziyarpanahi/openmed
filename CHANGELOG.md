@@ -164,6 +164,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added Doccano relation-extraction JSONL import and export for the versioned
+  annotation envelope, with de-identification digest binding, declared loss for
+  unsupported fields, review states and embeddings, controlled label and
+  relation normalization, and `--format doccano` CLI support (#3807).
 
 - Add governed workflow CLI plan/preview, inspection, human-review request,
   cancellation and explicit resume over caller-injected local services. Bind
