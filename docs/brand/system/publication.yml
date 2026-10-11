@@ -250,6 +250,7 @@ classification:
     - clinical/nli-cascade.md
     - clinical/nli-abstention.md
     - models/clinical-nli.md
+    - clinical/sdoh-extraction.md
     - clinical/sdoh-temporal-qualifiers.md
     - clinical/sdoh-section-scope.md
     - clinical/sdoh-evidence-deduplication.md
@@ -262,6 +263,7 @@ classification:
     - clinical/sdoh-evidence.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
+    - evaluation/sdoh-extraction.md
     - clinical/medication-change-relations.md
     - clinical/laboratory-result-relations.md
     - clinical/procedure-indication-relations.md

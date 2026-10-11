@@ -180,6 +180,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
@@ -192,6 +193,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
