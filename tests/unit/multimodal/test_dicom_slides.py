@@ -63,8 +63,8 @@ def test_retention_requires_explicit_policy_review_and_verified_current_pixels(
         1,
         (),
         DicomResidualTextReport(1),
-        True,
-        hashlib.sha256(ds.PixelData).hexdigest(),
+        residual_verified=True,
+        pixel_sha256=hashlib.sha256(ds.PixelData).hexdigest(),
     )
     policy = DicomHeaderDeidPolicy(
         keep_slide_associated_images=True, reviewer_confirmed=True
@@ -107,8 +107,9 @@ def test_missing_and_unknown_wsi_image_type_refused():
         _slide_instance_role(ds)
 
 
+@pytest.mark.parametrize("combined", [False, True])
 def test_retained_label_runs_actual_local_redaction_and_header_gate(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, combined
 ):
     # Fully injected offline detector, no models or transports are loaded.
     import openmed.multimodal.dicom as module
@@ -138,10 +139,14 @@ def test_retained_label_runs_actual_local_redaction_and_header_gate(
         "ocr_engine": object(),
         "model_name": "offline-stub",
     }
-    pixels = redact_dicom_pixels(source, policy=policy)
-    assert pixels.residual_verified and pixels.pixel_sha256
+    if combined:
+        result = module._dicom_handler(source, policy=policy)
+        assert result.metadata["dicom_pixel_redaction"]["residual_verified"]
+    else:
+        pixels = redact_dicom_pixels(source, policy=policy)
+        assert pixels.residual_verified and pixels.pixel_sha256
+        deidentify_dicom_headers(output, policy=policy, slide_pixel_redaction=pixels)
     assert calls == [0]
-    deidentify_dicom_headers(output, policy=policy, slide_pixel_redaction=pixels)
     assert pydicom.dcmread(output).PatientName == ""
     assert not pydicom.dcmread(output).pixel_array.any()
     # Same policy cannot bypass residual verification or explicit review.

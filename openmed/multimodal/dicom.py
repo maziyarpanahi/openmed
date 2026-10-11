@@ -57,8 +57,6 @@ class DicomHeaderDeidPolicy:
     date_shift_secret: str | bytes | None = None
     uid_salt: str | bytes = _DEFAULT_UID_SALT
     keep_year: bool = False
-    keep_slide_associated_images: bool = False
-    reviewer_confirmed: bool = False
     fail_on_unclean_pixels: bool = False
     redact_encapsulated_documents: bool = False
     document_policy: Any = None
@@ -70,6 +68,8 @@ class DicomHeaderDeidPolicy:
     retain_patient_characteristics: bool = False
     retain_uids: bool = False
     detector: Any = None
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,12 +162,12 @@ class DicomPixelRedactionPolicy:
     verify_residual: bool = True
     fail_on_residual: bool = True
     custom_recognizer: Any = None
-    keep_slide_associated_images: bool = False
-    reviewer_confirmed: bool = False
     overlay_mode: str = "remove"
     redact_encapsulated_documents: bool = False
     document_policy: Any = None
     document_models: Any = None
+    keep_slide_associated_images: bool = False
+    reviewer_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -237,11 +237,11 @@ class DicomPixelRedactionResult:
     frames_processed: int
     findings: tuple[DicomPixelFinding, ...]
     residual_report: DicomResidualTextReport
-    residual_verified: bool = False
-    pixel_sha256: str | None = None
     carrier_actions: tuple[DicomHeaderAction, ...] = ()
     pixel_status: DicomPixelStatus = DicomPixelStatus.NOT_CLEANED
     _processed_document_digests: tuple[str, ...] = field(default=(), repr=False)
+    residual_verified: bool = False
+    pixel_sha256: str | None = None
 
     @property
     def redaction_count(self) -> int:
