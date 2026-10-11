@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added offline chart-abstraction scoring with synthetic gold fields, separate
+  abstention errors, fact-bound source-support counts, field-type slices and
+  deterministic value-free Wilson intervals (#3788).
+
 - Added local Journey-to-chart-abstraction evidence production with explicit
   source-origin declarations, digest-bound review receipts, and persistent,
   value-free coverage blockers for missing, unsupported or conflicting evidence
@@ -159,6 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
+
 
 - Add governed workflow CLI plan/preview, inspection, human-review request,
   cancellation and explicit resume over caller-injected local services. Bind
