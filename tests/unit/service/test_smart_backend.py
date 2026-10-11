@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -102,6 +103,7 @@ class _FakeBulkServer:
         self.max_file_inflight = 0
         self.fail_once_after: dict[int, int] = {}
         self._status_polls = 0
+        self.token_reply: httpx.Response | None = None
         self.transport = httpx.MockTransport(self._handle)
 
     async def _handle(self, request: httpx.Request) -> httpx.Response:
@@ -109,7 +111,17 @@ class _FakeBulkServer:
         if str(request.url) == self.token_url and request.method == "POST":
             body = request.content.decode("utf-8")
             self.token_forms.append(parse_qs(body))
-            return httpx.Response(200, json={"access_token": "bearer-token-secret"})
+            if self.token_reply is not None:
+                return self.token_reply
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "bearer-token-secret",
+                    "token_type": "bearer",
+                    "expires_in": 300,
+                    "scope": self.token_forms[-1]["scope"][0],
+                },
+            )
 
         if request.url.path == "/$export":
             return httpx.Response(
@@ -280,6 +292,245 @@ def test_backpressure_caps_concurrent_file_downloads(tmp_path: Path) -> None:
     assert summary.resources_deidentified == 40
     assert summary.max_inflight_downloads_observed <= 3
     assert server.max_file_inflight <= 3
+
+
+@pytest.mark.parametrize("field", ["access_token", "token_type", "expires_in", "scope"])
+def test_rejects_missing_required_token_fields_before_export(tmp_path, field):
+    server = _FakeBulkServer(resource_counts=[1])
+    payload = {
+        "access_token": "private-access",
+        "token_type": "Bearer",
+        "expires_in": 300,
+        "scope": "system/*.read",
+    }
+    del payload[field]
+    server.token_reply = httpx.Response(200, json=payload)
+    with pytest.raises(SMARTBackendError, match="token response invalid"):
+        _run_ingestion(_config(tmp_path, server), server)
+    assert server.requests == [server.token_url]
+
+
+@pytest.mark.parametrize("scope", ["system/Patient.rs", "system/*.r"])
+def test_narrowed_token_refuses_bulk_export(tmp_path, scope):
+    server = _FakeBulkServer(resource_counts=[1])
+    server.token_reply = httpx.Response(
+        200,
+        json={
+            "access_token": "private-access",
+            "token_type": "Bearer",
+            "expires_in": 300,
+            "scope": scope,
+        },
+    )
+    with pytest.raises(
+        SMARTBackendError, match="token scope narrowed and insufficient"
+    ):
+        _run_ingestion(_config(tmp_path, server), server)
+    assert server.requests == [server.token_url]
+
+
+def test_equivalent_v2_grant_allows_legacy_bulk_request(tmp_path):
+    server = _FakeBulkServer(resource_counts=[1])
+    server.token_reply = httpx.Response(
+        200,
+        json={
+            "access_token": "private-access",
+            "token_type": "bEaReR",
+            "expires_in": 300,
+            "scope": "system/*.rs",
+        },
+    )
+    assert _run_ingestion(_config(tmp_path, server), server).resources_deidentified == 1
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"token_type": "MAC"},
+        {"expires_in": 301},
+        {"expires_in": True},
+        {"expires_in": 0},
+        {"scope": "system/*.*"},
+        {"access_token": "private\r\ncanary"},
+        {
+            "error": "invalid_grant",
+            "error_description": "private-endpoint-client-canary",
+        },
+    ],
+)
+def test_bulk_invalid_response_leaves_no_token_authority(tmp_path, changes):
+    server = _FakeBulkServer(resource_counts=[1])
+    payload = {
+        "access_token": "private-access",
+        "token_type": "Bearer",
+        "expires_in": 300,
+        "scope": "system/*.read",
+    }
+    payload.update(changes)
+    server.token_reply = httpx.Response(200, json=payload)
+    ingestor = SMARTBackendBulkIngestor(
+        _config(tmp_path, server),
+        transport=server.transport,
+        client_assertion_builder=lambda _: "private-assertion",
+        clock=lambda: 100,
+    )
+    with pytest.raises(SMARTBackendError, match="token response invalid") as exc:
+        asyncio.run(ingestor.run())
+    assert "private" not in str(exc.value) and ingestor._token_expires_at == 0
+    assert server.requests == [server.token_url]
+
+
+def test_private_assertion_builder_error_is_value_free(tmp_path):
+    server = _FakeBulkServer(resource_counts=[1])
+
+    def bad_builder(_):
+        raise SMARTBackendError("private-assertion-client-endpoint-canary")
+
+    ingestor = SMARTBackendBulkIngestor(
+        _config(tmp_path, server),
+        transport=server.transport,
+        client_assertion_builder=bad_builder,
+    )
+    with pytest.raises(SMARTBackendError, match="token endpoint unavailable") as exc:
+        asyncio.run(ingestor.run())
+    assert "private" not in str(exc.value) and not server.requests
+    assert exc.value.__context__ is None and exc.value.__cause__ is None
+
+
+def test_bounded_token_stream_stops_reading_before_export(tmp_path):
+    class TokenStream(httpx.AsyncByteStream):
+        def __init__(self):
+            self.reads = 0
+            self.closed = False
+
+        async def __aiter__(self):
+            for _ in range(100):
+                self.reads += 1
+                yield b"x" * 8192
+
+        async def aclose(self):
+            self.closed = True
+
+    server = _FakeBulkServer(resource_counts=[1])
+    stream = TokenStream()
+    server.token_reply = httpx.Response(200, stream=stream)
+    with pytest.raises(SMARTBackendError, match="token response invalid") as caught:
+        _run_ingestion(_config(tmp_path, server), server)
+    assert stream.reads <= 9 and stream.closed
+    assert server.requests == [server.token_url]
+    assert not server.file_gets
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+
+
+def test_expired_token_never_dispatches_another_poll(tmp_path):
+    server = _FakeBulkServer(resource_counts=[1])
+    now = [100]
+
+    async def sleep(_):
+        now[0] += 300
+
+    ingestor = SMARTBackendBulkIngestor(
+        _config(tmp_path, server),
+        transport=server.transport,
+        client_assertion_builder=lambda _: "private-assertion",
+        clock=lambda: now[0],
+        sleep=sleep,
+        deidentifier=_fake_deidentify,
+    )
+    with pytest.raises(SMARTBackendError, match="token expired"):
+        asyncio.run(ingestor.run())
+    assert server._status_polls == 1
+    assert not server.file_gets
+    assert len(server.token_forms) == 1
+
+
+def test_expired_token_never_starts_downloads(tmp_path):
+    server = _FakeBulkServer(resource_counts=[1])
+    now = [100]
+    manifest = server._manifest
+
+    def late_manifest():
+        now[0] = 400
+        return manifest()
+
+    server._manifest = late_manifest
+    ingestor = SMARTBackendBulkIngestor(
+        _config(tmp_path, server),
+        transport=server.transport,
+        client_assertion_builder=lambda _: "private-assertion",
+        clock=lambda: now[0],
+        sleep=_no_sleep,
+        deidentifier=_fake_deidentify,
+    )
+    with pytest.raises(SMARTBackendError, match="token expired"):
+        asyncio.run(ingestor.run())
+    assert not server.file_gets and ingestor._active_downloads == 0
+
+
+def test_token_exchange_does_not_emit_dependency_logs(tmp_path, caplog):
+    server = _FakeBulkServer(resource_counts=[1])
+    caplog.set_level(logging.DEBUG)
+    original = server._handle
+
+    async def transport(request):
+        if str(request.url) == server.token_url:
+            logging.getLogger("httpcore.connection").debug(
+                "private %s", server.token_url
+            )
+        return await original(request)
+
+    ingestor = SMARTBackendBulkIngestor(
+        _config(tmp_path, server),
+        transport=httpx.MockTransport(transport),
+        client_assertion_builder=lambda _: "private-assertion",
+        clock=lambda: 100,
+        sleep=_no_sleep,
+        deidentifier=_fake_deidentify,
+    )
+    asyncio.run(ingestor.run())
+    assert server.token_url not in caplog.text
+    assert (
+        "bearer-token-secret" not in caplog.text
+        and "private-assertion" not in caplog.text
+    )
+    assert (
+        server.status_url in caplog.text
+    )  # Resource logging outside token context survives.
+
+
+def test_token_log_guard_is_task_local(tmp_path, caplog):
+    server = _FakeBulkServer(resource_counts=[1])
+    caplog.set_level(logging.INFO)
+    original = server._handle
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def transport(request):
+        if str(request.url) == server.token_url:
+            entered.set()
+            await finish.wait()
+        return await original(request)
+
+    async def check():
+        ingestor = SMARTBackendBulkIngestor(
+            _config(tmp_path, server),
+            transport=httpx.MockTransport(transport),
+            client_assertion_builder=lambda _: "private-assertion",
+            clock=lambda: 100,
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(transport)
+        ) as client:
+            task = asyncio.create_task(ingestor._fetch_access_token(client))
+            await entered.wait()
+            logging.getLogger("httpx").info("unrelated-request-visible")
+            finish.set()
+            await task
+
+    asyncio.run(check())
+    assert (
+        "unrelated-request-visible" in caplog.text
+        and server.token_url not in caplog.text
+    )
 
 
 def test_rejects_manifest_file_urls_outside_configured_origins(
