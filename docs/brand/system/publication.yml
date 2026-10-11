@@ -438,6 +438,7 @@ classification:
     - evaluation/nli-negation-challenge.md
     - evaluation/governed-agent-fixtures.md
     - evaluation/agent-run-summary-fixtures.md
+    - evaluation/planner-qualification.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
