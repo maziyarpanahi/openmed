@@ -1,6 +1,46 @@
 {
   "paths": [
     {
+      "module": "openmed.agent.admission",
+      "function": "SQLiteAdmissionStore._append",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.admission",
+      "function": "SQLiteAdmissionStore._connection",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.admission",
+      "function": "SQLiteAdmissionStore.initialize",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.approvals.nonce_store",
+      "function": "SQLiteApprovalNonceStore.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.approvals.nonce_store",
+      "function": "SQLiteApprovalNonceStore._check_schema",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.approvals.nonce_store",
+      "function": "SQLiteApprovalNonceStore._connect",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.agent.approvals.nonce_store",
+      "function": "SQLiteApprovalNonceStore.claim",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.cli.governed_workflows",
+      "function": "run_governed_workflow_cli",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "ConsentCache.set",
       "module": "openmed.clinical.consent_cache"
@@ -114,6 +154,41 @@
       "classification": "operational",
       "function": "CohortDefinitionServiceBridge.import_definition",
       "module": "openmed.interop.bridges.cohort_definition"
+    },
+    {
+      "module": "openmed.interop.fhir.server_validation",
+      "function": "preflight_server_validation",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.subscription_checkpoint",
+      "function": "SubscriptionCheckpoint.__init__",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.subscription_checkpoint",
+      "function": "SubscriptionCheckpoint._record",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.subscription_checkpoint",
+      "function": "SubscriptionCheckpoint.claim",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.subscription_checkpoint",
+      "function": "SubscriptionCheckpoint.commit",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.subscription_checkpoint",
+      "function": "SubscriptionCheckpoint.discard_quarantine",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.interop.fhir.transactions",
+      "function": "assemble_transaction",
+      "classification": "operational"
     },
     {
       "classification": "legacy_explicit_opt_in",
@@ -286,6 +361,21 @@
       "module": "openmed.multimodal.ocr_tesseract_stream"
     },
     {
+      "module": "openmed.onnx.streaming_loader",
+      "function": "StreamingWeightLoader.load",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.onnx.tensorrt_session",
+      "function": "TensorRTTokenClassificationSession._run_legacy_bindings",
+      "classification": "operational"
+    },
+    {
+      "module": "openmed.onnx.tensorrt_session",
+      "function": "TensorRTTokenClassificationSession._run_named_io",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "BatchProcessor._process_items",
       "module": "openmed.processing.batch"
@@ -334,6 +424,11 @@
       "classification": "operational",
       "function": "OpenMedClient._post",
       "module": "openmed.service.client"
+    },
+    {
+      "module": "openmed.service.client",
+      "function": "OpenMedClient._post_lines",
+      "classification": "operational"
     },
     {
       "classification": "operational",
@@ -389,6 +484,11 @@
       "classification": "operational",
       "function": "deliver_webhook",
       "module": "openmed.service.webhooks"
+    },
+    {
+      "module": "openmed.service.workflow_client",
+      "function": "WorkflowClientMixin._workflow_send",
+      "classification": "operational"
     },
     {
       "classification": "operational",

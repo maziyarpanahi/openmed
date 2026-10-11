@@ -146,13 +146,13 @@ def _is_effect(node: ast.Call) -> bool:
         "write_omop_sqlite",
     }:
         return True  # Conservative: local names may also denote operational effects.
-    if name in {"request", "_request", "execute", "_execute"}:
+    if name in {"request", "_request", "stream", "execute", "_execute"}:
         method = _prefix(first)
         if method is None:
             return True  # Dynamic methods/SQL require classification and review.
         # Only literal read prefixes are excluded. CTEs, commented SQL and
         # other unfamiliar prefixes may still execute a mutation.
-        if name in {"request", "_request"}:
+        if name in {"request", "_request", "stream"}:
             return method not in {"GET", "HEAD", "OPTIONS"}
         return method != "SELECT"
     if name in {"Request", "urlopen", "send"}:
@@ -181,9 +181,27 @@ class _Effects(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         self.stack.append(node.name)
-        # Route decorators declare inbound handlers, rather than HTTP writes.
-        # Bodies, default expressions and annotations are still scanned.
+        # Known inbound route registration calls are declarations. Their
+        # arguments and nested expressions can still perform outbound effects.
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and isinstance(decorator.func.value, ast.Name)
+                and decorator.func.value.id
+                in {"app", "application", "fastapi_app", "router"}
+                and decorator.func.attr
+                in {"get", "head", "options", "post", "put", "patch", "delete"}
+            ):
+                for argument in decorator.args:
+                    self.visit(argument)
+                for keyword in decorator.keywords:
+                    self.visit(keyword.value)
+            else:
+                self.visit(decorator)
         self.visit(node.args)
+        if node.returns is not None:
+            self.visit(node.returns)
         for statement in node.body:
             self.visit(statement)
         self.stack.pop()
@@ -257,7 +275,7 @@ def validate_inventory(
 
 
 def _imports(module: str, source: ast.Module, modules: set[str]) -> set[str]:
-    result = set()
+    result: set[str] = set()
     # Resolve relatives against the longest existing package parent. Package
     # modules have children, while file modules use their containing package.
     is_package = getattr(
@@ -279,9 +297,14 @@ def _imports(module: str, source: ast.Module, modules: set[str]) -> set[str]:
             result.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             if node.level:
-                parent = package.split(".")[: len(package.split(".")) - node.level + 1]
+                relative_parents = package.split(".")[
+                    : len(package.split(".")) - node.level + 1
+                ]
                 base = ".".join(
-                    (*parent, *((node.module or "").split(".") if node.module else ()))
+                    (
+                        *relative_parents,
+                        *((node.module or "").split(".") if node.module else ()),
+                    )
                 )
             else:
                 base = node.module or ""

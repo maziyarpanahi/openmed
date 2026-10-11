@@ -61,6 +61,7 @@ def test_effect_inventory_matches_all_sources_and_has_no_source_values(effect_gu
     (
         "def mutate(client): client.post('PRIVATE_ENDPOINT', json={'secret': 'PRIVATE_PAYLOAD'})",
         "def mutate(client): client.request('PATCH', 'PRIVATE_ENDPOINT')",
+        "def mutate(client): client.stream('POST', 'PRIVATE_ENDPOINT')",
         "def mutate(client, method): client.request(method, 'PRIVATE_ENDPOINT')",
         "def mutate(connection): connection.execute('INSERT INTO private VALUES (?)')",
         "def mutate(connection, sql): connection.execute(sql)",
@@ -90,6 +91,7 @@ def test_http_route_declarations_and_literal_reads_are_not_write_effects(effect_
 @app.post('/PRIVATE_ENDPOINT')
 async def handler(client, connection):
     client.request('GET', '/PRIVATE_ENDPOINT')
+    client.stream('GET', '/PRIVATE_ENDPOINT')
     connection.execute('SELECT value FROM private')
 """)
     }
@@ -491,3 +493,21 @@ def test_presidio_adapter_missing_extra_raises_clear_import_error(monkeypatch):
 
     with pytest.raises(ImportError, match=r"openmed\[presidio\]"):
         presidio.from_canonical([])
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "@decorate(client.post('PRIVATE'))\ndef task(): pass",
+        "def task() -> client.post('PRIVATE'): pass",
+        "@app.post(client.post('PRIVATE'))\ndef task(): pass",
+        "@client.post('PRIVATE')\ndef task(): pass",
+    ],
+)
+def test_effect_inventory_catches_effectful_decorators_and_return_annotations(
+    effect_guard, code
+):
+    paths = effect_guard.scan_effect_paths({"openmed.synthetic": ast.parse(code)})
+    assert len(paths) == 1
+    with pytest.raises(effect_guard.EffectPathError, match="effect_path_unclassified"):
+        effect_guard.validate_inventory(paths, {})

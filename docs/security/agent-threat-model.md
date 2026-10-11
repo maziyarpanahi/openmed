@@ -28,6 +28,9 @@ free-form exception messages are never printed.
 
 The inventory conservatively identifies direct HTTP mutation methods, dynamic
 request/SQL methods, database execution/commit calls and known writer wrappers.
+Streaming HTTP mutation requests, effectful decorator arguments and return
+annotations are also checked. Only the outer registration call on known inbound
+route receivers is excluded; nested effects still require classification.
 Some candidates are reads, local callbacks or messaging operations sharing
 these method names. Those candidates remain explicitly classified so a
 future write cannot hide behind a broad module exemption. Inbound route
