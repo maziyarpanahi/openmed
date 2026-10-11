@@ -610,7 +610,7 @@ OpenMed katika makala, mabango na nyaraka zinazotokana nayo.
 
 Ikiwa OpenMed inakufaa, nyota huwasaidia wengine kuipata.
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
