@@ -1,10 +1,10 @@
 """Draft 2020-12 schema export for private-training metadata.
 
-The exported schemas are self-contained and use only fragment-local
-references. Cross-field arithmetic remains enforced by the Python validators. They describe the public federated training JSON projections
-(lifecycle, schedule, round status, update metadata, and aggregate metric
-envelopes) without importing a validator, reading model contents, or
-contacting a schema registry.
+The exported schemas are self-contained and use only fragment-local references.
+They describe the public federated training JSON projections (lifecycle,
+schedule, round status, update metadata, and aggregate metric envelopes) without
+importing a validator, reading model contents, or contacting a schema registry.
+Cross-field arithmetic remains enforced by the Python validators.
 """
 
 from __future__ import annotations
