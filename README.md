@@ -326,7 +326,7 @@ Example output:
 **REST service**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -602,7 +602,7 @@ A Docker-friendly FastAPI service with request validation, shared pipeline prelo
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -641,7 +641,7 @@ async jobs, webhooks, warm pools, dynamic batching, request coalescing, rate
 and concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m python -m openmed.service.logging --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
@@ -745,7 +745,7 @@ papers, posters, and derived documentation.
 
 If OpenMed is useful to you, a star helps others discover it.
 
-[5,400+ GitHub stars · 3 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 
