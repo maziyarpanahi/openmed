@@ -1,5 +1,8 @@
 # Post-de-identification summarization
 
+See [local backends and typed outcomes](local-backends.md) for executable
+synthetic provider wiring and the complete exception/refusal tables.
+
 OpenMed's clinical summarization stage is generative-last. The public
 `openmed.clinical.summarize()` entry point de-identifies a note first, then
 passes only the de-identified text to a summarizer backend. The default `mlx`
@@ -19,6 +22,22 @@ The leakage guard compares the summary with the source spans identified by the
 de-identification result. A backend that re-emits a source identifier is
 rejected before a result is returned. The check exposes counts and digests,
 not plaintext identifiers.
+
+Comparison removes the detector's supported zero-width controls, decomposes
+canonical variants before its width, confusable and combining-mark defenses,
+then recomposes the result for script matching. Case matching retains the prior
+Unicode case-insensitive equivalents.
+Source hashes and counts retain their existing meaning; normalized source text is
+never included in a `LeakageCheck` or exception. The complete source surface and
+each whitespace-separated part are compared. Latin and other spaced scripts
+retain word boundaries. Han, Kana, Thai, Lao, Khmer and Myanmar surfaces use
+substring matching; Hangul surfaces also allow a bounded inventory of trailing
+particles and common honorifics, with a word boundary after the suffix.
+
+This is a source-surface guard, not a morphological analyzer. Inflected forms
+such as Cyrillic case endings and unrecognized Korean suffixes remain a residual
+risk. The guard also depends on the original detector finding the source spans;
+keep the separate privacy detector and qualified review in the brief workflow.
 
 Pipeline code that already performed de-identification may call
 `summarize_deidentified()` with its `DeidentificationResult`. Passing a plain
@@ -40,6 +59,18 @@ hf download OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 --cache-dir ~/.cache/
 Missing dependencies raise
 `MissingOptionalDependencyError`; missing weights, context overflow, insufficient
 estimated memory, and malformed responses fail closed with content-free errors.
+`LocalSummarizerError.reason` is a controlled code: `unsupported_mode`,
+`unregistered_alias`, `artifact_not_cached`, `invalid_configuration`,
+`capability_unsupported`, `invalid_memory_budget`, `memory_budget_exceeded`,
+`input_limit_exceeded`, `context_exceeded`, `invalid_output`,
+`output_limit_exceeded`, `deidentification_unavailable`, `runtime_unavailable`,
+`invalid_backend`, or `execution_failed`. Remote aliases raise the compatible
+subclass `RemoteSummarizerError` with `reason="remote_backend"`. Reasons and
+messages never include the model alias, filesystem path, note, or underlying
+exception. Custom backend errors are reconstructed without their exception chain;
+existing `except LocalSummarizerError` handlers keep working. Both error types,
+`resolve_summarizer_backend`, `ExtractiveSummarizerBackend`, and
+`MLXSummarizerBackend` are exported from `openmed.clinical`.
 The adapter runs the shared `summarize` Maple task, template digest, offline
 capability probe and conservative memory preflight before model construction.
 The default memory estimate is capped at 16 GiB; applications can pass an
@@ -57,6 +88,16 @@ Migration: callers relying on the former implicit sentence-picker must now use
 `model="extractive"`. Maple is a general model, not a released clinical SLM or
 clinically validated summarizer. Summaries require qualified clinical review;
 the source-token leakage check cannot prove that every identifier was detected.
+
+The explicit extractive baseline uses OpenMed's local, script-aware
+`segment_text()` and returns at most the first three sentences in source order.
+CJK terminators and Indic danda are recognized, while ordinary abbreviations
+and decimals are preserved. Selected sentences keep their exact source text
+(only surrounding whitespace is trimmed); one space separates selections.
+The algorithm identity is `extractive-script-aware-first-three-v2`, bound into
+`template_digest`. This is sentence selection, not fact-coverage or model
+qualification. An overlarge custom output produces `output_limit_exceeded`,
+distinct from a non-string `invalid_output` result.
 
 ## Evidence-aware explicit extraction
 
@@ -90,8 +131,10 @@ bytes, including joining spaces, conservatively charge both global and class
 allowances. A sentence with facts from several length classes is charged in
 full to each class, once per class. This estimate does not claim a measured
 tokenizer bound for arbitrary model vocabularies. No class cap or metric
-threshold is increased. The brief adapter retains its existing `key_findings`
-allocation and charges the complete admitted extract including separators.
+threshold is increased. The brief adapter maps reviewed profile fields to their
+existing policy classes and supplies the resulting immutable length budget to
+the selector. Per-class charges include the separator before each selected sentence after
+the first; the global charge includes every joining separator.
 
 The bounded exact search maximizes unique fact coverage, then severity-weighted
 coverage, then prefers shorter extracts and earlier sentence indices. Each

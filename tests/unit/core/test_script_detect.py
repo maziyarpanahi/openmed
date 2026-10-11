@@ -172,11 +172,47 @@ def test_script_language_hints_cover_detectable_scripts():
         SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | USER_SUPPLIED_MODEL_LANGUAGES
     )
 
-    assert expected_scripts <= set(SCRIPT_LANGUAGE_HINTS)
+    unsupported = {
+        "Myanmar",
+        "Khmer",
+        "Lao",
+        "Sinhala",
+        "Thaana",
+        "Tibetan",
+        UNKNOWN_SCRIPT,
+    }
+    assert expected_scripts - unsupported <= set(SCRIPT_LANGUAGE_HINTS)
     for script in expected_scripts:
         hints = candidate_languages_for_script(script)
-        assert hints
+        assert bool(hints) == (script not in unsupported)
         assert set(hints) <= routing_languages
+
+
+@pytest.mark.parametrize(
+    "zero", [0x0660, 0x06F0, 0x0966, 0x0C66, 0x0E50, 0x0ED0, 0x1040, 0x17E0]
+)
+def test_detection_normalization_folds_decimal_blocks_with_exact_offsets(zero):
+    source = "prefix " + "".join(chr(zero + i) for i in range(10)) + " suffix"
+    normalized = normalize_for_pii_detection(source)
+    assert normalized.text == "prefix 0123456789 suffix"
+    assert normalized.remap_span(7, 17) == (7, 17)
+    assert normalized.to_metadata()["folded_native_digits"] == 10
+
+
+def test_detection_normalization_does_not_fold_nondecimal_numbers():
+    source = "Dose ² mg, stage Ⅳ"
+    normalized = normalize_for_pii_detection(source)
+    assert normalized.folded_native_digits == 0
+
+
+def test_perso_arabic_fold_is_declared_length_preserving_and_route_scoped():
+    from openmed.core.script_detect import fold_perso_arabic_letters
+
+    source = "ك ي ى ه ھ ة أ ض"
+    assert fold_perso_arabic_letters(source, "fa") == "ک ی ی ه ھ ة أ ض"
+    assert fold_perso_arabic_letters(source, "ur") == "ک ی ی ہ ہ ة أ ض"
+    assert fold_perso_arabic_letters(source, "ar") == source
+    assert len(fold_perso_arabic_letters(source, "ur")) == len(source)
 
 
 def test_indic_and_arabic_script_language_hints_are_exact():
