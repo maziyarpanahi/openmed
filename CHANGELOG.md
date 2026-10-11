@@ -169,6 +169,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local, sealed blinded-review result import for summary evaluation, with
+  exact artifact/rubric binding, citation and reviewer-agreement metrics, explicit
+  incomplete/disputed states and synthetic-only release refusal (#3655).
+
 - Added explicit, confirmation-bound terminal recovery journal retirement, sealed
   digest/count records, non-resumable retired dispositions, and restart-safe
   checkpoint cleanup with summary anchor verification (#3791).
