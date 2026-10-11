@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in BigTIFF pyramid metadata preflight in Python and OpenMedKit, with
+  declared tiled IFD-chain/SubIFD profiles, bounded directory and tile-table
+  traversal, value-free failures and shared synthetic geometry fixtures (#3683).
 - Added fail-closed Python evaluation sessions composing sealed manifest and
   holdout verification, injected execution/scoring, overlap forensics, blinded
   review and budgeted feedback, with content-free durable checkpoints and
