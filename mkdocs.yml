@@ -31,6 +31,7 @@ nav:
   - Core Guides:
       - Building with an Agent: agent-usage.md
       - Agent Action Graphs: agent/action-graphs.md
+      - Bounded Agent Scheduling: agent/bounded-scheduling.md
       - Agent Artifact References: agent/artifact-references.md
       - Clinical Side-Effect Previews: agent/side-effect-previews.md
       - Agent Action Execution Phases: agent/action-phases.md
@@ -40,6 +41,7 @@ nav:
       - Tool Argument Classification: agent/tool-argument-classification.md
       - PHI-safe Agent Tool Inventory: agent/tool-inventory.md
       - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
+      - Agent Exchange Record JSON Schemas: agent/exchange-record-schemas.md
       - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
       - Minimum-data Agent Tool Contracts: agent/minimum-data-contracts.md
       - Minimum-data Agent Tool Projections: agent/minimum-data-projections.md
@@ -63,6 +65,7 @@ nav:
       - Agent Run Completion Invariants: agent/run-invariants.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
+      - Offline Agent Governance Self-check: agent/self-check.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
       - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
@@ -126,6 +129,7 @@ nav:
       - Guarded Clinical Intelligence:
           - Brief and Summarization:
               - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Local Backends and Typed Outcomes: clinical/local-backends.md
               - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
               - Section-Preserving Summary Planning: clinical/summary-section-planning.md
               - Synthetic Brief Walkthrough: demo/clinical-brief.md
@@ -179,6 +183,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
@@ -191,6 +196,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
@@ -367,6 +373,7 @@ nav:
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
@@ -377,6 +384,7 @@ nav:
       - Benchmark Overlap Forensics: evaluation/overlap-forensics.md
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - v3.1 Agent Release Gates: evaluation/v3.1-agent-gates.md
+      - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
@@ -594,6 +602,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md
