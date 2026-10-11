@@ -6,9 +6,11 @@ import doctest
 import hashlib
 import http.client
 import importlib
+import json
 import os
 import re
 import socket
+import sqlite3
 import subprocess
 import textwrap
 import time
@@ -237,6 +239,31 @@ class _SyntheticCommitter:
     def commit_batch(self, mutations: Any, *, batch_digest: str, approval: Any) -> None:
         assert batch_digest == approval.batch_digest
         self.mutation_counts.append(len(mutations))
+
+
+class _SyntheticNlpCustody:
+    """Hash synthetic rollback payloads in memory, without durable custody claims."""
+
+    def store_rollback_material(self, stage: Any) -> tuple[Any, ...]:
+        from openmed.interop.omop_rollback_manifest import OmopRollbackInstruction
+
+        instructions = []
+        for requirement in stage.rollback_requirements:
+            payload = json.dumps(
+                stage.rollback_material(requirement.mutation_ordinal),
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+            instructions.append(
+                OmopRollbackInstruction(
+                    requirement.mutation_ordinal,
+                    requirement.strategy,
+                    "sha256:" + hashlib.sha256(payload).hexdigest(),
+                )
+            )
+        return tuple(instructions)
 
 
 def _synthetic_batch(concept_id: int = 3303) -> Any:
@@ -564,6 +591,61 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
                 "sha256:" + "c" * 64, "Observation.valueString"
             ),
         )
+    elif page == "interop/omop-staged-mutations.md":
+        from openmed.interop.omop import (
+            VocabularyConcept,
+            VocabularyMappingProvenance,
+            VocabularySnapshot,
+            initialize_omop_commit_metadata,
+            load_grounded_notes,
+        )
+        from openmed.interop.omop.cdm_loader import create_omop_schema
+
+        snapshot = VocabularySnapshot(
+            {"SYNTHETIC": "synthetic-release"},
+            (VocabularyConcept(701, "SYNTHETIC", standard_concept="S"),),
+        )
+        connection = sqlite3.connect(":memory:")
+        create_omop_schema(connection)
+        initialize_omop_commit_metadata(connection, snapshot)
+
+        def no_effect_connection() -> Any:
+            pytest.fail("refused documentation submission must not open a database")
+
+        namespace.update(
+            loaded_tables=load_grounded_notes(
+                [
+                    {
+                        "note_id": "synthetic-doc-note",
+                        "person_id": "synthetic-doc-person",
+                        "note_text": "Synthetic condition.",
+                        "entities": [
+                            {
+                                "text": "condition",
+                                "start": 10,
+                                "end": 19,
+                                "domain_id": "Condition",
+                                "concept_id": 701,
+                                "vocabulary_id": "SYNTHETIC",
+                                "code": "SYNTHETIC-701",
+                            }
+                        ],
+                    }
+                ],
+                vocabulary_version="synthetic-release",
+            ),
+            attested_pipeline_digest="sha256:" + "a" * 64,
+            target_snapshot=snapshot,
+            target_mapping_provenance=(
+                VocabularyMappingProvenance(701, "SYNTHETIC", "synthetic-release"),
+            ),
+            protected_custody=_SyntheticNlpCustody(),
+            connection=connection,
+            open_protected_sqlite_connection=no_effect_connection,
+            verify_receipt_and_both_review_bindings=lambda *args: False,
+            check_current_workflow_admission=lambda *args: False,
+            verify_protected_rollback_custody=lambda *args: False,
+        )
     elif page == "interop/omop-rollback-manifests.md":
         from openmed.interop.omop import OmopRowKey
 
@@ -637,6 +719,18 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
 
 
 def _prepare_followup(page: str, namespace: dict[str, Any]) -> None:
+    if page == "interop/omop-staged-mutations.md" and "staged" in namespace:
+        from openmed.interop.omop import OmopDatabasePreview
+
+        batch = namespace["staged"].batch
+        namespace.update(batch=batch, rollback_manifest=namespace["manifest"])
+        packet = namespace["packet"]
+        if type(packet) is OmopDatabasePreview:
+            namespace["approval_binding"] = batch.bind_approval(
+                packet.batch_preview,
+                approved_preview_digest=packet.batch_preview.preview_digest,
+                approval_receipt_digest="sha256:" + "d" * 64,
+            )
     if page == "agent/human-approval-tokens.md" and "key" in namespace:
         from openmed.mcp.consent_receipts import StaticConsentKeyProvider
 
@@ -675,6 +769,13 @@ def test_governed_documentation_python_blocks(
         assert namespace["result"].status.value == "committed"
     if page == "evaluation/v3.1-agent-gates.md":
         assert namespace["report"].decision == "NOT_READY"
+    if page == "interop/omop-staged-mutations.md":
+        assert namespace["result"].status.value == "denied"
+        assert namespace["result"].applied_count == 0
+        assert namespace["connection"].execute(
+            "SELECT COUNT(*) FROM person"
+        ).fetchone() == (0,)
+        namespace["connection"].close()
 
 
 def test_documentation_fragment_catalog_is_closed() -> None:
