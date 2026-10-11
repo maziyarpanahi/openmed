@@ -1,7 +1,7 @@
 """Draft 2020-12 schema export for private-training metadata.
 
 The exported schemas are self-contained and use only fragment-local
-references. They describe the public federated training JSON projections
+references. Cross-field arithmetic remains enforced by the Python validators. They describe the public federated training JSON projections
 (lifecycle, schedule, round status, update metadata, and aggregate metric
 envelopes) without importing a validator, reading model contents, or
 contacting a schema registry.
@@ -30,6 +30,8 @@ from openmed.training.federated_schedule import (
     MAX_FEDERATED_PHASE_DURATION_SECONDS,
 )
 from openmed.training.federated_status import (
+    _ABORT_REASON_CODES,
+    _HOLD_REASON_CODES,
     FEDERATED_ROUND_STATUS_SCHEMA_VERSION,
     FederatedCompletionBand,
     FederatedQuorumStatus,
@@ -37,6 +39,7 @@ from openmed.training.federated_status import (
 )
 from openmed.training.federated_update_metadata import (
     _DTYPES,
+    _MAX_DIMENSION,
     _MAX_ELEMENTS,
     _MAX_PARAMETERS,
     _MAX_RANK,
@@ -47,12 +50,14 @@ from openmed.training.federated_update_metadata import (
 
 PRIVATE_TRAINING_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 
-_DIGEST_PATTERN: Final = r"^sha256:[0-9a-f]{64}$"
-_CANONICAL_UTC_TIMESTAMP: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z$"
-_METRIC_ID_PATTERN: Final = r"^[a-z][a-z0-9_.-]{0,63}$"
-_MECHANISM_VERSION_PATTERN: Final = r"^v[1-9][0-9]{0,3}$"
+_DIGEST_PATTERN: Final = r"^sha256:[0-9a-f]{64}(?![\s\S])"
+_CANONICAL_UTC_TIMESTAMP: Final = (
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{6})?Z(?![\s\S])"
+)
+_METRIC_ID_PATTERN: Final = r"^[a-z][a-z0-9_.-]{0,63}(?![\s\S])"
+_MECHANISM_VERSION_PATTERN: Final = r"^v[1-9][0-9]{0,3}(?![\s\S])"
 _PARAMETER_NAME_PATTERN: Final = (
-    r"^[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*$"
+    r"^[A-Za-z_][A-Za-z0-9_]*(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+))*(?![\s\S])"
 )
 
 _SCHEDULE_BOUNDARY_FIELDS: Final = frozenset(
@@ -79,6 +84,7 @@ def build_federated_round_lifecycle_schema() -> dict[str, Any]:
 
     return {
         "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": f"urn:openmed:training:federated_round_lifecycle:{FEDERATED_ROUND_SCHEMA_VERSION}",
         "type": "object",
         "additionalProperties": False,
         "required": ["schema_version", "state"],
@@ -100,6 +106,7 @@ def build_federated_round_schedule_schema() -> dict[str, Any]:
 
     return {
         "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": f"urn:openmed:training:federated_round_schedule:{FEDERATED_SCHEDULE_SCHEMA_VERSION}",
         "type": "object",
         "additionalProperties": False,
         "required": [
@@ -120,6 +127,7 @@ def build_federated_round_schedule_schema() -> dict[str, Any]:
                     field: {
                         "type": "string",
                         "pattern": _CANONICAL_UTC_TIMESTAMP,
+                        "format": "date-time",
                     }
                     for field in sorted(_SCHEDULE_BOUNDARY_FIELDS)
                 },
@@ -151,6 +159,7 @@ def build_federated_round_status_schema() -> dict[str, Any]:
 
     return {
         "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": f"urn:openmed:training:federated_round_status:{FEDERATED_ROUND_STATUS_SCHEMA_VERSION}",
         "type": "object",
         "additionalProperties": False,
         "required": [
@@ -163,6 +172,55 @@ def build_federated_round_status_schema() -> dict[str, Any]:
             "reason_code",
             "schema_version",
             "state",
+        ],
+        "allOf": [
+            {
+                "if": {
+                    "properties": {"state": {"const": FederatedRoundState.HELD.value}}
+                },
+                "then": {
+                    "properties": {
+                        "reason_code": {
+                            "enum": sorted(item.value for item in _HOLD_REASON_CODES)
+                        }
+                    }
+                },
+            },
+            {
+                "if": {
+                    "properties": {
+                        "state": {"const": FederatedRoundState.ABORTED.value}
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "reason_code": {
+                            "enum": sorted(item.value for item in _ABORT_REASON_CODES)
+                        }
+                    }
+                },
+            },
+            {
+                "if": {
+                    "properties": {
+                        "state": {
+                            "not": {
+                                "enum": [
+                                    FederatedRoundState.HELD.value,
+                                    FederatedRoundState.ABORTED.value,
+                                ]
+                            }
+                        }
+                    }
+                },
+                "then": {"properties": {"reason_code": {"type": "null"}}},
+            },
+            {
+                "if": {"properties": {"participant_count": {"type": "null"}}},
+                "then": {
+                    "properties": {"completed_participant_count": {"type": "null"}}
+                },
+            },
         ],
         "properties": {
             "schema_version": {
@@ -220,6 +278,7 @@ def build_federated_update_metadata_schema() -> dict[str, Any]:
 
     return {
         "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": f"urn:openmed:training:federated_update_metadata:{FEDERATED_UPDATE_METADATA_SCHEMA_VERSION}",
         "type": "object",
         "additionalProperties": False,
         "required": sorted(_UPDATE_FIELDS),
@@ -252,7 +311,11 @@ def build_federated_update_metadata_schema() -> dict[str, Any]:
                             "type": "array",
                             "minItems": 1,
                             "maxItems": _MAX_RANK,
-                            "items": {"type": "integer", "minimum": 1},
+                            "items": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": _MAX_DIMENSION,
+                            },
                         },
                         "dtype": {
                             "type": "string",
@@ -280,6 +343,7 @@ def build_federated_aggregate_metric_schema() -> dict[str, Any]:
 
     return {
         "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": f"urn:openmed:training:federated_aggregate_metric:{FEDERATED_METRIC_SCHEMA_VERSION}",
         "type": "object",
         "additionalProperties": False,
         "required": [
@@ -298,6 +362,110 @@ def build_federated_aggregate_metric_schema() -> dict[str, Any]:
             "uncertainty_method",
             "uncertainty_upper_bound",
         ],
+        "$defs": {
+            "number": {"type": "number"},
+            "nullableNumber": {"type": ["number", "null"]},
+            "confidence": {
+                "type": ["number", "null"],
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1,
+            },
+        },
+        "allOf": [
+            {
+                "if": {
+                    "properties": {
+                        "participant_count_band": {
+                            "const": FederatedParticipantCountBand.SUPPRESSED.value
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "aggregate_value": {"type": "null"},
+                        "uncertainty_method": {
+                            "const": FederatedUncertaintyMethod.SUPPRESSED.value
+                        },
+                    }
+                },
+                "else": {
+                    "properties": {
+                        "aggregate_value": {"type": "number"},
+                        "uncertainty_method": {
+                            "enum": [
+                                FederatedUncertaintyMethod.NONE.value,
+                                FederatedUncertaintyMethod.CONFIDENCE_INTERVAL.value,
+                            ]
+                        },
+                    }
+                },
+            },
+            {
+                "if": {
+                    "properties": {
+                        "uncertainty_method": {
+                            "enum": [
+                                FederatedUncertaintyMethod.NONE.value,
+                                FederatedUncertaintyMethod.SUPPRESSED.value,
+                            ]
+                        }
+                    }
+                },
+                "then": {
+                    "properties": {
+                        field: {"type": "null"}
+                        for field in (
+                            "uncertainty_lower_bound",
+                            "uncertainty_upper_bound",
+                            "confidence_level",
+                        )
+                    }
+                },
+                "else": {
+                    "properties": {
+                        field: {"type": "number"}
+                        for field in (
+                            "uncertainty_lower_bound",
+                            "uncertainty_upper_bound",
+                            "confidence_level",
+                        )
+                    }
+                },
+            },
+            {
+                "if": {
+                    "properties": {
+                        "metric_kind": {"const": FederatedMetricKind.COUNT.value}
+                    }
+                },
+                "then": {
+                    "properties": {
+                        "aggregate_value": {"type": ["integer", "null"], "minimum": 0},
+                        "clipping_lower_bound": {"type": "integer", "minimum": 0},
+                        "clipping_upper_bound": {"type": "integer", "minimum": 0},
+                    }
+                },
+            },
+            {
+                "if": {
+                    "properties": {
+                        "metric_kind": {"const": FederatedMetricKind.RATE.value}
+                    }
+                },
+                "then": {
+                    "properties": {
+                        field: {"minimum": 0, "maximum": 1}
+                        for field in (
+                            "aggregate_value",
+                            "clipping_lower_bound",
+                            "clipping_upper_bound",
+                            "uncertainty_lower_bound",
+                            "uncertainty_upper_bound",
+                        )
+                    }
+                },
+            },
+        ],
         "properties": {
             "schema_version": {
                 "type": "string",
@@ -311,25 +479,9 @@ def build_federated_aggregate_metric_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": [item.value for item in FederatedMetricKind],
             },
-            "aggregate_value": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "number"},
-                    {"type": "null"},
-                ]
-            },
-            "clipping_lower_bound": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "number"},
-                ]
-            },
-            "clipping_upper_bound": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "number"},
-                ]
-            },
+            "aggregate_value": {"$ref": "#/$defs/nullableNumber"},
+            "clipping_lower_bound": {"$ref": "#/$defs/number"},
+            "clipping_upper_bound": {"$ref": "#/$defs/number"},
             "privacy_mechanism": {
                 "type": "string",
                 "enum": [item.value for item in FederatedPrivacyMechanism],
@@ -350,26 +502,9 @@ def build_federated_aggregate_metric_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": [item.value for item in FederatedUncertaintyMethod],
             },
-            "uncertainty_lower_bound": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "number"},
-                    {"type": "null"},
-                ]
-            },
-            "uncertainty_upper_bound": {
-                "anyOf": [
-                    {"type": "integer"},
-                    {"type": "number"},
-                    {"type": "null"},
-                ]
-            },
-            "confidence_level": {
-                "anyOf": [
-                    {"type": "number"},
-                    {"type": "null"},
-                ]
-            },
+            "uncertainty_lower_bound": {"$ref": "#/$defs/nullableNumber"},
+            "uncertainty_upper_bound": {"$ref": "#/$defs/nullableNumber"},
+            "confidence_level": {"$ref": "#/$defs/confidence"},
         },
     }
 

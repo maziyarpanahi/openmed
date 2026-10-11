@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any, NoReturn
@@ -13,6 +14,7 @@ from referencing import Registry
 
 from openmed.training.federated_metrics import (
     FEDERATED_METRIC_SCHEMA_VERSION,
+    FederatedMetricEnvelope,
     FederatedMetricKind,
     FederatedParticipantCountBand,
     FederatedPrivacyMechanism,
@@ -36,6 +38,7 @@ from openmed.training.federated_status import (
     build_federated_round_status,
 )
 from openmed.training.federated_update_metadata import (
+    _MAX_DIMENSION,
     FEDERATED_UPDATE_METADATA_SCHEMA_VERSION,
     FederatedParameterMetadata,
     FederatedUpdateMetadata,
@@ -133,6 +136,7 @@ def _validator(name: str) -> Draft202012Validator:
     return Draft202012Validator(
         build_schema(name),
         registry=Registry(retrieve=reject_remote_resolution),
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
     )
 
 
@@ -308,5 +312,134 @@ def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
     assert build_private_training_schemas()["federated_round_lifecycle"]["properties"]
     assert encoded == render_private_training_schemas()
     assert hashlib.sha256(encoded.encode("ascii")).hexdigest() == (
-        "10c237aaad7fd4cfb945abff0a8bb13ba9c07423b68ddb21fce8ee14e0b2ed2f"
+        "39baf45336aa417a4d17576cf7f61eaa24cccd4051e604bef76a0984815c2be8"
     )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"participant_count_band": "suppressed"},
+        {"participant_count_band": "suppressed", "aggregate_value": None},
+        {"uncertainty_method": "suppressed"},
+        {"aggregate_value": None},
+        {"confidence_level": 0.5},
+        {"uncertainty_lower_bound": 0.1},
+        {"uncertainty_upper_bound": 0.9},
+        {"uncertainty_method": "confidence_interval"},
+        {"metric_kind": "count", "aggregate_value": 0.5},
+        {"metric_kind": "count", "clipping_lower_bound": -1},
+        {"metric_kind": "count", "clipping_upper_bound": 1.5},
+        {"metric_kind": "rate", "clipping_lower_bound": -0.1},
+        {"metric_kind": "rate", "clipping_upper_bound": 1.1},
+        {"metric_id": "round.loss\n"},
+        {"privacy_mechanism_version": "v1\n"},
+    ],
+)
+def test_metric_schema_rejects_invalid_runtime_contract_combinations(changes):
+    payload = {**_metric_payload(), **changes}
+
+    with pytest.raises(ValueError):
+        FederatedMetricEnvelope.from_dict(payload)
+    with pytest.raises(ValidationError):
+        _validator("federated_aggregate_metric").validate(payload)
+
+
+@pytest.mark.parametrize("confidence", [0, 1, -0.1, 1.1])
+def test_interval_confidence_excludes_both_endpoints(confidence):
+    payload = {
+        **_metric_payload(),
+        "uncertainty_method": "confidence_interval",
+        "uncertainty_lower_bound": 0.25,
+        "uncertainty_upper_bound": 0.75,
+        "confidence_level": confidence,
+    }
+
+    with pytest.raises(ValidationError):
+        _validator("federated_aggregate_metric").validate(payload)
+
+
+@pytest.mark.parametrize("kind", list(FederatedMetricKind))
+@pytest.mark.parametrize("participants", [0, 100])
+@pytest.mark.parametrize("interval", [False, True])
+def test_schema_accepts_runtime_releases_and_suppressed_metrics(
+    kind, participants, interval
+):
+    envelope = build_federated_metric_envelope(
+        metric_id="round.metric",
+        metric_kind=kind,
+        aggregate_value=1 if kind is FederatedMetricKind.COUNT else 0.5,
+        clipping_lower_bound=0,
+        clipping_upper_bound=2 if kind is FederatedMetricKind.COUNT else 1,
+        privacy_mechanism=FederatedPrivacyMechanism.LAPLACE,
+        privacy_mechanism_version="v1",
+        participant_count=participants,
+        uncertainty_method=(
+            FederatedUncertaintyMethod.CONFIDENCE_INTERVAL
+            if interval
+            else FederatedUncertaintyMethod.NONE
+        ),
+        uncertainty_lower_bound=0 if interval else None,
+        uncertainty_upper_bound=1 if interval else None,
+        confidence_level=0.95 if interval else None,
+    )
+    _validator("federated_aggregate_metric").validate(envelope.to_dict())
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"reason_code": "operator_cancelled"},
+        {"state": "held", "reason_code": None},
+        {"state": "aborted", "reason_code": None},
+        {"state": "held", "reason_code": "operator_cancelled"},
+        {"participant_count": None, "completed_participant_count": 6},
+    ],
+)
+def test_status_schema_rejects_invalid_reason_and_suppression_combinations(changes):
+    with pytest.raises(ValidationError):
+        _validator("federated_round_status").validate({**_status_payload(), **changes})
+
+
+@pytest.mark.parametrize(
+    ("state", "reason"),
+    [
+        (FederatedRoundState.HELD, FederatedRoundReasonCode.PRIVACY_REVIEW_REQUIRED),
+        (FederatedRoundState.ABORTED, FederatedRoundReasonCode.OPERATOR_CANCELLED),
+        (FederatedRoundState.COLLECTING, None),
+    ],
+)
+def test_status_schema_accepts_runtime_reason_codes_and_suppression(state, reason):
+    payload = build_federated_round_status(
+        state=state,
+        participant_count=1,
+        completed_participant_count=0,
+        required_quorum=5,
+        reason_code=reason,
+    ).to_dict()
+    _validator("federated_round_status").validate(payload)
+
+
+def test_schema_rejects_out_of_range_dimensions_and_newline_digest():
+    payload = _update_payload()
+    payload["parameters"][0]["shape"] = [_MAX_DIMENSION + 1]
+    with pytest.raises(ValidationError):
+        _validator("federated_update_metadata").validate(payload)
+    payload = _update_payload()
+    payload["model_digest"] += "\n"
+    with pytest.raises(ValidationError):
+        _validator("federated_update_metadata").validate(payload)
+
+
+def test_schema_ids_are_unique_and_fragment_definitions_resolve_offline():
+    catalog = build_private_training_schemas()
+    identifiers = [schema["$id"] for schema in catalog.values()]
+    assert len(identifiers) == len(set(identifiers))
+    for schema in catalog.values():
+        assert schema["$id"].startswith("urn:openmed:training:")
+        assert schema["properties"]["schema_version"]["const"] in schema["$id"]
+    metric = catalog["federated_aggregate_metric"]
+    assert metric["$defs"]
+    assert metric["properties"]["aggregate_value"]["$ref"] == "#/$defs/nullableNumber"
+    _validator("federated_aggregate_metric").validate(_metric_payload())
+    assert json.loads(render_private_training_schemas()) == catalog
