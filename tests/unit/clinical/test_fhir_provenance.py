@@ -314,6 +314,43 @@ def test_governed_clock_is_called_once_and_normalized_to_utc() -> None:
 
 
 @pytest.mark.parametrize(
+    "field,value",
+    [
+        ("software_agent_ref", _PRIVATE_SENTINEL),
+        ("target_refs", (_PRIVATE_SENTINEL,)),
+        ("approval_receipt_digest", _PRIVATE_SENTINEL),
+    ],
+)
+def test_governed_projection_revalidates_native_attempt_before_clock(
+    field: str,
+    value: Any,
+) -> None:
+    attempt = _attempt()
+    object.__setattr__(attempt, field, value)
+
+    def clock() -> datetime:
+        pytest.fail("invalid metadata must be refused before calling the clock")
+
+    with pytest.raises(GovernedWriteAuditError) as error:
+        to_governed_write_audit_event(attempt, clock=clock)
+    assert error.value.code == "invalid_attempt"
+    assert error.value.__context__ is None
+    assert _PRIVATE_SENTINEL not in repr(error.value)
+
+
+def test_governed_projection_snapshots_metadata_before_clock_callback() -> None:
+    attempt = _attempt()
+
+    def clock() -> datetime:
+        object.__setattr__(attempt, "software_agent_ref", _PRIVATE_SENTINEL)
+        return _INSTANT
+
+    event = to_governed_write_audit_event(attempt, clock=clock)
+    assert event["source"]["observer"]["reference"] == _SOFTWARE
+    assert _PRIVATE_SENTINEL not in json.dumps(event)
+
+
+@pytest.mark.parametrize(
     "clock",
     [None, lambda: datetime(2026, 1, 2), lambda: _PRIVATE_SENTINEL, lambda: None],
 )
@@ -491,9 +528,12 @@ def test_governed_documented_refusal_runs_offline(
     for name in HF_OFFLINE_ENV_VARS:
         monkeypatch.setenv(name, "1")
     guide = Path(__file__).resolve().parents[3] / "docs/fhir-interop.md"
-    blocks = re.findall(
-        r"(?ms)^```python\n(.*?)^```", guide.read_text(encoding="utf-8")
+    section = (
+        guide.read_text(encoding="utf-8")
+        .split("## Governed write AuditEvents", 1)[1]
+        .split("\n## ", 1)[0]
     )
+    blocks = re.findall(r"(?ms)^```python\n(.*?)^```", section)
     runnable = [block for block in blocks if block.startswith("# Runnable:")]
     assert runnable
     with network_blocked_if_offline(local_only=True):

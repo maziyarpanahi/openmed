@@ -187,6 +187,11 @@ time, opaque references and optional receipt digests. There are no source
 payloads, narrative, diagnoses, diagnostics, credentials, endpoints, reviewer
 names or raw exceptions. Error messages contain only fixed projection codes.
 
+Projection rebuilds and validates a bounded local metadata snapshot before
+calling the injected clock. Invalidated native attempts fail with a fixed error
+without invoking the clock; a callback cannot change the projected references
+or receipt digest by modifying the original attempt.
+
 The injected clock is called once and must return an aware datetime. Recorded
 time is normalized to UTC with microsecond precision. Identical metadata and
 clock values produce identical resources and IDs; retain the original recorded

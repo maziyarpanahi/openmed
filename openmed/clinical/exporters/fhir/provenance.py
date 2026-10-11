@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from itertools import islice
 from typing import Any
 from uuid import UUID
 
@@ -154,11 +155,14 @@ class GovernedWriteAuditAttempt:
         outcome = _write_enum(self.outcome, GovernedWriteOutcome, "invalid_outcome")
         if not _opaque_write_reference(self.software_agent_ref):
             raise GovernedWriteAuditError("invalid_software_agent_ref")
-        if type(self.target_refs) not in {tuple, list} or len(self.target_refs) > 128:
+        if type(self.target_refs) not in {tuple, list}:
             raise GovernedWriteAuditError("invalid_target_refs")
-        if any(not _opaque_write_reference(ref) for ref in self.target_refs):
+        supplied_refs = tuple(islice(self.target_refs, 129))
+        if len(supplied_refs) > 128 or any(
+            not _opaque_write_reference(ref) for ref in supplied_refs
+        ):
             raise GovernedWriteAuditError("invalid_target_refs")
-        refs = tuple(sorted(set(self.target_refs)))
+        refs = tuple(sorted(set(supplied_refs)))
         role = self.reviewer_role
         if role is not None:
             role = _write_enum(role, GovernedWriteReviewerRole, "invalid_reviewer_role")
@@ -235,6 +239,21 @@ def to_governed_write_audit_event(
     """
     if type(attempt) is not GovernedWriteAuditAttempt:
         raise GovernedWriteAuditError("invalid_attempt")
+    validated: GovernedWriteAuditAttempt | None = None
+    try:
+        validated = GovernedWriteAuditAttempt(
+            action=attempt.action,
+            outcome=attempt.outcome,
+            software_agent_ref=attempt.software_agent_ref,
+            target_refs=attempt.target_refs,
+            reviewer_role=attempt.reviewer_role,
+            approval_receipt_digest=attempt.approval_receipt_digest,
+        )
+    except Exception:
+        pass
+    if validated is None:
+        raise GovernedWriteAuditError("invalid_attempt")
+    attempt = validated
     recorded = _write_recorded(clock)
     software = {"reference": attempt.software_agent_ref, "type": "Device"}
     outcome_codes = {
