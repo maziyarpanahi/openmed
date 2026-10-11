@@ -74,6 +74,7 @@ from .brief import (
     brief_policy_fingerprint,
     build_clinical_brief,
 )
+from .brief_cancellation import BriefCancellation, BriefInterrupted
 from .brief_context import (
     BriefContextBinding,
     BriefContextCode,
@@ -1484,6 +1485,13 @@ from .summarize import (
     summarize,
     summarize_deidentified,
 )
+from .summarize_backends import (
+    ExtractiveSummarizerBackend,
+    LocalSummarizerError,
+    MLXSummarizerBackend,
+    RemoteSummarizerError,
+    resolve_summarizer_backend,
+)
 from .summary_card import (
     CODING_COUNT_LABELS,
     ENTITY_CATEGORY_LABELS,
@@ -1924,6 +1932,8 @@ __all__ = [
     "ClinicalBrief",
     "brief_policy_fingerprint",
     "build_clinical_brief",
+    "BriefCancellation",
+    "BriefInterrupted",
     "ReviewedLocalBriefContext",
     "REVIEWED_LOCAL_EVIDENCE_VERSION",
     "CurrentLocalSource",
@@ -2655,6 +2665,11 @@ __all__ = [
     "SummarizerBackend",
     "summarize",
     "summarize_deidentified",
+    "ExtractiveSummarizerBackend",
+    "LocalSummarizerError",
+    "MLXSummarizerBackend",
+    "RemoteSummarizerError",
+    "resolve_summarizer_backend",
     "REASON_DUPLICATE_CITATION",
     "REASON_DUPLICATE_CITATIONS",
     "REASON_DUPLICATE_SOURCE_EVIDENCE",

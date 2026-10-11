@@ -243,29 +243,46 @@ extension ClinicalBrief {
         authority: any ReviewAuthorityVerifier,
         originalIdentifiers: [String],
         clock: () -> TimeInterval = { Date().timeIntervalSince1970 },
+        cancellation: ClinicalBriefCancellation = ClinicalBriefCancellation(),
         generate: (String) async throws -> String,
         evaluate: (String, String) async throws -> Data,
         privacyCheck: (String) throws -> Bool
     ) async throws -> ClinicalBrief {
+        try cancellation.check()
         guard source.utf8.count <= 16384 else { throw ReviewAdmissionRefusal.invalid }
         try evidence.admit(source: source, policyDigest: policyDigest, currentSource: currentSource, authority: authority, clock: clock)
+        try cancellation.check()
         let scalars = Array(source.unicodeScalars)
         let admitted = evidence.references.sorted { ($0.start, $0.end) < ($1.start, $1.end) }.map {
             String(String.UnicodeScalarView(scalars[$0.start..<$0.end]))
         }.joined(separator: " ")
+        try cancellation.check()
         try evidence.admit(source: source, policyDigest: policyDigest, currentSource: currentSource, authority: authority, clock: clock)
+        try cancellation.check()
         do {
             let summary = try await generate(admitted)
+            try cancellation.check()
             let evaluation = try await evaluate(source, summary)
+            try cancellation.check()
             let brief = try validate(
                 evaluationJSON: evaluation, source: source, generatedSummary: summary,
-                originalIdentifiers: originalIdentifiers, privacyCheck: privacyCheck)
+                originalIdentifiers: originalIdentifiers, cancellation: cancellation,
+                privacyCheck: privacyCheck)
             guard
                 brief.citations.allSatisfy({ citation in
                     evidence.references.contains { $0.start == citation.sourceStart && $0.end == citation.sourceEnd }
                 })
             else { throw ClinicalBriefError.unsupportedClaim }
+            try cancellation.check()
             return brief
-        } catch let error as ClinicalBriefError { throw error } catch is CancellationError { throw CancellationError() } catch { throw ClinicalBriefError.invalidPacket }
+        } catch let error as ClinicalBriefError {
+            try cancellation.check()
+            throw error
+        } catch is CancellationError {
+            throw ClinicalBriefError.cancelled
+        } catch {
+            try cancellation.check()
+            throw ClinicalBriefError.invalidPacket
+        }
     }
 }

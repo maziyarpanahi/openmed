@@ -15,6 +15,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Final, TypeVar
 
+from .outcomes import _bounded_governance_json
+
 CORRELATION_SCHEMA_VERSION: Final = "openmed.agent.correlation.v1"
 CORRELATION_TOKEN_BYTES: Final = 16
 RUN_ID_PREFIX: Final = "run_"
@@ -228,13 +230,10 @@ class ActionCorrelation:
         """Build typed correlation metadata from a strict JSON object."""
 
         try:
-            data = json.loads(payload, object_pairs_hook=_strict_json_object)
-        except (
-            json.JSONDecodeError,
-            CorrelationIdError,
-            TypeError,
-            UnicodeDecodeError,
-        ):
+            data = _bounded_governance_json(
+                payload, object_pairs_hook=_strict_json_object
+            )
+        except (ValueError, TypeError, UnicodeError, RecursionError):
             pass
         else:
             return cls.from_dict(data)
