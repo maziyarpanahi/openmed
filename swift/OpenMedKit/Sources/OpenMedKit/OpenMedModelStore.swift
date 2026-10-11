@@ -17,8 +17,8 @@ public enum OpenMedModelStoreError: LocalizedError {
             return "Downloaded MLX model is missing openmed-mlx.json in \(url.path)"
         case .missingWeights(let url):
             return "Downloaded MLX model does not contain any usable weight file in \(url.path)"
-        case .invalidManifestPath(let path):
-            return "MLX manifest resource path escapes the model directory: \(path)"
+        case .invalidManifestPath:
+            return "MLX artifact path rejected by snapshot confinement."
         }
     }
 }
@@ -27,6 +27,112 @@ public enum OpenMedMLXModelCacheState: String, Sendable {
     case missing
     case partial
     case ready
+}
+
+/// One boundary for manifest preflight, cache inspection and local artifact reads.
+/// The caller supplies the trusted root; declared paths never become new roots.
+struct OpenMedMLXPathBoundary {
+    let rootURL: URL
+
+    // AutoTokenizer and prepared-tokenizer copying read these without requiring
+    // manifest declarations. Keep that implicit read set inside the same root.
+    private static let tokenizerDiscoveryFiles = [
+        "config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+        "vocab.txt", "vocab.json", "merges.txt", "spm.model", "sentencepiece.bpe.model",
+        "added_tokens.json", "chat_template.jinja", "chat_template.json",
+    ]
+
+    init(directoryURL: URL) throws {
+        guard directoryURL.isFileURL else {
+            throw OpenMedModelStoreError.invalidManifestPath("invalid_root")
+        }
+        rootURL = directoryURL.resolvingSymlinksInPath().standardizedFileURL
+    }
+
+    static func validateRelativePath(_ path: String) throws {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !path.isEmpty,
+            !path.contains("\\"), !path.contains("\0"),
+            components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
+        else {
+            throw OpenMedModelStoreError.invalidManifestPath("invalid_relative_path")
+        }
+    }
+
+    func fileURL(_ path: String, rejectSymlinks: Bool = false) throws -> URL {
+        try Self.validateRelativePath(path)
+        guard rootURL.resolvingSymlinksInPath().standardizedFileURL.path == rootURL.path else {
+            throw OpenMedModelStoreError.invalidManifestPath("root_changed")
+        }
+        let prefix = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+        var current = rootURL
+        for component in path.split(separator: "/") {
+            current.append(path: String(component))
+            if (try? FileManager.default.destinationOfSymbolicLink(atPath: current.path)) != nil {
+                let resolved = current.resolvingSymlinksInPath().standardizedFileURL
+                guard !rejectSymlinks,
+                    resolved.path == rootURL.path || resolved.path.hasPrefix(prefix),
+                    FileManager.default.fileExists(atPath: resolved.path)
+                else {
+                    throw OpenMedModelStoreError.invalidManifestPath("unsafe_symlink")
+                }
+            }
+        }
+        let resolved = current.resolvingSymlinksInPath().standardizedFileURL.path
+        guard resolved == rootURL.path || resolved.hasPrefix(prefix) else {
+            throw OpenMedModelStoreError.invalidManifestPath("outside_snapshot")
+        }
+        return current
+    }
+
+    func tokenizerPath(base: String, file: String) throws -> String {
+        try Self.validateRelativePath(file)
+        if base == "." { return file }
+        _ = try fileURL(base)
+        return "\(base)/\(file)"
+    }
+
+    func validate(_ manifest: OpenMedMLXManifest) throws {
+        let paths =
+            [manifest.configPath, manifest.preferredWeights]
+            + [manifest.labelMapPath].compactMap { $0 }
+            + manifest.availableWeights + manifest.fallbackWeights
+            + (manifest.segmenter?.resourceFiles.map(\.path) ?? [])
+        for path in paths { _ = try fileURL(path) }
+        try validateTokenizerDirectory(manifest.tokenizer.path)
+        for file in manifest.tokenizer.files {
+            _ = try fileURL(tokenizerPath(base: manifest.tokenizer.path, file: file))
+        }
+    }
+
+    func validateTokenizerDirectory(_ path: String) throws {
+        if path != "." { _ = try fileURL(path) }
+        for file in Self.tokenizerDiscoveryFiles {
+            _ = try fileURL(tokenizerPath(base: path, file: file))
+        }
+    }
+
+    func containsFile(_ path: String) throws -> Bool {
+        let url = try fileURL(path).resolvingSymlinksInPath()
+        return (try? FileManager.default.attributesOfItem(atPath: url.path)[.type])
+            as? FileAttributeType == .typeRegular
+    }
+
+    /// Remove the leaf itself, including a replaced symlink, without following it.
+    /// A changed parent is refused, so cleanup cannot delete an outside target.
+    func removeFileIfConfined(_ path: String) {
+        guard (try? Self.validateRelativePath(path)) != nil else { return }
+        let components = path.split(separator: "/").map(String.init)
+        let parent: URL
+        if components.count == 1 {
+            guard rootURL.resolvingSymlinksInPath().standardizedFileURL.path == rootURL.path else { return }
+            parent = rootURL
+        } else {
+            guard let safeParent = try? fileURL(components.dropLast().joined(separator: "/")) else { return }
+            parent = safeParent
+        }
+        try? FileManager.default.removeItem(at: parent.appending(path: components.last!))
+    }
 }
 
 /// Download and cache OpenMed MLX model snapshots from the Hugging Face Hub.
@@ -50,11 +156,18 @@ public enum OpenMedModelStore {
         revision: String = "main",
         cacheDirectory: URL? = nil
     ) async throws -> URL {
-        let cacheRoot = try cacheDirectory ?? defaultCacheDirectory()
-        let modelDirectory =
-            cacheRoot
-            .appending(path: sanitizedPathComponent(repoID), directoryHint: .isDirectory)
-            .appending(path: sanitizedPathComponent(revision), directoryHint: .isDirectory)
+        try await downloadMLXModel(
+            repoID: repoID, revision: revision, cacheDirectory: cacheDirectory, session: .shared)
+    }
+
+    // Internal transport injection keeps confinement tests fully offline.
+    static func downloadMLXModel(
+        repoID: String, revision: String = "main", cacheDirectory: URL? = nil,
+        session: URLSession
+    ) async throws -> URL {
+        let modelDirectory = try cachedMLXModelDirectory(
+            repoID: repoID, revision: revision, cacheDirectory: cacheDirectory)
+        let boundary = try OpenMedMLXPathBoundary(directoryURL: modelDirectory)
         try FileManager.default.createDirectory(
             at: modelDirectory,
             withIntermediateDirectories: true
@@ -68,84 +181,75 @@ public enum OpenMedModelStore {
             return modelDirectory
         }
 
-        let manifestURL = modelDirectory.appending(path: "openmed-mlx.json")
-        let hasManifest = try await downloadOptionalFile(
-            repoID: repoID,
-            revision: revision,
-            relativePath: "openmed-mlx.json",
-            destinationURL: manifestURL
-        )
-
-        guard hasManifest else {
-            try await downloadLegacyArtifact(
-                repoID: repoID,
-                revision: revision,
-                into: modelDirectory
-            )
-            try markArtifactReadyIfComplete(at: modelDirectory)
-            return modelDirectory
-        }
-
-        let manifestData = try Data(contentsOf: manifestURL)
-        let manifest = try JSONDecoder().decode(OpenMedMLXManifest.self, from: manifestData)
-
-        let fixedFiles = [manifest.configPath, manifest.labelMapPath].compactMap { $0 }
-        for relativePath in fixedFiles {
-            try await downloadFile(
-                repoID: repoID,
-                revision: revision,
-                relativePath: relativePath,
-                destinationURL: modelDirectory.appending(path: relativePath)
-            )
-        }
-
-        var downloadedWeights = false
-        for weightPath in manifest.availableWeights {
-            let destinationURL = modelDirectory.appending(path: weightPath)
-            do {
+        var writtenFiles: [String] = []
+        func fetch(_ path: String, optional: Bool = false) async throws -> Bool {
+            let exists = try boundary.containsFile(path)
+            let result: Bool
+            if optional {
+                result = try await downloadOptionalFile(
+                    repoID: repoID, revision: revision, relativePath: path,
+                    boundary: boundary, session: session)
+            } else {
                 try await downloadFile(
-                    repoID: repoID,
-                    revision: revision,
-                    relativePath: weightPath,
-                    destinationURL: destinationURL
-                )
-                downloadedWeights = true
-            } catch {
-                continue
+                    repoID: repoID, revision: revision, relativePath: path,
+                    boundary: boundary, session: session)
+                result = true
             }
-        }
-        if !downloadedWeights {
-            throw OpenMedModelStoreError.missingWeights(modelDirectory)
-        }
-
-        for file in manifest.tokenizer.files {
-            let relativePath = tokenizerRelativePath(
-                basePath: manifest.tokenizer.path,
-                fileName: file
-            )
-            try await downloadFile(
-                repoID: repoID,
-                revision: revision,
-                relativePath: relativePath,
-                destinationURL: modelDirectory.appending(path: relativePath)
-            )
+            if result && !exists { writtenFiles.append(path) }
+            return result
         }
 
-        for resource in manifest.segmenter?.resourceFiles ?? [] {
-            let destinationURL = try artifactFileURL(
-                in: modelDirectory,
-                relativePath: resource.path
-            )
-            try await downloadFile(
-                repoID: repoID,
-                revision: revision,
-                relativePath: resource.path,
-                destinationURL: destinationURL
-            )
-        }
+        do {
+            let hasManifest = try await fetch("openmed-mlx.json", optional: true)
+            guard hasManifest else {
+                _ = try await fetch("config.json")
+                _ = try await fetch("id2label.json", optional: true)
+                var hasWeights = false
+                for name in ["weights.safetensors", "weights.npz"] {
+                    let exists = try await fetch(name, optional: true)
+                    hasWeights = hasWeights || exists
+                }
+                guard hasWeights else { throw OpenMedModelStoreError.missingWeights(modelDirectory) }
+                for name in legacyTokenizerFiles { _ = try await fetch(name, optional: true) }
+                try markArtifactReadyIfComplete(boundary: boundary)
+                return modelDirectory
+            }
 
-        try markArtifactReadyIfComplete(at: modelDirectory)
-        return modelDirectory
+            let manifestData = try Data(contentsOf: boundary.fileURL("openmed-mlx.json"))
+            let manifest = try JSONDecoder().decode(OpenMedMLXManifest.self, from: manifestData)
+            // Preflight every declaration, including candidates the loader may use later.
+            try boundary.validate(manifest)
+
+            for path in [manifest.configPath, manifest.labelMapPath].compactMap({ $0 }) {
+                _ = try await fetch(path)
+            }
+
+            var downloadedWeights = false
+            for path in manifest.availableWeights {
+                do {
+                    _ = try await fetch(path)
+                    downloadedWeights = true
+                } catch OpenMedModelStoreError.invalidManifestPath(let reason) {
+                    throw OpenMedModelStoreError.invalidManifestPath(reason)
+                } catch {
+                    continue
+                }
+            }
+            guard downloadedWeights else { throw OpenMedModelStoreError.missingWeights(modelDirectory) }
+
+            for file in manifest.tokenizer.files {
+                _ = try await fetch(boundary.tokenizerPath(base: manifest.tokenizer.path, file: file))
+            }
+            for resource in manifest.segmenter?.resourceFiles ?? [] { _ = try await fetch(resource.path) }
+
+            try boundary.validate(manifest)
+            try markArtifactReadyIfComplete(boundary: boundary)
+            return modelDirectory
+        } catch OpenMedModelStoreError.invalidManifestPath(let reason) {
+            boundary.removeFileIfConfined(readyMarkerFileName)
+            for path in writtenFiles.reversed() { boundary.removeFileIfConfined(path) }
+            throw OpenMedModelStoreError.invalidManifestPath(reason)
+        }
     }
 
     public static func cachedMLXModelDirectory(
@@ -154,10 +258,10 @@ public enum OpenMedModelStore {
         cacheDirectory: URL? = nil
     ) throws -> URL {
         let cacheRoot = try cacheDirectory ?? defaultCacheDirectory()
-        return
-            cacheRoot
-            .appending(path: sanitizedPathComponent(repoID), directoryHint: .isDirectory)
-            .appending(path: sanitizedPathComponent(revision), directoryHint: .isDirectory)
+        let boundary = try OpenMedMLXPathBoundary(directoryURL: cacheRoot)
+        return try boundary.fileURL(
+            "\(sanitizedPathComponent(repoID))/\(sanitizedPathComponent(revision))",
+            rejectSymlinks: true)
     }
 
     public static func isMLXModelCached(
@@ -192,8 +296,16 @@ public enum OpenMedModelStore {
 
     private static func cacheState(at modelDirectory: URL) throws -> OpenMedMLXModelCacheState {
         let fileManager = FileManager.default
-        let readyMarkerURL = readyMarkerURL(for: modelDirectory)
-        let isComplete = try hasCompleteArtifact(at: modelDirectory)
+        let boundary = try OpenMedMLXPathBoundary(directoryURL: modelDirectory)
+        let isComplete: Bool
+        do {
+            _ = try boundary.fileURL(readyMarkerFileName)
+            isComplete = try hasCompleteArtifact(boundary: boundary)
+        } catch OpenMedModelStoreError.invalidManifestPath(let reason) {
+            boundary.removeFileIfConfined(readyMarkerFileName)
+            throw OpenMedModelStoreError.invalidManifestPath(reason)
+        }
+        let readyMarkerURL = try boundary.fileURL(readyMarkerFileName)
 
         if isComplete {
             if !fileManager.fileExists(atPath: readyMarkerURL.path) {
@@ -214,89 +326,35 @@ public enum OpenMedModelStore {
         return contents.isEmpty ? .missing : .partial
     }
 
-    private static func hasCompleteArtifact(at modelDirectory: URL) throws -> Bool {
-        let manifestURL = modelDirectory.appending(path: "openmed-mlx.json")
+    private static func hasCompleteArtifact(boundary: OpenMedMLXPathBoundary) throws -> Bool {
+        let manifestURL = try boundary.fileURL("openmed-mlx.json")
         if !FileManager.default.fileExists(atPath: manifestURL.path) {
-            let hasLegacyConfig = FileManager.default.fileExists(
-                atPath: modelDirectory.appending(path: "config.json").path
-            )
-            let hasLegacyWeights = ["weights.safetensors", "weights.npz"].contains {
-                FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
-            }
+            try boundary.validateTokenizerDirectory(".")
+            let hasLegacyConfig = try boundary.containsFile("config.json")
+            let weightFiles = try ["weights.safetensors", "weights.npz"].map { try boundary.containsFile($0) }
+            let hasLegacyWeights = weightFiles.contains(true)
             return hasLegacyConfig && hasLegacyWeights
         }
 
         let data = try Data(contentsOf: manifestURL)
         let manifest = try JSONDecoder().decode(OpenMedMLXManifest.self, from: data)
+        try boundary.validate(manifest)
 
         let requiredFiles =
-            [manifest.configPath]
-            + manifest.tokenizer.files.map {
-                tokenizerRelativePath(basePath: manifest.tokenizer.path, fileName: $0)
-            }
+            [manifest.configPath] + [manifest.labelMapPath].compactMap { $0 }
+            + (try manifest.tokenizer.files.map {
+                try boundary.tokenizerPath(base: manifest.tokenizer.path, file: $0)
+            })
             + (manifest.segmenter?.resourceFiles.map(\.path) ?? [])
-        let hasWeights = manifest.availableWeights.contains {
-            FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
-        }
+        let hasWeights = try manifest.availableWeights.map { try boundary.containsFile($0) }.contains(true)
 
-        return hasWeights
-            && requiredFiles.allSatisfy {
-                FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
-            }
+        let requiredPresence = try requiredFiles.map { try boundary.containsFile($0) }
+        return hasWeights && requiredPresence.allSatisfy { $0 }
     }
 
-    private static func markArtifactReadyIfComplete(at modelDirectory: URL) throws {
-        guard try hasCompleteArtifact(at: modelDirectory) else {
-            return
-        }
-        try writeReadyMarker(to: readyMarkerURL(for: modelDirectory))
-    }
-
-    private static func downloadLegacyArtifact(
-        repoID: String,
-        revision: String,
-        into modelDirectory: URL
-    ) async throws {
-        try await downloadFile(
-            repoID: repoID,
-            revision: revision,
-            relativePath: "config.json",
-            destinationURL: modelDirectory.appending(path: "config.json")
-        )
-
-        _ = try await downloadOptionalFile(
-            repoID: repoID,
-            revision: revision,
-            relativePath: "id2label.json",
-            destinationURL: modelDirectory.appending(path: "id2label.json")
-        )
-
-        var hasWeights = false
-        for fileName in ["weights.safetensors", "weights.npz"] {
-            let didDownload = try await downloadOptionalFile(
-                repoID: repoID,
-                revision: revision,
-                relativePath: fileName,
-                destinationURL: modelDirectory.appending(path: fileName)
-            )
-            hasWeights =
-                hasWeights || didDownload
-                || FileManager.default.fileExists(
-                    atPath: modelDirectory.appending(path: fileName).path
-                )
-        }
-        guard hasWeights else {
-            throw OpenMedModelStoreError.missingWeights(modelDirectory)
-        }
-
-        for fileName in legacyTokenizerFiles {
-            _ = try await downloadOptionalFile(
-                repoID: repoID,
-                revision: revision,
-                relativePath: fileName,
-                destinationURL: modelDirectory.appending(path: fileName)
-            )
-        }
+    private static func markArtifactReadyIfComplete(boundary: OpenMedMLXPathBoundary) throws {
+        guard try hasCompleteArtifact(boundary: boundary) else { return }
+        try writeReadyMarker(to: boundary.fileURL(readyMarkerFileName))
     }
 
     private static func defaultCacheDirectory() throws -> URL {
@@ -313,26 +371,15 @@ public enum OpenMedModelStore {
             .appending(path: "MLXModels", directoryHint: .isDirectory)
     }
 
-    private static func artifactFileURL(
-        in modelDirectory: URL,
-        relativePath: String
-    ) throws -> URL {
-        let root = modelDirectory.standardizedFileURL
-        let rootPrefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        let destination = root.appending(path: relativePath).standardizedFileURL
-        guard !relativePath.isEmpty, destination.path.hasPrefix(rootPrefix) else {
-            throw OpenMedModelStoreError.invalidManifestPath(relativePath)
-        }
-        return destination
-    }
-
     private static func downloadFile(
         repoID: String,
         revision: String,
         relativePath: String,
-        destinationURL: URL
+        boundary: OpenMedMLXPathBoundary,
+        session: URLSession
     ) async throws {
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
+        let destinationURL = try boundary.fileURL(relativePath)
+        if try boundary.containsFile(relativePath) {
             return
         }
 
@@ -340,7 +387,7 @@ public enum OpenMedModelStore {
         var request = URLRequest(url: remoteURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw OpenMedModelStoreError.invalidResponse(remoteURL)
         }
@@ -348,10 +395,13 @@ public enum OpenMedModelStore {
             throw OpenMedModelStoreError.httpError(remoteURL, httpResponse.statusCode)
         }
 
+        // URLSession suspends: check again before creating directories or writing.
+        _ = try boundary.fileURL(relativePath)
         try FileManager.default.createDirectory(
             at: destinationURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        _ = try boundary.fileURL(relativePath)
         try data.write(to: destinationURL, options: .atomic)
     }
 
@@ -360,18 +410,19 @@ public enum OpenMedModelStore {
         repoID: String,
         revision: String,
         relativePath: String,
-        destinationURL: URL
+        boundary: OpenMedMLXPathBoundary,
+        session: URLSession
     ) async throws -> Bool {
         do {
             try await downloadFile(
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                destinationURL: destinationURL
+                boundary: boundary, session: session
             )
-            return FileManager.default.fileExists(atPath: destinationURL.path)
+            return try boundary.containsFile(relativePath)
         } catch OpenMedModelStoreError.httpError(_, 404) {
-            return FileManager.default.fileExists(atPath: destinationURL.path)
+            return try boundary.containsFile(relativePath)
         }
     }
 
@@ -384,7 +435,7 @@ public enum OpenMedModelStore {
             value
                 .split(separator: "/")
                 .map {
-                    String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+                    String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "%?#")))
                         ?? String($0)
                 }
                 .joined(separator: "/")
@@ -409,17 +460,6 @@ public enum OpenMedModelStore {
         value
             .replacingOccurrences(of: "/", with: "__")
             .replacingOccurrences(of: ":", with: "_")
-    }
-
-    private static func tokenizerRelativePath(basePath: String, fileName: String) -> String {
-        if basePath == "." || basePath.isEmpty {
-            return fileName
-        }
-        return "\(basePath)/\(fileName)"
-    }
-
-    private static func readyMarkerURL(for modelDirectory: URL) -> URL {
-        modelDirectory.appending(path: readyMarkerFileName)
     }
 
     private static func writeReadyMarker(to url: URL) throws {
