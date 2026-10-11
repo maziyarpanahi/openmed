@@ -55,6 +55,8 @@ def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
             "OPENMED_OFFLINE": "1",
         }
     )
+    # Capture to a file so the server never waits for an undrained output pipe.
+    output_file = (tmp_path / "synthetic-service-output.log").open("w+")
     process = subprocess.Popen(
         [
             sys.executable,
@@ -66,7 +68,7 @@ def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
             str(port),
         ],
         env=environment,
-        stdout=subprocess.PIPE,
+        stdout=output_file,
         stderr=subprocess.STDOUT,
         text=True,
     )
@@ -100,7 +102,10 @@ def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
                 pass
     finally:
         process.terminate()
-        output, _ = process.communicate(timeout=15)
+        process.communicate(timeout=15)
+        output_file.seek(0)
+        output = output_file.read()
+        output_file.close()
     assert sentinel not in output
     records = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
     if level == "off":
