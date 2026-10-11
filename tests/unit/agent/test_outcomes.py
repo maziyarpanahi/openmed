@@ -214,3 +214,158 @@ def test_outcome_contract_is_available_from_public_agent_api():
     assert agent.OutcomeError is OutcomeError
     assert agent.OUTCOME_SCHEMA_VERSION == OUTCOME_SCHEMA_VERSION
     assert agent.allowed_reason_codes is allowed_reason_codes
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32"])
+def test_bounded_parser_preserves_standard_json_byte_encodings(encoding):
+    original = WorkflowOutcome(OutcomeClass.SUCCESS, "completed")
+    assert WorkflowOutcome.from_json(original.to_json().encode(encoding)) == original
+
+
+def test_bounded_json_distinguishes_escaped_strings_from_nesting():
+    from openmed.agent.outcomes import _bounded_governance_json
+
+    literal = '{[\\"\\\\]}' * 100
+    serialized = json.dumps({"literal": literal})
+    assert _bounded_governance_json(serialized) == {"literal": literal}
+    assert _bounded_governance_json("[" * 64 + "0" + "]" * 64)
+    with pytest.raises(ValueError):
+        _bounded_governance_json("[" * 65 + "0" + "]" * 65)
+
+
+@pytest.mark.parametrize(
+    "value", ['{"x":1,"x":2}', "NaN", "Infinity", "-Infinity", "1e9999"]
+)
+def test_bounded_json_rejects_ambiguous_or_nonfinite_values(value):
+    from openmed.agent.outcomes import _bounded_governance_json
+
+    with pytest.raises(ValueError):
+        _bounded_governance_json(value)
+
+
+def test_issue_3779_size_limit_counts_utf8_bytes_before_decoding(monkeypatch):
+    payload = "é" * (32 * 1024 * 1024 + 1)
+
+    def forbidden_decoder(*args, **kwargs):
+        pytest.fail("oversized Unicode input reached the JSON decoder")
+
+    monkeypatch.setattr(json, "loads", forbidden_decoder)
+    with pytest.raises(OutcomeError) as caught:
+        WorkflowOutcome.from_json(payload)
+    assert caught.value.code == "malformed_json"
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("base_type", (str, bytes, bytearray))
+def test_issue_3779_serialized_subtypes_cannot_spoof_size(base_type, monkeypatch):
+    class SerializedSubtype(base_type):
+        def __len__(self):
+            return 0
+
+        def decode(self, *_args, **_kwargs):
+            pytest.fail("foreign byte decoder must not execute")
+
+        def __iter__(self):
+            pytest.fail("foreign text iterator must not execute")
+
+        def __getitem__(self, _key):
+            pytest.fail("foreign text accessor must not execute")
+
+    original = WorkflowOutcome(OutcomeClass.SUCCESS, "completed")
+    value = original.to_json()
+    if base_type is not str:
+        value = value.encode()
+    assert WorkflowOutcome.from_json(SerializedSubtype(value)) == original
+
+    oversized = " " * (64 * 1024 * 1024 + 1)
+    if base_type is not str:
+        oversized = oversized.encode()
+
+    def forbidden_decoder(*args, **kwargs):
+        pytest.fail("oversized serialized subtype reached the JSON decoder")
+
+    monkeypatch.setattr(json, "loads", forbidden_decoder)
+    with pytest.raises(OutcomeError) as caught:
+        WorkflowOutcome.from_json(SerializedSubtype(oversized))
+    assert caught.value.code == "malformed_json"
+
+
+_BOUNDED_GOVERNANCE_PARSERS = (
+    ("openmed.agent.outcomes", "WorkflowOutcome", "OutcomeError"),
+    ("openmed.agent.correlation", "ActionCorrelation", "CorrelationIdError"),
+    (
+        "openmed.agent.schema_compatibility",
+        "CompatibilityResult",
+        "SchemaCompatibilityError",
+    ),
+    (
+        "openmed.agent.workflows.quality_measure_evidence",
+        "QualityMeasureEvidencePacket",
+        "QualityMeasureEvidenceError",
+    ),
+    ("openmed.mcp.consent_receipts", "ConsentReceipt", "ConsentReceiptValidationError"),
+)
+
+
+@pytest.mark.parametrize(
+    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
+)
+def test_issue_3779_deep_json_has_typed_value_free_refusal(
+    module_name, class_name, error_name
+):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    with pytest.raises(getattr(module, error_name)) as caught:
+        getattr(module, class_name).from_json("[" * 100_000 + "]" * 100_000)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
+)
+@pytest.mark.parametrize(
+    "payload",
+    (
+        b"synthetic-parser-private-sentinel\xff",
+        '{"synthetic-parser-private-sentinel":',
+        "synthetic-parser-private-sentinel\ud800",
+    ),
+)
+def test_issue_3779_malformed_json_retains_no_private_exception(
+    module_name, class_name, error_name, payload
+):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    with pytest.raises(getattr(module, error_name)) as caught:
+        getattr(module, class_name).from_json(payload)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert "synthetic-parser-private-sentinel" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
+)
+@pytest.mark.parametrize("limit", ("depth", "bytes"))
+def test_issue_3779_bounds_run_before_the_json_decoder(
+    module_name, class_name, error_name, limit, monkeypatch
+):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    payload = (
+        "[" * 100_000 + "]" * 100_000
+        if limit == "depth"
+        else " " * (64 * 1024 * 1024 + 1)
+    )
+
+    def forbidden_decoder(*args, **kwargs):
+        pytest.fail("unbounded governance input reached the JSON decoder")
+
+    monkeypatch.setattr(json, "loads", forbidden_decoder)
+    with pytest.raises(getattr(module, error_name)):
+        getattr(module, class_name).from_json(payload)
