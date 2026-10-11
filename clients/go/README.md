@@ -19,6 +19,14 @@ spec (`docs/api/openapi.json`).
 
 ## Install
 
+Workflow transport methods (`WorkflowPreflight`, `WorkflowPreview`,
+`WorkflowStatus`, `WorkflowSubmitReceipt`, `WorkflowCancel`) return metadata-only
+`JSONObject` responses. They do not verify a receipt, grant reviewer authority,
+poll or automatically retry. The server's explicitly enabled custody service
+owns authority, state comparisons and durable idempotency. Cancellation records
+intent; a transport failure may leave the commit result unknown. Dedicated
+governed clients add strict workflow parsing and bounded polling separately.
+
 ```bash
 go get github.com/maziyarpanahi/openmed/clients/go
 ```

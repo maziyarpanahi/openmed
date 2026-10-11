@@ -38,6 +38,43 @@ def test_perturbers_are_seeded_and_reproject_gold_spans_without_drift():
         assert span.end > span.start
 
 
+@pytest.mark.parametrize("operator", ["bidi_in_value", "native_digit_substitution"])
+@pytest.mark.parametrize(
+    ("lang", "prefix", "value"),
+    [
+        ("fa", "کد ملی ", "0012345679"),
+        ("ar", "الرقم القومي ", "29001011234562"),
+        ("ur", "آدھار ", "2345 6789 0124"),
+        ("he", "טלפון ", "0501234567"),
+    ],
+)
+def test_native_digit_and_in_value_bidi_operators_are_seeded_and_detected(
+    operator, lang, prefix, value
+):
+    from openmed.core.safety_sweep import safety_sweep
+
+    fixture = BenchmarkFixture.from_mapping(
+        {
+            "id": "synthetic-rtl",
+            "text": prefix + value,
+            "language": lang,
+            "gold_spans": [
+                {"start": len(prefix), "end": len(prefix + value), "label": "ID_NUM"}
+            ],
+        }
+    )
+    first = perturb_fixture(fixture, operator, seed=6)
+    second = perturb_fixture(fixture, operator, seed=6)
+    assert first.text == second.text
+    assert first.gold_spans == second.gold_spans
+    assert first.text != fixture.text
+    detected = safety_sweep(first.text, [], lang=lang)
+    for span in first.gold_spans:
+        assert any(
+            entity.start <= span.start and entity.end >= span.end for entity in detected
+        )
+
+
 @pytest.mark.parametrize(
     "perturbation",
     [
