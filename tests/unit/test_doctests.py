@@ -174,6 +174,7 @@ def _execute_block(
     block: _DocBlock, namespace: dict[str, Any], blocked_effects: list[str]
 ) -> None:
     """Execute unchanged code against actual APIs, without exposing error text."""
+    failure_reason = None
     try:
         code = compile("\n" * (block.line - 1) + block.source, block.page, "exec")
         if block.fragment is not None:
@@ -185,8 +186,11 @@ def _execute_block(
     except _SnippetError:
         raise
     except BaseException:
-        reason = "external_effect_blocked" if blocked_effects else "snippet_failed"
-        raise _SnippetError(reason, block.page, block.line) from None
+        failure_reason = (
+            "external_effect_blocked" if blocked_effects else "snippet_failed"
+        )
+    if failure_reason is not None:
+        raise _SnippetError(failure_reason, block.page, block.line)
     if blocked_effects:
         # A broad exception handler in a snippet must not hide an I/O attempt.
         raise _SnippetError("external_effect_blocked", block.page, block.line)
@@ -289,7 +293,164 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
         "handle_closed_reason": callbacks.append,
         "_review_calls": callbacks,
     }
-    if page == "agent/error-envelopes.md":
+    if page == "agent/action-ledger.md":
+        namespace["ledger_directory"] = Path("synthetic-action-ledger")
+    elif page == "agent/resource-budgets.md":
+        namespace.update(
+            handle_budget_stop=callbacks.append,
+            execute_next_action=lambda: callbacks.append("synthetic-action"),
+        )
+    elif page == "agent/guarded-dispatch.md":
+        from tests.fixtures.agent.guarded_dispatch import DispatchHarness
+
+        harness = DispatchHarness()
+        namespace.update(
+            registered_spec=harness.spec,
+            resolved_arguments=harness.arguments,
+            adapter=harness.adapter(),
+            _dispatch_harness=harness,
+        )
+    elif page == "agent/effect-admission.md":
+        from openmed.agent.admission import (
+            EffectAdmissionController,
+            SQLiteAdmissionStore,
+        )
+        from openmed.agent.approvals import (
+            ApprovalTokenSigner,
+            ApprovalTokenVerifier,
+            InMemoryApprovalNonceStore,
+            dispatch_with_approval_token,
+        )
+        from openmed.agent.identifiers import WorkflowId
+
+        key = b"synthetic-docs-key-32-bytes-or-more"
+        workflow_id = WorkflowId("workflow:org.example/docs@1.0.0")
+        store = SQLiteAdmissionStore(
+            Path("synthetic-admission.sqlite"), Path("synthetic-anchor.sqlite"), key
+        )
+        store.initialize()
+        controller = EffectAdmissionController(store)
+        controller.enable(workflow_id=workflow_id, now=1_700_000_000)
+        digest = "sha256:" + "a" * 64
+        role = "role:org.example/reviewer@1.0.0"
+        namespace.update(
+            admission=controller,
+            workflow_id=workflow_id,
+            dispatch_with_approval_token=dispatch_with_approval_token,
+            token=ApprovalTokenSigner(key, clock=lambda: 1_700_000_000).issue(
+                action_digest=digest,
+                reviewer_role=role,
+                expires_at=1_700_000_060,
+            ),
+            action_digest=digest,
+            reviewer_role=role,
+            verifier=ApprovalTokenVerifier(key, InMemoryApprovalNonceStore()),
+            effect_adapter=lambda: callbacks.append("synthetic-effect"),
+        )
+    elif page == "agent/runtime-revocation.md":
+        from openmed.agent.permissions.runtime_authority import (
+            delegation_authorities,
+            grant_authority,
+            ticket_authority,
+        )
+        from tests.fixtures.agent.authority_status import SyntheticAuthority
+
+        fixture = SyntheticAuthority()
+        namespace.update(
+            grant_verifier=fixture.grant_verifier,
+            manifest=fixture.grant,
+            grant_request=fixture.grant_request,
+            ticket_verifier=fixture.ticket_verifier,
+            ticket=fixture.ticket,
+            ticket_request=fixture.ticket_request,
+            delegation_verifier=fixture.delegation_verifier,
+            chain=fixture.chain,
+            runtime=fixture.runtime,
+            grant_authority=grant_authority,
+            ticket_authority=ticket_authority,
+            delegation_authorities=delegation_authorities,
+            _authority_fixture=fixture,
+        )
+    elif page == "agent/purpose-bound-access.md":
+        from openmed.agent.correlation import RunId
+        from openmed.agent.permissions import (
+            AccessTicket,
+            AccessTicketRequest,
+            RecordSelector,
+            ToolAction,
+        )
+
+        key = b"synthetic-docs-key-32-bytes-or-more"
+        selectors = tuple(
+            RecordSelector.from_value(kind=kind, value=value, key=key)
+            for kind, value in (
+                ("selector:org.example/patient@1.0.0", "synthetic-patient"),
+                ("selector:org.example/encounter@1.0.0", "synthetic-encounter"),
+            )
+        )
+        action = ToolAction(
+            "tool:org.example/fhir@1.0.0", "action:org.example/write@1.0.0"
+        )
+        ticket = AccessTicket(
+            RunId("run_" + "1" * 32),
+            "purpose:org.example/docs@1.0.0",
+            ("data:org.example/observations@1.0.0",),
+            selectors,
+            (action,),
+            2_000_000_000,
+        )
+        request = AccessTicketRequest(
+            ticket.run_id,
+            ticket.purpose,
+            ticket.permitted_data_classes,
+            selectors,
+            action,
+        )
+
+        class SyntheticResolver:
+            def resolve(self, reference, *, resource):
+                del reference, resource
+                return (selectors,)
+
+        namespace.update(
+            selector_key=key,
+            write_ticket=ticket,
+            write_request=request,
+            resolver=SyntheticResolver(),
+            proposed_resource={
+                "resourceType": "Observation",
+                "subject": {"reference": "Patient/synthetic-patient"},
+                "encounter": {"reference": "Encounter/synthetic-encounter"},
+            },
+            render_local_preview=lambda value: value,
+        )
+    elif page == "agent/run-invariants.md":
+        from openmed.agent.action_graph import ActionNode
+        from openmed.agent.correlation import ActionCorrelation, ActionId, RunId
+        from openmed.agent.event_sequence import EventReference
+        from openmed.agent.outcomes import OutcomeClass, WorkflowOutcome
+        from openmed.agent.run_invariants import CompletedRun, RunAction
+        from openmed.agent.timing import ActionTiming, RunTiming
+
+        run = RunId("run_" + "1" * 32)
+        action = ActionId("act_" + "2" * 32)
+        outcome = WorkflowOutcome(OutcomeClass.SUCCESS, "completed")
+        namespace.update(
+            completed_run=CompletedRun(
+                run_id=run,
+                events=(EventReference(run.serialize(), "synthetic-event", 0),),
+                terminal_sequence_number=0,
+                graph=(ActionNode(action.serialize(), "tool:org.example/docs@1.0.0"),),
+                actions=(
+                    RunAction(ActionCorrelation(run, action), "completed", outcome),
+                ),
+                timing=RunTiming(0, 3, correlation_id=run.serialize()),
+                action_timings=(ActionTiming(action.serialize(), 1, 2),),
+                outcome=outcome,
+            ),
+            handle_incomplete_run=callbacks.append,
+        )
+    elif page == "agent/error-envelopes.md":
         from openmed.agent import RunId
 
         def run_tool() -> None:
@@ -476,6 +637,10 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
 
 
 def _prepare_followup(page: str, namespace: dict[str, Any]) -> None:
+    if page == "agent/human-approval-tokens.md" and "key" in namespace:
+        from openmed.mcp.consent_receipts import StaticConsentKeyProvider
+
+        namespace["key_provider"] = StaticConsentKeyProvider(namespace["key"])
     if page == "agent/quality-measure-evidence.md" and "packet" in namespace:
         namespace.update(
             previous_packet=namespace["packet"], current_packet=namespace["packet"]
@@ -564,6 +729,8 @@ def test_snippet_errors_do_not_echo_exception_or_source() -> None:
         _execute_block(block, {}, [])
     assert str(error.value) == "snippet_failed: synthetic.md:7"
     assert sentinel not in str(error.value)
+    assert error.value.__context__ is None
+    assert error.value.__cause__ is None
 
 
 @pytest.mark.parametrize(

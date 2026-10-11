@@ -164,7 +164,7 @@ from openmed.agent.permissions import (
     preview_with_fhir_write_scope,
 )
 
-# resolver, selector_key, ticket, request, and proposed_resource are provided
+# resolver, selector_key, write_ticket, write_request, and proposed_resource are provided
 # by the trusted local application. The payload and resolver are synthetic
 # in tests; no model inference or server connection is required.
 guard = FHIRWriteScopeVerifier(
@@ -176,8 +176,8 @@ guard = FHIRWriteScopeVerifier(
 )
 preview = preview_with_fhir_write_scope(
     proposed_resource,
-    ticket,
-    request,
+    write_ticket,
+    write_request,
     guard,
     lambda: render_local_preview(proposed_resource),
 )
