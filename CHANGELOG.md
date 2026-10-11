@@ -169,6 +169,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added local revisioned agent-handoff storage with bounded review leases,
+  atomic competing-decision refusals, exact action/evidence commitments and
+  append-only opaque decision receipts preserved across restart (#3666).
+
 - Added fail-closed purpose-ticket authorization for complete typed tool-result
   batches, with independent patient/encounter/namespace/snapshot scope checks,
   strict nested field projections, original evidence identity and content-free
