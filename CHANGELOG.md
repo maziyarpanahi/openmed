@@ -189,6 +189,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added content-free v3.1 release-gate adapters for executed adversarial and
+  recovery reports and versioned replay, reference-server and clinician-agreement
+  inputs, with canonical source digests and fail-closed coverage checks (#3775).
+
 - Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
   for the OMOP quality bridge, with value-free diagnostics, strict version and
   table allowlists, and synthetic leakage and status regression fixtures (#3799).
