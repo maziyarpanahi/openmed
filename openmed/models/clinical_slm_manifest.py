@@ -27,6 +27,7 @@ from dataclasses import dataclass, replace
 from functools import wraps
 from itertools import islice
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Any, Final
 
 CLINICAL_SLM_MANIFEST_SCHEMA_VERSION: Final = "openmed.clinical-slm-artifact.v1"
@@ -42,7 +43,16 @@ MAX_MODEL_ID_LENGTH: Final = 256
 MAX_PATH_LENGTH: Final = 512
 MAX_ARTIFACT_BYTES: Final = (1 << 63) - 1
 MAX_MANIFEST_BYTES: Final = 8 * 1024 * 1024
-_HAS_SECURE_LOCAL_READ = os.name == "posix" and hasattr(os, "O_NOFOLLOW")
+_HAS_SECURE_LOCAL_READ = (
+    os.name == "posix"
+    and hasattr(os, "O_NOFOLLOW")
+    and hasattr(os, "O_DIRECTORY")
+    and os.open in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.stat in os.supports_follow_symlinks
+    and os.listdir in os.supports_fd
+    and os.scandir in os.supports_fd
+)
 
 _DIGEST_RE = re.compile(r"^(?:sha256:)?[0-9a-fA-F]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:+/@-]{0,127}$")
@@ -115,6 +125,8 @@ _MANIFEST_FIELDS: Final = frozenset(
         "manifest_digest",
         "manifest_sha256",
         "digest",
+        "context_limits",
+        "required_runtime_features",
     }
 )
 _COMPONENT_FIELDS: Final = frozenset(
@@ -173,6 +185,10 @@ _ERROR_MESSAGES: Final = {
     "component_size_mismatch": "clinical SLM package component size does not match",
     "component_digest_mismatch": "clinical SLM package component digest does not match",
     "component_mutated": "clinical SLM package component changed during verification",
+    "platform_unsupported": "clinical SLM secure package reads are unsupported",
+    "undeclared_component": "clinical SLM package contains an undeclared member",
+    "invalid_context_limits": "clinical SLM manifest context limits are invalid",
+    "invalid_runtime_features": "clinical SLM runtime requirements are invalid",
 }
 _SAFE_ERROR_FIELDS: Final = frozenset(
     {
@@ -187,6 +203,8 @@ _SAFE_ERROR_FIELDS: Final = frozenset(
         "supported_tasks",
         "manifest_digest",
         "package_root",
+        "context_limits",
+        "required_runtime_features",
     }
 )
 _MISSING = object()
@@ -825,8 +843,10 @@ def _manifest_material(
     supported_tasks: Sequence[str],
     offline: bool,
     human_review_required: bool,
+    context_limits: Mapping[str, int] | None,
+    required_runtime_features: tuple[str, ...] | None,
 ) -> dict[str, Any]:
-    return {
+    material = {
         "components": [item.to_dict() for item in components],
         "human_review_required": human_review_required,
         "licenses": [item.to_dict() for item in licenses],
@@ -838,6 +858,44 @@ def _manifest_material(
         "schema_version": schema_version,
         "supported_tasks": list(supported_tasks),
     }
+    # Omit absent additions so existing manifests keep their exact digest.
+    if context_limits is not None:
+        material["context_limits"] = dict(context_limits)
+    if required_runtime_features is not None:
+        material["required_runtime_features"] = list(required_runtime_features)
+    return material
+
+
+def _normalise_context_limits(value: Any) -> Mapping[str, int] | None:
+    if value is None:
+        return None
+    fields = {"max_context_tokens", "max_input_tokens", "max_output_tokens"}
+    if not isinstance(value, Mapping):
+        _fail("invalid_context_limits", "context_limits")
+    values = _mapping_copy(value, field_name="context_limits")
+    if set(values) != fields:
+        _fail("invalid_context_limits", "context_limits")
+    limits = {key: values[key] for key in sorted(fields)}
+    if any(type(item) is not int or not 0 < item <= 2**20 for item in limits.values()):
+        _fail("invalid_context_limits", "context_limits")
+    if (
+        limits["max_input_tokens"] + limits["max_output_tokens"]
+        > limits["max_context_tokens"]
+    ):
+        _fail("invalid_context_limits", "context_limits")
+    return MappingProxyType(limits)
+
+
+def _normalise_runtime_features(value: Any) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (tuple, list)) or not 1 <= len(value) <= 16:
+        _fail("invalid_runtime_features", "required_runtime_features")
+    if any(type(item) is not str or _TASK_RE.fullmatch(item) is None for item in value):
+        _fail("invalid_runtime_features", "required_runtime_features")
+    if len(set(value)) != len(value):
+        _fail("invalid_runtime_features", "required_runtime_features")
+    return tuple(sorted(value))
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -848,7 +906,9 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
     ``templates``, and ``quantization``.  Each role is represented by one or
     more content-addressed artifacts.  ``manifest_digest`` is derived from
     every field except itself and is checked when supplied by a serialized
-    manifest.
+    manifest. Optional ``context_limits`` and ``required_runtime_features``
+    are likewise immutable and digest-bound when present; omission preserves
+    the serialized form and digest of existing generic manifests.
     """
 
     model_id: str
@@ -862,6 +922,8 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
     offline: bool = True
     human_review_required: bool = True
     manifest_digest: str | None = None
+    context_limits: Mapping[str, int] | None = None
+    required_runtime_features: tuple[str, ...] | None = None
 
     @_safe_boundary
     def __post_init__(self) -> None:
@@ -889,6 +951,14 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
         object.__setattr__(self, "licenses", licenses)
         tasks = _normalise_tasks(self.supported_tasks)
         object.__setattr__(self, "supported_tasks", tasks)
+        object.__setattr__(
+            self, "context_limits", _normalise_context_limits(self.context_limits)
+        )
+        object.__setattr__(
+            self,
+            "required_runtime_features",
+            _normalise_runtime_features(self.required_runtime_features),
+        )
         if type(self.offline) is not bool or not self.offline:
             _fail("offline_required", "offline")
         if (
@@ -908,6 +978,8 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
             supported_tasks=tasks,
             offline=self.offline,
             human_review_required=self.human_review_required,
+            context_limits=self.context_limits,
+            required_runtime_features=self.required_runtime_features,
         )
         expected_digest = _sha256_bytes(_canonical_json(material).encode("utf-8"))
         if self.manifest_digest is not None:
@@ -1066,6 +1138,8 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
                 default=True,
             ),
             manifest_digest=digest,
+            context_limits=fields.get("context_limits"),
+            required_runtime_features=fields.get("required_runtime_features"),
         )
 
     @classmethod
@@ -1097,7 +1171,7 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic JSON-compatible manifest mapping."""
 
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "model_id": self.model_id,
             "model_version": self.model_version,
@@ -1110,6 +1184,11 @@ class ClinicalSLMArtifactManifest(Mapping[str, Any]):
             "human_review_required": self.human_review_required,
             "manifest_digest": self.manifest_digest,
         }
+        if self.context_limits is not None:
+            payload["context_limits"] = dict(self.context_limits)
+        if self.required_runtime_features is not None:
+            payload["required_runtime_features"] = list(self.required_runtime_features)
+        return payload
 
     def to_json(self) -> str:
         """Return compact, canonical JSON for a package manifest."""
@@ -1492,12 +1571,81 @@ def _hash_local_artifact(root: Path, relative_path: str) -> tuple[str, int]:
     return f"sha256:{digest.hexdigest()}", count
 
 
+def _verify_package_inventory(root: Path, expected_files: set[str]) -> None:
+    """Reject undeclared members using bounded, no-follow directory traversal."""
+    directories = {
+        str(parent)
+        for name in expected_files
+        for parent in PurePosixPath(name).parents
+        if str(parent) != "."
+    }
+    if len(directories) > MAX_COMPONENTS:
+        _fail("package_invalid", error_type=ClinicalSLMArtifactError)
+    seen: set[str] = set()
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+    def walk(descriptor: int, prefix: str, depth: int) -> None:
+        if depth > 32:
+            _fail("unsafe_component_path", error_type=ClinicalSLMArtifactError)
+        before = os.fstat(descriptor)
+        with os.scandir(descriptor) as entries:
+            for entry in entries:
+                name = f"{prefix}/{entry.name}" if prefix else entry.name
+                metadata = os.stat(entry.name, dir_fd=descriptor, follow_symlinks=False)
+                if stat.S_ISLNK(metadata.st_mode):
+                    _fail("unsafe_component_path", error_type=ClinicalSLMArtifactError)
+                if stat.S_ISDIR(metadata.st_mode):
+                    if name not in directories:
+                        _fail(
+                            "undeclared_component", error_type=ClinicalSLMArtifactError
+                        )
+                    child = os.open(entry.name, flags, dir_fd=descriptor)
+                    try:
+                        walk(child, name, depth + 1)
+                        current = os.stat(
+                            entry.name, dir_fd=descriptor, follow_symlinks=False
+                        )
+                        opened = os.fstat(child)
+                        if (current.st_dev, current.st_ino) != (
+                            opened.st_dev,
+                            opened.st_ino,
+                        ):
+                            _fail(
+                                "component_mutated", error_type=ClinicalSLMArtifactError
+                            )
+                    finally:
+                        os.close(child)
+                elif stat.S_ISREG(metadata.st_mode) and name in expected_files:
+                    seen.add(name)
+                else:
+                    _fail("undeclared_component", error_type=ClinicalSLMArtifactError)
+        if _file_identity(before) != _file_identity(os.fstat(descriptor)):
+            _fail("component_mutated", error_type=ClinicalSLMArtifactError)
+
+    try:
+        descriptor = os.open(root, flags)
+        try:
+            walk(descriptor, "", 0)
+            opened = os.fstat(descriptor)
+            named = root.lstat()
+            if (opened.st_dev, opened.st_ino) != (named.st_dev, named.st_ino):
+                _fail("component_mutated", error_type=ClinicalSLMArtifactError)
+        finally:
+            os.close(descriptor)
+    except OSError:
+        _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
+    if seen != expected_files:
+        _fail("component_missing_on_disk", error_type=ClinicalSLMArtifactMissingError)
+
+
 @_safe_boundary
 def verify_clinical_slm_package(
     package_root: str | Path,
     manifest: ClinicalSLMArtifactManifest | Mapping[str, Any] | None = None,
     *,
     manifest_filename: str = CLINICAL_SLM_MANIFEST_FILENAME,
+    expected_manifest_digest: str | None = None,
+    reject_undeclared_files: bool = False,
 ) -> ClinicalSLMVerificationResult:
     """Verify a complete local package before model construction.
 
@@ -1505,10 +1653,33 @@ def verify_clinical_slm_package(
     The returned result contains only counts and the manifest digest.  Any
     missing, symlinked, resized, changed, or digest-mismatched artifact raises
     a content-free :class:`ClinicalSLMArtifactError` subclass.
+
+    Args:
+        package_root: Local directory containing regular package files.
+        manifest: Validated metadata, or ``None`` to read the disk manifest.
+        manifest_filename: Relative path to the persisted manifest.
+        expected_manifest_digest: Optional pin from a trusted channel,
+            independent of the package's self-digest.
+        reject_undeclared_files: Require the complete directory inventory to
+            contain only declared components and the matching disk manifest.
+
+    Returns:
+        Aggregate counts and the verified manifest digest.
+
+    Raises:
+        ClinicalSLMManifestError: For invalid metadata, unsupported secure file
+            APIs, unsafe paths, undeclared files or a digest mismatch.
     """
 
+    if type(reject_undeclared_files) is not bool:
+        _fail("invalid_input")
     if not _HAS_SECURE_LOCAL_READ:
-        _fail("component_unreadable", error_type=ClinicalSLMArtifactError)
+        _fail(
+            "platform_unsupported"
+            if reject_undeclared_files
+            else "component_unreadable",
+            error_type=ClinicalSLMArtifactError,
+        )
     root = _validated_package_root(package_root)
     if manifest is None:
         if type(manifest_filename) is not str or not manifest_filename:
@@ -1518,7 +1689,12 @@ def verify_clinical_slm_package(
                 error_type=ClinicalSLMArtifactError,
             )
         relative_manifest = _normalise_path(manifest_filename)
-        _local_artifact_path(root, relative_manifest)
+        try:
+            _local_artifact_path(root, relative_manifest)
+        except ClinicalSLMArtifactMissingError:
+            if reject_undeclared_files:
+                _fail("manifest_missing", error_type=ClinicalSLMArtifactMissingError)
+            raise
         with _open_local_file(root, relative_manifest) as handle:
             payload = handle.read(MAX_MANIFEST_BYTES + 1)
         loaded = ClinicalSLMArtifactManifest.from_json(
@@ -1526,6 +1702,32 @@ def verify_clinical_slm_package(
         )
     else:
         loaded = validate_clinical_slm_manifest(manifest, require_manifest_digest=True)
+    if (
+        expected_manifest_digest is not None
+        and loaded.manifest_digest
+        != _normalise_digest(expected_manifest_digest, "manifest_digest")
+    ):
+        _fail(
+            "manifest_digest_mismatch",
+            error_type=ClinicalSLMArtifactDigestMismatchError,
+        )
+    expected_files = {item.path for item in loaded.components}
+    if reject_undeclared_files:
+        relative_manifest = _normalise_path(manifest_filename)
+        if relative_manifest in expected_files:
+            _fail("invalid_component", error_type=ClinicalSLMArtifactError)
+        expected_files.add(relative_manifest)
+        _verify_package_inventory(root, expected_files)
+        # Strict admission binds the on-disk manifest even when supplied as an object.
+        with _open_local_file(root, relative_manifest) as handle:
+            persisted = ClinicalSLMArtifactManifest.from_json(
+                handle.read(MAX_MANIFEST_BYTES + 1), require_manifest_digest=True
+            )
+        if persisted.manifest_digest != loaded.manifest_digest:
+            _fail(
+                "manifest_digest_mismatch",
+                error_type=ClinicalSLMArtifactDigestMismatchError,
+            )
 
     total_bytes = 0
     executable_count = 0
@@ -1546,6 +1748,9 @@ def verify_clinical_slm_package(
             )
         total_bytes += actual_size
         executable_count += int(artifact.executable)
+
+    if reject_undeclared_files:
+        _verify_package_inventory(root, expected_files)
 
     return ClinicalSLMVerificationResult(
         verified=True,

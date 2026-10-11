@@ -147,6 +147,9 @@ classification:
     - agent/trial-eligibility-review.md
     - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
+    - agent/runtime-revocation.md
+    - agent/guarded-dispatch.md
+    - agent/effect-admission.md
     - agent/governed-reference-workflow.md
     - agent/action-ledger.md
     - agent/deterministic-replay.md
@@ -197,6 +200,7 @@ classification:
     - model-loader.md
     - models/bundled-offline.md
     - clinical/clinical-brief.md
+    - clinical/local-backends.md
     - clinical/summary-output-normalization.md
     - clinical/summary-section-planning.md
     - demo/clinical-brief.md
@@ -247,6 +251,7 @@ classification:
     - clinical/nli-cascade.md
     - clinical/nli-abstention.md
     - models/clinical-nli.md
+    - clinical/sdoh-extraction.md
     - clinical/sdoh-temporal-qualifiers.md
     - clinical/sdoh-section-scope.md
     - clinical/sdoh-evidence-deduplication.md
@@ -259,6 +264,7 @@ classification:
     - clinical/sdoh-evidence.md
     - evaluation/sdoh-counterfactuals.md
     - evaluation/sdoh-false-positive-stress.md
+    - evaluation/sdoh-extraction.md
     - clinical/medication-change-relations.md
     - clinical/laboratory-result-relations.md
     - clinical/procedure-indication-relations.md
@@ -581,6 +587,8 @@ classification:
     - interop/fhir-bulk-data.md
     - interop/fhir-capability-fixtures.md
     - interop/fhir-write-preflight.md
+    - interop/fhir-transactions.md
+    - interop/fhir-write-labels.md
     - interop/fhir-conditional-writes.md
     - interop/fhir-write-provenance.md
     - interop/fhir-concurrency.md
@@ -651,6 +659,7 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
