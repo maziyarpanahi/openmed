@@ -6,9 +6,81 @@ from datetime import datetime
 
 import pytest
 
+from openmed.core.errors import InputError
+from openmed.core.language_router import LanguageRouter
 from openmed.core.pii_i18n import DEFAULT_PII_MODELS
 from openmed.core.pipeline import LanguageRoute, Pipeline
 from openmed.processing.outputs import PredictionResult
+
+
+@pytest.mark.parametrize(
+    ("source", "script"),
+    [
+        ("မြန်မာ", "Myanmar"),
+        ("ខ្មែរ", "Khmer"),
+        ("ລາວ", "Lao"),
+        ("සිංහල", "Sinhala"),
+        ("ދިވެހި", "Thaana"),
+        ("བོད", "Tibetan"),
+    ],
+)
+def test_auto_pipeline_rejects_unsupported_letters_before_model_inference(
+    source, script
+):
+    calls = []
+    router = LanguageRouter(use_optional_lid=False)
+    decision = router.route(source)
+    assert decision.runs[0].script == script
+    assert decision.runs[0].reason == "unsupported_script"
+    assert decision.confidence < 0.99
+    with pytest.raises(InputError, match="unsupported script") as exc:
+        Pipeline(
+            lang="auto",
+            language_router=router,
+            model_detector=lambda *a, **k: calls.append(a),
+        ).run(source)
+    assert source not in str(exc.value)
+    assert not calls
+    explicit = LanguageRouter(use_optional_lid=False, fallback_pack="en")
+    assert (
+        Pipeline(lang="auto", language_router=explicit)
+        .stage2_language_script(source)
+        .lang
+        == "en"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "lang", "identifier", "phone"),
+    [
+        (
+            "ผู้ป่วย เลขประจำตัวประชาชน 1101700203450 โทร 0812345678 เกิด 15.01.1980",
+            "th",
+            "1101700203450",
+            "0812345678",
+        ),
+        (
+            "תעודת זהות 123456782 טלפון 0501234567 נולד ב-15.01.1980",
+            "he",
+            "123456782",
+            "0501234567",
+        ),
+    ],
+)
+def test_thai_hebrew_auto_packs_detect_structured_phi_without_model(
+    source, lang, identifier, phone
+):
+    def empty(text, **kwargs):
+        return PredictionResult(
+            text=text, entities=[], model_name="synthetic", timestamp="2026-01-01"
+        )
+
+    result = Pipeline(lang="auto", model_detector=empty).run(source)
+    assert result.route.lang == lang
+    for value in (identifier, phone, "15.01.1980"):
+        assert value not in result.redacted_text
+        assert any(source[span.start : span.end] == value for span in result.spans)
+    assert any(span.canonical_label == "PHONE" for span in result.spans)
 
 
 def test_language_route_preserves_existing_positional_metadata_contract():

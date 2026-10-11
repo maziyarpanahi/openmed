@@ -554,3 +554,32 @@ def test_schema_rejects_source_text_in_review_fields(name, section, field):
     payload["review_packet"][section][0][field] = "synthetic private source sentence"
     with pytest.raises(ClinicalRecordSchemaError):
         validate_clinical_record(name, payload)
+
+
+@pytest.mark.parametrize("schema_name", ["brief_audit", "brief_response"])
+@pytest.mark.parametrize(
+    "mutation", ["private_text", "mapping", "estimator", "count", "class", "duplicate"]
+)
+def test_brief_budget_provenance_is_closed_and_bounded(schema_name, mutation):
+    audit, response = _reviewed_brief_records()
+    payload = response if schema_name == "brief_response" else audit
+    metadata = payload["metrics"]["length_budget"]
+    if mutation == "private_text":
+        metadata["note"] = "SYNTHETIC_PRIVATE_NOTE"
+    elif mutation == "mapping":
+        metadata["mapping_id"] = "SYNTHETIC_PRIVATE_MAPPING"
+    elif mutation == "estimator":
+        metadata["estimator_id"] = "SYNTHETIC_PRIVATE_ESTIMATOR"
+    elif mutation == "count":
+        metadata["budget"]["allocations"][0]["requested_tokens"] = 1_048_641
+    elif mutation == "class":
+        metadata["budget"]["allocations"][0]["evidence_class"] = (
+            "SYNTHETIC_PRIVATE_CLASS"
+        )
+    else:
+        metadata["budget"]["allocations"][1] = metadata["budget"]["allocations"][0]
+    assert list(
+        Draft202012Validator(load_clinical_record_schema(schema_name)).iter_errors(
+            payload
+        )
+    )
