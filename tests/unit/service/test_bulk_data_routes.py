@@ -58,6 +58,8 @@ def test_bulk_routes_poll_manifest_report_and_preserve_privacy_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", str(tmp_path))
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path))
     app = create_app()
     app.state.fhir_bulk_deidentifier = _fake_deidentify
     source = tmp_path / "synthetic-source"
@@ -67,7 +69,7 @@ def test_bulk_routes_poll_manifest_report_and_preserve_privacy_boundary(
     with TestClient(app, base_url="http://127.0.0.1") as client:
         started = client.post(
             "/fhir/bulk/exports",
-            json={"input_dir": str(source), "output_dir": str(output)},
+            json={"input_dir": source.name, "output_dir": output.name},
         )
         assert started.status_code == 202
         job_id = started.json()["job_id"]
@@ -96,6 +98,8 @@ def test_bulk_route_cancellation_is_reported_without_resource_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", str(tmp_path))
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path))
     app = create_app()
 
     def slow_deidentify(text: str, **_: Any) -> _FakeResult:
@@ -110,7 +114,7 @@ def test_bulk_route_cancellation_is_reported_without_resource_data(
     with TestClient(app, base_url="http://127.0.0.1") as client:
         started = client.post(
             "/fhir/bulk/exports",
-            json={"input_dir": str(source), "output_dir": str(output)},
+            json={"input_dir": source.name, "output_dir": output.name},
         )
         job_id = started.json()["job_id"]
         cancelled = client.delete(f"/fhir/bulk/exports/{job_id}")
@@ -160,3 +164,116 @@ def test_socket_blocked_smart_job_does_not_expose_credentials_or_urls() -> None:
     assert assertion_secret not in rendered
     assert phi_url not in rendered
     assert payload["status"] == "failed"
+
+
+@pytest.mark.parametrize(
+    "submitted",
+    [
+        "/etc/SYNTHETIC_PATH",
+        "../SYNTHETIC_PATH",
+        "~/.ssh",
+        "C:\\SYNTHETIC_PATH",
+        "one/../SYNTHETIC_PATH",
+        "one//SYNTHETIC_PATH",
+        "./SYNTHETIC_PATH",
+    ],
+)
+@pytest.mark.parametrize("field", ["input_dir", "output_dir", "checkpoint_path"])
+def test_bulk_paths_reject_lexical_escapes_without_side_effects(
+    tmp_path, monkeypatch, submitted, field, caplog
+):
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_INPUT_ROOTS", str(tmp_path))
+    monkeypatch.setenv("OPENMED_SERVICE_BULK_OUTPUT_ROOT", str(tmp_path))
+    source = tmp_path / "source"
+    _write_export(source)
+    before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
+    payload = {"input_dir": "source", "output_dir": "fresh"}
+    payload[field] = submitted
+    app = create_app()
+    app.state.fhir_bulk_deidentifier = _fake_deidentify
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        response = client.post("/fhir/bulk/exports", json=payload)
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "path_invalid"
+    assert (
+        sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
+        == before
+    )
+    assert not app.state.fhir_bulk_jobs._jobs
+    assert "SYNTHETIC_PATH" not in response.text + caplog.text
+
+
+def test_bulk_roots_disabled_and_symlink_or_existing_outputs_are_rejected(
+    tmp_path, monkeypatch
+):
+    from openmed.service.bulk_data import BulkPathError, BulkStoragePolicy
+
+    with pytest.raises(BulkPathError, match="bulk_paths_disabled"):
+        BulkStoragePolicy().prepare(
+            input_dir="/arbitrary",
+            output_dir="/arbitrary",
+            checkpoint_path=None,
+            job_id="synthetic",
+        )
+    source = tmp_path / "source"
+    _write_export(source)
+    policy = BulkStoragePolicy((tmp_path,), tmp_path)
+    with pytest.raises(BulkPathError, match="path_exists"):
+        policy.prepare(
+            input_dir="source",
+            output_dir="source",
+            checkpoint_path=None,
+            job_id="synthetic",
+        )
+    try:
+        (source / "escape.ndjson").symlink_to(tmp_path / "outside.ndjson")
+    except OSError:
+        pytest.skip("Symlink creation is unavailable on this platform")
+    with pytest.raises(BulkPathError, match="path_outside_root"):
+        policy.prepare(
+            input_dir="source",
+            output_dir="fresh",
+            checkpoint_path=None,
+            job_id="synthetic",
+        )
+    assert not (tmp_path / "fresh").exists()
+
+
+def test_bulk_safe_relative_paths_reserve_exclusive_output_and_checkpoint(tmp_path):
+    from openmed.service.bulk_data import BulkPathError, BulkStoragePolicy
+
+    _write_export(tmp_path / "source")
+    policy = BulkStoragePolicy((tmp_path,), tmp_path)
+    source, output, checkpoint = policy.prepare(
+        input_dir="source", output_dir="fresh", checkpoint_path=None, job_id="synthetic"
+    )
+    assert source == tmp_path / "source"
+    assert checkpoint == output / ".checkpoint-synthetic.json"
+    with pytest.raises(BulkPathError, match="path_exists"):
+        policy.prepare(
+            input_dir="source",
+            output_dir="fresh",
+            checkpoint_path=None,
+            job_id="synthetic",
+        )
+
+
+def test_bulk_path_io_failure_drops_private_exception_context(monkeypatch, tmp_path):
+    from pathlib import Path
+
+    from openmed.service.bulk_data import BulkPathError, BulkStoragePolicy
+
+    marker = "".join(("SYNTHETIC", "_PRIVATE", "_PATH"))
+
+    def fail(*args, **kwargs):
+        raise OSError(13, "permission denied", marker)
+
+    monkeypatch.setattr(Path, "mkdir", fail)
+    with pytest.raises(BulkPathError) as caught:
+        BulkStoragePolicy((), tmp_path).prepare(
+            input_dir=None, output_dir="new", checkpoint_path=None, job_id="synthetic"
+        )
+    assert caught.value.code == "path_invalid"
+    assert caught.value.__context__ is caught.value.__cause__ is None
+    assert marker not in str(caught.value)
