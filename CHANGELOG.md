@@ -111,6 +111,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Import-free effect-path inventory and local/CI guards for unclassified
+  HTTP/database effect candidates and built-in MCP, REST, CLI and Journey
+  dependencies reaching legacy FHIR/OpenMRS write-back paths. Keep narrative
+  extraction independent of legacy writer modules while preserving their public
+  parser imports (#3780).
 - Project export-ready clinical registry cases to protected local NAACCR XML
   files using a caller-supplied dictionary, field map and Journey fact resolver.
   Verify exact export and fact custody, validate declared types and lengths,
