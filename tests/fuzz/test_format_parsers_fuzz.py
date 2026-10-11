@@ -13,7 +13,10 @@ up EML/MSG, RTF, and ODT handlers or the X12 parser when those modules land.
 
 from __future__ import annotations
 
+import ast
+import importlib
 import importlib.util
+import json
 import multiprocessing
 import os
 import queue
@@ -592,3 +595,93 @@ def test_harness_terminates_parser_that_exceeds_time_budget() -> None:
     with _ParserWorker(timeout=0.05) as worker:
         with pytest.raises(AssertionError, match="exceeded the 0.050s parser budget"):
             worker.run("__hang__", b"synthetic")
+
+
+# Explicit inventory of every public governance from_json classmethod.
+_GOVERNANCE_JSON_TARGETS = (
+    ("openmed.agent.approval_evidence", "ApprovalEvidenceResult"),
+    ("openmed.agent.approvals.tokens", "ApprovalToken"),
+    ("openmed.agent.approvals.tokens", "ApprovalReceipt"),
+    ("openmed.agent.artifact_reference", "ArtifactReference"),
+    ("openmed.agent.correlation", "ActionCorrelation"),
+    ("openmed.agent.event_attributes", "EventAttributes"),
+    ("openmed.agent.outcomes", "WorkflowOutcome"),
+    ("openmed.agent.permissions.delegation", "DelegationGrant"),
+    ("openmed.agent.permissions.grants", "CapabilityGrantManifest"),
+    ("openmed.agent.policy_matrix", "PolicyDecisionMatrix"),
+    ("openmed.agent.reviewer_handoff", "ReviewerHandoffPacket"),
+    ("openmed.agent.run_summary", "RunSummary"),
+    ("openmed.agent.schema_compatibility", "CompatibilityResult"),
+    (
+        "openmed.agent.workflows.quality_measure_evidence",
+        "QualityMeasureEvidencePacket",
+    ),
+    ("openmed.agent.workflows.recovery", "RecoveryCheckpoint"),
+    ("openmed.agent.workflows.recovery", "RetiredJournalRecord"),
+    ("openmed.agent.workflows.recovery", "JournalRetirementPlan"),
+    ("openmed.mcp.consent_receipts", "ConsentReceipt"),
+)
+
+
+def test_governance_json_inventory_covers_every_public_parser() -> None:
+    import openmed.agent
+    import openmed.mcp
+
+    discovered = set()
+    for package in (openmed.agent, openmed.mcp):
+        root = Path(package.__file__).parent
+        for path in root.rglob("*.py"):
+            module = (
+                package.__name__
+                + "."
+                + ".".join(path.relative_to(root).with_suffix("").parts)
+            )
+            for node in ast.walk(ast.parse(path.read_text())):
+                if not isinstance(node, ast.ClassDef) or node.name.startswith("_"):
+                    continue
+                if any(
+                    isinstance(method, ast.FunctionDef)
+                    and method.name == "from_json"
+                    and any(
+                        isinstance(decorator, ast.Name)
+                        and decorator.id == "classmethod"
+                        for decorator in method.decorator_list
+                    )
+                    for method in node.body
+                ):
+                    discovered.add((module, node.name))
+    assert discovered == set(_GOVERNANCE_JSON_TARGETS)
+
+
+@st.composite
+def _governance_json_inputs(draw: st.DrawFn) -> str | bytes:
+    secret = "synthetic-parser-private-sentinel"
+    kind = draw(st.sampled_from(("random", "deep", "duplicate", "nonfinite", "large")))
+    if kind == "random":
+        return draw(st.binary(max_size=8192))
+    if kind == "deep":
+        depth = draw(st.integers(min_value=1, max_value=100000))
+        return "[" * depth + json.dumps(secret) + "]" * depth
+    if kind == "duplicate":
+        return json.dumps({"synthetic": secret})[:-1] + ',"synthetic":null}'
+    if kind == "nonfinite":
+        number = draw(st.sampled_from(("NaN", "Infinity", "-Infinity", "1e9999")))
+        return '{"synthetic":' + number + "}"
+    size = draw(st.integers(min_value=65537, max_value=1048576))
+    return json.dumps({"synthetic": secret + "x" * size})
+
+
+@pytest.mark.parametrize("module_name,class_name", _GOVERNANCE_JSON_TARGETS)
+@given(payload=_governance_json_inputs())
+def test_public_governance_parsers_return_only_typed_errors(
+    module_name: str, class_name: str, payload: str | bytes
+) -> None:
+    parser = getattr(importlib.import_module(module_name), class_name)
+    try:
+        result = parser.from_json(payload)
+    except ValueError as error:
+        assert type(error).__module__.startswith("openmed.")
+        assert "synthetic-parser-private-sentinel" not in str(error)
+    else:
+        # A valid generated payload must remain a stable typed round trip.
+        assert parser.from_json(result.to_json()) == result

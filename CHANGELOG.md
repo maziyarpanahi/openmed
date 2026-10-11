@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Bound five governance JSON readers before decoding and return their existing
+  typed malformed-input errors for excessive nesting, oversized input and
+  invalid JSON. Cover every public governance JSON reader with bounded property
+  tests and verify consent rejection through the MCP error envelope (#3779).
+
 - Added offline chart-abstraction scoring with synthetic gold fields, separate
   abstention errors, fact-bound source-support counts, field-type slices and
   deterministic value-free Wilson intervals (#3788).
