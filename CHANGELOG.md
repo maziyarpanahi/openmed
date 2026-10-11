@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in local NLI verification for summarization and grounding, with retained
+  contradiction and abstention outcomes, offset- and digest-bound audit records,
+  typed backend refusals and unchanged default serialization. Source and claim
+  text are omitted from verification metadata; no trained model is required
+  for explicit synthetic heuristic checks (#3987).
+
 - Report exact package/version exposure for the core install and each optional
   extra in the vulnerability gate, with offline uv exports, value-free scanner
   diagnostics and a static import guard for reviewed extra-only packages.
