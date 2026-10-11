@@ -7,8 +7,9 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -44,7 +45,13 @@ from openmed.structured.decision import (
 )
 from openmed.utils.validation import validate_model_name
 
-from .auth import ServiceAuth, parse_service_auth_config
+from .auth import (
+    ROUTE_POLICIES,
+    ServiceAuth,
+    parse_service_auth_config,
+    request_needs_admission,
+    validate_route_policies,
+)
 from .batcher import (
     BackpressureError,
     BatchPriorityHandle,
@@ -52,8 +59,14 @@ from .batcher import (
     DynamicBatcher,
     normalize_priority,
 )
-from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
+from .bulk_data import (
+    BulkPathError,
+    BulkStoragePolicy,
+    FHIRBulkJobConfig,
+    FHIRBulkJobManager,
+)
 from .coalesce import RequestCoalescer, coalescing_key
+from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -155,23 +168,9 @@ _MULTIMODAL_PREFLIGHT_ENV = "OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT"
 _MANIFEST_HEADER = "X-OpenMed-Manifest"
 _MAX_MANIFEST_HEADER_BYTES = 8192
 _MODEL_BACKED_PATHS = frozenset(
-    {
-        "/graphql",
-        "/analyze",
-        "/ground",
-        "/brief",
-        "/pii/extract",
-        "/pii/extract/stream",
-        "/pii/deidentify",
-        "/pii/deidentify/stream",
-        "/jobs",
-        _PRIVACY_GATEWAY_PATH,
-        _SMART_BACKEND_START_PATH,
-        _FHIR_BULK_EXPORT_PATH,
-        _FHIR_BULK_IMPORT_PATH,
-        _DECISION_PATH,
-        OPENHIM_MEDIATOR_PATH,
-    }
+    path
+    for (_, path), policy in ROUTE_POLICIES.items()
+    if policy.admission in {"model", "heavy"}
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -760,6 +759,9 @@ def create_app(
     *,
     max_request_body_bytes: Optional[int] = None,
     experimental_multimodal_preflight: Optional[bool] = None,
+    workflow_service: Optional[WorkflowGovernanceService] = None,
+    workflow_policy: Optional[WorkflowHTTPPolicy] = None,
+    workflow_clock: Optional[Callable[[], int]] = None,
 ) -> FastAPI:
     """Create the REST app, optionally enabling single-asset preflight.
 
@@ -768,9 +770,12 @@ def create_app(
         experimental_multimodal_preflight: Explicit experimental opt-in. When
             omitted, read OPENMED_SERVICE_EXPERIMENTAL_MULTIMODAL_PREFLIGHT;
             unset or false keeps the route absent.
+        workflow_service: Trusted local custody service for workflow routes.
+        workflow_policy: Server-owned workflow opt-ins; disabled by default.
+        workflow_clock: Integer Unix-seconds source for receipt validity checks.
 
     Returns:
-        The configured local service application.
+        Configured application, without starting its lifespan or an effect executor.
     """
 
     if experimental_multimodal_preflight is None:
@@ -783,6 +788,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
+        validate_route_policies(fastapi_app)
         runtime = ServiceRuntime.from_env(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
@@ -847,6 +853,7 @@ def create_app(
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
+    app.state.bulk_storage = BulkStoragePolicy.from_env()
     if security_config.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -964,8 +971,7 @@ def create_app(
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
-        path = request.url.path
-        if path in _MODEL_BACKED_PATHS:
+        if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
                 return _error_response(
@@ -1142,6 +1148,19 @@ def create_app(
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+        from .runtime import ModelNotServedError
+
+        if isinstance(exc, ModelNotServedError):
+            return _error_response(
+                422,
+                "model_not_served",
+                "Requested model is not served",
+                details=None,
+            )
+        if isinstance(exc, BulkPathError):
+            return _error_response(
+                400, exc.code, "Bulk storage request is not permitted", details=None
+            )
         del exc
         return _error_response(
             400,
@@ -1480,6 +1499,7 @@ def create_app(
         request: Request,
     ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
 
         async def _events():
             async for event in runtime.stream_pii_extract(
@@ -1607,21 +1627,30 @@ def create_app(
         ):
             return await run_in_threadpool(_profile_summary, payload)
 
-    @app.post("/brief", response_model=BriefResponse)
+    @app.post("/brief", response_model=BriefResponse, response_model_exclude_unset=True)
     async def brief_route(payload: BriefRequest, request: Request) -> Dict[str, Any]:
         """Return the shared local brief without recording protected content."""
+        from openmed.clinical.brief_cancellation import BriefCancellation
+
         from .brief import brief_response
 
+        cancellation = BriefCancellation()
         provider = getattr(request.app.state, "brief_context_provider", None)
         try:
-            response = await run_in_threadpool(
+            response = await asyncio.to_thread(
                 brief_response,
                 payload.text,
                 model=payload.model,
                 profile=payload.profile,
                 review_id=payload.review_id,
                 context_provider=provider,
+                cancellation=cancellation,
             )
+            set_access_log_brief(request, response)
+            return response
+        except asyncio.CancelledError:
+            cancellation.cancel()
+            response = brief_response("", cancellation=cancellation)
             set_access_log_brief(request, response)
             return response
         except (TypeError, ValueError):
@@ -1822,10 +1851,19 @@ def create_app(
         request: Request,
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
         config = _smart_backend_config_from_payload(payload)
+        job_id = uuid.uuid4().hex
+        _, output, checkpoint = request.app.state.bulk_storage.prepare(
+            input_dir=None,
+            output_dir=payload.output_dir,
+            checkpoint_path=payload.checkpoint_path,
+            job_id=job_id,
+        )
+        config = replace(config, output_dir=output, checkpoint_path=checkpoint)
         deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(config, deidentifier=deidentifier).to_dict()
+        return manager.start(config, deidentifier=deidentifier, job_id=job_id).to_dict()
 
     @app.get("/fhir/smart-backend/ingestions/{job_id}")
     async def smart_backend_ingestion_status(
@@ -1880,7 +1918,7 @@ def create_app(
         payload: DeidentifyJobRequest,
         request: Request,
     ) -> Dict[str, Any]:
-        _get_service_runtime(request)
+        _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
         record = queue.submit(payload)
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
@@ -1899,6 +1937,12 @@ def create_app(
         app,
         runtime_getter=_get_service_runtime,
         resource_getter=_get_journey_resource_catalog,
+    )
+
+    from .workflow_routes import WorkflowBoundaryMiddleware, mount_workflow_routes
+
+    mount_workflow_routes(
+        app, service=workflow_service, policy=workflow_policy, clock=workflow_clock
     )
 
     if app.state.tracing.enabled:
@@ -1931,6 +1975,8 @@ def create_app(
         log_config=service_log_config_from_env(),
         minimal_log_paths=(_MULTIMODAL_PREFLIGHT_PATH,),
     )
+    app.add_middleware(WorkflowBoundaryMiddleware)
+    validate_route_policies(app)
     return app
 
 
@@ -2488,7 +2534,9 @@ def _fhir_bulk_config_from_payload(
 ) -> FHIRBulkJobConfig:
     """Convert a validated route payload without retaining request metadata."""
 
-    input_dir = payload.input_dir or payload.source_dir
+    input_dir = (
+        payload.input_dir if payload.input_dir is not None else payload.source_dir
+    )
     return FHIRBulkJobConfig(
         input_dir=input_dir,
         output_dir=payload.output_dir,
@@ -2514,11 +2562,28 @@ def _start_fhir_bulk_job(
     request: Request,
 ):
     runtime = _get_service_runtime(request)
+    runtime.validate_served_model(payload.model_name)
     manager = _get_fhir_bulk_manager(request)
     config = _fhir_bulk_config_from_payload(payload)
+    if payload.input_dir is not None and payload.source_dir is not None:
+        raise BulkPathError("path_invalid")
+    if not config.is_local:
+        config.to_smart_config()
+    job_id = uuid.uuid4().hex
+    source, output, checkpoint = request.app.state.bulk_storage.prepare(
+        input_dir=payload.input_dir
+        if payload.input_dir is not None
+        else payload.source_dir,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        job_id=job_id,
+    )
+    config = replace(
+        config, input_dir=source, output_dir=output, checkpoint_path=checkpoint
+    )
     configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
     deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
-    return manager.start(config, deidentifier=deidentifier)
+    return manager.start(config, deidentifier=deidentifier, job_id=job_id)
 
 
 def _fhir_bulk_deidentifier(

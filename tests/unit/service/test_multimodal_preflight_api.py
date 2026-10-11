@@ -253,3 +253,38 @@ def test_wrong_transport_and_configured_body_ceiling():
     assert response.status_code == 415
     assert response.json()["error"]["code"] == "unsupported_media_type"
     assert CANARY not in response.text
+
+
+@pytest.mark.parametrize(
+    ("scopes", "status"), [([], 403), (["models:read"], 403), (["pii:read"], 200)]
+)
+def test_existing_authentication_policy_protects_opt_in_route(
+    monkeypatch, caplog, scopes, status
+):
+    from openmed.service.auth import hash_api_key
+
+    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_AUTH_API_KEYS",
+        json.dumps(
+            [{"id": "synthetic", "key_hash": hash_api_key(CANARY), "scopes": scopes}]
+        ),
+    )
+    data = manifest(width=8, height=8)
+    with (
+        caplog.at_level(logging.INFO, logger="openmed.service.access"),
+        client() as transport,
+    ):
+        missing = transport.post(PATH, headers=headers(data), content=PNG)
+        response = transport.post(
+            PATH, headers={**headers(data), "X-API-Key": CANARY}, content=PNG
+        )
+    assert missing.status_code == 401
+    assert response.status_code == status
+    if status == 200:
+        assert response.content == preflight_asset(data, PNG).to_json().encode()
+    else:
+        assert response.json()["error"]["code"] == "forbidden"
+    assert CANARY not in caplog.text
+    assert CANARY not in missing.text
+    assert CANARY not in response.text
