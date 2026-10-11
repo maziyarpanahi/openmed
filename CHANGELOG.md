@@ -189,6 +189,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline exact-source v3.1 agent candidate manifest runner,
+  `openmed gates agent-release` and a release script with deterministic
+  HMAC-signed, content-free gate decisions and fail-closed source checks (#3776).
+
 - Added content-free v3.1 release-gate adapters for executed adversarial and
   recovery reports and versioned replay, reference-server and clinician-agreement
   inputs, with canonical source digests and fail-closed coverage checks (#3775).
