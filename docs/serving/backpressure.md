@@ -11,7 +11,7 @@ OPENMED_SERVICE_BATCHING_ENABLED=true \
 OPENMED_SERVICE_BATCH_HIGH_WATERMARK=256 \
 OPENMED_SERVICE_BATCH_LOW_WATERMARK=128 \
 OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS=1000 \
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 The admission depth counts both requests waiting for batch dispatch and batches
