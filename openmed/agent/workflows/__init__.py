@@ -72,6 +72,11 @@ from .evidence_query import (
     make_query_access_decision,
     plan_evidence_query,
 )
+from .journey_abstraction import (
+    AbstractionFieldBinding,
+    AbstractionReviewReceipt,
+    build_journey_abstraction_evidence,
+)
 from .native_measure_evidence import build_native_measure_evidence_packet
 from .prior_auth_completeness import (
     PRIOR_AUTH_COMPLETENESS_SCHEMA,
@@ -111,12 +116,15 @@ from .quality_measure_evidence import (
 from .recovery import (
     RECOVERY_CHECKPOINT_SCHEMA_VERSION,
     RECOVERY_EVIDENCE_SCHEMA_VERSION,
+    RETIRED_JOURNAL_SCHEMA_VERSION,
     CheckpointJournal,
     CompensationLimit,
     EffectKind,
     EffectObservation,
     EffectRecord,
     EffectState,
+    JournalRetentionPolicy,
+    JournalRetirementPlan,
     ObservationState,
     RecoveryCheckpoint,
     RecoveryDecision,
@@ -124,6 +132,7 @@ from .recovery import (
     RecoveryError,
     RecoveryPhase,
     RecoveryReason,
+    RetiredJournalRecord,
     advance_checkpoint,
     derive_idempotency_key,
     recover_workflow,
@@ -141,6 +150,9 @@ from .trial_eligibility_review import (
 )
 
 __all__ = [
+    "AbstractionFieldBinding",
+    "AbstractionReviewReceipt",
+    "build_journey_abstraction_evidence",
     "COHORT_EXPLANATION_SCHEMA_VERSION",
     "CohortMembershipExplanation",
     "explain_cohort_membership",
@@ -243,6 +255,10 @@ __all__ = [
     "score_prior_authorization_packet",
     "RECOVERY_CHECKPOINT_SCHEMA_VERSION",
     "RECOVERY_EVIDENCE_SCHEMA_VERSION",
+    "RETIRED_JOURNAL_SCHEMA_VERSION",
+    "JournalRetentionPolicy",
+    "JournalRetirementPlan",
+    "RetiredJournalRecord",
     "CheckpointJournal",
     "CompensationLimit",
     "EffectKind",
