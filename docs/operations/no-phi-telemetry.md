@@ -1,5 +1,64 @@
 # No-PHI telemetry
 
+## Opt-in agent OpenTelemetry bridge
+
+`openmed.agent.telemetry.AgentTelemetry` maps validated `EventAttributes` and
+existing `ActionPhase` values to caller-owned OpenTelemetry traces and metrics.
+It is disabled by default, including when pipeline telemetry is enabled through
+the environment. Disabled telemetry imports no OpenTelemetry modules, touches
+no injected sinks or clock, and creates no spans. If the optional OpenTelemetry
+API is absent, enabling the adapter without injected sinks remains a no-op.
+The bridge creates no SDK provider, processor, reader, exporter, or network path.
+Applications may install the existing `otel` extra and configure their own sinks.
+
+```python
+from openmed.agent.event_attributes import EventAttributes
+from openmed.agent.telemetry import AgentTelemetry
+
+telemetry = AgentTelemetry(enabled=True)  # explicit opt-in; uses global API sinks
+event = EventAttributes.from_mapping({
+    "sequence_number": 0,
+    "execution_stage": "completed",
+    "outcome_class": "success",
+    "outcome_reason": "completed",
+    "duration_ms": 12.5,
+})
+with telemetry.event_span("completed", event):
+    pass  # or wrap the local operation, omitting duration_ms to measure its latency
+```
+
+This example emits `openmed.agent.completed` with the five validated event fields
+prefixed by `openmed.agent.`. Span names use only the seven existing action
+phases. Nested contexts inherit the caller's ambient parent; the bridge does not
+invent a run lifecycle, enforce phase transitions, or decide approvals. Review
+and denial observations use existing outcome classes and reasons. There is no
+new breaker-trip or approval label: producers must use the existing validated
+event vocabulary rather than attach decision objects, arguments, or outputs.
+
+Span fields are limited to existing execution stages, outcomes/reasons, digests,
+bounded counts/durations, and flags. All correlation and governance identifiers
+are omitted by default. `run_id_mode="hash"` replaces the validated opaque run
+ID with a `sha256:` digest under `openmed.agent.run_id`, using the domain prefix
+`openmed.agent.telemetry.run_id.v1` plus a NUL separator. No raw run ID or other
+identifier is emitted. This digest is stable for correlation and is not an
+anonymization guarantee; leave the default `omit` mode for aggregate-only traces.
+Attributes are revalidated before any span or counter changes. Arbitrary
+mappings, unknown phases, and raw payload fields fail with value-free errors.
+
+Each entered context increments `openmed.agent.events` once and records
+`openmed.agent.event.duration` in milliseconds when it exits, including on
+exceptions. An event's supplied duration is authoritative; otherwise the context
+is measured with a monotonic clock (injectable for offline tests). Both metrics
+use only the closed phase, execution stage, outcome class/reason, and flags as
+dimensions. Counts, digests, identifiers, sequences, and durations never become
+metric labels. Exceptions propagate without automatic exception events, stack
+traces, or status descriptions. The context yields no raw span for arbitrary
+attribute writes. Caller-owned providers still control resources, sampling,
+ambient context, and export; the privacy boundary covers bridge-produced fields.
+
+The bridge targets the Python agent event and OpenTelemetry API contracts named
+in #3792; it adds no Swift/OpenMedKit execution surface.
+
 `openmed.core.no_phi_telemetry.NoPHITelemetryExporter` provides a small,
 local-first telemetry boundary for pipeline health and latency. It stores
 aggregate counters and fixed-bucket latency histograms in memory. `export()`

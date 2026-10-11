@@ -123,3 +123,13 @@ The scheduled workflow uploads queue and decision evidence as workflow
 artifacts. It opens a configuration-only pull request when a recipe actually
 changes. The workflow never trains, converts, or publishes model artifacts;
 the normal downstream release gates remain mandatory before promotion.
+
+## v3.1 agent candidate decision
+
+`python scripts/release/agent_release_gate.py` shares the exact-source runner
+with `openmed gates agent-release`. Supply a full source SHA, local wheel/sdist,
+tool catalog, policy, source-bound aggregate evidence, private signing-key file
+and a new output path outside the checkout. See the [candidate input and
+verification contract](../../docs/evaluation/v3.1-agent-gates.md#exact-source-candidate-runner).
+The command never builds, tags, publishes or creates a release; its exit codes
+are 0 for READY, 1 for signed NOT_READY, and 2 for configuration/output errors.
