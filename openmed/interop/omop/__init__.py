@@ -152,6 +152,19 @@ _NLP_STAGING_EXPORTS = frozenset(
 )
 
 
+_SQLITE_COMMIT_EXPORTS = frozenset(
+    {
+        "OmopDatabaseError",
+        "OmopDatabaseStatus",
+        "OmopDatabasePreview",
+        "OmopDatabaseResult",
+        "initialize_omop_commit_metadata",
+        "preview_omop_database",
+        "SQLiteOmopBatchCommitter",
+    }
+)
+
+
 def __getattr__(name: str) -> Any:
     """Load newer OMOP contracts without widening import cycles."""
 
@@ -161,6 +174,8 @@ def __getattr__(name: str) -> Any:
         module_name = ".quality"
     elif name in _NLP_STAGING_EXPORTS:
         module_name = "..lineage.nlp_omop_writes"
+    elif name in _SQLITE_COMMIT_EXPORTS:
+        module_name = ".sqlite_committer"
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module = import_module(module_name, __name__)
@@ -178,6 +193,13 @@ __all__ = [
     "NlpOmopStagingError",
     "NlpOmopWriteLineage",
     "stage_nlp_omop_tables",
+    "OmopDatabaseError",
+    "OmopDatabaseStatus",
+    "OmopDatabasePreview",
+    "OmopDatabaseResult",
+    "initialize_omop_commit_metadata",
+    "preview_omop_database",
+    "SQLiteOmopBatchCommitter",
     "OMOP_DATASET_SPLITS",
     "OMOP_DOMAIN_TABLES",
     "OMOP_FACT_PROJECTION_CDM_VERSION",
