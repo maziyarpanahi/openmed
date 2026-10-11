@@ -125,3 +125,104 @@ not row values.
 This API does not certify an OMOP deployment or authorize autonomous clinical
 decisions. Keep the reviewer, transaction, vocabulary-snapshot, and rollback
 controls required by the surrounding workflow.
+
+## Explicit SQLite transactional adapter
+
+`SQLiteOmopBatchCommitter` implements the batch protocol for the exact eleven
+loader-owned SQLite tables. It supports complete-row inserts, non-key updates
+and tombstones within a vocabulary-checked batch. Custom tables, explicit
+extra references, incomplete inserts, primary-key updates, different DDL,
+owned-table triggers and external inbound foreign keys are refused. Batch and
+target snapshots are limited to 10,000 rows; object inventory is limited to 256.
+It uses parameterized values and quotes identifiers from the checked schema.
+
+Provision the target explicitly with the existing `create_omop_schema` and
+`initialize_omop_commit_metadata(connection, target_snapshot)`. Initialization
+requires a caller-owned connection outside a transaction and adds only receipt
+and vocabulary metadata. It refuses an existing different snapshot rather than
+overwriting it. The operator attests vocabulary versions and retirement state
+through this protected metadata; the loader's SQLite catalog has no independent
+vocabulary-version or retirement column. The adapter also checks actual proposed
+target vocabulary identifiers and standard-concept flags against the snapshot.
+
+```python
+from openmed.interop.omop import (
+    SQLiteOmopBatchCommitter,
+    preview_omop_database,
+)
+
+packet = preview_omop_database(
+    connection,
+    batch,
+    vocabulary_snapshot=target_snapshot,
+    vocabulary_mappings=target_mapping_provenance,
+    rollback_manifest=rollback_manifest,
+)
+```
+
+Previewing takes a coherent read snapshot and hashes complete row values in
+private memory. The outer `packet.preview_digest` binds that row state, target
+schema, vocabulary-gate report, rollback manifest and inner batch preview. The
+approval service must independently review and authorize this outer digest as
+well as the inner batch preview. Binding only row identities cannot authorize
+this adapter: changing a value under the same identity invalidates the review.
+
+```python
+adapter = SQLiteOmopBatchCommitter(
+    batch,
+    packet,
+    vocabulary_snapshot=target_snapshot,
+    vocabulary_mappings=target_mapping_provenance,
+    rollback_manifest=rollback_manifest,
+    connection_factory=open_protected_sqlite_connection,
+    authorize=verify_receipt_and_both_review_bindings,
+    admit=check_current_workflow_admission,
+    rollback_ready=verify_protected_rollback_custody,
+)
+result = adapter.submit(approval_binding)
+```
+
+All three verifiers are required trusted integrations and must return exactly
+`True`. Authorization verifies receipt authenticity, reviewer authority,
+expiry, single-use issuance and both independently reviewed digests. It checks
+an already issued receipt rather than consuming a bearer token on each call.
+Admission composes the deployment's default-off controller and emergency stop.
+Custody verifies durable protected rollback artifacts; a structurally valid
+manifest alone is insufficient. The adapter rechecks these guards before and
+during the effects and before commit. There is no default authorization or
+admission implementation. Injected callbacks and the SQLite factory are trusted
+code; Python types do not provide authentication or storage isolation.
+
+`BEGIN IMMEDIATE` serializes submissions. Before writing, the adapter compares
+the fresh complete preview with the reviewed packet, checks vocabulary and
+references, then applies all mutations and the value-free receipt in one
+transaction. Final loader and foreign-key checks reject invalid resulting rows.
+Authorized duplicate submissions use the same approval-receipt digest and
+return the identical stored result without replaying mutations, including
+concurrent submissions. A changed batch or preview cannot reuse that receipt.
+The unchanged vocabulary gate still rejects empty mapping collections; batches
+must carry the exact provenance of inserted or updated clinical targets.
+
+Results expose `committed`, `conflict`, `denied`, `failed` or `unknown`, closed
+codes and digests. `proposed_count` always describes the proposal; `applied_count`
+is `None` for unknown outcomes. A failed commit acknowledgement stays unknown
+even when a subsequent rollback call succeeds. Call `adapter.recover(binding)`
+to read the exact durable receipt with SQLite query-only mode. Recovery performs
+no replay. A missing/unavailable receipt remains unknown rather than asserting
+that the transaction never committed. Do not automatically resubmit uncertain
+work; reconcile through the approval and recovery workflow.
+
+The original `batch.commit(adapter, approval=binding)` protocol has only success
+and failure outcomes. Use `submit` to retain the richer states; after a protocol
+failure, `adapter.last_result` preserves any unknown outcome. The adapter disables
+SQLite trace callbacks before queries and never copies SQL parameters, patient
+values, connection details or driver exception text into results or receipts.
+Public provisioning, preview and constructor failures also raise fresh closed
+errors without retaining private driver or iterator exception chains. Callback
+error codes outside the declared vocabulary become `transaction_failed`.
+Its factory supplies a fresh connection for each operation, which the adapter
+closes. Database, journal, receipt and rollback storage require the deployment's
+normal protection, retention and independent backup controls. Restoring or
+tampering with the database and its receipt ledger together defeats local
+idempotency evidence; use an external protected checkpoint when that threat is
+in scope. Offline synthetic transaction checks are not clinical validation.
