@@ -74,6 +74,15 @@ from .grants import (
     StaticCapabilityGrantKeyProvider,
     dispatch_with_capability_grant,
 )
+from .result_scope import (
+    ResultQuarantineCode,
+    ResultQuarantinedError,
+    ResultScope,
+    ToolResultPage,
+    ToolResultRecord,
+    authorize_tool_results,
+    dispatch_with_authorized_results,
+)
 
 __all__ = [
     "ACCESS_TICKET_DENIAL_SCHEMA_VERSION",
@@ -136,8 +145,15 @@ __all__ = [
     "preview_with_fhir_write_scope",
     "MappingCapabilityGrantKeyProvider",
     "RecordSelector",
+    "ResultQuarantineCode",
+    "ResultQuarantinedError",
+    "ResultScope",
     "StaticCapabilityGrantKeyProvider",
     "ToolAction",
+    "ToolResultPage",
+    "ToolResultRecord",
+    "authorize_tool_results",
     "dispatch_with_access_ticket",
+    "dispatch_with_authorized_results",
     "dispatch_with_capability_grant",
 ]

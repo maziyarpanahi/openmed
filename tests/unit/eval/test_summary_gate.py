@@ -131,6 +131,25 @@ def test_seeded_gold_and_actual_extractive_report_are_reproducible():
     )
     assert report["metrics"]["generated_count"] == 3
     assert not verify_summary_report(report)
+    baseline = run_summary_benchmark(
+        "extractive-baseline", seeds=seeds, thresholds=sample()["thresholds"]
+    ).to_dict()
+    assert not verify_summary_report(baseline)
+    assert baseline["metadata"]["output_digest"] == (
+        "sha256:79c018cd08babb008c8bcefd2c67db578fd75665b5da9f3a25c1d77fb5780988"
+    )
+    for candidate, recall in ((report, 1.0), (baseline, 0.75)):
+        assert candidate["metadata"]["synthetic_only"]
+        assert not candidate["metadata"]["clinical_validation"]
+        assert candidate["metrics"]["failed_fixture_count"] == 3
+        for row in candidate["metrics"]["checks"]:
+            checks = {c["gate"]: c for c in row}
+            assert checks["summary_clinical_fact_recall"]["details"]["value"] == recall
+            assert checks["summary_fact_coverage"]["details"]["value"] == recall
+            assert not checks["summary_citation_support"]["passed"]
+            assert (
+                checks["summary_citation_support"]["reason"] == "missing_adjudication"
+            )
     for fixture in gold:
         assert fixture["text"] not in json.dumps(report)
 

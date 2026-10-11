@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4555535
+    "json": 4877667
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4555535
+    "docs/search/search_index.json": 4877667
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,16 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed pinned summarizer provisioning and typed-error guides measure 4677157 search bytes, an increase of 6801 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed clinical budget and typed-error guides measure 4670356 search bytes, an increase of 5468 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed Swift MLX path-confinement guide updates measure 4664888 search bytes, an increase of 1625 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed local-backend and clinical brief threat-model guides measure 4663263 search bytes, an increase of 53884 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed multilingual and Unicode clinical brief guides measure 4609379 search bytes, an increase of 5319 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed passive FHIR brief document guide measures 4604060 search bytes, an increase of 5176 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The three reviewed clinical generation guides measure 4598884 search bytes, an increase of 19524 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed offline NLI qualification guide measures 4579360 search bytes, an increase of 7486 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed-local admission and Journey context guides measure 4571874 search bytes, an increase of 12634 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed SMART grammar and current preflight/custody integration measure 4559240 search bytes, an increase of 5391 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The four reviewed runtime authority changes measure 4553849 search bytes, an increase of 31144 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The five reviewed FHIR write changes measure 4522705 search bytes, an increase of 35553 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The reviewed approval validity and durable nonce guides measure 4487152 search bytes, an increase of 9665 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
@@ -102,6 +112,30 @@
     "The /docs/ route measured 5441121 bytes on the combined governance staging build; its 5560423-byte ceiling retains 119302 bytes of bounded transfer headroom.",
     "The tokenizer coverage route measured 7553281 bytes on the combined governance staging build; its 7660085-byte ceiling retains 106804 bytes of bounded transfer headroom for the expanded navigation and search index.",
     "The interaction latency is a deterministic two-frame lab proxy, not field INP.",
-    "Runtime model downloads in the opt-in browser demo are excluded."
+    "Runtime model downloads in the opt-in browser demo are excluded.",
+    "After integrating the service authority and safe reference-launcher documentation, the staged artifact measures 56215320 total bytes, 55850807 unique payload bytes and a 4685002-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "After integrating multilingual privacy, structured header coverage and service authority documentation, the staged artifact measures 56225479 total bytes, 55860966 unique payload bytes and a 4689232-byte search index. Its search ceiling retains the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed governed workflow CLI recovery guide measures 4697064 search bytes, an increase of 7832 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed native governance, receipt custody and Python/Swift parity guide measures 4702312 search bytes, an increase of 5248 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed MCP preflight, preview, status and human-review guide measures 4709023 search bytes, an increase of 6711 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The combined governed REST and typed workflow client guides measure 4720165 search bytes, an increase of 11142 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed SMART refresh, private custody and narrowed scope guide measures 4726940 search bytes, an increase of 6775 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed PDF annotation mapping and private refusal guide measures 4731639 search bytes, an increase of 4699 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed passive SDOH FHIR export guide measures 4740258 search bytes, an increase of 8619 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed offline clinical CLI contracts and local summary/NLI guides measure 4756114 search bytes, an increase of 15856 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
+    "The reviewed staged NLP lineage, SQLite transaction and independent approval composition guide measures 4768154 search bytes, an increase of 12040 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed SDOH extraction outcomes, synthetic benchmark, registration guide and authored timeline example measure 4796952 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed offline governance fixture and self-check guides measure 4804251 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload and route budgets are unchanged.",
+    "The reviewed chart-abstraction producer and synthetic scorer documentation measures 4815822 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #3992 documentation measures 4822016 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #3979 documentation measures 4824806 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #3986 documentation measures 4831505 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4016 documentation measures 4838584 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed issue #3779 documentation measures 4840231 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4002 documentation measures 4848440 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4007 documentation measures 4854203 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4006 documentation measures 4861003 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4009 documentation measures 4869367 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4011 documentation measures 4875981 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged."
   ]
 }
