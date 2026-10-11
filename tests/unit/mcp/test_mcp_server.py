@@ -59,6 +59,55 @@ def test_structured_result_includes_machine_data_and_text_fallback() -> None:
     assert json.loads(result.content[0].text) == result.structuredContent
 
 
+def test_registered_consent_handler_returns_typed_envelope_before_model_unload(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from openmed.mcp.consent_receipts import ConsentReceiptVerifier
+
+    class Runtime(_Runtime):
+        def unload_model(self, *_args: Any, **_kwargs: Any) -> None:
+            pytest.fail("malformed consent must be rejected before model unload")
+
+    verifier = ConsentReceiptVerifier(
+        {"synthetic": b"synthetic-consent-key-for-parser-tests"},
+        clock=lambda: 1000,
+    )
+    server = _server(
+        Runtime(), consent_verifier=verifier, consent_client="synthetic-client"
+    )
+    secret = "synthetic-parser-private-sentinel"
+    # Invoke the actual registered consent handler; transport validation is
+    # an independent gate, outside the five-parser repair's scope.
+    serialized = "[" * 1000 + json.dumps(secret) + "]" * 1000
+    registered = server._tool_manager.get_tool("openmed_unload_model")
+    assert registered is not None
+    with caplog.at_level(logging.DEBUG):
+        result = registered.fn(model_name="synthetic-model", consent_receipt=serialized)
+    assert result.isError is True
+    assert result.structuredContent == {
+        "error": {
+            "code": "invalid_consent_receipt",
+            "message": "The consent receipt is invalid.",
+        },
+        "is_error": True,
+    }
+    assert json.loads(result.content[0].text) == result.structuredContent
+    assert secret not in json.dumps(result.structuredContent)
+    assert all(secret not in record.getMessage() for record in caplog.records)
+
+
+def test_original_deep_consent_reproduction_uses_invalid_receipt_envelope():
+    from openmed.mcp.consent_receipts import (
+        ConsentReceipt,
+        ConsentReceiptValidationError,
+    )
+    from openmed.mcp.server import _error_envelope
+
+    with pytest.raises(ConsentReceiptValidationError) as caught:
+        ConsentReceipt.from_json("[" * 100000 + "]" * 100000)
+    assert _error_envelope(caught.value)["error"]["code"] == "invalid_consent_receipt"
+
+
 def test_malformed_call_returns_phi_safe_structured_error_without_logging(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
