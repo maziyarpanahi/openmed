@@ -56,6 +56,9 @@ the reviewed surface; they do not grant authority by themselves.
 - [Tool inventory JSON Schema](tool-inventory-schema.md): validate the portable inventory structure locally.
 - [Tool catalog diffs](tool-catalog-diffs.md): review content-free changes to the registered tool surface.
 
+- [Runtime revocation](runtime-revocation.md): recheck current authority and revocation state at dispatch.
+- [SMART token custody](../interop/smart-token-custody.md): keep bearer credentials in injected custody bound to the reviewed plan and lease.
+
 ## Approvals and previews
 
 Keep reviewer handoffs separate from approval. A changed action, expired approval
@@ -65,6 +68,8 @@ or consumed nonce cannot silently acquire permission for another dispatch.
 - [Policy decision matrices](policy-decision-matrices.md): compare caller-supplied decisions for review without clinical content.
 - [Single-use approval tokens](human-approval-tokens.md): verify signed action, role, expiry and nonce claims before a high-impact action.
 - [Approval receipt failures](human-approval-receipts.md): exercise expiry, replay and changed-review-context refusals.
+
+- [Clinical side-effect previews](side-effect-previews.md): bind controlled effect metadata to the exact reviewed action and context.
 
 ## Write-back and execution
 
@@ -83,6 +88,14 @@ approval boundary around any production writer.
 - [Staged OMOP mutations](../interop/omop-staged-mutations.md): separate trusted row values from review metadata and delegate atomic commit to an application-owned committer.
 - [OMOP vocabulary write gates](../interop/omop-vocabulary-write-gates.md): verify mapping provenance against the target snapshot before commit.
 - [FHIR-to-OMOP write lineage](../interop/fhir-omop-write-lineage.md): bind source-element and target-row digests before batch approval.
+
+- [Guarded dispatch](guarded-dispatch.md): compose the trusted permission and argument boundary around an injected executor.
+- [Effect admission](effect-admission.md): retain default-disabled workflow state until an explicit control-plane decision.
+- [Per-run resource budgets](resource-budgets.md): reserve bounded resources before dispatch and retain uncertain spends.
+- [Governed reference workflow](governed-reference-workflow.md): exercise the composed boundary with synthetic inputs and injected operations.
+- [FHIR transactions](../interop/fhir-transactions.md): assemble bounded atomic R4 transactions; a separately authorized one-shot sender performs dispatch.
+- [FHIR conditional writes](../interop/fhir-conditional-writes.md): bind a reviewed conditional target without serializing its protected predicate.
+- [FHIR concurrency](../interop/fhir-concurrency.md): check current version evidence before an approved write and refuse stale context.
 
 ## Evidence
 
@@ -110,6 +123,12 @@ opaque references, offsets and digests as well as to protected source artifacts.
 - [Quality-measure evidence](quality-measure-evidence.md): bind calculation provenance and aggregate results for reproduction and review.
 - [Trial-eligibility disagreement review](trial-eligibility-review.md): compare evidence-backed assessments and rules without initiating enrollment or outreach.
 
+- [Governance JSON schemas](json-schemas.md): validate portable metadata while keeping parsed evidence separate from execution authority.
+- [Run completion invariants](run-invariants.md): check bounded action outcomes and coverage without inventing missing evidence.
+- [Action ledger](action-ledger.md): record controlled action observations and reconcile durable commit evidence.
+- [FHIR write provenance](../interop/fhir-write-provenance.md): bind reviewed provenance to a write while keeping source values protected.
+- [FHIR write labels](../interop/fhir-write-labels.md): preserve exact reviewed security-label obligations on the proposed write.
+
 ## Recovery
 
 Reconcile each effect using the same durable idempotency key. A committed effect
@@ -121,6 +140,11 @@ Compensating clinical writes remain proposals requiring separate review.
 - [Durable workflow recovery](workflow-recovery.md): reconcile absent, committed and ambiguous effects without replaying bearer approval tokens.
 - [OMOP rollback manifests](../interop/omop-rollback-manifests.md): bind operation-compatible rollback strategies to the exact batch and vocabulary snapshot.
 - [OMOP rollback JSON Schema](../interop/omop-rollback-schema.md): validate the portable structural contract before semantic binding checks.
+
+- [Escalation circuit breakers](escalation-circuit-breakers.md): stop bounded failure loops and escalate uncertain outcomes to review.
+- [Deterministic replay](deterministic-replay.md): verify recorded transition evidence without repeating the clinical effect.
+- [FHIR transaction compensation](../interop/fhir-transaction-compensation.md): record proposed corrective coverage without executing compensating writes.
+- [FHIR subscription checkpoints](../interop/fhir-subscription-checkpoints.md): reserve and acknowledge delivery sequences while quarantining ambiguous ordering.
 
 ## Evaluation
 

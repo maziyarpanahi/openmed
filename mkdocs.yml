@@ -31,6 +31,8 @@ nav:
   - Governed Agents:
       - Overview: agent/index.md
       - Authority and Minimum Data:
+          - Runtime Authority Revocation: agent/runtime-revocation.md
+          - SMART Token Custody: interop/smart-token-custody.md
           - Signed Agent Capability Grants: agent/capability-grants.md
           - Agent Capability Validity: agent/capability-validity.md
           - Purpose-bound Agent Data Access: agent/purpose-bound-access.md
@@ -43,11 +45,19 @@ nav:
           - Agent Tool Inventory JSON Schema: agent/tool-inventory-schema.md
           - Content-free Agent Tool Catalog Diffs: agent/tool-catalog-diffs.md
       - Approvals and Previews:
+          - Clinical Side-Effect Previews: agent/side-effect-previews.md
           - Reviewer Handoff Packets: agent/reviewer-handoffs.md
           - Agent Policy Decision Matrices: agent/policy-decision-matrices.md
           - Single-use Human Approval Tokens: agent/human-approval-tokens.md
           - Human-approval Receipt Failures: agent/human-approval-receipts.md
       - Write-back and Execution:
+          - Guarded Workflow Dispatch: agent/guarded-dispatch.md
+          - Effect Admission and Emergency Stop: agent/effect-admission.md
+          - Per-run Agent Resource Budgets: agent/resource-budgets.md
+          - Governed Clinical Reference Workflow: agent/governed-reference-workflow.md
+          - Bounded Approved FHIR Transactions: interop/fhir-transactions.md
+          - FHIR Conditional Write Plans: interop/fhir-conditional-writes.md
+          - FHIR Optimistic Concurrency: interop/fhir-concurrency.md
           - Agent Action Graphs: agent/action-graphs.md
           - Agent Action Execution Phases: agent/action-phases.md
           - FHIR Write Capability Preflight: interop/fhir-write-preflight.md
@@ -56,6 +66,11 @@ nav:
           - OMOP Vocabulary Write Gates: interop/omop-vocabulary-write-gates.md
           - FHIR-to-OMOP Write Lineage: interop/fhir-omop-write-lineage.md
       - Evidence:
+          - Agent Governance JSON Schemas: agent/json-schemas.md
+          - Agent Run Completion Invariants: agent/run-invariants.md
+          - Agent Action Ledger: agent/action-ledger.md
+          - FHIR Write Provenance Gate: interop/fhir-write-provenance.md
+          - FHIR Write Origin Labels: interop/fhir-write-labels.md
           - Agent Artifact References: agent/artifact-references.md
           - Agent Event Correlation: agent/event-correlation.md
           - Agent Event Attributes: agent/event-attributes.md
@@ -75,6 +90,10 @@ nav:
           - Quality-Measure Evidence: agent/quality-measure-evidence.md
           - Trial-Eligibility Disagreement Review: agent/trial-eligibility-review.md
       - Recovery:
+          - Escalation Circuit Breakers: agent/escalation-circuit-breakers.md
+          - Deterministic Agent Replay: agent/deterministic-replay.md
+          - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
+          - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
           - Durable Workflow Recovery: agent/workflow-recovery.md
           - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
           - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
@@ -137,6 +156,7 @@ nav:
       - Guarded Clinical Intelligence:
           - Brief and Summarization:
               - Guarded Clinical Brief: clinical/clinical-brief.md
+              - Local Backends and Typed Outcomes: clinical/local-backends.md
               - Deterministic Summary Output Normalization: clinical/summary-output-normalization.md
               - Section-Preserving Summary Planning: clinical/summary-section-planning.md
               - Synthetic Brief Walkthrough: demo/clinical-brief.md
@@ -584,6 +604,7 @@ nav:
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - Clinical Brief Threat Model: security/clinical-brief-threat-model.md
       - V3 Journey Threat Model: security/journey-threat-model.md
       - Multilingual Ingestion Threat Model: security/threat-model-multilingual-ingestion.md
       - Adversarial PHI Red-Team Corpus: security/red-team-corpus.md

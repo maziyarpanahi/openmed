@@ -1871,6 +1871,38 @@ def test_per_language_date_traps_cover_all_wired_languages():
         assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
 
 
+def test_locale_date_variants_recover_and_shift_the_golden_interval():
+    from openmed.core.pii import _shift_date
+    from openmed.core.safety_sweep import safety_sweep
+
+    fixtures = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id.startswith("golden-locale-date-")
+    ]
+    assert len(fixtures) == 4
+    for fixture in fixtures:
+        entities = safety_sweep(fixture.text, [], lang=fixture.language)
+        for span in fixture.gold_spans:
+            assert any(
+                (entity.start, entity.end) == (span.start, span.end)
+                for entity in entities
+            )
+        if "expected_shift" in fixture.metadata:
+            rendered = fixture.text
+            for span in reversed(fixture.gold_spans):
+                rendered = (
+                    rendered[: span.start]
+                    + _shift_date(
+                        span.text,
+                        fixture.metadata["date_shift_days"],
+                        lang=fixture.language,
+                    )
+                    + rendered[span.end :]
+                )
+            assert rendered == fixture.metadata["expected_shift"]
+
+
 def test_per_language_id_traps_invalid_ids_fail_validators():
     """Valid IDs pass their language's checksum validator; invalid hard
     negatives fail it.

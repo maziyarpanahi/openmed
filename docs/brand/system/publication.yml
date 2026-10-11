@@ -106,56 +106,54 @@ classification:
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md
+    - agent-usage.md
+    - agent/action-graphs.md
+    - agent/artifact-references.md
+    - agent/side-effect-previews.md
+    - agent/action-phases.md
     - agent/capability-grants.md
-    - agent/capability-validity.md
     - agent/purpose-bound-access.md
     - agent/non-amplifying-delegation.md
-    - agent/governance-identifiers.md
-    - agent/minimum-data-contracts.md
-    - agent/minimum-data-projections.md
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
     - agent/tool-inventory-schema.md
     - agent/tool-catalog-diffs.md
-    - agent/reviewer-handoffs.md
-    - agent/policy-decision-matrices.md
-    - agent/human-approval-tokens.md
-    - agent/human-approval-receipts.md
-    - agent/action-graphs.md
-    - agent/action-phases.md
-    - interop/fhir-write-preflight.md
-    - interop/smart-scope-audit.md
-    - interop/omop-staged-mutations.md
-    - interop/omop-vocabulary-write-gates.md
-    - interop/fhir-omop-write-lineage.md
-    - agent/artifact-references.md
+    - agent/minimum-data-contracts.md
+    - agent/minimum-data-projections.md
+    - agent/governance-identifiers.md
+    - agent/capability-validity.md
     - agent/event-correlation.md
+    - agent/error-envelopes.md
     - agent/event-attributes.md
     - agent/event-sequences.md
     - agent/outcome-reasons.md
-    - agent/error-envelopes.md
-    - agent/timing-metadata.md
+    - agent/json-schemas.md
+    - agent/reviewer-handoffs.md
+    - agent/escalation-circuit-breakers.md
+    - agent/resource-budgets.md
+    - agent/policy-decision-matrices.md
+    - agent/human-approval-tokens.md
     - agent/run-summaries.md
     - agent/run-commitments.md
     - agent/run-diffs.md
     - agent/workflow-rollups.md
+    - agent/run-invariants.md
     - agent/schema-compatibility.md
+    - agent/timing-metadata.md
     - agent/evidence-query-planner.md
     - agent/chart-abstraction-evidence.md
     - agent/prior-auth-completeness.md
     - agent/cohort-explanations.md
     - agent/quality-measure-evidence.md
     - agent/trial-eligibility-review.md
+    - agent/human-approval-receipts.md
     - agent/workflow-recovery.md
-    - interop/omop-rollback-manifests.md
-    - interop/omop-rollback-schema.md
-    - evaluation/governed-agent-fixtures.md
-    - interop/fhir-capability-fixtures.md
-    - evaluation/sealed-workflow-manifests.md
-    - evaluation/v3.1-agent-gates.md
-    - security/agent-threat-model.md
-    - compliance/v3.1-agent-assurance.md
-    - agent-usage.md
+    - agent/runtime-revocation.md
+    - agent/guarded-dispatch.md
+    - agent/effect-admission.md
+    - agent/governed-reference-workflow.md
+    - agent/action-ledger.md
+    - agent/deterministic-replay.md
     - agent-skills/install.md
     - agent-skills/validation.md
     - agent-skills/setup.md
@@ -203,6 +201,7 @@ classification:
     - model-loader.md
     - models/bundled-offline.md
     - clinical/clinical-brief.md
+    - clinical/local-backends.md
     - clinical/summary-output-normalization.md
     - clinical/summary-section-planning.md
     - demo/clinical-brief.md
@@ -434,14 +433,17 @@ classification:
     - evaluation/comparator-harness.md
     - evaluation/nli-error-slices.md
     - evaluation/nli-negation-challenge.md
+    - evaluation/governed-agent-fixtures.md
     - evaluation/privacy-corpus.md
     - datasets/openmed-synth-phi.md
     - evaluation/mixed-script-integrity.md
     - evaluation/doctype-calibration.md
+    - evaluation/sealed-workflow-manifests.md
     - evaluation/holdout-commitments.md
     - evaluation/feedback-budgets.md
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
+    - evaluation/v3.1-agent-gates.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
@@ -551,6 +553,7 @@ classification:
     - compliance/policy-coverage.md
     - compliance/21-cfr-part-11-audit-trail.md
     - compliance/reproducible-release.md
+    - compliance/v3.1-agent-assurance.md
     - compliance/v3.1-clinician-review.md
     - compliance/access-scope.md
     - compliance/artifact-size-budgets.md
@@ -570,12 +573,28 @@ classification:
     - compliance/templates/breach-report-template.md
     - compliance/privacy-release-gate.md
     - guides/fhir-omop-interoperability.md
+    - interop/omop-staged-mutations.md
+    - interop/omop-vocabulary-write-gates.md
+    - interop/omop-rollback-manifests.md
+    - interop/omop-rollback-schema.md
+    - interop/fhir-omop-write-lineage.md
     - interop/archive-safety.md
     - fhir-interop.md
     - integrations/fhir-r5-fidelity.md
     - fhir/profile-declarations.md
     - fhir/observation-extensions.md
     - interop/fhir-bulk-data.md
+    - interop/fhir-capability-fixtures.md
+    - interop/fhir-write-preflight.md
+    - interop/fhir-transactions.md
+    - interop/fhir-write-labels.md
+    - interop/fhir-conditional-writes.md
+    - interop/fhir-write-provenance.md
+    - interop/fhir-concurrency.md
+    - interop/fhir-transaction-compensation.md
+    - interop/fhir-subscription-checkpoints.md
+    - interop/smart-scope-audit.md
+    - interop/smart-token-custody.md
     - interop/fhir-omop-matrix.md
     - interop/omop-fact-projection.md
     - interop/omop-quality-bridge.md
@@ -639,12 +658,14 @@ classification:
     - security/export-naming.md
     - security/disclosure-policy.md
     - security/threat-model.md
+    - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
     - security/policy-migrations.md
     - security/prompt-injection-guard.md
+    - security/agent-threat-model.md
     - security/mcp-consent-receipts.md
     - security/mcp-authorization-matrix.md
     - security/mcp-upstream-policy.md
