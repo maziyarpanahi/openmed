@@ -169,6 +169,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added fail-closed purpose-ticket authorization for complete typed tool-result
+  batches, with independent patient/encounter/namespace/snapshot scope checks,
+  strict nested field projections, original evidence identity and content-free
+  quarantine diagnostics. Privacy scanning remains a separate boundary (#3671).
+
 - Added local, sealed blinded-review result import for summary evaluation, with
   exact artifact/rubric binding, citation and reviewer-agreement metrics, explicit
   incomplete/disputed states and synthetic-only release refusal (#3655).
