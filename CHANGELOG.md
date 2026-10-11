@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, offline pure-Python Circe cohort-expression mapper with
+  digest-bound exchange custody, explicit semantic loss reports, synthetic
+  membership round trips, and no SQL or bundled vocabulary (#3804).
+
 - Added fail-closed Python evaluation sessions composing sealed manifest and
   holdout verification, injected execution/scoring, overlap forensics, blinded
   review and budgeted feedback, with content-free durable checkpoints and
