@@ -207,3 +207,7 @@ input/output paths, detected identifiers, or backend exception messages. The
 guard covers detected source identifiers; qualified clinical review remains
 required. See the [machine contract](../cli/machine-contract.md#guarded-summary-and-nli-commands)
 for limits, exit codes and stable failure codes.
+
+Provider diagnostics are mapped to closed local failure codes without reading
+foreign exception getters. Metadata requires exact built-in scalar types, so
+string subclasses cannot impersonate an allowed backend or label.

@@ -541,3 +541,73 @@ def test_malformed_backend_result_is_fixed(result, inputs, monkeypatch, capfd):
     captured = capfd.readouterr()
     assert json.loads(captured.out)["error"]["code"] == "nli_failed"
     assert captured.err == ""
+
+
+@pytest.mark.parametrize("command", ("summary", "nli"))
+@pytest.mark.parametrize("foreign", (False, True))
+def test_provider_error_codes_and_getters_cannot_cross_cli(
+    command, foreign, inputs, monkeypatch, capfd
+):
+    from openmed.cli._output import CliError
+
+    class ForeignCliError(CliError):
+        def __init__(self):
+            Exception.__init__(self, CANARY)
+
+        @property
+        def code(self):
+            raise AssertionError(CANARY)
+
+    error = ForeignCliError() if foreign else CliError(CANARY, code=CANARY)
+
+    def fail(*args, **kwargs):
+        raise error
+
+    if command == "summary":
+        monkeypatch.setattr(SUMMARY, "summarize", fail)
+        args = summary_args(inputs, "--json")
+    else:
+        monkeypatch.setattr(CLI, "_nli_backend", fail)
+        args = nli_args(inputs, "--json")
+    assert main(args) == 1
+    captured = capfd.readouterr()
+    assert json.loads(captured.out)["error"]["code"] == command + "_failed"
+    assert CANARY not in captured.out + captured.err
+    assert not any(path.exists() for path in inputs[2:])
+
+
+@pytest.mark.parametrize("command", ("summary", "nli"))
+def test_diagnostic_string_subclasses_cannot_masquerade_as_cli_metadata(
+    command, inputs, monkeypatch, capfd
+):
+    allowed = "deterministic-extractive" if command == "summary" else "heuristic"
+
+    class PrivateBackend(str):
+        def __hash__(self):
+            return hash(allowed)
+
+        def __eq__(self, other):
+            return other == allowed
+
+    if command == "summary":
+        result = SummarizationResult(
+            "Synthetic protected output",
+            LeakageCheck(True, 1, 0),
+            backend="deterministic-extractive",
+            template_digest="sha256:" + "1" * 64,
+        )
+        object.__setattr__(result, "backend", PrivateBackend(CANARY))
+        monkeypatch.setattr(SUMMARY, "summarize", lambda *args, **kwargs: result)
+        args = summary_args(inputs, "--json")
+    else:
+        nli = importlib.import_module("openmed.clinical.nli")
+
+        values = verify(json.loads(inputs[1].read_text()), SOURCE, backend="heuristic")
+        values[0]["backend_id"] = PrivateBackend(CANARY)
+        monkeypatch.setattr(nli, "verify", lambda *args, **kwargs: values)
+        args = nli_args(inputs, "--backend", "heuristic", "--json")
+    assert main(args) == 1
+    captured = capfd.readouterr()
+    assert json.loads(captured.out)["error"]["code"] == command + "_result_invalid"
+    assert CANARY not in captured.out + captured.err
+    assert not any(path.exists() for path in inputs[2:])

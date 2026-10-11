@@ -29,6 +29,20 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _NLI_FIELDS = frozenset(
     {"claim_index", "label", "score", "backend_id", "contradicted", "review_required"}
 )
+_PROCESSING_CODES = frozenset(
+    {
+        "summary_result_invalid",
+        "summary_failed",
+        "summary_deidentification_rejected",
+        "summary_leakage_rejected",
+        "summary_backend_unavailable",
+        "nli_backend_invalid",
+        "nli_backend_factory_invalid",
+        "nli_result_invalid",
+        "nli_backend_unavailable",
+        "nli_failed",
+    }
+)
 
 
 def add_clinical_review_commands(subparsers: argparse._SubParsersAction) -> None:
@@ -153,6 +167,23 @@ def _error(code: str, *, usage: bool = False) -> CliError:
     )
 
 
+def _processing_error(error: CliError, prefix: str) -> CliError:
+    """Read only exact local errors' closed stored codes, never provider getters."""
+    if type(error) is CliError:
+        values = vars(error)
+        code = values.get("code")
+        exit_code = values.get("exit_code")
+        if (
+            type(code) is str
+            and code in _PROCESSING_CODES
+            and code.startswith(prefix + "_")
+        ):
+            return _error(
+                code, usage=type(exit_code) is int and exit_code == EXIT_USAGE
+            )
+    return _error(prefix + "_failed")
+
+
 def _read(path: str, limit: int, prefix: str) -> bytes:
     descriptor = None
     failure = None
@@ -265,7 +296,9 @@ def _summary_metadata(result: Any) -> dict[str, Any]:
 
     if (
         type(result) is not SummarizationResult
+        or type(result.mode) is not str
         or result.mode != "bhc"
+        or type(result.backend) is not str
         or result.backend not in {"local-mlx", "deterministic-extractive"}
     ):
         raise _error("summary_result_invalid")
@@ -283,7 +316,9 @@ def _summary_metadata(result: Any) -> dict[str, Any]:
     if (
         type(check.checked_token_count) is not int
         or not 0 <= check.checked_token_count <= _NOTE_BYTES
+        or type(check.leaked_token_count) is not int
         or check.leaked_token_count != 0
+        or type(check.leaked_token_hashes) is not tuple
         or check.leaked_token_hashes
     ):
         raise _error("summary_result_invalid")
@@ -374,7 +409,7 @@ def handle_summarize(args: argparse.Namespace) -> int:
         except (MissingOptionalDependencyError, LocalSummarizerError):
             failure = _error("summary_backend_unavailable")
         except CliError as error:
-            failure = _error(error.code)
+            failure = _processing_error(error, "summary")
         except Exception:
             failure = _error("summary_failed")
     if failure is not None:
@@ -433,11 +468,16 @@ def _nli_projection(
         raise _error("nli_result_invalid")
     results = []
     for index, value in enumerate(values):
-        if type(value) is not dict or value.keys() != _NLI_FIELDS:
+        if (
+            type(value) is not dict
+            or any(type(key) is not str for key in value)
+            or value.keys() != _NLI_FIELDS
+        ):
             raise _error("nli_result_invalid")
         if (
             type(value["claim_index"]) is not int
             or value["claim_index"] != index
+            or type(value["label"]) is not str
             or value["label"] not in NLI_LABELS
         ):
             raise _error("nli_result_invalid")
@@ -456,7 +496,11 @@ def _nli_projection(
         ):
             raise _error("nli_result_invalid")
         backend_id = "caller-supplied-local" if caller_supplied else value["backend_id"]
-        if backend_id not in {"heuristic", "local-encoder", "caller-supplied-local"}:
+        if type(backend_id) is not str or backend_id not in {
+            "heuristic",
+            "local-encoder",
+            "caller-supplied-local",
+        }:
             raise _error("nli_result_invalid")
         results.append({**value, "backend_id": backend_id})
     return results
@@ -490,7 +534,7 @@ def handle_nli_verify(args: argparse.Namespace) -> int:
                 values, len(claims), caller_supplied=args.backend_factory is not None
             )
         except CliError as error:
-            failure = _error(error.code, usage=error.exit_code == EXIT_USAGE)
+            failure = _processing_error(error, "nli")
         except (
             LocalNLIError,
             MissingOptionalDependencyError,
