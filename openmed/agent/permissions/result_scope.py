@@ -316,10 +316,11 @@ def _records(
         _scope_matches(record.scope, scope)
         if type(record.evidence) is not ArtifactReference:
             raise ResultQuarantinedError(ResultQuarantineCode.MISSING_EVIDENCE)
+        evidence = cast(ArtifactReference, record.evidence)
         # Even identical repeated IDs are ambiguous record custody in this batch.
-        if record.evidence.artifact_id in evidence_ids:
+        if evidence.artifact_id in evidence_ids:
             raise ResultQuarantinedError(ResultQuarantineCode.AMBIGUOUS_EVIDENCE)
-        evidence_ids.add(record.evidence.artifact_id)
+        evidence_ids.add(evidence.artifact_id)
         fields = _project(record.fields, schema, plan, "", budget, depth)
         children = _records(
             record.children, scope, schema, plan, evidence_ids, budget, depth + 1
