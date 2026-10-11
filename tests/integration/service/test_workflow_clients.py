@@ -25,9 +25,12 @@ def test_inspection_never_implicitly_submits_review_or_cancel():
 
     def transport(incoming):
         calls.append(incoming)
+        response = json.loads(vectors["receipt_response_json"])
+        if incoming.url.path.endswith("/cancel"):
+            response["cancellation_requested"] = True
         return httpx.Response(
             200,
-            content=vectors["receipt_response_json"],
+            content=json.dumps(response),
             headers={"Content-Type": "application/json"},
         )
 

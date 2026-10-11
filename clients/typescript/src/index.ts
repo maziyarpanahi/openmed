@@ -131,12 +131,10 @@ export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
 
 /** Existing consumed receipt metadata; declaring this type grants no authority. */
 export interface GovernedWorkflowReceipt {
-  schema_version: "openmed.agent.approval_receipt.v1";
+  schema_version: "openmed.agent.approval_receipt.v2";
   action_digest: string;
-  reviewer_role: string;
   token_digest: string;
-  consumed_at: number | bigint;
-  expires_at: number | bigint;
+  code: "approved";
 }
 
 export interface GovernedWorkflowReview extends GovernedWorkflowMutation {

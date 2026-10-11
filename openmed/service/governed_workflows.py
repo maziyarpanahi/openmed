@@ -153,8 +153,9 @@ class WorkflowReference:
                 value["expected_state_digest"],
                 value["request_id"],
             )
-        except (TypeError, ValueError):
-            raise WorkflowServiceError("workflow_invalid_input") from None
+        except Exception:
+            pass
+        raise WorkflowServiceError("workflow_invalid_input")
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -377,8 +378,9 @@ def workflow_receipt_digest(receipt: ApprovalReceipt) -> str:
             raise ValueError()
         receipt = ApprovalReceipt.from_dict(receipt.to_dict())
         return "sha256:" + hashlib.sha256(receipt.to_json().encode("utf-8")).hexdigest()
-    except (TypeError, ValueError):
-        raise WorkflowServiceError("workflow_invalid_input") from None
+    except Exception:
+        pass
+    raise WorkflowServiceError("workflow_invalid_input")
 
 
 def validate_workflow_view(value: Any, reference: WorkflowReference) -> WorkflowView:
@@ -398,27 +400,28 @@ def validate_workflow_view(value: Any, reference: WorkflowReference) -> Workflow
         value.to_dict()
         return value
     except WorkflowServiceError as error:
-        if error.code == "workflow_conflict":
-            raise
-        raise WorkflowServiceError("workflow_invalid_result") from None
+        code = (
+            "workflow_conflict"
+            if type(error) is WorkflowServiceError
+            and type(error.code) is str
+            and error.code == "workflow_conflict"
+            else "workflow_invalid_result"
+        )
     except Exception:
-        raise WorkflowServiceError("workflow_invalid_result") from None
+        code = "workflow_invalid_result"
+    raise WorkflowServiceError(code)
 
 
 def validate_workflow_receipt(
     reference: WorkflowReference, receipt: ApprovalReceipt, *, now: int
 ) -> str:
-    """Check structural binding and time; trusted custody must still verify it."""
+    """Check structural binding and clock; time authority stays in service custody."""
     reference.require_mutation()
     digest = workflow_receipt_digest(receipt)
     if type(now) is not int or not 0 <= now < 2**63:
         raise WorkflowServiceError("workflow_service_failed")
     if not hmac.compare_digest(reference.action_digest, receipt.action_digest):
         raise WorkflowServiceError("workflow_conflict")
-    if now < receipt.consumed_at:
-        raise WorkflowServiceError("workflow_receipt_future")
-    if now >= receipt.expires_at:
-        raise WorkflowServiceError("workflow_receipt_expired")
     return digest
 
 
@@ -457,4 +460,5 @@ def parse_workflow_json(raw: bytes) -> dict[str, Any]:
             raise ValueError()
         return value
     except Exception:
-        raise WorkflowServiceError("workflow_invalid_input") from None
+        pass
+    raise WorkflowServiceError("workflow_invalid_input")

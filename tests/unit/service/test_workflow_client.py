@@ -77,7 +77,7 @@ def test_shared_wire_vectors(case):
     assert json.loads(requests[0].content) == case["reference"]
 
 
-def test_existing_receipt_preserves_int64_and_exact_action():
+def test_existing_receipt_preserves_v2_metadata_and_exact_action():
     received = []
     with OpenMedClient(
         transport=httpx.MockTransport(
@@ -372,3 +372,88 @@ def test_client_construction_and_metadata_parsing_do_not_open_sockets(monkeypatc
             parse_workflow_response(GOOD_BODY, REFERENCE).phase.value
             == "waiting-review"
         )
+
+
+@pytest.mark.parametrize("boundary", ["reference", "receipt", "clock"])
+def test_pre_dispatch_errors_drop_private_exception_context(monkeypatch, boundary):
+    def private_failure(*args, **kwargs):
+        raise UnicodeDecodeError("utf-8", b"PRIVATE-CANARY", 0, 1, "invalid")
+
+    calls = []
+    with OpenMedClient(
+        transport=httpx.MockTransport(lambda request: calls.append(request))
+    ) as client:
+        if boundary == "reference":
+            monkeypatch.setattr(WorkflowReference, "to_dict", private_failure)
+            invoke = lambda: client.workflow_status(REFERENCE)
+        elif boundary == "receipt":
+            receipt = ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
+            monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+            invoke = lambda: client.workflow_submit_receipt(MUTATION, receipt)
+        else:
+            invoke = lambda: client.poll_workflow(REFERENCE, clock=private_failure)
+        with pytest.raises(WorkflowClientError) as caught:
+            invoke()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+    assert calls == []
+
+
+@pytest.mark.parametrize("operation", ["receipt", "cancel"])
+def test_successful_mutation_acknowledgement_must_bind_requested_action(operation):
+    body = json.loads(GOOD_BODY)
+    body["receipt_digest"] = "sha256:" + "0" * 64
+    calls = []
+
+    def transport(request):
+        calls.append(request)
+        return httpx.Response(
+            200, json=body, headers={"Content-Type": "application/json"}
+        )
+
+    with OpenMedClient(transport=httpx.MockTransport(transport)) as client:
+        with pytest.raises(WorkflowClientError) as caught:
+            if operation == "receipt":
+                client.workflow_submit_receipt(
+                    MUTATION, ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
+                )
+            else:
+                client.workflow_cancel(MUTATION)
+    assert caught.value.mutation_outcome == "unknown"
+    assert len(calls) == 1
+
+
+def test_error_metadata_cannot_store_private_values():
+    error = WorkflowClientError(
+        "workflow_invalid_request",
+        status_code="PRIVATE-CANARY",
+        mutation_outcome="PRIVATE-CANARY",
+        last_view={"clinical": "PRIVATE-CANARY"},
+    )
+    assert "PRIVATE-CANARY" not in repr(vars(error))
+
+
+@pytest.mark.parametrize("kind", ["foreign", "false-refusal"])
+def test_transport_diagnostic_does_not_establish_mutation_refusal(kind):
+    class ForeignError(WorkflowClientError):
+        def __init__(self):
+            RuntimeError.__init__(self, "Foreign diagnostic")
+
+        def __getattribute__(self, name):
+            if name == "code":
+                raise UnicodeDecodeError("utf-8", b"PRIVATE-CANARY", 0, 1, "invalid")
+            return super().__getattribute__(name)
+
+    calls = []
+
+    def transport(request):
+        calls.append(request)
+        if kind == "foreign":
+            raise ForeignError()
+        raise WorkflowClientError("workflow_forbidden", mutation_outcome="refused")
+
+    with OpenMedClient(transport=httpx.MockTransport(transport)) as client:
+        with pytest.raises(WorkflowClientError) as caught:
+            client.workflow_cancel(MUTATION)
+    assert caught.value.mutation_outcome == "unknown"
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+    assert len(calls) == 1

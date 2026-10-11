@@ -245,8 +245,9 @@ body reads and pending fetch observation, including an injected fetch that ignor
 the signal. It cannot retract a request already sent. Cancellation intent does
 not roll back committed effects. A parsed receipt cannot prove its custody;
 only submit an already issued, consumed receipt from the trusted application.
-Receipt timestamps use safe integer `number` or `bigint` up to signed Int64;
-`bigint` serializes as an exact JSON integer rather than a rounded number.
+The v2 receipt has only action/token digests, an `approved` code and its schema
+version. Role and timestamp claims are rejected; authority remains in trusted
+server custody.
 
 Successful replies are limited to 256 KiB, eight container levels, 4,096 values
 and 128 effects. Requests are limited to 64 KiB. SHA-256 checks use standard
@@ -262,3 +263,5 @@ node --test clients/typescript/tests/workflow-client.test.mjs
 Run from the repository root. An external build directory can be selected with
 `OPENMED_WORKFLOW_CLIENT_DIST`. The tests use the same frozen synthetic JSON
 vectors as Python and make no network requests.
+
+Workflow mutations use one transport attempt. A successful review-receipt acknowledgement must match the submitted metadata digest; cancellation must report a cancellation request or an aborted phase. A transport callback cannot declare a mutation refused: without a validated server refusal, reconcile an unknown result by inspection before taking any further action. Diagnostic fields contain only closed codes, bounded status and correlation identifiers, and a validated last snapshot.

@@ -40,17 +40,15 @@ for (const vector of vectors.cases) test(vector.name, async () => {
   assert.equal(calls[0].init.redirect, "manual");
 });
 
-// Native Int64 receipt values must not pass through imprecise JS numbers.
+// v2 receipt metadata carries no role or timestamp authority.
 const review = JSON.parse(vectors.receipt_request_json);
-review.receipt.consumed_at = BigInt("9223372036854775806");
-review.receipt.expires_at = BigInt("9223372036854775807");
 const { receipt, ...mutation } = review;
-test("existing receipt retains exact Int64 metadata", async () => {
+test("existing receipt retains exact v2 metadata", async () => {
   const calls = [];
   const client = new OpenMedClient({ baseUrl: "http://test.example", fetch: async (_, init) => { calls.push(init); return response(); } });
   await client.workflowSubmitReceipt(review);
   assert.equal(calls[0].body, vectors.receipt_request_json);
-  await assert.rejects(client.workflowSubmitReceipt({ ...review, receipt: { ...receipt, expires_at: Number(receipt.expires_at) } }), error => error.code === "workflow_invalid_request" && error.mutationOutcome === "not_attempted");
+  await assert.rejects(client.workflowSubmitReceipt({ ...review, receipt: { ...receipt, expires_at: BigInt("9223372036854775807") } }), error => error.code === "workflow_invalid_request" && error.mutationOutcome === "not_attempted");
   await assert.rejects(client.workflowCancel(reference), error => error.mutationOutcome === "not_attempted");
   assert.equal(calls.length, 1);
 });
@@ -140,4 +138,42 @@ test("poll transport refusal preserves the last validated phase", async () => {
   const client = new OpenMedClient({ baseUrl: "http://test.example", fetch: async () => ++calls === 1 ? response(vectors.cases.find(v => v.name === "phase-running").body) : response(vector.body, vector.status) });
   await assert.rejects(client.pollWorkflow(reference, { intervalMs: 0, clock: () => 0 }), error => error.code === "workflow_conflict" && error.lastView.phase === "running");
   assert.equal(calls, 2);
+});
+
+for (const operation of ["receipt", "cancel"]) test("successful " + operation + " reply acknowledges the requested mutation", async () => {
+    const body=JSON.parse(good); body.receipt_digest="sha256:"+"0".repeat(64);
+    let calls=0;
+    const client=new OpenMedClient({baseUrl:"http://test.example",fetch:async()=>{calls++;return response(JSON.stringify(body));}});
+    await assert.rejects(operation === "receipt" ? client.workflowSubmitReceipt(review) : client.workflowCancel(mutation),error=>error instanceof WorkflowClientError && error.mutationOutcome === "unknown");
+    assert.equal(calls,1);
+});
+
+test("transport diagnostic cannot declare a mutation refused", async () => {
+  let calls=0;
+  const client=new OpenMedClient({baseUrl:"http://test.example",fetch:async()=>{calls++;throw new WorkflowClientError("workflow_forbidden",{mutationOutcome:"refused"});}});
+  await assert.rejects(client.workflowCancel(mutation),error=>error.mutationOutcome === "unknown");
+  assert.equal(calls,1);
+});
+
+test("public error metadata drops private values",()=>{
+  const error=new WorkflowClientError("workflow_invalid_request",{status:"PRIVATE-CANARY",mutationOutcome:"PRIVATE-CANARY",lastView:{clinical:"PRIVATE-CANARY"}});
+  assert.ok(!JSON.stringify(error).includes("PRIVATE-CANARY"));
+});
+
+
+test("transport error accessors cannot leak private diagnostics",async()=>{
+  const error=new WorkflowClientError("workflow_transport_failed");
+  Object.defineProperty(error,"code",{get(){throw new Error("PRIVATE-CANARY");}});
+  let calls=0;
+  const client=new OpenMedClient({baseUrl:"http://test.example",fetch:async()=>{calls++;throw error;}});
+  await assert.rejects(client.workflowCancel(mutation),failure=>failure instanceof WorkflowClientError && failure.mutationOutcome === "unknown" && !String(failure).includes("PRIVATE-CANARY"));
+  assert.equal(calls,1);
+});
+
+test("transport exception proxies cannot expose private diagnostics", async () => {
+  const privateError = new Proxy({}, { getPrototypeOf() { throw new Error("PRIVATE-CANARY"); } });
+  let calls = 0;
+  const client = new OpenMedClient({ baseUrl: "http://test.example", fetch: async () => { calls++; throw privateError; } });
+  await assert.rejects(client.workflowCancel(mutation), error => error instanceof WorkflowClientError && error.mutationOutcome === "unknown" && !String(error).includes("PRIVATE-CANARY"));
+  assert.equal(calls, 1);
 });

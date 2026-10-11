@@ -50,7 +50,7 @@ def effect(ordinal=0, action="3"):
 
 
 def receipt():
-    return ApprovalReceipt(DIGEST, "role:test.example/reviewer", STATE, 100, 200)
+    return ApprovalReceipt(DIGEST, STATE)
 
 
 def test_reference_roundtrip_and_closed_repr():
@@ -151,19 +151,24 @@ def test_modified_frozen_service_results_are_revalidated():
     assert "Synthetic private marker" not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "now,code",
-    [
-        (99, "workflow_receipt_future"),
-        (200, "workflow_receipt_expired"),
-        (201, "workflow_receipt_expired"),
-        (True, "workflow_service_failed"),
-    ],
-)
-def test_receipt_time_limits(now, code):
+@pytest.mark.parametrize("now", [99, 100, 200, 201])
+def test_receipt_metadata_carries_no_time_authority(now):
+    value = receipt()
+    assert validate_workflow_receipt(
+        reference(), value, now=now
+    ) == workflow_receipt_digest(value)
+    assert set(value.to_dict()) == {
+        "schema_version",
+        "action_digest",
+        "token_digest",
+        "code",
+    }
+
+
+def test_invalid_clock_is_refused_before_custody():
     with pytest.raises(WorkflowServiceError) as error:
-        validate_workflow_receipt(reference(), receipt(), now=now)
-    assert error.value.code == code
+        validate_workflow_receipt(reference(), receipt(), now=True)
+    assert error.value.code == "workflow_service_failed"
 
 
 def test_receipt_is_actual_public_contract_and_requires_exact_action():
@@ -204,3 +209,30 @@ def test_json_byte_limit_and_roundtrip():
     with pytest.raises(WorkflowServiceError) as error:
         parse_workflow_json(b" " * (MAX_WORKFLOW_REQUEST_BYTES + 1))
     assert error.value.code == "workflow_request_too_large"
+
+
+@pytest.mark.parametrize("boundary", ["json", "reference", "receipt", "view"])
+def test_public_workflow_errors_drop_private_context(monkeypatch, boundary):
+    marker = b"synthetic-private-workflow-marker"
+
+    def private_failure(*args, **kwargs):
+        raise UnicodeDecodeError("utf-8", marker, 0, 1, "invalid")
+
+    if boundary == "json":
+        invoke = lambda: parse_workflow_json(b"\xff" + marker)
+    elif boundary == "reference":
+        payload = reference().to_dict()
+        monkeypatch.setattr(RunId, "parse", private_failure)
+        invoke = lambda: WorkflowReference.from_dict(payload)
+    elif boundary == "receipt":
+        value = ApprovalReceipt(DIGEST, STATE)
+        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+        invoke = lambda: workflow_receipt_digest(value)
+    else:
+        value = WorkflowView(reference(), STATE, ActionPhase.READY)
+        monkeypatch.setattr(WorkflowView, "to_dict", private_failure)
+        invoke = lambda: validate_workflow_view(value, reference())
+    with pytest.raises(WorkflowServiceError) as caught:
+        invoke()
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+    assert marker.decode() not in str(caught.value)

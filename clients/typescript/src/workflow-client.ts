@@ -84,6 +84,7 @@ const RETRY_CODES = new Set(["workflow_unavailable", "workflow_service_failed", 
 const UNCERTAIN_CODES = new Set(["workflow_unavailable", "workflow_service_failed", "workflow_invalid_result", "workflow_mutation_unknown"]);
 const READ_PATHS = new Set(["/v1/workflows/preflight", "/v1/workflows/preview", "/v1/workflows/status"]);
 const MUTATION_PATHS = new Set(["/v1/workflows/review-receipts", "/v1/workflows/cancel"]);
+const VALIDATED_SNAPSHOTS = new WeakSet<object>();
 
 /** Fixed diagnostics; raw envelopes, credentials and protected content are discarded. */
 export class WorkflowClientError extends Error {
@@ -96,16 +97,21 @@ export class WorkflowClientError extends Error {
     status?: number; mutationOutcome?: WorkflowMutationOutcome;
     requestId?: string | null; lastView?: WorkflowSnapshot;
   } = {}) {
-    const safeCode = CLIENT_CODES.has(code) || Object.hasOwnProperty.call(ERROR_STATUSES, code)
+    const safeCode = typeof code === "string" &&
+      (CLIENT_CODES.has(code) || Object.hasOwnProperty.call(ERROR_STATUSES, code))
       ? code : "workflow_server_refused";
     super(`${safeCode}: governed workflow request did not complete.`);
     this.name = "WorkflowClientError";
     this.code = safeCode;
-    this.status = options.status;
-    this.mutationOutcome = options.mutationOutcome ?? "not_applicable";
+    this.status = typeof options.status === "number" && Number.isSafeInteger(options.status) &&
+      options.status >= 100 && options.status <= 599 ? options.status : undefined;
+    const outcome = options.mutationOutcome ?? "not_applicable";
+    this.mutationOutcome = ["not_applicable", "not_attempted", "refused", "unknown"].includes(outcome)
+      ? outcome : "unknown";
     this.requestId = typeof options.requestId === "string" && text(options.requestId, SAFE_CORRELATION)
       ? options.requestId : undefined;
-    this.lastView = options.lastView;
+    this.lastView = options.lastView !== undefined && VALIDATED_SNAPSHOTS.has(options.lastView)
+      ? options.lastView : undefined;
   }
 }
 function fail(code = "workflow_malformed_response"): never { throw new WorkflowClientError(code); }
@@ -269,7 +275,9 @@ async function parseWorkflowSnapshot(raw: Uint8Array, reference: GovernedWorkflo
     Object.freeze(v.outcome);
   }
   Object.freeze(v.effects);
-  return Object.freeze(v) as unknown as WorkflowSnapshot;
+  const snapshot = Object.freeze(v) as unknown as WorkflowSnapshot;
+  VALIDATED_SNAPSHOTS.add(snapshot);
+  return snapshot;
 }
 
 function payload(request: GovernedWorkflowReference, mutation: boolean, receipt: boolean): string {
@@ -282,15 +290,9 @@ function payload(request: GovernedWorkflowReference, mutation: boolean, receipt:
         (mutation && (request.expected_state_digest === null || request.request_id === null))) fail();
     if (receipt) {
       const r = (request as unknown as GovernedWorkflowReview).receipt;
-      exact(r, ["schema_version", "action_digest", "reviewer_role", "token_digest", "consumed_at", "expires_at"]);
-      const timestamp = (v: unknown): bigint => {
-        if (typeof v !== "bigint" && !integer(v, Number.MAX_SAFE_INTEGER)) fail();
-        const number = BigInt(v as number | bigint);
-        if (number < BigInt(0) || number > BigInt("9223372036854775807")) fail();
-        return number;
-      };
-      if (r.schema_version !== "openmed.agent.approval_receipt.v1" || r.action_digest !== request.action_digest ||
-          !text(r.token_digest, DIGEST) || !identifier(r.reviewer_role, "role", true) || timestamp(r.consumed_at) >= timestamp(r.expires_at)) fail();
+      exact(r, ["schema_version", "action_digest", "token_digest", "code"]);
+      if (r.schema_version !== "openmed.agent.approval_receipt.v2" || r.action_digest !== request.action_digest ||
+          !text(r.token_digest, DIGEST) || r.code !== "approved") fail();
     }
     const body = canonical(request);
     if (new TextEncoder().encode(body).byteLength > MAX_REQUEST_BYTES) fail();
@@ -339,8 +341,15 @@ export class GovernedWorkflowClient {
     const timeout = options.timeoutMs ?? 30000;
     if (!finite(timeout, 30000) || !validSignal(options.signal))
       throw new WorkflowClientError("workflow_invalid_request", { mutationOutcome: "not_attempted" });
-    const body = payload(request, true, path.endsWith("review-receipts"));
-    return this.send(path, body, Object.freeze({ ...request }), timeout, options.signal, true);
+    const receipt = path.endsWith("review-receipts");
+    const body = payload(request, true, receipt);
+    const binding = Object.freeze({ ...request });
+    let expectedReceiptDigest: string | undefined;
+    if (receipt) {
+      try { expectedReceiptDigest = "sha256:" + await hash(canonical(JSON.parse(body).receipt)); }
+      catch { throw new WorkflowClientError("workflow_invalid_request", { mutationOutcome: "not_attempted" }); }
+    }
+    return this.send(path, body, binding, timeout, options.signal, true, expectedReceiptDigest);
   }
   async poll(request: GovernedWorkflowReference, options: WorkflowPollOptions = {}): Promise<WorkflowSnapshot> {
     if ((options === null || typeof options !== "object")) fail("workflow_invalid_request");
@@ -377,12 +386,13 @@ export class GovernedWorkflowClient {
     }
     return stopped("workflow_poll_timeout");
   }
-  private async send(path: string, body: string, request: GovernedWorkflowReference, timeout: number, signal: AbortSignal | undefined, mutation: boolean): Promise<WorkflowSnapshot> {
+  private async send(path: string, body: string, request: GovernedWorkflowReference, timeout: number, signal: AbortSignal | undefined, mutation: boolean, expectedReceiptDigest?: string): Promise<WorkflowSnapshot> {
     const before = mutation ? "not_attempted" : "not_applicable";
     const uncertain = mutation ? "unknown" : "not_applicable";
     if (signal?.aborted) throw new WorkflowClientError("workflow_poll_cancelled", { mutationOutcome: before });
     const controller = new AbortController();
     let status: number | undefined, correlation: string | null = null;
+    let validatedRefusal = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectBound: (reason: unknown) => void = () => {};
     const bound = new Promise<never>((_, reject) => { rejectBound = reject; });
@@ -427,14 +437,26 @@ export class GovernedWorkflowClient {
                 fields.every(key => ["code", "message", "details", "request_id"].includes(key)) &&
                 typeof error.code === "string" && Object.hasOwnProperty.call(ERROR_STATUSES, error.code) && ERROR_STATUSES[error.code] === status) code = error.code;
           }
-          throw new WorkflowClientError(code, { mutationOutcome: mutation && code !== "workflow_server_refused" && !UNCERTAIN_CODES.has(code) ? "refused" : uncertain });
+          validatedRefusal = code !== "workflow_server_refused" && !UNCERTAIN_CODES.has(code);
+          throw new WorkflowClientError(code);
         }
-        return await parseWorkflowResponse(raw, request);
+        const snapshot = await parseWorkflowResponse(raw, request);
+        if (expectedReceiptDigest !== undefined && snapshot.receipt_digest !== expectedReceiptDigest)
+          fail("workflow_binding_mismatch");
+        if (path.endsWith("/cancel") && !snapshot.cancellation_requested && snapshot.phase !== "aborted")
+          fail();
+        return snapshot;
       })();
       return await Promise.race([work, bound]);
     } catch (error) {
-      const code = error instanceof WorkflowClientError ? error.code : mutation ? "workflow_mutation_unknown" : "workflow_transport_failed";
-      const outcome = error instanceof WorkflowClientError && error.mutationOutcome !== "not_applicable" ? error.mutationOutcome : uncertain;
+      let ownCode: unknown;
+      try {
+        if (error !== null && typeof error === "object" &&
+            Object.getPrototypeOf(error) === WorkflowClientError.prototype)
+          ownCode = Object.getOwnPropertyDescriptor(error, "code")?.value;
+      } catch { /* Foreign exception objects cannot supply diagnostic metadata. */ }
+      const code = typeof ownCode === "string" ? ownCode : mutation ? "workflow_mutation_unknown" : "workflow_transport_failed";
+      const outcome = mutation && validatedRefusal ? "refused" : uncertain;
       throw new WorkflowClientError(code, { status, mutationOutcome: outcome, requestId: correlation });
     } finally {
       clearTimeout(timer); signal?.removeEventListener("abort", abort);

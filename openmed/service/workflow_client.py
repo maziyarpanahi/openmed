@@ -14,7 +14,7 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 import httpx
@@ -34,6 +34,7 @@ from .governed_workflows import (
     WORKFLOW_RESPONSE_VERSION,
     WorkflowReference,
     WorkflowView,
+    workflow_receipt_digest,
 )
 
 _RESPONSE_FIELDS = frozenset(
@@ -104,17 +105,35 @@ class WorkflowClientError(RuntimeError):
     ) -> None:
         self.code = (
             code
-            if code in _CLIENT_CODES or code in WORKFLOW_ERROR_STATUSES
+            if type(code) is str
+            and (code in _CLIENT_CODES or code in WORKFLOW_ERROR_STATUSES)
             else "workflow_server_refused"
         )
-        self.status_code = status_code
-        self.mutation_outcome = mutation_outcome
+        self.status_code = (
+            status_code
+            if type(status_code) is int and 100 <= status_code <= 599
+            else None
+        )
+        self.mutation_outcome = (
+            mutation_outcome
+            if type(mutation_outcome) is str
+            and mutation_outcome
+            in {"not_applicable", "not_attempted", "refused", "unknown"}
+            else "unknown"
+        )
         self.request_id = (
             request_id
             if type(request_id) is str and _SAFE_REQUEST_ID.fullmatch(request_id)
             else None
         )
-        self.last_view = last_view
+        validated_view: WorkflowView | None = None
+        if last_view is not None and type(last_view) is WorkflowView:
+            try:
+                validated_view = replace(last_view)
+                validated_view.to_dict()
+            except Exception:
+                validated_view = None
+        self.last_view = validated_view
         super().__init__(f"{self.code}: governed workflow request did not complete.")
 
 
@@ -342,9 +361,11 @@ class WorkflowClientMixin:
                 raise ValueError()
             payload["receipt"] = parsed.to_dict()
         except Exception:
+            parsed = None
+        if parsed is None:
             raise WorkflowClientError(
                 "workflow_invalid_request", mutation_outcome="not_attempted"
-            ) from None
+            )
         return self._workflow_send(
             "review-receipts",
             payload,
@@ -352,6 +373,7 @@ class WorkflowClientMixin:
             timeout_seconds,
             stop_event,
             mutation=True,
+            expected_receipt_digest=workflow_receipt_digest(parsed),
         )
 
     def workflow_cancel(
@@ -403,7 +425,8 @@ class WorkflowClientMixin:
                     raise ValueError()
                 return float(value)
             except Exception:
-                raise WorkflowClientError("workflow_clock_failed") from None
+                pass
+            raise WorkflowClientError("workflow_clock_failed")
 
         start = previous = now()
         last = None
@@ -469,10 +492,11 @@ class WorkflowClientMixin:
                 reference.require_mutation()
             return reference.to_dict()
         except Exception:
-            raise WorkflowClientError(
-                "workflow_invalid_request",
-                mutation_outcome="not_attempted" if mutation else "not_applicable",
-            ) from None
+            pass
+        raise WorkflowClientError(
+            "workflow_invalid_request",
+            mutation_outcome="not_attempted" if mutation else "not_applicable",
+        )
 
     def _workflow_read(
         self,
@@ -515,6 +539,7 @@ class WorkflowClientMixin:
         stop_event: threading.Event | None,
         *,
         mutation: bool,
+        expected_receipt_digest: str | None = None,
     ) -> WorkflowView:
         before: MutationOutcome = "not_attempted" if mutation else "not_applicable"
         uncertain: MutationOutcome = "unknown" if mutation else "not_applicable"
@@ -542,6 +567,7 @@ class WorkflowClientMixin:
             headers["X-Request-ID"] = self._request_id
         status = None
         correlation = None
+        validated_refusal = False
         deadline = time.monotonic() + timeout
         try:
             with self._client.stream(
@@ -614,8 +640,9 @@ class WorkflowClientMixin:
                             and WORKFLOW_ERROR_STATUSES.get(candidate) == status
                         ):
                             code = candidate
+                    validated_refusal = code in _REFUSAL_CODES
                     outcome: MutationOutcome = (
-                        "refused" if mutation and code in _REFUSAL_CODES else uncertain
+                        "refused" if mutation and validated_refusal else uncertain
                     )
                     raise WorkflowClientError(
                         code,
@@ -623,14 +650,30 @@ class WorkflowClientMixin:
                         mutation_outcome=outcome,
                         request_id=correlation,
                     )
-                return parse_workflow_response(bytes(raw), reference)
+                view = parse_workflow_response(bytes(raw), reference)
+                if (
+                    expected_receipt_digest is not None
+                    and view.receipt_digest != expected_receipt_digest
+                ):
+                    raise WorkflowClientError("workflow_binding_mismatch")
+                if operation == "cancel" and not (
+                    view.cancellation_requested or view.phase is ActionPhase.ABORTED
+                ):
+                    raise WorkflowClientError("workflow_malformed_response")
+                return view
         except WorkflowClientError as error:
             # Parser errors must retain mutation uncertainty too, without causes.
+            data = vars(error) if type(error) is WorkflowClientError else {}
             failure = WorkflowClientError(
-                error.code,
+                data.get(
+                    "code",
+                    "workflow_mutation_unknown"
+                    if mutation
+                    else "workflow_transport_failed",
+                ),
                 status_code=status,
-                mutation_outcome=error.mutation_outcome
-                if error.mutation_outcome != "not_applicable"
+                mutation_outcome="refused"
+                if mutation and validated_refusal
                 else uncertain,
                 request_id=correlation,
             )

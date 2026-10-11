@@ -207,7 +207,6 @@ type JSONObject = map[string]any
 // Request types
 // ---------------------------------------------------------------------------
 
-// AnalyzeRequest is the request body for POST /analyze.
 // GovernedWorkflowReference contains opaque custody references, never action content.
 // Null state/key fields are allowed only for inspection.
 type GovernedWorkflowReference struct {
@@ -241,6 +240,7 @@ type GovernedWorkflowReview struct {
 	Receipt             JSONObject `json:"receipt"`
 }
 
+// AnalyzeRequest is the request body for POST /analyze.
 type AnalyzeRequest struct {
 	Text                string               `json:"text"`
 	ModelName           string               `json:"model_name,omitempty"`
