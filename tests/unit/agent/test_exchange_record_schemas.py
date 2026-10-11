@@ -65,7 +65,7 @@ SCHEMA_FINGERPRINTS: dict[str, str] = {
         "sha256:19c5085b7ce870e8311130f8336f7f586a7d97def2822d65e00b34755ab1f4d8"
     ),
     "recovery_decision": (
-        "sha256:b66991b4e4b7e531d1514c935477968582ee0faed6bac77d79f880386c7046a2"
+        "sha256:2633299fe82af0f417e72a2a54200439ca4a2f34b09c98586c549f6f9768a223"
     ),
     "reviewer_handoff": (
         "sha256:ae5130f20f359cf429c0f45293f045439b16829afa66c6bfd9e2bde279a5e5ca"
@@ -762,6 +762,55 @@ def test_catalog_builds_independent_mappings() -> None:
 def test_terminal_decisions_reject_orphan_retry_keys(disposition, reason) -> None:
     payload = _payload("recovery_decision")
     payload.update(disposition=disposition, reason=reason, retry_effect_ids=[])
+    with pytest.raises(ValidationError):
+        _validator("recovery_decision").validate(payload)
+
+
+def test_retired_recovery_decision_schema_matches_runtime_without_resume():
+    retired = recovery.RecoveryDecision.create(
+        disposition=recovery.RecoveryDisposition.RETIRED,
+        reason=recovery.RecoveryReason.JOURNAL_RETIRED,
+        source_checkpoint_digest=_SOURCE_DIGEST,
+    )
+    payload = retired.to_dict()
+    _validator("recovery_decision").validate(payload)
+    assert payload["disposition"] == "retired"
+    assert payload["reason"] == "journal_retired"
+    assert all(
+        not payload[field]
+        for field in (
+            "retry_effect_ids",
+            "retry_idempotency_keys",
+            "compensation_effect_ids",
+            "committed_effects",
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    (
+        {"reason": "safe_to_resume"},
+        {"retry_effect_ids": [_ACTION_ID.serialize()]},
+        {"retry_idempotency_keys": [_IDEMPOTENCY_KEY]},
+        {"compensation_effect_ids": [_ACTION_ID.serialize()]},
+        {
+            "committed_effects": [
+                {
+                    "action_id": _ACTION_ID.serialize(),
+                    "commit_evidence_digest": _DIGEST,
+                }
+            ]
+        },
+    ),
+)
+def test_retired_decision_schema_rejects_reason_or_effect_payloads(change):
+    payload = recovery.RecoveryDecision.create(
+        disposition=recovery.RecoveryDisposition.RETIRED,
+        reason=recovery.RecoveryReason.JOURNAL_RETIRED,
+        source_checkpoint_digest=_SOURCE_DIGEST,
+    ).to_dict()
+    payload.update(change)
     with pytest.raises(ValidationError):
         _validator("recovery_decision").validate(payload)
 
