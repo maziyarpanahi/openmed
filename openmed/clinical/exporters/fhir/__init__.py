@@ -113,6 +113,16 @@ from .reference_types import (
     validate_reference_types,
 )
 from .references import deterministic_fullurl
+from .sdoh_observation import (
+    SDOH_FHIR_IG_VERSION,
+    SDOH_FHIR_US_CORE_VERSION,
+    SDOHFHIRCode,
+    SDOHFHIRExportError,
+    SDOHFHIRExportResult,
+    SDOHFHIRRecord,
+    SDOHObservationBinding,
+    to_sdoh_observations,
+)
 from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
 from .validate import (
     BASE_R4_RESOURCE_TYPES,
@@ -123,6 +133,14 @@ from .validate import (
 )
 
 __all__ = [
+    "SDOH_FHIR_IG_VERSION",
+    "SDOH_FHIR_US_CORE_VERSION",
+    "SDOHFHIRCode",
+    "SDOHFHIRExportError",
+    "SDOHFHIRExportResult",
+    "SDOHFHIRRecord",
+    "SDOHObservationBinding",
+    "to_sdoh_observations",
     "BRIEF_DOCUMENT_SUBSET",
     "BriefDocumentError",
     "BriefFHIRDocument",
