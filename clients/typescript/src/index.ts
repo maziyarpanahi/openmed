@@ -109,6 +109,35 @@ export interface GroundRequest {
   top_k?: number;
 }
 
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
+}
+
 export interface PIIExtractRequest {
   text: string;
   model_name?: string;
@@ -614,6 +643,28 @@ export class OpenMedClient {
 
   async ground(request: GroundRequest): Promise<GroundResponse> {
     return this.post("/ground", request);
+  }
+
+  // These transport bindings do not verify custody, poll, retry or execute an
+  // effect. Dedicated governed clients own strict response/receipt parsing.
+  async workflowPreflight(request: GovernedWorkflowReference): Promise<JSONObject> {
+    return this.post("/v1/workflows/preflight", request);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference): Promise<JSONObject> {
+    return this.post("/v1/workflows/preview", request);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference): Promise<JSONObject> {
+    return this.post("/v1/workflows/status", request);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview): Promise<JSONObject> {
+    return this.post("/v1/workflows/review-receipts", request);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation): Promise<JSONObject> {
+    return this.post("/v1/workflows/cancel", request);
   }
 
   async brief(request: BriefRequest): Promise<BriefResponse> {
