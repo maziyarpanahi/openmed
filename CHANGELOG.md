@@ -258,6 +258,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   #3001). These contracts do not dispatch effects or replace adapter validation.
 - Added local FHIR Subscription intake checkpoints with bounded deduplication,
   ordered claims, payload-free quarantine, and explicit gap replay (#2776).
+- Added an offline Draft 2020-12 catalog for approval tokens and receipts,
+  reviewer handoff packets, capability grant manifests and workflow recovery
+  checkpoints and decisions, with local references, bounded fields, version,
+  enum and digest drift tests (#3783).
+
 - Add the offline agent governance self-check and `openmed agent self-check`
   command. Independently verify the actual schema catalog, bundled golden
   summaries, closed fields, outcomes, correlations, timing and commitments,
