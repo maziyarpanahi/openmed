@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
+  two-patient packet fixtures with verified pixel/gold digests, critical flags,
+  packet splits and value-free loader representations (#3829).
+
 - Opt-in local NLI verification for summarization and grounding, with retained
   contradiction and abstention outcomes, offset- and digest-bound audit records,
   typed backend refusals and unchanged default serialization. Source and claim

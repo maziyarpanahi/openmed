@@ -467,6 +467,7 @@ classification:
     - export-gptq.md
     - export-gguf.md
     - evaluation/clinical-fixtures.md
+    - evaluation/openphi-vision-fixtures.md
     - multimodal/box-normalization.md
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md

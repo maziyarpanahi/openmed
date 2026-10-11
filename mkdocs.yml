@@ -402,6 +402,7 @@ nav:
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
       - Synthetic Clinical Fixtures: evaluation/clinical-fixtures.md
+      - OpenPHI-Vision Fixed Fixtures: evaluation/openphi-vision-fixtures.md
       - OCR box-coordinate normalization: multimodal/box-normalization.md
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
