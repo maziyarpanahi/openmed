@@ -137,7 +137,9 @@ def parse_clinical_args(
         else:
             break
     if index >= len(values) or values[index] != "clinical":
-        return parser.parse_args(values)
+        from .clinical_review import parse_clinical_review_args
+
+        return parse_clinical_review_args(parser, values)
     with open(os.devnull, "w", encoding="utf-8") as sink:
         with contextlib.redirect_stderr(sink):
             try:

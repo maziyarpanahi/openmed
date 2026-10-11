@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Offline `summarize` and `nli verify` CLI commands with bounded local inputs,
+  value-free console results, explicit baseline selection, and exclusive private
+  summary/metadata destinations (#3801).
+
+### Added
+
 - Metadata-only MCP governed workflow preflight, preview, status and human-review
   request tools. Server-held single-use consent protects handoff creation; no
   approval token or reviewer claim crosses MCP and no tool executes an effect
