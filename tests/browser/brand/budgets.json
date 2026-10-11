@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 4605746
+    "json": 4664949
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 4605746
+    "docs/search/search_index.json": 4664949
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -31,6 +31,8 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The reviewed local-backend and clinical brief threat-model guides measure 4663263 search bytes, an increase of 53884 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
+    "The reviewed multilingual and Unicode clinical brief guides measure 4609379 search bytes, an increase of 5319 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The reviewed passive FHIR brief document guide measures 4604060 search bytes, an increase of 5176 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The three reviewed clinical generation guides measure 4598884 search bytes, an increase of 19524 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
     "The reviewed offline NLI qualification guide measures 4579360 search bytes, an increase of 7486 bytes over the current-master build. The JSON and search ceilings retain the current-master 1686-byte allowance. Aggregate, route, non-JSON, duplicate, source-map and page-metric limits are unchanged.",
