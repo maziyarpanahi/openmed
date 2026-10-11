@@ -640,18 +640,18 @@
     "bundle": {
       "entry": [
         {
-          "fullUrl": "urn:uuid:078cb1fc-1e16-589a-8745-0677b0d876b2",
+          "fullUrl": "urn:uuid:334ae107-5b50-54a5-b4be-e71788ba3eb0",
           "resource": {
             "author": [
               {
-                "reference": "urn:uuid:ba25d7f5-9a31-5a7a-8d59-fa80761ced49"
+                "reference": "urn:uuid:a69d3ad7-e77b-5d6d-8405-dee1a2ee5a5d"
               }
             ],
             "date": "2026-01-01T00:00:00+00:00",
             "extension": [
               {
                 "url": "https://openmed.ai/fhir/StructureDefinition/clinical-brief-document",
-                "valueString": "{\"brief_digest\":\"sha256:59af59f651aed13e80818042f1e5f9da9af715a1b2a20d9a92c0606d5f9244f2\",\"citations\":[{\"claim_index\":0,\"evidence_hash\":\"sha256:6ecb0fbdc64461e148b2e5bc297c0e7508876b5cb5d70dbdc805687a8f074dc4\",\"evidence_id\":\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"output_end\":38,\"output_start\":0,\"source_end\":38,\"source_start\":0},{\"claim_index\":1,\"evidence_hash\":\"sha256:8ecef0e2f54bf28c5341e088c76cc47abe72f90608c8cbed78530b7906b0b045\",\"evidence_id\":\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"output_end\":79,\"output_start\":39,\"source_end\":79,\"source_start\":39},{\"claim_index\":2,\"evidence_hash\":\"sha256:d97bf778ec8ff6880a73615a920cf62ea9dcfb37ca1915af61b56bcd3394edb0\",\"evidence_id\":\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\",\"output_end\":111,\"output_start\":80,\"source_end\":111,\"source_start\":80}],\"conversion_loss\":[\"profile_sections_unavailable\",\"source_payloads_omitted\",\"evaluation_metrics_omitted\",\"review_packet_details_omitted\",\"model_details_omitted\"],\"policy_digest\":\"sha256:36a7ce819265851c3bc9ae7642860fa05a11717d81116c0eac37343775d6163b\",\"provenance_digest\":\"sha256:42ffc95e460e02f59a21ba9786d1b3e5ae126bc20c9062ef0efefe8b75864e41\",\"requires_human_review\":true,\"review_status\":\"queued\",\"source_digest\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"subset\":\"openmed.clinical.brief.fhir-r4.v1\",\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\"}"
+                "valueString": "{\"brief_digest\":\"sha256:ed7add4dd0bcd412e97d850c656875a9a3138e242ed1e8f7683ba3a29834c1d4\",\"citations\":[{\"claim_index\":0,\"evidence_hash\":\"sha256:6ecb0fbdc64461e148b2e5bc297c0e7508876b5cb5d70dbdc805687a8f074dc4\",\"evidence_id\":\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"output_end\":38,\"output_start\":0,\"source_end\":38,\"source_start\":0},{\"claim_index\":1,\"evidence_hash\":\"sha256:8ecef0e2f54bf28c5341e088c76cc47abe72f90608c8cbed78530b7906b0b045\",\"evidence_id\":\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"output_end\":79,\"output_start\":39,\"source_end\":79,\"source_start\":39},{\"claim_index\":2,\"evidence_hash\":\"sha256:d97bf778ec8ff6880a73615a920cf62ea9dcfb37ca1915af61b56bcd3394edb0\",\"evidence_id\":\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\",\"output_end\":111,\"output_start\":80,\"source_end\":111,\"source_start\":80}],\"conversion_loss\":[\"profile_sections_unavailable\",\"source_payloads_omitted\",\"evaluation_metrics_omitted\",\"review_packet_details_omitted\",\"model_details_omitted\"],\"policy_digest\":\"sha256:36a7ce819265851c3bc9ae7642860fa05a11717d81116c0eac37343775d6163b\",\"provenance_digest\":\"sha256:42ffc95e460e02f59a21ba9786d1b3e5ae126bc20c9062ef0efefe8b75864e41\",\"requires_human_review\":true,\"review_status\":\"queued\",\"source_digest\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"subset\":\"openmed.clinical.brief.fhir-r4.v1\",\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\"}"
               }
             ],
             "id": "brief",
@@ -660,7 +660,7 @@
               {
                 "entry": [
                   {
-                    "reference": "urn:uuid:45d86f65-08d5-573e-ae75-26574e9d21a8"
+                    "reference": "urn:uuid:426d55fb-affa-5922-bf3e-3460aa33cd50"
                   }
                 ],
                 "text": {
@@ -672,7 +672,7 @@
               {
                 "entry": [
                   {
-                    "reference": "urn:uuid:c57a2c40-0e54-589d-b573-e236972c2752"
+                    "reference": "urn:uuid:2734d675-9c2b-531c-b745-455d655c3a79"
                   }
                 ],
                 "text": {
@@ -684,7 +684,7 @@
               {
                 "entry": [
                   {
-                    "reference": "urn:uuid:6579df9d-914f-5722-a6b8-ffe25ae781dd"
+                    "reference": "urn:uuid:b6fdbbf9-872e-5dd9-b2bc-944fb324ed6a"
                   }
                 ],
                 "text": {
@@ -713,7 +713,7 @@
           }
         },
         {
-          "fullUrl": "urn:uuid:ba25d7f5-9a31-5a7a-8d59-fa80761ced49",
+          "fullUrl": "urn:uuid:a69d3ad7-e77b-5d6d-8405-dee1a2ee5a5d",
           "resource": {
             "id": "brief-exporter",
             "resourceType": "Device",
@@ -721,7 +721,7 @@
           }
         },
         {
-          "fullUrl": "urn:uuid:45d86f65-08d5-573e-ae75-26574e9d21a8",
+          "fullUrl": "urn:uuid:426d55fb-affa-5922-bf3e-3460aa33cd50",
           "resource": {
             "content": [
               {
@@ -745,7 +745,7 @@
           }
         },
         {
-          "fullUrl": "urn:uuid:c57a2c40-0e54-589d-b573-e236972c2752",
+          "fullUrl": "urn:uuid:2734d675-9c2b-531c-b745-455d655c3a79",
           "resource": {
             "content": [
               {
@@ -769,7 +769,7 @@
           }
         },
         {
-          "fullUrl": "urn:uuid:6579df9d-914f-5722-a6b8-ffe25ae781dd",
+          "fullUrl": "urn:uuid:b6fdbbf9-872e-5dd9-b2bc-944fb324ed6a",
           "resource": {
             "content": [
               {
@@ -793,10 +793,10 @@
           }
         }
       ],
-      "id": "7192c814f71f00a6dc263565d3da624f5bb75881d473ef94002fb0fff455acf0",
+      "id": "bfd2c7ba2469625cba5b9c27e368e0bccf84276a2e4f0896d9c43c65e0612f3d",
       "identifier": {
         "system": "urn:openmed:brief-document",
-        "value": "sha256:7192c814f71f00a6dc263565d3da624f5bb75881d473ef94002fb0fff455acf0"
+        "value": "sha256:bfd2c7ba2469625cba5b9c27e368e0bccf84276a2e4f0896d9c43c65e0612f3d"
       },
       "resourceType": "Bundle",
       "timestamp": "2026-01-01T00:00:00+00:00",
@@ -808,7 +808,7 @@
           "attachment": {
             "contentType": "application/fhir+json",
             "title": "Preliminary clinical brief",
-            "url": "urn:uuid:9643f353-d6e5-5cae-85b8-4df558e9d096"
+            "url": "urn:uuid:59ded9f9-9f96-51e2-8744-2fa6c4d6c2e6"
           }
         }
       ],
@@ -817,7 +817,7 @@
       "extension": [
         {
           "url": "https://openmed.ai/fhir/StructureDefinition/clinical-brief-document",
-          "valueString": "{\"brief_digest\":\"sha256:59af59f651aed13e80818042f1e5f9da9af715a1b2a20d9a92c0606d5f9244f2\",\"citations\":[{\"claim_index\":0,\"evidence_hash\":\"sha256:6ecb0fbdc64461e148b2e5bc297c0e7508876b5cb5d70dbdc805687a8f074dc4\",\"evidence_id\":\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"output_end\":38,\"output_start\":0,\"source_end\":38,\"source_start\":0},{\"claim_index\":1,\"evidence_hash\":\"sha256:8ecef0e2f54bf28c5341e088c76cc47abe72f90608c8cbed78530b7906b0b045\",\"evidence_id\":\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"output_end\":79,\"output_start\":39,\"source_end\":79,\"source_start\":39},{\"claim_index\":2,\"evidence_hash\":\"sha256:d97bf778ec8ff6880a73615a920cf62ea9dcfb37ca1915af61b56bcd3394edb0\",\"evidence_id\":\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\",\"output_end\":111,\"output_start\":80,\"source_end\":111,\"source_start\":80}],\"conversion_loss\":[\"profile_sections_unavailable\",\"source_payloads_omitted\",\"evaluation_metrics_omitted\",\"review_packet_details_omitted\",\"model_details_omitted\"],\"policy_digest\":\"sha256:36a7ce819265851c3bc9ae7642860fa05a11717d81116c0eac37343775d6163b\",\"provenance_digest\":\"sha256:42ffc95e460e02f59a21ba9786d1b3e5ae126bc20c9062ef0efefe8b75864e41\",\"requires_human_review\":true,\"review_status\":\"queued\",\"source_digest\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"subset\":\"openmed.clinical.brief.fhir-r4.v1\",\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\"}"
+          "valueString": "{\"brief_digest\":\"sha256:ed7add4dd0bcd412e97d850c656875a9a3138e242ed1e8f7683ba3a29834c1d4\",\"citations\":[{\"claim_index\":0,\"evidence_hash\":\"sha256:6ecb0fbdc64461e148b2e5bc297c0e7508876b5cb5d70dbdc805687a8f074dc4\",\"evidence_id\":\"sha256:18214db7d0dd2971b0b7ef9eaa1bceca8d96be65fc6b106ffc1f5b5c46cf65ce\",\"output_end\":38,\"output_start\":0,\"source_end\":38,\"source_start\":0},{\"claim_index\":1,\"evidence_hash\":\"sha256:8ecef0e2f54bf28c5341e088c76cc47abe72f90608c8cbed78530b7906b0b045\",\"evidence_id\":\"sha256:19c0de2742167e8d758a779d9494007a6ebe250d8744db6d9f309c76c39e78eb\",\"output_end\":79,\"output_start\":39,\"source_end\":79,\"source_start\":39},{\"claim_index\":2,\"evidence_hash\":\"sha256:d97bf778ec8ff6880a73615a920cf62ea9dcfb37ca1915af61b56bcd3394edb0\",\"evidence_id\":\"sha256:c7a4f47ee7b554f45084f5945277438e34d5b82f02c5e479fbfc2c1032ebc6fb\",\"output_end\":111,\"output_start\":80,\"source_end\":111,\"source_start\":80}],\"conversion_loss\":[\"profile_sections_unavailable\",\"source_payloads_omitted\",\"evaluation_metrics_omitted\",\"review_packet_details_omitted\",\"model_details_omitted\"],\"policy_digest\":\"sha256:36a7ce819265851c3bc9ae7642860fa05a11717d81116c0eac37343775d6163b\",\"provenance_digest\":\"sha256:42ffc95e460e02f59a21ba9786d1b3e5ae126bc20c9062ef0efefe8b75864e41\",\"requires_human_review\":true,\"review_status\":\"queued\",\"source_digest\":\"sha256:327bfe7dfef071a87cd19062d08831de463b7f9d90fa2c5742b361bc8955a6d6\",\"subset\":\"openmed.clinical.brief.fhir-r4.v1\",\"summary_digest\":\"sha256:30751656dfbf2b4388219843639757b9d5e47fd9f8d8d23db7f2775b04f828e1\"}"
         }
       ],
       "resourceType": "DocumentReference",
@@ -826,6 +826,6 @@
         "text": "Clinical brief"
       }
     },
-    "document_url": "urn:uuid:9643f353-d6e5-5cae-85b8-4df558e9d096"
+    "document_url": "urn:uuid:59ded9f9-9f96-51e2-8744-2fa6c4d6c2e6"
   }
 }
