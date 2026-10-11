@@ -599,11 +599,16 @@ def build_parser() -> argparse.ArgumentParser:
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
     from .brief import add_brief_command
+    from .clinical import add_clinical_command
 
     add_brief_command(subparsers)
+    add_clinical_command(subparsers)
     from .nli_qualification import add_nli_qualification_command
 
     add_nli_qualification_command(subparsers)
+    from .clinical_review import add_clinical_review_commands
+
+    add_clinical_review_commands(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -3290,7 +3295,9 @@ def main(
 
         return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    from .clinical import parse_clinical_args
+
+    args = parse_clinical_args(parser, argv)
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
