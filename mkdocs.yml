@@ -63,6 +63,7 @@ nav:
       - Agent Run Completion Invariants: agent/run-invariants.md
       - Agent Schema Compatibility: agent/schema-compatibility.md
       - Agent Timing Metadata: agent/timing-metadata.md
+      - Offline Agent Governance Self-check: agent/self-check.md
       - Evidence-grounded Query Planner: agent/evidence-query-planner.md
       - Clinical Chart-Abstraction Evidence: agent/chart-abstraction-evidence.md
       - Prior-Authorization Evidence Completeness: agent/prior-auth-completeness.md
@@ -180,6 +181,7 @@ nav:
               - Clinical NLI abstention gate: clinical/nli-abstention.md
               - Clinical NLI Checkpoints: models/clinical-nli.md
           - Social Determinants:
+              - SDOH Extraction: clinical/sdoh-extraction.md
               - SDOH Temporal Qualifiers: clinical/sdoh-temporal-qualifiers.md
               - Strict SDOH Section Scope: clinical/sdoh-section-scope.md
               - SDOH Evidence Deduplication: clinical/sdoh-evidence-deduplication.md
@@ -192,6 +194,7 @@ nav:
               - Social-determinant evidence contract: clinical/sdoh-evidence.md
               - Synthetic SDOH Counterfactuals: evaluation/sdoh-counterfactuals.md
               - Synthetic SDOH False-positive Stress: evaluation/sdoh-false-positive-stress.md
+              - SDOH Extraction Benchmark: evaluation/sdoh-extraction.md
           - Guarded Relations:
               - Medication-change Relation Candidates: clinical/medication-change-relations.md
               - Laboratory-result Relation Candidates: clinical/laboratory-result-relations.md
@@ -367,6 +370,7 @@ nav:
       - Clinical NLI Error Slices: evaluation/nli-error-slices.md
       - Synthetic Clinical NLI Negation Challenge: evaluation/nli-negation-challenge.md
       - Governed-agent Trace Fixtures: evaluation/governed-agent-fixtures.md
+      - Agent Run-summary Golden Fixtures: evaluation/agent-run-summary-fixtures.md
       - Synthetic Privacy Regression Corpus: evaluation/privacy-corpus.md
       - OpenMed Synthetic PHI Corpus: datasets/openmed-synth-phi.md
       - Mixed-script Span Integrity: evaluation/mixed-script-integrity.md
