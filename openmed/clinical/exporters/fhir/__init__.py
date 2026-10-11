@@ -122,6 +122,16 @@ from .reviewed_relations import (
     export_reviewed_relations,
     relation_fhir_review_fingerprint,
 )
+from .sdoh_observation import (
+    SDOH_FHIR_IG_VERSION,
+    SDOH_FHIR_US_CORE_VERSION,
+    SDOHFHIRCode,
+    SDOHFHIRExportError,
+    SDOHFHIRExportResult,
+    SDOHFHIRRecord,
+    SDOHObservationBinding,
+    to_sdoh_observations,
+)
 from .uscore import US_CORE_VERSION, ConformanceResult, check_us_core
 from .validate import (
     BASE_R4_RESOURCE_TYPES,
@@ -139,6 +149,14 @@ __all__ = [
     "ReviewedFHIRRelation",
     "export_reviewed_relations",
     "relation_fhir_review_fingerprint",
+    "SDOH_FHIR_IG_VERSION",
+    "SDOH_FHIR_US_CORE_VERSION",
+    "SDOHFHIRCode",
+    "SDOHFHIRExportError",
+    "SDOHFHIRExportResult",
+    "SDOHFHIRRecord",
+    "SDOHObservationBinding",
+    "to_sdoh_observations",
     "BRIEF_DOCUMENT_SUBSET",
     "BriefDocumentError",
     "BriefFHIRDocument",
