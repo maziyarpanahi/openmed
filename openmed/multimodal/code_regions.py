@@ -194,6 +194,8 @@ def detect_code_regions(
                 raise CodeDetectionError("code_detection_unavailable") from None
             return CodeCoverageReport(coverage_incomplete=True)
         regions = []
+        symbology: Any
+        bbox: Any
         for index, item in enumerate(raw):
             if index >= max_regions:
                 raise CodeDetectionError("code_detection_region_limit")

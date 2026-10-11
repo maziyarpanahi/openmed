@@ -393,7 +393,7 @@ def render_redacted_pdf(
 
     output_pdf = pikepdf.Pdf.new()
     code_reports = []
-    code_region_boxes = []
+    code_region_boxes: list[tuple[int, tuple[float, float, float, float]]] = []
     try:
         try:
             _reject_type3_fonts(BytesIO(content), pikepdf)
