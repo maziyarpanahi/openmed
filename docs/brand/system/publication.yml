@@ -106,6 +106,7 @@ classification:
     - onboarding-india.md
     - agent-usage.md
     - agent/action-graphs.md
+    - agent/bounded-scheduling.md
     - agent/artifact-references.md
     - agent/side-effect-previews.md
     - agent/action-phases.md
@@ -115,6 +116,7 @@ classification:
     - agent/tool-argument-classification.md
     - agent/tool-inventory.md
     - agent/tool-inventory-schema.md
+    - agent/exchange-record-schemas.md
     - agent/tool-catalog-diffs.md
     - agent/minimum-data-contracts.md
     - agent/minimum-data-projections.md
@@ -447,6 +449,7 @@ classification:
     - evaluation/overlap-forensics.md
     - evaluation/blinded-adjudication.md
     - evaluation/v3.1-agent-gates.md
+    - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
     - clinical-validation-protocol.md
