@@ -6,14 +6,21 @@ Node runtimes and tests.
 
 ## Install
 
-Workflow transport methods (`workflowPreflight`, `workflowPreview`,
-`workflowStatus`, `workflowSubmitReceipt`, `workflowCancel`) accept opaque
-reference/receipt types and return metadata-only `JSONObject` responses. These
-bindings do not verify receipt custody, grant authority, poll or retry. The
-server's explicitly enabled custody service owns those decisions. Cancellation
-records intent and a transport failure may leave a mutation outcome unknown.
-Dedicated governed clients add strict workflow parsing and bounded polling
-separately; static TypeScript declarations are not response validation.
+Workflow methods (`workflowPreflight`, `workflowPreview`, `workflowStatus`,
+`workflowSubmitReceipt`, `workflowCancel`) validate the existing HTTP contract
+and return immutable `WorkflowSnapshot` metadata. They reject unknown fields,
+versions, malformed JSON, mismatched action/run/workflow bindings and invalid
+preview or effect commitments. Server custody still owns authorization and
+approval verification. `pollWorkflow` stops at review, completion or abortion.
+
+Inspection makes one request by default. `maxAttempts` explicitly permits at
+most three inspection attempts for transport failures or declared temporary
+service failures. Receipt submission and cancellation intent always make one
+attempt; an unknown outcome requires inspecting status before an explicit next
+step. `WorkflowClientError` preserves a controlled code, HTTP status, safe
+correlation ID and `mutationOutcome`; it discards raw messages, details and
+credential-bearing transport errors. Generic service calls retain their existing
+`OpenMedApiError` behavior.
 
 From a checkout of this repository:
 
@@ -202,3 +209,59 @@ The underlying service envelope has this shape:
   }
 }
 ```
+
+## Governed workflow inspection
+
+```ts
+import { OpenMedClient, WorkflowClientError } from "@openmed/rest-client";
+
+const client = new OpenMedClient({ baseUrl: "http://127.0.0.1:8080" });
+const reference = {
+  schema_version: "openmed.service.workflow_request.v1" as const,
+  run_id: "run_" + "1".repeat(32),
+  workflow_id: "workflow:test.example/review@1.0.0",
+  action_digest: "sha256:" + "2".repeat(64),
+  expected_state_digest: null,
+  request_id: null,
+};
+const stop = new AbortController();
+try {
+  const snapshot = await client.pollWorkflow(reference, {
+    maxRequests: 20, timeoutMs: 60000, intervalMs: 1000, signal: stop.signal,
+  });
+  console.log(snapshot.phase, snapshot.committed_effect_count);
+  // A waiting-review snapshot requires an external reviewer; it is no approval.
+} catch (error) {
+  if (error instanceof WorkflowClientError) console.log(error.code);
+  else throw error;
+}
+// stop.abort() stops local waiting and observation. Request server cancellation
+// separately with workflowCancel and a fresh state digest + random request ID.
+```
+
+Per-request deadlines are at most 30 seconds; polling allows at most 100 actual
+status requests and a five-minute deadline. `AbortSignal` interrupts waiting,
+body reads and pending fetch observation, including an injected fetch that ignores
+the signal. It cannot retract a request already sent. Cancellation intent does
+not roll back committed effects. A parsed receipt cannot prove its custody;
+only submit an already issued, consumed receipt from the trusted application.
+The v2 receipt has only action/token digests, an `approved` code and its schema
+version. Role and timestamp claims are rejected; authority remains in trusted
+server custody.
+
+Successful replies are limited to 256 KiB, eight container levels, 4,096 values
+and 128 effects. Requests are limited to 64 KiB. SHA-256 checks use standard
+Web Crypto (`crypto.subtle`), available in modern browsers and Node runtimes.
+No dependency, server, issuer or clinical dispatcher is added.
+
+Offline native SDK controls after building the SDK:
+
+```bash
+node --test clients/typescript/tests/workflow-client.test.mjs
+```
+
+Run from the repository root. An external build directory can be selected with
+`OPENMED_WORKFLOW_CLIENT_DIST`. The tests use the same frozen synthetic JSON
+vectors as Python and make no network requests.
+
+Workflow mutations use one transport attempt. A successful review-receipt acknowledgement must match the submitted metadata digest; cancellation must report a cancellation request or an aborted phase. A transport callback cannot declare a mutation refused: without a validated server refusal, reconcile an unknown result by inspection before taking any further action. Diagnostic fields contain only closed codes, bounded status and correlation identifiers, and a validated last snapshot.

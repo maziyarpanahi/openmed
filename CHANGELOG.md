@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Typed Python and TypeScript workflow clients with strict metadata validation,
+  bounded inspection retries and polling, one-attempt mutations and shared
+  offline contract vectors (#3670).
+
+### Added
+
 - Default-disabled, authenticated REST workflow inspection, receipt submission
   and cancellation intent over an injected custody service, with bounded
   governance schemas and content-free responses (#3668).

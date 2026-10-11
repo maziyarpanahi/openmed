@@ -537,6 +537,82 @@ codes before the adapter runs. These offline adapter tests use synthetic custody
 and establish HTTP behavior, not clinical validation or a production database's
 durability guarantee.
 
+
+#### Typed workflow clients
+
+Python and TypeScript clients strictly parse the declared metadata responses,
+recompute preview and run-bound effect commitments, and preserve schema version,
+action digest, phase, outcome, receipt digest and cancellation intent. Unknown
+versions, extra fields, duplicate JSON keys, malformed successful responses and
+binding mismatches fail with fixed `WorkflowClientError` diagnostics. Errors
+retain controlled code/status and a validated opaque correlation ID; they do
+not retain server messages, details, response bodies or transport exceptions.
+A parsed snapshot is evidence to inspect, not clinical execution authority.
+
+```python
+import threading
+from openmed.agent.correlation import RunId
+from openmed.agent.identifiers import WorkflowId
+from openmed.service.client import (
+    OpenMedClient, WorkflowClientError, WorkflowPollPolicy, WorkflowReference,
+)
+
+reference = WorkflowReference(
+    RunId.parse("run_" + "1" * 32),
+    WorkflowId.parse("workflow:test.example/review@1.0.0"),
+    "sha256:" + "2" * 64,
+)
+stop = threading.Event()
+with OpenMedClient("http://127.0.0.1:8080") as client:
+    try:
+        view = client.poll_workflow(
+            reference,
+            policy=WorkflowPollPolicy(max_requests=20, timeout_seconds=60),
+            stop_event=stop,
+        )
+        print(view.phase.value, view.to_dict()["committed_effect_count"])
+    except WorkflowClientError as error:
+        print(error.code)
+```
+
+`workflow_preflight`, `workflow_preview` and `workflow_status` make one request
+by default. Explicit `WorkflowReadOptions(max_attempts=3)` permits up to three
+inspection attempts only for transport or declared temporary service failures.
+`poll_workflow` makes at most 100 status requests within a five-minute deadline;
+it returns on `waiting-review`, `completed` or `aborted`, without accepting a
+receipt or requesting cancellation. A timeout/cancellation error preserves the
+last strictly validated view when one exists. Per-request timeouts are at most
+30 seconds. Python `stop_event` is cooperative between requests, response chunks
+and interruptible waits; a synchronous HTTP read already in flight can run until
+its bounded HTTPX I/O timeout. The deadline is rechecked after each chunk and
+request. Custom synchronous transports must enforce their own I/O timeout.
+
+State changes require separate `workflow_submit_receipt(reference, receipt)` or
+`workflow_cancel(reference)` calls with both a fresh expected-state digest and
+random `req_` idempotency ID. They make one attempt. `mutation_outcome` is
+`not_attempted` before dispatch, `refused` for declared refusals, and `unknown`
+for transport, timeout, malformed success or ambiguous service failures.
+Inspect status before deciding on another explicit call after an unknown result.
+A locally cancelled HTTP request cannot revoke a receipt already recorded.
+Server cancellation records intent and does not undo committed effects.
+
+TypeScript provides the equivalent `WorkflowSnapshot`, `WorkflowReadOptions`,
+`WorkflowMutationOptions`, `WorkflowPollOptions` and `WorkflowClientError`, using
+`AbortSignal` and millisecond bounds. `workflowSubmitReceipt` preserves exact v2 receipt metadata and rejects role or
+timestamp fields; the client cannot infer authority from serialized metadata.
+
+A successful receipt response must acknowledge the submitted receipt digest.
+A successful cancellation response must report a cancellation request or an aborted phase.
+Transport exceptions cannot declare a mutation refused; only a validated server
+refusal can. Otherwise the mutation result stays unknown, and inspection must
+reconcile it before further action. Diagnostic metadata uses only closed codes,
+bounded status and correlation identifiers, and a validated last snapshot.
+See the [TypeScript client](https://github.com/maziyarpanahi/openmed/blob/master/clients/typescript/README.md)
+for runnable usage and the shared offline wire tests. Responses are bounded by
+256 KiB, depth eight, 4,096 values and 128 effects; requests by 64 KiB. No client
+validates human custody, issues approval, executes effects or follows redirects.
+
+
 ### `POST /v1/decisions`
 
 Evaluates a bounded caller-supplied choice, ordering, multi-label, boolean, or

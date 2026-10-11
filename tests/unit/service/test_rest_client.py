@@ -248,6 +248,11 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     }
 
     assert set(CLIENT_ENDPOINTS) == {
+        "workflow_preflight",
+        "workflow_preview",
+        "workflow_status",
+        "workflow_submit_receipt",
+        "workflow_cancel",
         "brief",
         "analyze",
         "extract_pii",
@@ -271,6 +276,26 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
 
         schema = _request_body_schema(spec, operation)
         assert endpoint.request_fields == set(schema["properties"])
+
+        if method_name.startswith("workflow_"):
+            from openmed.agent.correlation import RunId
+            from openmed.agent.identifiers import WorkflowId
+            from openmed.service.governed_workflows import WorkflowReference
+
+            reference = WorkflowReference(
+                RunId.parse("run_" + "1" * 32),
+                WorkflowId.parse("workflow:test.example/review@1.0.0"),
+                "sha256:" + "2" * 64,
+            ).to_dict()
+            serialized_fields = set(reference)
+            if method_name == "workflow_submit_receipt":
+                serialized_fields.add("receipt")
+            assert serialized_fields == set(schema["required"])
+            assert (
+                schema["properties"]["schema_version"]["const"]
+                == reference["schema_version"]
+            )
+            continue
 
         request_type = request_types[method_name]
         required_fields = {
