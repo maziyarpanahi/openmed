@@ -154,11 +154,12 @@ clinical validator.
 ```python
 from openmed.agent.permissions import dispatch_with_authorized_results
 
-# expected_scope, output_schema and local_read are reviewed local bindings.
-# request.record_selectors exactly covers expected_scope.selectors().
+# result_ticket, result_request, expected_scope, output_schema and local_read
+# come from the trusted host. This distinct result request covers exactly
+# expected_scope.selectors(); the earlier single-selector request does not.
 result = dispatch_with_authorized_results(
-    ticket,
-    request,
+    result_ticket,
+    result_request,
     AccessTicketVerifier(),
     scope=expected_scope,
     schema=output_schema,

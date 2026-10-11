@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import doctest
 import hashlib
+import hmac
 import http.client
 import importlib
 import json
@@ -67,7 +68,7 @@ _EXTRA_GOVERNED_PAGES = (
 _FRAGMENTS: dict[str, tuple[str, str, str]] = {
     "workflow-recovery-adapters": (
         "agent/workflow-recovery.md",
-        "6223e4d27fb39b2a8fe1de8b831e6542a9c9e43ac5cf89259788dad510605785",
+        "f1898ad982a08d4bd998ffbb9b14f3ab375128d5daef6f33f3673b2826ff22ef",
         "Application journal, effect-sink inspection and dispatch adapters.",
     ),
     "omop-database-transaction": (
@@ -310,6 +311,52 @@ def _synthetic_seals() -> dict[str, Any]:
     }
 
 
+def _synthetic_candidate_bundle() -> dict[str, Any]:
+    """Supply a signed NOT_READY packet without repository or artifact effects."""
+    from openmed.eval.agent_release_candidate import PACKET_SCHEMA, AgentCandidatePacket
+    from openmed.eval.suites.agent_release import evaluate_agent_release_gates
+
+    key = b"synthetic-docs-candidate-key-32-bytes"
+    report = evaluate_agent_release_gates((), candidate_digest="sha256:" + "a" * 64)
+    unsigned = {
+        "schema_version": PACKET_SCHEMA,
+        "manifest_digest": "sha256:" + "a" * 64,
+        "report_digest": report.report_digest,
+        "decision": "NOT_READY",
+        "reason_codes": ["gate_failed", "gate_missing_evidence"],
+        "gates": [
+            {
+                "metric": row.metric,
+                "reason_code": row.reason_code,
+                "sample_size": row.sample_size,
+                "event_count": row.event_count,
+                "slice_count": len(row.slice_sizes),
+            }
+            for row in report.gate_results
+        ],
+    }
+
+    def encode(value: Any) -> bytes:
+        return json.dumps(
+            value, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+
+    signed = {
+        **unsigned,
+        "packet_digest": "sha256:" + hashlib.sha256(encode(unsigned)).hexdigest(),
+    }
+    packet = AgentCandidatePacket.from_dict(
+        {
+            **signed,
+            "signature": "sha256:"
+            + hmac.new(key, encode(signed), hashlib.sha256).hexdigest(),
+        }
+    )
+    assert packet.verify(key)
+    assert packet.decision == "NOT_READY"
+    return {"bundle": {"packet": packet.to_dict()}, "private_signing_key_bytes": key}
+
+
 def _synthetic_prelude(page: str) -> dict[str, Any]:
     """Supply only the page's documented application-owned synthetic context."""
     callbacks: list[Any] = []
@@ -322,6 +369,30 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
     }
     if page == "agent/action-ledger.md":
         namespace["ledger_directory"] = Path("synthetic-action-ledger")
+    elif page == "agent/bounded-scheduling.md":
+        from openmed.agent.workflows.scheduler import DispatchOutcome
+
+        class SyntheticDispatcher:
+            async def dispatch(self, run_id, node, cancellation):
+                del run_id, node, cancellation
+                return DispatchOutcome.REVIEW_REQUIRED
+
+        namespace.update(
+            guarded_dispatcher=SyntheticDispatcher(),
+            atomic_save_checkpoint=callbacks.append,
+        )
+    elif page == "agent/chart-abstraction-evidence.md":
+        from openmed.clinical.journey import JourneySnapshot
+        from tests.unit.agent.workflows.test_journey_abstraction import SUBJECT, records
+
+        artifact, locator, fact = records()
+        namespace.update(
+            snapshot=JourneySnapshot.at(SUBJECT, 1),
+            artifact=artifact,
+            locator=locator,
+            fact=fact,
+            conflicts=(),
+        )
     elif page == "agent/resource-budgets.md":
         namespace.update(
             handle_budget_stop=callbacks.append,
@@ -451,6 +522,19 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
             },
             render_local_preview=lambda value: value,
         )
+        from dataclasses import replace
+
+        from tests.fixtures.agent.result_scope import binding, pages, schema
+
+        result_ticket, result_request, scope = binding()
+        namespace.update(
+            result_ticket=replace(result_ticket, expires_at=2_000_000_000),
+            result_request=result_request,
+            expected_scope=scope,
+            output_schema=schema(),
+            local_read=lambda: pages(scope),
+            screen_then_run_next_step=callbacks.append,
+        )
     elif page == "agent/run-invariants.md":
         from openmed.agent.action_graph import ActionNode
         from openmed.agent.correlation import ActionCorrelation, ActionId, RunId
@@ -485,9 +569,52 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
 
         namespace.update(run_tool=run_tool, run_id=RunId.generate().serialize())
     elif page == "agent/quality-measure-evidence.md":
+        from tests.unit.agent.workflows.test_native_measure_evidence import SCHEMA, _run
+
         namespace["load_local_signing_key"] = lambda: (
             b"synthetic-docs-key-32-bytes-or-more"
         )
+        namespace.update(
+            native_run=_run(),
+            local_input_schema_digest=SCHEMA,
+            local_keys={"quality-evidence-2026": namespace["load_local_signing_key"]()},
+        )
+    elif page == "agent/workflow-recovery.md":
+        from openmed.agent.workflows import JournalRetentionPolicy
+        from tests.unit.agent.workflows.test_journal_retirement import (
+            exported_summary,
+            terminal_journal,
+        )
+
+        journal, final = terminal_journal(Path("synthetic-docs-journal"))
+        now = 1_700_000_000
+        plan = journal.plan_retirement(
+            JournalRetentionPolicy(30 * 24 * 60 * 60), now=now
+        )
+        assert plan is not None
+        namespace.update(
+            journal=journal,
+            clock=lambda: now,
+            confirmed_token=plan.confirmation_token,
+            previously_exported_summary=exported_summary(final),
+            show_for_operator_review=callbacks.append,
+        )
+    elif page == "security/agent-threat-model.md":
+
+        class SyntheticFHIRRead:
+            def get_resource(self, resource_type, resource_id):
+                assert (resource_type, resource_id) == (
+                    "Observation",
+                    "synthetic-observation",
+                )
+                callbacks.append("synthetic-fhir-read")
+                return {
+                    "resourceType": "Observation",
+                    "status": "preliminary",
+                    "text": {"div": "<div>Synthetic stable result.</div>"},
+                }
+
+        namespace["fhir_client"] = SyntheticFHIRRead()
     elif page == "agent/tool-argument-classification.md":
         from openmed.agent.permissions import (
             CapabilityGrantConstraint,
@@ -715,6 +842,8 @@ def _synthetic_prelude(page: str) -> dict[str, Any]:
                 (), candidate_digest="sha256:" + "a" * 64
             ),
         )
+    if page == "evaluation/v3.1-agent-gates.md":
+        namespace.update(_synthetic_candidate_bundle())
     return namespace
 
 
@@ -769,6 +898,19 @@ def test_governed_documentation_python_blocks(
         assert namespace["result"].status.value == "committed"
     if page == "evaluation/v3.1-agent-gates.md":
         assert namespace["report"].decision == "NOT_READY"
+        assert namespace["packet"].decision == "NOT_READY"
+        assert not namespace["packet"].verify(b"different-synthetic-docs-key-32-bytes")
+    if page == "agent/workflow-recovery.md":
+        assert namespace["record"].verifies_summary(
+            namespace["previously_exported_summary"]
+        )
+        assert not list(Path("synthetic-docs-journal").glob("checkpoint-*.json"))
+        assert len(namespace["_review_calls"]) == 1
+    if page == "agent/purpose-bound-access.md":
+        assert len(namespace["_review_calls"]) == 1
+    if page == "security/agent-threat-model.md":
+        assert namespace["_review_calls"] == ["synthetic-fhir-read"]
+        assert not namespace["prepared"].flagged
     if page == "interop/omop-staged-mutations.md":
         assert namespace["result"].status.value == "denied"
         assert namespace["result"].applied_count == 0
