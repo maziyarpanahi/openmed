@@ -200,6 +200,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add typed Python service-client grounding, profiling and cohort resolution,
+  with explicit OpenAPI path coverage and documented operational exclusions (#3754).
+
 - Project governed FHIR create/update attempts and refusals into deterministic,
   value-free R4 AuditEvents with injected clocks, opaque references, controlled
   reviewer categories and receipt digests. Preserve unknown commit state for
