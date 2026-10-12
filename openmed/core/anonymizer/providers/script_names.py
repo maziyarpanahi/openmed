@@ -6,15 +6,25 @@ selected outside the source surface's code-point set. Han output also preserves
 the number of Han characters in the detected name. Gujarati uses Faker's
 native ``gu_IN`` name provider and preserves the language-specific ``ભાઈ`` /
 ``બેન`` suffix when the source contains one.
+
+Arabic-script names come from Faker's generic ``ar_AA`` person inventory,
+because the default ``ar_EG`` locale ships no Arabic-script person data. A
+regional override whose Faker locale does ship Arabic-script names, such as
+``ar-DZ``, keeps its own regional names. Ethiopic names are recombined from the
+synthetic curated values in ``LANGUAGE_FAKE_DATA["am"]``, because the ``en_KE``
+backend behind ``am_ET`` ships no Ethiopic data. Neither path bundles a list of
+real people, and no output name part reuses a token of the source surface.
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from functools import lru_cache
 from typing import Final
 
+from ... import labels as L
 from ...language_pack import LanguagePack, get_language_pack
 from ..locales import generate_urdu_name
 
@@ -35,6 +45,8 @@ TELUGU_LANGUAGE_PACK: Final = _require_language_pack("te")
 GUJARATI_LANGUAGE_PACK: Final = _require_language_pack("gu")
 KANNADA_LANGUAGE_PACK: Final = _require_language_pack("kn")
 URDU_LANGUAGE_PACK: Final = _require_language_pack("ur")
+ARABIC_LANGUAGE_PACK: Final = _require_language_pack("ar")
+AMHARIC_LANGUAGE_PACK: Final = _require_language_pack("am")
 
 
 def _unicode_letters(start: int, end: int, name_prefix: str) -> tuple[str, ...]:
@@ -308,6 +320,200 @@ def generate_gurmukhi_name(faker, original: str, *, locale: str) -> str:
     return f"{given_name} {suffix}" if suffix else given_name
 
 
+_ARABIC_SCRIPT_RANGES: Final = (
+    (0x0600, 0x06FF),
+    (0x0750, 0x077F),
+    (0x08A0, 0x08FF),
+    (0xFB50, 0xFDFF),
+    (0xFE70, 0xFEFF),
+)
+"""Unicode blocks that hold Arabic-script letters."""
+
+_ETHIOPIC_SCRIPT_RANGES: Final = (
+    (0x1200, 0x137F),
+    (0x1380, 0x139F),
+    (0x2D80, 0x2DDF),
+    (0xAB00, 0xAB2F),
+)
+"""Unicode blocks that hold Ethiopic syllables."""
+
+_NATIVE_DRAW_ATTEMPTS: Final = 8
+
+
+def _fold_surface(value: str) -> str:
+    """Return ``value`` in NFKC form without combining marks.
+
+    Arabic harakat and Ethiopic combining marks do not change which name or
+    place a token denotes, so token comparisons ignore them.
+    """
+
+    normalized = unicodedata.normalize("NFKC", str(value))
+    return "".join(
+        character
+        for character in normalized
+        if not unicodedata.category(character).startswith("M")
+    )
+
+
+def _surface_tokens(value: str) -> frozenset[str]:
+    """Return the mark-folded word tokens of ``value``."""
+
+    return frozenset(re.findall(r"\w+", _fold_surface(value)))
+
+
+def _is_script_text(value: str, ranges: tuple[tuple[int, int], ...]) -> bool:
+    """Return whether ``value`` has letters and every letter is in ``ranges``."""
+
+    letters = [character for character in str(value) if character.isalpha()]
+    return bool(letters) and all(
+        any(start <= ord(character) <= end for start, end in ranges)
+        for character in letters
+    )
+
+
+def _draw_unshared_value(
+    faker,
+    values: Sequence[str],
+    original: str,
+    *,
+    exclude: frozenset[str] = frozenset(),
+) -> str:
+    """Draw a value sharing no token with ``original`` or ``exclude``.
+
+    Falls back to any value that differs from ``original`` when every value
+    shares a token, so the result never equals the source surface while the
+    inventory has at least two entries.
+    """
+
+    forbidden = _surface_tokens(original) | exclude
+    folded_original = _fold_surface(original)
+    eligible = (
+        tuple(value for value in values if _surface_tokens(value).isdisjoint(forbidden))
+        or tuple(value for value in values if _fold_surface(value) != folded_original)
+        or tuple(values)
+    )
+    return str(faker.random.choice(eligible))
+
+
+@lru_cache(maxsize=1)
+def _arabic_name_inventory() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return Faker's generic Arabic-script given and family names."""
+
+    from faker.providers.person.ar_AA import Provider
+
+    given_names = tuple(
+        dict.fromkeys((*Provider.first_names_male, *Provider.first_names_female))
+    )
+    return given_names, tuple(Provider.last_names)
+
+
+def _draw_arabic_name_part(
+    faker,
+    original: str,
+    *,
+    method: str,
+    values: Sequence[str],
+    exclude: frozenset[str] = frozenset(),
+) -> str:
+    """Prefer the locale's own Arabic-script names, else the ``ar_AA`` inventory."""
+
+    forbidden = _surface_tokens(original) | exclude
+    for _ in range(_NATIVE_DRAW_ATTEMPTS):
+        candidate = str(getattr(faker, method)()).strip()
+        if not _is_script_text(candidate, _ARABIC_SCRIPT_RANGES):
+            # This Faker locale has no Arabic-script names; stop asking it.
+            break
+        if _surface_tokens(candidate).isdisjoint(forbidden):
+            return candidate
+    return _draw_unshared_value(faker, values, original, exclude=exclude)
+
+
+def generate_arabic_first_name(faker, original: str, *, locale: str) -> str:
+    """Return an Arabic-script given name sharing no token with ``original``."""
+
+    del locale
+    given_names, _family_names = _arabic_name_inventory()
+    return _draw_arabic_name_part(
+        faker,
+        original,
+        method="first_name",
+        values=given_names,
+    )
+
+
+def generate_arabic_last_name(faker, original: str, *, locale: str) -> str:
+    """Return an Arabic-script family name sharing no token with ``original``."""
+
+    del locale
+    _given_names, family_names = _arabic_name_inventory()
+    return _draw_arabic_name_part(
+        faker,
+        original,
+        method="last_name",
+        values=family_names,
+    )
+
+
+def generate_arabic_person(faker, original: str, *, locale: str) -> str:
+    """Return an Arabic-script given and family name distinct from ``original``.
+
+    The locale's own Faker names are used when they are Arabic-script, which
+    keeps regional overrides such as ``ar-DZ`` in-region. Otherwise the parts
+    come from Faker's generic ``ar_AA`` inventory.
+    """
+
+    _given_names, family_names = _arabic_name_inventory()
+    given = generate_arabic_first_name(faker, original, locale=locale)
+    family = _draw_arabic_name_part(
+        faker,
+        original,
+        method="last_name",
+        values=family_names,
+        exclude=_surface_tokens(given),
+    )
+    return f"{given} {family}"
+
+
+def _amharic_values(key: str) -> tuple[str, ...]:
+    """Return the synthetic curated Amharic values for ``key``."""
+
+    from ...pii_i18n import LANGUAGE_FAKE_DATA
+
+    return tuple(LANGUAGE_FAKE_DATA["am"][key])
+
+
+def generate_ethiopic_first_name(faker, original: str, *, locale: str) -> str:
+    """Return a curated Ethiopic given name sharing no token with ``original``."""
+
+    del locale
+    return _draw_unshared_value(faker, _amharic_values("FIRST_NAME"), original)
+
+
+def generate_ethiopic_last_name(faker, original: str, *, locale: str) -> str:
+    """Return a curated Ethiopic father's name sharing no source token."""
+
+    del locale
+    return _draw_unshared_value(faker, _amharic_values("LAST_NAME"), original)
+
+
+def generate_ethiopic_person(faker, original: str, *, locale: str) -> str:
+    """Return a curated Ethiopic given name plus father's name.
+
+    Ethiopian names pair a given name with the father's given name. Both parts
+    are drawn from the synthetic curated Amharic values, never from a list of
+    real people, and neither part reuses a token of ``original``.
+    """
+
+    given = generate_ethiopic_first_name(faker, original, locale=locale)
+    father = _draw_unshared_value(
+        faker,
+        _amharic_values("LAST_NAME"),
+        original,
+        exclude=_surface_tokens(given),
+    )
+    return f"{given} {father}"
+
+
 SCRIPT_NAME_PACKS: Final = (
     (HAN_LANGUAGE_PACK, "Han", generate_han_name),
     (DEVANAGARI_LANGUAGE_PACK, "Devanagari", generate_devanagari_name),
@@ -318,17 +524,52 @@ SCRIPT_NAME_PACKS: Final = (
     (URDU_LANGUAGE_PACK, "Arabic", generate_urdu_name),
 )
 
+SCRIPT_NAME_PART_PACKS: Final[
+    tuple[tuple[LanguagePack, str, Mapping[str, Callable[..., str]]], ...]
+] = (
+    (
+        ARABIC_LANGUAGE_PACK,
+        "Arabic",
+        {
+            L.PERSON: generate_arabic_person,
+            L.FIRST_NAME: generate_arabic_first_name,
+            L.MIDDLE_NAME: generate_arabic_first_name,
+            L.LAST_NAME: generate_arabic_last_name,
+        },
+    ),
+    (
+        AMHARIC_LANGUAGE_PACK,
+        "Ethiopic",
+        {
+            L.PERSON: generate_ethiopic_person,
+            L.FIRST_NAME: generate_ethiopic_first_name,
+            L.MIDDLE_NAME: generate_ethiopic_first_name,
+            L.LAST_NAME: generate_ethiopic_last_name,
+        },
+    ),
+)
+"""Per-label script name generators, keyed by language pack and script."""
+
 
 __all__ = [
+    "AMHARIC_LANGUAGE_PACK",
+    "ARABIC_LANGUAGE_PACK",
     "DEVANAGARI_LANGUAGE_PACK",
     "GUJARATI_LANGUAGE_PACK",
     "HAN_LANGUAGE_PACK",
     "KANNADA_LANGUAGE_PACK",
     "PUNJABI_LANGUAGE_PACK",
     "SCRIPT_NAME_PACKS",
+    "SCRIPT_NAME_PART_PACKS",
     "TELUGU_LANGUAGE_PACK",
     "URDU_LANGUAGE_PACK",
+    "generate_arabic_first_name",
+    "generate_arabic_last_name",
+    "generate_arabic_person",
     "generate_devanagari_name",
+    "generate_ethiopic_first_name",
+    "generate_ethiopic_last_name",
+    "generate_ethiopic_person",
     "generate_gujarati_name",
     "generate_han_name",
     "generate_kannada_name",
