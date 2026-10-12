@@ -421,6 +421,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stop rewriting the local async job store after every document. Progress is
+  saved in coalesced checkpoints (at most 100 per job, at least 1 second
+  apart) while status changes and terminal results are saved immediately, so
+  bytes written grow linearly with job size. Failed writes roll back only the
+  affected record and still leave the previous store and no temporary file
+  (#3904).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).

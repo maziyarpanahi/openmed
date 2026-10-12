@@ -481,3 +481,360 @@ def test_job_store_failed_publication_preserves_memory_and_disk(
     assert store._records == original_records
     assert path.read_bytes() == original_bytes
     assert list(tmp_path.iterdir()) == [path]
+
+
+class _StoreWriteSpy:
+    """Record every published job-store payload without changing behavior."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.payloads: list[bytes] = []
+        self._replace = jobs.os.replace
+        monkeypatch.setattr(jobs.os, "replace", self)
+
+    def __call__(self, src: Any, dst: Any) -> None:
+        self.payloads.append(Path(src).read_bytes())
+        self._replace(src, dst)
+
+    @property
+    def count(self) -> int:
+        return len(self.payloads)
+
+    @property
+    def bytes_written(self) -> int:
+        return sum(len(payload) for payload in self.payloads)
+
+    def job_snapshots(self, job_id: str) -> list[dict[str, Any]]:
+        return [json.loads(payload)["jobs"][job_id] for payload in self.payloads]
+
+
+def _synthetic_job_payload(document_count: int) -> Any:
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    return DeidentifyJobRequest(
+        documents=[
+            DeidentifyJobDocument(
+                id=f"synthetic-{index}",
+                text=f"Synthetic patient Alex Rivera visit {index}",
+            )
+            for index in range(document_count)
+        ]
+    )
+
+
+def _run_synthetic_job(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    document_count: int,
+    *,
+    seconds_per_document: float = 1.0,
+    failing_documents: frozenset[int] = frozenset(),
+    **queue_kwargs: Any,
+) -> tuple[_StoreWriteSpy, jobs.LocalJobStore, str]:
+    """Run one fake-runtime job and spy on every store publication."""
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+    ticks = [0.0]
+    store = jobs.LocalJobStore(tmp_path / "jobs.json", clock=lambda: now[0])
+    queue = jobs.DeidentifyJobQueue(
+        SimpleNamespace(),
+        store=store,
+        clock=lambda: now[0],
+        monotonic=lambda: ticks[0],
+        **queue_kwargs,
+    )
+    payload = _synthetic_job_payload(document_count)
+    record = queue._new_record(payload)
+    calls = [0]
+
+    def process(_payload: DeidentifyJobRequest, document: DeidentifyJobDocument):
+        index = calls[0]
+        calls[0] += 1
+        ticks[0] += seconds_per_document
+        now[0] += timedelta(seconds=seconds_per_document)
+        if index in failing_documents:
+            raise RuntimeError("synthetic model failure")
+        start = document.text.index("Alex Rivera")
+        return SimpleNamespace(
+            pii_entities=[
+                SimpleNamespace(
+                    label="NAME",
+                    text="Alex Rivera",
+                    start=start,
+                    end=start + len("Alex Rivera"),
+                    confidence=0.9,
+                )
+            ]
+        )
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    spy = _StoreWriteSpy(monkeypatch)
+    store.create(record)
+    try:
+        queue._run_job(jobs._JobWorkItem(record["id"], payload))
+    finally:
+        queue.shutdown()
+    return spy, store, record["id"]
+
+
+def _assert_consistent_progress(snapshot: dict[str, Any]) -> None:
+    attempted = snapshot["processed_count"] + snapshot["failed_count"]
+    assert 0 <= attempted <= snapshot["document_count"]
+    assert len(snapshot["spans"]) == snapshot["processed_count"]
+    assert sum(snapshot["label_histogram"].values()) == snapshot["processed_count"]
+    if snapshot["status"] == "running" and snapshot["document_count"]:
+        expected = round(attempted / snapshot["document_count"] * 100, 2)
+        assert snapshot["progress_percent"] == expected
+    span_ids = [span["document_id"] for span in snapshot["spans"]]
+    assert span_ids == sorted(span_ids, key=lambda value: int(value.split("-")[1]))
+
+
+@pytest.mark.parametrize("document_count", [40, 160, 640])
+def test_job_store_writes_stay_under_ceiling_independent_of_document_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    document_count: int,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        document_count,
+        progress_interval_seconds=0.5,
+        max_progress_writes=8,
+    )
+
+    # create + running + at most 8 progress checkpoints + terminal.
+    assert spy.count <= 11
+    final = store.get(job_id)
+    assert final is not None
+    assert final["status"] == "done"
+    assert final["processed_count"] == document_count
+    assert final["progress_percent"] == 100.0
+    assert len(final["spans"]) == document_count
+
+
+def test_job_store_bytes_written_grow_linearly_with_document_count(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    measured: dict[int, int] = {}
+    for document_count in (100, 400):
+        run_path = tmp_path / str(document_count)
+        run_path.mkdir()
+        with monkeypatch.context() as patched:
+            spy, _store, _job_id = _run_synthetic_job(
+                patched,
+                run_path,
+                document_count,
+                progress_interval_seconds=0.5,
+                max_progress_writes=8,
+            )
+        measured[document_count] = spy.bytes_written
+
+    # Four times the documents must cost about four times the bytes; the
+    # per-document full rewrite cost about sixteen times as much.
+    assert measured[400] < measured[100] * 5
+
+
+def test_job_progress_writes_coalesce_on_injected_clock(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        20,
+        seconds_per_document=0.25,
+        progress_interval_seconds=1.0,
+        max_progress_writes=100,
+    )
+
+    snapshots = spy.job_snapshots(job_id)
+    statuses = [snapshot["status"] for snapshot in snapshots]
+    progress = [snapshot for snapshot in snapshots if snapshot["status"] == "running"]
+    # One checkpoint per elapsed second of synthetic time, not one per document.
+    assert statuses[0] == "queued"
+    assert statuses[-1] == "done"
+    assert [snapshot["processed_count"] for snapshot in progress] == [0, 4, 8, 12, 16]
+    for snapshot in snapshots:
+        _assert_consistent_progress(snapshot)
+    persisted = json.loads(store.path.read_text(encoding="utf-8"))["jobs"]
+    assert persisted == store._records
+
+
+def test_job_progress_writes_skip_checkpoints_before_interval_elapses(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        30,
+        seconds_per_document=0.0,
+        progress_interval_seconds=1.0,
+        max_progress_writes=100,
+    )
+
+    statuses = [snapshot["status"] for snapshot in spy.job_snapshots(job_id)]
+    assert statuses == ["queued", "running", "done"]
+    final = store.get(job_id)
+    assert final is not None
+    assert final["processed_count"] == 30
+    assert len(final["spans"]) == 30
+
+
+def test_job_progress_without_coalescing_writes_after_each_document(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Negative control: disabling both limits restores one write per document.
+    spy, _store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        12,
+        progress_interval_seconds=0.0,
+        max_progress_writes=12,
+    )
+
+    progress = [
+        snapshot["processed_count"]
+        for snapshot in spy.job_snapshots(job_id)
+        if snapshot["status"] == "running"
+    ]
+    assert progress == list(range(12))
+    assert spy.count == 14
+
+
+def test_coalesced_progress_keeps_counts_and_never_persists_raw_text(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    spy, store, job_id = _run_synthetic_job(
+        monkeypatch,
+        tmp_path,
+        50,
+        failing_documents=frozenset({3, 17, 49}),
+        progress_interval_seconds=0.5,
+        max_progress_writes=5,
+    )
+
+    snapshots = spy.job_snapshots(job_id)
+    assert len(snapshots) <= 8
+    for snapshot in snapshots:
+        _assert_consistent_progress(snapshot)
+    final = store.get(job_id)
+    assert final is not None
+    assert final["status"] == "failed"
+    assert final["processed_count"] == 47
+    assert final["failed_count"] == 3
+    assert final["label_histogram"] == {"NAME": 47}
+    assert final["error"]["type"] == "RuntimeError"
+    for payload in spy.payloads:
+        text = payload.decode("utf-8")
+        assert "Alex Rivera" not in text
+        assert "Synthetic patient" not in text
+        assert "synthetic model failure" not in text
+
+
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [
+        ("progress_interval_seconds", -0.1),
+        ("max_progress_writes", 0),
+    ],
+)
+def test_job_queue_rejects_invalid_progress_coalescing_limits(
+    tmp_path: Path,
+    argument: str,
+    value: float,
+) -> None:
+    from types import SimpleNamespace
+
+    store = jobs.LocalJobStore(tmp_path / "jobs.json")
+    with pytest.raises(ValueError, match=argument):
+        jobs.DeidentifyJobQueue(SimpleNamespace(), store=store, **{argument: value})
+    assert not (tmp_path / "jobs.json").exists()
+
+
+def test_failed_progress_write_leaves_previous_store_without_temp_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from types import SimpleNamespace
+
+    from openmed.service.schemas import DeidentifyJobDocument, DeidentifyJobRequest
+
+    ticks = [0.0]
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    queue = jobs.DeidentifyJobQueue(
+        SimpleNamespace(),
+        store=store,
+        monotonic=lambda: ticks[0],
+        progress_interval_seconds=1.0,
+    )
+    payload = _synthetic_job_payload(6)
+    record = queue._new_record(payload)
+    store.create(record)
+    calls = [0]
+
+    def process(_payload: DeidentifyJobRequest, _document: DeidentifyJobDocument):
+        calls[0] += 1
+        ticks[0] += 1.0
+        return SimpleNamespace(pii_entities=[])
+
+    original_replace = jobs.os.replace
+    replacements = [0]
+
+    def fail_second_checkpoint(src: Any, dst: Any) -> None:
+        replacements[0] += 1
+        if replacements[0] == 3:
+            raise OSError("synthetic disk full")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(queue, "_deidentify_document", process)
+    monkeypatch.setattr(jobs.os, "replace", fail_second_checkpoint)
+    try:
+        with pytest.raises(OSError, match="synthetic disk full"):
+            queue._run_job(jobs._JobWorkItem(record["id"], payload))
+    finally:
+        queue.shutdown()
+
+    persisted = json.loads(path.read_text(encoding="utf-8"))["jobs"]
+    assert persisted == store._records
+    assert persisted[record["id"]]["status"] == "running"
+    assert persisted[record["id"]]["processed_count"] == 1
+    assert calls[0] == 2
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_job_store_rollback_restores_only_the_changed_record(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "jobs.json"
+    store = jobs.LocalJobStore(path)
+    store.create({"id": "synthetic-a", "status": "queued", "spans": []})
+    store.create({"id": "synthetic-b", "status": "queued", "spans": []})
+    untouched = store._records["synthetic-b"]
+    original_bytes = path.read_bytes()
+
+    def fail(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("synthetic publication failure")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(jobs.os, "replace", fail)
+        with pytest.raises(OSError, match="synthetic publication failure"):
+            store.update("synthetic-a", status="running", spans=[{"start": 0}])
+
+    assert store._records["synthetic-a"] == {
+        "id": "synthetic-a",
+        "status": "queued",
+        "spans": [],
+    }
+    # Rollback must not snapshot and restore unrelated records.
+    assert store._records["synthetic-b"] is untouched
+    assert path.read_bytes() == original_bytes
+    assert list(tmp_path.iterdir()) == [path]

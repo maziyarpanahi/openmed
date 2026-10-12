@@ -38,7 +38,10 @@ curl -s http://127.0.0.1:8080/jobs/<job-id>
 ```
 
 Status moves from `queued` to `running` and then to `done` or `failed`.
-Progress is updated after each document. Terminal records include:
+Status changes and terminal results are saved as soon as they happen. Progress
+(`progress_percent`, counts, `label_histogram`, and `spans`) is saved in
+coalesced checkpoints rather than after every document; see
+[Progress checkpoints](#progress-checkpoints). Terminal records include:
 
 - `processed_count` and `failed_count`
 - `label_histogram`
@@ -112,3 +115,30 @@ python -m openmed.service.logging --host 0.0.0.0 --port 8080
 `OPENMED_SERVICE_JOBS_WORKERS` bounds concurrent job execution. The local
 backend is intended for one service process and does not provide multi-node
 distribution.
+
+## Progress Checkpoints
+
+Each progress checkpoint rewrites the whole local store, so the service limits
+how often a running job writes one. A checkpoint is written only when both
+conditions hold:
+
+- at least 1 second has passed since the job's previous progress write, and
+- at least 1% of the job's documents (rounded up to a whole document) have
+  finished, successfully or not, since the previous checkpoint.
+
+A job therefore writes at most 100 progress checkpoints regardless of its
+document count, plus one write each for submission, the `running` transition,
+and the terminal result, and one more for webhook delivery status when a
+webhook is configured. The bytes a job writes grow linearly with its document
+count. The last document's progress is saved with the terminal result rather
+than as a separate checkpoint.
+
+`GET /jobs/{job_id}` returns the most recently saved record, so polled
+progress can trail the worker by up to one checkpoint. Counts, label
+histograms, and spans in a response always describe the same set of
+documents, and `done` or `failed` records always carry the complete result.
+
+Every write goes to a temporary file in the store directory that then
+atomically replaces the store. If a write fails, the temporary file is removed,
+the store keeps its previous contents, and the affected in-memory records
+are restored to match.
