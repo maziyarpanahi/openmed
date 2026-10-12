@@ -75,6 +75,9 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.journey.database.secretName | quote }}
                   key: {{ .Values.journey.database.secretKey | quote }}
+            {{- if .Values.journey.database.tls.secretName }}
+            {{- include "openmed-service.journeyDatabaseTLSEnv" . | nindent 12 }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
@@ -133,6 +136,9 @@ spec:
               mountPath: {{ .Values.journey.artifacts.mountPath | quote }}
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.journey.database.tls.secretName }}
+            {{- include "openmed-service.journeyDatabaseTLSVolumeMount" . | nindent 12 }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
@@ -152,6 +158,9 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 128Mi
+        {{- if .Values.journey.database.tls.secretName }}
+        {{- include "openmed-service.journeyDatabaseTLSVolume" . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}

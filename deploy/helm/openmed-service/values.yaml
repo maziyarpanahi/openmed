@@ -160,6 +160,16 @@ journey:
   database:
     secretName: openmed-journey-database
     secretKey: dsn
+    # Existing Secret with the operator CA bundle (and an optional client
+    # certificate and key) used to verify PostgreSQL TLS with host-name checks.
+    # The production profile refuses plaintext DSNs; leave secretName empty
+    # only when the DSN uses sslmode=verify-full against the image trust store.
+    tls:
+      secretName: ""
+      caKey: ca.crt
+      clientCertKey: ""
+      clientKeyKey: ""
+      mountPath: /etc/openmed/postgres-tls
   artifacts:
     existingClaim: ""
     storageClassName: ""

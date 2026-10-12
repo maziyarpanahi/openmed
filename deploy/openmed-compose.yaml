@@ -1,5 +1,9 @@
 # Local-first Journey deployment profile. Set OPENMED_POSTGRES_PASSWORD before
 # startup; the value is never persisted in this file or emitted by health tools.
+# Set OPENMED_POSTGRES_TLS_DIR to an operator directory holding ca.crt plus a
+# server.crt/server.key pair issued for the host name "postgres". The Journey
+# store verifies the server certificate and host name and refuses plaintext in
+# the production profile.
 
 x-openmed-image: &openmed-image
   image: "${OPENMED_IMAGE:-openmed:distroless}"
@@ -19,6 +23,9 @@ x-openmed-security: &openmed-security
     - no-new-privileges:true
   pids_limit: 512
 
+x-postgres-ca-bundle: &postgres-ca-bundle >-
+  ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/ca.crt:/run/openmed/postgres-tls/ca.crt:ro
+
 x-openmed-environment: &openmed-environment
   OPENMED_PROFILE: "${OPENMED_PROFILE:-prod}"
   OPENMED_OFFLINE: "1"
@@ -34,19 +41,34 @@ x-openmed-environment: &openmed-environment
   OPENMED_CACHE_DIR: /cache/openmed
   OPENMED_JOURNEY_ARTIFACT_ROOT: /cache/artifacts
   OPENMED_JOURNEY_POSTGRES_DSN: >-
-    postgresql://openmed:${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed
+    postgresql://openmed:${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}@postgres:5432/openmed?sslmode=verify-full
+  OPENMED_JOURNEY_POSTGRES_SSLROOTCERT: /run/openmed/postgres-tls/ca.crt
   OPENMED_JOURNEY_SCHEMA: "${OPENMED_JOURNEY_SCHEMA:-openmed_journey}"
 
 services:
   postgres:
     image: "${OPENMED_POSTGRES_IMAGE:-postgres:17-alpine}"
     pull_policy: "${OPENMED_POSTGRES_PULL_POLICY:-missing}"
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - ssl_cert_file=/run/openmed/postgres-tls/server.crt
+      - -c
+      - ssl_key_file=/run/openmed/postgres-tls/server.key
     environment:
       POSTGRES_DB: openmed
       POSTGRES_USER: openmed
       POSTGRES_PASSWORD: "${OPENMED_POSTGRES_PASSWORD:?set OPENMED_POSTGRES_PASSWORD}"
     volumes:
       - openmed-postgres:/var/lib/postgresql/data
+      - >-
+        ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/server.crt:/run/openmed/postgres-tls/server.crt:ro
+      - >-
+        ${OPENMED_POSTGRES_TLS_DIR:?set OPENMED_POSTGRES_TLS_DIR}/server.key:/run/openmed/postgres-tls/server.key:ro
     networks:
       - openmed-internal
     restart: unless-stopped
@@ -79,6 +101,8 @@ services:
     command: ["migrate"]
     environment:
       <<: *openmed-environment
+    volumes:
+      - *postgres-ca-bundle
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +118,7 @@ services:
       <<: *openmed-environment
     volumes:
       - openmed-cache:/cache
+      - *postgres-ca-bundle
     depends_on:
       journey-migrate:
         condition: service_completed_successfully
@@ -137,6 +162,7 @@ services:
     volumes:
       - openmed-cache:/cache
       - openmed-models:/models:ro
+      - *postgres-ca-bundle
     depends_on:
       journey-migrate:
         condition: service_completed_successfully
@@ -176,6 +202,7 @@ services:
       <<: *openmed-environment
     volumes:
       - openmed-cache:/cache
+      - *postgres-ca-bundle
     depends_on:
       openmed:
         condition: service_healthy

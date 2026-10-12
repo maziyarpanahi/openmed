@@ -39,19 +39,40 @@ a plain Helm value:
 
 ```bash
 kubectl -n openmed create secret generic openmed-journey-database \
-  --from-literal=dsn='postgresql://USER:PASSWORD@postgres.openmed.svc:5432/openmed'
+  --from-literal=dsn='postgresql://USER:PASSWORD@postgres.openmed.svc:5432/openmed?sslmode=verify-full'
 ```
 
-Install with Journey enabled and explicitly identify the in-cluster database
-pods allowed by the default-deny egress policy:
+The Journey pods run in the `prod` profile, which requires verified TLS: a
+plaintext or non-verifying DSN is refused before any socket is opened and the
+probes report `postgres_tls_required`. Put the CA bundle that issued the
+PostgreSQL server certificate, and optionally a client certificate and key, in
+an existing Secret. The server certificate must match the DSN host name:
+
+```bash
+kubectl -n openmed create secret generic openmed-journey-postgres-tls \
+  --from-file=ca.crt=./postgres-ca.crt
+```
+
+Install with Journey enabled, reference the TLS Secret, and explicitly identify
+the in-cluster database pods allowed by the default-deny egress policy:
 
 ```bash
 helm upgrade --install openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --create-namespace \
   --set journey.enabled=true \
+  --set journey.database.tls.secretName=openmed-journey-postgres-tls \
   --set journey.networkPolicy.databasePodSelector.app=postgres
 ```
+
+The chart mounts the Secret read-only at
+`journey.database.tls.mountPath` in the migration Job, the worker, and the API
+pod, and sets `OPENMED_JOURNEY_POSTGRES_SSLROOTCERT` (plus
+`OPENMED_JOURNEY_POSTGRES_SSLCERT` and `OPENMED_JOURNEY_POSTGRES_SSLKEY` when
+`clientCertKey` and `clientKeyKey` are set) to file paths only. Leave
+`journey.database.tls.secretName` empty only when the database certificate
+chains to the image trust store. Server-side `pg_hba.conf` enforcement, role
+management, and encryption at rest remain operator responsibilities.
 
 For an external database, keep `databasePodSelector` empty and supply a
 reviewed `journey.networkPolicy.additionalEgress` IP block. Do not disable the
@@ -194,6 +215,11 @@ objects are not backups; use the cluster's encrypted secret manager.
 | `journey.schema` | `openmed_journey` | Controlled PostgreSQL schema name. |
 | `journey.database.secretName` | `openmed-journey-database` | Existing Secret containing the DSN. |
 | `journey.database.secretKey` | `dsn` | Key inside the database Secret. |
+| `journey.database.tls.secretName` | `""` | Existing Secret with the PostgreSQL CA bundle and optional client certificate. |
+| `journey.database.tls.caKey` | `ca.crt` | CA bundle key; exported as `OPENMED_JOURNEY_POSTGRES_SSLROOTCERT`. |
+| `journey.database.tls.clientCertKey` | `""` | Optional client certificate key; exported as `OPENMED_JOURNEY_POSTGRES_SSLCERT`. |
+| `journey.database.tls.clientKeyKey` | `""` | Optional client key; exported as `OPENMED_JOURNEY_POSTGRES_SSLKEY`. |
+| `journey.database.tls.mountPath` | `/etc/openmed/postgres-tls` | Read-only mount path for the TLS Secret. |
 | `journey.artifacts.existingClaim` | `""` | Existing artifact PVC; empty creates one. |
 | `journey.artifacts.size` | `20Gi` | Requested content-addressed artifact capacity. |
 | `journey.worker.replicas` | `1` | Operational worker replicas. |

@@ -421,6 +421,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Require verified PostgreSQL TLS for Journey stores in the production
+  profile. `PostgresJourneyStore.connect` and `openmed-journey` accept an
+  operator CA bundle and optional client certificate and key
+  (`sslrootcert`/`sslcert`/`sslkey`, `OPENMED_JOURNEY_POSTGRES_SSL*`), build a
+  verify-full context with host-name checks, and refuse plaintext or
+  non-verifying DSNs with `postgres_tls_required` before opening a socket.
+  Plaintext now needs an explicit `OPENMED_PROFILE=dev` or `test`; the Compose
+  bundle and Helm chart mount the CA bundle, and a value-free transport posture
+  is exported for deployment self-checks (#3915).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).

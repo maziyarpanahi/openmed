@@ -31,7 +31,10 @@ namespace = ObjectStoreNamespace(
 )
 artifacts = FsspecArtifactStore(namespace)
 metadata = PostgresJourneyStore(
-    psycopg.connect("postgresql://application@localhost/journey"),
+    psycopg.connect(
+        "postgresql://application@db.internal.example/journey"
+        "?sslmode=verify-full&sslrootcert=/run/openmed/postgres-tls/ca.crt"
+    ),
     schema="openmed_journey",
 )
 store = ComposedJourneyStore(artifacts, metadata)
@@ -61,10 +64,56 @@ The connection or DSN must use TLS, authentication, routing, and access controls
 appropriate to the deployment. OpenMed neither weakens those controls nor puts
 connection details into result representations. `PostgresJourneyStore.connect()`
 is an optional convenience that lazily imports the BSD-licensed `pg8000` driver
-from the `journey` extra. It accepts a PostgreSQL URL with an optional
-`sslmode=verify-full` query (using the system trust store); other URL options
-fail closed. Direct construction accepts a compatible dedicated DB-API
-connection when deployment-specific TLS or routing is required.
+from the `journey` extra. Direct construction accepts a compatible dedicated
+DB-API connection when deployment-specific routing is required.
+
+### Verified TLS for `connect()`
+
+`connect()` builds a standard-library `ssl` context with certificate
+verification, host-name checking, and TLS 1.2 or newer. Supply a private CA
+bundle, and optionally a client certificate and key, through
+`connect_options`:
+
+```python
+from openmed.structured.store import PostgresJourneyStore
+
+result = PostgresJourneyStore.connect(
+    "postgresql://application@db.internal.example:5432/journey"
+    "?sslmode=verify-full",
+    connect_options={
+        "connect_timeout": 3,
+        "sslrootcert": "/run/openmed/postgres-tls/ca.crt",
+        "sslcert": "/run/openmed/postgres-tls/client.crt",  # optional
+        "sslkey": "/run/openmed/postgres-tls/client.key",  # optional
+    },
+)
+```
+
+`sslmode=verify-full` without `sslrootcert` verifies against the system trust
+store. Supplying any TLS file option selects verified TLS even when the URL has
+no `sslmode`. `sslkey` requires `sslcert`, and `sslmode=disable` cannot be
+combined with TLS files. Other URL options fail closed with `invalid_dsn`.
+
+The transport policy follows `OPENMED_PROFILE` (or the `profile=` argument),
+which defaults to `prod` as in the REST service:
+
+| Profile | Plaintext or `sslmode=disable` | `allow`, `prefer`, `require`, `verify-ca` | `verify-full` or TLS files |
+| --- | --- | --- | --- |
+| `dev`, `test` | allowed | `invalid_dsn` | verified TLS |
+| any other, including unset | `denied` / `postgres_tls_required` | `denied` / `postgres_tls_required` | verified TLS |
+
+Every refusal happens before the driver is imported or a socket is opened.
+An unreadable or malformed CA bundle, certificate, or key returns
+`failure` / `postgres_tls_config_invalid`. Results, errors, and health reports
+never include the DSN, host name, user name, password, file paths, or
+certificate contents. Development plaintext must be selected explicitly with
+`OPENMED_PROFILE=dev` or `OPENMED_PROFILE=test`.
+
+`postgres_transport_posture()` evaluates the same policy without loading
+files or connecting and returns a value-free `PostgresTransportPosture`
+(`production`, `tls`, `trust_anchor`, `client_certificate`, `code`, `ok`) for
+deployment self-checks. Server-side `pg_hba.conf` enforcement, role
+management, and encryption at rest remain operator responsibilities.
 
 ## Migration state and recovery
 
