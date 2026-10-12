@@ -252,6 +252,14 @@ scheme/host/port origins and cannot use wildcards. Setting
 `OPENMED_SERVICE_TRUSTED_HOSTS` replaces the loopback default, so include every
 host the service should accept.
 
+Trusted-host validation runs first, then CORS, then authentication, all before
+any request body is read. Preflights therefore succeed without credentials, and
+`401`, `403`, `413` and `429` responses to allowed origins keep their CORS
+headers. Allowed origins may send `X-OpenMed-Priority`; with authentication
+enabled they may also send `Authorization` and `X-API-Key`. `X-Request-ID` and
+`Retry-After` are exposed to browser code. See
+[REST Authentication](serving/authentication.md#middleware-order).
+
 Example browser front-end configuration:
 
 ```bash
