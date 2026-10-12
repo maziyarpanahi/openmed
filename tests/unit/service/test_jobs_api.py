@@ -255,6 +255,11 @@ def _wait_for_job(
     raise AssertionError(f"job {job_id} did not reach expected state: {payload}")
 
 
+def _delivery_settled(payload: dict[str, Any]) -> bool:
+    delivery = payload["webhook_delivery"]
+    return delivery is not None and delivery["status"] != "pending"
+
+
 def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -330,9 +335,7 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
         done = _wait_for_job(
             client,
             created["id"],
-            lambda payload: (
-                payload["status"] == "done" and payload["webhook_delivery"] is not None
-            ),
+            lambda payload: payload["status"] == "done" and _delivery_settled(payload),
         )
 
     assert done["progress_percent"] == 100.0
@@ -340,7 +343,13 @@ def test_jobs_api_runs_batch_and_posts_no_phi_webhook(
     assert done["failed_count"] == 0
     assert done["label_histogram"] == {"NAME": 2}
     assert done["webhook"]["url_hash"].startswith("sha256:")
-    assert done["webhook_delivery"]["success"] is True
+    assert done["webhook_delivery"] == {
+        "status": "delivered",
+        "success": True,
+        "attempts": 1,
+        "status_code": 204,
+        "error": None,
+    }
     assert callbacks[0]["payload"]["status"] == "done"
     assert callbacks[0]["payload"]["label_histogram"] == {"NAME": 2}
 
@@ -404,8 +413,7 @@ def test_failed_job_surfaces_error_and_records_webhook_delivery(
             client,
             job_id,
             lambda payload: (
-                payload["status"] == "failed"
-                and payload["webhook_delivery"] is not None
+                payload["status"] == "failed" and _delivery_settled(payload)
             ),
         )
 
