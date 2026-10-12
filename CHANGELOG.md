@@ -421,6 +421,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Enforce the declared JSON depth, node and longest-string limits on REST and
+  GraphQL request bodies with a streaming structural pre-scan in the shared
+  request-limit middleware. Violations return `json_structure_exceeded` with
+  only the limit category and ceiling before JSON decoding, Pydantic validation
+  or the route handler runs; `/cohort/resolve` documents a 250,000-value
+  ceiling for concept hierarchies (#3906).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).
