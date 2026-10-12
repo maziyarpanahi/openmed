@@ -928,9 +928,15 @@ with requests.post(
 ```
 
 If the configured service timeout is reached after the response has started,
-the last line has `type: "error"` and the standard `timeout` error fields. A
-client disconnect stops iteration and releases the model request. Streamed
-source text is never written to service logs.
+the last line has `type: "error"` and the standard `timeout` error fields; the
+response ends with exactly that one error line and no `chunk` or `final` line
+follows it. A client disconnect stops iteration without emitting further lines.
+In both cases the timeout or cancellation is recorded as the model request
+outcome, and the model reference is released so the `keep_alive` idle-unload
+timer and warm-pool eviction apply. A core window that is still running in a
+worker thread when the stream ends cannot be interrupted, so the service keeps
+the model reference until that window returns, discards its output, and then
+releases the reference. Streamed source text is never written to service logs.
 
 ### `POST /privacy-gateway/complete`
 

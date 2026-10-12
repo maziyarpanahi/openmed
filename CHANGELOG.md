@@ -421,6 +421,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release the model reference when a streaming de-identification response
+  times out or the client disconnects mid-window. Cleanup no longer fails with
+  `generator already executing`; a still-running window keeps the reference
+  until it returns, then its output is discarded and the timeout or
+  cancellation is recorded as the request outcome (#3901).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).
