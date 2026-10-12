@@ -551,12 +551,132 @@ def _selected(value: Any, path: tuple[str | int, ...]) -> Any:
     return value
 
 
+def _windows_output(path: Any) -> int:
+    """Create a new file with a protected owner-only DACL before any payload write."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class SecurityAttributes(ctypes.Structure):
+        _fields_ = [
+            ("length", wintypes.DWORD),
+            ("descriptor", wintypes.LPVOID),
+            ("inherit", wintypes.BOOL),
+        ]
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    security = ctypes.WinDLL("advapi32", use_last_error=True)
+    convert = security.ConvertStringSecurityDescriptorToSecurityDescriptorW
+    convert.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPVOID),
+        wintypes.LPVOID,
+    ]
+    convert.restype = wintypes.BOOL
+    kernel.LocalFree.argtypes = [wintypes.LPVOID]
+    kernel.LocalFree.restype = wintypes.LPVOID
+    kernel.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(SecurityAttributes),
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel.CreateFileW.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    descriptor = wintypes.LPVOID()
+    # Protected DACL: only OWNER RIGHTS gets full access; no inherited ACEs.
+    if not convert("D:P(A;;FA;;;OW)", 1, ctypes.byref(descriptor), None):
+        raise OSError()
+    try:
+        attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes), descriptor, False
+        )
+        # GENERIC_WRITE | READ_CONTROL, no sharing, CREATE_NEW, OPEN_REPARSE_POINT.
+        handle = kernel.CreateFileW(
+            os.fsdecode(path),
+            0x40020000,
+            0,
+            ctypes.byref(attributes),
+            1,
+            0x00200080,
+            None,
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            raise OSError()
+        try:
+            return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)
+        except BaseException:
+            kernel.CloseHandle(handle)
+            raise
+    finally:
+        kernel.LocalFree(descriptor)
+
+
+def _verify_windows_output(fd: int) -> None:
+    """Refuse filesystems that did not preserve the requested private DACL."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    security = ctypes.WinDLL("advapi32", use_last_error=True)
+    get_security = security.GetKernelObjectSecurity
+    get_security.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    get_security.restype = wintypes.BOOL
+    convert = security.ConvertSecurityDescriptorToStringSecurityDescriptorW
+    convert.argtypes = [
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.LPWSTR),
+        wintypes.LPVOID,
+    ]
+    convert.restype = wintypes.BOOL
+    kernel.LocalFree.argtypes = [wintypes.LPVOID]
+    kernel.LocalFree.restype = wintypes.LPVOID
+    size = wintypes.DWORD()
+    handle = msvcrt.get_osfhandle(fd)
+    get_security(handle, 4, None, 0, ctypes.byref(size))
+    if not 0 < size.value <= 65536:
+        raise OSError()
+    descriptor = ctypes.create_string_buffer(size.value)
+    if not get_security(handle, 4, descriptor, size.value, ctypes.byref(size)):
+        raise OSError()
+    text = wintypes.LPWSTR()
+    if not convert(descriptor, 1, 4, ctypes.byref(text), None):
+        raise OSError()
+    try:
+        if text.value != "D:P(A;;FA;;;OW)":
+            raise OSError()
+    finally:
+        kernel.LocalFree(text)
+
+
 def _write(path: Any, payload: bytes) -> None:
     fd = None
     owned = None
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        fd = (
+            _windows_output(path)
+            if os.name == "nt"
+            else os.open(
+                path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+            )
+        )
         owned = os.fstat(fd)
+        if os.name == "nt":
+            _verify_windows_output(fd)
         with os.fdopen(fd, "wb") as stream:
             if stream.write(payload) != len(payload):
                 raise OSError()

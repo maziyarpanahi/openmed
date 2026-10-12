@@ -276,6 +276,17 @@ jobs:
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
+    - name: Windows portability regression checks
+      if: runner.os == 'Windows'
+      timeout-minutes: 10
+      run: >-
+        uv run --frozen pytest -q --tb=short --show-capture=no
+        tests/unit/test_utils.py
+        tests/unit/structured/registry/test_naaccr.py
+        tests/unit/release/test_agent_release_candidate.py
+        tests/unit/service/test_workflow_routes.py
+        tests/unit/test_doctests.py
+
     - name: Test with pytest
       timeout-minutes: 45
       run: >-

@@ -345,7 +345,11 @@ def test_executed_report_output_contains_no_default_case_payloads():
     ['{"/private/patient-token":', "[" * 2000 + "0" + "]" * 2000],
     ids=["malformed", "deep"],
 )
-def test_private_json_parser_context_is_not_retained(serialized):
+def test_private_json_parser_context_is_not_retained(
+    serialized, force_json_recursion_error
+):
+    if serialized.startswith("["):
+        force_json_recursion_error()
     with pytest.raises(AgentReleaseAdapterError, match="^invalid_json$") as error:
         json_release_evidence(
             serialized, expected_kind="replay", expected_case_digests=()

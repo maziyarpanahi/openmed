@@ -69,7 +69,15 @@ def test_offline_process_returns_one_value_free_envelope(tmp_path, name):
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
         "OPENMED_OFFLINE": "1",
-        "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+        "PYTHONPATH": os.pathsep.join(
+            filter(
+                None,
+                (
+                    str(Path(__file__).resolve().parents[2]),
+                    os.environ.get("PYTHONPATH"),
+                ),
+            )
+        ),
     }
     result = subprocess.run(
         [
@@ -111,7 +119,18 @@ def test_offline_process_returns_one_value_free_envelope(tmp_path, name):
 
 
 def test_help_and_invalid_arguments_are_private_across_process(tmp_path):
-    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            filter(
+                None,
+                (
+                    str(Path(__file__).resolve().parents[2]),
+                    os.environ.get("PYTHONPATH"),
+                ),
+            )
+        ),
+    }
     help_result = subprocess.run(
         [sys.executable, "-c", _RUNNER, "clinical", "timeline", "--help"],
         env=env,

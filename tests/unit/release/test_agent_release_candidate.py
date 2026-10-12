@@ -245,7 +245,7 @@ def test_exports_contain_no_payloads_paths_keys_or_arbitrary_refs(candidate_inpu
     inputs = candidate_inputs
     probes = ["JaneDoeSynthetic", "محمد_مصطنع", "सिंथेटिक_नाम", "private/path/credential"]
     # Catalog/policy content is never parsed or echoed; it is only hashed.
-    inputs.params["tool_catalog"].write_text("\n".join(probes))
+    inputs.params["tool_catalog"].write_text("\n".join(probes), encoding="utf-8")
     for metric in inputs.envelope["metrics"]:
         metric["limitations"] = ["synthetic_patient_identifier"]
         for index, row in enumerate(metric["slices"]):
@@ -341,12 +341,11 @@ def test_git_file_checkout_and_annotated_tag_are_supported(candidate_inputs):
     completed = subprocess.run(
         ["git", "hash-object", "-t", "tag", "-w", "--stdin"],
         cwd=inputs.root,
-        input=annotation,
-        text=True,
+        input=annotation.encode("utf-8"),
         capture_output=True,
         check=True,
     )
-    (git_dir / "refs" / "tags" / "synthetic-rc").write_text(completed.stdout)
+    (git_dir / "refs" / "tags" / "synthetic-rc").write_bytes(completed.stdout)
     tagged = run_agent_release_candidate(**inputs.params, tag="synthetic-rc")
     assert tagged.packet.decision == "READY"
     assert tagged.manifest["repository"]["tag_sha"] == inputs.sha
