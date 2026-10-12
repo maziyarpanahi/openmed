@@ -270,8 +270,9 @@ def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(tm
             env={**os.environ, "OPENMED_TEST_OUTPUT": str(tmp_path / "protected.xml")},
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
         )
+        assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "D:P(A;;FA;;;OW)"
     else:
         assert stat.S_IMODE(os.stat(tmp_path / "protected.xml").st_mode) == 0o600
