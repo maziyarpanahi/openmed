@@ -246,6 +246,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Verify patient-keyed calendar-day shifts and emitted subject surrogates across
+  five Journey source surfaces using bounded local witness processors. Keep
+  protected values in memory and emit keyed proofs and counts; report missing
+  format coverage explicitly. Release schema v1.1 adds consistency blockers
+  while preserving v1.0 report parsing and historical signature verification.
+  Bind the candidate's synthetic fixture to shared patient/date witnesses and
+  regenerate its golden output; preserve the historical v3.0 inputs at their
+  immutable tag (#3806).
+
 - Add typed Python service-client grounding, profiling and cohort resolution,
   with explicit OpenAPI path coverage and documented operational exclusions (#3754).
 
