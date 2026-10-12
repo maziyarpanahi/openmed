@@ -324,15 +324,29 @@ sink with appropriate retention for long-running workflows. No network call or
 filesystem write is required by the default verifier.
 
 ```python
-from openmed.agent.permissions import AccessTicketVerifier, LocalAccessEventSink
+import os
+
+from openmed.agent.permissions import (
+    AccessEventError, AccessTicketVerifier, LocalAccessEventSink,
+)
 
 # The host chooses a protected local directory; this is a synthetic path.
 sink = LocalAccessEventSink("synthetic-access-events.jsonl")
 verifier = AccessTicketVerifier(sink=sink, clock=lambda: 1_999_999_999)
-verifier.verify(ticket, request)
-head = sink.verify_chain()
-counts = sink.export_counts()
-assert counts["outcomes"] == {"allow": 1}
+if os.name == "posix":
+    verifier.verify(ticket, request)
+    head = sink.verify_chain()
+    counts = sink.export_counts()
+    assert counts["outcomes"] == {"allow": 1}
+else:
+    # This durable adapter requires POSIX. A Windows host must supply its own
+    # durable AccessEventSink; verification fails closed until it does.
+    try:
+        verifier.verify(ticket, request)
+    except AccessEventError as error:
+        assert error.code == "sink_unavailable"
+    else:
+        raise AssertionError("unsupported durable sink must refuse authority")
 ```
 
 An injected `AccessEventSink` implements `emit(event)`. Verification calls it

@@ -6,8 +6,11 @@ import hashlib
 import json
 import os
 import stat
+import subprocess
 import xml.etree.ElementTree as ET
 from dataclasses import replace
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -252,7 +255,26 @@ def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(tm
     ) == (3, 2, 3, 8)
     assert report.losses == ()
     assert report.xml_digest == "sha256:" + hashlib.sha256(payload).hexdigest()
-    assert stat.S_IMODE(os.stat(tmp_path / "protected.xml").st_mode) == 0o600
+    if os.name == "nt":
+        # Query through an independent Windows API (.NET), not the writer helper.
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "(Get-Acl -LiteralPath $env:OPENMED_TEST_OUTPUT)."
+                "GetSecurityDescriptorSddlForm("
+                "[System.Security.AccessControl.AccessControlSections]::Access)",
+            ],
+            env={**os.environ, "OPENMED_TEST_OUTPUT": str(tmp_path / "protected.xml")},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == "D:P(A;;FA;;;OW)"
+    else:
+        assert stat.S_IMODE(os.stat(tmp_path / "protected.xml").st_mode) == 0o600
     safe = json.dumps(report.to_dict()) + repr(report)
     assert all(
         v not in safe
@@ -912,3 +934,26 @@ def test_case_provider_is_enumerated_once(tmp_path):
     batch["cases"] = cases
     assert _write(tmp_path, batch).file_written
     assert cases.iterations == 1
+
+
+def test_unverified_windows_permissions_refuse_before_payload_write(
+    tmp_path, monkeypatch
+):
+    import openmed.structured.registry.naaccr as module
+
+    def create_empty(path):
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+
+    fdopen = Mock(side_effect=AssertionError("payload must not be written"))
+    monkeypatch.setattr(
+        module,
+        "os",
+        SimpleNamespace(**(vars(os) | {"name": "nt", "fdopen": fdopen})),
+    )
+    monkeypatch.setattr(module, "_windows_output", create_empty)
+    monkeypatch.setattr(module, "_verify_windows_output", Mock(side_effect=OSError()))
+    with pytest.raises(NAACCRProjectionError) as exc:
+        _write(tmp_path)
+    assert exc.value.code == "output_refused"
+    fdopen.assert_not_called()
+    assert not (tmp_path / "protected.xml").exists()

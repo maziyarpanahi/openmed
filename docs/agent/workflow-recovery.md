@@ -191,8 +191,10 @@ The protocol is `WorkflowCLIGovernanceService`; the clock is an injected Unix
 second function, never a command-line override. No service is dynamically loaded
 from request JSON or environment variables.
 
-This synthetic example creates a private temporary metadata request and invokes
-the actual CLI boundary offline. The preview service executes no effects:
+This synthetic example creates a temporary metadata request with POSIX mode
+`0600` and invokes the actual CLI boundary offline. The file-based CLI refuses
+Windows inputs with `input_unprotected`; its current protection checks require
+POSIX. The preview service executes no effects:
 
 ```python
 from openmed.agent.action_phases import ActionPhase
@@ -202,6 +204,8 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from contextlib import redirect_stdout
+from io import StringIO
 from openmed.cli.governed_workflows import (
     WorkflowCLIRequest, WorkflowCLIStatus, WorkflowCLIView,
     run_governed_workflow_cli,
@@ -231,10 +235,18 @@ with TemporaryDirectory() as directory:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
         json.dump(request.to_dict(), stream)
-    assert run_governed_workflow_cli(
-        ["workflow", "preview", "--request", str(path)],
-        service=PreviewOnly(),
-    ) == 0
+    output = StringIO()
+    with redirect_stdout(output):
+        code = run_governed_workflow_cli(
+            ["workflow", "preview", "--request", str(path)],
+            service=PreviewOnly(),
+        )
+    response = json.loads(output.getvalue())
+    if os.name == "posix":
+        assert code == 0 and response["ok"]
+    else:
+        assert code == 2 and not response["ok"]
+        assert response["error"]["code"] == "input_unprotected"
 ```
 
 With protected request files, the same adapter can be supplied to the console

@@ -197,7 +197,9 @@ item identifiers and value-path names as trusted schema metadata without patient
 information. The resolver is trusted local code, not sandboxed code; its standard
 output and error are suppressed, but its side effects are the caller's concern.
 
-All values are validated in memory before writing a new file with mode `0600`.
+All values are validated in memory before writing a new file with mode `0600`
+on POSIX or a protected owner-only DACL on Windows. Windows filesystems that
+do not preserve that DACL are refused before any clinical values are written.
 Existing files and final-component symlinks are refused. A failed write removes
 only the newly created inode. The receipt contains counts, digests and indexed
 losses, never XML, patient/fact identifiers, output paths or clinical values.
