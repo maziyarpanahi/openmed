@@ -487,7 +487,7 @@ def test_reconciliation_property_preserves_every_signed_delta(
     assert OmopReconciliation.from_dict(reconciliation.to_dict()) == reconciliation
 
 
-def test_windows_adapter_environment_preserves_only_required_system_root(monkeypatch):
+def test_windows_adapter_environment_preserves_only_required_os_paths(monkeypatch):
     from types import SimpleNamespace
 
     from openmed.interop.omop import quality
@@ -500,6 +500,7 @@ def test_windows_adapter_environment_preserves_only_required_system_root(monkeyp
             defpath="fallback",
             environ={
                 "SystemRoot": r"C:\Windows",
+                "USERPROFILE": r"C:\Users\synthetic",
                 "PATH": "runtime",
                 "PRIVATE_TOKEN": "synthetic-secret",
             },
@@ -510,6 +511,7 @@ def test_windows_adapter_environment_preserves_only_required_system_root(monkeyp
         "LC_ALL": "C.UTF-8",
         "PATH": "runtime",
         "SystemRoot": r"C:\Windows",
+        "USERPROFILE": r"C:\Users\synthetic",
     }
     assert (
         quality._safe_environment({"EXPLICIT_SETTING": "synthetic"})["EXPLICIT_SETTING"]

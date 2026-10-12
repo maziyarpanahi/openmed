@@ -448,7 +448,7 @@ def test_caller_local_backend_runs_offline_and_console_chatter_is_discarded(
             os.write(1, CANARY.encode())
             os.write(2, CANARY.encode())
             logging.error(CANARY)
-            ctypes.CDLL(None).printf(CANARY.encode())
+            ctypes.CDLL("ucrtbase" if os.name == "nt" else None).printf(CANARY.encode())
             return {"label": label, "score": 0.8}
 
     monkeypatch.setitem(
@@ -674,3 +674,25 @@ def test_unverified_output_permissions_prevent_payload_write(tmp_path, monkeypat
     assert caught.value.code == "summary_output_failed"
     private_os.fdopen.assert_not_called()
     assert not path.exists()
+
+
+def test_native_flush_selects_windows_system_runtimes(monkeypatch):
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical_review
+
+    libraries = []
+    flushes = []
+
+    def load(name):
+        libraries.append(name)
+        flush = Mock()
+        flushes.append(flush)
+        return SimpleNamespace(fflush=flush)
+
+    monkeypatch.setattr(clinical_review, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(clinical_review.ctypes, "CDLL", load)
+    clinical_review._flush_native()
+    assert libraries == ["ucrtbase", "msvcrt"]
+    for flush in flushes:
+        flush.assert_called_once_with(None)

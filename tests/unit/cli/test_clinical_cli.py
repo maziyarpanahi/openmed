@@ -737,12 +737,17 @@ def test_clinical_projection_rejects_private_scalar_alias(
     assert "PRIVATE" not in json.dumps(envelope)
 
 
-def test_partial_writer_cleanup_preserves_replaced_file(tmp_path, monkeypatch):
+def test_partial_writer_cleanup_respects_output_ownership(tmp_path, monkeypatch):
     from openmed.cli._output import CliError
 
     target = tmp_path / "output.json"
 
     def replace_target(payload, stream, **kwargs):
+        if os.name == "nt":
+            # The private Windows handle denies sharing, including deletion.
+            with pytest.raises(PermissionError):
+                target.unlink()
+            raise OSError("PRIVATE_DETAIL")
         target.unlink()
         target.write_text("owner replacement")
         raise OSError("PRIVATE_DETAIL")
@@ -750,7 +755,10 @@ def test_partial_writer_cleanup_preserves_replaced_file(tmp_path, monkeypatch):
     monkeypatch.setattr(clinical.json, "dump", replace_target)
     with pytest.raises(CliError):
         clinical._write_new(str(target), {})
-    assert target.read_text() == "owner replacement"
+    if os.name == "nt":
+        assert not target.exists()
+    else:
+        assert target.read_text() == "owner replacement"
 
 
 def test_custom_extractor_oversized_output_refused_before_file_creation(
