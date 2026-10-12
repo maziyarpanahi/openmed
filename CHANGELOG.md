@@ -109,6 +109,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now rejects invalid or insufficient token responses and expired dispatches
   (#3773).
 
+### Documentation
+
+- State the Python 3.10 floor in the getting-started guide instead of 3.11,
+  matching `requires-python` and the README (#4132).
+
 ### Added
 
 - Import-free effect-path inventory and local/CI guards for unclassified
