@@ -12,13 +12,13 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 5038094
+    "json": 5043930
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 5038094
+    "docs/search/search_index.json": 5043930
   },
   "route_transfer_bytes": {
     "/": 3145728,
@@ -163,6 +163,7 @@
     "The reviewed PR #4036 documentation measures 4994840 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed PR #4019 documentation measures 5000084 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed governed-agent overview and migration documentation batch measures 5031494 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
-    "The reviewed PR #4070 documentation measures 5036408 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged."
+    "The reviewed PR #4070 documentation measures 5036408 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4038 documentation measures 5042244 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged."
   ]
 }
