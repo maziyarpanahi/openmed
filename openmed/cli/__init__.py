@@ -12,9 +12,11 @@ for _attr in ("analyze_text", "list_models", "get_model_max_length"):
         setattr(main_module, _attr, None)
 
 
-def main(argv=None):
+def main(argv=None, *, governance_service=None):
     """Proxy to :func:`openmed.cli.main.main` for convenience."""
-    return main_module.main(argv)
+    if governance_service is None:
+        return main_module.main(argv)
+    return main_module.main(argv, governance_service=governance_service)
 
 
 __all__ = ["COMPLIANCE_CAVEAT", "main", "main_module"]

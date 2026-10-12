@@ -779,6 +779,7 @@ from .nli import (
     MEDNLI_DATA_POLICY,
     NLI_ADVISORY,
     NLI_LABELS,
+    ClaimVerification,
     HeuristicNLIBackend,
     NLIBackend,
     NLIResult,
@@ -1484,6 +1485,13 @@ from .summarize import (
     SummarizerBackend,
     summarize,
     summarize_deidentified,
+)
+from .summarize_backends import (
+    ExtractiveSummarizerBackend,
+    LocalSummarizerError,
+    MLXSummarizerBackend,
+    RemoteSummarizerError,
+    resolve_summarizer_backend,
 )
 from .summary_card import (
     CODING_COUNT_LABELS,
@@ -2658,6 +2666,11 @@ __all__ = [
     "SummarizerBackend",
     "summarize",
     "summarize_deidentified",
+    "ExtractiveSummarizerBackend",
+    "LocalSummarizerError",
+    "MLXSummarizerBackend",
+    "RemoteSummarizerError",
+    "resolve_summarizer_backend",
     "REASON_DUPLICATE_CITATION",
     "REASON_DUPLICATE_CITATIONS",
     "REASON_DUPLICATE_SOURCE_EVIDENCE",
@@ -3023,6 +3036,7 @@ __all__ = [
     "VerificationResult",
     "get_default_backend",
     "nli",
+    "ClaimVerification",
     "set_default_backend",
     "verify",
     "MEDICATION_RECONCILIATION_ADVISORY",

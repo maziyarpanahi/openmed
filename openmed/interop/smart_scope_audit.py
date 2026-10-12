@@ -5,9 +5,11 @@ These helpers perform no OAuth, server discovery, or patient-record access.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
+from itertools import islice
 from typing import Any
 
 from openmed.interop.smart_scope_grammar import (
@@ -18,6 +20,9 @@ from openmed.interop.smart_scope_grammar import (
 )
 
 __all__ = [
+    "SmartGrantedScopeAudit",
+    "audit_granted_smart_scopes",
+    "smart_scopes_cover",
     "SmartScope",
     "SmartScopeAudit",
     "SmartScopeFinding",
@@ -227,4 +232,120 @@ def audit_smart_scope_preflight(
         tuple(sorted(missing, key=lambda item: item.scope)),
         tuple(sorted(excessive, key=lambda item: item.scope)),
         comparison.findings,
+    )
+
+
+@dataclass(frozen=True)
+class SmartGrantedScopeAudit:
+    """Value-free comparison of requested and actually granted permissions.
+
+    Args:
+        requested_count: Number of distinct requested scope tokens.
+        granted_count: Number of distinct granted scope tokens.
+        narrowed: Whether the requested permission union is not fully granted.
+        expanded: Whether the response grants permissions not requested.
+    """
+
+    requested_count: int
+    granted_count: int
+    narrowed: bool
+    expanded: bool
+
+    def __post_init__(self) -> None:
+        if any(
+            type(n) is not int or not 0 <= n <= 128
+            for n in (self.requested_count, self.granted_count)
+        ) or any(type(flag) is not bool for flag in (self.narrowed, self.expanded)):
+            raise ValueError("Invalid SMART scope finding.")
+
+    def to_dict(self) -> dict[str, int | bool]:
+        """Return only counts and closed findings, never scope/filter values."""
+        return {
+            "requested_count": self.requested_count,
+            "granted_count": self.granted_count,
+            "narrowed": self.narrowed,
+            "expanded": self.expanded,
+        }
+
+
+_OAUTH_SCOPE_TOKEN = re.compile(r"[\x21\x23-\x5b\x5d-\x7e]{1,512}")
+_SMART_GRANT_SCOPE = re.compile(
+    r"(patient|user|system)/([A-Z][A-Za-z0-9]*|\*)\."
+    r"(read|write|\*|[cruds]+)(\?[^\s]+)?"
+)
+_LEGACY_OPERATIONS = {"read": "rs", "write": "cud", "*": "cruds"}
+
+
+def _granted_scope_tokens(values: Iterable[str]) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes, dict)):
+        raise ValueError("Invalid SMART scope collection.")
+    try:
+        tokens = tuple(islice(values, 129))
+    except Exception:
+        tokens = None
+    if tokens is None:
+        raise ValueError("Invalid SMART scope collection.")
+    if len(tokens) > 128 or any(
+        type(token) is not str or _OAUTH_SCOPE_TOKEN.fullmatch(token) is None
+        for token in tokens
+    ):
+        raise ValueError("Invalid SMART scope collection.")
+    for token in tokens:
+        match = _SMART_GRANT_SCOPE.fullmatch(token)
+        if token.startswith(("patient/", "user/", "system/")):
+            if match is None:
+                raise ValueError("Invalid SMART resource scope.")
+            operations = match[3]
+            if operations not in _LEGACY_OPERATIONS and len(set(operations)) != len(
+                operations
+            ):
+                raise ValueError("Invalid SMART resource scope.")
+    return tuple(sorted(set(tokens)))
+
+
+def _permission_covered(scope: str, declared: tuple[str, ...]) -> bool:
+    requested = _SMART_GRANT_SCOPE.fullmatch(scope)
+    if requested is None:
+        return scope in declared
+    context, resource, operations, query = requested.groups()
+    wanted = set(_LEGACY_OPERATIONS.get(operations, operations))
+    covered: set[str] = set()
+    for token in declared:
+        parent = _SMART_GRANT_SCOPE.fullmatch(token)
+        if parent is None:
+            continue
+        parent_context, parent_resource, parent_ops, parent_query = parent.groups()
+        if (
+            parent_context == context
+            and parent_resource in (resource, "*")
+            and (parent_query is None or parent_query == query)
+        ):
+            covered.update(_LEGACY_OPERATIONS.get(parent_ops, parent_ops))
+    return wanted <= covered
+
+
+def smart_scopes_cover(required: Iterable[str], granted: Iterable[str]) -> bool:
+    """Check SMART permission unions without exposing scope/filter values.
+
+    SMART v1 read/write and v2 CRUDS forms, resource wildcards and exact query
+    constraints are supported. Query predicates are never evaluated: a grant
+    with a different filter cannot satisfy the requested filter. Other OAuth
+    scopes require exact token equality. This check does not authorize an action.
+    """
+    wanted = _granted_scope_tokens(required)
+    actual = _granted_scope_tokens(granted)
+    return all(_permission_covered(scope, actual) for scope in wanted)
+
+
+def audit_granted_smart_scopes(
+    *, requested_scopes: Iterable[str], granted_scopes: Iterable[str]
+) -> SmartGrantedScopeAudit:
+    """Compare scope unions and return counts plus narrowing/expansion flags."""
+    requested = _granted_scope_tokens(requested_scopes)
+    granted = _granted_scope_tokens(granted_scopes)
+    return SmartGrantedScopeAudit(
+        requested_count=len(requested),
+        granted_count=len(granted),
+        narrowed=not smart_scopes_cover(requested, granted),
+        expanded=not smart_scopes_cover(granted, requested),
     )

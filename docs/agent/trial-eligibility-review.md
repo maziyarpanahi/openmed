@@ -89,3 +89,22 @@ Generic reviewer-handoff validation, presentation rendering, notifications,
 and approval-token issuance remain separate governance layers. Until those
 contracts are integrated, callers should retain this packet locally and must
 not treat its digest or review status as authority for a high-impact action.
+
+## Runnable synthetic example
+
+Run the [offline example](https://github.com/maziyarpanahi/openmed/blob/master/examples/trial_eligibility_review.py)
+from the repository root after installing OpenMed:
+
+```bash
+python -m examples.trial_eligibility_review
+```
+
+Hand-authored assessment fixtures show agreement and disagreement (`outcome_conflict`)
+routing. An assessment for an undeclared criterion is rejected. These fixtures are not
+model outputs; agreement never authorizes enrollment or contact.
+The fail-closed case prints the stable reason code `unknown_criterion`.
+Each run finishes in a few seconds and prints one deterministic JSON report
+containing only synthetic digests, developer-authored IDs and closed codes.
+Source payloads, dates, counts, offsets, uncertainty scores and key material
+are excluded from printed output. No model downloads, credentials, network
+connections or clinical actions are required.
