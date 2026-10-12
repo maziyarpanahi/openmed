@@ -59,3 +59,16 @@ caps, exact governed large payloads, total and content-hash-unique artifact
 bytes, bounded duplicate bytes, zero source maps, representative first-party
 route transfers, CLS/LCP, and a deterministic two-frame
 interaction-latency proxy (not field INP).
+
+Documentation navigation checks require Material's actual search-ready state
+before leaving each page. This verifies search initialization and avoids
+cancelling a worker's language imports during the cache-disabled metadata
+interception used by the browser matrix. Console and request errors remain
+failures; a missing search dependency must fail the readiness check.
+
+The documentation transfer budget separates fixed assets from the search
+index. Its fixed-asset ceiling remains 1,475,384 bytes, derived from the prior
+5,817,753-byte route ceiling and its recorded 4,342,369-byte index. The total
+ceiling combines that fixed limit with the separately reviewed governed search
+ceiling. Both components are checked, so index growth grants no extra room to
+other assets. Other route and artifact limits remain as recorded.
