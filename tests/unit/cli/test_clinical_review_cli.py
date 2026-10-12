@@ -448,7 +448,12 @@ def test_caller_local_backend_runs_offline_and_console_chatter_is_discarded(
             os.write(1, CANARY.encode())
             os.write(2, CANARY.encode())
             logging.error(CANARY)
-            ctypes.CDLL("ucrtbase" if os.name == "nt" else None).printf(CANARY.encode())
+            assert (
+                ctypes.CDLL("ucrtbase" if os.name == "nt" else None).puts(
+                    CANARY.encode()
+                )
+                >= 0
+            )
             return {"label": label, "score": 0.8}
 
     monkeypatch.setitem(
