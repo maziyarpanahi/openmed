@@ -96,3 +96,8 @@ redaction provenance without writing a presentation.
   exact layout fidelity after replacement is not guaranteed.
 - SmartArt, charts, OLE objects, comments, masters, and layout-template text are
   outside this adapter's scope.
+
+
+ZIP input admission enforces entry, size, ratio and path limits before parsing.
+See [ZIP document admission](asset-limits.md#zip-document-admission) for defaults,
+configurable tighter limits, content-free errors and allocation-test scope.

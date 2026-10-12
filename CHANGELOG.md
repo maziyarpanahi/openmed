@@ -198,6 +198,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
+  archive-safety limits before parsing, verify actual member sizes with bounded
+  decompression, and report archive failures using content-free codes/counts
+  (#3812).
 - Registered MLX summarizers now require a provisioned, symlink-free package
   with a trusted manifest pin before model construction. Admission verifies
   every file, refuses undeclared members, and derives task support, context

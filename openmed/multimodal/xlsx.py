@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.labels import OTHER, normalize_label
+from openmed.interop.archive_safety import ArchiveSafetyPolicy
 
+from .archive import admitted_zip
 from .base import ExtractedDocument
 from .exceptions import MissingDependencyError
 from .tabular_csv import (
@@ -95,6 +97,7 @@ def redact_xlsx(
     keep_year: bool = True,
     sample_size: int = 50,
     cell_deidentifier: CellDeidentifier | None = None,
+    archive_policy: ArchiveSafetyPolicy | None = None,
 ) -> XlsxRedactionResult:
     """Redact PHI in XLSX string cells while preserving workbook structure.
 
@@ -106,6 +109,7 @@ def redact_xlsx(
 
     Args:
         source: Input ``.xlsx`` workbook path.
+        archive_policy: Optional tighter ZIP admission policy.
         output_path: Destination ``.xlsx`` path. It must differ from ``source``.
         policy: Optional tabular mapping with ``header_heuristics`` and
             ``action_overrides``, or a core policy profile name for the default
@@ -140,13 +144,15 @@ def redact_xlsx(
     if sample_size < 1:
         raise ValueError("sample_size must be at least 1")
 
-    load_workbook = _load_workbook_function()
-    workbook = load_workbook(
-        filename=source_path,
-        read_only=False,
-        data_only=False,
-        keep_links=True,
-    )
+    with admitted_zip(source_path, archive_policy) as archive:
+        load_workbook = _load_workbook_function()
+        archive.fp.seek(0)
+        workbook = load_workbook(
+            filename=archive.fp,
+            read_only=False,
+            data_only=False,
+            keep_links=True,
+        )
     resolved_deidentifier = _resolve_cell_deidentifier(
         explicit=cell_deidentifier,
         models=models,
