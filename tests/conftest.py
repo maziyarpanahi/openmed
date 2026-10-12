@@ -1,5 +1,6 @@
 """Pytest configuration and fixtures for OpenMed tests."""
 
+import hashlib
 import json
 import shutil
 import sys
@@ -251,3 +252,12 @@ def force_json_recursion_error(monkeypatch):
         monkeypatch.setattr(json, "loads", refuse)
 
     return install
+
+
+def pytest_make_parametrize_id(val, argname):
+    """Keep large synthetic payloads out of test IDs and Windows environment values."""
+    if type(val) in (str, bytes) and len(val) > 256:
+        raw = val.encode("utf-8", errors="surrogatepass") if type(val) is str else val
+        digest = hashlib.sha256(raw).hexdigest()[:12]
+        return f"{argname}-{type(val).__name__}-{len(val)}-{digest}"
+    return None
