@@ -84,7 +84,7 @@ class Backend:
         os.write(1, canary.encode())
         os.write(2, canary.encode())
         logging.error(canary)
-        ctypes.CDLL(None).printf(canary.encode())
+        ctypes.CDLL("ucrtbase" if os.name == "nt" else None).printf(canary.encode())
         return {"label": kind, "score": 0.8}
 
 sys.modules["synthetic_cli_backend"] = SimpleNamespace(create=Backend)

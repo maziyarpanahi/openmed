@@ -16,6 +16,7 @@ from openmed.interop.omop import (
     run_omop_quality_subprocess,
     verify_omop_quality_report,
 )
+from openmed.interop.omop.quality import _safe_environment
 from openmed.structured.store import StoreState
 
 pytestmark = pytest.mark.integration
@@ -60,6 +61,16 @@ def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
         path.write_text(json.dumps(payload), encoding="utf-8")
     fixture = load_frozen_omop_quality_fixture(FIXTURES / "quality_reconciliation.json")
     signing_key = b"synthetic-dqd-integration-key"
+    environment = {"PYTHONPATH": os.environ.get("PYTHONPATH", "")}
+    probe = subprocess.run(
+        [sys.executable, "-m", "openmed.interop.omop.dqd", str(path)],
+        input=json.dumps(_request()).encode("utf-8"),
+        capture_output=True,
+        env=_safe_environment(environment),
+        check=False,
+        timeout=10,
+    )
+    assert probe.returncode == 0, probe.stderr.decode("utf-8", errors="replace")
     result = run_omop_quality_subprocess(
         fixture.quality_input,
         command=(sys.executable, "-m", "openmed.interop.omop.dqd", str(path)),
@@ -67,7 +78,7 @@ def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
         signing_key=signing_key,
         timeout=10,
         # The adapter strips ambient variables; provision only its import path.
-        environment={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
+        environment=environment,
     )
     assert result.state is (StoreState.SUCCESS if all_pass else StoreState.FAILURE)
     assert result.value is not None

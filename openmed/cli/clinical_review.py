@@ -255,13 +255,17 @@ def _claims(raw: bytes) -> list[str]:
 
 
 def _flush_native() -> None:
-    try:
-        flush = ctypes.CDLL(None).fflush
-        flush.argtypes = [ctypes.c_void_p]
-        flush.restype = ctypes.c_int
-        flush(None)
-    except (AttributeError, OSError):
-        pass
+    # Windows has no process-global CDLL(None); flush both system C runtimes
+    # while their descriptors still point at the discard sink.
+    libraries = ("ucrtbase", "msvcrt") if os.name == "nt" else (None,)
+    for library in libraries:
+        try:
+            flush = ctypes.CDLL(library).fflush
+            flush.argtypes = [ctypes.c_void_p]
+            flush.restype = ctypes.c_int
+            flush(None)
+        except (AttributeError, OSError):
+            pass
 
 
 @contextlib.contextmanager
