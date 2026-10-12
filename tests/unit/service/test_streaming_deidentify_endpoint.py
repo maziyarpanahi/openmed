@@ -275,3 +275,293 @@ def test_stream_timeout_uses_safe_ndjson_error_line(
             },
         }
     ]
+
+
+SYNTHETIC_STREAM_TEXT = "Synthetic patient Zed Quillborne visited clinic."
+LATE_FRAGMENT = "late redacted fragment"
+KEEP_ALIVE = "30s"
+
+
+class _ResidentFakeLoader(_FakeLoader):
+    """Stub loader that reports every requested model as resident."""
+
+    def __init__(self, config: Any) -> None:
+        super().__init__(config)
+        self.resident: set[str] = set()
+
+    def resolve_model_name(self, model_name: str) -> str:
+        self.resident.add(model_name)
+        return model_name
+
+    def loaded_models(self) -> dict[str, Any]:
+        return {
+            name: {"models": 1, "tokenizers": 1, "pipelines": 1}
+            for name in sorted(self.resident)
+        }
+
+
+class _SlowSecondWindow:
+    """Synthetic core stream whose second window blocks until released."""
+
+    def __init__(self) -> None:
+        self.second_window_started = threading.Event()
+        self.release = threading.Event()
+        self.window_returned = threading.Event()
+        self.closed = threading.Event()
+
+    def __call__(self, *args: Any, **kwargs: Any):
+        try:
+            yield StreamingDeidentificationEvent(redacted_text="first window ")
+            self.second_window_started.set()
+            self.release.wait(timeout=10.0)
+            self.window_returned.set()
+            yield StreamingDeidentificationEvent(redacted_text=LATE_FRAGMENT)
+            yield StreamingDeidentificationEvent(
+                redacted_text="",
+                final=True,
+                audit_record={"span_count": 0, "spans": []},
+            )
+        finally:
+            self.closed.set()
+
+
+def _model_state(runtime: Any) -> dict[str, Any]:
+    models = runtime.loaded_models()["models"]
+    assert len(models) == 1
+    return next(iter(models.values()))
+
+
+def _wait_until(predicate: Any, *, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return bool(predicate())
+
+
+async def _async_wait_until(predicate: Any, *, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(0.01)
+    return bool(predicate())
+
+
+def _stream_runtime(monkeypatch: pytest.MonkeyPatch, *, timeout: float) -> Any:
+    monkeypatch.setattr(service_runtime, "ModelLoader", _ResidentFakeLoader)
+    runtime = service_runtime.ServiceRuntime.from_env()
+    runtime.config.timeout = timeout
+    return runtime
+
+
+def _record_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: Any,
+) -> list[type[BaseException] | None]:
+    outcomes: list[type[BaseException] | None] = []
+    finish = runtime.finish_model_request
+
+    def recording_finish(
+        model_key: str,
+        keep_alive: Any,
+        error: BaseException | None = None,
+    ) -> None:
+        outcomes.append(None if error is None else type(error))
+        finish(model_key, keep_alive, error)
+
+    monkeypatch.setattr(runtime, "finish_model_request", recording_finish)
+    return outcomes
+
+
+def _stream_payload() -> Any:
+    from openmed.service.streaming import PIIDeidentifyStreamRequest
+
+    return PIIDeidentifyStreamRequest(
+        text=SYNTHETIC_STREAM_TEXT,
+        chunk_size=8,
+        keep_alive=KEEP_ALIVE,
+    )
+
+
+def test_timeout_mid_window_releases_model_after_window_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from openmed.service.streaming import deidentify_ndjson_stream
+
+    caplog.set_level(logging.DEBUG)
+    core = _SlowSecondWindow()
+    monkeypatch.setattr("openmed.service.streaming.deidentify_stream", core)
+    runtime = _stream_runtime(monkeypatch, timeout=0.5)
+    outcomes = _record_outcomes(monkeypatch, runtime)
+
+    async def scenario() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        lines = [
+            json.loads(line)
+            async for line in deidentify_ndjson_stream(_stream_payload(), runtime)
+        ]
+        # The worker thread is still inside the second window, so the model
+        # reference must stay held until that window returns.
+        held = dict(_model_state(runtime))
+        assert outcomes == []
+        core.release.set()
+        released = await _async_wait_until(
+            lambda: _model_state(runtime)["active_requests"] == 0
+        )
+        assert released
+        return lines, held
+
+    events, held = asyncio.run(scenario())
+
+    assert core.second_window_started.is_set()
+    assert core.window_returned.is_set()
+    assert held["active_requests"] == 1
+    assert held["keep_alive_seconds_remaining"] is None
+    assert events == [
+        {"type": "chunk", "index": 0, "redacted_text": "first window "},
+        {
+            "type": "error",
+            "error": {
+                "code": "timeout",
+                "message": "Request exceeded configured timeout of 0.5 seconds",
+                "details": {"timeout_seconds": 0.5},
+            },
+        },
+    ]
+    state = _model_state(runtime)
+    assert state["active_requests"] == 0
+    assert state["keep_alive_seconds_remaining"] is not None
+    assert 0 < state["keep_alive_seconds_remaining"] <= 30
+    assert outcomes == [asyncio.TimeoutError]
+    assert core.closed.is_set()
+    assert LATE_FRAGMENT not in json.dumps(events)
+    assert SYNTHETIC_STREAM_TEXT not in caplog.text
+    assert "Zed Quillborne" not in caplog.text
+    assert "generator already executing" not in caplog.text
+
+
+def test_client_disconnect_mid_window_releases_model_after_window_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from openmed.service.streaming import deidentify_ndjson_stream
+
+    caplog.set_level(logging.DEBUG)
+    core = _SlowSecondWindow()
+    monkeypatch.setattr("openmed.service.streaming.deidentify_stream", core)
+    runtime = _stream_runtime(monkeypatch, timeout=0)
+    outcomes = _record_outcomes(monkeypatch, runtime)
+
+    async def scenario() -> tuple[str, dict[str, Any]]:
+        stream = deidentify_ndjson_stream(_stream_payload(), runtime)
+        first = await stream.__anext__()
+        pending = asyncio.ensure_future(stream.__anext__())
+        started = await _async_wait_until(core.second_window_started.is_set)
+        assert started
+        # Starlette cancels the response body task when the client disconnects.
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+        with pytest.raises(StopAsyncIteration):
+            await stream.__anext__()
+        held = dict(_model_state(runtime))
+        assert outcomes == []
+        core.release.set()
+        released = await _async_wait_until(
+            lambda: _model_state(runtime)["active_requests"] == 0
+        )
+        assert released
+        return first, held
+
+    first, held = asyncio.run(scenario())
+
+    assert json.loads(first) == {
+        "type": "chunk",
+        "index": 0,
+        "redacted_text": "first window ",
+    }
+    assert held["active_requests"] == 1
+    state = _model_state(runtime)
+    assert state["active_requests"] == 0
+    assert state["keep_alive_seconds_remaining"] is not None
+    assert outcomes == [asyncio.CancelledError]
+    assert core.closed.is_set()
+    assert SYNTHETIC_STREAM_TEXT not in caplog.text
+    assert "generator already executing" not in caplog.text
+
+
+def test_completed_stream_releases_model_immediately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openmed.service.streaming import deidentify_ndjson_stream
+
+    core = _SlowSecondWindow()
+    core.release.set()
+    monkeypatch.setattr("openmed.service.streaming.deidentify_stream", core)
+    runtime = _stream_runtime(monkeypatch, timeout=5.0)
+    outcomes = _record_outcomes(monkeypatch, runtime)
+
+    async def scenario() -> list[dict[str, Any]]:
+        lines = [
+            json.loads(line)
+            async for line in deidentify_ndjson_stream(_stream_payload(), runtime)
+        ]
+        # Negative control: no deferred cleanup is needed once the core
+        # iterator is exhausted, so the reference is free before the loop
+        # gets another turn.
+        assert _model_state(runtime)["active_requests"] == 0
+        assert outcomes == [None]
+        return lines
+
+    events = asyncio.run(scenario())
+
+    assert [event["type"] for event in events] == ["chunk", "chunk", "final"]
+    assert events[1]["redacted_text"] == LATE_FRAGMENT
+    state = _model_state(runtime)
+    assert state["active_requests"] == 0
+    assert state["keep_alive_seconds_remaining"] is not None
+    assert core.closed.is_set()
+
+
+def test_http_stream_timeout_mid_window_ends_with_one_error_and_releases(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    core = _SlowSecondWindow()
+    monkeypatch.setattr("openmed.service.streaming.deidentify_stream", core)
+    monkeypatch.setattr(service_runtime, "ModelLoader", _ResidentFakeLoader)
+    app = create_app()
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=True,
+    ) as test_client:
+        runtime = test_client.app.state.runtime
+        runtime.config.timeout = 0.5
+        events = _stream_events(
+            test_client,
+            {
+                "text": SYNTHETIC_STREAM_TEXT,
+                "chunk_size": 8,
+                "keep_alive": KEEP_ALIVE,
+            },
+        )
+        held = dict(_model_state(runtime))
+        core.release.set()
+        assert _wait_until(lambda: _model_state(runtime)["active_requests"] == 0)
+        state = _model_state(runtime)
+
+    assert core.second_window_started.is_set()
+    assert held["active_requests"] == 1
+    assert [event["type"] for event in events] == ["chunk", "error"]
+    assert events[-1]["error"]["code"] == "timeout"
+    assert LATE_FRAGMENT not in json.dumps(events)
+    assert state["active_requests"] == 0
+    assert state["keep_alive_seconds_remaining"] is not None
+    assert core.closed.is_set()
+    assert SYNTHETIC_STREAM_TEXT not in caplog.text
+    assert "Zed Quillborne" not in caplog.text
+    assert "generator already executing" not in caplog.text
