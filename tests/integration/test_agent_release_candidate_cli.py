@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -41,10 +40,12 @@ def _arguments(inputs, output):
 
 
 @pytest.mark.parametrize("entry", ["cli", "script"])
-def test_real_commands_produce_same_verifiable_packet(tmp_path, entry):
+def test_real_commands_produce_same_verifiable_packet(
+    tmp_path, entry, openmed_console_script
+):
     inputs = build_candidate_inputs(tmp_path)
     command = (
-        [str(Path(sys.executable).with_name("openmed")), "gates", "agent-release"]
+        [openmed_console_script, "gates", "agent-release"]
         if entry == "cli"
         else [sys.executable, "scripts/release/agent_release_gate.py"]
     )
@@ -72,12 +73,14 @@ def test_real_commands_produce_same_verifiable_packet(tmp_path, entry):
 
 
 @pytest.mark.parametrize("entry", ["cli", "script"])
-def test_real_commands_exit_nonzero_and_sign_dirty_refusal(tmp_path, entry):
+def test_real_commands_exit_nonzero_and_sign_dirty_refusal(
+    tmp_path, entry, openmed_console_script
+):
     inputs = build_candidate_inputs(tmp_path)
     (inputs.root / "source.txt").write_text("synthetic dirty mutation")
     command = (
         [
-            str(Path(sys.executable).with_name("openmed")),
+            openmed_console_script,
             "gates",
             "agent-release",
             "--json",
@@ -96,14 +99,16 @@ def test_real_commands_exit_nonzero_and_sign_dirty_refusal(tmp_path, entry):
     assert str(tmp_path) not in completed.stdout + completed.stderr
 
 
-def test_cli_missing_key_is_value_free_and_writes_nothing(tmp_path):
+def test_cli_missing_key_is_value_free_and_writes_nothing(
+    tmp_path, openmed_console_script
+):
     inputs = build_candidate_inputs(tmp_path)
     output = tmp_path / "bundle.json"
     args = _arguments(inputs, output)
     (tmp_path / "signing-key").unlink()
     result = subprocess.run(
         [
-            str(Path(sys.executable).with_name("openmed")),
+            openmed_console_script,
             "gates",
             "agent-release",
             "--json",

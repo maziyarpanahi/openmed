@@ -169,10 +169,13 @@ def test_forged_predecessor_and_duplicate_json_fields_fail_closed(tmp_path):
         ledger.load()
 
 
-def test_deep_malformed_entry_is_a_value_free_ledger_error(tmp_path):
+def test_deep_malformed_entry_is_a_value_free_ledger_error(
+    tmp_path, force_json_recursion_error
+):
     ledger = ActionLedger(tmp_path / "ledger")
     path = tmp_path / "ledger" / "entry-00000000000000000000.json"
     path.write_text("[" * 1200 + '"synthetic-private-marker"' + "]" * 1200)
+    force_json_recursion_error("synthetic-private-marker")
     with pytest.raises(ActionLedgerError, match="invalid_entry_json") as caught:
         ledger.load()
     assert "synthetic-private-marker" not in str(caught.value)

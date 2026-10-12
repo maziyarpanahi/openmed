@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -65,6 +66,8 @@ def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
         reconciliation=fixture.reconcile(),
         signing_key=signing_key,
         timeout=10,
+        # The adapter strips ambient variables; provision only its import path.
+        environment={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
     )
     assert result.state is (StoreState.SUCCESS if all_pass else StoreState.FAILURE)
     assert result.value is not None
@@ -138,6 +141,7 @@ def test_command_fails_closed_with_no_payload_or_private_path_in_diagnostics(
             reconciliation=fixture.reconcile(),
             signing_key=b"synthetic-dqd-key",
             timeout=10,
+            environment={"PYTHONPATH": os.environ.get("PYTHONPATH", "")},
         )
         assert bridge.state is StoreState.FAILURE
         assert bridge.code == "quality_adapter_failed"

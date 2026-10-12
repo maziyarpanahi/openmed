@@ -1,5 +1,9 @@
 """Pytest configuration and fixtures for OpenMed tests."""
 
+import json
+import shutil
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, Mock
 
@@ -225,3 +229,25 @@ class TestHelpers:
 def test_helpers():
     """Provide access to test helper methods."""
     return TestHelpers
+
+
+@pytest.fixture
+def openmed_console_script():
+    """Find the installed console script in virtualenv and split Nix layouts."""
+    sibling = Path(sys.executable).with_name("openmed")
+    console = str(sibling) if sibling.is_file() else shutil.which("openmed")
+    assert console is not None, "Install the openmed console entry point before testing"
+    return console
+
+
+@pytest.fixture
+def force_json_recursion_error(monkeypatch):
+    """Exercise decoder refusal without depending on CPython's nesting limit."""
+
+    def install(message="synthetic-private-parser-sentinel"):
+        def refuse(*args, **kwargs):
+            raise RecursionError(message)
+
+        monkeypatch.setattr(json, "loads", refuse)
+
+    return install

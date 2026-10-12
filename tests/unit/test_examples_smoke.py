@@ -158,7 +158,9 @@ def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
         cwd=root,
         env={
             **os.environ,
-            "PYTHONPATH": str(root),
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(root), os.environ.get("PYTHONPATH")))
+            ),
             "HF_HUB_OFFLINE": "1",
             "TRANSFORMERS_OFFLINE": "1",
         },
@@ -1096,7 +1098,9 @@ def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
         cwd=root,
         env={
             **os.environ,
-            "PYTHONPATH": str(root),
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(root), os.environ.get("PYTHONPATH")))
+            ),
             "HF_HUB_OFFLINE": "1",
             "TRANSFORMERS_OFFLINE": "1",
         },
