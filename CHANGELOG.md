@@ -421,6 +421,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Deliver async job webhooks on a bounded background executor so failing
+  receivers no longer hold job workers for hours. Delivery is recorded as
+  `pending` until it settles, capped by a server-side wall-time ceiling, and
+  backoff waits are cancelled on shutdown, which settles unfinished deliveries
+  as `abandoned` within a drain bound. `webhook_delivery` now stores only
+  controlled error codes, attempt counts and status codes (#3899).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).

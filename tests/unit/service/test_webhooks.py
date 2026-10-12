@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 
 import httpx
+import pytest
 
 from openmed.service.signing import (
     NONCE_HEADER,
@@ -16,10 +18,14 @@ from openmed.service.webhooks import (
     DEFAULT_WEBHOOK_TIMEOUT_SECONDS,
     SIGNATURE_HEADER,
     TIMESTAMP_HEADER,
+    WebhookDeliveryResult,
     canonical_json_bytes,
     deliver_webhook,
     sign_webhook_payload,
 )
+
+SENTINEL = "SYNTHETIC-SENTINEL-3899"
+SENTINEL_URL = f"https://receiver.invalid/{SENTINEL}/hook?token={SENTINEL}"
 
 
 def test_sign_webhook_payload_uses_canonical_json_and_timestamp() -> None:
@@ -117,7 +123,14 @@ def test_deliver_webhook_reports_failure_after_attempts() -> None:
     assert result.success is False
     assert result.attempts == 2
     assert result.status_code == 500
-    assert result.error == "HTTP 500"
+    assert result.error == "http_status"
+    assert result.to_dict() == {
+        "status": "failed",
+        "success": False,
+        "attempts": 2,
+        "status_code": 500,
+        "error": "http_status",
+    }
 
 
 def test_canonical_json_bytes_is_stable() -> None:
@@ -247,3 +260,149 @@ def test_deliver_webhook_leaves_the_supplied_client_ownership_alone() -> None:
     assert client.is_closed is False
     assert client.timeout.connect == 30.0
     client.close()
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        (httpx.ConnectError(f"refused {SENTINEL_URL}"), "connect"),
+        (httpx.ConnectTimeout(f"connect timed out {SENTINEL_URL}"), "timeout"),
+        (httpx.ReadTimeout(f"read timed out {SENTINEL_URL}"), "timeout"),
+        (httpx.RemoteProtocolError(f"protocol {SENTINEL_URL}"), "transport"),
+    ],
+    ids=["connect", "connect-timeout", "read-timeout", "transport"],
+)
+def test_deliver_webhook_reports_controlled_transport_codes(
+    failure: Exception,
+    code: str,
+) -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        raise failure
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    result = deliver_webhook(
+        SENTINEL_URL,
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        max_attempts=2,
+        backoff_seconds=0,
+        client=client,
+    )
+
+    assert result.to_dict() == {
+        "status": "failed",
+        "success": False,
+        "attempts": 2,
+        "status_code": None,
+        "error": code,
+    }
+    assert SENTINEL not in json.dumps(result.to_dict())
+
+
+def test_delivery_result_never_serializes_free_form_errors() -> None:
+    result = WebhookDeliveryResult(
+        success=False,
+        attempts=1,
+        status_code=500,
+        error=f"HTTP 500 from {SENTINEL_URL}",
+    )
+
+    assert result.to_dict()["error"] == "sender_error"
+    assert SENTINEL not in json.dumps(result.to_dict())
+
+
+def test_deliver_webhook_backoff_wait_is_cancellable() -> None:
+    cancel = threading.Event()
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        cancel.set()
+        return httpx.Response(500)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    results: list[WebhookDeliveryResult] = []
+    worker = threading.Thread(
+        target=lambda: results.append(
+            deliver_webhook(
+                "https://callbacks.example.test/openmed",
+                {"event": "job.done", "job_id": "abc", "status": "done"},
+                secret="secret",
+                max_attempts=10,
+                backoff_seconds=60.0,
+                client=client,
+                cancel_event=cancel,
+            )
+        ),
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert calls == 1
+    assert results[0].to_dict() == {
+        "status": "abandoned",
+        "success": False,
+        "attempts": 1,
+        "status_code": 500,
+        "error": "cancelled",
+    }
+
+
+def test_deliver_webhook_stops_at_the_total_wall_time_ceiling() -> None:
+    now = [0.0]
+    delays: list[float] = []
+    timeouts: list[dict[str, float]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        timeouts.append(dict(request.extensions["timeout"]))
+        return httpx.Response(500)
+
+    def sleeper(delay: float) -> None:
+        delays.append(delay)
+        now[0] += delay
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    result = deliver_webhook(
+        "https://callbacks.example.test/openmed",
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        max_attempts=10,
+        backoff_seconds=60.0,
+        client=client,
+        sleeper=sleeper,
+        max_total_seconds=100.0,
+        monotonic=lambda: now[0],
+    )
+
+    assert delays == [60.0]
+    assert timeouts == [
+        _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
+        _timeout_extensions(DEFAULT_WEBHOOK_TIMEOUT_SECONDS),
+    ]
+    assert result.to_dict() == {
+        "status": "abandoned",
+        "success": False,
+        "attempts": 2,
+        "status_code": 500,
+        "error": "deadline_exceeded",
+    }
+
+
+def test_deliver_webhook_caps_attempt_timeout_at_the_remaining_budget() -> None:
+    seen: list[dict[str, float]] = []
+    client = httpx.Client(transport=_recording_transport(seen))
+    result = deliver_webhook(
+        "https://callbacks.example.test/openmed",
+        {"event": "job.done", "job_id": "abc", "status": "done"},
+        secret="secret",
+        client=client,
+        max_attempts=1,
+        max_total_seconds=2.5,
+        monotonic=lambda: 0.0,
+    )
+
+    assert result.success is True
+    assert seen == [_timeout_extensions(2.5)]

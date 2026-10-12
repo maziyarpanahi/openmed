@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import os
 import tempfile
@@ -19,7 +20,15 @@ from openmed.core.audit import hash_text
 
 from .runtime import ServiceRuntime
 from .schemas import DeidentifyJobDocument, DeidentifyJobRequest, JobWebhookRequest
-from .webhooks import WebhookDeliveryResult, deliver_webhook
+from .webhooks import (
+    DEFAULT_WEBHOOK_DRAIN_SECONDS,
+    DEFAULT_WEBHOOK_MAX_DELIVERY_SECONDS,
+    DEFAULT_WEBHOOK_WORKERS,
+    WebhookDeliveryResult,
+    WebhookDispatcher,
+    deliver_webhook,
+    pending_delivery_metadata,
+)
 
 SERVICE_JOBS_STORE_ENV_VAR = "OPENMED_SERVICE_JOBS_STORE_PATH"
 SERVICE_JOBS_TTL_ENV_VAR = "OPENMED_SERVICE_JOBS_TTL_SECONDS"
@@ -224,7 +233,24 @@ def _parse_timestamp(raw_value: Any) -> datetime:
 
 
 class DeidentifyJobQueue:
-    """Bounded local worker pool for async de-identification jobs."""
+    """Bounded local worker pool for async de-identification jobs.
+
+    Terminal webhooks are delivered on a separate bounded
+    :class:`~openmed.service.webhooks.WebhookDispatcher`, so job workers return
+    as soon as the terminal record is committed.
+
+    Args:
+        runtime: Service runtime used to run de-identification.
+        store: Job metadata store.
+        max_workers: Maximum number of concurrently running jobs.
+        webhook_sender: Callable performing one terminal webhook delivery.
+        clock: UTC clock used for record timestamps.
+        webhook_workers: Maximum number of concurrent webhook deliveries.
+        webhook_max_delivery_seconds: Server-side ceiling on the total wall
+            time of one webhook delivery, including retries and backoff.
+        webhook_drain_seconds: Time :meth:`shutdown` waits for in-flight
+            deliveries before recording them as abandoned.
+    """
 
     def __init__(
         self,
@@ -234,11 +260,19 @@ class DeidentifyJobQueue:
         max_workers: int = DEFAULT_JOBS_WORKERS,
         webhook_sender: WebhookSender = deliver_webhook,
         clock: Callable[[], datetime] = _utc_now,
+        webhook_workers: int = DEFAULT_WEBHOOK_WORKERS,
+        webhook_max_delivery_seconds: float = DEFAULT_WEBHOOK_MAX_DELIVERY_SECONDS,
+        webhook_drain_seconds: float = DEFAULT_WEBHOOK_DRAIN_SECONDS,
     ) -> None:
         self.runtime = runtime
         self.store = store
         self.webhook_sender = webhook_sender
         self.clock = clock
+        self._webhooks = WebhookDispatcher(
+            max_workers=webhook_workers,
+            max_delivery_seconds=webhook_max_delivery_seconds,
+            drain_seconds=webhook_drain_seconds,
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=int(max_workers),
             thread_name_prefix="openmed-job",
@@ -274,11 +308,20 @@ class DeidentifyJobQueue:
         """Return persisted job metadata."""
         return self.store.get(job_id)
 
-    def shutdown(self) -> None:
-        """Stop accepting work and request worker shutdown."""
+    def shutdown(self, drain_seconds: Optional[float] = None) -> None:
+        """Stop accepting work and settle pending webhook deliveries.
+
+        Job workers are released without waiting. Webhook backoff waits are
+        cancelled, and deliveries that do not settle within the drain bound are
+        recorded as ``abandoned`` with error ``cancelled``.
+
+        Args:
+            drain_seconds: Override for the configured webhook drain bound.
+        """
         with self._lock:
             self._shutdown = True
         self._executor.shutdown(wait=False, cancel_futures=True)
+        self._webhooks.shutdown(drain_seconds)
 
     def _expiry_timestamp(self, moment: datetime) -> str:
         """Return the metadata expiry for a record that reached *moment*."""
@@ -345,6 +388,7 @@ class DeidentifyJobQueue:
             error=error,
             completed_at=_isoformat(completed_at),
             expires_at=self._expiry_timestamp(completed_at),
+            **_pending_webhook_delivery(item.payload.webhook),
         )
         self._send_terminal_webhook(item.payload.webhook, final_record)
 
@@ -385,23 +429,55 @@ class DeidentifyJobQueue:
     ) -> None:
         if webhook is None:
             return
+        job_id = record["id"]
         payload = webhook_payload(record)
-        try:
-            result = self.webhook_sender(
+        sender = self.webhook_sender
+
+        def _deliver(
+            cancel_event: threading.Event,
+            remaining_seconds: float,
+        ) -> WebhookDeliveryResult:
+            return sender(
                 webhook.url,
                 payload,
                 secret=webhook.secret,
                 max_attempts=webhook.max_attempts,
                 backoff_seconds=webhook.backoff_seconds,
+                **_sender_options(
+                    sender,
+                    cancel_event=cancel_event,
+                    max_total_seconds=remaining_seconds,
+                ),
             )
-        except Exception as exc:
-            result = WebhookDeliveryResult(
-                success=False,
-                attempts=0,
-                status_code=None,
-                error=str(exc),
-            )
-        self.store.update(record["id"], webhook_delivery=result.to_dict())
+
+        def _settle(result: WebhookDeliveryResult) -> None:
+            self.store.update(job_id, webhook_delivery=result.to_dict())
+
+        self._webhooks.submit(_deliver, _settle)
+
+
+def _pending_webhook_delivery(
+    webhook: Optional[JobWebhookRequest],
+) -> dict[str, Any]:
+    if webhook is None:
+        return {}
+    return {"webhook_delivery": pending_delivery_metadata()}
+
+
+def _sender_options(sender: WebhookSender, **options: Any) -> dict[str, Any]:
+    """Return the cancellation/budget options *sender* accepts.
+
+    Custom senders with the original keyword set keep working; senders that
+    accept ``cancel_event`` / ``max_total_seconds`` (or ``**kwargs``) receive
+    them.
+    """
+    try:
+        parameters = inspect.signature(sender).parameters
+    except (TypeError, ValueError):
+        return {}
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        return options
+    return {name: value for name, value in options.items() if name in parameters}
 
 
 @dataclass
