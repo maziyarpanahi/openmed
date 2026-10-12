@@ -133,6 +133,10 @@ def test_local_backend_guide_documents_every_error_and_brief_refusal():
     _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
 
 
+@pytest.mark.skipif(
+    not manifests._HAS_SECURE_LOCAL_READ,
+    reason="backend guide verifies a POSIX-only local artifact package",
+)
 def test_local_backend_guide_examples_run_offline_with_only_synthetic_doubles(
     forbid_backend_guide_model_loading, capsys
 ):
@@ -210,6 +214,10 @@ def test_local_backend_guide_check_rejects_table_drift(before, after, message):
         _assert_documented_backend_outcomes(markdown)
 
 
+@pytest.mark.skipif(
+    not manifests._HAS_SECURE_LOCAL_READ,
+    reason="backend guide verifies a POSIX-only local artifact package",
+)
 def test_local_backend_guide_example_check_rejects_incompatible_brief_provider(
     forbid_backend_guide_model_loading,
 ):
@@ -296,7 +304,7 @@ def repin_package(root, manifest):
 
 
 @pytest.fixture
-def local_runner(tmp_path, monkeypatch):
+def configured_local_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(registry, "_SUMMARIZER_PACKAGES", {})
     manifest = write_package(tmp_path)
     calls = []
@@ -350,6 +358,15 @@ def local_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(backends, "verify_clinical_slm_package", verify)
     monkeypatch.setattr(backends, "_load_model", load)
     return calls, state
+
+
+@pytest.fixture
+def local_runner(configured_local_runner):
+    if not manifests._HAS_SECURE_LOCAL_READ:
+        pytest.skip(
+            "package verification requires POSIX no-follow directory descriptors"
+        )
+    return configured_local_runner
 
 
 def test_default_resolves_pinned_registry_model():
@@ -633,9 +650,9 @@ def test_trusted_pin_does_not_bypass_package_capabilities(local_runner, changes,
 
 
 def test_unsupported_platform_fails_before_manifest_read_or_load(
-    local_runner, monkeypatch
+    configured_local_runner, monkeypatch
 ):
-    calls, _ = local_runner
+    calls, _ = configured_local_runner
     monkeypatch.setattr(manifests, "_HAS_SECURE_LOCAL_READ", False)
     with pytest.raises(backends.LocalSummarizerPackageError) as caught:
         summarize_deidentified(deidentified(), model="mlx")

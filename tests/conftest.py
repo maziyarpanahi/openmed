@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import os
 import shutil
+import stat
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -261,3 +264,42 @@ def pytest_make_parametrize_id(val, argname):
         digest = hashlib.sha256(raw).hexdigest()[:12]
         return f"{argname}-{type(val).__name__}-{len(val)}-{digest}"
     return None
+
+
+@pytest.fixture
+def assert_private_file():
+    """Independently inspect POSIX modes or the native Windows DACL."""
+
+    def check(path):
+        if os.name == "nt":
+            # Query through an independent Windows API (.NET), not the writer helper.
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "(Get-Acl -LiteralPath $env:OPENMED_TEST_OUTPUT)."
+                    "GetSecurityDescriptorSddlForm("
+                    "[System.Security.AccessControl.AccessControlSections]::Access)",
+                ],
+                # CI's parent pwsh can export PowerShell 7 module paths that Windows
+                # PowerShell 5 cannot load. Let this child initialize its own paths.
+                env={
+                    **{
+                        k: v
+                        for k, v in os.environ.items()
+                        if k.lower() != "psmodulepath"
+                    },
+                    "OPENMED_TEST_OUTPUT": str(path),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout.strip() == "D:P(A;;FA;;;OW)"
+        else:
+            assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+    return check

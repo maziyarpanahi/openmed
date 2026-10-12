@@ -204,7 +204,9 @@ def _items(node):
     return {n.attrib["naaccrId"]: n.text for n in children}
 
 
-def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(tmp_path):
+def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(
+    tmp_path, assert_private_file
+):
     batch, _ = _batch(
         (
             {"root": "ROOT", "patient": "FIRST", "code": "TUMOR1"},
@@ -255,32 +257,7 @@ def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(tm
     ) == (3, 2, 3, 8)
     assert report.losses == ()
     assert report.xml_digest == "sha256:" + hashlib.sha256(payload).hexdigest()
-    if os.name == "nt":
-        # Query through an independent Windows API (.NET), not the writer helper.
-        result = subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "(Get-Acl -LiteralPath $env:OPENMED_TEST_OUTPUT)."
-                "GetSecurityDescriptorSddlForm("
-                "[System.Security.AccessControl.AccessControlSections]::Access)",
-            ],
-            # CI's parent pwsh can export PowerShell 7 module paths that Windows
-            # PowerShell 5 cannot load. Let this child initialize its own paths.
-            env={
-                **{k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"},
-                "OPENMED_TEST_OUTPUT": str(tmp_path / "protected.xml"),
-            },
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "D:P(A;;FA;;;OW)"
-    else:
-        assert stat.S_IMODE(os.stat(tmp_path / "protected.xml").st_mode) == 0o600
+    assert_private_file(tmp_path / "protected.xml")
     safe = json.dumps(report.to_dict()) + repr(report)
     assert all(
         v not in safe
