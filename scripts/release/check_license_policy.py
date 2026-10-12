@@ -107,6 +107,7 @@ REVIEWED_LICENSES = {
     "indic-nlp-library": "MIT",
     "jieba": "MIT",
     "jinja2": "BSD-3-Clause",
+    "jsonschema": "MIT",
     "kopf": "MIT",
     "langchain-core": "MIT",
     "langgraph": "MIT",
