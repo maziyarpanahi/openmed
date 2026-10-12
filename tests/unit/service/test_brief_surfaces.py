@@ -138,7 +138,7 @@ def test_missing_review_and_mismatched_provider_refuse():
 
 def cli_args(tmp_path, text):
     source = tmp_path / "source.txt"
-    source.write_text(text, encoding="utf-8")
+    source.write_bytes(text.encode("utf-8"))
     return argparse.Namespace(
         path=source,
         model="extractive",
