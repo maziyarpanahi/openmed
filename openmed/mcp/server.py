@@ -60,6 +60,7 @@ from openmed.mcp.consent_receipts import (
     ConsentReceiptVerificationError,
     ConsentReceiptVerifier,
 )
+from openmed.mcp.consent_receipts import ConsentReceipt as _ConsentReceipt
 from openmed.mcp.governed_workflows import (
     GOVERNED_MCP_OPERATIONS,
     GovernedConsentProvider,
@@ -107,6 +108,12 @@ from openmed.service.security import (
     SecureOAuthAuthorizationServerProvider,
     install_mcp_log_filter,
     safe_error_payload,
+)
+from openmed.service.security import (
+    validate_payload_bounds as _validate_payload_bounds,
+)
+from openmed.service.security import (
+    validate_untrusted_tool_content as _validate_untrusted_tool_content,
 )
 from openmed.structured.decision import (
     DETERMINISTIC_DECISION_BACKEND,
@@ -516,6 +523,7 @@ def _structured_fastmcp(
     injection_guard: Optional[InjectionGuard] = None,
     *,
     policy: Optional[MCPToolPolicy] = None,
+    consent_transport_tools: frozenset[str] = frozenset(),
 ) -> Any:
     """Return a FastMCP class that envelopes malformed calls without logging data."""
 
@@ -540,15 +548,40 @@ def _structured_fastmcp(
                 tool = self._tool_manager.get_tool(name)
                 if tool is None:
                     raise KeyError(name)
+                if name in consent_transport_tools and tool_policy is not None:
+                    _validate_payload_bounds(arguments, **tool_policy.bounds)
+                    receipt = arguments.get(_CONSENT_RECEIPT_PARAMETER.name)
+                    if isinstance(receipt, str):
+                        # Treat signed JSON as receipt metadata, so its required
+                        # tool field is not mistaken for an embedded instruction.
+                        # Parse without consuming; the handler still verifies it.
+                        arguments = {
+                            **arguments,
+                            _CONSENT_RECEIPT_PARAMETER.name: _ConsentReceipt.from_json(
+                                receipt
+                            ).to_dict(),
+                        }
                 guarded = selected_guard.guard_arguments(arguments)
                 validate(instance=guarded.value, schema=tool.parameters)
                 if tool_policy is not None:
+                    policy_arguments = guarded.value
+                    if name in consent_transport_tools:
+                        # Receipt transport is server-local, but still belongs to
+                        # the bounded, untrusted request. The consent handler must
+                        # receive it intact and verify it before any effect.
+                        _validate_payload_bounds(guarded.value, **tool_policy.bounds)
+                        _validate_untrusted_tool_content(guarded.value)
+                        policy_arguments = {
+                            key: value
+                            for key, value in guarded.value.items()
+                            if key != _CONSENT_RECEIPT_PARAMETER.name
+                        }
                     permission_granted = (
                         access_token is None and tool_policy.allow_local_state_changes
                     ) or tool_policy.has_state_change_permission(granted_scopes)
                     tool_policy.validate_tool_call(
                         name,
-                        guarded.value,
+                        policy_arguments,
                         granted_scopes=granted_scopes,
                         permission_granted=permission_granted,
                     )
@@ -2254,6 +2287,15 @@ def create_mcp_server(
         _load_fastmcp(),
         policy=policy,
         injection_guard=injection_guard,
+        consent_transport_tools=frozenset(
+            spec.name
+            for spec in TOOL_REGISTRY.latest_specs()
+            if consent_policy is not None
+            and not spec.read_only_hint
+            and spec.name not in GOVERNED_MCP_OPERATIONS
+            and _CONSENT_RECEIPT_PARAMETER.name
+            not in spec.input_schema.get("properties", {})
+        ),
     )
 
     server_kwargs: dict[str, Any] = {

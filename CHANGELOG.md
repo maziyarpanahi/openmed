@@ -430,6 +430,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Accept signed consent receipts through the real MCP call transport while
+  retaining canonical argument schemas, bounded untrusted metadata, remote
+  authorization and single-use verification (#4147).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).
