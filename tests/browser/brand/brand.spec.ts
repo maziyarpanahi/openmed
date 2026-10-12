@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import {
+  BrowserContext,
   ConsoleMessage,
   Page,
   TestInfo,
@@ -136,15 +137,19 @@ const CANONICAL_VISUAL_CASES = new Set([
   "rtl-fixture/mobile-390/light",
 ]);
 
-test.beforeEach(async ({ page }) => {
+async function stubCloudflareBeacon(context: BrowserContext): Promise<void> {
   // Exercise the installation without sending test visits to production analytics.
-  await page.route(CLOUDFLARE_BEACON_URL, (route) =>
+  await context.route(CLOUDFLARE_BEACON_URL, (route) =>
     route.fulfill({
       body: "",
       contentType: "application/javascript",
       status: 200,
     }),
   );
+}
+
+test.beforeEach(async ({ context, page }) => {
+  await stubCloudflareBeacon(context);
   for (const url of GITHUB_METADATA_URLS) {
     await page.route(url, (route) =>
       route.fulfill({
@@ -1755,6 +1760,7 @@ test("representative routes respect first-party transfer budgets", async ({
   const origin = new URL(baseURL ?? "http://127.0.0.1:4173").origin;
   for (const [route, maximum] of Object.entries(routeBudgets)) {
     const context = await browser.newContext({ baseURL });
+    await stubCloudflareBeacon(context);
     const page = await context.newPage();
     let firstPartyBytes = 0;
     let searchBytes = 0;

@@ -11,12 +11,17 @@ const criticalSurfaces = [
   { name: "browser demo", path: "/docs/demo/web/" },
   { name: "RTL fixture", path: "/docs/demo/rtl/" },
 ];
+const CLOUDFLARE_BEACON_URL = "https://static.cloudflareinsights.com/beacon.min.js";
 const GITHUB_METADATA_URLS = [
   "https://api.github.com/repos/maziyarpanahi/openmed",
   "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
 ] as const;
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ context, page }) => {
+  // Keep every coverage test offline from production analytics.
+  await context.route(CLOUDFLARE_BEACON_URL, (route) =>
+    route.fulfill({ body: "", contentType: "application/javascript", status: 200 }),
+  );
   for (const url of GITHUB_METADATA_URLS) {
     await page.route(url, (route) =>
       route.fulfill({
@@ -78,6 +83,12 @@ function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
       && !isGitHubMetadataRequest(url)
+      && !(
+        url.href === CLOUDFLARE_BEACON_URL
+        && request.method() === "GET"
+        && new URL(page.url()).origin === expectedOrigin
+        && new URL(page.url()).pathname === "/"
+      )
     ) {
       audit.externalRequests.push(`${request.method()} ${url.href}`);
     }
