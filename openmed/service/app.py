@@ -7,8 +7,9 @@ import hashlib
 import json
 import os
 import time
+import uuid
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -44,7 +45,13 @@ from openmed.structured.decision import (
 )
 from openmed.utils.validation import validate_model_name
 
-from .auth import ServiceAuth, parse_service_auth_config
+from .auth import (
+    ROUTE_POLICIES,
+    ServiceAuth,
+    parse_service_auth_config,
+    request_needs_admission,
+    validate_route_policies,
+)
 from .batcher import (
     BackpressureError,
     BatchPriorityHandle,
@@ -52,8 +59,14 @@ from .batcher import (
     DynamicBatcher,
     normalize_priority,
 )
-from .bulk_data import FHIRBulkJobConfig, FHIRBulkJobManager
+from .bulk_data import (
+    BulkPathError,
+    BulkStoragePolicy,
+    FHIRBulkJobConfig,
+    FHIRBulkJobManager,
+)
 from .coalesce import RequestCoalescer, coalescing_key
+from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -132,7 +145,12 @@ from .security_headers import (
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
-from .throttle import ServiceThrottle, format_retry_after
+from .throttle import (
+    ServiceBusyError,
+    ServiceThrottle,
+    current_request_work,
+    format_retry_after,
+)
 from .tracing import (
     OpenTelemetryMiddleware,
     operational_trace_attributes,
@@ -151,23 +169,9 @@ _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
 _MODEL_BACKED_PATHS = frozenset(
-    {
-        "/graphql",
-        "/analyze",
-        "/ground",
-        "/brief",
-        "/pii/extract",
-        "/pii/extract/stream",
-        "/pii/deidentify",
-        "/pii/deidentify/stream",
-        "/jobs",
-        _PRIVACY_GATEWAY_PATH,
-        _SMART_BACKEND_START_PATH,
-        _FHIR_BULK_EXPORT_PATH,
-        _FHIR_BULK_IMPORT_PATH,
-        _DECISION_PATH,
-        OPENHIM_MEDIATOR_PATH,
-    }
+    path
+    for (_, path), policy in ROUTE_POLICIES.items()
+    if policy.admission in {"model", "heavy"}
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -186,6 +190,9 @@ class _AnalyzeBatchJob:
 @dataclass(frozen=True)
 class _PIIExtractBatchJob:
     payload: PIIExtractRequest
+
+
+_SERVICE_WORK_TASKS: set[asyncio.Future[Any]] = set()
 
 
 class ServiceTimeoutError(RuntimeError):
@@ -602,32 +609,90 @@ async def _run_with_timeout(
     operation: Any,
 ) -> Any:
     """Run blocking service work in a threadpool under the profile timeout."""
-    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
-    if timeout_seconds <= 0:
-        return await run_in_threadpool(operation)
+    work = current_request_work()
 
-    try:
-        return await asyncio.wait_for(
-            run_in_threadpool(operation),
-            timeout=float(timeout_seconds),
-        )
-    except asyncio.TimeoutError as exc:
-        raise ServiceTimeoutError(timeout_seconds) from exc
+    async def model_work() -> Any:
+        release_slot = await work.acquire_model_slot() if work is not None else None
+        try:
+            return await run_in_threadpool(operation)
+        finally:
+            if release_slot is not None:
+                release_slot()
+
+    return await _await_with_timeout(runtime, model_work())
+
+
+def _track_service_work(awaitable: Any) -> asyncio.Future[Any]:
+    """Keep a strong reference and consume late failures without logging input."""
+    task = asyncio.ensure_future(awaitable)
+    _SERVICE_WORK_TASKS.add(task)
+
+    def completed(future: asyncio.Future[Any]) -> None:
+        _SERVICE_WORK_TASKS.discard(future)
+        if not future.cancelled():
+            future.exception()
+
+    task.add_done_callback(completed)
+    work = current_request_work()
+    if work is not None:
+        work.track(task)
+    return task
 
 
 async def _await_with_timeout(
     runtime: ServiceRuntime,
     awaitable: Any,
+    *,
+    cancel_on_timeout: bool = False,
 ) -> Any:
-    """Await async service work under the profile timeout."""
+    """Bound the client wait without cancelling work that still owns capacity."""
+    task = _track_service_work(awaitable)
     timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    wait = task if cancel_on_timeout else asyncio.shield(task)
     if timeout_seconds <= 0:
-        return await awaitable
+        return await wait
 
     try:
-        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+        return await asyncio.wait_for(wait, timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
         raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+async def _submit_with_timeout(
+    runtime: ServiceRuntime,
+    batcher: DynamicBatcher,
+    item: Any,
+    *,
+    priority: str,
+    priority_handle: BatchPriorityHandle,
+) -> Any:
+    """Cancel abandoned queued jobs while retaining ownership of dispatches."""
+    work_done = asyncio.get_running_loop().create_future()
+    _track_service_work(work_done)
+    started = False
+
+    async def submit() -> Any:
+        nonlocal started
+        started = True
+        return await batcher.submit(
+            item,
+            priority=priority,
+            priority_handle=priority_handle,
+            work_done=work_done,
+        )
+
+    task = asyncio.create_task(submit())
+
+    def completed_before_start(future: asyncio.Future[Any]) -> None:
+        if not started and not work_done.done():
+            work_done.set_result(None)
+
+    task.add_done_callback(completed_before_start)
+    return await _await_with_timeout(
+        runtime,
+        task,
+        cancel_on_timeout=True,
+    )
 
 
 def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
@@ -703,11 +768,15 @@ async def _run_maybe_coalesced(
             "openmed.coalescing.enabled": True,
         },
     ):
-        return await coalescer.run(
-            coalescing_key(endpoint, payload),
-            operation,
-            priority=priority,
-            on_priority_upgrade=on_priority_upgrade,
+        return await asyncio.shield(
+            _track_service_work(
+                coalescer.run(
+                    coalescing_key(endpoint, payload),
+                    operation,
+                    priority=priority,
+                    on_priority_upgrade=on_priority_upgrade,
+                )
+            )
         )
 
 
@@ -748,13 +817,30 @@ def _metrics_route_label(request: Request) -> str:
     return "unknown"
 
 
-def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
-    """Create and configure the OpenMed REST FastAPI app."""
+def create_app(
+    *,
+    max_request_body_bytes: Optional[int] = None,
+    workflow_service: Optional[WorkflowGovernanceService] = None,
+    workflow_policy: Optional[WorkflowHTTPPolicy] = None,
+    workflow_clock: Optional[Callable[[], int]] = None,
+) -> FastAPI:
+    """Create and configure the OpenMed REST FastAPI app.
+
+    Args:
+        max_request_body_bytes: Optional model-route body limit.
+        workflow_service: Trusted local custody service for workflow routes.
+        workflow_policy: Server-owned workflow opt-ins; disabled by default.
+        workflow_clock: Integer Unix-seconds source for receipt validity checks.
+
+    Returns:
+        Configured application, without starting its lifespan or an effect executor.
+    """
 
     openhim_settings = OpenHIMMediatorSettings.from_env()
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
+        validate_route_policies(fastapi_app)
         runtime = ServiceRuntime.from_env(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
@@ -819,6 +905,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     )
     security_config = parse_service_security_config()
     app.state.security = security_config
+    app.state.bulk_storage = BulkStoragePolicy.from_env()
     if security_config.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -854,8 +941,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
-        path = request.url.path
-        if path in _MODEL_BACKED_PATHS:
+        if request_needs_admission(request):
             state = request.app.state
             if getattr(state, "shutting_down", False):
                 return _error_response(
@@ -868,7 +954,15 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
             try:
                 return await call_next(request)
             finally:
-                state.inflight = getattr(state, "inflight", 0) - 1
+
+                def release_inflight() -> None:
+                    state.inflight = getattr(state, "inflight", 0) - 1
+
+                work = current_request_work()
+                if work is None:
+                    release_inflight()
+                else:
+                    work.on_finished(release_inflight)
         return await call_next(request)
 
     if app.state.metrics is not None:
@@ -956,6 +1050,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
     ) -> JSONResponse:
         return _backpressure_response(exc)
 
+    @app.exception_handler(ServiceBusyError)
+    async def _service_busy_handler(_: Request, exc: ServiceBusyError) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "max_concurrency": exc.max_concurrency,
+                "wait_seconds": exc.wait_seconds,
+                "key": exc.key_by,
+            },
+        )
+
     @app.exception_handler(PrivacyGatewayConfigurationError)
     async def _privacy_gateway_config_handler(
         _: Request,
@@ -1032,6 +1139,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
+        from .runtime import ModelNotServedError
+
+        if isinstance(exc, ModelNotServedError):
+            return _error_response(
+                422,
+                "model_not_served",
+                "Requested model is not served",
+                details=None,
+            )
+        if isinstance(exc, BulkPathError):
+            return _error_response(
+                400, exc.code, "Bulk storage request is not permitted", details=None
+            )
         del exc
         return _error_response(
             400,
@@ -1283,13 +1403,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_analyze_batcher(request).submit(
-                        _AnalyzeBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_analyze_batcher(request),
+                    _AnalyzeBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1329,13 +1448,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
-                return await _await_with_timeout(
+                return await _submit_with_timeout(
                     runtime,
-                    _get_pii_extract_batcher(request).submit(
-                        _PIIExtractBatchJob(payload),
-                        priority=priority,
-                        priority_handle=priority_handle,
-                    ),
+                    _get_pii_extract_batcher(request),
+                    _PIIExtractBatchJob(payload),
+                    priority=priority,
+                    priority_handle=priority_handle,
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -1370,6 +1488,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         request: Request,
     ) -> StreamingResponse:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
 
         async def _events():
             async for event in runtime.stream_pii_extract(
@@ -1721,10 +1840,19 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         request: Request,
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
         config = _smart_backend_config_from_payload(payload)
+        job_id = uuid.uuid4().hex
+        _, output, checkpoint = request.app.state.bulk_storage.prepare(
+            input_dir=None,
+            output_dir=payload.output_dir,
+            checkpoint_path=payload.checkpoint_path,
+            job_id=job_id,
+        )
+        config = replace(config, output_dir=output, checkpoint_path=checkpoint)
         deidentifier = _smart_backend_deidentifier(payload, runtime)
-        return manager.start(config, deidentifier=deidentifier).to_dict()
+        return manager.start(config, deidentifier=deidentifier, job_id=job_id).to_dict()
 
     @app.get("/fhir/smart-backend/ingestions/{job_id}")
     async def smart_backend_ingestion_status(
@@ -1779,7 +1907,7 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         payload: DeidentifyJobRequest,
         request: Request,
     ) -> Dict[str, Any]:
-        _get_service_runtime(request)
+        _get_service_runtime(request).validate_served_model(payload.model_name)
         queue = _get_job_queue(request)
         record = queue.submit(payload)
         return job_response_payload(record, status_url=f"/jobs/{record['id']}")
@@ -1798,6 +1926,12 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         app,
         runtime_getter=_get_service_runtime,
         resource_getter=_get_journey_resource_catalog,
+    )
+
+    from .workflow_routes import WorkflowBoundaryMiddleware, mount_workflow_routes
+
+    mount_workflow_routes(
+        app, service=workflow_service, policy=workflow_policy, clock=workflow_clock
     )
 
     if app.state.tracing.enabled:
@@ -1826,6 +1960,8 @@ def create_app(*, max_request_body_bytes: Optional[int] = None) -> FastAPI:
         BoundedRequestBodyMiddleware,
         limits=app.state.operational_limits,
     )
+    app.add_middleware(WorkflowBoundaryMiddleware)
+    validate_route_policies(app)
     return app
 
 
@@ -2383,7 +2519,9 @@ def _fhir_bulk_config_from_payload(
 ) -> FHIRBulkJobConfig:
     """Convert a validated route payload without retaining request metadata."""
 
-    input_dir = payload.input_dir or payload.source_dir
+    input_dir = (
+        payload.input_dir if payload.input_dir is not None else payload.source_dir
+    )
     return FHIRBulkJobConfig(
         input_dir=input_dir,
         output_dir=payload.output_dir,
@@ -2409,11 +2547,28 @@ def _start_fhir_bulk_job(
     request: Request,
 ):
     runtime = _get_service_runtime(request)
+    runtime.validate_served_model(payload.model_name)
     manager = _get_fhir_bulk_manager(request)
     config = _fhir_bulk_config_from_payload(payload)
+    if payload.input_dir is not None and payload.source_dir is not None:
+        raise BulkPathError("path_invalid")
+    if not config.is_local:
+        config.to_smart_config()
+    job_id = uuid.uuid4().hex
+    source, output, checkpoint = request.app.state.bulk_storage.prepare(
+        input_dir=payload.input_dir
+        if payload.input_dir is not None
+        else payload.source_dir,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        job_id=job_id,
+    )
+    config = replace(
+        config, input_dir=source, output_dir=output, checkpoint_path=checkpoint
+    )
     configured_deidentifier = getattr(request.app.state, "fhir_bulk_deidentifier", None)
     deidentifier = configured_deidentifier or _fhir_bulk_deidentifier(payload, runtime)
-    return manager.start(config, deidentifier=deidentifier)
+    return manager.start(config, deidentifier=deidentifier, job_id=job_id)
 
 
 def _fhir_bulk_deidentifier(

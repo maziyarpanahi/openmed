@@ -18,7 +18,7 @@ import re
 import unicodedata
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from openmed.clinical.brief_cancellation import (
     BriefCancellation,
@@ -32,6 +32,9 @@ from openmed.core.script_detect import (
     normalize_for_pii_detection,
     segment_by_script,
 )
+
+if TYPE_CHECKING:
+    from openmed.clinical.nli import ClaimVerification
 
 DEFAULT_SUMMARIZATION_MODE = "bhc"
 SUMMARIZATION_ADVISORY = (
@@ -187,6 +190,7 @@ class SummarizationResult:
     mode: str = DEFAULT_SUMMARIZATION_MODE
     backend: str = "deterministic-extractive"
     template_digest: str | None = None
+    verification: tuple[ClaimVerification, ...] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.summary, str):
@@ -202,6 +206,29 @@ class SummarizationResult:
             or re.fullmatch(r"sha256:[0-9a-f]{64}", self.template_digest) is None
         ):
             raise ValueError("invalid template digest")
+        if self.verification is not None:
+            from openmed.clinical.nli import ClaimVerification, _verification_digest
+
+            checks = tuple(self.verification)
+            if any(
+                type(check) is not ClaimVerification or check.claim_index != index
+                for index, check in enumerate(checks)
+            ):
+                raise ValueError("invalid summary verification metadata")
+            previous_end = 0
+            for check in checks:
+                if check.claim_offset is None:
+                    raise ValueError("invalid summary verification metadata")
+                start, end = check.claim_offset
+                if (
+                    start < previous_end
+                    or end > len(self.summary)
+                    or check.claim_digest
+                    != _verification_digest(self.summary[start:end])
+                ):
+                    raise ValueError("invalid summary verification metadata")
+                previous_end = end
+            object.__setattr__(self, "verification", checks)
 
     def __iter__(self) -> Iterator[str | LeakageCheck]:
         """Yield the summary and leakage check for tuple-style consumers."""
@@ -217,19 +244,24 @@ class SummarizationResult:
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible result without source PHI metadata."""
 
-        return {
+        payload: dict[str, Any] = {
             "summary": self.summary,
             "leakage_check": self.leakage_check.to_dict(),
             "mode": self.mode,
             "backend": self.backend,
             "metadata": self.metadata,
         }
+        if self.verification is not None:
+            payload["verification"] = [check.to_dict() for check in self.verification]
+        return payload
 
 
 def summarize(
     text: str | DeidentificationResult,
     mode: str = DEFAULT_SUMMARIZATION_MODE,
     model: object | None = None,
+    *,
+    verify: object = False,
 ) -> SummarizationResult:
     """De-identify and summarize a clinical note.
 
@@ -245,6 +277,8 @@ def summarize(
             denotes a brief hospital-course style summary.
         model: Registry alias (default ``mlx``), explicit ``extractive``, or
             a caller-owned local callable accepting de-identified text.
+        verify: Opt in with ``True`` for the configured local NLI backend,
+            an explicit registry alias, or a caller-owned local NLI backend.
 
     Returns:
         A summary and a passing :class:`LeakageCheck`.
@@ -260,19 +294,25 @@ def summarize(
 
     normalized_mode = _normalize_mode(mode)
     if isinstance(text, DeidentificationResult):
-        return summarize_deidentified(text, mode=normalized_mode, model=model)
+        return summarize_deidentified(
+            text, mode=normalized_mode, model=model, verify=verify
+        )
     if not isinstance(text, str):
         raise TypeError("text must be a string or DeidentificationResult")
     from openmed.clinical.summarize_backends import (
+        ExtractiveSummarizerBackend,
         LocalSummarizerError,
         MLXSummarizerBackend,
         _require_runtime,
+        _validate_input,
         resolve_summarizer_backend,
     )
     from openmed.core.config import OpenMedConfig
     from openmed.core.offline import network_blocked_if_offline
 
     backend = resolve_summarizer_backend(model)
+    if type(backend) in {ExtractiveSummarizerBackend, MLXSummarizerBackend}:
+        _validate_input(text, normalized_mode)
     if isinstance(backend, MLXSummarizerBackend):
         _require_runtime()
     failed = False
@@ -284,10 +324,10 @@ def summarize(
     except Exception:
         failed = True
     if failed:
-        raise LocalSummarizerError(
-            "local de-identification failed; prepare cached PII artifacts"
-        )
-    return summarize_deidentified(result, mode=normalized_mode, model=backend)
+        raise LocalSummarizerError(reason="deidentification_unavailable")
+    return summarize_deidentified(
+        result, mode=normalized_mode, model=backend, verify=verify
+    )
 
 
 def summarize_deidentified(
@@ -296,6 +336,7 @@ def summarize_deidentified(
     model: object | None = None,
     *,
     cancellation: BriefCancellation | None = None,
+    verify: object = False,
 ) -> SummarizationResult:
     """Run the guarded summarization stage on a de-identification result.
 
@@ -309,6 +350,7 @@ def summarize_deidentified(
         mode: Summarization mode forwarded to compatible backends.
         model: Optional local/on-device summarizer backend.
         cancellation: Optional cooperative brief interruption context.
+        verify: Optional local NLI verification, as in :func:`summarize`.
 
     Returns:
         A summary paired with a passing leakage check.
@@ -317,6 +359,10 @@ def summarize_deidentified(
         SummarizationOrderError: If the input is not a de-identification
             result or its output still contains a detected source token.
         SummarizationLeakageError: If the backend emits a source token.
+
+    ``verify`` has the same opt-in local NLI contract as :func:`summarize`.
+    Verification runs only after both leakage guards pass and uses only the
+    de-identified source. Missing NLI artifacts retain their typed refusal.
     """
 
     check_cancellation(cancellation)
@@ -340,11 +386,28 @@ def summarize_deidentified(
     if not leakage_check.passed:
         raise SummarizationLeakageError(leakage_check)
 
+    verification = None
+    if verify is not False:
+        from openmed.clinical.nli import _verify_claim_spans
+        from openmed.clinical.summary_claim_segments import segment_summary_claims
+
+        claims = segment_summary_claims(summary).segments
+        verification = _verify_claim_spans(
+            [claim.text for claim in claims],
+            source.deidentified_text,
+            [(0, len(source.deidentified_text))] * len(claims),
+            option=verify,
+            claim_offsets=[claim.offset for claim in claims],
+            review_flags=[claim.review_required for claim in claims],
+            cancellation=cancellation,
+        )
+
     result = SummarizationResult(
         summary=summary,
         leakage_check=leakage_check,
         mode=normalized_mode,
         backend=_backend_name(backend),
+        verification=verification,
         template_digest=(
             backend.template_digest
             if _backend_name(backend) != "caller-supplied-local"
@@ -391,32 +454,44 @@ def _invoke_backend(
     from openmed.clinical.extractive_selection import ExtractiveSelectionError
     from openmed.clinical.summarize_backends import (
         LocalSummarizerError,
+        LocalSummarizerPackageError,
         MLXSummarizerBackend,
     )
     from openmed.core.capabilities import MissingOptionalDependencyError
     from openmed.core.offline import network_blocked_if_offline
 
-    failed = False
+    reason = "execution_failed"
+    package_code = None
     try:
         with network_blocked_if_offline(local_only=True):
             return _call_backend(model, text, mode, cancellation)
     except BriefInterrupted:
         raise
+    except LocalSummarizerPackageError as error:
+        if (
+            type(model) is MLXSummarizerBackend
+            and type(error) is LocalSummarizerPackageError
+        ):
+            package_code = error.code
     except MissingOptionalDependencyError:
         if type(model) is MLXSummarizerBackend:
             raise
-        failed = True
+        reason = "runtime_unavailable"
     except ExtractiveSelectionError:
         from openmed.clinical.summarize_backends import ExtractiveSummarizerBackend
 
         if type(model) is ExtractiveSummarizerBackend:
             raise
-        failed = True
+    except LocalSummarizerError as error:
+        # Reconstruct a closed, value-free error outside the handler instead
+        # of retaining a third-party exception or its chained source payload.
+        if type(error) is LocalSummarizerError:
+            reason = error.reason
     except Exception:
-        failed = True
-    if failed:
-        raise LocalSummarizerError("local summarizer execution failed")
-    raise AssertionError("unreachable summarizer state")
+        pass
+    if package_code is not None:
+        raise LocalSummarizerPackageError(package_code)
+    raise LocalSummarizerError(reason=reason)
 
 
 def _call_backend(model: object | None, text: str, mode: str, cancellation=None) -> str:
@@ -453,19 +528,28 @@ def _call_backend(model: object | None, text: str, mode: str, cancellation=None)
         else:
             output = callback(text)
 
-    if not isinstance(output, str) or len(output.encode("utf-8")) > 8192:
-        raise TypeError("summarizer backend must return a string")
+    from openmed.clinical.summarize_backends import (
+        MAX_OUTPUT_BYTES,
+        LocalSummarizerError,
+        _utf8_size,
+    )
+
+    if not isinstance(output, str):
+        raise LocalSummarizerError(reason="invalid_output")
+    if _utf8_size(output) > MAX_OUTPUT_BYTES:
+        raise LocalSummarizerError(reason="output_limit_exceeded")
     return output.strip()
 
 
 def _extractive_summary(text: str) -> str:
-    """Return a deterministic, local, first-three-sentence stub summary."""
+    """Select the first three source sentences with local script-aware boundaries."""
+    from openmed.processing import segment_text
 
-    normalized = " ".join(text.split())
-    if not normalized:
+    if not text.strip():
         return ""
-    sentences = [part.strip() for part in _SENTENCE_BOUNDARY.split(normalized)]
-    return " ".join(sentences[:3])
+    sentences = [text[span.start : span.end].strip() for span in segment_text(text)]
+    selected = [sentence for sentence in sentences if sentence][:3]
+    return " ".join(selected)
 
 
 def _backend_name(model: object | None) -> str:
