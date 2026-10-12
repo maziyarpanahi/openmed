@@ -76,7 +76,20 @@ config:
     rateLimitBurst: 0
     maxConcurrency: 0
     concurrencyWaitSeconds: 0.05
+    # global, peer, or x-forwarded-for. x-forwarded-for honors the header only
+    # from trustedProxies; without them every request is keyed by its direct
+    # peer, so behind an ingress all clients would share one bucket.
     keyBy: global
+    # Addresses or CIDRs of the ingress controllers and load balancers that
+    # append X-Forwarded-For, for example the ingress pod network. Also used
+    # by the authentication-failure limiter.
+    trustedProxies: []
+    # Trusted proxies, counting the direct peer, skipped when reading
+    # X-Forwarded-For from the right. Set to the number of proxy tiers.
+    trustedProxyHops: 1
+    # Upper bound on client identities each limiter tracks; beyond it, new
+    # identities share one overflow bucket.
+    maxTrackedKeys: 10000
 
 # Additional environment variables appended directly to the container.
 # Use this for secretKeyRef/configMapKeyRef entries such as HF_TOKEN.
