@@ -1056,6 +1056,35 @@ HTTP 500 with `details` set to `null`. See
 compatibility guarantees. Request-schema failures continue to use HTTP 422 and
 `validation_error` as shown above.
 
+JSON structure limits run before route parsing. For `POST`, `PUT`, and
+`PATCH` bodies sent as `application/json`, `application/*+json`, or with no
+`Content-Type`, the shared request-limit middleware streams the body through a
+structural pre-scan using the `OperationalLimits` defaults: nesting depth 32,
+100,000 JSON values, and 4 MiB for the longest decoded string or object key.
+Escapes such as `\u00e9` are measured after decoding, and UTF-16 or UTF-32
+bodies are scanned after transcoding. The first violation returns HTTP 413
+before the framework parser, Pydantic validation, or the route handler runs:
+
+```json
+{
+  "error": {
+    "code": "json_structure_exceeded",
+    "message": "Request rejected by an operational limit",
+    "details": {"category": "nodes", "ceiling": 100000}
+  }
+}
+```
+
+`category` is `depth`, `nodes`, or `string_bytes`, and `ceiling` is the
+configured maximum. The response and logs never include request values.
+Malformed JSON is left to the route's normal `422` handling, and other media
+types are not scanned. `JSON_STRUCTURE_ROUTE_OVERRIDES` in
+`openmed.service.request_limits` documents per-route ceilings for legitimate
+larger arrays; `/cohort/resolve` allows 250,000 values for caller-supplied
+concept hierarchies. `/graphql` request envelopes, including `variables`,
+receive the same default JSON ceilings; GraphQL document complexity remains a
+separate GraphQL-layer limit.
+
 Timeout example:
 
 ```json
