@@ -267,7 +267,12 @@ def test_multiple_patients_tumors_and_parents_have_exact_nonduplicated_values(tm
                 "GetSecurityDescriptorSddlForm("
                 "[System.Security.AccessControl.AccessControlSections]::Access)",
             ],
-            env={**os.environ, "OPENMED_TEST_OUTPUT": str(tmp_path / "protected.xml")},
+            # CI's parent pwsh can export PowerShell 7 module paths that Windows
+            # PowerShell 5 cannot load. Let this child initialize its own paths.
+            env={
+                **{k: v for k, v in os.environ.items() if k.lower() != "psmodulepath"},
+                "OPENMED_TEST_OUTPUT": str(tmp_path / "protected.xml"),
+            },
             capture_output=True,
             text=True,
             check=False,
