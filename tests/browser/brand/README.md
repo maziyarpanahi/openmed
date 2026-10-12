@@ -65,6 +65,10 @@ before leaving each page. This verifies search initialization and avoids
 cancelling a worker's language imports during the cache-disabled metadata
 interception used by the browser matrix. Console and request errors remain
 failures; a missing search dependency must fail the readiness check.
+Each navigation edge has its own case, retaining the normal test and action
+timeouts while requiring search readiness at each page. The negative control
+blocks the search index and proves that the request was intercepted on every
+browser; Firefox does not route worker language imports through Playwright.
 
 The documentation transfer budget separates fixed assets from the search
 index. Its fixed-asset ceiling remains 1,475,384 bytes, derived from the prior
@@ -72,3 +76,6 @@ index. Its fixed-asset ceiling remains 1,475,384 bytes, derived from the prior
 ceiling combines that fixed limit with the separately reviewed governed search
 ceiling. Both components are checked, so index growth grants no extra room to
 other assets. Other route and artifact limits remain as recorded.
+The tokenizer guide uses the same component checks. Its fixed-asset ceiling is
+3,572,036 bytes: its prior 7,992,837-byte route ceiling minus the 4,420,801-byte
+search ceiling at revision `429403b7f687fa6c94f3446917be050069afeef5`.

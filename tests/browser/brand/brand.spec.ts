@@ -1156,55 +1156,64 @@ async function expectDocsSearchReady(page: Page): Promise<void> {
 }
 
 test("docs navigation readiness refuses a missing search dependency", async ({
+  context,
   page,
 }) => {
-  await page.route("**/lunr.multi.min.js", (route) =>
-    route.fulfill({ status: 404, body: "missing synthetic test dependency" }),
-  );
+  let intercepted = 0;
+  await context.route("**/search/search_index.json", (route) => {
+    intercepted += 1;
+    return route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: '{"error":"synthetic missing search index"}',
+    });
+  });
   await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
+  await expect.poll(() => intercepted).toBeGreaterThan(0);
   await expect(expectDocsSearchReady(page)).rejects.toThrow();
 });
 
+const governedDocRoutes = [
+  ["Signed capability grants", "/docs/agent/capability-grants/"],
+  ["Single-use approval tokens", "/docs/agent/human-approval-tokens/"],
+  ["Staged OMOP mutations", "/docs/interop/omop-staged-mutations/"],
+  ["Run summaries", "/docs/agent/run-summaries/"],
+  ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
+  ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
+  ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
+  ["Migrate from 3.0 to 3.1", "/docs/migration/3.0-to-3.1/"],
+];
+
 for (const width of [390, 1440]) {
-  test(`governed-agent docs connect lifecycle routes at ${width}px`, async ({
-    baseURL,
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await prepareTheme(page, "light");
-    const audit = monitorPage(page, baseURL);
-    await page.goto("/docs/agent-usage/", { waitUntil: "domcontentloaded" });
-    await expectDocsSearchReady(page);
-    if (width === 390) {
-      await page.locator("[data-openmed-drawer]").click();
-      await page
-        .locator(".md-sidebar--primary label.md-nav__title")
-        .filter({ hasText: /Core Guides/ })
-        .click();
-      await page
-        .locator(".md-sidebar--primary")
-        .getByRole("link", { name: "Governed Agents", exact: true })
-        .click();
-    } else {
-      await page
-        .locator(".md-tabs")
-        .getByRole("link", { name: "Governed Agents", exact: true })
-        .click();
-    }
-    await expect(page).toHaveURL(new URL("/docs/agent/", baseURL).href);
-    await expectDocsSearchReady(page);
-    await expectAccessible(page);
-    const routes = [
-      ["Signed capability grants", "/docs/agent/capability-grants/"],
-      ["Single-use approval tokens", "/docs/agent/human-approval-tokens/"],
-      ["Staged OMOP mutations", "/docs/interop/omop-staged-mutations/"],
-      ["Run summaries", "/docs/agent/run-summaries/"],
-      ["Durable workflow recovery", "/docs/agent/workflow-recovery/"],
-      ["v3.1 agent release gates", "/docs/evaluation/v3.1-agent-gates/"],
-      ["Agent deployment assurance", "/docs/compliance/v3.1-agent-assurance/"],
-      ["Migrate from 3.0 to 3.1", "/docs/migration/3.0-to-3.1/"],
-    ];
-    for (const [name, route] of routes) {
+  for (const [name, route] of governedDocRoutes) {
+    test(`governed-agent docs connect ${name} at ${width}px`, async ({
+      baseURL,
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await prepareTheme(page, "light");
+      const audit = monitorPage(page, baseURL);
+      await page.goto("/docs/agent-usage/", { waitUntil: "domcontentloaded" });
+      await expectDocsSearchReady(page);
+      if (width === 390) {
+        await page.locator("[data-openmed-drawer]").click();
+        await page
+          .locator(".md-sidebar--primary label.md-nav__title")
+          .filter({ hasText: /Core Guides/ })
+          .click();
+        await page
+          .locator(".md-sidebar--primary")
+          .getByRole("link", { name: "Governed Agents", exact: true })
+          .click();
+      } else {
+        await page
+          .locator(".md-tabs")
+          .getByRole("link", { name: "Governed Agents", exact: true })
+          .click();
+      }
+      await expect(page).toHaveURL(new URL("/docs/agent/", baseURL).href);
+      await expectDocsSearchReady(page);
+      await expectAccessible(page);
       await page
         .locator(".md-content")
         .getByRole("link", { name, exact: true })
@@ -1213,48 +1222,42 @@ for (const width of [390, 1440]) {
       await expect(page.locator("h1")).toBeVisible();
       await expectDocsSearchReady(page);
       await expectNoPageOverflow(page);
-      await page.goto("/docs/agent/", { waitUntil: "domcontentloaded" });
+      expectCleanAudit(audit);
+    });
+  }
+}
+
+const clinicalDocRoutes = [
+  ["Clinical NLI", "/docs/clinical/nli-label-contract/", "", ""],
+  ["Clinical NLI Checkpoints", "/docs/models/clinical-nli/", "Clinical NLI", "/docs/clinical/nli-label-contract/"],
+  ["Social Determinants", "/docs/clinical/sdoh-extraction/", "", ""],
+  ["SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH Counterfactuals", "/docs/evaluation/sdoh-counterfactuals/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
+  ["Synthetic SDOH False-positive Stress", "/docs/evaluation/sdoh-false-positive-stress/", "Social Determinants", "/docs/clinical/sdoh-extraction/"],
+  ["Context, Grounding and Journey", "/docs/clinical/journey-contracts/", "", ""],
+  ["Clinical Context Analysis", "/docs/clinical/context-analysis/", "Context, Grounding and Journey", "/docs/clinical/journey-contracts/"],
+] as const;
+
+for (const [name, route, group, groupRoute] of clinicalDocRoutes) {
+  test(`docs clinical topics expose ${name}`, async ({ baseURL, page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await prepareTheme(page, "light");
+    const audit = monitorPage(page, baseURL);
+    await page.goto("/docs/clinical/clinical-brief/", { waitUntil: "domcontentloaded" });
+    await expectDocsSearchReady(page);
+    const navigation = page.locator(".md-sidebar--primary");
+    const follow = async (linkName: string, expectedRoute: string): Promise<void> => {
+      await navigation.getByRole("link", { name: linkName, exact: true }).click();
+      await expect(page).toHaveURL(new URL(expectedRoute, baseURL).href);
+      await expect(page.locator("h1")).toBeVisible();
       await expectDocsSearchReady(page);
-    }
+      await expectNoPageOverflow(page);
+    };
+    if (group) await follow(group, groupRoute);
+    await follow(name, route);
     expectCleanAudit(audit);
   });
 }
-
-test("docs clinical topics expose the previously unlisted guide routes", async ({
-  baseURL,
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await prepareTheme(page, "light");
-  const audit = monitorPage(page, baseURL);
-  await page.goto("/docs/clinical/clinical-brief/", {
-    waitUntil: "domcontentloaded",
-  });
-  await expectDocsSearchReady(page);
-  const navigation = page.locator(".md-sidebar--primary");
-  const follow = async (name: string, route: string): Promise<void> => {
-    await navigation.getByRole("link", { name, exact: true }).click();
-    await expect(page).toHaveURL(new URL(route, baseURL).href);
-    await expect(page.locator("h1")).toBeVisible();
-    await expectDocsSearchReady(page);
-    await expectNoPageOverflow(page);
-  };
-  await follow("Clinical NLI", "/docs/clinical/nli-label-contract/");
-  await follow("Clinical NLI Checkpoints", "/docs/models/clinical-nli/");
-  await follow("Social Determinants", "/docs/clinical/sdoh-extraction/");
-  await follow("SDOH Temporal Qualifiers", "/docs/clinical/sdoh-temporal-qualifiers/");
-  await follow(
-    "Synthetic SDOH Counterfactuals",
-    "/docs/evaluation/sdoh-counterfactuals/",
-  );
-  await follow(
-    "Synthetic SDOH False-positive Stress",
-    "/docs/evaluation/sdoh-false-positive-stress/",
-  );
-  await follow("Context, Grounding and Journey", "/docs/clinical/journey-contracts/");
-  await follow("Clinical Context Analysis", "/docs/clinical/context-analysis/");
-  expectCleanAudit(audit);
-});
 
 test("docs search, locale, theme, and code copy controls operate", async ({
   baseURL,
@@ -1773,7 +1776,7 @@ test("representative routes respect first-party transfer budgets", async ({
     expect(firstPartyBytes, `${route} transfer bytes`).toBeLessThanOrEqual(
       maximum as number,
     );
-    if (route === "/docs/") {
+    if (route.startsWith("/docs/")) {
       const searchLimit =
         budgets.governed_payload_bytes["docs/search/search_index.json"];
       const fixedLimit = budgets.route_fixed_transfer_bytes[route];
@@ -1782,7 +1785,10 @@ test("representative routes respect first-party transfer budgets", async ({
       );
       expect(searchBytes, "docs search transfer").toBeGreaterThan(0);
       expect(searchBytes, "docs search transfer").toBeLessThanOrEqual(searchLimit);
-      expect(firstPartyBytes - searchBytes, "docs fixed-asset transfer").toBeLessThanOrEqual(
+      expect(
+        firstPartyBytes - searchBytes,
+        "docs fixed-asset transfer",
+      ).toBeLessThanOrEqual(
         fixedLimit,
       );
     }
