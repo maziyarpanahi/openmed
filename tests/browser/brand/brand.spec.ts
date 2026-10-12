@@ -15,6 +15,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
 const artifactRoot = path.join(root, "site");
 const MAX_FULL_PAGE_SCREENSHOT_DIMENSION = 30_000;
+const CLOUDFLARE_BEACON_URL = "https://static.cloudflareinsights.com/beacon.min.js";
+const CLOUDFLARE_SITE_TOKEN = "86108e13d57f44f69a4c67a445df1f17";
 const GITHUB_METADATA_URLS = [
   "https://api.github.com/repos/maziyarpanahi/openmed",
   "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
@@ -135,6 +137,14 @@ const CANONICAL_VISUAL_CASES = new Set([
 ]);
 
 test.beforeEach(async ({ page }) => {
+  // Exercise the installation without sending test visits to production analytics.
+  await page.route(CLOUDFLARE_BEACON_URL, (route) =>
+    route.fulfill({
+      body: "",
+      contentType: "application/javascript",
+      status: 200,
+    }),
+  );
   for (const url of GITHUB_METADATA_URLS) {
     await page.route(url, (route) =>
       route.fulfill({
@@ -226,6 +236,12 @@ function monitorPage(
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
       && !isGitHubMetadataRequest(url)
+      && !(
+        url.href === CLOUDFLARE_BEACON_URL
+        && request.method() === "GET"
+        && new URL(page.url()).origin === expectedOrigin
+        && new URL(page.url()).pathname === "/"
+      )
     ) {
       audit.externalRequests.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -1884,4 +1900,42 @@ test("docs preload only the above-fold local IBM Plex face", async ({
     },
   ]);
   expect(JSON.stringify(preloads)).not.toMatch(/Newsreader/iu);
+});
+
+test("homepage loads exactly one Cloudflare beacon for the configured site", async ({
+  baseURL,
+  page,
+}) => {
+  const audit = monitorPage(page, baseURL);
+  const beaconRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url() === CLOUDFLARE_BEACON_URL) {
+      beaconRequests.push(request.method());
+    }
+  });
+
+  await page.goto("/", { waitUntil: "load" });
+  const beacon = page.locator("script[data-cf-beacon]");
+  await expect(beacon).toHaveCount(1);
+  await expect(beacon).toHaveAttribute("src", CLOUDFLARE_BEACON_URL);
+  await expect(beacon).toHaveAttribute("type", "module");
+  expect(JSON.parse((await beacon.getAttribute("data-cf-beacon"))!)).toEqual({
+    token: CLOUDFLARE_SITE_TOKEN,
+  });
+  expect(beaconRequests).toEqual(["GET"]);
+  expect(audit.externalRequests).toEqual([]);
+  expect(audit.unexpectedMethods).toEqual([]);
+  expect(audit.failedRequests).toEqual([]);
+  expect(audit.pageErrors).toEqual([]);
+  expect(audit.consoleErrors).toEqual([]);
+});
+
+test("clinical demo pages do not install the marketing analytics beacon", async ({
+  request,
+}) => {
+  for (const route of ["/docs/demo/web/", "/docs/demo/privacy-playground/"]) {
+    const response = await request.get(route);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).not.toMatch(/cloudflareinsights|data-cf-beacon/i);
+  }
 });
