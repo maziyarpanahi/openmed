@@ -74,8 +74,13 @@ function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
     }
   });
   page.on("pageerror", (error) => audit.pageErrors.push(error.message));
+  // Firefox can request module scripts before page.url() commits the navigation.
+  let documentUrl = new URL(page.url());
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      documentUrl = url;
+    }
     if (!["GET", "HEAD"].includes(request.method())) {
       audit.unexpectedMethods.push(`${request.method()} ${url.href}`);
     }
@@ -86,8 +91,8 @@ function monitorPage(page: Page, baseURL: string | undefined): PageAudit {
       && !(
         url.href === CLOUDFLARE_BEACON_URL
         && request.method() === "GET"
-        && new URL(page.url()).origin === expectedOrigin
-        && new URL(page.url()).pathname === "/"
+        && documentUrl.origin === expectedOrigin
+        && documentUrl.pathname === "/"
       )
     ) {
       audit.externalRequests.push(`${request.method()} ${url.href}`);

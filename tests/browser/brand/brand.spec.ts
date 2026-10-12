@@ -230,8 +230,13 @@ function monitorPage(
   page.on("pageerror", (error) =>
     audit.pageErrors.push(redactMarker(error.message, forbiddenMarker)),
   );
+  // Firefox can request module scripts before page.url() commits the navigation.
+  let documentUrl = new URL(page.url());
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      documentUrl = url;
+    }
     if (!["GET", "HEAD"].includes(request.method())) {
       audit.unexpectedMethods.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -244,8 +249,8 @@ function monitorPage(
       && !(
         url.href === CLOUDFLARE_BEACON_URL
         && request.method() === "GET"
-        && new URL(page.url()).origin === expectedOrigin
-        && new URL(page.url()).pathname === "/"
+        && documentUrl.origin === expectedOrigin
+        && documentUrl.pathname === "/"
       )
     ) {
       audit.externalRequests.push(
@@ -1944,4 +1949,23 @@ test("clinical demo pages do not install the marketing analytics beacon", async 
     expect(response.status()).toBe(200);
     expect(await response.text()).not.toMatch(/cloudflareinsights|data-cf-beacon/i);
   }
+});
+
+
+test("network audit rejects the marketing beacon outside the homepage", async ({
+  baseURL,
+  page,
+}) => {
+  // A controlled document lets the request reach the audit; clinical-page CSP
+  // independently blocks this script before a network request can be made.
+  await page.route("**/docs/analytics-audit-negative-control/", (route) =>
+    route.fulfill({
+      body: "<!doctype html><title>Network audit control</title>",
+      contentType: "text/html",
+    }),
+  );
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/analytics-audit-negative-control/", { waitUntil: "load" });
+  await page.addScriptTag({ url: CLOUDFLARE_BEACON_URL, type: "module" });
+  expect(audit.externalRequests).toEqual([`GET ${CLOUDFLARE_BEACON_URL}`]);
 });
