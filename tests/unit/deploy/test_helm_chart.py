@@ -180,3 +180,63 @@ def test_journey_profile_renders_migration_worker_storage_and_default_deny():
     ]
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]
     assert all(set(rule) <= {"to", "ports"} for rule in policy["spec"]["egress"])
+
+
+def test_journey_database_tls_secret_is_mounted_for_every_store_client():
+    manifests = _render_chart(
+        "--set",
+        "journey.enabled=true",
+        "--set",
+        "journey.networkPolicy.databasePodSelector.app=postgres",
+        "--set",
+        "journey.database.tls.secretName=openmed-journey-postgres-tls",
+        "--set",
+        "journey.database.tls.clientCertKey=tls.crt",
+        "--set",
+        "journey.database.tls.clientKeyKey=tls.key",
+    )
+    worker = _by_component(manifests, "Deployment", "journey-worker")
+    migration = _by_component(manifests, "Job", "journey-migration")
+    api = next(
+        item
+        for item in manifests
+        if item.get("kind") == "Deployment"
+        and item["spec"]["selector"]["matchLabels"]["app.kubernetes.io/component"]
+        == "api"
+    )
+
+    for workload in (worker, migration, api):
+        pod = workload["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        env = {item["name"]: item.get("value") for item in container["env"]}
+        assert env["OPENMED_JOURNEY_POSTGRES_SSLROOTCERT"] == (
+            "/etc/openmed/postgres-tls/ca.crt"
+        )
+        assert env["OPENMED_JOURNEY_POSTGRES_SSLCERT"] == (
+            "/etc/openmed/postgres-tls/tls.crt"
+        )
+        assert env["OPENMED_JOURNEY_POSTGRES_SSLKEY"] == (
+            "/etc/openmed/postgres-tls/tls.key"
+        )
+        assert {
+            "name": "journey-database-tls",
+            "mountPath": "/etc/openmed/postgres-tls",
+            "readOnly": True,
+        } in container["volumeMounts"]
+        assert {
+            "name": "journey-database-tls",
+            "secret": {"secretName": "openmed-journey-postgres-tls"},
+        } in pod["volumes"]
+
+
+def test_journey_database_tls_is_absent_until_a_secret_is_named():
+    manifests = _render_chart(
+        "--set",
+        "journey.enabled=true",
+        "--set",
+        "journey.networkPolicy.databasePodSelector.app=postgres",
+    )
+    rendered = yaml.safe_dump_all(manifests)
+
+    assert "OPENMED_JOURNEY_POSTGRES_SSLROOTCERT" not in rendered
+    assert "journey-database-tls" not in rendered

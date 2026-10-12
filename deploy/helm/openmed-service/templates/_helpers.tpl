@@ -81,3 +81,33 @@ Trusted hosts needed for loopback probes and in-cluster Service DNS.
 {{- end -}}
 {{- join "," (uniq $hosts) -}}
 {{- end -}}
+
+{{/*
+Journey PostgreSQL TLS file paths. Only paths are rendered; certificate and key
+contents stay in the operator-managed Secret.
+*/}}
+{{- define "openmed-service.journeyDatabaseTLSEnv" -}}
+{{- $tls := .Values.journey.database.tls -}}
+- name: OPENMED_JOURNEY_POSTGRES_SSLROOTCERT
+  value: {{ printf "%s/%s" $tls.mountPath $tls.caKey | quote }}
+{{- if $tls.clientCertKey }}
+- name: OPENMED_JOURNEY_POSTGRES_SSLCERT
+  value: {{ printf "%s/%s" $tls.mountPath $tls.clientCertKey | quote }}
+{{- end }}
+{{- if $tls.clientKeyKey }}
+- name: OPENMED_JOURNEY_POSTGRES_SSLKEY
+  value: {{ printf "%s/%s" $tls.mountPath $tls.clientKeyKey | quote }}
+{{- end }}
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseTLSVolumeMount" -}}
+- name: journey-database-tls
+  mountPath: {{ .Values.journey.database.tls.mountPath | quote }}
+  readOnly: true
+{{- end -}}
+
+{{- define "openmed-service.journeyDatabaseTLSVolume" -}}
+- name: journey-database-tls
+  secret:
+    secretName: {{ .Values.journey.database.tls.secretName | quote }}
+{{- end -}}

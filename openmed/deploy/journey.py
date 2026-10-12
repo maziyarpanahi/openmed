@@ -14,7 +14,7 @@ import signal
 import threading
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Mapping, Sequence
@@ -24,7 +24,10 @@ from openmed.structured.store import (
     FsspecArtifactStore,
     MigrationHealth,
     PostgresJourneyStore,
+    PostgresTransportPosture,
+    StoreResult,
     StoreState,
+    postgres_transport_posture,
 )
 
 DEPLOYMENT_HEALTH_SCHEMA_VERSION = "openmed.journey.deployment-health.v1"
@@ -35,6 +38,10 @@ DEFAULT_ARTIFACT_ROOT = "/artifacts"
 DEFAULT_WORKER_HOST = "0.0.0.0"
 DEFAULT_WORKER_PORT = 8091
 DEFAULT_PROBE_TIMEOUT_SECONDS = 3.0
+DEFAULT_CONNECT_TIMEOUT_SECONDS = 3
+POSTGRES_SSLROOTCERT_ENV_VAR = "OPENMED_JOURNEY_POSTGRES_SSLROOTCERT"
+POSTGRES_SSLCERT_ENV_VAR = "OPENMED_JOURNEY_POSTGRES_SSLCERT"
+POSTGRES_SSLKEY_ENV_VAR = "OPENMED_JOURNEY_POSTGRES_SSLKEY"
 
 _GOLDEN_CONTENT = b"openmed synthetic deployment golden journey v1"
 _GOLDEN_RECORDED_AT = "2026-01-01T00:00:00Z"
@@ -94,20 +101,122 @@ class DeploymentHealth:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class PostgresTransportSettings:
+    """Operator-supplied PostgreSQL transport settings for Journey entrypoints.
+
+    File paths are excluded from representations. Supplying any TLS file
+    selects verified TLS with host-name checking.
+
+    Attributes:
+        sslrootcert: Path to the operator CA bundle used to verify the server.
+        sslcert: Optional client certificate path for mutual TLS.
+        sslkey: Optional client private key path; requires ``sslcert``.
+        profile: Optional OpenMed profile override. ``None`` uses
+            ``OPENMED_PROFILE`` and then ``prod``.
+    """
+
+    sslrootcert: str | None = field(default=None, repr=False)
+    sslcert: str | None = field(default=None, repr=False)
+    sslkey: str | None = field(default=None, repr=False)
+    profile: str | None = None
+
+    @classmethod
+    def from_env(
+        cls,
+        environ: Mapping[str, str] | None = None,
+    ) -> "PostgresTransportSettings":
+        """Read the CA bundle and client certificate paths from the environment.
+
+        Args:
+            environ: Optional mapping used instead of ``os.environ``.
+
+        Returns:
+            Settings with blank variables treated as unset.
+        """
+
+        source = os.environ if environ is None else environ
+
+        def read(name: str) -> str | None:
+            value = source.get(name, "").strip()
+            return value or None
+
+        return cls(
+            sslrootcert=read(POSTGRES_SSLROOTCERT_ENV_VAR),
+            sslcert=read(POSTGRES_SSLCERT_ENV_VAR),
+            sslkey=read(POSTGRES_SSLKEY_ENV_VAR),
+        )
+
+    def connect_options(self) -> dict[str, Any]:
+        """Return ``PostgresJourneyStore.connect`` options for these settings."""
+
+        options: dict[str, Any] = {"connect_timeout": DEFAULT_CONNECT_TIMEOUT_SECONDS}
+        for name in ("sslrootcert", "sslcert", "sslkey"):
+            value = getattr(self, name)
+            if value:
+                options[name] = value
+        return options
+
+
+def _transport(
+    transport: PostgresTransportSettings | None,
+) -> PostgresTransportSettings:
+    return PostgresTransportSettings.from_env() if transport is None else transport
+
+
+def _connect_store(
+    dsn: str,
+    *,
+    schema: str,
+    transport: PostgresTransportSettings | None,
+) -> StoreResult[PostgresJourneyStore]:
+    settings = _transport(transport)
+    return PostgresJourneyStore.connect(
+        dsn,
+        schema=schema,
+        connect_options=settings.connect_options(),
+        profile=settings.profile,
+    )
+
+
+def journey_transport_posture(
+    dsn: str,
+    *,
+    transport: PostgresTransportSettings | None = None,
+) -> PostgresTransportPosture:
+    """Report the Journey PostgreSQL transport posture without connecting.
+
+    The result is value-free and suitable for a production security
+    self-check: it never includes the DSN, host, user name, or certificate
+    paths or contents.
+
+    Args:
+        dsn: Journey PostgreSQL DSN.
+        transport: Optional settings; defaults to the environment.
+
+    Returns:
+        The evaluated ``PostgresTransportPosture``.
+    """
+
+    settings = _transport(transport)
+    return postgres_transport_posture(
+        dsn,
+        settings.connect_options(),
+        profile=settings.profile,
+    )
+
+
 def _open_store(
     dsn: str,
     *,
     schema: str,
+    transport: PostgresTransportSettings | None = None,
 ) -> tuple[PostgresJourneyStore | None, ComponentHealth, ComponentHealth]:
-    result = PostgresJourneyStore.connect(
-        dsn,
-        schema=schema,
-        connect_options={"connect_timeout": 3},
-    )
+    result = _connect_store(dsn, schema=schema, transport=transport)
     if not result.ok or result.value is None:
         state = (
             ComponentState.INCOMPATIBLE
-            if result.state is StoreState.UNSUPPORTED
+            if result.state in {StoreState.UNSUPPORTED, StoreState.DENIED}
             else ComponentState.UNAVAILABLE
         )
         code = result.code or "store_open_failed"
@@ -215,10 +324,15 @@ def probe_deployment(
     schema: str = DEFAULT_SCHEMA,
     worker_url: str | None = None,
     model_url: str | None = None,
+    transport: PostgresTransportSettings | None = None,
 ) -> DeploymentHealth:
     """Probe all configured deployment planes without exposing stored values."""
 
-    store, migration, store_health = _open_store(dsn, schema=schema)
+    store, migration, store_health = _open_store(
+        dsn,
+        schema=schema,
+        transport=transport,
+    )
     if store is not None:
         store.close()
     return DeploymentHealth(
@@ -232,10 +346,19 @@ def probe_deployment(
     )
 
 
-def run_migrations(dsn: str, *, schema: str = DEFAULT_SCHEMA) -> DeploymentHealth:
+def run_migrations(
+    dsn: str,
+    *,
+    schema: str = DEFAULT_SCHEMA,
+    transport: PostgresTransportSettings | None = None,
+) -> DeploymentHealth:
     """Apply and verify the append-only PostgreSQL migration chain."""
 
-    store, migration, store_health = _open_store(dsn, schema=schema)
+    store, migration, store_health = _open_store(
+        dsn,
+        schema=schema,
+        transport=transport,
+    )
     if store is not None:
         store.close()
     return DeploymentHealth(
@@ -254,14 +377,11 @@ def run_golden_journey(
     *,
     artifact_root: str = DEFAULT_ARTIFACT_ROOT,
     schema: str = DEFAULT_SCHEMA,
+    transport: PostgresTransportSettings | None = None,
 ) -> dict[str, Any]:
     """Commit and read back one idempotent synthetic deployment artifact."""
 
-    store_result = PostgresJourneyStore.connect(
-        dsn,
-        schema=schema,
-        connect_options={"connect_timeout": 3},
-    )
+    store_result = _connect_store(dsn, schema=schema, transport=transport)
     if not store_result.ok or store_result.value is None:
         return _golden_result("failed", store_result.code or "store_open_failed")
 
@@ -360,6 +480,7 @@ def _serve_worker(
     host: str,
     port: int,
     interval_seconds: float,
+    transport: PostgresTransportSettings | None = None,
 ) -> int:
     state = _WorkerState()
     stopped = threading.Event()
@@ -371,6 +492,7 @@ def _serve_worker(
                     dsn,
                     artifact_root=artifact_root,
                     schema=schema,
+                    transport=transport,
                 )
             )
             stopped.wait(interval_seconds)
@@ -476,8 +598,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
+    transport = PostgresTransportSettings.from_env()
     if args.command == "migrate":
-        report = run_migrations(dsn, schema=args.schema)
+        report = run_migrations(dsn, schema=args.schema, transport=transport)
         _print_json(report.to_dict())
         return 0 if report.ready else 1
     if args.command == "golden":
@@ -485,6 +608,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             dsn,
             artifact_root=args.artifact_root,
             schema=args.schema,
+            transport=transport,
         )
         _print_json(result)
         return 0 if result["state"] == "passed" else 1
@@ -495,6 +619,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             schema=args.schema,
             worker_url=args.worker_url,
             model_url=args.model_url,
+            transport=transport,
         )
         _print_json(report.to_dict())
         return 0 if report.ready else 1
@@ -515,6 +640,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             interval_seconds=args.interval_seconds,
+            transport=transport,
         )
     return 2
 
