@@ -88,6 +88,31 @@ def test_five_format_privacy_controls_feed_signed_ready_packet(tmp_path: Path) -
     assert packet.verify(SIGNING_KEY)
 
 
+def test_witnessed_golden_fixture_feeds_signed_privacy_gate(tmp_path: Path) -> None:
+    scenario_path = Path("tests/fixtures/journey/v3/scenario.json")
+    scenario = load_golden_journey_scenario(scenario_path)
+    consistency = verify_golden_journey_privacy(
+        scenario,
+        patient_key="synthetic-patient",
+        date_shift_secret=b"synthetic-shift-key-at-least-32-bytes",
+        proof_secret=b"synthetic-proof-key-at-least-32-bytes",
+        processors={
+            item["format"]: privacy_control_processor for item in scenario["sources"]
+        },
+    )
+    root, _commit, manifest = make_release_repository(
+        tmp_path,
+        source_files={"inputs/five-source-scenario.json": scenario_path},
+    )
+    privacy = gate_report(manifest, "privacy")
+    privacy["metrics"].update(consistency.lane_metrics())
+    privacy["state"] = consistency.state
+    packet = evaluate_journey_release(manifest, repo_root=root, signing_key=SIGNING_KEY)
+    assert packet.decision == JOURNEY_RELEASE_READY
+    assert packet.verify(SIGNING_KEY)
+    assert all(item["verified"] for item in packet.frozen_inputs)
+
+
 def test_one_wrong_format_shift_blocks_signed_release_packet(tmp_path: Path) -> None:
     from dataclasses import replace
     from datetime import date, timedelta
@@ -107,13 +132,15 @@ def test_one_wrong_format_shift_blocks_signed_release_packet(tmp_path: Path) -> 
             )
         return replace(transformed, text=text)
 
-    sources = privacy_control_sources()
-    consistency = verify_journey_privacy_consistency(
-        sources,
+    scenario = load_golden_journey_scenario(
+        Path("tests/fixtures/journey/v3/scenario.json")
+    )
+    consistency = verify_golden_journey_privacy(
+        scenario,
         patient_key="synthetic-patient",
         date_shift_secret=b"synthetic-shift-key-at-least-32-bytes",
         proof_secret=b"synthetic-proof-key-at-least-32-bytes",
-        processors={source.format: different_shift for source in sources},
+        processors={item["format"]: different_shift for item in scenario["sources"]},
     )
     root, _commit, manifest = make_release_repository(tmp_path)
     privacy = gate_report(manifest, "privacy")

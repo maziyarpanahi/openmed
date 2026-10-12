@@ -469,10 +469,10 @@ def verify_golden_journey_privacy(
     processors: Mapping[str, JourneyPrivacyProcessor],
     date_shift_max_days: int = 365,
 ) -> JourneyPrivacyConsistency:
-    """Verify the unchanged golden payloads without fabricating missing witnesses.
+    """Verify frozen payloads through actual caller-supplied transformations.
 
-    The frozen scenario has no shared patient dates and identifiers in every
-    payload. Absent processors or actual witnesses therefore remain unsupported.
+    Absent processors or actual date/identifier witnesses remain unsupported.
+    The verifier never creates witnesses or changes the supplied sources.
     DICOM SR verification covers ``document_text`` only.
     """
 

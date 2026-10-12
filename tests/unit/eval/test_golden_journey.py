@@ -74,7 +74,7 @@ def test_five_format_controls_use_one_shift_and_subject_surrogate() -> None:
         assert value not in rendered
 
 
-def test_frozen_golden_sources_are_unchanged_and_unwitnessed_formats_unsupported() -> (
+def test_golden_sources_are_not_mutated_and_missing_processors_are_unsupported() -> (
     None
 ):
     path = ROOT / "tests/fixtures/journey/v3/scenario.json"
@@ -95,6 +95,35 @@ def test_frozen_golden_sources_are_unchanged_and_unwitnessed_formats_unsupported
     assert all(not item.date_shift_digest for item in result.formats)
     assert path.read_bytes() == before
     assert scenario == json.loads(before)
+
+
+def test_golden_fixture_has_actual_shared_date_and_identifier_witnesses() -> None:
+    path = ROOT / "tests/fixtures/journey/v3/scenario.json"
+    before = path.read_bytes()
+    scenario = load_golden_journey_scenario(path)
+    result = verify_golden_journey_privacy(
+        scenario,
+        patient_key=PATIENT_KEY,
+        date_shift_secret=SHIFT_SECRET,
+        proof_secret=PROOF_SECRET,
+        processors={
+            item["format"]: privacy_control_processor for item in scenario["sources"]
+        },
+    )
+    assert result.state == "success"
+    assert result.lane_metrics() == {
+        "date_shift_inconsistency_count": 0,
+        "surrogate_inconsistency_count": 0,
+        "consistency_checked_format_count": 5,
+        "consistency_unsupported_format_count": 0,
+    }
+    assert {item.date_witness_count for item in result.formats} == {2}
+    assert len({item.shifted_interval_digest for item in result.formats}) == 1
+    assert len({item.surrogate_set_digest for item in result.formats}) == 1
+    assert path.read_bytes() == before
+    rendered = json.dumps(result.to_dict())
+    for protected in (PATIENT_KEY, "SYNTH-001", "2026-01-02", "20260102"):
+        assert protected not in rendered
 
 
 @pytest.mark.parametrize("format_name", ["text", "fhir_r4", "hl7v2", "csv", "dicom_sr"])
