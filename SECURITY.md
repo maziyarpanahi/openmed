@@ -116,13 +116,13 @@ Privacy-impacting defects are never rated below **High**.
 
 ## Supported versions
 
-Security fixes target the **latest released minor version** (currently the
-`1.7.x` line); we do not backport to end-of-life lines. Reproduce on a supported
-version before reporting.
+Security fixes target the **latest released minor version** (the most recent
+version listed in [CHANGELOG.md](CHANGELOG.md)); we do not backport to
+end-of-life lines. Reproduce on a supported version before reporting.
 
 | Version | Supported |
 |---|---|
-| Latest minor (`1.7.x`) | Yes |
+| Latest released minor | Yes |
 | Older releases | Upgrade first |
 
 ## Response targets
