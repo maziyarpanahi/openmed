@@ -332,3 +332,141 @@ def test_access_template_uses_registered_route_when_scope_path_is_empty(path, ex
     template = _route_template(scope)
     assert template == expected
     assert "SYNTHETIC-PRIVATE" not in template
+
+
+# Synthetic MRN-like sentinel. Every rejected request id below embeds it so a
+# scan over headers, envelopes and captured logs proves it never escapes.
+REQUEST_ID_SENTINEL = "MRN-SYNTH-884213"
+MAX_LENGTH_REQUEST_ID = "req-" + "a" * 124
+NON_CONFORMING_REQUEST_IDS = {
+    "oversized": REQUEST_ID_SENTINEL + "-" + "x" * 8010,
+    "one_over_limit": REQUEST_ID_SENTINEL + "-" + "b" * (128 - 16),
+    "non_ascii": (REQUEST_ID_SENTINEL + "-\u00e9").encode("utf-8"),
+    "carriage_return_line_feed": REQUEST_ID_SENTINEL + "\r\nX-Injected: 1",
+    "line_feed": REQUEST_ID_SENTINEL + "\n",
+    "comma": "req-ok," + REQUEST_ID_SENTINEL,
+    "space": "req-ok " + REQUEST_ID_SENTINEL,
+    "tab": "req-ok\t" + REQUEST_ID_SENTINEL,
+    "semicolon": "req-ok;" + REQUEST_ID_SENTINEL,
+    "equals": "mrn=" + REQUEST_ID_SENTINEL,
+    "slash": "req/" + REQUEST_ID_SENTINEL,
+    "whitespace_only": " ",
+    "empty": "",
+}
+
+
+def _sentinel_free(*rendered: str) -> bool:
+    return all(REQUEST_ID_SENTINEL not in text for text in rendered)
+
+
+def _all_log_text(caplog: pytest.LogCaptureFixture) -> str:
+    lines = []
+    for record in caplog.records:
+        lines.append(record.getMessage())
+        lines.append(json.dumps(getattr(record, "openmed_access_log", None)))
+    return "\n".join(lines)
+
+
+def test_one_over_limit_fixture_is_exactly_129_characters() -> None:
+    assert len(MAX_LENGTH_REQUEST_ID) == 128
+    assert len(NON_CONFORMING_REQUEST_IDS["one_over_limit"]) == 129
+    assert len(NON_CONFORMING_REQUEST_IDS["oversized"]) == 8027
+
+
+@pytest.mark.parametrize(
+    "inbound",
+    list(NON_CONFORMING_REQUEST_IDS.values()),
+    ids=list(NON_CONFORMING_REQUEST_IDS),
+)
+def test_non_conforming_request_id_is_replaced_everywhere(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+    inbound: str | bytes,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+
+    response = client.post(
+        "/analyze",
+        headers={REQUEST_ID_HEADER: inbound},
+        json={"text": "   "},
+    )
+
+    assert response.status_code == 422
+    request_id = response.headers[REQUEST_ID_HEADER]
+    assert str(uuid.UUID(request_id)) == request_id
+    assert response.headers.get_list(REQUEST_ID_HEADER) == [request_id]
+    assert "x-injected" not in response.headers
+    assert response.json()["error"]["request_id"] == request_id
+    records = _access_records(caplog)
+    assert len(records) == 1
+    assert json.loads(records[0].getMessage())["request_id"] == request_id
+    assert records[0].openmed_access_log["request_id"] == request_id
+    assert _sentinel_free(
+        "\n".join(f"{key}: {value}" for key, value in response.headers.items()),
+        response.text,
+        _all_log_text(caplog),
+    )
+
+
+def test_replaced_request_ids_are_fresh_per_request(client: TestClient) -> None:
+    inbound = NON_CONFORMING_REQUEST_IDS["oversized"]
+
+    first = client.get("/health", headers={REQUEST_ID_HEADER: inbound})
+    second = client.get("/health", headers={REQUEST_ID_HEADER: inbound})
+
+    assert first.headers[REQUEST_ID_HEADER] != second.headers[REQUEST_ID_HEADER]
+
+
+def test_non_conforming_request_id_is_replaced_in_plain_access_log(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(SERVICE_LOG_FORMAT_ENV_VAR, "plain")
+    caplog.set_level(logging.DEBUG)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
+        response = test_client.get(
+            "/health",
+            headers={REQUEST_ID_HEADER: NON_CONFORMING_REQUEST_IDS["space"]},
+        )
+
+    request_id = response.headers[REQUEST_ID_HEADER]
+    records = _access_records(caplog)
+    assert len(records) == 1
+    assert f"request_id={request_id} " in records[0].getMessage()
+    assert _sentinel_free(_all_log_text(caplog))
+
+
+@pytest.mark.parametrize(
+    "inbound",
+    [
+        "a",
+        MAX_LENGTH_REQUEST_ID,
+        "req_ABC-123.trace:7",
+        "12345678-1234-1234-1234-123456789abc",
+    ],
+    ids=["single_char", "exactly_128", "full_alphabet", "uuid"],
+)
+def test_conforming_request_id_is_preserved_end_to_end(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+    inbound: str,
+) -> None:
+    caplog.set_level(logging.INFO, logger=ACCESS_LOGGER_NAME)
+
+    response = client.post(
+        "/analyze",
+        headers={REQUEST_ID_HEADER: inbound},
+        json={"text": "   "},
+    )
+
+    assert response.status_code == 422
+    assert response.headers[REQUEST_ID_HEADER] == inbound
+    assert response.json()["error"]["request_id"] == inbound
+    records = _access_records(caplog)
+    assert len(records) == 1
+    assert json.loads(records[0].getMessage())["request_id"] == inbound

@@ -22,6 +22,7 @@ from .journey_client_generated import (
     JourneyWorkflowClientMixin,
     JourneyWorkflowName,
 )
+from .request_id import REQUEST_ID_HEADER, is_valid_request_id
 from .workflow_client import (
     WorkflowClientError,
     WorkflowClientMixin,
@@ -81,7 +82,6 @@ PIILanguage = Literal[
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_REQUEST_ID_HEADER = "X-Request-ID"
 
 
 @dataclass(frozen=True)
@@ -393,7 +393,7 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
         if client is not None and transport is not None:
             raise ValueError("Pass either client or transport, not both.")
 
-        self._request_id = request_id
+        self._request_id = _outgoing_request_id(request_id)
         self._owns_client = client is None
         self._client = client or httpx.Client(
             base_url=base_url,
@@ -756,10 +756,10 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
         *,
         request_id: Optional[str] = None,
     ):
-        active_request_id = request_id or self._request_id
+        active_request_id = _outgoing_request_id(request_id) or self._request_id
         headers = {"Accept": "application/x-ndjson"}
         if active_request_id:
-            headers[_REQUEST_ID_HEADER] = active_request_id
+            headers[REQUEST_ID_HEADER] = active_request_id
         with self._client.stream(
             "POST",
             path,
@@ -782,8 +782,8 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
         params: Optional[Mapping[str, Any]] = None,
         request_id: Optional[str] = None,
     ) -> JsonDict:
-        active_request_id = request_id or self._request_id
-        headers = {_REQUEST_ID_HEADER: active_request_id} if active_request_id else None
+        active_request_id = _outgoing_request_id(request_id) or self._request_id
+        headers = {REQUEST_ID_HEADER: active_request_id} if active_request_id else None
         response = self._client.request(
             method,
             path,
@@ -801,8 +801,7 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
                 code="invalid_response",
                 message="Expected JSON object response from OpenMed REST service",
                 details=payload,
-                request_id=response.headers.get(_REQUEST_ID_HEADER)
-                or active_request_id,
+                request_id=_response_request_id(response, active_request_id),
             )
         return payload
 
@@ -832,8 +831,29 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
             code=code,
             message=message,
             details=details,
-            request_id=response.headers.get(_REQUEST_ID_HEADER) or request_id,
+            request_id=_response_request_id(response, request_id),
         )
+
+
+def _outgoing_request_id(request_id: Optional[str]) -> Optional[str]:
+    """Return a conforming outgoing request id, or ``None`` when unset."""
+    if not request_id:
+        return None
+    if not is_valid_request_id(request_id):
+        # Never echo the rejected value; it may carry identifiers.
+        raise ValueError(
+            "request_id must be 1-128 ASCII letters, digits, '_', '.', ':' or '-'."
+        )
+    return request_id
+
+
+def _response_request_id(
+    response: httpx.Response,
+    fallback: Optional[str],
+) -> Optional[str]:
+    """Return the response correlation id only when it conforms."""
+    candidate = response.headers.get(REQUEST_ID_HEADER)
+    return candidate if is_valid_request_id(candidate) else fallback
 
 
 __all__ = [

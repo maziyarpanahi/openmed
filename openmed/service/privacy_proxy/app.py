@@ -32,6 +32,7 @@ from ..privacy_gateway import (
     safety_sweep_tripwire,
     sha256_text,
 )
+from ..request_id import is_valid_request_id
 from .inbound import (
     InboundPlaceholderRestorer,
     InboundRestorationError,
@@ -43,7 +44,6 @@ DEFAULT_REDACTION_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
 CHAT_COMPLETIONS_COMPATIBILITY_PATH = "/chat/completions"
 _REQUEST_ID_HEADER = "x-request-id"
-_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _PLACEHOLDER_PREFIX = "<<OPENMED_PHI_"
 _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
 _DONE = object()
@@ -570,7 +570,7 @@ def _stable_request_id(
     request_id_header: Optional[str],
 ) -> str:
     if request_id_header is not None:
-        if not _REQUEST_ID_PATTERN.fullmatch(request_id_header):
+        if not is_valid_request_id(request_id_header):
             raise PrivacyProxyRequestError(reason_code="request_id_invalid")
         source = f"header:{request_id_header}"
     else:

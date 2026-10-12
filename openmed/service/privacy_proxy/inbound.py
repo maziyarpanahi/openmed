@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Optional
 
+from ..request_id import is_valid_request_id
+
 DEFAULT_MAX_PLACEHOLDERS = 256
 DEFAULT_MAX_MAPPING_BYTES = 1_048_576
 DEFAULT_MAX_RESPONSE_BYTES = 4_194_304
@@ -27,7 +29,6 @@ DEFAULT_MAX_ACTIVE_REQUESTS = 128
 DEFAULT_MAX_TOTAL_MAPPING_BYTES = 16 * 1_048_576
 
 _DEFAULT_REQUEST_ID = "unscoped"
-_REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
 _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
 _PLACEHOLDER_CANDIDATE_PATTERN = re.compile(r"<<OPENMED_PHI_[^<>\s]*>>")
 _PLACEHOLDER_FRAGMENT_PATTERN = re.compile(r"OPENMED[_-]PHI", re.IGNORECASE)
@@ -701,10 +702,7 @@ def _coerce_mapping_pair(raw_item: Any) -> tuple[Any, Any]:
 
 
 def _validate_request_id(request_id: str) -> str:
-    if (
-        not isinstance(request_id, str)
-        or _REQUEST_ID_PATTERN.fullmatch(request_id) is None
-    ):
+    if not is_valid_request_id(request_id):
         raise RequestScopeError("Inbound request id is invalid")
     return request_id
 
