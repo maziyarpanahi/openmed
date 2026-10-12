@@ -75,6 +75,11 @@ DOCUMENTED_APPROXIMATE = {
     "xh",
 }
 
+# Languages whose name and place surrogates bypass the default Faker locale and
+# come from script-correct providers instead. Kept independent of the code under
+# test so a silent change to the documented approximation fails loudly.
+DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS = {"am", "ar"}
+
 # Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
 KNOWN_PROVIDERLESS_VALIDATORS = set()
@@ -645,6 +650,7 @@ class TestLocaleCoherenceReport:
                 "id_providers",
                 "id_types",
                 "id_locale",
+                "surrogate_approximation",
             }
             assert row["locale"] == LANG_TO_LOCALE[lang]
             assert isinstance(row["approximate"], bool)
@@ -661,6 +667,30 @@ class TestLocaleCoherenceReport:
                 assert row["id_providers"] == []
                 assert row["id_types"] == []
                 assert row["id_locale"] is None
+            if lang in DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS:
+                assert isinstance(row["surrogate_approximation"], str)
+            else:
+                assert row["surrogate_approximation"] is None
+
+    def test_arabic_and_amharic_script_surrogates_are_documented_approximations(
+        self,
+    ):
+        rows = {
+            r["language"]: r
+            for r in locale_coherence_report()
+            if r["locale"] not in CONCEPTUAL_BACKENDS
+        }
+
+        assert {
+            lang for lang, row in rows.items() if row["surrogate_approximation"]
+        } == DOCUMENTED_SCRIPT_SURROGATE_APPROXIMATIONS
+        arabic = rows["ar"]["surrogate_approximation"]
+        amharic = rows["am"]["surrogate_approximation"]
+        assert "ar_AA" in arabic and "synthetic" in arabic
+        assert "synthetic" in amharic and "en_KE" in amharic
+        # The Arabic default stays a native Faker locale with no warning.
+        assert rows["ar"]["approximate"] is False
+        assert rows["am"]["approximate"] is True
 
     def test_conceptual_rows_include_all_backends(self):
         rows = {
@@ -679,6 +709,7 @@ class TestLocaleCoherenceReport:
                 "id_providers",
                 "id_types",
                 "id_locale",
+                "surrogate_approximation",
             }
             assert row["language"] == CONCEPTUAL_LOCALE_LANGUAGES[locale]
             assert FAKER_BACKEND_LOCALE[locale] == backend
@@ -686,6 +717,7 @@ class TestLocaleCoherenceReport:
             assert row["id_providers"] == []
             assert row["id_types"] == []
             assert row["id_locale"] is None
+            assert row["surrogate_approximation"] is None
 
     def test_report_is_json_serializable(self):
         # The status/leaderboard work serializes this; keep it JSON-friendly.

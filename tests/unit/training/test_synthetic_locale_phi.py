@@ -195,6 +195,26 @@ def test_non_latin_locale_templates_render_target_script(language):
     assert any(low <= char <= high for char in example.text)
 
 
+@pytest.mark.parametrize(
+    ("language", "low", "high"),
+    (("ar", "\u0600", "\u06ff"), ("am", "\u1200", "\u139f")),
+)
+def test_arabic_and_amharic_names_and_addresses_render_source_script(
+    language, low, high
+):
+    for seed in range(10):
+        example = LocalePhiGenerator(seed=seed).generate(language)
+        spans = {span.label: span.text for span in example.gold_spans}
+        for label in ("PERSON", "STREET_ADDRESS"):
+            letters = [char for char in spans[label] if char.isalpha()]
+            assert letters, (language, label, spans[label])
+            assert all(low <= char <= high for char in letters), (
+                language,
+                label,
+                spans[label],
+            )
+
+
 def test_locale_phi_generator_rejects_unsupported_language():
     with pytest.raises(ValueError, match="unsupported locale PHI language"):
         LocalePhiGenerator(seed=1).generate("xx")

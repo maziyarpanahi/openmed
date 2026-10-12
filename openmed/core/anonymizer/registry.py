@@ -1919,6 +1919,34 @@ def _register_builtin_script_name_generators() -> None:
 _register_builtin_script_name_generators()
 
 
+def _register_builtin_script_label_generators() -> None:
+    """Install per-label Arabic and Ethiopic name and place generators.
+
+    Faker's ``ar_EG`` default and the ``en_KE`` backend behind ``am_ET`` hold
+    no Arabic-script or Ethiopic person and address data. Routing by source
+    script keeps these surrogates in the source script, while Latin spans in
+    the same documents keep the Faker fallback.
+    """
+
+    from .providers.script_names import SCRIPT_NAME_PART_PACKS
+    from .providers.script_places import SCRIPT_PLACE_PACKS
+
+    for language_pack, script, generators in (
+        *SCRIPT_NAME_PART_PACKS,
+        *SCRIPT_PLACE_PACKS,
+    ):
+        for canonical_label, generator in generators.items():
+            register_label_generator(
+                canonical_label,
+                generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_builtin_script_label_generators()
+
+
 def _register_marathi_name_generators() -> None:
     """Install Marathi-specific three-part Devanagari name generators."""
 
