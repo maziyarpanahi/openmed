@@ -409,10 +409,38 @@ After:  रुग्णाचे नाव [PERSON]. जन्मतारीख
 ### Nepali — `ne`
 
 - Model: `user-supplied` · locale `ne_NP`
+- Names, places, and organizations need the user-supplied model. The first
+  worked example below assumes one is configured.
+- Deterministic Nepali patterns run on this route even with an empty model
+  detector, in Devanagari and ASCII digits:
+  - `+977` and `00977` mobile numbers (96x-98x) and landlines. The country
+    code stays inside the masked span. Domestic `0`-prefixed landlines need
+    nearby phone context such as `फोन` or `सम्पर्क`.
+  - Citizenship-certificate numbers in district-office-year-serial groups
+    such as `27-01-75-05678`. Plain or slash-split serials count only directly
+    after a number label (`नं.`, `नम्बर`) with `नागरिकता` context nearby.
+  - National identity card numbers, either ten digits grouped `3-3-3-1` or
+    ten digits after a number label, with `राष्ट्रिय परिचयपत्र` context.
+  - Numeric Bikram Sambat dates, year-first or day-first, separated by `-`,
+    `/`, or `.`. Day 32 is accepted for years 2000-2199. Earlier years must
+    also be valid Gregorian dates.
+  - Five-digit postal codes, gated on `हुलाक` or `postal code` context.
+- Limits: identifier rules check shape only. They make no checksum or
+  issuing-authority claim, and numbers without Nepali identifier context
+  (doses, lab values) are not treated as identifiers. Bikram Sambat month
+  names, calendar conversion, and Bikram Sambat-aware date shifting are not
+  covered. The synthetic `openmed/eval/golden/fixtures/i18n/ne.jsonl` fixture
+  checks spans and leakage. It is not a trained Nepali model or a
+  clinical-quality claim.
 
 ```text
 Before: सुमन थापा काठमाडौंको जीवन अस्पताल गए।
 After:  [PERSON] [LOCATION]को [ORGANIZATION] गए।
+```
+
+```text
+Before: जन्म मिति २०४५/०३/३२। मोबाइल +९७७ ९८४१२३४५६७। नागरिकता नं. २७-०१-७५-०५६७८।
+After:  जन्म मिति [DATE]। मोबाइल [PHONE]। नागरिकता नं. [ID_NUM]।
 ```
 
 ### Odia — `or`
