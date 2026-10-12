@@ -18,6 +18,8 @@ import warnings
 from collections.abc import Iterator, Sequence
 from typing import Any
 
+from openmed.utils import _verify_windows_output, _windows_output
+
 from ._output import EXIT_ERROR, EXIT_USAGE, CliError, command_path, emit, emit_error
 
 _NOTE_BYTES = 16_384
@@ -194,7 +196,8 @@ def _read(path: str, limit: int, prefix: str) -> bytes:
         if not stat.S_ISREG(expected.st_mode):
             raise _error(prefix + "_input_not_regular", usage=True)
         descriptor = os.open(
-            path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
+            path,
+            os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
         )
         info = os.fstat(descriptor)
         if not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != (
@@ -345,14 +348,23 @@ def _write_summary_pair(paths: tuple[str, str], contents: tuple[bytes, bytes]) -
             for path in paths:
                 if type(path) is not str or "://" in path:
                     raise ValueError()
-                descriptor = os.open(
-                    path,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-                    0o600,
+                descriptor = (
+                    _windows_output(path)
+                    if os.name == "nt"
+                    else os.open(
+                        path,
+                        os.O_WRONLY
+                        | os.O_CREAT
+                        | os.O_EXCL
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        0o600,
+                    )
                 )
                 info = os.fstat(descriptor)
                 created.append((path, info.st_dev, info.st_ino))
                 try:
+                    if os.name == "nt":
+                        _verify_windows_output(descriptor)
                     stream = os.fdopen(descriptor, "wb")
                 except Exception:
                     os.close(descriptor)

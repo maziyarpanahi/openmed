@@ -1532,6 +1532,8 @@ def _safe_environment(environment: Mapping[str, str] | None) -> dict[str, str]:
         "LC_ALL": "C.UTF-8",
         "PATH": os.environ.get("PATH", os.defpath),
     }
+    if os.name == "nt" and "SystemRoot" in os.environ:
+        result["SystemRoot"] = os.environ["SystemRoot"]
     if environment is None:
         return result
     if not isinstance(environment, Mapping):

@@ -547,6 +547,8 @@ def test_bounded_reader_rejects_unsafe_note_inputs(tmp_path, capsys, target):
     elif target == "symlink":
         note.symlink_to(spans)
     elif target == "fifo":
+        if not hasattr(os, "mkfifo"):
+            pytest.skip("POSIX named pipe fixture")
         os.mkfifo(note)
     elif target == "too_large":
         note.write_bytes(b"x" * (clinical._NOTE_BYTES + 1))
@@ -584,13 +586,15 @@ def test_invalid_sections_fail_before_processing(
     processing.assert_not_called()
 
 
-def test_output_is_private_new_file_and_refuses_overwrite(tmp_path, capsys):
+def test_output_is_private_new_file_and_refuses_overwrite(
+    tmp_path, capsys, assert_private_file
+):
     note, spans, _ = _files(tmp_path, "No tobacco use.", [])
     output = tmp_path / "PRIVATE_OUTPUT.json"
     code, envelope = _run(capsys, "sdoh", note, spans, "--output", str(output))
     assert code == 0 and envelope["data"]["output_written"] is True
     written = output.read_bytes()
-    assert output.stat().st_mode & 0o777 == 0o600
+    assert_private_file(output)
     saved = json.loads(written)
     assert saved["command"] == "clinical sdoh" and saved["ok"]
     assert saved["data"]["findings"] == envelope["data"]["findings"]
@@ -772,3 +776,62 @@ def test_custom_extractor_oversized_output_refused_before_file_creation(
     code, envelope = _run(capsys, "sdoh", note, spans, "--output", str(target))
     assert code == 1 and envelope["error"]["code"] == "clinical_processing_failed"
     assert not target.exists()
+
+
+def test_reader_without_posix_flags_refuses_replaced_file(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical as reader
+    from openmed.cli._output import CliError
+
+    path = tmp_path / "original.txt"
+    path.write_bytes(b"synthetic original")
+    replacement = tmp_path / "replacement.txt"
+    replacement.write_bytes(b"synthetic replacement")
+    real_open = os.open
+
+    def replaced(name, flags):
+        path.unlink()
+        replacement.rename(path)
+        return real_open(name, flags)
+
+    portable_os = SimpleNamespace(
+        **{
+            name: getattr(os, name)
+            for name in dir(os)
+            if name not in {"O_NOFOLLOW", "O_NONBLOCK"}
+        }
+    )
+    portable_os.open = replaced
+    portable_os.fdopen = Mock(side_effect=AssertionError("substituted bytes were read"))
+    monkeypatch.setattr(reader, "os", portable_os)
+    with pytest.raises(CliError) as caught:
+        reader._read(str(path), 100)
+    assert caught.value.code == "clinical_input_not_regular"
+    portable_os.fdopen.assert_not_called()
+
+
+def test_unverified_output_permissions_prevent_payload_write(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical as writer
+    from openmed.cli._output import CliError
+
+    path = tmp_path / "private.json"
+
+    def create(name):
+        return os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+
+    private_os = SimpleNamespace(**{name: getattr(os, name) for name in dir(os)})
+    private_os.name = "nt"
+    private_os.fdopen = Mock(side_effect=AssertionError("unprotected payload write"))
+    monkeypatch.setattr(writer, "os", private_os)
+    monkeypatch.setattr(writer, "_windows_output", create)
+    monkeypatch.setattr(writer, "_verify_windows_output", Mock(side_effect=OSError()))
+    with pytest.raises(CliError) as caught:
+        writer._write_new(str(path), {"synthetic": True})
+    assert caught.value.code == "clinical_output_unavailable"
+    private_os.fdopen.assert_not_called()
+    assert not path.exists()

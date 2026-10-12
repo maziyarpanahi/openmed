@@ -1,6 +1,7 @@
 """Synthetic metadata canaries and negative controls for access decisions."""
 
 import json
+import os
 import traceback
 from dataclasses import replace
 from pathlib import Path
@@ -208,6 +209,9 @@ def test_sink_failure_blocks_dispatch_and_does_not_retry(denied: bool) -> None:
     "tamper",
     ["value", "delete", "reorder", "duplicate", "truncate", "unknown", "partial"],
 )
+@pytest.mark.skipif(
+    os.name == "nt", reason="durable access sink requires POSIX file locks"
+)
 def test_tampering_breaks_chain(tmp_path: Path, tamper: str) -> None:
     path = tmp_path / "events.jsonl"
     sink = LocalAccessEventSink(path)
@@ -261,6 +265,9 @@ def test_private_path_and_symlink_failures_have_value_free_errors(
     assert target.read_text() == "do not change"
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="durable access sink requires POSIX file locks"
+)
 def test_deeply_nested_corrupt_chain_fails_with_a_private_controlled_error(tmp_path):
     path = tmp_path / "events.jsonl"
     path.write_text("[" * 2000 + '"SYNTHETIC_PRIVATE_RECORD"' + "]" * 2000 + "\n")
@@ -273,3 +280,19 @@ def test_deeply_nested_corrupt_chain_fails_with_a_private_controlled_error(tmp_p
     with pytest.raises(AccessEventError, match="^sink_unavailable$"):
         AccessTicketVerifier(sink=sink).verify(ticket(), request(), now=99)
     assert path.read_bytes() == original
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows fail-closed contract")
+def test_windows_durable_sink_refuses_before_dispatch(tmp_path):
+    calls = []
+    path = tmp_path / "events.jsonl"
+    with pytest.raises(AccessEventError, match="^sink_unavailable$"):
+        dispatch_with_access_ticket(
+            ticket(),
+            request(),
+            AccessTicketVerifier(sink=LocalAccessEventSink(path)),
+            lambda: calls.append(True),
+            now=99,
+        )
+    assert calls == []
+    assert not path.exists()

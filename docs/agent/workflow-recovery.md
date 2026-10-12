@@ -114,13 +114,12 @@ openmed agents workflow cancel --request request.json
 openmed agents workflow resume --request request.json --receipt receipt.json
 ```
 
-Inputs are caller-owned local regular files. On POSIX they must belong to the
-current user and have no group/other permissions, such as mode `0600`. Final
-symlinks and FIFOs are refused, reads are bounded to 64 KiB, and changing files,
-duplicate JSON keys, non-finite values, deep documents and unknown fields are
-refused. Platforms without `O_NOFOLLOW` return a controlled protection failure.
-Do not pass tokens, credentials, identities or clinical payloads as command-line
-arguments. Global configuration overrides are not accepted on this surface.
+Inputs must be local regular files owned by the caller, with no POSIX group/other
+permissions (for example, mode `0600`). Reads are bounded to 64 KiB. Final symlinks,
+FIFOs, changing files, duplicate JSON keys, non-finite values, deep documents and
+unknown fields are refused. Platforms without `O_NOFOLLOW` fail protection checks.
+Never pass tokens, credentials, identities or clinical payloads as command-line
+arguments. Global configuration overrides are refused.
 
 A request has exactly these fields:
 
@@ -191,10 +190,9 @@ The protocol is `WorkflowCLIGovernanceService`; the clock is an injected Unix
 second function, never a command-line override. No service is dynamically loaded
 from request JSON or environment variables.
 
-This synthetic example creates a temporary metadata request with POSIX mode
-`0600` and invokes the actual CLI boundary offline. The file-based CLI refuses
-Windows inputs with `input_unprotected`; its current protection checks require
-POSIX. The preview service executes no effects:
+This offline example writes synthetic request metadata with mode `0600`.
+The file-based CLI requires POSIX and refuses Windows inputs with
+`input_unprotected`. The preview service executes no effects:
 
 ```python
 from openmed.agent.action_phases import ActionPhase
@@ -249,10 +247,10 @@ with TemporaryDirectory() as directory:
         assert response["error"]["code"] == "input_unprotected"
 ```
 
-With protected request files, the same adapter can be supplied to the console
-entry for preview. Its unsupported operations return exit `7`; the example
-does not provide approval, execution or recovery capabilities. Without injection,
-valid operational CLI requests also return `adapter_unavailable` with exit `7`.
+The console preview accepts the same adapter with protected request files.
+Unsupported operations exit `7`; this adapter provides no approval, execution
+or recovery. Without injection, valid operational requests return
+`adapter_unavailable` and exit `7`.
 
 ## Open integration dependencies
 
