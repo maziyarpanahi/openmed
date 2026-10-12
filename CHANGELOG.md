@@ -421,6 +421,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Key service throttles by trusted proxy hops: `X-Forwarded-For` is honored only
+  from `OPENMED_SERVICE_TRUSTED_PROXIES` peers and resolved to the rightmost
+  untrusted address within `OPENMED_SERVICE_TRUSTED_PROXY_HOPS`, so rotated
+  leftmost values no longer bypass rate or authentication-failure limits.
+  Without trusted proxies the header is ignored and the direct peer is used.
+  The authentication-failure limiter shares this resolution by default. Bound
+  limiter state with `OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS`, evicting only
+  fully refilled buckets and idle semaphores and falling back to a shared
+  overflow bucket; Helm exposes the new settings (#3900).
+
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
   without downloading artifacts or constructing models (#3755, #3759).

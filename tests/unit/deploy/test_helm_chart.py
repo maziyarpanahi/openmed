@@ -108,6 +108,9 @@ def test_default_render_configures_service_environment():
         "openmed-service.openmed.svc"
         in configmap["data"]["OPENMED_SERVICE_TRUSTED_HOSTS"]
     )
+    assert configmap["data"]["OPENMED_SERVICE_TRUSTED_PROXIES"] == ""
+    assert configmap["data"]["OPENMED_SERVICE_TRUSTED_PROXY_HOPS"] == "1"
+    assert configmap["data"]["OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS"] == "10000"
 
 
 def test_synthetic_values_exercise_image_resources_and_secret_env():
@@ -134,6 +137,13 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
     assert configmap["data"]["OPENMED_SERVICE_BATCH_HIGH_WATERMARK"] == "24"
     assert configmap["data"]["OPENMED_SERVICE_BATCH_LOW_WATERMARK"] == "8"
     assert configmap["data"]["OPENMED_SERVICE_BATCH_MAX_QUEUE_WAIT_MS"] == "250"
+    assert configmap["data"]["OPENMED_SERVICE_THROTTLE_KEY"] == "x-forwarded-for"
+    assert (
+        configmap["data"]["OPENMED_SERVICE_TRUSTED_PROXIES"]
+        == "198.51.100.0/24,2001:db8:ffff::/48"
+    )
+    assert configmap["data"]["OPENMED_SERVICE_TRUSTED_PROXY_HOPS"] == "2"
+    assert configmap["data"]["OPENMED_SERVICE_THROTTLE_MAX_TRACKED_KEYS"] == "5000"
 
 
 def test_journey_profile_renders_migration_worker_storage_and_default_deny():

@@ -117,11 +117,14 @@ Failed authentication attempts are rate limited in process:
 ```bash
 OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS=5 \
 OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST=10 \
-OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer
+OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=x-forwarded-for
 ```
 
 The failure limiter only counts failed authentication attempts. Successful
-authenticated requests are not charged against it.
+authenticated requests are not charged against it. Its default key,
+`x-forwarded-for`, resolves clients exactly like the request throttle: through
+`OPENMED_SERVICE_TRUSTED_PROXIES` when configured, otherwise by the direct
+peer. See [Client Identity and Limiter State](backpressure.md#client-identity-and-limiter-state).
 
 ## Mutual TLS
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import math
 import time
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Collection
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -14,10 +16,17 @@ from fastapi import Request
 from starlette.responses import Response
 
 from .batcher import BackpressureError
-from .runtime import ServiceThrottleConfig
+from .runtime import (
+    DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    ServiceThrottleConfig,
+    TrustedProxyConfig,
+)
 
 PROBE_PATHS = frozenset({"/health", "/livez", "/readyz"})
 GLOBAL_THROTTLE_KEY = "global"
+# Idle buckets examined per admission once the key bound is reached.
+_EVICTION_SCAN_LIMIT = 32
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 ErrorResponseFactory = Callable[..., Response]
 CallNext = Callable[[Request], Awaitable[Response]]
 BackpressureCheck = Callable[[Request], Awaitable[Optional[BackpressureError]]]
@@ -38,25 +47,43 @@ class _BucketState:
 
 
 class TokenBucketRateLimiter:
-    """Async-safe in-memory token bucket keyed by client identity."""
+    """Async-safe in-memory token bucket keyed by client identity.
+
+    At most ``max_keys`` identities are tracked. A bucket is evicted only once
+    it has refilled to the full burst, when forgetting it cannot change any
+    admission decision; a depleted bucket is never reset. When the bound is
+    reached and no tracked bucket is idle, new identities share one overflow
+    bucket until capacity frees up.
+    """
 
     def __init__(
         self,
         *,
         requests_per_second: float,
         burst_size: int,
+        max_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if requests_per_second < 0:
             raise ValueError("requests_per_second must be greater than or equal to 0")
         if burst_size < 0:
             raise ValueError("burst_size must be greater than or equal to 0")
+        if max_keys < 1:
+            raise ValueError("max_keys must be greater than or equal to 1")
 
         self.requests_per_second = float(requests_per_second)
         self.burst_size = int(burst_size)
+        self.max_keys = int(max_keys)
         self._clock = clock
         self._lock = asyncio.Lock()
-        self._buckets: dict[str, _BucketState] = {}
+        # Least recently updated first, so refilled buckets gather at the front.
+        self._buckets: OrderedDict[str, _BucketState] = OrderedDict()
+        self._overflow: Optional[_BucketState] = None
+
+    @property
+    def tracked_key_count(self) -> int:
+        """Return how many per-identity buckets are currently retained."""
+        return len(self._buckets)
 
     @property
     def enabled(self) -> bool:
@@ -70,11 +97,7 @@ class TokenBucketRateLimiter:
 
         async with self._lock:
             now = self._clock()
-            bucket = self._buckets.get(key)
-            if bucket is None:
-                bucket = _BucketState(tokens=float(self.burst_size), updated_at=now)
-                self._buckets[key] = bucket
-
+            bucket = self._bucket_for(key, now)
             elapsed = max(0.0, now - bucket.updated_at)
             bucket.tokens = min(
                 float(self.burst_size),
@@ -92,10 +115,62 @@ class TokenBucketRateLimiter:
                 retry_after_seconds=max(0.0, retry_after),
             )
 
+    def _bucket_for(self, key: str, now: float) -> _BucketState:
+        self._evict_idle_front(now)
+        bucket = self._buckets.get(key)
+        if bucket is not None:
+            self._buckets.move_to_end(key)
+            return bucket
+
+        if len(self._buckets) >= self.max_keys:
+            self._evict_idle_scan(now)
+        if len(self._buckets) >= self.max_keys:
+            if self._overflow is None:
+                self._overflow = self._new_bucket(now)
+            return self._overflow
+
+        bucket = self._new_bucket(now)
+        self._buckets[key] = bucket
+        return bucket
+
+    def _new_bucket(self, now: float) -> _BucketState:
+        return _BucketState(tokens=float(self.burst_size), updated_at=now)
+
+    def _is_idle(self, bucket: _BucketState, now: float) -> bool:
+        elapsed = max(0.0, now - bucket.updated_at)
+        refilled = bucket.tokens + (elapsed * self.requests_per_second)
+        return refilled >= float(self.burst_size)
+
+    def _evict_idle_front(self, now: float) -> None:
+        while self._buckets:
+            key, bucket = next(iter(self._buckets.items()))
+            if not self._is_idle(bucket, now):
+                return
+            del self._buckets[key]
+
+    def _evict_idle_scan(self, now: float) -> None:
+        candidates = []
+        for index, (key, bucket) in enumerate(self._buckets.items()):
+            if index >= _EVICTION_SCAN_LIMIT:
+                break
+            if self._is_idle(bucket, now):
+                candidates.append(key)
+        for key in candidates:
+            del self._buckets[key]
+
+
+@dataclass
+class _GateSlot:
+    semaphore: asyncio.Semaphore
+    # Permit holders plus waiters; the slot is dropped when this reaches zero.
+    users: int = 0
+
 
 class _ConcurrencyPermit:
-    def __init__(self, semaphore: asyncio.Semaphore) -> None:
-        self._semaphore = semaphore
+    def __init__(self, gate: ConcurrencyGate, key: Optional[str], slot: _GateSlot):
+        self._gate = gate
+        self._key = key
+        self._slot = slot
         self._released = False
 
     def release(self) -> None:
@@ -103,27 +178,49 @@ class _ConcurrencyPermit:
         if self._released:
             return
         self._released = True
-        self._semaphore.release()
+        self._slot.semaphore.release()
+        self._gate._leave(self._key, self._slot)
 
 
 class ConcurrencyGate:
-    """Bound concurrent in-flight work with per-key semaphores."""
+    """Bound concurrent in-flight work with per-key semaphores.
 
-    def __init__(self, *, max_concurrency: int, wait_seconds: float) -> None:
+    A key's semaphore is retained only while a permit is held or a request is
+    waiting for one, so idle identities never accumulate. At most
+    ``max_keys`` identities are tracked at once; beyond that, new identities
+    share one overflow semaphore. Slot bookkeeping runs on the event loop
+    without awaiting, so it needs no lock.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_concurrency: int,
+        wait_seconds: float,
+        max_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    ) -> None:
         if max_concurrency < 0:
             raise ValueError("max_concurrency must be greater than or equal to 0")
         if wait_seconds < 0:
             raise ValueError("wait_seconds must be greater than or equal to 0")
+        if max_keys < 1:
+            raise ValueError("max_keys must be greater than or equal to 1")
 
         self.max_concurrency = int(max_concurrency)
         self.wait_seconds = float(wait_seconds)
-        self._lock = asyncio.Lock()
-        self._semaphores: dict[str, asyncio.Semaphore] = {}
+        self.max_keys = int(max_keys)
+        self._slots: dict[str, _GateSlot] = {}
+        self._overflow: Optional[_GateSlot] = None
 
     @property
     def enabled(self) -> bool:
         """Return whether concurrency limiting is active."""
         return self.max_concurrency > 0
+
+    @property
+    def tracked_key_count(self) -> int:
+        """Return how many per-identity semaphores are currently retained."""
+        return len(self._slots)
 
     async def acquire(
         self,
@@ -133,19 +230,41 @@ class ConcurrencyGate:
         if not self.enabled:
             return None
 
-        semaphore = await self._semaphore_for_key(key)
-        acquired = await self._acquire_with_bound(semaphore)
+        slot_key, slot = self._enter(key)
+        acquired = False
+        try:
+            acquired = await self._acquire_with_bound(slot.semaphore)
+        finally:
+            if not acquired:
+                self._leave(slot_key, slot)
         if not acquired:
             return None
-        return _ConcurrencyPermit(semaphore)
+        return _ConcurrencyPermit(self, slot_key, slot)
 
-    async def _semaphore_for_key(self, key: str) -> asyncio.Semaphore:
-        async with self._lock:
-            semaphore = self._semaphores.get(key)
-            if semaphore is None:
-                semaphore = asyncio.Semaphore(self.max_concurrency)
-                self._semaphores[key] = semaphore
-            return semaphore
+    def _enter(self, key: str) -> tuple[Optional[str], _GateSlot]:
+        slot = self._slots.get(key)
+        slot_key: Optional[str] = key
+        if slot is None:
+            if len(self._slots) < self.max_keys:
+                slot = _GateSlot(asyncio.Semaphore(self.max_concurrency))
+                self._slots[key] = slot
+            else:
+                slot_key = None
+                if self._overflow is None:
+                    self._overflow = _GateSlot(asyncio.Semaphore(self.max_concurrency))
+                slot = self._overflow
+        slot.users += 1
+        return slot_key, slot
+
+    def _leave(self, key: Optional[str], slot: _GateSlot) -> None:
+        slot.users -= 1
+        if slot.users > 0:
+            return
+        if key is None:
+            if self._overflow is slot:
+                self._overflow = None
+        elif self._slots.get(key) is slot:
+            del self._slots[key]
 
     async def _acquire_with_bound(self, semaphore: asyncio.Semaphore) -> bool:
         if self.wait_seconds <= 0:
@@ -279,10 +398,12 @@ class ServiceThrottle:
         self.rate_limiter = TokenBucketRateLimiter(
             requests_per_second=config.rate_limit_rps,
             burst_size=config.rate_limit_burst,
+            max_keys=config.max_tracked_keys,
         )
         self.concurrency_gate = ConcurrencyGate(
             max_concurrency=config.max_concurrency,
             wait_seconds=config.concurrency_wait_seconds,
+            max_keys=config.max_tracked_keys,
         )
         self._error_response = error_response
         self._backpressure_check = backpressure_check
@@ -307,7 +428,7 @@ class ServiceThrottle:
         if not should_throttle:
             return await call_next(request)
 
-        key = client_identity(request, self.config.key_by)
+        key = client_identity(request, self.config.key_by, self.config.proxies)
         decision = await self.rate_limiter.consume(key)
         if not decision.allowed:
             response = self._error_response(
@@ -379,16 +500,36 @@ class ServiceThrottle:
         return self._limited_paths is None or path in self._limited_paths
 
 
-def client_identity(request: Request, key_by: str) -> str:
-    """Return the throttle bucket key for one request."""
+def client_identity(
+    request: Request,
+    key_by: str,
+    proxies: Optional[TrustedProxyConfig] = None,
+) -> str:
+    """Return the throttle bucket key for one request.
+
+    In ``x-forwarded-for`` mode the header is honored only when the direct
+    peer is a trusted proxy. Entries are read from right to left, skipping at
+    most ``proxies.hops`` trusted proxies (the direct peer counts as the
+    first), and the first untrusted address identifies the client. Entries a
+    client prepends are therefore never reached. Without trusted proxies the
+    direct peer is used, exactly as in ``peer`` mode.
+
+    Args:
+        request: Incoming HTTP request.
+        key_by: ``global``, ``peer``, or ``x-forwarded-for``.
+        proxies: Trusted reverse proxies; ``None`` trusts no proxy.
+
+    Returns:
+        A bucket key. Forwarded addresses are returned in canonical form; the
+        key must never be logged or exposed in responses or metrics.
+    """
     if key_by == "global":
         return GLOBAL_THROTTLE_KEY
 
-    if key_by == "x-forwarded-for":
-        forwarded_for = request.headers.get("x-forwarded-for", "")
-        first_hop = forwarded_for.split(",", 1)[0].strip()
-        if first_hop:
-            return first_hop
+    if key_by == "x-forwarded-for" and proxies is not None and proxies.enabled:
+        forwarded_client = _forwarded_client(request, proxies)
+        if forwarded_client is not None:
+            return forwarded_client
 
     if key_by in {"x-forwarded-for", "peer"}:
         peer = peer_identity(request)
@@ -404,6 +545,71 @@ def peer_identity(request: Request) -> Optional[str]:
     if client is not None and client.host:
         return client.host
     return None
+
+
+def _forwarded_client(
+    request: Request,
+    proxies: TrustedProxyConfig,
+) -> Optional[str]:
+    peer = _parse_address(peer_identity(request) or "")
+    if peer is None or not _is_trusted(peer, proxies):
+        return None
+
+    header_values = request.headers.getlist("x-forwarded-for")
+    # Only the rightmost ``hops`` entries can be examined; never split the rest.
+    entries = ",".join(header_values).rsplit(",", proxies.hops)
+    candidate = peer
+    skipped = 1
+    for raw_entry in reversed(entries):
+        address = _parse_forwarded_address(raw_entry)
+        if address is None:
+            # A malformed entry cannot identify anyone; key by the last trusted
+            # hop rather than by attacker-influenced text.
+            break
+        candidate = address
+        if skipped >= proxies.hops or not _is_trusted(address, proxies):
+            break
+        skipped += 1
+    return str(candidate)
+
+
+def _is_trusted(address: IPAddress, proxies: TrustedProxyConfig) -> bool:
+    return any(
+        address.version == network.version and address in network
+        for network in proxies.networks
+    )
+
+
+def _parse_forwarded_address(raw_value: str) -> Optional[IPAddress]:
+    value = raw_value.strip()
+    if value.startswith("["):
+        host, closed, rest = value[1:].partition("]")
+        if not closed or (rest and not _is_port_suffix(rest)):
+            return None
+        return _parse_address(host)
+    if value.count(":") == 1:
+        host, _, port = value.partition(":")
+        if not port.isdigit():
+            return None
+        value = host
+    return _parse_address(value)
+
+
+def _is_port_suffix(value: str) -> bool:
+    return value.startswith(":") and value[1:].isdigit()
+
+
+def _parse_address(value: str) -> Optional[IPAddress]:
+    try:
+        address = ipaddress.ip_address(value.strip())
+    except ValueError:
+        return None
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return address.ipv4_mapped
+        if address.scope_id is not None:
+            return ipaddress.IPv6Address(str(address).split("%", 1)[0])
+    return address
 
 
 def format_retry_after(seconds: float) -> str:

@@ -19,6 +19,13 @@ from fastapi import Request
 from starlette.responses import Response
 from starlette.routing import Match
 
+from .runtime import (
+    DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS,
+    SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR,
+    TrustedProxyConfig,
+    parse_service_throttle_max_tracked_keys,
+    parse_service_trusted_proxy_config,
+)
 from .throttle import TokenBucketRateLimiter, client_identity, format_retry_after
 
 SERVICE_AUTH_ENABLED_ENV_VAR = "OPENMED_SERVICE_AUTH_ENABLED"
@@ -212,7 +219,9 @@ class ServiceAuthConfig:
     exempt_paths: frozenset[str] = DEFAULT_AUTH_EXEMPT_PATHS
     failure_rate_limit_rps: float = DEFAULT_AUTH_FAILURE_RATE_LIMIT_RPS
     failure_rate_limit_burst: int = DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST
-    failure_rate_limit_key_by: str = "peer"
+    failure_rate_limit_key_by: str = "x-forwarded-for"
+    failure_rate_limit_max_tracked_keys: int = DEFAULT_SERVICE_THROTTLE_MAX_TRACKED_KEYS
+    proxies: TrustedProxyConfig = TrustedProxyConfig()
 
     @property
     def failure_rate_limit_enabled(self) -> bool:
@@ -258,6 +267,10 @@ def parse_service_auth_config() -> ServiceAuthConfig:
     failure_key_by = parse_failure_rate_limit_key(
         os.getenv(SERVICE_AUTH_FAILURE_KEY_ENV_VAR)
     )
+    failure_max_tracked_keys = parse_service_throttle_max_tracked_keys(
+        os.getenv(SERVICE_THROTTLE_MAX_TRACKED_KEYS_ENV_VAR)
+    )
+    proxies = parse_service_trusted_proxy_config()
 
     if not enabled:
         return ServiceAuthConfig(
@@ -265,6 +278,8 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             deny_by_default=deny_by_default,
             route_scopes=route_scopes,
             failure_rate_limit_key_by=failure_key_by,
+            failure_rate_limit_max_tracked_keys=failure_max_tracked_keys,
+            proxies=proxies,
         )
 
     return ServiceAuthConfig(
@@ -304,6 +319,8 @@ def parse_service_auth_config() -> ServiceAuthConfig:
             default=DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST,
         ),
         failure_rate_limit_key_by=failure_key_by,
+        failure_rate_limit_max_tracked_keys=failure_max_tracked_keys,
+        proxies=proxies,
     )
 
 
@@ -435,9 +452,14 @@ def parse_route_scopes(
 
 
 def parse_failure_rate_limit_key(raw_value: Optional[str]) -> str:
-    """Parse the client identity source for auth failure rate limits."""
+    """Parse the client identity source for auth failure rate limits.
+
+    The default, ``x-forwarded-for``, resolves the client exactly like the
+    request throttle: through ``OPENMED_SERVICE_TRUSTED_PROXIES`` when they
+    are configured, otherwise by the direct peer.
+    """
     if raw_value is None or not raw_value.strip():
-        return "peer"
+        return "x-forwarded-for"
 
     normalized = raw_value.strip().lower()
     aliases = {
@@ -523,6 +545,7 @@ class ServiceAuth:
         self._failure_limiter = TokenBucketRateLimiter(
             requests_per_second=config.failure_rate_limit_rps,
             burst_size=config.failure_rate_limit_burst,
+            max_keys=config.failure_rate_limit_max_tracked_keys,
         )
 
     @property
@@ -589,7 +612,11 @@ class ServiceAuth:
         exc: AuthError,
     ) -> Response:
         if self.config.failure_rate_limit_enabled:
-            key = client_identity(request, self.config.failure_rate_limit_key_by)
+            key = client_identity(
+                request,
+                self.config.failure_rate_limit_key_by,
+                self.config.proxies,
+            )
             decision = await self._failure_limiter.consume(key)
             if not decision.allowed:
                 response = self._error_response(
