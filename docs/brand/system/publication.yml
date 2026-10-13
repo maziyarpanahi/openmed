@@ -436,6 +436,7 @@ classification:
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md
     - multimodal/preflight.md
+    - multimodal/preflight-fixtures.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
