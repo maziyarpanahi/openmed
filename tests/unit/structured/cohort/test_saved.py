@@ -327,7 +327,11 @@ def test_legacy_byte_retention_rejects_ambiguous_json(hidden) -> None:
     ],
     ids=["malformed", "encoding", "deep"],
 )
-def test_saved_json_refusals_do_not_retain_private_decoder_context(parser, payload):
+def test_saved_json_refusals_do_not_retain_private_decoder_context(
+    parser, payload, force_json_recursion_error
+):
+    if isinstance(payload, str) and payload.startswith("["):
+        force_json_recursion_error("synthetic-private-sentinel")
     with pytest.raises(SavedCohortError, match="is not valid JSON") as caught:
         parser(payload)
     assert caught.value.__context__ is None

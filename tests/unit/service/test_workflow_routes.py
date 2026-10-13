@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import threading
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -562,16 +564,42 @@ def test_openapi_matches_native_contracts_and_fixed_route_scopes():
 
 
 @pytest.mark.parametrize("operation", ["status", "cancel"])
-def test_timeout_has_no_retry_and_reports_unknown_mutation(operation):
+def test_timeout_has_no_retry_and_reports_unknown_mutation(operation, monkeypatch):
+    import openmed.service.workflow_routes as routes
+
     service = CustodiedService()
     release = threading.Event()
     started = threading.Event()
 
     def stalled(principal, ref):
         started.set()
-        release.wait(1)
+        release.wait(30)
         return service.view
 
+    async def wait_for_started_work(awaitable, *, timeout):
+        task = asyncio.ensure_future(awaitable)
+
+        async def wait_until_started():
+            while not started.is_set():
+                await asyncio.sleep(0)
+
+        try:
+            # Exercise expiration after dispatch starts, independently of worker
+            # startup latency. Keep the actual short asyncio timeout unchanged.
+            await asyncio.wait_for(wait_until_started(), timeout=10)
+            return await asyncio.wait_for(task, timeout=timeout)
+        finally:
+            task.cancel()
+            release.set()
+
+    monkeypatch.setattr(
+        routes,
+        "asyncio",
+        SimpleNamespace(
+            wait_for=wait_for_started_work,
+            TimeoutError=asyncio.TimeoutError,
+        ),
+    )
     method = Mock(side_effect=stalled)
     setattr(service, operation, method)
     try:
