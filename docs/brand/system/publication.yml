@@ -217,6 +217,7 @@ classification:
     - serving/graphql.md
     - serving/authentication.md
     - serving/load-testing.md
+    - evaluation/resource-soak.md
     - serving/mtls.md
     - deploy/helm.md
     - deploy/autoscaling.md
