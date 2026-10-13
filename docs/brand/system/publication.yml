@@ -412,6 +412,7 @@ classification:
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
     - training/private-training-schemas.md
+    - training/synthetic-federation-fixtures.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
