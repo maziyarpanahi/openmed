@@ -12,6 +12,7 @@ from google.protobuf import struct_pb2
 from openmed.core.streaming import deidentify_stream
 
 from .app import _analyze_payload, _pii_deidentify_payload, _pii_extract_payload
+from .grpc_health import ReadinessGrpcServer
 from .proto.generated import openmed_pb2, openmed_pb2_grpc
 from .runtime import ModelNotServedError, ServiceRuntime
 from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
@@ -131,14 +132,20 @@ def create_grpc_server(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
-) -> grpc.Server:
-    """Create a grpcio server with the OpenMed service registered."""
+) -> ReadinessGrpcServer:
+    """Create a grpcio server with OpenMed and initially not-serving health.
+
+    Hosts using this factory should call ``preload_runtime`` after listener setup
+    and ``begin_drain`` before coordinated shutdown. Credentials remain caller-owned.
+    """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=max_workers))
-    openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(
-        OpenMedGrpcServicer(runtime),
+    servicer = OpenMedGrpcServicer(runtime)
+    openmed_pb2_grpc.add_OpenMedServiceServicer_to_server(servicer, server)
+    return ReadinessGrpcServer(
         server,
+        servicer.runtime,
+        openmed_pb2.DESCRIPTOR.services_by_name["OpenMedService"].full_name,
     )
-    return server
 
 
 def serve(
@@ -146,11 +153,20 @@ def serve(
     *,
     runtime: ServiceRuntime | None = None,
     max_workers: int = DEFAULT_GRPC_MAX_WORKERS,
-) -> grpc.Server:
-    """Start an insecure local gRPC server and return the running server."""
+) -> ReadinessGrpcServer:
+    """Start the existing configured listener, preload, and publish serving health.
+
+    Listener selection is unchanged; use the factory for caller-supplied TLS.
+    Health remains not-serving on preload failure or when drain begins.
+    """
     server = create_grpc_server(runtime=runtime, max_workers=max_workers)
     server.add_insecure_port(address)
     server.start()
+    try:
+        server.preload_runtime()
+    except RuntimeError:
+        server.stop(0).wait()
+        raise
     return server
 
 

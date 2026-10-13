@@ -97,6 +97,7 @@ REVIEWED_LICENSES = {
     "gitpython": "BSD-3-Clause",
     "gliner": "Apache-2.0",
     "grpcio": "Apache-2.0",
+    "grpcio-health-checking": "Apache-2.0",
     "griffe": "ISC",
     "h2": "MIT",
     "hanlp": "Apache-2.0",
