@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Check anonymous federated-round quorum, recovery, dropout and aggregation
+  group relationships with bounded arithmetic and stable pre-enrollment
+  accept, review or reject metadata (#3098).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into

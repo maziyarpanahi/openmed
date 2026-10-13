@@ -351,6 +351,7 @@ nav:
       - Federated Aggregate Metrics: training/federated-metrics.md
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
+      - Secure Aggregation Count Preflight: training/secure-aggregation-preflight.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
