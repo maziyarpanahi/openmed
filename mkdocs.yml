@@ -383,6 +383,7 @@ nav:
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md

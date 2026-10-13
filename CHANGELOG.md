@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Compare versioned local multimodal provider capability declarations against
+  content-free modality profiles, with stable exact, transform-required,
+  unsupported and missing-capability JSON and Markdown reports (#3095).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
