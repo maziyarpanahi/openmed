@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Run ordered multimodal batch preflight with shared per-asset reports, aggregate ceilings, duplicates and explicit stop policies (#3009).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
