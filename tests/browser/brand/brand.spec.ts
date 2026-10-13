@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import {
+  BrowserContext,
   ConsoleMessage,
   Page,
   TestInfo,
@@ -15,6 +16,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../..");
 const artifactRoot = path.join(root, "site");
 const MAX_FULL_PAGE_SCREENSHOT_DIMENSION = 30_000;
+const CLOUDFLARE_BEACON_URL = "https://static.cloudflareinsights.com/beacon.min.js";
+const CLOUDFLARE_SITE_TOKEN = "86108e13d57f44f69a4c67a445df1f17";
 const GITHUB_METADATA_URLS = [
   "https://api.github.com/repos/maziyarpanahi/openmed",
   "https://api.github.com/repos/maziyarpanahi/openmed/releases/latest",
@@ -134,7 +137,19 @@ const CANONICAL_VISUAL_CASES = new Set([
   "rtl-fixture/mobile-390/light",
 ]);
 
-test.beforeEach(async ({ page }) => {
+async function stubCloudflareBeacon(context: BrowserContext): Promise<void> {
+  // Exercise the installation without sending test visits to production analytics.
+  await context.route(CLOUDFLARE_BEACON_URL, (route) =>
+    route.fulfill({
+      body: "",
+      contentType: "application/javascript",
+      status: 200,
+    }),
+  );
+}
+
+test.beforeEach(async ({ context, page }) => {
+  await stubCloudflareBeacon(context);
   for (const url of GITHUB_METADATA_URLS) {
     await page.route(url, (route) =>
       route.fulfill({
@@ -215,8 +230,13 @@ function monitorPage(
   page.on("pageerror", (error) =>
     audit.pageErrors.push(redactMarker(error.message, forbiddenMarker)),
   );
+  // Firefox can request module scripts before page.url() commits the navigation.
+  let documentUrl = new URL(page.url());
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      documentUrl = url;
+    }
     if (!["GET", "HEAD"].includes(request.method())) {
       audit.unexpectedMethods.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -226,6 +246,12 @@ function monitorPage(
       (url.protocol === "http:" || url.protocol === "https:") &&
       url.origin !== expectedOrigin
       && !isGitHubMetadataRequest(url)
+      && !(
+        url.href === CLOUDFLARE_BEACON_URL
+        && request.method() === "GET"
+        && documentUrl.origin === expectedOrigin
+        && documentUrl.pathname === "/"
+      )
     ) {
       audit.externalRequests.push(
         redactMarker(`${request.method()} ${url.href}`, forbiddenMarker),
@@ -1739,6 +1765,7 @@ test("representative routes respect first-party transfer budgets", async ({
   const origin = new URL(baseURL ?? "http://127.0.0.1:4173").origin;
   for (const [route, maximum] of Object.entries(routeBudgets)) {
     const context = await browser.newContext({ baseURL });
+    await stubCloudflareBeacon(context);
     const page = await context.newPage();
     let firstPartyBytes = 0;
     let searchBytes = 0;
@@ -1884,4 +1911,61 @@ test("docs preload only the above-fold local IBM Plex face", async ({
     },
   ]);
   expect(JSON.stringify(preloads)).not.toMatch(/Newsreader/iu);
+});
+
+test("homepage loads exactly one Cloudflare beacon for the configured site", async ({
+  baseURL,
+  page,
+}) => {
+  const audit = monitorPage(page, baseURL);
+  const beaconRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url() === CLOUDFLARE_BEACON_URL) {
+      beaconRequests.push(request.method());
+    }
+  });
+
+  await page.goto("/", { waitUntil: "load" });
+  const beacon = page.locator("script[data-cf-beacon]");
+  await expect(beacon).toHaveCount(1);
+  await expect(beacon).toHaveAttribute("src", CLOUDFLARE_BEACON_URL);
+  await expect(beacon).toHaveAttribute("type", "module");
+  expect(JSON.parse((await beacon.getAttribute("data-cf-beacon"))!)).toEqual({
+    token: CLOUDFLARE_SITE_TOKEN,
+  });
+  expect(beaconRequests).toEqual(["GET"]);
+  expect(audit.externalRequests).toEqual([]);
+  expect(audit.unexpectedMethods).toEqual([]);
+  expect(audit.failedRequests).toEqual([]);
+  expect(audit.pageErrors).toEqual([]);
+  expect(audit.consoleErrors).toEqual([]);
+});
+
+test("clinical demo pages do not install the marketing analytics beacon", async ({
+  request,
+}) => {
+  for (const route of ["/docs/demo/web/", "/docs/demo/privacy-playground/"]) {
+    const response = await request.get(route);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).not.toMatch(/cloudflareinsights|data-cf-beacon/i);
+  }
+});
+
+
+test("network audit rejects the marketing beacon outside the homepage", async ({
+  baseURL,
+  page,
+}) => {
+  // A controlled document lets the request reach the audit; clinical-page CSP
+  // independently blocks this script before a network request can be made.
+  await page.route("**/docs/analytics-audit-negative-control/", (route) =>
+    route.fulfill({
+      body: "<!doctype html><title>Network audit control</title>",
+      contentType: "text/html",
+    }),
+  );
+  const audit = monitorPage(page, baseURL);
+  await page.goto("/docs/analytics-audit-negative-control/", { waitUntil: "load" });
+  await page.addScriptTag({ url: CLOUDFLARE_BEACON_URL, type: "module" });
+  expect(audit.externalRequests).toEqual([`GET ${CLOUDFLARE_BEACON_URL}`]);
 });

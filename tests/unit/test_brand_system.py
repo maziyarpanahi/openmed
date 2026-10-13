@@ -8,6 +8,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "scripts/brand/validate_system.py"
 SOCIAL_RENDERER = REPO_ROOT / "scripts/brand/render_social_assets.py"
@@ -171,3 +173,32 @@ def test_brand_rejects_substituted_national_id_only_language(monkeypatch):
     assert any(
         "national-ID-only language claim" in error for error in validator.validate()
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        ("86108e13d57f44f69a4c67a445df1f17", "wrong-site-token"),
+        ("beacon.min.js", "beacon.min.js?extra=1"),
+        ("static.cloudflareinsights.com", "unapproved.example"),
+        ('type="module"', 'type="module" onload="unapproved()"'),
+        ("</script>", "unapproved()</script>"),
+    ],
+)
+def test_marketing_beacon_exception_is_exact_and_homepage_only(mutation):
+    validator = _load_validator()
+    snippet = (
+        '<script type="module" '
+        'src="https://static.cloudflareinsights.com/beacon.min.js" '
+        'data-cf-beacon=\'{"token": "86108e13d57f44f69a4c67a445df1f17"}\'>'
+        "</script>"
+    )
+    source = snippet if mutation is None else snippet.replace(*mutation)
+    assert validator._without_marketing_beacon(source, marketing_page=False) == source
+    assert validator._without_marketing_beacon(source, marketing_page=True) == (
+        "" if mutation is None else source
+    )
+    assert validator._without_marketing_beacon(
+        source + source, marketing_page=True
+    ) == (source if mutation is None else source + source)
