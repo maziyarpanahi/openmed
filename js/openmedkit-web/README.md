@@ -144,3 +144,31 @@ provides fail-closed Python-reference parity and critical-label recall gates.
 OpenMed is Apache-2.0 licensed. See the
 [main repository](https://github.com/maziyarpanahi/openmed) for models,
 documentation, and the Python, Swift, and Android runtimes.
+
+## Resource ownership
+
+Calls to `extractPii` or `deidentify` without a caller-supplied `pipeline` reuse
+one package-owned pipeline for each model, loader, runtime identity and loader
+option combination. Call `await disposeDefaultPipelines()` when closing the
+application or dropping these models. It removes cached entries immediately,
+waits for existing operations and pending loads, and releases each owned
+pipeline once. A later call acquires a fresh pipeline. Failed package-owned
+operations evict and dispose their pipeline; supplied pipelines remain owned
+by the caller and are never disposed by these entry points.
+
+`await clearOrtWebSessionCache(cache)` removes cache entries immediately and
+releases both settled sessions and sessions still loading. Active native
+`run` calls drain before release; subsequent runs reject with a controlled
+disposed-session error. Await clearing before application shutdown. Pipelines
+created by `loadOrtWebTokenClassificationPipeline` also expose an optional
+`dispose()` method. Each returned handle owns a lease on its cached session:
+disposing one handle drains its admitted operations without invalidating other
+handles. The final handle removes and releases the session exactly once,
+including when cache clearing already released it. Disposed handles reject new
+calls; explicitly clearing the session cache invalidates every handle for those
+sessions after active native runs drain. Release failures use
+controlled messages without incorporating the underlying error or its cause.
+
+Cache option keys distinguish scalar types, signed zero, arrays and plain objects,
+with sorted object keys; runtime, loader, function and opaque object identities
+remain distinct. Symbol option values are unsupported and reject before loading.
