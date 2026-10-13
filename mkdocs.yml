@@ -352,6 +352,7 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Transparent Coarse Site Weighting: private-learning/site-weighting.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
