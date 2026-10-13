@@ -576,6 +576,7 @@ classification:
     - interop/x12-837-redaction.md
     - interop/artifact-inventory.md
     - compliance.md
+    - compliance/governance/federation-charters.md
     - compliance/audit-envelopes.md
     - compliance/report-cardinality.md
     - compliance/report-lint.md
