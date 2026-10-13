@@ -353,6 +353,7 @@ nav:
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
+      - Synthetic Federation Fixtures: training/synthetic-federation-fixtures.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
