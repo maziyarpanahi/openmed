@@ -201,28 +201,55 @@ export async function loadOrtWebSession(
   return promise;
 }
 
+const pipelineOwners = new WeakMap<OrtWebLoadedSession, number>();
+
 export async function loadOrtWebTokenClassificationPipeline(
   options: OrtWebTokenClassificationPipelineOptions,
 ): Promise<TokenClassificationPipeline> {
   const loaded = await loadOrtWebSession(options);
-  return async (
+  pipelineOwners.set(loaded, (pipelineOwners.get(loaded) ?? 0) + 1);
+  const cache = options.cache ?? DEFAULT_ORT_WEB_SESSION_CACHE;
+  const ownedPending = cache.get(loaded.cacheKey);
+  let active = 0;
+  let closed = false;
+  let drained: (() => void) | undefined;
+  let disposal: Promise<void> | undefined;
+  const pipeline: TokenClassificationPipeline = async (
     text: string,
     callOptions?: TokenClassificationCallOptions,
   ): Promise<TokenClassificationOutput> => {
-    const inputs = await options.tokenize(text);
-    const outputs = await loaded.session.run(inputs, options.runOptions);
-    const context: OrtTokenClassificationDecodeContext = {
-      text,
-      inputs,
-      outputs,
-      session: loaded.session,
-      backend: loaded.backend,
-    };
-    if (callOptions !== undefined) {
-      context.callOptions = callOptions;
+    if (closed) throw new Error("OpenMed pipeline is disposed");
+    active++;
+    try {
+      const inputs = await options.tokenize(text);
+      const outputs = await loaded.session.run(inputs, options.runOptions);
+      const context: OrtTokenClassificationDecodeContext = {
+        text,
+        inputs,
+        outputs,
+        session: loaded.session,
+        backend: loaded.backend,
+      };
+      if (callOptions !== undefined) context.callOptions = callOptions;
+      return await options.decode(context);
+    } finally {
+      if (--active === 0) drained?.();
     }
-    return options.decode(context);
   };
+  pipeline.dispose = () => {
+    closed = true;
+    return disposal ??= (async () => {
+      if (active > 0) await new Promise<void>(resolve => { drained = resolve; });
+      const owners = (pipelineOwners.get(loaded) ?? 1) - 1;
+      pipelineOwners.set(loaded, owners);
+      if (owners > 0) return;
+      if (ownedPending !== undefined && cache.get(loaded.cacheKey) === ownedPending) {
+        cache.delete(loaded.cacheKey);
+      }
+      await loaded.session.release?.();
+    })();
+  };
+  return pipeline;
 }
 
 export function configureOrtWebRuntime(
@@ -238,8 +265,18 @@ export function configureOrtWebRuntime(
   wasm.proxy = false;
 }
 
-export function clearOrtWebSessionCache(cache = DEFAULT_ORT_WEB_SESSION_CACHE) {
+/** Drain and release all cached sessions, including pending creations. */
+export async function clearOrtWebSessionCache(cache = DEFAULT_ORT_WEB_SESSION_CACHE): Promise<void> {
+  const pending = [...cache.values()];
   cache.clear();
+  const results = await Promise.allSettled(pending.map(async promise => {
+    let loaded;
+    try { loaded = await promise; } catch { return; }
+    await loaded.session.release?.();
+  }));
+  if (results.some(result => result.status === "rejected")) {
+    throw new Error("OpenMed session release failed");
+  }
 }
 
 async function createOrtWebSession(
@@ -251,10 +288,31 @@ async function createOrtWebSession(
 ): Promise<OrtWebLoadedSession> {
   const runtime = await resolveOrtRuntime(options.runtime);
   configureOrtWebRuntime(runtime, options.backend, options.assetPath);
-  const session = await runtime.InferenceSession.create(
+  const rawSession = await runtime.InferenceSession.create(
     options.modelPath,
     options.sessionOptions,
   );
+  let active = 0;
+  let closing = false;
+  let drained: (() => void) | undefined;
+  let disposal: Promise<void> | undefined;
+  const session: OrtInferenceSession = {
+    async run(feeds, runOptions) {
+      if (closing) throw new Error("OpenMed session is disposed");
+      active++;
+      try { return await rawSession.run(feeds, runOptions); }
+      finally { if (--active === 0) drained?.(); }
+    },
+    release() {
+      closing = true;
+      return disposal ??= (async () => {
+        if (active > 0) await new Promise<void>(resolve => { drained = resolve; });
+        try { await rawSession.release?.(); } catch {
+          throw new Error("OpenMed session release failed");
+        }
+      })();
+    },
+  };
   return {
     session,
     runtime,

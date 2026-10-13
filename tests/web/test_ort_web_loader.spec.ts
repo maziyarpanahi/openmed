@@ -267,3 +267,159 @@ function assertSpansClose(actual: OpenMedSpan[], expected: OpenMedSpan[]) {
     assert.ok(Math.abs(actualScore - expectedScore) <= 1e-6);
   }
 }
+
+test("cache clearing releases settled and pending sessions exactly once", async () => {
+  const { clearOrtWebSessionCache } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let releaseCount = 0;
+  let finish!: (value: OrtInferenceSession) => void;
+  const pending = new Promise<OrtInferenceSession>(resolve => { finish = resolve; });
+  const runtime = { InferenceSession: { create: () => pending } };
+  const loading = loadOrtWebSession({ modelPath: "/model.onnx", assetPath: "/ort/", runtime, capabilities: basicWasmProfile, cache });
+  const clearing = clearOrtWebSessionCache(cache);
+  assert.equal(cache.size, 0);
+  finish({ run: () => ({}), release() { releaseCount++; } });
+  const loaded = await loading;
+  await clearing;
+  await loaded.session.release?.();
+  assert.equal(releaseCount, 1);
+  await assert.rejects(loaded.session.run({}), /session is disposed/);
+});
+
+test("cache clearing waits for active execution and disposable pipelines recreate", async () => {
+  const { clearOrtWebSessionCache } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let releaseCount = 0;
+  let created = 0;
+  let finish!: () => void;
+  const running = new Promise<void>(resolve => { finish = resolve; });
+  const runtime = { InferenceSession: { create() { created++; return {
+    async run() { await running; return {}; },
+    release() { releaseCount++; },
+  }; } } };
+  const options = { modelPath: "/active.onnx", assetPath: "/ort/", runtime, capabilities: basicWasmProfile, cache, tokenize: () => ({}), decode: () => [] };
+  const pipeline = await loadOrtWebTokenClassificationPipeline(options);
+  const inference = pipeline("synthetic");
+  await new Promise(resolve => setImmediate(resolve));
+  const clearing = clearOrtWebSessionCache(cache);
+  assert.equal(releaseCount, 0);
+  finish();
+  await Promise.all([inference, clearing]);
+  assert.equal(releaseCount, 1);
+  await pipeline.dispose?.();
+  assert.equal(releaseCount, 1);
+  const replacement = await loadOrtWebTokenClassificationPipeline(options);
+  assert.equal(created, 2);
+  await replacement.dispose?.();
+  assert.equal(cache.size, 0);
+  assert.equal(releaseCount, 2);
+});
+
+test("session release errors are controlled and clear still releases remaining sessions", async () => {
+  const { clearOrtWebSessionCache } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let released = 0;
+  const runtime = { InferenceSession: { create(model: string) { return {
+    run: () => ({}),
+    release() { released++; if (model.includes("bad")) throw new Error("synthetic-private-path-token"); },
+  }; } } };
+  for (const modelPath of ["/bad.onnx", "/good.onnx"]) {
+    await loadOrtWebSession({ modelPath, assetPath: "/ort/", runtime, capabilities: basicWasmProfile, cache });
+  }
+  await assert.rejects(clearOrtWebSessionCache(cache), error => {
+    assert.equal(String(error), "Error: OpenMed session release failed");
+    assert.equal((error as Error).cause, undefined);
+    return true;
+  });
+  assert.equal(released, 2);
+  assert.equal(cache.size, 0);
+});
+
+test("failed pending creations do not prevent clearing another session", async () => {
+  const { clearOrtWebSessionCache } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let released = 0;
+  let reject!: (error: Error) => void;
+  const pending = new Promise<OrtInferenceSession>((_resolve, fail) => { reject = fail; });
+  const runtime = { InferenceSession: { create(model: string) {
+    return model.includes("pending") ? pending : { run: () => ({}), release() { released++; } };
+  } } };
+  await loadOrtWebSession({ modelPath: "/ready.onnx", assetPath: "/ort/", runtime, capabilities: basicWasmProfile, cache });
+  const loading = loadOrtWebSession({ modelPath: "/pending.onnx", assetPath: "/ort/", runtime, capabilities: basicWasmProfile, cache });
+  const failure = assert.rejects(loading, /synthetic load failure/);
+  const clearing = clearOrtWebSessionCache(cache);
+  reject(new Error("synthetic load failure"));
+  await Promise.all([failure, clearing]);
+  assert.equal(released, 1);
+  assert.equal(cache.size, 0);
+});
+
+test("disposing one pipeline preserves another handle sharing its session", async () => {
+  const cache = new Map();
+  let releases = 0;
+  let creates = 0;
+  const runtime = { InferenceSession: { create() { creates++; return {
+    run: () => ({}), release() { releases++; },
+  }; } } };
+  const options = { modelPath: "/shared.onnx", assetPath: "/ort/", runtime, cache, capabilities: basicWasmProfile, tokenize: () => ({}), decode: () => [] };
+  const first = await loadOrtWebTokenClassificationPipeline(options);
+  const second = await loadOrtWebTokenClassificationPipeline(options);
+  await first.dispose?.();
+  await assert.rejects(first("synthetic"), /pipeline is disposed/);
+  assert.deepEqual(await second("synthetic"), []);
+  assert.equal(creates, 1);
+  assert.equal(releases, 0);
+  await second.dispose?.();
+  assert.equal(releases, 1);
+  assert.equal(cache.size, 0);
+});
+
+test("default teardown cannot invalidate a replacement sharing an active native session", async () => {
+  const { extractPii, disposeDefaultPipelines } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let releases = 0;
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  let runs = 0;
+  const runtime = { InferenceSession: { create() { return {
+    async run() { if (++runs === 1) await gate; return {}; },
+    release() { releases++; },
+  }; } } };
+  const modelLoader = async () => loadOrtWebTokenClassificationPipeline({ modelPath: "/generation.onnx", assetPath: "/ort/", runtime, cache, capabilities: basicWasmProfile, tokenize: () => ({}), decode: () => [] });
+  const options = { model: "/generation", modelLoader, hashSecret: "synthetic-secret" };
+  const original = extractPii("synthetic", options);
+  await new Promise(resolve => setImmediate(resolve));
+  const clearing = disposeDefaultPipelines();
+  await extractPii("synthetic", options);
+  finish();
+  await Promise.all([original, clearing]);
+  await extractPii("synthetic", options);
+  assert.equal(releases, 0);
+  await disposeDefaultPipelines();
+  assert.equal(releases, 1);
+});
+
+test("clearing a pending session does not close or remove a new cache generation", async () => {
+  const { clearOrtWebSessionCache } = await import("../../js/openmedkit-web/src/index");
+  const cache = new Map();
+  let complete!: (session: OrtInferenceSession) => void;
+  const pending = new Promise<OrtInferenceSession>(resolve => { complete = resolve; });
+  let creates = 0;
+  let oldReleased = 0;
+  let newReleased = 0;
+  const runtime = { InferenceSession: { create() {
+    return ++creates === 1 ? pending : { run: () => ({}), release() { newReleased++; } };
+  } } };
+  const options = { modelPath: "/same.onnx", assetPath: "/ort/", runtime, cache, capabilities: basicWasmProfile };
+  const oldLoading = loadOrtWebSession(options);
+  const clearing = clearOrtWebSessionCache(cache);
+  const replacement = await loadOrtWebSession(options);
+  complete({ run: () => ({}), release() { oldReleased++; } });
+  await Promise.all([oldLoading, clearing]);
+  assert.deepEqual(await replacement.session.run({}), {});
+  assert.equal(await loadOrtWebSession(options), replacement);
+  assert.equal(oldReleased, 1);
+  assert.equal(newReleased, 0);
+  await clearOrtWebSessionCache(cache);
+  assert.equal(newReleased, 1);
+});

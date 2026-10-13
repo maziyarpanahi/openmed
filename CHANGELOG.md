@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reuse and explicitly dispose package-owned web inference pipelines. Release
+  settled and pending ONNX Runtime Web cached sessions once, draining active
+  native runs and preserving caller pipeline ownership (#3935).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
