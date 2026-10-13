@@ -410,6 +410,7 @@ classification:
     - training/federated-metrics.md
     - training/federated-round-status.md
     - training/federated-scheduling.md
+    - training/secure-aggregation-preflight.md
     - training/federated-update-metadata.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
