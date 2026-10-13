@@ -411,6 +411,7 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - private-learning/checkpoint-lineage.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
