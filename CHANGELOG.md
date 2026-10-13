@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ship bounded synthetic malformed-header fixtures exercising the existing multimodal preflight and batch contracts (#3007).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
