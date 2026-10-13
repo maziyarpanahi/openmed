@@ -407,6 +407,7 @@ classification:
     - reference/chat-schema.md
     - reference/training-schemas.md
     - training/federated-round-lifecycle.md
+    - private-learning/non-iid-simulation.md
     - training/federated-metrics.md
     - training/federated-round-status.md
     - training/federated-scheduling.md
