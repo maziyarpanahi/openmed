@@ -579,6 +579,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     add_agent_self_check_command(subparsers)
+    from .synthetic import add_synthetic_command
+
+    add_synthetic_command(subparsers)
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
