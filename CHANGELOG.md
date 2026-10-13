@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Declare exact bounded site weighting with caps, floors, protected-slice gates and uniform/volume counterfactual reports (#2834).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
