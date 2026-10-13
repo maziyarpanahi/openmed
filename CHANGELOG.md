@@ -461,6 +461,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile on every supported Python version. Reject basic, week-date, ordinal
   and compact-offset input with value-free errors while retaining supported
   extended values, caller timezone rules and golden digests.
+- Run REST trusted-host, CORS and header-only authentication checks before
+  request bodies are buffered or throttle tokens are spent. Preflights no
+  longer need credentials, error responses keep CORS headers for allowed
+  origins, and preflights allow `X-OpenMed-Priority` plus credential headers
+  when authentication is enabled while exposing `X-Request-ID` and
+  `Retry-After` (#3897).
 
 ## [3.0.0] - 2026-10-05
 
