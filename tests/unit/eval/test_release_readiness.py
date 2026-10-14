@@ -812,7 +812,9 @@ def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
     script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
     env = os.environ.copy()
     env.update(
-        GITHUB_EVENT_NAME="pull_request", GITHUB_OUTPUT=str(tmp_path / "outputs")
+        GITHUB_EVENT_NAME="pull_request",
+        CANDIDATE_SHA=head,
+        GITHUB_OUTPUT=str(tmp_path / "outputs"),
     )
     result = subprocess.run(
         [sys.executable, "-c", script],
