@@ -64,9 +64,11 @@ from .bulk_data import (
     BulkStoragePolicy,
     FHIRBulkJobConfig,
     FHIRBulkJobManager,
+    bulk_job_bounds_from_env,
 )
 from .coalesce import RequestCoalescer, coalescing_key
 from .governed_workflows import WorkflowGovernanceService, WorkflowHTTPPolicy
+from .job_bounds import BulkJobsSaturatedError
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .journey_resources import (
     JourneyAccessPolicy,
@@ -718,7 +720,9 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
 def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
     manager = getattr(request.app.state, "smart_backend_jobs", None)
     if manager is None:
-        manager = SMARTBackendJobManager()
+        manager = SMARTBackendJobManager(
+            bounds=getattr(request.app.state, "bulk_job_bounds", None)
+        )
         request.app.state.smart_backend_jobs = manager
     return manager
 
@@ -726,7 +730,9 @@ def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
 def _get_fhir_bulk_manager(request: Request) -> FHIRBulkJobManager:
     manager = getattr(request.app.state, "fhir_bulk_jobs", None)
     if manager is None:
-        manager = FHIRBulkJobManager()
+        manager = FHIRBulkJobManager(
+            bounds=getattr(request.app.state, "bulk_job_bounds", None)
+        )
         request.app.state.fhir_bulk_jobs = manager
     return manager
 
@@ -845,10 +851,15 @@ def create_app(
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        bulk_job_bounds = getattr(fastapi_app.state, "bulk_job_bounds", None)
         if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
-            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
+            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager(
+                bounds=bulk_job_bounds
+            )
         if getattr(fastapi_app.state, "fhir_bulk_jobs", None) is None:
-            fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager()
+            fastapi_app.state.fhir_bulk_jobs = FHIRBulkJobManager(
+                bounds=bulk_job_bounds
+            )
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
@@ -906,6 +917,7 @@ def create_app(
     security_config = parse_service_security_config()
     app.state.security = security_config
     app.state.bulk_storage = BulkStoragePolicy.from_env()
+    app.state.bulk_job_bounds = bulk_job_bounds_from_env()
     if security_config.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -1049,6 +1061,19 @@ def create_app(
         exc: BackpressureError,
     ) -> JSONResponse:
         return _backpressure_response(exc)
+
+    @app.exception_handler(BulkJobsSaturatedError)
+    async def _bulk_jobs_saturated_handler(
+        _: Request,
+        exc: BulkJobsSaturatedError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "bulk_jobs_saturated",
+            "Bulk job capacity is saturated; retry later",
+            details=exc.to_details(),
+            headers={"Retry-After": format_retry_after(exc.retry_after_seconds)},
+        )
 
     @app.exception_handler(ServiceBusyError)
     async def _service_busy_handler(_: Request, exc: ServiceBusyError) -> JSONResponse:
@@ -1843,6 +1868,9 @@ def create_app(
         runtime.validate_served_model(payload.model_name)
         manager = _get_smart_backend_manager(request)
         config = _smart_backend_config_from_payload(payload)
+        # Admission precedes path reservation so a rejected start leaves no
+        # output directory behind.
+        manager.ensure_capacity()
         job_id = uuid.uuid4().hex
         _, output, checkpoint = request.app.state.bulk_storage.prepare(
             input_dir=None,
@@ -2554,6 +2582,9 @@ def _start_fhir_bulk_job(
         raise BulkPathError("path_invalid")
     if not config.is_local:
         config.to_smart_config()
+    # Admission precedes path reservation so a rejected start leaves no output
+    # directory behind.
+    manager.ensure_capacity()
     job_id = uuid.uuid4().hex
     source, output, checkpoint = request.app.state.bulk_storage.prepare(
         input_dir=payload.input_dir

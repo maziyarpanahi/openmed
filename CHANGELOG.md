@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing event content; no resources, credentials or identifiers are returned
   (#3772).
 
+- Bound the FHIR Bulk Data and SMART ingestion job managers. Starts beyond
+  `OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS` return `503` `bulk_jobs_saturated`
+  with `Retry-After` before any task or output directory exists. Terminal
+  records expire after `OPENMED_SERVICE_BULK_JOB_TTL_SECONDS` and are capped by
+  `OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS`, oldest first; running jobs are never
+  evicted. Request tuning now has server ceilings, including a one-second
+  minimum poll interval; out-of-range values return `422` (#3909).
+
 ### Added
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
