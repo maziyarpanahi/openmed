@@ -619,7 +619,8 @@ type FixedOptionDecisionResult struct {
 	Extensions          JSONObject            `json:"extensions"`
 }
 
-// HealthResponse is returned by /health.
+// HealthResponse is returned by /health. Version and Profile are reported
+// only by the dev profile; other profiles leave them empty.
 type HealthResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`

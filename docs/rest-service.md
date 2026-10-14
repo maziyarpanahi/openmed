@@ -35,7 +35,15 @@ truth for exact request and response schemas. Its current public operations are:
 - `POST /v1/workflows/cancel`
 
 The opt-in `GET /metrics` route is intentionally excluded from the generated
-schema and returns `404` unless metrics are enabled.
+schema and returns `404` unless metrics are enabled. The authenticated
+`/service/metadata` operator route is excluded the same way; see
+[service metadata](#get-servicemetadata).
+
+Swagger UI (`/docs`), ReDoc (`/redoc`), and the live `/openapi.json` are served
+only in the `dev` profile. Other profiles do not register them; the committed
+`docs/api/openapi.json` is the published contract. See
+[API Docs and Service Metadata](serving/authentication.md#api-docs-and-service-metadata)
+for the authenticated `OPENMED_SERVICE_OPENAPI_ENABLED` opt-in.
 
 The service includes stricter request validation, shared model/pipeline reuse,
 optional startup preload, bounded warm-pool residency, model keep-alive
@@ -236,6 +244,9 @@ Optional profile selection (defaults to `prod`):
 ```bash
 OPENMED_PROFILE=dev python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
+
+The `dev` profile also serves the interactive API docs at `/docs` and `/redoc`
+and reports `version` and `profile` from `/health`.
 
 ## Browser and Host Allowlists
 
@@ -686,18 +697,32 @@ schemas, limits, and client examples.
 
 ### `GET /health`
 
-Health response:
+Health response outside the `dev` profile:
 
 ```json
 {
   "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+`GET /health` remains the backward-compatible health alias and never requires
+authentication. Only the `dev` profile adds `version` and `profile` to it.
+Other clients read them from `GET /service/metadata`.
+
+### `GET /service/metadata`
+
+Authenticated operator metadata. It is not part of the published OpenAPI
+contract. When authentication is enabled, any authenticated principal can read
+it and anonymous callers get `401`:
+
+```json
+{
   "service": "openmed-rest",
   "version": "<installed OpenMed version>",
   "profile": "prod"
 }
 ```
-
-`GET /health` remains the backward-compatible health alias.
 
 ### `GET /livez`
 

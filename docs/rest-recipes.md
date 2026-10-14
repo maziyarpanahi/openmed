@@ -97,6 +97,16 @@ Response:
 ```json
 {
   "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+Outside the `dev` profile, `/health` does not report the package version or
+profile. Read them from the authenticated `GET /service/metadata` operator
+route instead; send the same credentials as other authenticated calls:
+
+```json
+{
   "service": "openmed-rest",
   "version": "3.0.0",
   "profile": "prod"

@@ -103,6 +103,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output files without loading NER models or downloading artifacts.
 ### Security
 
+- Hide REST discovery surfaces from unauthenticated production callers. Swagger
+  UI, ReDoc and the live `/openapi.json` are served only in the `dev` profile;
+  `OPENMED_SERVICE_OPENAPI_ENABLED=true` serves only `/openapi.json` behind
+  authentication elsewhere. Outside `dev`, `/health` returns status and service
+  name only, and version and profile move to the authenticated
+  `GET /service/metadata` route. The reference launcher no longer sends a
+  `server` header (#3911).
 - Refresh explicitly configured SMART credentials through atomic injected custody,
   validate token type/lifetime/granted permission unions, rotate refresh secrets,
   and revoke uncertain or invalid refreshes with value-free findings. Bulk export

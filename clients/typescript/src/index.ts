@@ -454,8 +454,10 @@ export type PIIDeidentifyStreamResponse = string;
 export interface HealthResponse {
   status: string;
   service: string;
-  version: string;
-  profile: string;
+  /** Reported only by the `dev` profile. */
+  version?: string;
+  /** Reported only by the `dev` profile. */
+  profile?: string;
   [key: string]: unknown;
 }
 

@@ -59,8 +59,9 @@ curl http://127.0.0.1:8080/readyz
 ```
 
 Use `/livez` for process liveness and `/readyz` for startup readiness. The
-legacy `/health` endpoint remains available for clients that need version and
-profile metadata, but it is not used by the hardened image healthcheck.
+legacy `/health` endpoint remains available, but it is not used by the hardened
+image healthcheck. Outside the `dev` profile it reports status only; read the
+version and profile from the authenticated `GET /service/metadata` route.
 
 ## Smoke Test
 
