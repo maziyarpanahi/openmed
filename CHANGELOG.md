@@ -109,6 +109,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now rejects invalid or insufficient token responses and expired dispatches
   (#3773).
 
+- Apply the shared trusted-host allowlist (loopback by default), opt-in API-key
+  or JWT auth and operational request-byte bound to the local privacy proxy
+  before any body parsing. Bound message count, total text characters and
+  streaming duration before redaction or transport calls, with controlled
+  `privacy_proxy_limit_exceeded` and `privacy_proxy_timeout` codes; refusals
+  carry no message text, placeholders or mappings (#3898).
+
 ### Added
 
 - Import-free effect-path inventory and local/CI guards for unclassified
