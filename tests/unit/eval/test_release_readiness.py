@@ -761,7 +761,7 @@ def test_sdk_workflow_classifies_real_version_boundaries(
     assert evidence["classification"] == (
         "CANDIDATE" if expected else "NOT_A_CANDIDATE"
     )
-    assert evidence["release_readiness_evaluated"] is expected
+    assert evidence["release_readiness_required"] is expected
     assert not (root / "artifacts/sdk-readiness/readiness.json").exists()
     required = {
         "Check version and API compatibility",

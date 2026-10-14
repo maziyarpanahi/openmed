@@ -125,7 +125,7 @@ jobs:
               "declared_version": declared, "requested_version": version,
               "api_base_ref": api_base, "migration_guide": migration,
               "classification": "CANDIDATE" if evaluate else "NOT_A_CANDIDATE",
-              "release_readiness_evaluated": evaluate,
+              "release_readiness_required": evaluate,
           }
           Path("artifacts/sdk-readiness").mkdir(parents=True, exist_ok=True)
           Path("artifacts/sdk-readiness/scope.json").write_text(json.dumps(evidence, indent=2) + "\n")
