@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -668,3 +671,157 @@ def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
         report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
         assert report.decision == NOT_READY
         assert not report.checks[0].passed
+
+
+@pytest.mark.parametrize(
+    "event,declared,expected,expected_base,expected_guide",
+    [
+        ("pull_request", "3.0.0", False, "v3.0.0", ""),
+        ("pull_request", "4.0.0", True, "v3.0.0", "docs/migration/3.0-to-4.0.md"),
+        ("pull_request", "3.0.1", True, "v3.0.0", "docs/migration/2.5-to-3.0.md"),
+        ("workflow_dispatch", "3.0.0", True, "v2.5.0", "docs/migration/2.5-to-3.0.md"),
+    ],
+)
+def test_sdk_workflow_classifies_real_version_boundaries(
+    tmp_path, event, declared, expected, expected_base, expected_guide
+):
+    """Ordinary PRs never claim READY; explicit dispatch never bypasses gates."""
+    root = tmp_path / "repository"
+    (root / "openmed").mkdir(parents=True)
+    about = root / "openmed/__about__.py"
+    about.write_text('__version__ = "3.0.0"\n')
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "SDK baseline",
+        ],
+        cwd=root,
+        check=True,
+    )
+    base = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    about.write_text(f'__version__ = "{declared}"\n')
+    (root / "docs/migration").mkdir(parents=True)
+    (root / "docs/migration/2.5-to-3.0.md").write_text("Reviewed prior boundary")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "SDK head",
+        ],
+        cwd=root,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    # Input resolution must use the immutable commit, not a modified checkout.
+    about.write_text('__version__ = "99.0.0"\n')
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github/workflows/sdk-release-candidate.yml"
+    )
+    workflow = yaml.safe_load(workflow_path.read_text())
+    steps = workflow["jobs"]["readiness"]["steps"]
+    resolver = next(step for step in steps if step.get("id") == "candidate")
+    script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    output = tmp_path / "outputs"
+    env = os.environ.copy()
+    env.update(
+        GITHUB_EVENT_NAME=event,
+        PR_BASE_SHA=base,
+        CANDIDATE_SHA=head,
+        GITHUB_OUTPUT=str(output),
+        REQUESTED_VERSION="3.0.0",
+        REQUESTED_API_BASE="v2.5.0",
+        REQUESTED_MIGRATION="docs/migration/2.5-to-3.0.md",
+    )
+    subprocess.run([sys.executable, "-c", script], cwd=root, env=env, check=True)
+    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert values["evaluate"] == str(expected).lower()
+    assert values["version"] == declared
+    assert values["api_base"] == expected_base
+    assert values["migration"] == expected_guide
+    evidence = json.loads((root / "artifacts/sdk-readiness/scope.json").read_text())
+    assert evidence["classification"] == (
+        "CANDIDATE" if expected else "NOT_A_CANDIDATE"
+    )
+    assert evidence["release_readiness_evaluated"] is expected
+    assert not (root / "artifacts/sdk-readiness/readiness.json").exists()
+    required = {
+        "Check version and API compatibility",
+        "Run end-to-end golden suite",
+        "Verify SDK readiness without model promotion",
+    }
+    guarded = [step for step in steps if step.get("name") in required]
+    assert len(guarded) == len(required)
+    assert all(
+        step["if"] == "steps.candidate.outputs.evaluate == 'true'" for step in guarded
+    )
+
+
+def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
+    """Malformed metadata cannot turn a real candidate into an ordinary PR."""
+    root = tmp_path / "repository"
+    (root / "openmed").mkdir(parents=True)
+    (root / "openmed/__about__.py").write_text('__version__ = "unknown"\n')
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "Invalid SDK metadata",
+        ],
+        cwd=root,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github/workflows/sdk-release-candidate.yml"
+    )
+    workflow = yaml.safe_load(workflow_path.read_text())
+    resolver = next(
+        step
+        for step in workflow["jobs"]["readiness"]["steps"]
+        if step.get("id") == "candidate"
+    )
+    script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    env = os.environ.copy()
+    env.update(
+        GITHUB_EVENT_NAME="pull_request", GITHUB_OUTPUT=str(tmp_path / "outputs")
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "stable SDK version" in result.stderr
+    assert not (tmp_path / "outputs").exists()
+    assert not (root / "artifacts/sdk-readiness/scope.json").exists()
