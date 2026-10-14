@@ -50,7 +50,9 @@ def fixture_context(case, scenario="preserved"):
     quality. Providers declare support for these exact fixture pairs only.
     """
     traps = json.loads(
-        (ROOT / "openmed/eval/golden/fixtures/per_language_id_traps.json").read_text()
+        (ROOT / "openmed/eval/golden/fixtures/per_language_id_traps.json").read_text(
+            encoding="utf-8"
+        )
     )["fixtures"]
     trap = next(row for row in traps if row["id"] == case["identifier_fixture"])
     identifier = trap["gold_spans"][0]["text"]
