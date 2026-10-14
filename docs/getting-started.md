@@ -1,7 +1,7 @@
 # Quick Start
 
 This guide gets you from a blank workstation to copying results from the docs within minutes. It uses
-[uv](https://github.com/astral-sh/uv) for dependency management, but any Python 3.11+ environment works.
+[uv](https://github.com/astral-sh/uv) for dependency management, but any Python 3.10+ environment works.
 
 Working with intermittent connectivity, offline clinics, OpenMRS, or DHIS2?
 Use the [African developer onboarding guide](africa-onboarding.md) for a
