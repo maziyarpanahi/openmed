@@ -8,21 +8,21 @@ on:
       - 'openmed/__about__.py'
       - 'openmed/eval/release_readiness.py'
       - 'CHANGELOG.md'
-      - 'docs/migration/2.5-to-3.0.md'
+      - 'docs/migration/**'
   workflow_dispatch:
     inputs:
       version:
         description: Stable SDK version to prepare.
         required: true
-        default: 3.0.0
+        default: 4.0.0
       api_base_ref:
         description: Previous stable SDK tag.
         required: true
-        default: v2.5.0
+        default: v3.0.0
       migration_guide:
         description: Reviewed migration guide for this SDK candidate.
         required: true
-        default: docs/migration/2.5-to-3.0.md
+        default: docs/migration/3.0-to-4.0.md
 
 permissions:
   contents: read
@@ -36,9 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      RELEASE_VERSION: ${{ inputs.version || '3.0.0' }}
-      API_BASE_REF: ${{ inputs.api_base_ref || 'v2.5.0' }}
-      MIGRATION_GUIDE: ${{ inputs.migration_guide || 'docs/migration/2.5-to-3.0.md' }}
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      REQUESTED_VERSION: ${{ inputs.version || '4.0.0' }}
+      REQUESTED_API_BASE: ${{ inputs.api_base_ref || 'v3.0.0' }}
+      REQUESTED_MIGRATION: ${{ inputs.migration_guide || 'docs/migration/3.0-to-4.0.md' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -49,7 +50,94 @@ jobs:
           version: "0.11.28"
       - name: Install locked gate dependencies
         run: uv sync --frozen --extra dev --python 3.11
+      - name: Resolve candidate scope and immutable inputs
+        id: candidate
+        run: |
+          uv run --frozen python - <<'PY'
+          import ast
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path, PurePosixPath
+
+          def version_from_source(source):
+              tree = ast.parse(source)
+              for node in tree.body:
+                  if isinstance(node, ast.Assign) and any(
+                      isinstance(target, ast.Name) and target.id == "__version__"
+                      for target in node.targets
+                  ):
+                      value = ast.literal_eval(node.value)
+                      if isinstance(value, str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", value):
+                          return value
+              raise SystemExit("candidate metadata must declare a stable SDK version")
+
+          head_source = subprocess.check_output(
+              ["git", "show", os.environ["CANDIDATE_SHA"] + ":openmed/__about__.py"],
+              text=True,
+          )
+          declared = version_from_source(head_source)
+          if os.environ["GITHUB_EVENT_NAME"] == "pull_request":
+              base_source = subprocess.check_output(
+                  ["git", "show", os.environ["PR_BASE_SHA"] + ":openmed/__about__.py"],
+                  text=True,
+              )
+              base = version_from_source(base_source)
+              version = declared
+              api_base = "v" + base
+              evaluate = version != base
+              source_line = ".".join(base.split(".")[:2])
+              target_line = ".".join(version.split(".")[:2])
+              migration = ""
+              if evaluate:
+                  if tuple(map(int, version.split("."))) <= tuple(map(int, base.split("."))):
+                      raise SystemExit("candidate version must increase over its PR base")
+                  if source_line == target_line:
+                      guides = sorted(Path("docs/migration").glob("*-to-" + target_line + ".md"))
+                      if len(guides) != 1:
+                          raise SystemExit("patch candidate requires one existing migration guide")
+                      migration = guides[0].as_posix()
+                  else:
+                      migration = "docs/migration/" + source_line + "-to-" + target_line + ".md"
+          else:
+              version = os.environ["REQUESTED_VERSION"]
+              api_base = os.environ["REQUESTED_API_BASE"]
+              migration = os.environ["REQUESTED_MIGRATION"]
+              evaluate = True
+          if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+              raise SystemExit("invalid stable candidate version")
+          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", api_base):
+              raise SystemExit("invalid stable API baseline tag")
+          if evaluate:
+              guide = PurePosixPath(migration)
+              if guide.is_absolute() or ".." in guide.parts or "\n" in migration or "\r" in migration or guide.suffix != ".md":
+                  raise SystemExit("migration guide must be a relative Markdown path")
+          outputs = {
+              "evaluate": str(evaluate).lower(), "version": version,
+              "api_base": api_base, "migration": migration,
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
+              for key, value in outputs.items():
+                  stream.write(key + "=" + value + "\n")
+          evidence = {
+              "schema_version": 1, "candidate_sha": os.environ["CANDIDATE_SHA"],
+              "declared_version": declared, "requested_version": version,
+              "api_base_ref": api_base, "migration_guide": migration,
+              "classification": "CANDIDATE" if evaluate else "NOT_A_CANDIDATE",
+              "release_readiness_required": evaluate,
+          }
+          Path("artifacts/sdk-readiness").mkdir(parents=True, exist_ok=True)
+          Path("artifacts/sdk-readiness/scope.json").write_text(json.dumps(evidence, indent=2) + "\n")
+          if not evaluate:
+              print("SDK version unchanged: ordinary PR; no release readiness decision produced")
+          PY
       - name: Check version and API compatibility
+        if: steps.candidate.outputs.evaluate == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+          API_BASE_REF: ${{ steps.candidate.outputs.api_base }}
+          MIGRATION_GUIDE: ${{ steps.candidate.outputs.migration }}
         run: |
           uv run --frozen python scripts/release/check_release_version.py --version "$RELEASE_VERSION"
           mkdir -p artifacts/sdk-readiness
@@ -58,6 +146,7 @@ jobs:
             --json artifacts/sdk-readiness/api-compat.json \
             --check "$MIGRATION_GUIDE"
       - name: Run end-to-end golden suite
+        if: steps.candidate.outputs.evaluate == 'true'
         run: |
           uv run --frozen pytest \
             tests/integration/test_end_to_end.py \
@@ -85,6 +174,11 @@ jobs:
           }, indent=2) + "\n")
           PY
       - name: Verify SDK readiness without model promotion
+        if: steps.candidate.outputs.evaluate == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+          API_BASE_REF: ${{ steps.candidate.outputs.api_base }}
+          MIGRATION_GUIDE: ${{ steps.candidate.outputs.migration }}
         run: |
           uv run --frozen python -m openmed.eval.release_readiness \
             --sdk-baseline "$API_BASE_REF" \

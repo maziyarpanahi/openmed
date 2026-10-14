@@ -253,7 +253,7 @@ def _assert_full_suite_diagnostics(lane):
     assert lane.get("continue-on-error", "false") == "false"
     steps = lane["steps"]
     test_step = next(step for step in steps if step.get("name") == "Test with pytest")
-    assert test_step["timeout-minutes"] == "45"
+    assert test_step["timeout-minutes"] == "60"
     assert test_step.get("continue-on-error", "false") == "false"
     assert "if" not in test_step
     # Exact argv retains default full-suite discovery and rejects selection,

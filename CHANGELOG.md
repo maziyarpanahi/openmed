@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking privacy remediations planned for v4.0.0
+
+- Prepare the existing approval-receipt and aggregate differential-privacy
+  removals at a major boundary. Protect approval role/timestamps through
+  `ApprovalAuthorization` and omit exact noise/seed data from public DP
+  releases. Document the narrowly approved security-remediation warning-window
+  exception; all other deprecation and compatibility rules remain in force.
+- Capture the reviewed governance/write-back API baseline after explicitly
+  announcing the two privacy constructor migrations, then remove their stale
+  transitional allowlist entries. Release comparison against v3.0.0 still
+  requires a major target and complete migration coverage (#3770).
+
+
+### Release checks
+
+- Allow 60 minutes for the full CI pytest step after the Windows suite
+  completed its tests at the former 45-minute boundary. Preserve full discovery,
+  coverage, exit status and the bounded timeout contract.
+
+- Coordinate the REST shedding fixture through the event loop instead of an
+  additional blocking executor waiter. Retain the same response, privacy,
+  admission and post-release latency assertions, and release its controlled
+  worker on fixture failure.
+
+- Classify exported `typing.Any` aliases consistently on Python 3.10 through
+  3.13, without treating interpreter representation changes as removed APIs.
+  Real changes from an alias to a class, callable or constant still fail the
+  public API guard (#3770).
+
+- Distinguish ordinary SDK PRs from version-changing release candidates using
+  immutable base/head package metadata. Candidate PRs derive their stable
+  baseline and migration guide from that boundary; explicit dispatches always
+  evaluate all gates. Ordinary PRs produce a NOT_A_CANDIDATE scope receipt,
+  never a READY report (#3770).
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
@@ -245,6 +280,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ### Added
+
+- Include governance, FHIR/OMOP write-back, lineage and MCP namespaces in the
+  per-PR public API compatibility gate, with the same deprecation window and
+  dependency-light capture of declared exports.
 
 - Verify patient-keyed calendar-day shifts and emitted subject surrogates across
   five Journey source surfaces using bounded local witness processors. Keep

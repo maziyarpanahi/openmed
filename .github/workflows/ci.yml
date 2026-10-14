@@ -302,7 +302,8 @@ jobs:
         tests/integration/agent/test_access_event_log.py
 
     - name: Test with pytest
-      timeout-minutes: 45
+      # Leave bounded completion time for the full Windows suite and coverage.
+      timeout-minutes: 60
       run: >-
         uv run --frozen python -c
         "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
