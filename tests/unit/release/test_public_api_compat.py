@@ -222,7 +222,7 @@ def test_enum_signature_uses_stable_lookup_contract():
     assert api._member_signature(Status, "class") == "(value)"
 
 
-@pytest.mark.parametrize("alias", [tuple[int, int], Callable[[str], int]])
+@pytest.mark.parametrize("alias", [api.Any, tuple[int, int], Callable[[str], int]])
 def test_type_alias_kind_is_stable(alias):
     assert api._member_kind(alias) == "type_alias"
     assert api._member_signature(alias, "type_alias") is None
@@ -292,9 +292,18 @@ def test_removal_can_be_announced_via_allowlist():
     assert allowlisted == []
 
 
-def test_kind_change_is_breaking():
-    baseline = [_surface("openmed", _member("thing", kind="function"))]
-    current = [_surface("openmed", _member("thing", kind="class"))]
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("function", "class"),
+        ("type_alias", "class"),
+        ("type_alias", "callable"),
+        ("type_alias", "constant"),
+    ],
+)
+def test_kind_change_is_breaking(before, after):
+    baseline = [_surface("openmed", _member("thing", kind=before))]
+    current = [_surface("openmed", _member("thing", kind=after))]
 
     changes = api.diff_surface(baseline, current)
     assert len(changes) == 1

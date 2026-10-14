@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Release checks
 
+- Classify exported `typing.Any` aliases consistently on Python 3.10 through
+  3.13, without treating interpreter representation changes as removed APIs.
+  Real changes from an alias to a class, callable or constant still fail the
+  public API guard (#3770).
+
 - Distinguish ordinary SDK PRs from version-changing release candidates using
   immutable base/head package metadata. Candidate PRs derive their stable
   baseline and migration guide from that boundary; explicit dispatches always

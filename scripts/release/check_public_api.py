@@ -121,8 +121,8 @@ class Change:
 def _member_kind(obj: Any) -> str:
     """Classify a member into a coarse, stable kind label."""
 
-    if get_origin(obj) is not None:
-        # PEP 585 aliases and ``typing`` aliases changed their answers to
+    if obj is Any or get_origin(obj) is not None:
+        # ``Any``, PEP 585 aliases and ``typing`` aliases changed their answers to
         # ``inspect.isclass`` across supported Python releases.  They are a
         # distinct public-API construct, not runtime classes or callables.
         return "type_alias"

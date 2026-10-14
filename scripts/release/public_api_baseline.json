@@ -3500,8 +3500,8 @@
         "signature": "(invalidated_count, event_type=...)"
       },
       "ConsentRevision": {
-        "kind": "class",
-        "signature": "(*args, **kwargs)"
+        "kind": "type_alias",
+        "signature": null
       },
       "ConsentScope": {
         "kind": "type_alias",
