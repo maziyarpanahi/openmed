@@ -144,6 +144,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now rejects invalid or insufficient token responses and expired dispatches
   (#3773).
 
+### Documentation
+
+- Make the supported-versions section of `SECURITY.md` version-agnostic instead
+  of naming the long-superseded `1.7.x` line (#4131).
+
 ### Added
 
 - Import-free effect-path inventory and local/CI guards for unclassified
