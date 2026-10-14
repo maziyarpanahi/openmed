@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Release checks
 
+- Coordinate the REST shedding fixture through the event loop instead of an
+  additional blocking executor waiter. Retain the same response, privacy,
+  admission and post-release latency assertions, and release its controlled
+  worker on fixture failure.
+
 - Classify exported `typing.Any` aliases consistently on Python 3.10 through
   3.13, without treating interpreter representation changes as removed APIs.
   Real changes from an alias to a class, callable or constant still fail the
