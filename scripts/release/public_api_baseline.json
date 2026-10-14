@@ -43,7 +43,7 @@
       },
       "BatchProcessor": {
         "kind": "class",
-        "signature": "(model_name=..., operation=..., batch_size=..., config=..., loader=..., aggregation_strategy=..., confidence_threshold=..., group_entities=..., continue_on_error=..., checkpoint_interval=..., _atomic_write_hook=..., **analyze_kwargs)"
+        "signature": "(model_name=..., operation=..., batch_size=..., config=..., loader=..., aggregation_strategy=..., confidence_threshold=..., group_entities=..., continue_on_error=..., checkpoint_interval=..., _atomic_write_hook=..., budget=..., **analyze_kwargs)"
       },
       "BatchProgress": {
         "kind": "class",
@@ -123,7 +123,7 @@
       },
       "GroundingResult": {
         "kind": "class",
-        "signature": "(spans=..., concepts=..., systems=..., language=..., top_k=..., offline=...)"
+        "signature": "(spans=..., concepts=..., systems=..., language=..., top_k=..., offline=..., verification=...)"
       },
       "InMemorySurrogateStore": {
         "kind": "class",
@@ -223,7 +223,7 @@
       },
       "OpenMedConfig": {
         "kind": "class",
-        "signature": "(default_org=..., cache_dir=..., device=..., hf_token=..., log_level=..., timeout=..., use_medical_tokenizer=..., medical_tokenizer_exceptions=..., chinese_segmentation_backend=..., chinese_user_dict_path=..., chinese_pkuseg_domain=..., clinical_protect_enabled=..., clinical_protect_terms=..., clinical_protect_use_builtin=..., backend=..., batch_size=..., num_workers=..., lazy_model_loading=..., pii_model=..., pii_model_revision=..., onnx_variant=..., onnx_intra_op_num_threads=..., torch_attention_backend=..., load_in_4bit=..., bnb_4bit_use_double_quant=..., local_only=..., cjk_width_convention=..., chinese_target_script=..., transliteration_aware_name_matching=..., indic_name_similarity_threshold=..., profile=...)"
+        "signature": "(default_org=..., cache_dir=..., device=..., hf_token=..., log_level=..., timeout=..., use_medical_tokenizer=..., medical_tokenizer_exceptions=..., chinese_segmentation_backend=..., chinese_user_dict_path=..., chinese_pkuseg_domain=..., clinical_protect_enabled=..., clinical_protect_terms=..., clinical_protect_use_builtin=..., backend=..., batch_size=..., num_workers=..., lazy_model_loading=..., pii_model=..., pii_model_revision=..., onnx_variant=..., onnx_intra_op_num_threads=..., torch_attention_backend=..., load_in_4bit=..., bnb_4bit_use_double_quant=..., local_only=..., cjk_width_convention=..., chinese_target_script=..., transliteration_aware_name_matching=..., indic_name_similarity_threshold=..., profile=..., remote_inference_endpoint=..., remote_inference_protocol=..., remote_inference_model_name=..., remote_inference_model_version=..., remote_inference_tokenizer=..., remote_inference_timeout_seconds=..., remote_inference_verify_tls=...)"
       },
       "OpenMedError": {
         "kind": "class",
@@ -247,7 +247,7 @@
       },
       "PIIPattern": {
         "kind": "class",
-        "signature": "(pattern, entity_type, priority=..., flags=..., base_score=..., context_boost=..., context_words=..., requires_context=..., validator=..., context_required=..., safety_sweep_requires_context=..., reject_on_validation_failure=...)"
+        "signature": "(pattern, entity_type, priority=..., flags=..., base_score=..., context_boost=..., context_words=..., requires_context=..., validator=..., context_required=..., safety_sweep_requires_context=..., reject_on_validation_failure=..., match_normalizer=..., context_normalizer=...)"
       },
       "PII_PATTERNS": {
         "kind": "constant",
@@ -311,7 +311,7 @@
       },
       "StreamingDeidentificationEvent": {
         "kind": "class",
-        "signature": "(redacted_text, final=..., spans=..., audit_record=...)"
+        "signature": "(redacted_text, final=..., spans=..., audit_record=..., mapping=...)"
       },
       "StreamingDeidentifier": {
         "kind": "class",
@@ -387,7 +387,7 @@
       },
       "analyze_text": {
         "kind": "function",
-        "signature": "(text, model_name=..., kw:model_id=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
+        "signature": "(text, model_name=..., kw:model_id=..., kw:config=..., kw:loader=..., kw:aggregation_strategy=..., kw:output_format=..., kw:include_confidence=..., kw:confidence_threshold=..., kw:group_entities=..., kw:formatter_kwargs=..., kw:metadata=..., kw:use_fast_tokenizer=..., kw:sentence_detection=..., kw:sentence_language=..., kw:sentence_clean=..., kw:sentence_segmenter=..., kw:sentence_backend=..., kw:assert_context=..., kw:cache_results=..., kw:max_cache_entries=..., **pipeline_kwargs)"
       },
       "append_feedback": {
         "kind": "function",
@@ -435,7 +435,7 @@
       },
       "deidentify": {
         "kind": "function",
-        "signature": "(text, method=..., model_name=..., confidence_threshold=..., keep_year=..., shift_dates=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., keep_mapping=..., config=..., use_smart_merging=..., lang=..., normalize_accents=..., use_safety_sweep=..., kw:consistent=..., kw:seed=..., kw:locale=..., kw:surrogate_vault=..., kw:loader=..., kw:policy=..., kw:calibration_thresholds_path=..., kw:custom_recognizer=..., kw:abdm=..., kw:code_mixed=..., kw:token_language_tags=..., kw:lid_model=..., kw:transliterated_name_config=..., kw:audit=..., kw:cache_results=..., kw:max_cache_entries=...)"
+        "signature": "(text, method=..., model_name=..., confidence_threshold=..., keep_year=..., shift_dates=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., keep_mapping=..., config=..., use_smart_merging=..., lang=..., normalize_accents=..., use_safety_sweep=..., kw:consistent=..., kw:seed=..., kw:locale=..., kw:surrogate_vault=..., kw:loader=..., kw:policy=..., kw:calibration_thresholds_path=..., kw:custom_recognizer=..., kw:abdm=..., kw:code_mixed=..., kw:token_language_tags=..., kw:lid_model=..., kw:transliterated_name_config=..., kw:audit=..., kw:cache_results=..., kw:max_cache_entries=..., kw:budget=...)"
       },
       "deidentify_document_stream": {
         "kind": "function",
@@ -471,7 +471,7 @@
       },
       "extract_pii": {
         "kind": "function",
-        "signature": "(text, model_name=..., confidence_threshold=..., config=..., use_smart_merging=..., lang=..., cache_results=..., max_cache_entries=..., normalize_accents=..., kw:preserve_whitespace=..., kw:locale=..., kw:loader=..., kw:batch_size=..., kw:num_workers=..., kw:custom_recognizer=..., kw:abdm=..., kw:code_mixed=..., kw:token_language_tags=..., kw:lid_model=..., kw:transliterated_name_config=...)"
+        "signature": "(text, model_name=..., confidence_threshold=..., config=..., use_smart_merging=..., lang=..., cache_results=..., max_cache_entries=..., normalize_accents=..., kw:preserve_whitespace=..., kw:locale=..., kw:loader=..., kw:batch_size=..., kw:num_workers=..., kw:custom_recognizer=..., kw:abdm=..., kw:code_mixed=..., kw:token_language_tags=..., kw:lid_model=..., kw:transliterated_name_config=..., kw:budget=...)"
       },
       "find_semantic_units": {
         "kind": "function",
@@ -543,7 +543,7 @@
       },
       "ground": {
         "kind": "function",
-        "signature": "(text_or_entities, systems=..., lang=..., top_k=..., snapshot=..., kw:loader=..., kw:encoder=..., kw:config=..., kw:restricted_loaders=..., kw:restricted_endpoint=..., kw:source_language=..., kw:offline=..., kw:local_only=..., kw:terminology_bridge=..., kw:bridge=..., kw:normalize_composites=..., kw:composite_atomic_terms=..., kw:postcoordination=...)"
+        "signature": "(text_or_entities, systems=..., lang=..., top_k=..., snapshot=..., kw:loader=..., kw:encoder=..., kw:config=..., kw:restricted_loaders=..., kw:restricted_endpoint=..., kw:source_language=..., kw:offline=..., kw:local_only=..., kw:terminology_bridge=..., kw:bridge=..., kw:normalize_composites=..., kw:composite_atomic_terms=..., kw:postcoordination=..., kw:verify=...)"
       },
       "india_clinical_route_active": {
         "kind": "function",
@@ -727,6 +727,14 @@
         "kind": "constant",
         "signature": null
       },
+      "AGENT_SCHEMA_DIALECT": {
+        "kind": "constant",
+        "signature": null
+      },
+      "AGENT_SELF_CHECK_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "ALLOWED_ATTRIBUTES": {
         "kind": "constant",
         "signature": null
@@ -774,6 +782,14 @@
       "AgentRunTiming": {
         "kind": "class",
         "signature": "(run, actions=..., allow_action_overlaps=...)"
+      },
+      "AgentSelfCheckReport": {
+        "kind": "class",
+        "signature": "(checks)"
+      },
+      "AgentSelfCheckResult": {
+        "kind": "class",
+        "signature": "(name, status, case_count, control_count, reason, digest)"
       },
       "ArtifactKind": {
         "kind": "class",
@@ -846,6 +862,10 @@
       "CompatibilityResult": {
         "kind": "class",
         "signature": "(outcome, reason_code, artifact_kind, incoming_version, min_version=..., max_version=...)"
+      },
+      "CompletedRun": {
+        "kind": "class",
+        "signature": "(run_id, events, terminal_sequence_number, graph, actions, timing, action_timings, outcome, error=..., artifacts=...)"
       },
       "CorrelationIdError": {
         "kind": "class",
@@ -1151,6 +1171,14 @@
         "kind": "constant",
         "signature": null
       },
+      "RUN_INVARIANT_REASON_CODES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "RUN_INVARIANT_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "RUN_SUMMARY_SCHEMA_VERSION": {
         "kind": "constant",
         "signature": null
@@ -1166,6 +1194,10 @@
       "ReviewerHandoffPacket": {
         "kind": "class",
         "signature": "(run_id, workflow_id, reason_code, requested_decision, evidence_references, issued_at, expires_at, schema_version=..., validation_time=...)"
+      },
+      "RunAction": {
+        "kind": "class",
+        "signature": "(correlation, phase, outcome=..., error=..., artifact_ids=..., reviewed=...)"
       },
       "RunCommitmentError": {
         "kind": "class",
@@ -1186,6 +1218,14 @@
       "RunId": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "RunInvariantError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "RunInvariantReport": {
+        "kind": "class",
+        "signature": "(findings, schema_version=...)"
       },
       "RunSummary": {
         "kind": "class",
@@ -1222,6 +1262,18 @@
       "SchemaRange": {
         "kind": "class",
         "signature": "(min_version, max_version, allow_prerelease=...)"
+      },
+      "SelfCheckName": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SelfCheckReason": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SelfCheckStatus": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "SemVer": {
         "kind": "class",
@@ -1275,9 +1327,21 @@
         "kind": "function",
         "signature": "(outcome_class)"
       },
+      "build_agent_schema": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "build_agent_schema_catalog": {
+        "kind": "function",
+        "signature": "()"
+      },
       "check_capability_validity": {
         "kind": "function",
         "signature": "(grant, kw:now, kw:expected_audience, kw:max_clock_skew_seconds=..., kw:max_lifetime_seconds=...)"
+      },
+      "check_run_invariants": {
+        "kind": "function",
+        "signature": "(run)"
       },
       "check_schema_compatibility": {
         "kind": "function",
@@ -1319,6 +1383,10 @@
         "kind": "function",
         "signature": "(phase)"
       },
+      "list_agent_schema_names": {
+        "kind": "function",
+        "signature": "()"
+      },
       "load_evidence_query_schema": {
         "kind": "function",
         "signature": "(name)"
@@ -1334,6 +1402,14 @@
       "plan_evidence_query": {
         "kind": "function",
         "signature": "(query)"
+      },
+      "render_agent_schema": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "run_agent_self_check": {
+        "kind": "function",
+        "signature": "()"
       },
       "security": {
         "kind": "unavailable",
@@ -1385,7 +1461,23 @@
         "kind": "class",
         "signature": "(code, field_name=...)"
       },
+      "ApprovalAuthorization": {
+        "kind": "class",
+        "signature": "()"
+      },
       "ApprovalExpiredError": {
+        "kind": "class",
+        "signature": "(code, field_name=...)"
+      },
+      "ApprovalKeyError": {
+        "kind": "class",
+        "signature": "(code, field_name=...)"
+      },
+      "ApprovalKeyProvider": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "ApprovalLifetimeError": {
         "kind": "class",
         "signature": "(code, field_name=...)"
       },
@@ -1396,6 +1488,26 @@
       "ApprovalNonceStoreError": {
         "kind": "class",
         "signature": "(code, field_name=...)"
+      },
+      "ApprovalNotYetValidError": {
+        "kind": "class",
+        "signature": "(code, field_name=...)"
+      },
+      "ApprovalQuorumDecision": {
+        "kind": "class",
+        "signature": "(action_digest, policy_digest, requester_role, reviewer_roles, receipt_digests, required_count, approved_count)"
+      },
+      "ApprovalQuorumError": {
+        "kind": "class",
+        "signature": null
+      },
+      "ApprovalQuorumEvaluator": {
+        "kind": "class",
+        "signature": "(policies)"
+      },
+      "ApprovalQuorumPolicy": {
+        "kind": "class",
+        "signature": "(action_class, required_count, allowed_reviewer_roles, distinct_roles=..., excluded_requester_roles=...)"
       },
       "ApprovalReceipt": {
         "kind": "class",
@@ -1415,7 +1527,7 @@
       },
       "ApprovalToken": {
         "kind": "class",
-        "signature": "(action_digest, reviewer_role, expires_at, nonce, signature, schema_version=...)"
+        "signature": "(action_digest, reviewer_role, expires_at, nonce, signature, schema_version=..., key_id=..., issued_at=...)"
       },
       "ApprovalTokenError": {
         "kind": "class",
@@ -1423,7 +1535,7 @@
       },
       "ApprovalTokenSigner": {
         "kind": "class",
-        "signature": "(key)"
+        "signature": "(key, kw:key_id=..., kw:clock=..., kw:max_lifetime_seconds=..., kw:clock_skew_seconds=...)"
       },
       "ApprovalTokenValidationError": {
         "kind": "class",
@@ -1431,11 +1543,39 @@
       },
       "ApprovalTokenVerifier": {
         "kind": "class",
-        "signature": "(key, nonce_store, kw:clock=...)"
+        "signature": "(key, nonce_store, kw:clock=..., kw:max_lifetime_seconds=..., kw:clock_skew_seconds=..., kw:allow_v1=..., kw:legacy_key_id=...)"
+      },
+      "DEFAULT_APPROVAL_LIFETIME_SECONDS": {
+        "kind": "constant",
+        "signature": null
       },
       "InMemoryApprovalNonceStore": {
         "kind": "class",
         "signature": "()"
+      },
+      "LEGACY_APPROVAL_TOKEN_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_APPROVAL_CLOCK_SKEW_SECONDS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_APPROVAL_LIFETIME_SECONDS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MappingApprovalKeyProvider": {
+        "kind": "class",
+        "signature": "(keys)"
+      },
+      "SQLiteApprovalNonceStore": {
+        "kind": "class",
+        "signature": "(path, kw:timeout=...)"
+      },
+      "SQLiteApprovalQuorumStore": {
+        "kind": "class",
+        "signature": "(path)"
       },
       "dispatch_with_approval_token": {
         "kind": "function",
@@ -1443,6 +1583,10 @@
       }
     },
     "openmed.agent.permissions": {
+      "ACCESS_EVENT_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "ACCESS_TICKET_DENIAL_SCHEMA_VERSION": {
         "kind": "constant",
         "signature": null
@@ -1450,6 +1594,18 @@
       "ACCESS_TICKET_SELECTOR_DIGEST_ALGORITHM": {
         "kind": "constant",
         "signature": null
+      },
+      "AccessEvent": {
+        "kind": "class",
+        "signature": "(run_id, purpose, data_classes, selector_count, tool_action, outcome, reason_code, timestamp)"
+      },
+      "AccessEventError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "AccessEventSink": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
       },
       "AccessTicket": {
         "kind": "class",
@@ -1505,7 +1661,7 @@
       },
       "AccessTicketVerifier": {
         "kind": "class",
-        "signature": "(kw:clock=...)"
+        "signature": "(kw:clock=..., kw:sink=...)"
       },
       "CAPABILITY_GRANT_SCHEMA_VERSION": {
         "kind": "constant",
@@ -1655,13 +1811,49 @@
         "kind": "class",
         "signature": "(code, kw:parent_grant_digest=..., kw:child_grant_digest=...)"
       },
+      "FHIRWriteScopeError": {
+        "kind": "class",
+        "signature": "(findings)"
+      },
+      "FHIRWriteScopeFinding": {
+        "kind": "class",
+        "signature": "(path, code)"
+      },
+      "FHIRWriteScopeVerifier": {
+        "kind": "class",
+        "signature": "(kw:selector_key, kw:patient_selector_kind, kw:encounter_selector_kind, kw:server_base, kw:resolver, kw:ticket_verifier=...)"
+      },
+      "LocalAccessEventSink": {
+        "kind": "class",
+        "signature": "(path)"
+      },
       "MappingCapabilityGrantKeyProvider": {
         "kind": "class",
         "signature": "(keys)"
       },
+      "MemoryAccessEventSink": {
+        "kind": "class",
+        "signature": "()"
+      },
       "RecordSelector": {
         "kind": "class",
         "signature": "(kind, digest)"
+      },
+      "ReferenceScopeResolver": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "ResultQuarantineCode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "ResultQuarantinedError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "ResultScope": {
+        "kind": "class",
+        "signature": "(patient, encounter, namespace, snapshot)"
       },
       "StaticCapabilityGrantKeyProvider": {
         "kind": "class",
@@ -1671,13 +1863,33 @@
         "kind": "class",
         "signature": "(tool, action)"
       },
+      "ToolResultPage": {
+        "kind": "class",
+        "signature": "(scope, records, index=..., final=...)"
+      },
+      "ToolResultRecord": {
+        "kind": "class",
+        "signature": "(scope, evidence, fields, children=...)"
+      },
+      "authorize_tool_results": {
+        "kind": "function",
+        "signature": "(ticket, request, verifier, kw:scope, kw:schema, kw:pages, kw:now=...)"
+      },
       "dispatch_with_access_ticket": {
         "kind": "function",
         "signature": "(ticket, request, verifier, dispatch, kw:now=...)"
       },
+      "dispatch_with_authorized_results": {
+        "kind": "function",
+        "signature": "(ticket, request, verifier, kw:scope, kw:schema, kw:read, kw:consume, kw:now=...)"
+      },
       "dispatch_with_capability_grant": {
         "kind": "function",
         "signature": "(manifest, request, verifier, dispatch, kw:now=...)"
+      },
+      "preview_with_fhir_write_scope": {
+        "kind": "function",
+        "signature": "(payload, ticket, request, verifier, preview, kw:now=...)"
       }
     },
     "openmed.agent.security": {
@@ -1745,13 +1957,17 @@
         "kind": "constant",
         "signature": null
       },
+      "FHIR_ADVERSARIAL_FIXTURES": {
+        "kind": "constant",
+        "signature": null
+      },
       "GuardedInput": {
         "kind": "class",
         "signature": "(value, findings)"
       },
       "InjectionFinding": {
         "kind": "class",
-        "signature": "(pattern_id, start, end, severity)"
+        "signature": "(pattern_id, start, end, severity, element_path=...)"
       },
       "InjectionGuard": {
         "kind": "class",
@@ -1925,6 +2141,14 @@
         "kind": "class",
         "signature": "(evidence_digest, required_fields_digest, report_digest, issues, chain_count, required_field_count, clinical_source_count, approved_field_count, schema=...)"
       },
+      "AbstractionFieldBinding": {
+        "kind": "class",
+        "signature": "(field_id, fact_ids, transformation_kind)"
+      },
+      "AbstractionReviewReceipt": {
+        "kind": "class",
+        "signature": "(field_id, pending_chain_digest, reviewer_state)"
+      },
       "AccessOutcome": {
         "kind": "class",
         "signature": "(value)"
@@ -1951,7 +2175,7 @@
       },
       "ChartAbstractionEvidence": {
         "kind": "class",
-        "signature": "(chains)"
+        "signature": "(chains, kw:blocking_issues=...)"
       },
       "CheckpointJournal": {
         "kind": "class",
@@ -2129,6 +2353,14 @@
         "kind": "class",
         "signature": "(schema_digest, projection_digest, record_count)"
       },
+      "JournalRetentionPolicy": {
+        "kind": "class",
+        "signature": "(minimum_age_seconds)"
+      },
+      "JournalRetirementPlan": {
+        "kind": "class",
+        "signature": "(record, policy, terminal_mtime_ns, checkpoint_digests, planned_at, journal_binding, plan_digest)"
+      },
       "MeasureDefinitionEvidence": {
         "kind": "class",
         "signature": "(measure_id, version, definition_digest)"
@@ -2245,6 +2477,10 @@
         "kind": "constant",
         "signature": null
       },
+      "RETIRED_JOURNAL_SCHEMA_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "RecoveryCheckpoint": {
         "kind": "class",
         "signature": "(workflow_id, run_id, sequence, phase, plan_digest, effects, checkpoint_digest, approval_action_digest=..., approval_receipt_digest=..., approval_expires_at=..., previous_checkpoint_digest=..., recovery_evidence_digest=..., schema_version=...)"
@@ -2268,6 +2504,10 @@
       "RecoveryReason": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "RetiredJournalRecord": {
+        "kind": "class",
+        "signature": "(final_checkpoint_digest, recovery_evidence_digest, checkpoint_recovery_evidence_digest, phase, checkpoint_count, effect_count, committed_effect_count, record_digest, schema_version=...)"
       },
       "ReviewerAction": {
         "kind": "class",
@@ -2320,6 +2560,14 @@
       "advance_checkpoint": {
         "kind": "function",
         "signature": "(checkpoint, decision)"
+      },
+      "build_journey_abstraction_evidence": {
+        "kind": "function",
+        "signature": "(snapshot, fields, kw:facts, kw:locators, kw:artifacts, kw:source_kinds, kw:conflicts=..., kw:review_receipts=...)"
+      },
+      "build_native_measure_evidence_packet": {
+        "kind": "function",
+        "signature": "(run, kw:input_schema_digest, kw:key_id, kw:key_provider)"
       },
       "build_quality_measure_evidence_packet": {
         "kind": "function",
@@ -2579,17 +2827,65 @@
         "kind": "class",
         "signature": "(template_id, text, source_type)"
       },
+      "BriefCancellation": {
+        "kind": "class",
+        "signature": "(clock=...)"
+      },
       "BriefContext": {
         "kind": "class",
         "signature": "(packet, content_digest, facts, nli_predict, thresholds, privacy_detector)"
+      },
+      "BriefContextBinding": {
+        "kind": "class",
+        "signature": "(source_digest, content_digest, extraction_digest, profile_digest, calibration_digest, policy_fingerprint)"
+      },
+      "BriefContextCode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "BriefContextError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "BriefContextOutcome": {
+        "kind": "class",
+        "signature": "(code, artifact=..., context=..., binding=...)"
+      },
+      "BriefContextPlan": {
+        "kind": "class",
+        "signature": "(binding, facts, spans)"
+      },
+      "BriefContextSpan": {
+        "kind": "class",
+        "signature": "(reference_id, source_id, start, end)"
+      },
+      "BriefExtraction": {
+        "kind": "class",
+        "signature": "(artifact, artifact_id, source_id, facts, locators, mappings, conflicts=..., synthetic=...)"
+      },
+      "BriefExtractionProvider": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
       },
       "BriefFact": {
         "kind": "class",
         "signature": "(reference_id, profile_field, negation, certainty, temporality, experiencer, demographic_class=...)"
       },
+      "BriefFactMapping": {
+        "kind": "class",
+        "signature": "(fact_id, profile_field, temporality)"
+      },
+      "BriefInterrupted": {
+        "kind": "class",
+        "signature": "(kw:expired=...)"
+      },
       "BriefRefusal": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "BriefReviewVerifier": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
       },
       "BucketedClinicalTimeline": {
         "kind": "class",
@@ -2779,6 +3075,30 @@
         "kind": "constant",
         "signature": null
       },
+      "CLINICAL_RECORD_SCHEMA_BUNDLE_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
+      "CLINICAL_RECORD_SCHEMA_FILENAMES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "CLINICAL_RECORD_SCHEMA_IDS": {
+        "kind": "constant",
+        "signature": null
+      },
+      "CLINICAL_RECORD_SCHEMA_NAMES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "CLINICAL_RECORD_SCHEMA_PACKAGE": {
+        "kind": "constant",
+        "signature": null
+      },
+      "CLINICAL_RECORD_SCHEMA_SNAPSHOT_NAME": {
+        "kind": "constant",
+        "signature": null
+      },
       "CLINICIAN_REVIEW_REQUIRED_NOTE": {
         "kind": "constant",
         "signature": null
@@ -2857,7 +3177,7 @@
       },
       "CanonicalMention": {
         "kind": "class",
-        "signature": "(document_id, source_index, text, start, end, normalized_text, canonical_text, semantic_type=..., section=..., canonical_section=..., negation=..., temporality=..., experiencer=..., system=..., code=..., coref_entity_id=...)"
+        "signature": "(document_id, source_index, text, start, end, normalized_text, canonical_text, semantic_type=..., section=..., canonical_section=..., negation=..., temporality=..., experiencer=..., system=..., code=..., coref_entity_id=..., text_hash=...)"
       },
       "CareGapConflictError": {
         "kind": "class",
@@ -3031,6 +3351,10 @@
         "kind": "type_alias",
         "signature": null
       },
+      "ClaimVerification": {
+        "kind": "class",
+        "signature": "(claim_index, label, score, backend_id, source_offset, claim_offset, source_digest, claim_digest, review_required)"
+      },
       "ClinicalAnalysisError": {
         "kind": "class",
         "signature": null
@@ -3045,7 +3369,7 @@
       },
       "ClinicalContextResult": {
         "kind": "class",
-        "signature": "(temporality, certainty, negation)"
+        "signature": "(temporality, certainty, negation, experiencer=...)"
       },
       "ClinicalEvent": {
         "kind": "class",
@@ -3107,6 +3431,10 @@
         "kind": "class",
         "signature": "(language, decimal_separator=..., thousands_separators=..., unit_aliases=..., abbreviation_expansions=..., frequency_aliases=..., duration_unit_aliases=..., abnormal_flags=..., token_boundaries=...)"
       },
+      "ClinicalRecordSchemaError": {
+        "kind": "class",
+        "signature": null
+      },
       "ClinicalRefusal": {
         "kind": "class",
         "signature": "(category, count=...)"
@@ -3121,7 +3449,7 @@
       },
       "ClinicalSummaryCard": {
         "kind": "class",
-        "signature": "(problems=..., medications=..., labs=..., procedures=..., other=..., coded_entities=..., uncoded_entities=..., distinct_codes=..., section_count=...)"
+        "signature": "(problems=..., medications=..., labs=..., procedures=..., other=..., coded_entities=..., uncoded_entities=..., distinct_codes=..., section_count=..., suppression_provenance=...)"
       },
       "ClinicalTemporalNliPair": {
         "kind": "class",
@@ -3250,6 +3578,10 @@
       "CoverageStatus": {
         "kind": "type_alias",
         "signature": null
+      },
+      "CurrentLocalSource": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
       },
       "DEFAULT_ABBREVIATION_EXPANSIONS": {
         "kind": "constant",
@@ -3585,7 +3917,7 @@
       },
       "DocumentCluster": {
         "kind": "class",
-        "signature": "(cluster_id, documents=..., edges=...)"
+        "signature": "(cluster_id, documents=..., edges=..., patient_id=..., entities=...)"
       },
       "DocumentEdge": {
         "kind": "class",
@@ -4323,9 +4655,17 @@
         "kind": "class",
         "signature": "(doc_id, note_datetime, superseded, provenance)"
       },
+      "LocalBriefContextProvider": {
+        "kind": "class",
+        "signature": "(kw:extraction_provider, kw:review_verifier, kw:thresholds, kw:nli_predict, kw:privacy_detector, kw:profile=...)"
+      },
       "LocalNLIError": {
         "kind": "class",
         "signature": null
+      },
+      "LocalReviewReceipt": {
+        "kind": "class",
+        "signature": "(receipt_id, authority_id, evidence_digest, issued_at, expires_at)"
       },
       "LocalSummarizerError": {
         "kind": "class",
@@ -4597,11 +4937,11 @@
       },
       "MedicationRelation": {
         "kind": "class",
-        "signature": "(relation_type, attribute_type, head, attribute, score, confidence, features, normalized=...)"
+        "signature": "(relation_type, attribute_type, head, attribute, score, confidence, features, normalized=..., coreference=...)"
       },
       "MedicationRelationGroup": {
         "kind": "class",
-        "signature": "(medication, relations, advisory)"
+        "signature": "(medication, relations, advisory, coreference=...)"
       },
       "MedicationRelationScorer": {
         "kind": "class",
@@ -5403,6 +5743,10 @@
         "kind": "constant",
         "signature": null
       },
+      "REVIEWED_LOCAL_EVIDENCE_VERSION": {
+        "kind": "constant",
+        "signature": null
+      },
       "REVIEW_PACKET_ADVISORY": {
         "kind": "constant",
         "signature": null
@@ -5651,6 +5995,22 @@
         "kind": "type_alias",
         "signature": null
       },
+      "ReviewAdmissionError": {
+        "kind": "class",
+        "signature": "(reason)"
+      },
+      "ReviewAdmissionRefusal": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "ReviewAuthorityStatus": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "ReviewAuthorityVerifier": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
       "ReviewBand": {
         "kind": "type_alias",
         "signature": null
@@ -5730,6 +6090,18 @@
       "ReviewTransitionValidationError": {
         "kind": "class",
         "signature": "(code, kw:from_state=..., kw:to_state=...)"
+      },
+      "ReviewedLocalBriefContext": {
+        "kind": "class",
+        "signature": "(packet, content_digest, facts, nli_predict, thresholds, privacy_detector, source, authority, clock=...)"
+      },
+      "ReviewedLocalEvidence": {
+        "kind": "class",
+        "signature": "(source_id, source_digest, source_length, policy_digest, references, review_receipt=..., schema_version=..., kind=..., provenance_class=..., offset_convention=...)"
+      },
+      "ReviewedLocalReference": {
+        "kind": "class",
+        "signature": "(reference_id, start, end)"
       },
       "RoleSlot": {
         "kind": "class",
@@ -6141,7 +6513,7 @@
       },
       "SpanReference": {
         "kind": "class",
-        "signature": "(text, label, start, end, score, section=...)"
+        "signature": "(text, label, start, end, score, section=..., derived=..., text_hash=...)"
       },
       "SpanSig": {
         "kind": "class",
@@ -6161,7 +6533,7 @@
       },
       "SummarizationResult": {
         "kind": "class",
-        "signature": "(summary, leakage_check, mode=..., backend=..., template_digest=...)"
+        "signature": "(summary, leakage_check, mode=..., backend=..., template_digest=..., verification=...)"
       },
       "SummarizerBackend": {
         "kind": "class",
@@ -6597,7 +6969,7 @@
       },
       "TimelineEvent": {
         "kind": "class",
-        "signature": "(event_id, text, start, end, timex, interval, temporality, reference_date_dependent, reference_date_provenance, relation_anchor=..., relative_offset_days=..., provenance=...)"
+        "signature": "(event_id, text, start, end, timex, interval, temporality, reference_date_dependent, reference_date_provenance, relation_anchor=..., relative_offset_days=..., provenance=..., doc_time_rel=...)"
       },
       "TimelineEvidence": {
         "kind": "class",
@@ -6995,6 +7367,10 @@
         "kind": "function",
         "signature": "(text, kw:language=...)"
       },
+      "admit_reviewed_local_evidence": {
+        "kind": "function",
+        "signature": "(packet, kw:source_digest, kw:policy_digest, kw:source, kw:authority, kw:clock=...)"
+      },
       "aggregate_document_relations": {
         "kind": "function",
         "signature": "(text, candidates, kw:document_id=..., kw:entity_ids_by_offset=..., kw:cardinality=..., kw:min_relation_score=..., kw:hash_secret=...)"
@@ -7025,7 +7401,7 @@
       },
       "apply_section_context": {
         "kind": "function",
-        "signature": "(span, section=..., assertion=...)"
+        "signature": "(span, section=..., assertion=..., language=..., kw:modifier_hits=...)"
       },
       "assemble_biomarker_results": {
         "kind": "function",
@@ -7149,7 +7525,7 @@
       },
       "build_clinical_brief": {
         "kind": "function",
-        "signature": "(note_or_deid_result, kw:model=..., kw:profile=..., kw:context=...)"
+        "signature": "(note_or_deid_result, kw:model=..., kw:profile=..., kw:context=..., kw:cancellation=...)"
       },
       "build_deidentification_offset_map": {
         "kind": "function",
@@ -7277,7 +7653,7 @@
       },
       "build_relation_candidates": {
         "kind": "function",
-        "signature": "(text, spans, rules, kw:language)"
+        "signature": "(text, spans, rules, kw:language, kw:max_sentence_distance=...)"
       },
       "build_review_packet": {
         "kind": "function",
@@ -7297,7 +7673,7 @@
       },
       "build_summary_card": {
         "kind": "function",
-        "signature": "(entities=..., sections=...)"
+        "signature": "(entities=..., sections=..., kw:boilerplate_spans=..., kw:suppress_boilerplate=...)"
       },
       "build_summary_citation_report": {
         "kind": "function",
@@ -7495,6 +7871,30 @@
         "kind": "function",
         "signature": "(language=...)"
       },
+      "clinical_record_schema_filename": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "clinical_record_schema_fingerprint": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "clinical_record_schema_fingerprints": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "clinical_record_schema_id": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "clinical_record_schema_json": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "clinical_record_schema_snapshot": {
+        "kind": "function",
+        "signature": "()"
+      },
       "clinical_status_from_assertion": {
         "kind": "function",
         "signature": "(assertion)"
@@ -7518,6 +7918,14 @@
       "collapse_relation_duplicates": {
         "kind": "function",
         "signature": "(candidates, kw:source_id=..., kw:document_id=..., kw:hash_secret=...)"
+      },
+      "compare_all_clinical_record_drift": {
+        "kind": "function",
+        "signature": "(kw:schemas=..., kw:snapshot=...)"
+      },
+      "compare_clinical_record_drift": {
+        "kind": "function",
+        "signature": "(name, current_schema=..., kw:snapshot=...)"
       },
       "compare_event_intervals": {
         "kind": "function",
@@ -7669,7 +8077,7 @@
       },
       "derive_abnormal_flag": {
         "kind": "function",
-        "signature": "(value, reference_range, explicit_flag=..., kw:value_unit=..., kw:reference_unit=...)"
+        "signature": "(value, reference_range, explicit_flag=..., kw:value_unit=..., kw:reference_unit=..., kw:language=...)"
       },
       "detect_boilerplate": {
         "kind": "function",
@@ -7809,7 +8217,7 @@
       },
       "extract_lab_trend_events": {
         "kind": "function",
-        "signature": "(text, mentions=..., kw:lab_value_graph=..., kw:max_distance=..., kw:include_detected_time_anchors=...)"
+        "signature": "(text, mentions=..., kw:lab_value_graph=..., kw:max_distance=..., kw:include_detected_time_anchors=..., kw:coreference_chains=..., kw:language=..., kw:max_events=...)"
       },
       "extract_measurement_trends": {
         "kind": "function",
@@ -7817,7 +8225,7 @@
       },
       "extract_medication_change_events": {
         "kind": "function",
-        "signature": "(text, mentions=..., kw:max_distance=..., kw:include_detected_time_anchors=...)"
+        "signature": "(text, mentions=..., kw:max_distance=..., kw:include_detected_time_anchors=..., kw:coreference_chains=..., kw:language=..., kw:max_events=...)"
       },
       "extract_medication_relations": {
         "kind": "function",
@@ -7857,7 +8265,7 @@
       },
       "extract_relations": {
         "kind": "function",
-        "signature": "(text, spans, kw:language, kw:min_score=..., kw:asserted_only=...)"
+        "signature": "(text, spans, sections=..., kw:language=..., kw:min_score=..., kw:asserted_only=...)"
       },
       "extract_scoped_medication_candidates": {
         "kind": "function",
@@ -7881,7 +8289,7 @@
       },
       "filter_medication_candidates": {
         "kind": "function",
-        "signature": "(text, entities, kw:preset=..., kw:grounder=...)"
+        "signature": "(text, entities, kw:preset=..., kw:grounder=..., kw:language=...)"
       },
       "filter_patient_record": {
         "kind": "function",
@@ -8021,7 +8429,7 @@
       },
       "link_medication_attributes": {
         "kind": "function",
-        "signature": "(text, spans, kw:section_by_span=..., kw:scorer=...)"
+        "signature": "(text, spans, kw:section_by_span=..., kw:scorer=..., kw:coreference_chains=...)"
       },
       "link_mentions": {
         "kind": "function",
@@ -8035,6 +8443,10 @@
         "kind": "function",
         "signature": "(path=..., kw:include_starter=...)"
       },
+      "load_all_clinical_record_schemas": {
+        "kind": "function",
+        "signature": "()"
+      },
       "load_boilerplate_template_corpus": {
         "kind": "callable",
         "signature": "()"
@@ -8046,6 +8458,18 @@
       "load_chinese_terminology_dictionary": {
         "kind": "function",
         "signature": "(dictionary_path, kw:license_acknowledged=...)"
+      },
+      "load_clinical_record_schema": {
+        "kind": "function",
+        "signature": "(name)"
+      },
+      "load_clinical_record_schema_bundle": {
+        "kind": "function",
+        "signature": "()"
+      },
+      "load_clinical_record_snapshot": {
+        "kind": "function",
+        "signature": "(path=...)"
       },
       "load_context_rules": {
         "kind": "function",
@@ -8165,7 +8589,7 @@
       },
       "normalize_duration": {
         "kind": "function",
-        "signature": "(text)"
+        "signature": "(text, kw:language=...)"
       },
       "normalize_employment_status": {
         "kind": "function",
@@ -8181,7 +8605,7 @@
       },
       "normalize_frequency": {
         "kind": "function",
-        "signature": "(text)"
+        "signature": "(text, kw:language=...)"
       },
       "normalize_interval": {
         "kind": "function",
@@ -8205,7 +8629,7 @@
       },
       "normalize_medication_attribute": {
         "kind": "function",
-        "signature": "(attribute_type, text)"
+        "signature": "(attribute_type, text, kw:language=...)"
       },
       "normalize_medication_dose": {
         "kind": "function",
@@ -8249,7 +8673,7 @@
       },
       "normalize_temporal": {
         "kind": "function",
-        "signature": "(text, spans, reference_time)"
+        "signature": "(text, spans, reference_time, kw:language=...)"
       },
       "normalize_temporal_interval": {
         "kind": "function",
@@ -8261,7 +8685,7 @@
       },
       "normalize_to": {
         "kind": "function",
-        "signature": "(value, from_unit, to_unit)"
+        "signature": "(value, from_unit, to_unit, kw:language=..., kw:from_language=..., kw:to_language=...)"
       },
       "normalize_unit_surface": {
         "kind": "function",
@@ -8269,7 +8693,7 @@
       },
       "normalize_vital_measurement": {
         "kind": "function",
-        "signature": "(value, unit, target_unit)"
+        "signature": "(value, unit, target_unit, kw:language=..., kw:target_language=...)"
       },
       "opaque_case_key": {
         "kind": "function",
@@ -8297,7 +8721,7 @@
       },
       "parse_measurement": {
         "kind": "function",
-        "signature": "(value, unit=...)"
+        "signature": "(value, unit=..., kw:language=...)"
       },
       "parse_radiology_finding_profile": {
         "kind": "function",
@@ -8309,7 +8733,7 @@
       },
       "parse_reference_range": {
         "kind": "function",
-        "signature": "(text)"
+        "signature": "(text, kw:language=...)"
       },
       "parse_sig": {
         "kind": "function",
@@ -8341,7 +8765,11 @@
       },
       "parse_unit": {
         "kind": "function",
-        "signature": "(unit)"
+        "signature": "(unit, kw:language=...)"
+      },
+      "plan_brief_context": {
+        "kind": "function",
+        "signature": "(extraction, kw:profile, kw:thresholds)"
       },
       "plan_summary_length_budget": {
         "kind": "function",
@@ -8397,7 +8825,7 @@
       },
       "refine_experiencer": {
         "kind": "function",
-        "signature": "(spans, context_result=..., kw:text=..., kw:section_experiencer=...)"
+        "signature": "(spans, context_result=..., kw:text=..., kw:section_experiencer=..., kw:language=...)"
       },
       "register_clinical_norm_lexicon": {
         "kind": "function",
@@ -8461,7 +8889,7 @@
       },
       "resolve_coreference": {
         "kind": "function",
-        "signature": "(spans, text, kw:threshold=...)"
+        "signature": "(spans=..., text=..., kw:threshold=..., kw:document_text=..., kw:document_id=..., kw:include_anaphora=..., kw:abbreviation_expansions=..., kw:canonical_aliases=..., kw:hash_secret=...)"
       },
       "resolve_event_coreference": {
         "kind": "function",
@@ -8469,7 +8897,7 @@
       },
       "resolve_experiencer": {
         "kind": "function",
-        "signature": "(text, span, kw:section_experiencer=...)"
+        "signature": "(text, span, kw:section_experiencer=..., kw:language=...)"
       },
       "resolve_medication_candidate_preset": {
         "kind": "function",
@@ -8550,6 +8978,10 @@
       "review_evidence_claims": {
         "kind": "function",
         "signature": "(claims, assertion_records=..., temporal_records=..., source_integrity_records=..., kw:assertions=..., kw:temporal=..., kw:source_integrity=...)"
+      },
+      "reviewed_source_digest": {
+        "kind": "function",
+        "signature": "(text)"
       },
       "route_analysis": {
         "kind": "function",
@@ -8641,15 +9073,15 @@
       },
       "structure_vital_sign": {
         "kind": "function",
-        "signature": "(text)"
+        "signature": "(text, kw:language=...)"
       },
       "summarize": {
         "kind": "function",
-        "signature": "(text, mode=..., model=...)"
+        "signature": "(text, mode=..., model=..., kw:verify=...)"
       },
       "summarize_deidentified": {
         "kind": "function",
-        "signature": "(deidentified, mode=..., model=...)"
+        "signature": "(deidentified, mode=..., model=..., kw:cancellation=..., kw:verify=...)"
       },
       "summary_citation_consistency": {
         "kind": "function",
@@ -8698,6 +9130,10 @@
       "validate_claim_packet_integrity": {
         "kind": "function",
         "signature": "(packet_or_claims=..., citations=..., reviews=..., policy=..., **kwargs)"
+      },
+      "validate_clinical_record": {
+        "kind": "function",
+        "signature": "(name, record)"
       },
       "validate_evidence_packet": {
         "kind": "function",
@@ -8846,6 +9282,10 @@
       "verify_guarded_provenance": {
         "kind": "function",
         "signature": "(value, **kwargs)"
+      },
+      "write_clinical_record_snapshot": {
+        "kind": "function",
+        "signature": "(path)"
       },
       "write_guarded_provenance_manifest": {
         "kind": "function",
@@ -10333,7 +10773,7 @@
       },
       "DetectionNormalization": {
         "kind": "class",
-        "signature": "(text, original_length, offset_starts, offset_ends, removed_zero_width=..., stripped_combining_marks=..., folded_confusables=..., folded_native_digits=..., indic_changes=..., indic_scripts=..., converted_legacy_bytes=..., legacy_encoding=..., scripts=..., mixed_script=..., chinese_variant_normalized=..., chinese_target_script=..., opencc_available=...)"
+        "signature": "(text, original_length, offset_starts, offset_ends, removed_zero_width=..., stripped_combining_marks=..., folded_confusables=..., folded_native_digits=..., indic_changes=..., indic_scripts=..., converted_legacy_bytes=..., legacy_encoding=..., scripts=..., mixed_script=..., chinese_variant_normalized=..., chinese_target_script=..., opencc_available=..., removed_bidi_controls=..., folded_perso_arabic_letters=...)"
       },
       "DetectorInfo": {
         "kind": "class",
@@ -10469,7 +10909,7 @@
       },
       "LanguagePack": {
         "kind": "class",
-        "signature": "(code, scripts, default_model, segmenter_id, recognizers, surrogate_locale, national_id_providers=..., policy_overrides=..., recall_floor_overrides=..., candidate_priority=..., context_scripts=..., routing_markers=...)"
+        "signature": "(code, scripts, default_model, segmenter_id, recognizers, surrogate_locale, national_id_providers=..., policy_overrides=..., recall_floor_overrides=..., candidate_priority=..., context_scripts=..., routing_markers=..., surrogate_locale_approximation=...)"
       },
       "LanguagePackCoherenceError": {
         "kind": "class",
@@ -10485,11 +10925,11 @@
       },
       "LanguageRouter": {
         "kind": "class",
-        "signature": "(kw:packs=..., kw:language_identifier=..., kw:use_optional_lid=...)"
+        "signature": "(kw:packs=..., kw:language_identifier=..., kw:use_optional_lid=..., kw:fallback_pack=...)"
       },
       "LanguageRun": {
         "kind": "class",
-        "signature": "(start, end, script, language, confidence, source)"
+        "signature": "(start, end, script, language, confidence, source, candidates=..., normalizer=..., tokenizer=..., numeral_set=..., reason=...)"
       },
       "MAX_AUDIT_HMAC_KEY_BYTES": {
         "kind": "constant",
@@ -10537,7 +10977,7 @@
       },
       "OpenMedConfig": {
         "kind": "class",
-        "signature": "(default_org=..., cache_dir=..., device=..., hf_token=..., log_level=..., timeout=..., use_medical_tokenizer=..., medical_tokenizer_exceptions=..., chinese_segmentation_backend=..., chinese_user_dict_path=..., chinese_pkuseg_domain=..., clinical_protect_enabled=..., clinical_protect_terms=..., clinical_protect_use_builtin=..., backend=..., batch_size=..., num_workers=..., lazy_model_loading=..., pii_model=..., pii_model_revision=..., onnx_variant=..., onnx_intra_op_num_threads=..., torch_attention_backend=..., load_in_4bit=..., bnb_4bit_use_double_quant=..., local_only=..., cjk_width_convention=..., chinese_target_script=..., transliteration_aware_name_matching=..., indic_name_similarity_threshold=..., profile=...)"
+        "signature": "(default_org=..., cache_dir=..., device=..., hf_token=..., log_level=..., timeout=..., use_medical_tokenizer=..., medical_tokenizer_exceptions=..., chinese_segmentation_backend=..., chinese_user_dict_path=..., chinese_pkuseg_domain=..., clinical_protect_enabled=..., clinical_protect_terms=..., clinical_protect_use_builtin=..., backend=..., batch_size=..., num_workers=..., lazy_model_loading=..., pii_model=..., pii_model_revision=..., onnx_variant=..., onnx_intra_op_num_threads=..., torch_attention_backend=..., load_in_4bit=..., bnb_4bit_use_double_quant=..., local_only=..., cjk_width_convention=..., chinese_target_script=..., transliteration_aware_name_matching=..., indic_name_similarity_threshold=..., profile=..., remote_inference_endpoint=..., remote_inference_protocol=..., remote_inference_model_name=..., remote_inference_model_version=..., remote_inference_tokenizer=..., remote_inference_timeout_seconds=..., remote_inference_verify_tls=...)"
       },
       "OpenMedError": {
         "kind": "class",
@@ -10777,7 +11217,7 @@
       },
       "normalize_for_pii_detection": {
         "kind": "function",
-        "signature": "(text, kw:width_convention=..., kw:chinese_target_script=..., kw:legacy_font_map=...)"
+        "signature": "(text, kw:width_convention=..., kw:chinese_target_script=..., kw:legacy_font_map=..., kw:lang=..., kw:preserve_script_letters=...)"
       },
       "normalizer_for_script": {
         "kind": "function",
@@ -11195,7 +11635,7 @@
       },
       "CalibrationArtifactPaths": {
         "kind": "class",
-        "signature": "(artifact_dir, thresholds_path, report_path, under_shift_report_path=...)"
+        "signature": "(artifact_dir, thresholds_path, report_path, under_shift_report_path=..., relation_report_path=...)"
       },
       "CalibrationGroupReport": {
         "kind": "class",
@@ -13187,7 +13627,7 @@
       },
       "ReleaseGate": {
         "kind": "class",
-        "signature": "(kw:milestone=..., kw:policy=..., kw:baseline_path=..., kw:thresholds_matrix=..., kw:thresholds_matrix_path=..., kw:model_steward_config=..., kw:signing_key=..., kw:key_id=...)"
+        "signature": "(kw:milestone=..., kw:policy=..., kw:baseline_path=..., kw:thresholds_matrix=..., kw:thresholds_matrix_path=..., kw:model_steward_config=..., kw:cross_document_linkage_ceiling=..., kw:signing_key=..., kw:key_id=...)"
       },
       "ReliabilityBin": {
         "kind": "class",
@@ -13275,7 +13715,7 @@
       },
       "RolloutStateMachine": {
         "kind": "class",
-        "signature": "(entries=..., dwell_windows=..., clock=...)"
+        "signature": "(entries=..., dwell_windows=..., clock=..., audit_records=...)"
       },
       "RunAggregation": {
         "kind": "class",
@@ -13911,7 +14351,7 @@
       },
       "bundle_gate_evidence": {
         "kind": "function",
-        "signature": "(gate_report, output_dir, kw:evidence_root=..., kw:extra_artifacts=..., kw:manifest_name=..., kw:extraction_fairness=...)"
+        "signature": "(gate_report, output_dir, kw:evidence_root=..., kw:extra_artifacts=..., kw:manifest_name=..., kw:extraction_fairness=..., kw:pipeline_attribution=...)"
       },
       "cache_path": {
         "kind": "function",
@@ -14003,7 +14443,7 @@
       },
       "compute_date_shift_consistency": {
         "kind": "function",
-        "signature": "(original_dates, shifted_dates)"
+        "signature": "(original_dates, shifted_dates, kw:patient_ids=...)"
       },
       "compute_document_level_relation_metrics": {
         "kind": "function",
@@ -14055,7 +14495,7 @@
       },
       "compute_metrics_bundle": {
         "kind": "function",
-        "signature": "(gold_spans, predicted_spans, kw:extraction_outputs=..., kw:latencies_ms=..., kw:cold_start_ms=..., kw:peak_rss_bytes=..., kw:model_size_bytes=..., kw:abstention_thresholds=..., kw:abstention_confidence_threshold=..., kw:abstention_model_id=..., kw:abstention_target_risk=..., kw:abstention_confidence_level=..., kw:abstention_bootstrap_resamples=..., kw:abstention_seed=..., kw:default_language=..., kw:default_device=..., kw:source_text=...)"
+        "signature": "(gold_spans, predicted_spans, kw:extraction_outputs=..., kw:latencies_ms=..., kw:cold_start_ms=..., kw:peak_rss_bytes=..., kw:model_size_bytes=..., kw:original_dates=..., kw:shifted_dates=..., kw:date_patient_ids=..., kw:surrogate_originals=..., kw:surrogates=..., kw:surrogate_document_ids=..., kw:surrogate_checksum_valid=..., kw:abstention_thresholds=..., kw:abstention_confidence_threshold=..., kw:abstention_model_id=..., kw:abstention_target_risk=..., kw:abstention_confidence_level=..., kw:abstention_bootstrap_resamples=..., kw:abstention_seed=..., kw:extracted_facts=..., kw:default_language=..., kw:default_device=..., kw:source_text=..., kw:source_facts=..., kw:summary_facts=...)"
       },
       "compute_mixed_script_leakage": {
         "kind": "function",
@@ -14147,7 +14587,7 @@
       },
       "compute_surrogate_consistency": {
         "kind": "function",
-        "signature": "(originals, surrogates)"
+        "signature": "(originals, surrogates, kw:document_ids=..., kw:checksum_valid=...)"
       },
       "compute_temporal_awareness_f1": {
         "kind": "function",
@@ -14307,7 +14747,7 @@
       },
       "evaluate_readiness": {
         "kind": "function",
-        "signature": "(kw:version=..., kw:repo_root=..., kw:gate_report=..., kw:gate_report_key=..., kw:migration_guide=..., kw:api_compat_report=..., kw:e2e_report=..., kw:signing_key=..., kw:key_id=...)"
+        "signature": "(kw:version=..., kw:repo_root=..., kw:gate_report=..., kw:gate_report_key=..., kw:migration_guide=..., kw:api_compat_report=..., kw:e2e_report=..., kw:signing_key=..., kw:key_id=..., kw:sdk_baseline=...)"
       },
       "evaluate_reid_risk_gate": {
         "kind": "function",
@@ -15243,7 +15683,7 @@
       },
       "write_calibration_artifacts": {
         "kind": "function",
-        "signature": "(samples, kw:artifact_dir, kw:model_id, kw:suite, kw:target_leakage=..., kw:min_recall=..., kw:conformal_alpha=..., kw:gate_samples=..., kw:coverage_tolerance=..., kw:membership_defense=..., kw:generated_at=..., kw:metadata=...)"
+        "signature": "(samples, kw:artifact_dir, kw:model_id, kw:suite, kw:target_leakage=..., kw:min_recall=..., kw:conformal_alpha=..., kw:gate_samples=..., kw:coverage_tolerance=..., kw:membership_defense=..., kw:generated_at=..., kw:metadata=..., kw:relation_report=...)"
       },
       "write_comparator_report": {
         "kind": "function",
@@ -15333,7 +15773,7 @@
     "openmed.interop": {
       "AdapterSpec": {
         "kind": "class",
-        "signature": "(name, module, extra, description)"
+        "signature": "(name, module, extra, description, kind=..., plugin_id=..., component_id=..., loaded_by_policy_opt_in=...)"
       },
       "PrivacyGateway": {
         "kind": "class",
@@ -15369,7 +15809,7 @@
       },
       "available_adapters": {
         "kind": "function",
-        "signature": "()"
+        "signature": "(kw:include_plugins=..., kw:allow_network_egress=..., kw:allow_non_permissive_licenses=..., kw:opt_in_plugins=...)"
       },
       "discover_plugin_adapters": {
         "kind": "function",
@@ -15420,6 +15860,14 @@
       "AmbiguousPolicyPathError": {
         "kind": "class",
         "signature": null
+      },
+      "ApprovedWriteEntry": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "AssembledTransaction": {
+        "kind": "class",
+        "signature": "(serialized, bundle_digest, entry_count)"
       },
       "BULK_CHECKPOINT_MANIFEST_VERSION": {
         "kind": "constant",
@@ -15505,9 +15953,17 @@
         "kind": "class",
         "signature": null
       },
+      "FHIRCredentialCustody": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
       "FHIREvidenceMapping": {
         "kind": "class",
         "signature": "(record_id, target_reference, evidence_ids, canonical_hash)"
+      },
+      "FHIRHTTPResponse": {
+        "kind": "class",
+        "signature": "(status_code, body=..., headers=...)"
       },
       "FHIRJourneyConflictError": {
         "kind": "class",
@@ -15541,13 +15997,45 @@
         "kind": "class",
         "signature": "(path, line_number, message)"
       },
+      "FHIRPreparedWrite": {
+        "kind": "class",
+        "signature": "(action_digest, payload_digest, resource_count, idempotency_key, _method, _path, _headers, _body, _handle, _lineage, _scopes, _types)"
+      },
       "FHIRReferenceIntegrityReport": {
         "kind": "class",
         "signature": "(entry_count, resource_count, contained_resource_count, full_url_count, reference_count, findings=..., schema_version=...)"
       },
+      "FHIRServerValidationIssue": {
+        "kind": "class",
+        "signature": "(severity, code, element_paths=...)"
+      },
+      "FHIRServerValidationReason": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "FHIRServerValidationResult": {
+        "kind": "class",
+        "signature": "(status, reason_code, issues=..., discarded_path_count=..., request_digest=...)"
+      },
+      "FHIRServerValidationStatus": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "FHIRTransportRequest": {
+        "kind": "class",
+        "signature": "(method, url, headers, body, timeout_seconds, max_response_bytes, follow_redirects=..., retries=...)"
+      },
+      "FHIRValidationResponse": {
+        "kind": "class",
+        "signature": "(status_code, outcome)"
+      },
       "FHIRValidationResult": {
         "kind": "class",
         "signature": "(issues, version, profile=...)"
+      },
+      "FHIRValidationTransport": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
       },
       "FHIRVersion": {
         "kind": "class",
@@ -15560,6 +16048,34 @@
       "FHIRVersionError": {
         "kind": "class",
         "signature": null
+      },
+      "FHIRWriteClient": {
+        "kind": "class",
+        "signature": "(kw:audience, kw:secret, kw:capabilities, kw:transport, kw:custody_factory, kw:ledger, kw:authorize, kw:verify_lineage, kw:clock=..., kw:limits=..., kw:scope_context=..., kw:allow_insecure_loopback=...)"
+      },
+      "FHIRWriteError": {
+        "kind": "class",
+        "signature": "(reason_code)"
+      },
+      "FHIRWriteLabelPolicy": {
+        "kind": "class",
+        "signature": "(security_system=..., security_code=..., tag_system=..., tag_code=..., attesting_roles=...)"
+      },
+      "FHIRWriteLedger": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "FHIRWriteLimits": {
+        "kind": "class",
+        "signature": "(max_request_bytes=..., max_response_bytes=..., max_entries=..., max_json_nodes=..., max_json_depth=..., timeout_seconds=...)"
+      },
+      "FHIRWriteOutcome": {
+        "kind": "class",
+        "signature": "(status, reason_code, action_digest, payload_digest, resource_count, response_digest=...)"
+      },
+      "FHIRWriteStatus": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "FHIR_JOURNEY_COMPATIBILITY_POLICY": {
         "kind": "constant",
@@ -15589,6 +16105,14 @@
         "kind": "class",
         "signature": null
       },
+      "MAX_SERVER_VALIDATION_ISSUES": {
+        "kind": "constant",
+        "signature": null
+      },
+      "MAX_SERVER_VALIDATION_RESOURCE_BYTES": {
+        "kind": "constant",
+        "signature": null
+      },
       "NDJSONFileSummary": {
         "kind": "class",
         "signature": "(source, destination, lines_processed=..., resources_deidentified=..., blank_lines=..., errors=..., output_sha256=..., rejections=..., peak_buffered_resources=..., resumed=...)"
@@ -15596,6 +16120,10 @@
       "NDJSONLineError": {
         "kind": "class",
         "signature": "(line_number, message, resource_sha256=...)"
+      },
+      "NormalizedFHIRWrite": {
+        "kind": "class",
+        "signature": "(resource, findings)"
       },
       "OPENMED_CANONICAL_HASH_SYSTEM": {
         "kind": "constant",
@@ -15709,6 +16237,42 @@
         "kind": "constant",
         "signature": null
       },
+      "SMARTCredential": {
+        "kind": "class",
+        "signature": "(access_token, refresh_token, expires_at, granted_scopes)"
+      },
+      "SMARTCredentialCustody": {
+        "kind": "class",
+        "signature": "(*args, **kwargs)"
+      },
+      "SMARTCredentialRefresher": {
+        "kind": "class",
+        "signature": "(config, kw:custody, kw:transport, kw:clock, kw:backend_config=..., kw:client_assertion_builder=...)"
+      },
+      "SMARTRefreshConfig": {
+        "kind": "class",
+        "signature": "(token_endpoint, client_id, grant_type, requested_scopes, refresh_margin_seconds=..., max_lifetime_seconds=...)"
+      },
+      "SMARTRefreshLease": {
+        "kind": "class",
+        "signature": "(handle, lease_id, generation, binding_digest, credential)"
+      },
+      "SMARTRefreshReport": {
+        "kind": "class",
+        "signature": "(code, refreshed=..., narrowed=..., requested_count=..., granted_count=..., refresh_token_rotated=..., revocation_confirmed=...)"
+      },
+      "SMARTTokenRequest": {
+        "kind": "class",
+        "signature": "(endpoint, form)"
+      },
+      "SMARTTokenResponse": {
+        "kind": "class",
+        "signature": "(status_code, body)"
+      },
+      "SMARTTokenValidationError": {
+        "kind": "class",
+        "signature": "(code=...)"
+      },
       "SUPPORTED_PROFILE_MATRIX": {
         "kind": "constant",
         "signature": null
@@ -15720,6 +16284,54 @@
       "SUPPORTED_RESOURCE_TYPES": {
         "kind": "constant",
         "signature": null
+      },
+      "SubscriptionContentMode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SubscriptionEvent": {
+        "kind": "class",
+        "signature": "(position, event_number, focus_reference_digest, additional_reference_digests, content_mode)"
+      },
+      "SubscriptionFindingCode": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SubscriptionNotification": {
+        "kind": "class",
+        "signature": "(version, notification_type, bundle_digest, subscription_reference_digest, events_since_start, events, findings, resource_count, error_count)"
+      },
+      "SubscriptionNotificationError": {
+        "kind": "class",
+        "signature": "(code, position=...)"
+      },
+      "SubscriptionNotificationFinding": {
+        "kind": "class",
+        "signature": "(code, position=..., count=..., first_missing=..., last_missing=...)"
+      },
+      "SubscriptionNotificationType": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "SubscriptionNotificationVersion": {
+        "kind": "class",
+        "signature": "(value)"
+      },
+      "TransactionApproval": {
+        "kind": "class",
+        "signature": "(action_digest, receipt_digest, reviewer_role, evidence_references)"
+      },
+      "TransactionAssemblyError": {
+        "kind": "class",
+        "signature": null
+      },
+      "TransactionLimits": {
+        "kind": "class",
+        "signature": "(max_entries, max_bytes)"
+      },
+      "TransactionReviewerRole": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "UnknownPolicyPathError": {
         "kind": "class",
@@ -15736,6 +16348,18 @@
       "VersionAdapter": {
         "kind": "class",
         "signature": "(source_version=..., target_version=...)"
+      },
+      "WriteLabelError": {
+        "kind": "class",
+        "signature": "(findings)"
+      },
+      "WriteLabelFinding": {
+        "kind": "class",
+        "signature": "(resource_type, path, code)"
+      },
+      "assemble_transaction": {
+        "kind": "function",
+        "signature": "(entries, kw:approval, kw:limits, kw:clock)"
       },
       "assert_resume_compatible": {
         "kind": "function",
@@ -15857,9 +16481,21 @@
         "kind": "function",
         "signature": "()"
       },
+      "normalize_proposed_resource": {
+        "kind": "function",
+        "signature": "(resource, kw:policy=...)"
+      },
       "parse_fhir_version": {
         "kind": "function",
         "signature": "(value)"
+      },
+      "parse_subscription_notification": {
+        "kind": "function",
+        "signature": "(payload, kw:version, kw:previous_event_number=..., kw:global_event_numbers=...)"
+      },
+      "preflight_server_validation": {
+        "kind": "function",
+        "signature": "(statement, resource, kw:mode, kw:enabled=..., kw:transport=..., kw:credential_handle=..., kw:resource_id=..., kw:profile_uri=..., kw:block_warnings=..., kw:timeout_seconds=...)"
       },
       "profile_matrix": {
         "kind": "function",
@@ -15941,6 +16577,10 @@
         "kind": "function",
         "signature": "(payload)"
       },
+      "validate_proposed_resource": {
+        "kind": "function",
+        "signature": "(resource, kw:policy=..., kw:approval_authorization=...)"
+      },
       "validate_questionnaire": {
         "kind": "function",
         "signature": "(resource)"
@@ -15972,6 +16612,10 @@
       "validate_sdc_response": {
         "kind": "function",
         "signature": "(resource, questionnaire=..., kw:original_identifiers=...)"
+      },
+      "validate_smart_token_response": {
+        "kind": "function",
+        "signature": "(response, kw:requested_scopes, kw:issued_at, kw:max_lifetime_seconds=..., kw:previous_refresh_token=..., kw:allow_omitted_scope=...)"
       },
       "validation_result": {
         "kind": "function",
@@ -16015,15 +16659,51 @@
         "kind": "class",
         "signature": "(links)"
       },
+      "NLP_OMOP_STAGING_SCHEMA": {
+        "kind": "constant",
+        "signature": null
+      },
+      "NlpOmopLineageRecord": {
+        "kind": "class",
+        "signature": "(mutation_ordinal, table, row_digest, source_note_digest, note_content_digest, start, end, nlp_system_digest, pipeline_digest)"
+      },
+      "NlpOmopLineageReport": {
+        "kind": "class",
+        "signature": "(expected_count, supplied_count, missing_count, extra_count, duplicate_count, mismatch_count, lineage_digest)"
+      },
+      "NlpOmopStagedBatch": {
+        "kind": "class",
+        "signature": "(batch, lineage, vocabulary_snapshot, _mappings, _existing_keys, _rollback_materials, rejected_span_count=...)"
+      },
+      "NlpOmopStagedPreview": {
+        "kind": "class",
+        "signature": "(batch_preview, lineage_report, vocabulary_snapshot_digest, vocabulary_report_digest, vocabulary_compatible, missing_mapping_count, extra_mapping_count, provenance_mismatch_count, rollback_manifest_digest, bindings_match, rejected_span_count)"
+      },
+      "NlpOmopStagingError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "NlpOmopWriteLineage": {
+        "kind": "class",
+        "signature": "(records)"
+      },
       "VocabularyLineageEvidence": {
         "kind": "class",
         "signature": "(mapping_digest, target_vocabulary_id, snapshot_digest)"
+      },
+      "stage_nlp_omop_tables": {
+        "kind": "function",
+        "signature": "(tables, kw:pipeline_digest, kw:vocabulary_snapshot, kw:vocabulary_mappings, kw:existing_tables=..., kw:existing_pipeline_digests=...)"
       }
     },
     "openmed.interop.omop": {
       "CommitStatus": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "DQD_SUPPORTED_VERSIONS": {
+        "kind": "constant",
+        "signature": null
       },
       "LoadMode": {
         "kind": "type_alias",
@@ -16036,6 +16716,34 @@
       "MutationOperation": {
         "kind": "class",
         "signature": "(value)"
+      },
+      "NLP_OMOP_STAGING_SCHEMA": {
+        "kind": "constant",
+        "signature": null
+      },
+      "NlpOmopLineageRecord": {
+        "kind": "class",
+        "signature": "(mutation_ordinal, table, row_digest, source_note_digest, note_content_digest, start, end, nlp_system_digest, pipeline_digest)"
+      },
+      "NlpOmopLineageReport": {
+        "kind": "class",
+        "signature": "(expected_count, supplied_count, missing_count, extra_count, duplicate_count, mismatch_count, lineage_digest)"
+      },
+      "NlpOmopStagedBatch": {
+        "kind": "class",
+        "signature": "(batch, lineage, vocabulary_snapshot, _mappings, _existing_keys, _rollback_materials, rejected_span_count=...)"
+      },
+      "NlpOmopStagedPreview": {
+        "kind": "class",
+        "signature": "(batch_preview, lineage_report, vocabulary_snapshot_digest, vocabulary_report_digest, vocabulary_compatible, missing_mapping_count, extra_mapping_count, provenance_mismatch_count, rollback_manifest_digest, bindings_match, rejected_span_count)"
+      },
+      "NlpOmopStagingError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "NlpOmopWriteLineage": {
+        "kind": "class",
+        "signature": "(records)"
       },
       "OMOP_DATASET_SPLITS": {
         "kind": "constant",
@@ -16145,6 +16853,22 @@
         "kind": "class",
         "signature": "(table, column, reason, row_id=...)"
       },
+      "OmopDatabaseError": {
+        "kind": "class",
+        "signature": "(code)"
+      },
+      "OmopDatabasePreview": {
+        "kind": "class",
+        "signature": "(batch_preview, state_digest, schema_digest, vocabulary_snapshot_digest, vocabulary_report_digest, rollback_manifest_digest)"
+      },
+      "OmopDatabaseResult": {
+        "kind": "class",
+        "signature": "(status, code, batch_digest, preview_digest, approval_receipt_digest, rollback_manifest_digest, proposed_count, applied_count)"
+      },
+      "OmopDatabaseStatus": {
+        "kind": "class",
+        "signature": "(value)"
+      },
       "OmopDomain": {
         "kind": "type_alias",
         "signature": null
@@ -16203,7 +16927,7 @@
       },
       "OmopMutationBatch": {
         "kind": "class",
-        "signature": "(mutations)"
+        "signature": "(mutations, kw:evidence_digests=...)"
       },
       "OmopMutationError": {
         "kind": "class",
@@ -16211,7 +16935,7 @@
       },
       "OmopMutationPreview": {
         "kind": "class",
-        "signature": "(batch_digest, preview_digest, reference_snapshot_digest, mutations, issues, operation_counts, schema=...)"
+        "signature": "(batch_digest, preview_digest, reference_snapshot_digest, mutations, issues, operation_counts, schema=..., evidence_digests=...)"
       },
       "OmopMutationSummary": {
         "kind": "class",
@@ -16305,6 +17029,10 @@
         "kind": "class",
         "signature": "(reason, source_note_hash, start=..., end=..., domain=...)"
       },
+      "SQLiteOmopBatchCommitter": {
+        "kind": "class",
+        "signature": "(batch, preview, kw:vocabulary_snapshot, kw:vocabulary_mappings, kw:rollback_manifest, kw:connection_factory, kw:authorize, kw:admit, kw:rollback_ready)"
+      },
       "SourceToConceptMapping": {
         "kind": "class",
         "signature": "(source_code, source_vocabulary_id, source_concept_id, source_code_description, target_concept_id, target_vocabulary_id, target_domain_id, domain, cdm_table, standard_concept, vocabulary_version, mapping_status)"
@@ -16397,6 +17125,10 @@
         "kind": "function",
         "signature": "()"
       },
+      "initialize_omop_commit_metadata": {
+        "kind": "function",
+        "signature": "(con, snapshot)"
+      },
       "load_grounded_jsonl": {
         "kind": "function",
         "signature": "(path, kw:vocabulary_version=..., kw:vocabulary_router=..., kw:mode=..., kw:completeness_floor=..., kw:quality_floor=..., kw:required_fields=...)"
@@ -16413,9 +17145,17 @@
         "kind": "function",
         "signature": "()"
       },
+      "normalize_dqd_results_file": {
+        "kind": "function",
+        "signature": "(path, kw:quality_input)"
+      },
       "normalize_omop_quality_output": {
         "kind": "function",
         "signature": "(output, kw:quality_input, kw:reconciliation, kw:signing_key, kw:key_id=..., kw:expected_execution_mode=...)"
+      },
+      "preview_omop_database": {
+        "kind": "function",
+        "signature": "(con, batch, kw:vocabulary_snapshot, kw:vocabulary_mappings, kw:rollback_manifest)"
       },
       "project_clinical_facts_to_omop": {
         "kind": "function",
@@ -16444,6 +17184,10 @@
       "sign_omop_quality_report": {
         "kind": "function",
         "signature": "(report, key, kw:key_id=...)"
+      },
+      "stage_nlp_omop_tables": {
+        "kind": "function",
+        "signature": "(tables, kw:pipeline_digest, kw:vocabulary_snapshot, kw:vocabulary_mappings, kw:existing_tables=..., kw:existing_pipeline_digests=...)"
       },
       "summarize_omop_violations": {
         "kind": "function",
@@ -16509,7 +17253,7 @@
       },
       "ConsentReceiptVerifier": {
         "kind": "class",
-        "signature": "(key_provider, kw:clock=..., kw:clock_skew_seconds=...)"
+        "signature": "(key_provider, kw:clock=..., kw:clock_skew_seconds=..., kw:consumption_store=...)"
       },
       "MCPAuthConfig": {
         "kind": "class",
@@ -16533,7 +17277,7 @@
       },
       "create_mcp_server": {
         "kind": "function",
-        "signature": "(kw:runtime_provider=..., kw:host=..., kw:port=..., kw:streamable_http_path=..., kw:authorization_config=..., kw:auth_config=..., kw:token_verifier=..., kw:auth_server_provider=..., kw:injection_guard_mode=..., kw:consent_policy=..., kw:consent_verifier=..., kw:consent_client=..., kw:consent_resource=..., kw:consent_scope=..., kw:consent_policy_version=..., kw:consent_require_receipt=..., kw:journey_catalog_provider=..., kw:journey_access_policy=..., kw:decision_backend=..., kw:decision_access_policy=..., kw:decision_calibration_profiles=...)"
+        "signature": "(kw:runtime_provider=..., kw:host=..., kw:port=..., kw:streamable_http_path=..., kw:authorization_config=..., kw:auth_config=..., kw:token_verifier=..., kw:auth_server_provider=..., kw:injection_guard_mode=..., kw:consent_policy=..., kw:consent_verifier=..., kw:consent_client=..., kw:consent_resource=..., kw:consent_scope=..., kw:consent_policy_version=..., kw:consent_require_receipt=..., kw:journey_catalog_provider=..., kw:journey_access_policy=..., kw:decision_backend=..., kw:decision_access_policy=..., kw:decision_calibration_profiles=..., kw:governance_service=..., kw:governance_consent_policy=..., kw:governance_consent_receipt_provider=..., kw:governance_clock=...)"
       },
       "ensure_mcp_available": {
         "kind": "function",
@@ -16687,7 +17431,7 @@
       },
       "PrivacyFilterMLXPipeline": {
         "kind": "class",
-        "signature": "(model_path, tokenizer_name=..., aggregation_strategy=...)"
+        "signature": "(model_path, tokenizer_name=..., aggregation_strategy=..., kw:compile_forward=...)"
       },
       "SpeculativeDecodeMetrics": {
         "kind": "class",
@@ -16947,17 +17691,21 @@
         "kind": "constant",
         "signature": null
       },
+      "DicomDeidentificationError": {
+        "kind": "class",
+        "signature": "(reason_code)"
+      },
       "DicomHeaderAction": {
         "kind": "class",
         "signature": "(tag, keyword, vr, action, ps315_action, location=..., value_sha256=..., value_length=...)"
       },
       "DicomHeaderDeidPolicy": {
         "kind": "class",
-        "signature": "(output_path=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., uid_salt=..., keep_year=...)"
+        "signature": "(output_path=..., date_shift_days=..., patient_key=..., date_shift_max_days=..., date_shift_secret=..., uid_salt=..., keep_year=..., fail_on_unclean_pixels=..., redact_encapsulated_documents=..., document_policy=..., document_models=..., clean_descriptors=..., clean_structured_content=..., retain_longitudinal_temporal_information=..., retain_device_identity=..., retain_patient_characteristics=..., retain_uids=..., detector=...)"
       },
       "DicomHeaderDeidResult": {
         "kind": "class",
-        "signature": "(source_path, output_path, date_shift_days, actions, uid_remap_count, private_tag_removed_count)"
+        "signature": "(source_path, output_path, date_shift_days, actions, uid_remap_count, private_tag_removed_count, pixel_status=..., profile_options=...)"
       },
       "DicomPixelFinding": {
         "kind": "class",
@@ -16965,11 +17713,15 @@
       },
       "DicomPixelRedactionPolicy": {
         "kind": "class",
-        "signature": "(output_path=..., ocr_engine=..., model_name=..., confidence_threshold=..., bbox_padding=..., verify_residual=..., fail_on_residual=..., custom_recognizer=...)"
+        "signature": "(output_path=..., ocr_engine=..., model_name=..., confidence_threshold=..., bbox_padding=..., verify_residual=..., fail_on_residual=..., custom_recognizer=..., overlay_mode=..., redact_encapsulated_documents=..., document_policy=..., document_models=...)"
       },
       "DicomPixelRedactionResult": {
         "kind": "class",
-        "signature": "(source_path, output_path, frames_processed, findings, residual_report)"
+        "signature": "(source_path, output_path, frames_processed, findings, residual_report, carrier_actions=..., pixel_status=..., _processed_document_digests=...)"
+      },
+      "DicomPixelStatus": {
+        "kind": "class",
+        "signature": "(value)"
       },
       "DicomResidualTextReport": {
         "kind": "class",
@@ -17309,7 +18061,7 @@
       },
       "PdfRedactionResult": {
         "kind": "class",
-        "signature": "(output_path, page_count, region_count, render_dpi, output_sha256, region_fidelity, text_removal, layout_fidelity)"
+        "signature": "(output_path, page_count, region_count, render_dpi, output_sha256, region_fidelity, text_removal, layout_fidelity, annotations=...)"
       },
       "PdfRegions": {
         "kind": "class",
@@ -17625,7 +18377,7 @@
       },
       "extract_pdf": {
         "kind": "function",
-        "signature": "(path)"
+        "signature": "(path, kw:reading_order=..., kw:preserve_lines=..., kw:include_annotations=...)"
       },
       "extract_pdf_captions": {
         "kind": "function",
@@ -17829,7 +18581,7 @@
       },
       "render_redacted_pdf": {
         "kind": "function",
-        "signature": "(source, output, regions, kw:render_dpi=..., kw:fidelity_dpi=..., kw:pixel_tolerance=..., kw:max_outside_changed_fraction=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:overwrite=...)"
+        "signature": "(source, output, regions, kw:render_dpi=..., kw:fidelity_dpi=..., kw:pixel_tolerance=..., kw:max_outside_changed_fraction=..., kw:max_pages=..., kw:max_page_pixels=..., kw:max_total_pixels=..., kw:max_regions=..., kw:overwrite=..., kw:annotation_detector=...)"
       },
       "render_redacted_raster_pages": {
         "kind": "function",
@@ -18035,7 +18787,7 @@
       },
       "ModelRecord": {
         "kind": "class",
-        "signature": "(id, family, domains=..., languages=..., path=..., notes=...)"
+        "signature": "(id, family, domains=..., languages=..., path=..., notes=..., license=...)"
       },
       "NerRequest": {
         "kind": "class",
@@ -18137,7 +18889,7 @@
       },
       "BatchProcessor": {
         "kind": "class",
-        "signature": "(model_name=..., operation=..., batch_size=..., config=..., loader=..., aggregation_strategy=..., confidence_threshold=..., group_entities=..., continue_on_error=..., checkpoint_interval=..., _atomic_write_hook=..., **analyze_kwargs)"
+        "signature": "(model_name=..., operation=..., batch_size=..., config=..., loader=..., aggregation_strategy=..., confidence_threshold=..., group_entities=..., continue_on_error=..., checkpoint_interval=..., _atomic_write_hook=..., budget=..., **analyze_kwargs)"
       },
       "BatchProgress": {
         "kind": "class",
@@ -18905,7 +19657,7 @@
       },
       "segment_text": {
         "kind": "function",
-        "signature": "(text, kw:language=..., kw:clean=..., kw:segmenter=...)"
+        "signature": "(text, kw:language=..., kw:clean=..., kw:segmenter=..., kw:backend=..., kw:list_items=...)"
       },
       "segmentation_boundary_f1": {
         "kind": "function",
@@ -19583,7 +20335,7 @@
       },
       "LongitudinalEvidence": {
         "kind": "class",
-        "signature": "(note_index, note_hash, category, value_hash, source, start=..., end=..., section=...)"
+        "signature": "(note_index, note_hash, category, value_hash, source, start=..., end=..., section=..., trajectory_hashes=...)"
       },
       "LongitudinalMitigationAction": {
         "kind": "class",
@@ -20469,6 +21221,10 @@
         "kind": "function",
         "signature": "(sensitivity, epsilon, delta, kw:rng=...)"
       },
+      "gaussian_privacy_delta": {
+        "kind": "function",
+        "signature": "(sigma, sensitivity, epsilon)"
+      },
       "gaussian_scale": {
         "kind": "function",
         "signature": "(sensitivity, epsilon, delta)"
@@ -20643,11 +21399,11 @@
       },
       "render_release_assessment_dashboard": {
         "kind": "function",
-        "signature": "(assessment, kw:title=...)"
+        "signature": "(assessment, kw:longitudinal=..., kw:title=...)"
       },
       "render_risk_dashboard": {
         "kind": "function",
-        "signature": "(risk, kw:kanon=..., kw:title=...)"
+        "signature": "(risk, kw:kanon=..., kw:longitudinal=..., kw:title=...)"
       },
       "render_tabular_risk_json": {
         "kind": "function",
@@ -20671,7 +21427,7 @@
       },
       "risk_report": {
         "kind": "function",
-        "signature": "(deidentified, original=..., aux=...)"
+        "signature": "(deidentified, original=..., aux=..., kw:quasi_identifier_fields=...)"
       },
       "run_membership_inference_self_test": {
         "kind": "function",
@@ -20799,7 +21555,7 @@
       },
       "write_release_assessment_dashboard": {
         "kind": "function",
-        "signature": "(assessment, path, kw:title=...)"
+        "signature": "(assessment, path, kw:longitudinal=..., kw:title=...)"
       },
       "write_risk_dashboard": {
         "kind": "function",
@@ -20945,7 +21701,7 @@
       },
       "CohortExecution": {
         "kind": "class",
-        "signature": "(manifest, memberships, schema_version=..., compatibility_policy=...)"
+        "signature": "(manifest, memberships, schema_version=..., compatibility_policy=..., coverage=...)"
       },
       "CohortMembership": {
         "kind": "class",
@@ -21455,6 +22211,42 @@
         "kind": "class",
         "signature": null
       },
+      "NAACCRDictionary": {
+        "kind": "class",
+        "signature": "(uri, specification_version, items, source_digest)"
+      },
+      "NAACCRDictionaryError": {
+        "kind": "class",
+        "signature": "(code, case_index=..., field_index=...)"
+      },
+      "NAACCRExportReport": {
+        "kind": "class",
+        "signature": "(file_written, xml_digest, bytes_written, case_count, patient_count, tumor_count, item_count, losses, dictionary_digest, export_manifest_digest, mapping_digest)"
+      },
+      "NAACCRFieldMapping": {
+        "kind": "class",
+        "signature": "(field_id, naaccr_id, value_path=...)"
+      },
+      "NAACCRItemDefinition": {
+        "kind": "class",
+        "signature": "(naaccr_id, naaccr_num, length, parent, data_type=..., record_types=..., unlimited_text=...)"
+      },
+      "NAACCRLoss": {
+        "kind": "class",
+        "signature": "(case_index, field_index, code)"
+      },
+      "NAACCRProjectionError": {
+        "kind": "class",
+        "signature": "(code, case_index=..., field_index=...)"
+      },
+      "NAACCRValueError": {
+        "kind": "class",
+        "signature": "(code, case_index=..., field_index=...)"
+      },
+      "NAACCR_NAMESPACE": {
+        "kind": "constant",
+        "signature": null
+      },
       "ObjectStoreNamespace": {
         "kind": "class",
         "signature": "(root_uri, allowed_protocols=..., storage_options=...)"
@@ -21505,7 +22297,7 @@
       },
       "PhenotypeProvenance": {
         "kind": "class",
-        "signature": "(definition_sha256, hierarchy_sha256, matched_patient_count, evidence_pointer_count, concept_sets, schema_version=...)"
+        "signature": "(definition_sha256, hierarchy_sha256, matched_patient_count, evidence_pointer_count, concept_sets, schema_version=..., coverage=...)"
       },
       "PointInTimeReader": {
         "kind": "class",
@@ -21737,7 +22529,7 @@
       },
       "RelationalSchema": {
         "kind": "class",
-        "signature": "(key_spaces, subject_key_space, foreign_keys=..., date_columns=...)"
+        "signature": "(key_spaces, subject_key_space, foreign_keys=..., date_columns=..., quasi_identifiers=...)"
       },
       "RelationalSchemaError": {
         "kind": "class",
@@ -21937,7 +22729,7 @@
       },
       "SurrogateManifest": {
         "kind": "class",
-        "signature": "(key_id, key_spaces, entries, subject_offsets, orphaned_foreign_keys=...)"
+        "signature": "(key_id, key_spaces, entries, subject_offsets, orphaned_foreign_keys=..., linkage_risk=...)"
       },
       "SyntheticDataGateError": {
         "kind": "class",
@@ -22017,7 +22809,7 @@
       },
       "anonymize_table": {
         "kind": "function",
-        "signature": "(table, quasi_identifiers, kw:target_k=..., kw:suppression_limit=..., kw:suppression_rate=..., kw:sensitive_attributes=..., kw:model=...)"
+        "signature": "(table, quasi_identifiers=..., kw:model=..., kw:k=..., kw:l=..., kw:t=..., kw:target_k=..., kw:target_l=..., kw:target_t=..., kw:sensitive_attributes=..., kw:text_columns=..., kw:role_overrides=..., kw:profile_backend=..., kw:text_deidentifier=..., kw:engine=..., kw:arx_bridge=..., kw:suppression_limit=..., kw:suppression_rate=..., kw:clinical_code_hierarchies=..., kw:subject_id_column=..., kw:date_shift_secret=..., kw:date_shift_max_days=..., kw:seed=..., kw:l_metric=..., kw:dp_bounds=..., kw:epsilon=..., kw:delta=..., kw:output_path=..., kw:overwrite=...)"
       },
       "apply_omop_file": {
         "kind": "function",
@@ -22045,7 +22837,7 @@
       },
       "build_cohort_execution": {
         "kind": "function",
-        "signature": "(definition_version, kw:source_snapshot, kw:vocabulary_digest, kw:policy_digest, kw:evaluator_version, kw:memberships)"
+        "signature": "(definition_version, kw:source_snapshot, kw:vocabulary_digest, kw:policy_digest, kw:evaluator_version, kw:memberships, kw:coverage=...)"
       },
       "build_dataset_snapshot": {
         "kind": "function",
@@ -22053,7 +22845,7 @@
       },
       "build_enforcement_hierarchies": {
         "kind": "function",
-        "signature": "(column_to_type, records)"
+        "signature": "(column_to_type, records, kw:clinical_code_hierarchies=...)"
       },
       "build_registry_export": {
         "kind": "function",
@@ -22133,7 +22925,7 @@
       },
       "deidentify_linked_tables": {
         "kind": "function",
-        "signature": "(tables, schema, kw:vault, kw:date_shift_secret, kw:date_shift_max_days=...)"
+        "signature": "(tables, schema, kw:vault, kw:date_shift_secret, kw:date_shift_max_days=..., kw:target_k=..., kw:suppression_limit=..., kw:suppression_rate=..., kw:clinical_code_hierarchies=...)"
       },
       "deidentify_subject_column": {
         "kind": "function",
@@ -22247,6 +23039,10 @@
         "kind": "function",
         "signature": "(text)"
       },
+      "parse_naaccr_dictionary": {
+        "kind": "function",
+        "signature": "(value)"
+      },
       "profile": {
         "kind": "function",
         "signature": "(results, **kwargs)"
@@ -22325,7 +23121,7 @@
       },
       "scan_column_roles": {
         "kind": "function",
-        "signature": "(path_or_df, kw:overrides=..., kw:max_rows=...)"
+        "signature": "(path_or_df, kw:overrides=..., kw:max_rows=..., kw:profile_backend=...)"
       },
       "scan_table": {
         "kind": "function",
@@ -22373,7 +23169,7 @@
       },
       "to_enforce_kanon_hierarchy": {
         "kind": "function",
-        "signature": "(column_type, values=...)"
+        "signature": "(column_type, values=..., kw:clinical_code_parent_chains=...)"
       },
       "validate_schema_policy": {
         "kind": "function",
@@ -22390,6 +23186,10 @@
       "write_auto_policy": {
         "kind": "function",
         "signature": "(policy, path, kw:overwrite=...)"
+      },
+      "write_naaccr_xml": {
+        "kind": "function",
+        "signature": "(cases, definition_version, kw:authorization, kw:export_envelope, kw:dictionary, kw:field_map, kw:resolver, kw:output_path, kw:patient_key_item, kw:patient_key_secret, kw:record_type=...)"
       },
       "write_table": {
         "kind": "function",

@@ -57,7 +57,7 @@ against the committed baseline (`scripts/release/public_api_baseline.json`).
 
 ## Deprecation cycle
 
-The v3.1 governance types, approval and permission contracts, workflow
+The v4.0 governance types, approval and permission contracts, workflow
 operations, and FHIR/OMOP write-back APIs follow this same deprecation window.
 Their inclusion in the per-PR baseline does not grant a pre-release exception
 to the compatibility policy. New exports and optional parameters remain
@@ -114,3 +114,31 @@ callable signatures. Modules that cannot be imported in a given environment
 removed. A declared export that is temporarily unavailable remains in the
 snapshot but is not treated as a kind or signature change, so partial installs
 never produce false breaks.
+
+## v4.0 security-remediation boundary
+
+The v4.0.0 SDK candidate deliberately removes privacy-sensitive fields present
+in v3.0.0. The maintainer approved this major boundary on 2026-10-14. The
+normal warning window is waived only for these removals: keeping the original
+fields working during a minor release would preserve the exposure being fixed.
+No other API receives an exception. A major version, explicit before/after
+migration guidance and the full v3.0.0-to-candidate API diff remain required.
+
+- `openmed.agent.approvals.ApprovalReceipt` removes `reviewer_role`,
+  `consumed_at` and `expires_at` from its public constructor and receipt. These
+  protected attributes belong to `ApprovalAuthorization`, returned through
+  `consume_authorization`; use its approved value-free receipt projection for
+  audit output. The public receipt is not a reusable authorization credential.
+- `openmed.risk.AggregateDPRelease` removes `noise` and `seed_digest` from its
+  constructor and public release record. The exact noise draw permits reversal
+  of the release's differential privacy. Use the released `value` and its
+  privacy accounting; obtain releases through the reviewed aggregation factory
+  rather than reconstructing a public record with the hidden draw.
+
+These contracts are also reachable through `openmed.agent.approvals.tokens`
+and `openmed.risk.aggregate_dp`; their field removals must be named in the
+release migration guide. The per-PR checker reports the two exported
+constructor locations above. Its temporary announcements cover only those
+locations and must be removed when the reviewed v4.0 baseline is captured.
+The release-level static diff still compares against the immutable v3.0.0 tag;
+refreshing a per-PR snapshot does not erase release migration requirements.

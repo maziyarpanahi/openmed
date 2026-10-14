@@ -494,9 +494,22 @@ def test_allowlist_accepts_bare_mapping(tmp_path):
 
 
 def test_committed_allowlist_loads():
-    # The committed allowlist must be parseable and currently empty of stale
-    # entries (nothing announced yet on a fresh baseline).
-    assert api.load_allowlist(ALLOWLIST) == set()
+    # Every announcement must explain an actual break against the baseline;
+    # future or stale exemptions must not silently suppress the gate.
+    announced = api.load_allowlist(ALLOWLIST)
+    current_breaks = {
+        change.location
+        for change in api.diff_surface(
+            api.load_baseline(BASELINE), api.capture_surface()
+        )
+        if change.breaking
+    }
+    assert announced <= current_breaks
+    document = json.loads(ALLOWLIST.read_text(encoding="utf-8"))
+    assert all(
+        isinstance(reason, str) and reason.strip()
+        for reason in document["announced_breaks"].values()
+    )
 
 
 # --- Policy documentation ---------------------------------------------------

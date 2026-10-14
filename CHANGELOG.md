@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking privacy remediations planned for v4.0.0
+
+- Prepare the existing approval-receipt and aggregate differential-privacy
+  removals at a major boundary. Protect approval role/timestamps through
+  `ApprovalAuthorization` and omit exact noise/seed data from public DP
+  releases. Document the narrowly approved security-remediation warning-window
+  exception; all other deprecation and compatibility rules remain in force.
+
+
 ### Interoperability
 
 - Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
