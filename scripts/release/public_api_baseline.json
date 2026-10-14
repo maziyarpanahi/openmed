@@ -1511,7 +1511,7 @@
       },
       "ApprovalReceipt": {
         "kind": "class",
-        "signature": "(action_digest, reviewer_role, token_digest, consumed_at, expires_at, schema_version=...)"
+        "signature": "(action_digest, token_digest, code=..., schema_version=...)"
       },
       "ApprovalReplayError": {
         "kind": "class",
@@ -19807,7 +19807,7 @@
       },
       "AggregateDPRelease": {
         "kind": "class",
-        "signature": "(value, noise, spend, composition, mechanism=..., scope=..., seed_digest=...)"
+        "signature": "(value, spend, composition, mechanism=..., scope=..., test_only=...)"
       },
       "AggregateKind": {
         "kind": "type_alias",

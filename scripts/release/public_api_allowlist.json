@@ -1,7 +1,4 @@
 {
   "_comment": "Records intentional, announced breaking changes to the openmed public API. Each key is a 'module.name' location (matching the differ's report) and each value is a short justification citing the deprecation cycle. See docs/compliance/api-deprecation-policy.md. Entries here are how you tell check_public_api.py that a removal or incompatible signature change is sanctioned rather than accidental. Remove an entry once the corresponding member no longer exists in the baseline.",
-  "announced_breaks": {
-    "openmed.agent.approvals.ApprovalReceipt": "v4.0.0 security remediation approved 2026-10-14: remove public reviewer_role/consumed_at/expires_at; protected attributes use ApprovalAuthorization via consume_authorization. Narrow warning-window exception documented in docs/compliance/api-deprecation-policy.md; major migration remains required.",
-    "openmed.risk.AggregateDPRelease": "v4.0.0 security remediation approved 2026-10-14: remove exact noise/seed_digest, which would undo differential privacy; use released value and accounting. Narrow warning-window exception documented in docs/compliance/api-deprecation-policy.md; major migration remains required."
-  }
+  "announced_breaks": {}
 }

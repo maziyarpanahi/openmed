@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ApprovalAuthorization` and omit exact noise/seed data from public DP
   releases. Document the narrowly approved security-remediation warning-window
   exception; all other deprecation and compatibility rules remain in force.
+- Capture the reviewed governance/write-back API baseline after explicitly
+  announcing the two privacy constructor migrations, then remove their stale
+  transitional allowlist entries. Release comparison against v3.0.0 still
+  requires a major target and complete migration coverage (#3770).
 
 
 ### Interoperability
