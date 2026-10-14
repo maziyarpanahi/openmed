@@ -75,9 +75,33 @@ request id), with no raw target/query string or client address.
 `OPENMED_SERVICE_LOG_LEVEL=off` suppresses those records too. Custom ASGI
 launchers must disable raw access logs (Uvicorn: `--no-access-log`) and configure
 the structured logger explicitly; otherwise rejected URLs may expose PHI.
-Request-ID validation is separate: do not put sensitive values into
-`X-Request-ID`, and have a trusted ingress replace caller-provided request ids
-with opaque values before exposing this launch configuration publicly.
+
+### Request IDs
+
+Every response carries an `X-Request-ID` header. The same value is the
+`error.request_id` in application error envelopes, the access-log `request_id`
+field and the `openmed.request_id` span attribute. The service keeps an inbound
+`X-Request-ID` only when the whole value matches `^[A-Za-z0-9_.:-]{1,128}$`:
+1 to 128 ASCII letters, digits, `_`, `.`, `:` or `-`. It replaces any other
+value with a random UUID: empty, longer than 128 characters, non-ASCII, or
+containing whitespace, CR/LF, commas, semicolons, slashes or other separators.
+The request is not rejected, and no part of the replaced value is echoed,
+logged or recorded on a span. Request IDs are correlation metadata only; use
+opaque values and never put patient identifiers or other sensitive data in
+them.
+
+The grammar is defined once in `openmed.service.request_id` and shared by the
+other request-ID boundaries:
+
+- The privacy proxy rejects a non-conforming `X-Request-ID` with `400` and
+  reason `request_id_invalid`, without echoing it.
+- The privacy gateway and the outbound and inbound privacy filters reject a
+  non-conforming `request_id` argument.
+- `OpenMedClient` raises `ValueError` before sending a non-conforming
+  `request_id`, and ignores a non-conforming `X-Request-ID` response header.
+
+Governed workflow routes keep only the narrower `req_` plus 32 lowercase hex
+digits or lowercase UUID forms; see [Governed workflows](#governed-workflows).
 
 ### Served-model policy
 
@@ -205,8 +229,8 @@ The coverage test rejects a newly added OpenAPI path until it is implemented
 or deliberately documented in this list and the exclusion map.
 
 Non-2xx responses raise `OpenMedAPIError` with the service error `code`,
-`message`, optional `details`, HTTP status, and any `X-Request-ID` returned by
-the service or proxy:
+`message`, optional `details`, HTTP status, and any conforming `X-Request-ID`
+returned by the service or proxy (see [Request IDs](#request-ids)):
 
 ```python
 try:

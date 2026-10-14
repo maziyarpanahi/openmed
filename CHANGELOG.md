@@ -138,6 +138,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output files without loading NER models or downloading artifacts.
 ### Security
 
+- Bound inbound `X-Request-ID` values to `^[A-Za-z0-9_.:-]{1,128}$` in the REST
+  service. Oversized, non-ASCII or separator-bearing ids are replaced with a
+  random UUID before they reach response headers, error envelopes, access logs
+  or spans. The privacy proxy, privacy gateway and filters, and `OpenMedClient`
+  now share the one grammar in `openmed.service.request_id` (#3913).
+
 - Refresh explicitly configured SMART credentials through atomic injected custody,
   validate token type/lifetime/granted permission unions, rotate refresh secrets,
   and revoke uncertain or invalid refreshes with value-free findings. Bulk export

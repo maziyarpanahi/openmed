@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import time
-import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
@@ -14,8 +13,9 @@ from typing import Any, Mapping, Optional
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .request_id import REQUEST_ID_HEADER, request_id_or_generated
+
 ACCESS_LOGGER_NAME = "openmed.service.access"
-REQUEST_ID_HEADER = "X-Request-ID"
 SERVICE_LOG_LEVEL_ENV_VAR = "OPENMED_SERVICE_LOG_LEVEL"
 SERVICE_LOG_FORMAT_ENV_VAR = "OPENMED_SERVICE_LOG_FORMAT"
 _MODEL_NAME_SCOPE_KEY = "openmed.access_log_model_name"
@@ -130,7 +130,12 @@ def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
 
 
 class CorrelationIdMiddleware:
-    """Add request IDs and emit PHI-free structured access logs."""
+    """Add request IDs and emit PHI-free structured access logs.
+
+    An inbound ``X-Request-ID`` is kept only when it matches the shared grammar
+    in :mod:`openmed.service.request_id`; any other value is replaced with a
+    generated id rather than rejected.
+    """
 
     def __init__(
         self,
@@ -217,10 +222,8 @@ def emit_access_log(
 
 
 def _request_id_from_scope(scope: Scope) -> str:
-    inbound = Headers(scope=scope).get(REQUEST_ID_HEADER)
-    if inbound:
-        return inbound
-    return str(uuid.uuid4())
+    # Replace, never repair, non-conforming ids so no part of them is echoed.
+    return request_id_or_generated(Headers(scope=scope).get(REQUEST_ID_HEADER))
 
 
 def _route_template(scope: Scope) -> str:
