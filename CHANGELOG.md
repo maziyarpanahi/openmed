@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Release checks
 
+- Allow 60 minutes for the full CI pytest step after the Windows suite
+  completed its tests at the former 45-minute boundary. Preserve full discovery,
+  coverage, exit status and the bounded timeout contract.
+
 - Coordinate the REST shedding fixture through the event loop instead of an
   additional blocking executor waiter. Retain the same response, privacy,
   admission and post-release latency assertions, and release its controlled
