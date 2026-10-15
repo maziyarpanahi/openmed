@@ -129,6 +129,35 @@ await session.dispose();
 The session also emits local-only warm/cold per-device benchmark records and
 provides fail-closed Python-reference parity and critical-label recall gates.
 
+## Content-Security-Policy profile
+
+A `connect-src` restriction is the browser's own enforcement of the no-upload
+invariant, but a policy that is too strict breaks threaded WebAssembly or
+workers without an obvious error. This is the minimal profile the package is
+tested against (`tests/browser/csp-profile.spec.ts`):
+
+```http
+Content-Security-Policy: default-src 'self'; base-uri 'none'; connect-src 'self' blob:; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+| Directive | Why inference needs it |
+|---|---|
+| `script-src 'self' 'wasm-unsafe-eval'` | Same-origin runtime scripts. `'wasm-unsafe-eval'` is required to compile WebAssembly (ONNX Runtime Web WASM and WebGPU builds). Without it, compilation throws `CompileError` and a `script-src` violation is reported; there is no silent fallback. |
+| `worker-src 'self' blob:` | Same-origin workers and the blob workers ONNX Runtime Web uses for threads. |
+| `connect-src 'self' blob:` | Model and `.wasm` fetches from your own origin; any cross-origin request (including to a hosted API) is refused. Add the model host here only if you deliberately load models remotely. |
+| `default-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` | Deny everything else by default. |
+| COOP `same-origin` + COEP `require-corp` | Cross-origin isolation, needed for `SharedArrayBuffer` and threaded WASM. Every subresource must then be same-origin or carry CORP/CORS headers. |
+
+The automated check covers WebAssembly on the main thread and in a same-origin
+worker; WGSL shaders are passed to the browser as strings rather than evaluated
+as script, so WebGPU is not expected to need an extra directive, but that path
+is not covered by the CSP test (it needs a WebGPU-capable runner).
+Violations are observable through the `securitypolicyviolation` event; record
+only `effectiveDirective` and counts, never `blockedURI`, `sample` or request
+payloads, which can contain text or paths.
+
 ## Privacy and Safety
 
 - No telemetry is enabled by default.
