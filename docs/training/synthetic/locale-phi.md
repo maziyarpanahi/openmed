@@ -98,6 +98,11 @@ not reproducible. `metadata["seed"]` records which of the two was used.
   from Faker locale providers, so they depend on the installed Faker version
   and on how complete that provider is for the language. Identifiers use the
   repository's checksum validators where one exists.
+- **Borrowed Faker locales.** Languages without a native Faker locale (for
+  example `as`, `kn`, `ml`, `mr`, `pa`, `te`, `am`, `ur`, `xh`) emit a
+  `UserWarning` and take names, phones, and addresses from a neighboring
+  locale such as `en_IN` or `hi_IN`. Those values are valid synthetic data but
+  are not written in the target language's own conventions.
 - **One fixed template per language.** Sentence structure is fixed, so the
   notes teach value formats, not varied clinical prose.
 - **Not clinical ground truth.** The note content is a fictional patient
