@@ -413,6 +413,13 @@ classification:
     - training/federated-update-metadata.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
+    - training/synthetic/index.md
+    - training/synthetic/locale-phi.md
+    - training/synthetic/burned-in.md
+    - training/synthetic/social-history.md
+    - training/synthetic/section-labels.md
+    - training/synthetic/offset-projection.md
+    - training/synthetic/translation-augmentation.md
     - training/synthetic/license-identifiers.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
