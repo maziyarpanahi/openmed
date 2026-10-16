@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, TextIO
 
+from ..core.offline import network_blocked_if_offline
 from ._output import EXIT_ERROR, EXIT_OK, EXIT_USAGE, CliError, emit
 
 
@@ -50,7 +53,9 @@ def add_sealed_eval_command(eval_sub: argparse._SubParsersAction) -> None:
             "0 success; 1 refused or failed (see error code); 2 usage error."
         ),
     )
-    parser.add_argument("--model", required=True, help="Explicit candidate model reference.")
+    parser.add_argument(
+        "--model", required=True, help="Explicit candidate model reference."
+    )
     parser.add_argument(
         "--holdout-manifest",
         type=Path,
@@ -91,24 +96,34 @@ def run_from_args(
     service = service if service is not None else default_service()
 
     try:
-        check = service.preflight(args.model, manifest)
-    except CliError:
-        raise
+        with (
+            network_blocked_if_offline(local_only=True),
+            redirect_stdout(StringIO()),
+            redirect_stderr(StringIO()),
+        ):
+            check = service.preflight(args.model, manifest)
     except Exception:
-        raise _refuse("Preflight could not complete.", "sealed_eval_preflight_failed") from None
-    if check.get("requires_network"):
+        raise _refuse(
+            "Preflight could not complete.", "sealed_eval_preflight_failed"
+        ) from None
+    if check.get("requires_network") is not False:
         raise _refuse("Sealed evaluation must run offline.", "network_required")
-    if not check.get("signed"):
+    if check.get("signed") is not True:
         raise _refuse("Candidate is unsigned or unverified.", "candidate_unsigned")
-    if not check.get("digest_match"):
+    if check.get("digest_match") is not True:
         raise _refuse("Candidate digest mismatch.", "candidate_digest_mismatch")
 
     try:
-        envelope = dict(service.evaluate(args.model, manifest))
-    except CliError:
-        raise
+        with (
+            network_blocked_if_offline(local_only=True),
+            redirect_stdout(StringIO()),
+            redirect_stderr(StringIO()),
+        ):
+            envelope = dict(service.evaluate(args.model, manifest))
     except Exception:
-        raise _refuse("Sealed evaluation could not complete.", "sealed_eval_failed") from None
+        raise _refuse(
+            "Sealed evaluation could not complete.", "sealed_eval_failed"
+        ) from None
 
     output: Path = args.output
     try:
@@ -118,8 +133,15 @@ def run_from_args(
             encoding="utf-8",
         )
     except OSError:
-        raise _refuse("Could not write the result envelope.", "output_unwritable") from None
+        raise _refuse(
+            "Could not write the result envelope.", "output_unwritable"
+        ) from None
 
     data = {"status": "completed", "output_written": True}
-    emit(args, data, human="Sealed evaluation completed; aggregate envelope written.", stream=stdout)
+    emit(
+        args,
+        data,
+        human="Sealed evaluation completed; aggregate envelope written.",
+        stream=stdout,
+    )
     return EXIT_OK

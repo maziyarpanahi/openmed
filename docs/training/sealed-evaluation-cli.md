@@ -11,6 +11,14 @@ openmed eval sealed --model <candidate-ref> \
   --holdout-manifest holdout.json --output result.json [--json]
 ```
 
+The command does not ship an evaluation backend yet. Without a configured
+service it returns `sealed_eval_service_unavailable` (exit 1). Integrations can
+call `openmed.cli.sealed_eval.run_from_args(args, service=...)` with a local
+`SealedEvaluationService`; the service owns signature verification and the
+aggregate envelope contract. Preflight and evaluation run under OpenMed's
+outbound socket guard, and backend stdout/stderr and exception details are
+suppressed.
+
 ## Exit codes and error codes
 
 | Exit | Meaning | Error codes |
