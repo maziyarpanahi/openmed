@@ -468,6 +468,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `jsonschema` validation and value-free contract tests (#3803).
 
 ### Fixed
+- Require MCP Python SDK 1.30 or newer within the existing 1.x compatibility
+  range to fix unbounded Streamable HTTP session retention (CVE-2026-59951).
+  MCP remains optional; the base SDK dependency set is unchanged.
 
 - Accept signed consent receipts through the real MCP call transport while
   retaining canonical argument schemas, bounded untrusted metadata, remote
@@ -836,6 +839,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Honor per-call ONNX revision overrides before configured and default revisions
+  (#3504).
 - Retain service concurrency permits and drain tokens until timed-out model
   work actually finishes, including GraphQL and batched requests. Add a
   value-free orphaned-work gauge and bound parallel GraphQL resolver work
