@@ -878,6 +878,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Key GLiNER model cache entries by requested device so a cached instance is not
   moved under a later caller (#3501).
 
+- Remove quadratic suffix copying from list boundary construction (#3518).
 - Include breaking commits with unmapped types in release notes.
 - Hash dataset files with bounded memory (#3510).
 - Report non-object catalog JSONL rows through the normal coherence diagnostic
