@@ -474,6 +474,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `jsonschema` validation and value-free contract tests (#3803).
 
 ### Fixed
+- Require MCP Python SDK 1.30 or newer within the existing 1.x compatibility
+  range to fix unbounded Streamable HTTP session retention (CVE-2026-59951).
+  MCP remains optional; the base SDK dependency set is unchanged.
 
 - Accept signed consent receipts through the real MCP call transport while
   retaining canonical argument schemas, bounded untrusted metadata, remote
@@ -842,6 +845,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Honor per-call ONNX revision overrides before configured and default revisions
+  (#3504).
 - Retain service concurrency permits and drain tokens until timed-out model
   work actually finishes, including GraphQL and batched requests. Add a
   value-free orphaned-work gauge and bound parallel GraphQL resolver work
@@ -879,11 +884,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Key GLiNER model cache entries by requested device so a cached instance is not
   moved under a later caller (#3501).
 
+- Remove quadratic suffix copying from list boundary construction (#3518).
 - Include breaking commits with unmapped types in release notes.
 - Hash dataset files with bounded memory (#3510).
 - Report non-object catalog JSONL rows through the normal coherence diagnostic
   path with physical line numbers, without exposing row values or paths (#3562).
 - Respect explicitly empty gold annotations (#3511).
+- Treat eval-cache entries removed between lookup and read as cache misses,
+  allowing recomputation (#3505).
 - Reject missing requested splits in named CMeEE directories before loading
   another split, while preserving explicit-file and generic-directory use (#3563).
 - Load prefetched Hugging Face models from the standard cache during offline

@@ -403,6 +403,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
+        ("mcp", "1.29.1", "1.30.0", ("dev", "mcp")),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
         ("pymongo", "4.18.1", "4.18.2", ("beam",)),
     ],
