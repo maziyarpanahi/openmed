@@ -14,6 +14,9 @@ from ._text_redaction import (
 )
 from .base import ExtractedDocument, SourceSpan, register_handler
 
+# Keep line geometry and replacement validation aligned with str.splitlines().
+_LINE_ENDING_CHARACTERS = "\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+
 
 def extract_text(
     path: str | Path,
@@ -84,7 +87,8 @@ def write_redacted_text(
     """Write redacted plaintext while retaining fixed-width column positions.
 
     When ``preserve_columns`` is true, replacement text is padded or truncated
-    to the original span width. Replacements cannot cross a line ending.
+    to the original span width. Replacements cannot cross any line ending
+    recognized by :meth:`str.splitlines` or introduce a new one.
     """
     source = Path(source_path)
     output = Path(output_path)
@@ -95,9 +99,9 @@ def write_redacted_text(
     edits: list[TextReplacement] = []
     for start, end, replacement in logical:
         original = document.text[start:end]
-        if any(character in original for character in "\r\n"):
+        if any(character in original for character in _LINE_ENDING_CHARACTERS):
             raise ValueError("plaintext replacement ranges cannot cross line endings")
-        if any(character in replacement for character in "\r\n"):
+        if any(character in replacement for character in _LINE_ENDING_CHARACTERS):
             raise ValueError("plaintext replacements cannot contain line endings")
         if preserve_columns:
             width = end - start
@@ -116,7 +120,7 @@ def write_redacted_text(
 def _line_ending(line: str) -> str:
     if line.endswith("\r\n"):
         return "\r\n"
-    if line.endswith(("\r", "\n")):
+    if line.endswith(tuple(_LINE_ENDING_CHARACTERS)):
         return line[-1]
     return ""
 
