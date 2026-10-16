@@ -133,8 +133,7 @@ provides fail-closed Python-reference parity and critical-label recall gates.
 
 A `connect-src` restriction is the browser's own enforcement of the no-upload
 invariant, but a policy that is too strict breaks threaded WebAssembly or
-workers without an obvious error. This is the minimal profile the package is
-tested against (`tests/browser/csp-profile.spec.ts`):
+workers without an obvious error. This minimal profile is exercised by a synthetic WebAssembly fixture (`tests/browser/csp-profile.spec.ts`):
 
 ```http
 Content-Security-Policy: default-src 'self'; base-uri 'none'; connect-src 'self' blob:; font-src 'self'; form-action 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; worker-src 'self' blob:
@@ -150,8 +149,13 @@ Cross-Origin-Embedder-Policy: require-corp
 | `default-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'` | Deny everything else by default. |
 | COOP `same-origin` + COEP `require-corp` | Cross-origin isolation, needed for `SharedArrayBuffer` and threaded WASM. Every subresource must then be same-origin or carry CORP/CORS headers. |
 
-The automated check covers WebAssembly on the main thread and in a same-origin
-worker; WGSL shaders are passed to the browser as strings rather than evaluated
+The demo at `docs/demo/web/index.html` uses the same script, connection and
+worker directives; it additionally allows inline styles for its UI. COOP/COEP
+must be configured as HTTP response headers by the host.
+
+The automated check uses a small WebAssembly addition module on the main thread
+and in a same-origin worker. It validates browser policy enforcement, not an
+ONNX Runtime model, blob workers, or threaded inference; WGSL shaders are passed to the browser as strings rather than evaluated
 as script, so WebGPU is not expected to need an extra directive, but that path
 is not covered by the CSP test (it needs a WebGPU-capable runner).
 Violations are observable through the `securitypolicyviolation` event; record
