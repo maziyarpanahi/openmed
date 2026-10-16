@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Distinguish supported scalar and container types recursively in tokenizer
+  loader cache keys while preserving deterministic unordered inputs,
+  PathLike/string equivalence, loader identity, revisions and bounds (#3565).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy

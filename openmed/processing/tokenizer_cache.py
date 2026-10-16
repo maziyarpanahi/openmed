@@ -74,6 +74,8 @@ def get_tokenizer_with_loader(
     """Return a cached tokenizer using an explicit ``from_pretrained`` loader.
 
     Entries are scoped to the loader as well as the name, revision, and kwargs.
+    Supported scalar and container option types stay distinct recursively;
+    mapping/set order is canonical and PathLike values share string keys.
     Repeated bound-method access on the same owner shares an entry; a different
     loader or owner does not. ``refresh_cache`` replaces only that loader's entry.
     """
