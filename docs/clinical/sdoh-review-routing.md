@@ -1,5 +1,8 @@
 # SDOH Review Routing
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `route_sdoh_review()` sends uncertain SDOH evidence to a typed human-review
 queue. Routing covers low confidence, conflict, and explicit `unknown`,
 `declined`, or `refused` outcomes.
@@ -39,3 +42,7 @@ underwriting decision.
 
 The router uses controlled, value-free records, is deterministic, and performs
 no network calls.
+
+The [synthetic SDOH false-positive stress gate](../evaluation/sdoh-false-positive-stress.md)
+checks screening, education, boilerplate, third-party, section, negated, and
+historical language against patient-level extraction and the zero-action rule.

@@ -485,3 +485,35 @@ def test_reconciliation_property_preserves_every_signed_delta(
     assert reconciliation.expectations_met
     assert {item.table: item.delta for item in reconciliation.row_deltas} == expected
     assert OmopReconciliation.from_dict(reconciliation.to_dict()) == reconciliation
+
+
+def test_windows_adapter_environment_preserves_only_required_os_paths(monkeypatch):
+    from types import SimpleNamespace
+
+    from openmed.interop.omop import quality
+
+    monkeypatch.setattr(
+        quality,
+        "os",
+        SimpleNamespace(
+            name="nt",
+            defpath="fallback",
+            environ={
+                "SystemRoot": r"C:\Windows",
+                "USERPROFILE": r"C:\Users\synthetic",
+                "PATH": "runtime",
+                "PRIVATE_TOKEN": "synthetic-secret",
+            },
+        ),
+    )
+    assert quality._safe_environment(None) == {
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PATH": "runtime",
+        "SystemRoot": r"C:\Windows",
+        "USERPROFILE": r"C:\Users\synthetic",
+    }
+    assert (
+        quality._safe_environment({"EXPLICIT_SETTING": "synthetic"})["EXPLICIT_SETTING"]
+        == "synthetic"
+    )

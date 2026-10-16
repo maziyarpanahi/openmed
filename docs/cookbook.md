@@ -42,6 +42,9 @@ using the same workflow with real data.
 
 | Use when you want to... | Script |
 | --- | --- |
+| Build a cited synthetic brief offline with explicitly labelled fixture NER/NLI providers | [`examples/v30_clinical_brief.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_clinical_brief.py) |
+| Run section-scoped SDOH extraction and an explicitly anchored synthetic timeline with labels/offsets/states-only output | [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) |
+| Inspect development NLI verdicts, synthetic calibration and evidence-bound relation review bands offline | [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) |
 | Compare clinical and biomedical NER families | [`examples/clinical_ner_families.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/clinical_ner_families.py) |
 | Redact, extract, and build a FHIR Bundle | [`examples/first_five_minutes_redact_extract_fhir.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/first_five_minutes_redact_extract_fhir.py) |
 | Export grounded spans for FHIR and OMOP workflows | [`examples/interop_fhir_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/interop_fhir_export.py) |
@@ -51,6 +54,20 @@ using the same workflow with real data.
 | Prepare a local OpenMRS de-identified handoff | [`examples/openmrs_deid_handoff.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/openmrs_deid_handoff.py) |
 | Build a de-identified DHIS2 district export | [`examples/dhis2_district_export.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/dhis2_district_export.py) |
 | Extend the SDOH status vocabulary with a local domain | [`examples/custom_status_vocabulary.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/custom_status_vocabulary.py) |
+
+### Clinical workflow evidence
+
+These five examples run offline with synthetic digests and hand-authored
+fixtures. Each prints a deterministic digest/ID/code-only report containing a
+successful case and a rejected case with its stable reason code.
+
+| Use when you want to... | Script |
+| --- | --- |
+| Check [prior-authorization completeness](./agent/prior-auth-completeness.md) | [`examples/prior_auth_completeness.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/prior_auth_completeness.py) |
+| Finalize [chart-abstraction evidence](./agent/chart-abstraction-evidence.md) | [`examples/chart_abstraction_evidence.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/chart_abstraction_evidence.py) |
+| Explain [cohort membership](./agent/cohort-explanations.md) | [`examples/cohort_explanations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/cohort_explanations.py) |
+| Verify [quality-measure evidence](./agent/quality-measure-evidence.md) | [`examples/quality_measure_evidence.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/quality_measure_evidence.py) |
+| Compare [trial-eligibility assessments](./agent/trial-eligibility-review.md) | [`examples/trial_eligibility_review.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/trial_eligibility_review.py) |
 
 ### Models, agents, and local pipelines
 

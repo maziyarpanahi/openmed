@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from datetime import date
 from pathlib import Path
@@ -9,11 +10,152 @@ from pathlib import Path
 import pytest
 
 from openmed.clinical import NormalizedTimex, normalize_temporal
+from openmed.core.iso_temporal import (
+    parse_iso_date,
+    parse_iso_datetime,
+    parse_iso_time,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLD_FIXTURE = (
     ROOT / "tests" / "fixtures" / "clinical" / "temporal_normalization_gold.json"
 )
+
+# Literal synthetic vectors are also executed unchanged by the local Python
+# 3.10/3.11/3.12/3.13 conformance runner. All CI compatibility lanes run this file.
+ISO_PROFILE_CASES = [
+    ("date", "2026-01-05", "2026-01-05"),
+    ("date", "2024-02-29", "2024-02-29"),
+    ("date", "0001-01-01", "0001-01-01"),
+    ("date", "20260105", None),
+    ("date", "2026-W02-1", None),
+    ("date", "2026-005", None),
+    ("date", "2026-02-29", None),
+    ("date", "2026-13-01", None),
+    ("date", "2026-01-00", None),
+    ("date", "0000-01-01", None),
+    ("date", "2026-1-5", None),
+    ("date", "2026-01-05Z", None),
+    ("date", "\uff12\uff10\uff12\uff16-01-05", None),
+    ("date", "synthetic-private-timestamp", None),
+    ("datetime", "2026-01-05", "2026-01-05T00:00:00"),
+    ("datetime", "2026-01-05T10", "2026-01-05T10:00:00"),
+    ("datetime", "2026-01-05T10:30", "2026-01-05T10:30:00"),
+    ("datetime", "2026-01-05 10:30:00", "2026-01-05T10:30:00"),
+    ("datetime", "2026-01-05t10:30:00z", "2026-01-05T10:30:00+00:00"),
+    ("datetime", "2026-01-05T10:30:00Z", "2026-01-05T10:30:00+00:00"),
+    ("datetime", "2026-01-05T10:30:00-05:30", "2026-01-05T10:30:00-05:30"),
+    ("datetime", "2026-01-05T10:30:00+05:30", "2026-01-05T10:30:00+05:30"),
+    ("datetime", "2026-01-05T10:30:00.1Z", "2026-01-05T10:30:00.100000+00:00"),
+    ("datetime", "2026-01-05T10:30:00.12Z", "2026-01-05T10:30:00.120000+00:00"),
+    ("datetime", "2026-01-05T10:30:00.123Z", "2026-01-05T10:30:00.123000+00:00"),
+    ("datetime", "2026-01-05T10:30:00.1234Z", "2026-01-05T10:30:00.123400+00:00"),
+    ("datetime", "2026-01-05T10:30:00.12345Z", "2026-01-05T10:30:00.123450+00:00"),
+    ("datetime", "2026-01-05T10:30:00.123456Z", "2026-01-05T10:30:00.123456+00:00"),
+    ("datetime", "20260105T103000Z", None),
+    ("datetime", "2026-W02-1T10:30:00Z", None),
+    ("datetime", "2026-005T10:30:00Z", None),
+    ("datetime", "2026-01-05T10:30:00+0530", None),
+    ("datetime", "2026-01-05T10:30:00+05", None),
+    ("datetime", "2026-01-05T10:30:00+05:30:01", None),
+    ("datetime", "2026-01-05T10:30:00+24:00", None),
+    ("datetime", "2026-01-05T10:30:00+05:60", None),
+    ("datetime", "2026-01-05T10:30:00.1234567Z", None),
+    ("datetime", "2026-01-05T10:30:00,123Z", None),
+    ("datetime", "2026-01-05T24:00:00Z", None),
+    ("datetime", "2026-01-05T10:60:00Z", None),
+    ("datetime", "2026-01-05T10:30:60Z", None),
+    ("datetime", "2026-01-05\u202810:30:00Z", None),
+    ("time", "14", "14:00:00"),
+    ("time", "14:30", "14:30:00"),
+    ("time", "14:30:45.123456Z", "14:30:45.123456+00:00"),
+    ("time", "14:30:45.1+05:30", "14:30:45.100000+05:30"),
+    ("time", "143045", None),
+    ("time", "14:30:45+0530", None),
+    ("time", "14:30:45+05:60", None),
+    ("time", "24:30:00", None),
+    ("time", "14:30:45.1234567", None),
+]
+
+
+@pytest.mark.parametrize("kind,value,expected", ISO_PROFILE_CASES)
+def test_shared_iso_profile_has_interpreter_independent_conformance(
+    kind, value, expected
+):
+    parser = {
+        "date": parse_iso_date,
+        "datetime": parse_iso_datetime,
+        "time": parse_iso_time,
+    }[kind]
+    if expected is None:
+        with pytest.raises(ValueError) as error:
+            parser(value)
+        assert str(error.value) == "invalid_iso_temporal"
+        assert error.value.__context__ is None
+    else:
+        assert parser(value).isoformat() == expected
+
+
+@pytest.mark.parametrize("value", [None, True, 20260105, {}, [], "x" * 4096])
+@pytest.mark.parametrize("parser", [parse_iso_date, parse_iso_datetime, parse_iso_time])
+def test_shared_iso_parser_rejects_nonstrings_and_excessive_values_without_echo(
+    parser, value
+):
+    with pytest.raises(ValueError, match="^invalid_iso_temporal$"):
+        parser(value)
+
+
+def _direct_iso_accesses(source: str) -> tuple[int, ...]:
+    return tuple(
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Attribute) and node.attr == "fromisoformat"
+    )
+
+
+def _assert_shared_iso_parsing(sources: dict[str, str]) -> None:
+    offenders = [
+        (module, lines)
+        for module, source in sorted(sources.items())
+        if (lines := _direct_iso_accesses(source))
+    ]
+    assert offenders == []
+
+
+def test_clinical_code_uses_the_shared_iso_profile_instead_of_interpreter_grammar():
+    _assert_shared_iso_parsing(
+        {
+            str(path.relative_to(ROOT)): path.read_text(encoding="utf-8")
+            for path in sorted((ROOT / "openmed/clinical").rglob("*.py"))
+        }
+    )
+
+
+def test_direct_iso_lint_detects_a_synthetic_alias_and_bound_method():
+    with pytest.raises(AssertionError, match="synthetic.clinical"):
+        _assert_shared_iso_parsing(
+            {
+                "synthetic.clinical": "from datetime import datetime as dt\n"
+                "def parse(value):\n"
+                "    raw_parser = dt.fromisoformat\n"
+                "    return raw_parser(value)\n"
+            }
+        )
+    assert (
+        _direct_iso_accesses(
+            "from openmed.core.iso_temporal import parse_iso_datetime\n"
+        )
+        == ()
+    )
+
+
+@pytest.mark.parametrize(
+    "value", ["20260105", "2026-W02-1", "2026-005", "2026-01-05T10:00:00+0530"]
+)
+def test_reference_times_refuse_basic_week_ordinal_and_compact_offsets(value):
+    with pytest.raises(ValueError) as error:
+        normalize_temporal("yesterday", [(0, 9)], value)
+    assert value not in str(error.value)
 
 
 def test_temporal_normalization_gold_fixture() -> None:

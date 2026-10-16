@@ -104,5 +104,140 @@
       "expected_display": "Seizure",
       "fhir_resource_type": "Observation"
     }
-  ]
+  ],
+  "synthetic": true,
+  "source_rights": "generated synthetic fixture",
+  "language": "en",
+  "source_note": "Synthetic discharge summary for patient DEMO-001. DOB: 1975-04-03. Contact phone: 212-555-0198. Email: demo.patient@example.test. MRN: 00123456. SSN: 123-45-6789. History of present illness: The patient reports type 2 diabetes and hypertension. Medication: metformin 500 mg twice daily and lisinopril 10 mg daily. The patient denies pneumonia. Reports headache and fever. Family history of seizure.",
+  "expected_pipeline": {
+    "entities": [
+      {
+        "text": "type 2 diabetes",
+        "start": 195,
+        "end": 210,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "certainty": "certain",
+        "code": "E11.9",
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "vocab_version": "sha256:778c8a675b9d73b96930a07cec6285009a490c9de5a1db5bb74feacf7309c709",
+        "resource_type": "Condition",
+        "status": "inactive"
+      },
+      {
+        "text": "hypertension",
+        "start": 215,
+        "end": 227,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "I10",
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "vocab_version": "sha256:778c8a675b9d73b96930a07cec6285009a490c9de5a1db5bb74feacf7309c709",
+        "resource_type": "Condition",
+        "status": "active"
+      },
+      {
+        "text": "metformin",
+        "start": 241,
+        "end": 250,
+        "label": "MEDICATION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "6809",
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "vocab_version": "sha256:112c8c6076a28d31250d01b479bd8857d6714245e6cb06aeb9ec93fc9f1c73e2",
+        "resource_type": "MedicationStatement",
+        "status": "active"
+      },
+      {
+        "text": "lisinopril",
+        "start": 274,
+        "end": 284,
+        "label": "MEDICATION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "29046",
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "vocab_version": "sha256:112c8c6076a28d31250d01b479bd8857d6714245e6cb06aeb9ec93fc9f1c73e2",
+        "resource_type": "MedicationStatement",
+        "status": "active"
+      },
+      {
+        "text": "pneumonia",
+        "start": 317,
+        "end": 326,
+        "label": "CONDITION",
+        "negation": "negated",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "J18.9",
+        "system": "http://hl7.org/fhir/sid/icd-10-cm",
+        "vocab_version": "sha256:778c8a675b9d73b96930a07cec6285009a490c9de5a1db5bb74feacf7309c709",
+        "resource_type": "Condition",
+        "status": "refuted"
+      },
+      {
+        "text": "headache",
+        "start": 336,
+        "end": 344,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "HP:0002315",
+        "system": "http://human-phenotype-ontology.org",
+        "vocab_version": "sha256:46aa1fcaee2118ef8618ff5aaf09716da89425d7a58835d35d909cdd702f886a",
+        "resource_type": "Observation",
+        "status": "active"
+      },
+      {
+        "text": "fever",
+        "start": 349,
+        "end": 354,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "HP:0001945",
+        "system": "http://human-phenotype-ontology.org",
+        "vocab_version": "sha256:46aa1fcaee2118ef8618ff5aaf09716da89425d7a58835d35d909cdd702f886a",
+        "resource_type": "Observation",
+        "status": "active"
+      },
+      {
+        "text": "seizure",
+        "start": 374,
+        "end": 381,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "historical",
+        "certainty": "certain",
+        "code": "HP:0001250",
+        "system": "http://human-phenotype-ontology.org",
+        "vocab_version": "sha256:46aa1fcaee2118ef8618ff5aaf09716da89425d7a58835d35d909cdd702f886a",
+        "resource_type": "Observation",
+        "status": "inactive"
+      }
+    ],
+    "fhir_bundle": {
+      "resource_type": "Bundle",
+      "type": "transaction",
+      "entry_types": [
+        "Patient",
+        "Condition",
+        "Condition",
+        "MedicationStatement",
+        "MedicationStatement",
+        "Condition",
+        "Observation",
+        "Observation",
+        "Observation"
+      ]
+    }
+  }
 }

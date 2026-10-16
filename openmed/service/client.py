@@ -16,10 +16,17 @@ from openmed.structured.decision import (
     decision_request_schema,
 )
 
+from .governed_workflows import WorkflowReference, WorkflowView
 from .journey_client_generated import (
     JourneyResourceType,
     JourneyWorkflowClientMixin,
     JourneyWorkflowName,
+)
+from .workflow_client import (
+    WorkflowClientError,
+    WorkflowClientMixin,
+    WorkflowPollPolicy,
+    WorkflowReadOptions,
 )
 
 JsonDict = dict[str, Any]
@@ -43,6 +50,7 @@ PIILanguage = Literal[
     "mr",
     "ne",
     "or",
+    "pl",
     "pa",
     "ta",
     "te",
@@ -66,6 +74,7 @@ PIILanguage = Literal[
     "xh",
     "zh",
     "uk",
+    "ur",
     "cs",
     "el",
     "vi",
@@ -89,6 +98,57 @@ class AnalyzeRequest:
     sentence_clean: bool = False
     use_fast_tokenizer: bool = True
     keep_alive: Optional[KeepAliveValue] = None
+
+
+@dataclass(frozen=True)
+class BriefRequest:
+    """Typed clinical brief request; review references are opaque handles."""
+
+    text: str
+    model: Literal["mlx", "extractive", "maple", "maple-preview"] = "mlx"
+    profile: str = "bhc"
+    review_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class GroundRequest:
+    """Typed request body for offline terminology grounding."""
+
+    text: Optional[str] = None
+    entities: Optional[list[JsonDict]] = None
+    systems: tuple[str, ...] = ("rxnorm", "icd10cm", "loinc", "hpo")
+    source_language: str = "en"
+    top_k: int = 5
+    offline: bool = True
+
+
+@dataclass(frozen=True)
+class ProfileRequest:
+    """Typed request body for aggregate structured-record profiling."""
+
+    records_jsonl: str
+    completeness_floor: float = 0.0
+    required_fields: tuple[str, ...] = ()
+    athena_index: Optional[JsonDict] = None
+
+
+@dataclass(frozen=True)
+class ConceptAncestorRequest:
+    """One caller-supplied concept hierarchy edge for cohort resolution."""
+
+    ancestor_concept_id: int
+    descendant_concept_id: int
+
+
+@dataclass(frozen=True)
+class CohortResolveRequest:
+    """Typed request body for in-memory phenotype/cohort resolution."""
+
+    phenotype: JsonDict
+    records_jsonl: str
+    concept_ancestors: tuple[ConceptAncestorRequest, ...] = ()
+    completeness_floor: Optional[float] = None
+    required_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -172,7 +232,47 @@ def _request_field_names(request_type: type[Any]) -> frozenset[str]:
     return frozenset(field.name for field in fields(request_type))
 
 
+_WORKFLOW_REFERENCE_FIELDS = _request_field_names(WorkflowReference) | {
+    "schema_version"
+}
+
+
 CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
+    "workflow_preflight": ClientEndpoint(
+        "POST", "/v1/workflows/preflight", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_preview": ClientEndpoint(
+        "POST", "/v1/workflows/preview", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_status": ClientEndpoint(
+        "POST", "/v1/workflows/status", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "workflow_submit_receipt": ClientEndpoint(
+        "POST",
+        "/v1/workflows/review-receipts",
+        _WORKFLOW_REFERENCE_FIELDS | {"receipt"},
+    ),
+    "workflow_cancel": ClientEndpoint(
+        "POST", "/v1/workflows/cancel", _WORKFLOW_REFERENCE_FIELDS
+    ),
+    "brief": ClientEndpoint(
+        method="POST", path="/brief", request_fields=_request_field_names(BriefRequest)
+    ),
+    "ground": ClientEndpoint(
+        method="POST",
+        path="/ground",
+        request_fields=_request_field_names(GroundRequest),
+    ),
+    "profile": ClientEndpoint(
+        method="POST",
+        path="/profile",
+        request_fields=_request_field_names(ProfileRequest),
+    ),
+    "resolve_cohort": ClientEndpoint(
+        method="POST",
+        path="/cohort/resolve",
+        request_fields=_request_field_names(CohortResolveRequest),
+    ),
     "analyze": ClientEndpoint(
         method="POST",
         path="/analyze",
@@ -218,6 +318,22 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
 }
 
 
+CLIENT_OPENAPI_EXCLUSIONS: Mapping[str, str] = {
+    "/health": "Deployment probe; use an operator-owned HTTP health check.",
+    "/livez": "Deployment probe; use an operator-owned HTTP health check.",
+    "/readyz": "Deployment probe; use an operator-owned HTTP health check.",
+    "/omop/load": "Bulk loading remains an explicit direct REST operation.",
+    "/pii/deidentify/stream": "De-identification streaming has no sync wrapper yet.",
+    "/jobs": "Asynchronous job lifecycle has no sync wrapper yet.",
+    "/jobs/{job_id}": "Asynchronous job lifecycle has no sync wrapper yet.",
+    "/fhir/smart-backend/ingestions": "SMART ingestion is an operator workflow.",
+    "/fhir/smart-backend/ingestions/{job_id}": "SMART ingestion is an operator workflow.",
+    "/fhir/smart-backend/ingestions/{job_id}/summary": (
+        "SMART ingestion is an operator workflow."
+    ),
+}
+
+
 class OpenMedAPIError(RuntimeError):
     """Raised when the REST service returns a non-2xx error envelope."""
 
@@ -239,12 +355,30 @@ class OpenMedAPIError(RuntimeError):
         super().__init__(f"{status_code} {code}: {message}{suffix}")
 
 
-class OpenMedClient(JourneyWorkflowClientMixin):
+class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
     """Small typed sync client for the OpenMed REST service.
 
     Non-2xx responses, including unfollowed redirects, raise
     :class:`OpenMedAPIError` for both JSON and streaming requests.
+    Governed workflow operations use :class:`WorkflowClientError`, immutable
+    native metadata and explicit single-attempt state changes.
     """
+
+    def brief(
+        self,
+        text: str,
+        *,
+        model: str = "mlx",
+        profile: str = "bhc",
+        review_id: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Request a guarded local brief; returned summary is protected content."""
+        return self._post(
+            "/brief",
+            BriefRequest(text, model, profile, review_id),
+            request_id=request_id,
+        )
 
     def __init__(
         self,
@@ -308,6 +442,77 @@ class OpenMedClient(JourneyWorkflowClientMixin):
                 sentence_clean=sentence_clean,
                 use_fast_tokenizer=use_fast_tokenizer,
                 keep_alive=keep_alive,
+            ),
+            request_id=request_id,
+        )
+
+    def ground(
+        self,
+        text: Optional[str] = None,
+        *,
+        entities: Optional[Sequence[Mapping[str, Any]]] = None,
+        systems: Sequence[str] = ("rxnorm", "icd10cm", "loinc", "hpo"),
+        source_language: str = "en",
+        top_k: int = 5,
+        offline: bool = True,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Ground text or entity spans with ``POST /ground``; offline by default."""
+        return self._post(
+            "/ground",
+            GroundRequest(
+                text=text,
+                entities=[dict(entity) for entity in entities]
+                if entities is not None
+                else None,
+                systems=tuple(systems),
+                source_language=source_language,
+                top_k=top_k,
+                offline=offline,
+            ),
+            request_id=request_id,
+        )
+
+    def profile(
+        self,
+        records_jsonl: str,
+        *,
+        completeness_floor: float = 0.0,
+        required_fields: Sequence[str] = (),
+        athena_index: Optional[Mapping[str, Any]] = None,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Profile supplied records with ``POST /profile`` without local file I/O."""
+        return self._post(
+            "/profile",
+            ProfileRequest(
+                records_jsonl=records_jsonl,
+                completeness_floor=completeness_floor,
+                required_fields=tuple(required_fields),
+                athena_index=dict(athena_index) if athena_index is not None else None,
+            ),
+            request_id=request_id,
+        )
+
+    def resolve_cohort(
+        self,
+        phenotype: Mapping[str, Any],
+        records_jsonl: str,
+        *,
+        concept_ancestors: Sequence[ConceptAncestorRequest] = (),
+        completeness_floor: Optional[float] = None,
+        required_fields: Sequence[str] = (),
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Resolve a supplied phenotype against records with ``POST /cohort/resolve``."""
+        return self._post(
+            "/cohort/resolve",
+            CohortResolveRequest(
+                phenotype=dict(phenotype),
+                records_jsonl=records_jsonl,
+                concept_ancestors=tuple(concept_ancestors),
+                completeness_floor=completeness_floor,
+                required_fields=tuple(required_fields),
             ),
             request_id=request_id,
         )
@@ -634,8 +839,12 @@ class OpenMedClient(JourneyWorkflowClientMixin):
 __all__ = [
     "AnalyzeRequest",
     "CLIENT_ENDPOINTS",
+    "CLIENT_OPENAPI_EXCLUSIONS",
     "ClientEndpoint",
+    "CohortResolveRequest",
+    "ConceptAncestorRequest",
     "FixedOptionDecisionRequest",
+    "GroundRequest",
     "JourneyResourceType",
     "JourneyWorkflowClientMixin",
     "JourneyWorkflowName",
@@ -645,4 +854,10 @@ __all__ = [
     "PIIDeidentifyRequest",
     "PIIExtractRequest",
     "PIIExtractStreamRequest",
+    "ProfileRequest",
+    "WorkflowClientError",
+    "WorkflowPollPolicy",
+    "WorkflowReadOptions",
+    "WorkflowReference",
+    "WorkflowView",
 ]

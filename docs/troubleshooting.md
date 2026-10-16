@@ -31,6 +31,43 @@ see the [Quick Start](getting-started.md) and
 
 ---
 
+## Clinical brief readiness
+
+`openmed doctor --json` includes the same checks returned by
+`openmed.core.doctor.clinical_brief_readiness()`. This reusable function inspects
+platform metadata, package specs and local cache metadata only: it does not
+import MLX, construct models, download artifacts or call an inference backend.
+Every new check has a controlled `code`, a `PASS`/`WARN` status and a remediation
+hint when needed. These checks do not include private paths, filenames or tokens.
+
+- `brief_extractive`: explicit deterministic extractive mode is available without MLX.
+- `brief_mlx_platform`: the built-in MLX alias requires Apple silicon on macOS.
+- `brief_mlx_runtime`: the MLX, MLX-LM and Hub packages are discoverable.
+- `brief_summarizer_cache`: the registered pinned Maple revision has non-empty
+  config/tokenizer files and weights (all indexed shards when sharded) in the
+  distribution cache. This inventory does not satisfy runtime admission.
+- `brief_summarizer_package`: the application has registered a local package
+  with a trusted immutable manifest pin. Registration does not verify files;
+  the runtime still verifies its complete provisioned package before loading.
+  The default remains a warning until the host registers a reviewed package.
+- `brief_raw_note_pii_cache`: the default English PII artifact is cached. Its
+  local `main` reference must resolve to a complete snapshot; this is not an
+  immutable pin or verification of another language/model chosen by the caller.
+- `brief_nli_provider`: a released NLI checkpoint is registered, or the controlled
+  warning `caller_nli_provider_required` explains the caller-supplied option.
+
+`PASS` means the named prerequisite was observed, not that inference succeeded
+or that a model is clinically qualified. The checks do not validate cache or
+provisioned package contents as model code, calibration quality, a review packet,
+or sufficient device memory. Cache index reads are bounded to 1 MiB; malformed
+or deeply nested indexes are reported as missing without parser diagnostics.
+Supply a reviewed context and a calibrated local NLI provider to compose a brief;
+training a new model is optional and is not a release requirement.
+
+Warnings alone keep the doctor exit code at zero. A failed diagnostic emits
+`outcome: "check_failed"` and exits 1; see the
+[machine contract](cli/machine-contract.md) for scripting semantics.
+
 ## Install / Extras
 
 OpenMed ships a small permissive core and keeps heavy or platform-specific stacks behind
@@ -397,18 +434,17 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ValueError: Unsupported language 'xx'. Supported: [...]
 ```
 
-**Cause.** PII extraction and de-identification support **38 supported PII
+**Cause.** PII extraction and de-identification support **42 supported PII
 language codes: am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja,
-kn, ko, mr, nl, no, or, pt, ro, ru, sv, sw, ta, te, th, tr, uk, vi, xh, zh, and zu**.
+kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, and zu**.
 Russian currently uses a documented multilingual default-model placeholder.
 Passing anything outside that set (or a mistyped code) raises this error.
-The accepted API set also includes two optional Indic routes: `ml`
-and `pa`. Those codes require an explicit model or
-`OPENMED_INDIC_NER_MODEL`; Assamese, Bengali, Gujarati, Hindi, Kannada, Marathi, Odia, Tamil, and
-Telugu can use the adapter too.
+The optional Indic NER adapter can serve Assamese, Bengali, Gujarati, Hindi,
+Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, and Telugu when configured
+with an explicit model or `OPENMED_INDIC_NER_MODEL`.
 
-**Fix.** Use a built-in code or a configured optional Indic route with
-`extract_pii(..., lang="<code>")`. Clinical NER coverage depends
+**Fix.** Use a built-in code with `extract_pii(..., lang="<code>")`, or
+configure an explicit model for a registered user-supplied route. Clinical NER coverage depends
 on the selected registry model — check each model's `languages` in the
 [Model Registry](model-registry.md). See the [FAQ](faq.md#which-languages-are-supported).
 
@@ -460,7 +496,7 @@ print(result.deidentified_text)   # read output from .deidentified_text (not .te
 
 ```bash
 pip install "openmed[service]"
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Tune behavior with `OPENMED_SERVICE_*` variables, e.g. `OPENMED_PROFILE=dev`,

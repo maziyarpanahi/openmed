@@ -24,6 +24,8 @@ from functools import lru_cache
 from importlib import resources
 from typing import Any
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 from ._validation_primitives import _extract_codes, _Occurrence, _occurrence_groups
 
 __all__ = [
@@ -40,6 +42,7 @@ BASE_R4_RESOURCE_TYPES = frozenset(
         "Condition",
         "DiagnosticReport",
         "Encounter",
+        "FamilyMemberHistory",
         "Immunization",
         "MedicationRequest",
         "MedicationStatement",
@@ -115,7 +118,8 @@ def validate_resource(resource: Mapping[str, Any]) -> ValidationResult:
 
     Supported resource types are Condition, Observation, MedicationRequest,
     MedicationStatement, Procedure, DiagnosticReport, AllergyIntolerance,
-    Immunization, and Encounter. Other resource types produce a warning because
+    Immunization, Encounter, and FamilyMemberHistory. Other resource types
+    produce a warning because
     no claim of base conformance can be made for a type outside the bundled
     subset.
 
@@ -267,6 +271,25 @@ def _validate_resource_at(
     findings: list[ValidationFinding] = []
     for element in elements:
         findings.extend(_validate_element(resource, location_root, element))
+    if resource_type == "FamilyMemberHistory" and isinstance(
+        resource.get("condition"), list
+    ):
+        # Generic traversal treats empty values as absent. An explicit empty
+        # repeating backbone entry must still satisfy its required code.
+        for index, condition in enumerate(resource["condition"]):
+            location = f"{location_root}.condition[{index}]"
+            if isinstance(condition, Mapping) and not condition:
+                findings.append(
+                    _error(
+                        location + ".code",
+                        "Required element is missing or empty.",
+                        "required",
+                    )
+                )
+            elif condition is None:
+                findings.append(
+                    _error(location, "Element has an invalid FHIR R4 datatype.")
+                )
     return findings
 
 
@@ -443,7 +466,7 @@ def _valid_datetime(value: str, *, require_time: bool) -> bool:
     if _DATETIME_RE.fullmatch(value) is None:
         return False
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError:
         return False
     return parsed.tzinfo is not None

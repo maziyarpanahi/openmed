@@ -25,6 +25,7 @@ _GROUNDING_INPUT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_input_count"
 _GROUNDING_RESULT_COUNT_SCOPE_KEY = "openmed.access_log_grounding_result_count"
 _GROUNDING_SYSTEMS_SCOPE_KEY = "openmed.access_log_grounding_systems"
 _GROUNDING_LANG_SCOPE_KEY = "openmed.access_log_grounding_lang"
+_BRIEF_SCOPE_KEY = "openmed.access_log_brief"
 
 _REQUEST_ID: ContextVar[Optional[str]] = ContextVar(
     "openmed_service_request_id",
@@ -76,6 +77,9 @@ def current_request_id() -> Optional[str]:
 def set_access_log_model_name(request: Any, model_name: Optional[str]) -> None:
     """Attach the parsed model name to the current request scope for logging."""
     if model_name:
+        from .app import _get_service_runtime
+
+        _get_service_runtime(request).validate_served_model(model_name)
         request.scope[_MODEL_NAME_SCOPE_KEY] = str(model_name)
 
 
@@ -105,6 +109,24 @@ def set_access_log_grounding(
     request.scope[_GROUNDING_LANG_SCOPE_KEY] = str(lang)
     if result_count is not None:
         request.scope[_GROUNDING_RESULT_COUNT_SCOPE_KEY] = max(0, int(result_count))
+
+
+def set_access_log_brief(request: Any, response: Mapping[str, Any]) -> None:
+    """Attach only bounded counts and closed-vocabulary brief outcomes."""
+    from openmed.clinical.brief import BriefRefusal
+
+    reason = response.get("refusal_reason")
+    backend = response.get("backend_id")
+    request.scope[_BRIEF_SCOPE_KEY] = {
+        "brief_claim_count": len(response.get("verdicts", [])),
+        "brief_summary_characters": int(response.get("summary_characters", 0)),
+        "brief_refusal_reason": reason
+        if reason in {item.value for item in BriefRefusal}
+        else None,
+        "brief_backend": backend
+        if backend in {"deterministic-extractive", "local-mlx"}
+        else "local",
+    }
 
 
 class CorrelationIdMiddleware:
@@ -166,6 +188,7 @@ class CorrelationIdMiddleware:
                             "grounding_lang": scope[_GROUNDING_LANG_SCOPE_KEY],
                         }
                     )
+                payload.update(scope.get(_BRIEF_SCOPE_KEY, {}))
                 emit_access_log(
                     self.logger,
                     self.log_config,
@@ -205,6 +228,18 @@ def _route_template(scope: Scope) -> str:
     route_path = getattr(route, "path", None)
     if isinstance(route_path, str) and route_path:
         return route_path
+    if scope.get("app") is not None:
+        # Lazy included routers may leave the request's route path empty.
+        # Resolve only a registered effective template; never log raw targets.
+        from starlette.requests import Request
+
+        from .auth import route_key_for_request
+
+        try:
+            _, template = route_key_for_request(Request(scope))
+            return template or "unknown"
+        except Exception:
+            return "unknown"
     return "unknown"
 
 
@@ -277,3 +312,52 @@ __all__ = [
     "set_access_log_identity",
     "set_access_log_model_name",
 ]
+
+
+def main() -> None:
+    """Launch structured access logging without raw request targets."""
+    import argparse
+
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("app", nargs="?", default="openmed.service.app:app")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", default=8080, type=int)
+    parser.add_argument("--workers", default=1, type=int)
+    parser.add_argument("--ssl-keyfile")
+    parser.add_argument("--ssl-certfile")
+    parser.add_argument("--ssl-ca-certs")
+    parser.add_argument("--ssl-cert-reqs", type=int, default=0)
+    parser.add_argument(
+        "--no-proxy-headers", dest="proxy_headers", action="store_false"
+    )
+    parser.add_argument("--forwarded-allow-ips")
+    options = vars(parser.parse_args())
+    log_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "access": {"()": "openmed.service.logging.StructuredJsonLogFormatter"}
+        },
+        "handlers": {
+            "access": {
+                "class": "logging.StreamHandler",
+                "formatter": "access",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "loggers": {
+            ACCESS_LOGGER_NAME: {
+                "handlers": ["access"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
+        },
+    }
+    uvicorn.run(**options, access_log=False, log_config=log_config)
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised by process-level tests
+    main()

@@ -8,6 +8,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "scripts/brand/validate_system.py"
 SOCIAL_RENDERER = REPO_ROOT / "scripts/brand/render_social_assets.py"
@@ -34,6 +36,37 @@ def _load_social_renderer():
 def test_brand_system_contract_and_reproducibility() -> None:
     validator = _load_validator()
     assert validator.validate() == []
+
+
+def test_brand_package_version_tracks_candidate_and_rejects_stale_claim(monkeypatch):
+    validator = _load_validator()
+    original = validator._load_json
+
+    def stale(path):
+        value = original(path)
+        if path == "docs/brand/system/claims.yml":
+            value = deepcopy(value)
+            value["claims"]["package_version"]["value"] = "0.0.0"
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", stale)
+    errors = []
+    validator._validate_claims(errors)
+    assert any("claim package_version" in error for error in errors)
+
+
+def test_brand_package_version_snapshot_uses_candidate_changelog_date():
+    spec = importlib.util.spec_from_file_location(
+        "update_brand_claims", REPO_ROOT / "scripts/brand/update_claims.py"
+    )
+    assert spec is not None and spec.loader is not None
+    updater = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(updater)
+    registry = updater.build_registry()
+    version = updater._read_version()
+    assert registry["claims"]["package_version"]["as_of"] == (
+        updater._read_version_date(version).isoformat()
+    )
 
 
 def test_social_masters_are_exact_approved_handoff_exports() -> None:
@@ -123,3 +156,49 @@ def test_faq_parity_rejects_visible_answer_drift() -> None:
     )
     validator._validate_faq_parity(drifted, faq_page, errors)
     assert any("visible FAQ disagrees with JSON-LD" in error for error in errors)
+
+
+def test_brand_rejects_substituted_national_id_only_language(monkeypatch):
+    validator = _load_validator()
+    original = validator._load_json
+
+    def changed(path):
+        value = original(path)
+        if path == "docs/brand/system/claims.yml":
+            value = deepcopy(value)
+            value["claims"]["national_id_only_languages"]["value"][0] = "zz"
+        return value
+
+    monkeypatch.setattr(validator, "_load_json", changed)
+    assert any(
+        "national-ID-only language claim" in error for error in validator.validate()
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        None,
+        ("86108e13d57f44f69a4c67a445df1f17", "wrong-site-token"),
+        ("beacon.min.js", "beacon.min.js?extra=1"),
+        ("static.cloudflareinsights.com", "unapproved.example"),
+        ('type="module"', 'type="module" onload="unapproved()"'),
+        ("</script>", "unapproved()</script>"),
+    ],
+)
+def test_marketing_beacon_exception_is_exact_and_homepage_only(mutation):
+    validator = _load_validator()
+    snippet = (
+        '<script type="module" '
+        'src="https://static.cloudflareinsights.com/beacon.min.js" '
+        'data-cf-beacon=\'{"token": "86108e13d57f44f69a4c67a445df1f17"}\'>'
+        "</script>"
+    )
+    source = snippet if mutation is None else snippet.replace(*mutation)
+    assert validator._without_marketing_beacon(source, marketing_page=False) == source
+    assert validator._without_marketing_beacon(source, marketing_page=True) == (
+        "" if mutation is None else source
+    )
+    assert validator._without_marketing_beacon(
+        source + source, marketing_page=True
+    ) == (source if mutation is None else source + source)

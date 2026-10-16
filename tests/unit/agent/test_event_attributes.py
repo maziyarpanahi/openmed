@@ -405,3 +405,18 @@ def test_event_attributes_are_available_from_the_public_agent_api() -> None:
         "validate_event_attributes",
     }
     assert exported.issubset(set(agent.__all__))
+
+
+def test_issue_3779_nightly_depth_failure_below_event_byte_limit_is_typed(
+    force_json_recursion_error,
+):
+    secret = "synthetic-parser-private-sentinel"
+    payload = "[" * 2000 + json.dumps(secret) + "]" * 2000
+    assert len(payload.encode()) < MAX_ATTRIBUTE_JSON_BYTES
+    force_json_recursion_error(secret)
+    with pytest.raises(EventAttributeError) as caught:
+        EventAttributes.from_json(payload)
+    assert caught.value.code == "malformed_json"
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert secret not in str(caught.value)
