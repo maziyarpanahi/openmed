@@ -836,6 +836,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
+- Honor per-call ONNX revision overrides before configured and default revisions
+  (#3504).
 - Retain service concurrency permits and drain tokens until timed-out model
   work actually finishes, including GraphQL and batched requests. Add a
   value-free orphaned-work gauge and bound parallel GraphQL resolver work
