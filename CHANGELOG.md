@@ -836,8 +836,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
-- Treat eval-cache entries removed between lookup and read as cache misses,
-  allowing recomputation (#3505).
 - Retain service concurrency permits and drain tokens until timed-out model
   work actually finishes, including GraphQL and batched requests. Add a
   value-free orphaned-work gauge and bound parallel GraphQL resolver work
@@ -880,6 +878,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Report non-object catalog JSONL rows through the normal coherence diagnostic
   path with physical line numbers, without exposing row values or paths (#3562).
 - Respect explicitly empty gold annotations (#3511).
+- Treat eval-cache entries removed between lookup and read as cache misses,
+  allowing recomputation (#3505).
 - Reject missing requested splits in named CMeEE directories before loading
   another split, while preserving explicit-file and generic-directory use (#3563).
 - Load prefetched Hugging Face models from the standard cache during offline
