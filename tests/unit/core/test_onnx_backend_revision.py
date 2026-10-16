@@ -46,11 +46,15 @@ def test_omitted_revision_retains_config_fallback(loader, configured, expected):
     assert loader.call_args.kwargs["revision"] == expected
 
 
-def test_none_revision_retains_config_fallback(loader):
-    OnnxBackend(SimpleNamespace(pii_model_revision="configured")).create_pipeline(
-        "synthetic/model", revision=None
+@pytest.mark.parametrize("requested", [None, ""])
+@pytest.mark.parametrize(
+    "configured,expected", [(None, "main"), ("configured", "configured")]
+)
+def test_empty_revision_retains_fallback(loader, requested, configured, expected):
+    OnnxBackend(SimpleNamespace(pii_model_revision=configured)).create_pipeline(
+        "synthetic/model", revision=requested
     )
-    assert loader.call_args.kwargs["revision"] == "configured"
+    assert loader.call_args.kwargs["revision"] == expected
 
 
 def test_other_loader_safety_options_are_unchanged(loader):
