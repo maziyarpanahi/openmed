@@ -18,12 +18,17 @@ __all__ = [
     "CLINICAL_PRIVACY_TRAINING_SOURCE_IDS",
     "DAPT_CORPUS_MANIFEST_PATH",
     "DAPT_CORPUS_SCHEMA_VERSION",
+    "DEFAULT_DP_CONTRIBUTION_FLOORS",
     "DEFAULT_FEDERATED_MINIMUM_GROUP_SIZE",
     "DEFAULT_FEDERATED_METRIC_MINIMUM_GROUP_SIZE",
+    "DEFAULT_NON_DP_CONTRIBUTION_FLOORS",
+    "FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION",
+    "FEDERATED_CONTRIBUTION_SCHEMA_VERSION",
     "FEDERATED_METRIC_SCHEMA_VERSION",
     "FEDERATED_SCHEDULE_PHASES",
     "FEDERATED_SCHEDULE_SCHEMA_VERSION",
     "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
+    "MAX_FEDERATED_CONTRIBUTION_FLOOR",
     "MAX_FEDERATED_PHASE_DURATION_SECONDS",
     "MAX_LORA_TRAINABLE_RATIO",
     "JOURNEY_SPECIALIST_ADAPTER_METHODS",
@@ -116,6 +121,13 @@ __all__ = [
     "DistillationReport",
     "DistillationTargets",
     "EntityTypeWeights",
+    "FederatedContributionBand",
+    "FederatedContributionDeclaration",
+    "FederatedContributionDecision",
+    "FederatedContributionError",
+    "FederatedContributionFloorPolicy",
+    "FederatedContributionReasonCode",
+    "FederatedContributionRefusedError",
     "FederatedRoundLifecycle",
     "FederatedMetricEnvelope",
     "FederatedMetricError",
@@ -204,6 +216,7 @@ __all__ = [
     "compute_kd_loss",
     "compute_span_agreement_loss",
     "can_transition_round",
+    "check_federated_contribution",
     "decode_repaired_spans",
     "directid_dataset_manifest_hash",
     "directid_records_hash",
@@ -239,6 +252,7 @@ __all__ = [
     "render_journey_specialist_pack_card",
     "sample_hard_negatives",
     "sampler_for_recipe",
+    "seal_federated_contribution",
     "soft_label_distributions",
     "span_logits_from_repaired_spans",
     "student_backbone_from_tiny_distill_preset",
@@ -322,6 +336,26 @@ def __getattr__(name: str) -> Any:
     }:
         federated_metrics = import_module(".federated_metrics", __name__)
         return getattr(federated_metrics, name)
+    if name in {
+        "DEFAULT_DP_CONTRIBUTION_FLOORS",
+        "DEFAULT_NON_DP_CONTRIBUTION_FLOORS",
+        "FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION",
+        "FEDERATED_CONTRIBUTION_SCHEMA_VERSION",
+        "MAX_FEDERATED_CONTRIBUTION_FLOOR",
+        "FederatedContributionBand",
+        "FederatedContributionDeclaration",
+        "FederatedContributionDecision",
+        "FederatedContributionError",
+        "FederatedContributionFloorPolicy",
+        "FederatedContributionReasonCode",
+        "FederatedContributionRefusedError",
+        "check_federated_contribution",
+        "seal_federated_contribution",
+    }:
+        federated_contribution_floors = import_module(
+            ".federated_contribution_floors", __name__
+        )
+        return getattr(federated_contribution_floors, name)
     if name in {
         "FEDERATED_UPDATE_METADATA_SCHEMA_VERSION",
         "FederatedParameterMetadata",

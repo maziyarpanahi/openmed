@@ -11,6 +11,12 @@ from typing import Any, Callable
 
 import pytest
 
+from openmed.training.federated_contribution_floors import (
+    FederatedContributionDeclaration,
+    FederatedContributionError,
+    FederatedContributionFloorPolicy,
+    seal_federated_contribution,
+)
 from openmed.training.federated_metrics import (
     FederatedMetricEnvelope,
     FederatedMetricError,
@@ -93,6 +99,20 @@ def _round_payload() -> dict[str, Any]:
     return FederatedRoundLifecycle(state=FederatedRoundState.PLANNED).to_dict()
 
 
+def _contribution_policy_payload() -> dict[str, Any]:
+    return FederatedContributionFloorPolicy().to_dict()
+
+
+def _contribution_payload() -> dict[str, Any]:
+    return seal_federated_contribution(
+        FederatedContributionFloorPolicy(),
+        update_digest=_UPDATE,
+        local_examples=300,
+        local_steps=10,
+        effective_batch_size=40,
+    ).to_dict()
+
+
 def _as_json(parse: Callable[[str], object]) -> Callable[[Any], object]:
     return lambda payload: parse(json.dumps(payload))
 
@@ -171,6 +191,30 @@ SURFACES: dict[str, Surface] = {
         _as_json(FederatedRoundLifecycle.from_json),
         FederatedRoundStateError,
         "invalid federated round lifecycle payload",
+    ),
+    "contribution-floor-policy-dict": Surface(
+        _contribution_policy_payload,
+        FederatedContributionFloorPolicy.from_dict,
+        FederatedContributionError,
+        "invalid contribution fields",
+    ),
+    "contribution-floor-policy-json": Surface(
+        _contribution_policy_payload,
+        _as_json(FederatedContributionFloorPolicy.from_json),
+        FederatedContributionError,
+        "invalid contribution fields",
+    ),
+    "contribution-declaration-dict": Surface(
+        _contribution_payload,
+        FederatedContributionDeclaration.from_dict,
+        FederatedContributionError,
+        "invalid contribution fields",
+    ),
+    "contribution-declaration-json": Surface(
+        _contribution_payload,
+        _as_json(FederatedContributionDeclaration.from_json),
+        FederatedContributionError,
+        "invalid contribution fields",
     ),
 }
 
