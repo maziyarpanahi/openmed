@@ -396,6 +396,7 @@ classification:
     - operations/no-phi-telemetry.md
     - benchmarks/low-resource.md
     - benchmarks/shield-synthetic.md
+    - benchmarks/relaxed-matching.md
     - benchmarks/i18n-throughput.md
     - benchmarks/cost-vs-cloud.md
     - zero-shot-howto.md

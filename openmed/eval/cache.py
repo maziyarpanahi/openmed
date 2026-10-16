@@ -16,7 +16,12 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from openmed.eval.report import BenchmarkReport
 
 CACHE_SCHEMA_VERSION = 1
-DEFAULT_CODE_HASH_MODULES = ("openmed.eval.harness", "openmed.eval.metrics")
+DEFAULT_CODE_HASH_MODULES = (
+    "openmed.eval.harness",
+    "openmed.eval.metrics",
+    "openmed.eval.relation_metrics",
+    "openmed.eval._matching",
+)
 
 
 @dataclass(frozen=True)
@@ -89,7 +94,7 @@ def hash_fixture_set(fixtures: Iterable[Any]) -> str:
 def eval_code_hash(
     module_names: Sequence[str] = DEFAULT_CODE_HASH_MODULES,
 ) -> str:
-    """Hash eval harness and metric code so logic changes invalidate reports."""
+    """Hash the harness and scoring dependencies so logic changes invalidate reports."""
     digest = hashlib.sha256()
     for module_name in module_names:
         module = importlib.import_module(module_name)
