@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Handle decoding failures through both batch readers' per-file error paths,
+  continue later files in permissive mode, and retain strict propagation
+  without including decoder details in error reports (#4201).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy
