@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reuse one lazy entity lookup across relation records so one-shot entity
+  iterators match list-backed input while retaining typed and empty-batch
+  laziness (#4204).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy

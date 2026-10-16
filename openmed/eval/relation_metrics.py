@@ -153,18 +153,36 @@ def normalize_eval_relations(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> list[EvalRelation]:
-    """Normalize relation-like records for scoring."""
-    return [
-        normalize_eval_relation(
-            relation,
-            entity_spans=entity_spans,
-            fixture_id=fixture_id,
-            default_language=default_language,
-            default_device=default_device,
-            source_text=source_text,
+    """Normalize relation-like records for scoring.
+
+    Entity iterables are consumed once, on the first mapping-like relation,
+    and the lookup is reused. Empty and fully typed batches leave them unused.
+    """
+    normalized: list[EvalRelation] = []
+    shared_entities = entity_spans
+    for relation in relations:
+        if (
+            not isinstance(relation, EvalRelation)
+            and shared_entities is not None
+            and not isinstance(shared_entities, Mapping)
+        ):
+            shared_entities = _entity_lookup(
+                shared_entities,
+                default_language=default_language,
+                default_device=default_device,
+                source_text=source_text,
+            )
+        normalized.append(
+            normalize_eval_relation(
+                relation,
+                entity_spans=shared_entities,
+                fixture_id=fixture_id,
+                default_language=default_language,
+                default_device=default_device,
+                source_text=source_text,
+            )
         )
-        for relation in relations
-    ]
+    return normalized
 
 
 def compute_relation_f1(
