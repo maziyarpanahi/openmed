@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any, Iterable, Mapping, Sequence
 
+from openmed.eval._matching import maximum_matching_count
 from openmed.eval.metrics import (
     EvalSpan,
     F1Metrics,
@@ -365,6 +366,14 @@ def _matching_count(
     *,
     match: str,
 ) -> int:
+    if match == MATCH_RELAXED:
+        return maximum_matching_count(
+            len(gold),
+            len(predicted),
+            lambda left, right: _relation_matches(
+                gold[left], predicted[right], match=match
+            ),
+        )
     matched_predictions: set[int] = set()
     true_positives = 0
     for gold_relation in gold:

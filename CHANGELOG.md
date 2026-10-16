@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Propose maximum one-to-one relaxed span/relation matching to remove greedy
+  input-order undercounts while retaining eligibility and strict scoring.
+  Generate edges on demand with linear auxiliary memory, document paired
+  per-document/aggregate benchmarks, and hash the shared scoring dependencies
+  in eval cache keys (#4208).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy

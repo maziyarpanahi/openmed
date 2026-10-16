@@ -17,6 +17,7 @@ from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.script_detect import UNKNOWN_SCRIPT, segment_by_script
+from openmed.eval._matching import maximum_matching_count
 from openmed.processing.outputs import EntityPrediction
 
 if TYPE_CHECKING:
@@ -2722,7 +2723,13 @@ def compute_relaxed_span_f1(
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> F1Metrics:
-    """Compute label-aware relaxed F1 where any character overlap matches."""
+    """Compute label-aware relaxed F1 with maximum one-to-one overlap matches.
+
+    Any positive character overlap with the same label remains eligible.
+    Maximize the number of eligible pairs, rather than greedily maximizing
+    overlap length per gold span. Only counts are returned; strict scoring
+    and the input normalization rules are unchanged.
+    """
     gold = normalize_eval_spans(
         gold_spans,
         default_language=default_language,
@@ -2735,23 +2742,11 @@ def compute_relaxed_span_f1(
         default_device=default_device,
         source_text=source_text,
     )
-    matched_predictions: set[int] = set()
-    true_positives = 0
-    for gold_span in gold:
-        candidates = [
-            (index, pred_span)
-            for index, pred_span in enumerate(predicted)
-            if index not in matched_predictions
-            and _label_aware_overlap(gold_span, pred_span)
-        ]
-        if not candidates:
-            continue
-        best_index, _ = max(
-            candidates,
-            key=lambda item: _overlap_len(gold_span, item[1]),
-        )
-        matched_predictions.add(best_index)
-        true_positives += 1
+    true_positives = maximum_matching_count(
+        len(gold),
+        len(predicted),
+        lambda left, right: _label_aware_overlap(gold[left], predicted[right]),
+    )
     return _f1_from_counts(true_positives, len(predicted), len(gold))
 
 
