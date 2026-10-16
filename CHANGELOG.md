@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Parse origin-form load-test targets into separate ASGI path and query
+  fields, decoding only the routed path and retaining raw target bytes
+  and complete-response validation (#3564).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy

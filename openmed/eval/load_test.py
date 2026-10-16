@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any
+from urllib.parse import unquote
 
 from openmed.eval.metrics import compute_latency_summary
 
@@ -40,7 +41,8 @@ def run_load_test(
     """Run requests through complete response bodies and summarize performance.
 
     A response that starts but never sends its final body event is a failed
-    request, not a successful latency sample.
+    request, not a successful latency sample. ``path`` is an origin-form HTTP
+    request target, optionally including a percent-encoded query string.
     """
     if concurrency < 1 or total_requests < 1:
         raise ValueError("concurrency and total_requests must be at least 1")
@@ -118,15 +120,16 @@ async def _post(app: Any, path: str, payload: dict[str, Any]) -> int:
         ):
             response_complete.set()
 
+    raw_path, _, query_string = path.partition("?")
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
         "http_version": "1.1",
         "method": "POST",
         "scheme": "http",
-        "path": path,
-        "raw_path": path.encode(),
-        "query_string": b"",
+        "path": unquote(raw_path),
+        "raw_path": raw_path.encode("utf-8"),
+        "query_string": query_string.encode("utf-8"),
         "headers": [
             (b"host", b"127.0.0.1"),
             (b"content-type", b"application/json"),
