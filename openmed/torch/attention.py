@@ -25,6 +25,9 @@ def select_attn_implementation(
 ) -> str | None:
     """Return a safe Transformers ``attn_implementation`` override.
 
+    Ordinary CUDA availability probe failures use the eager fallback. Native
+    error details are omitted; process-control exceptions still propagate.
+
     Args:
         prefer: ``"auto"``, ``"flash_attention_2"``, ``"sdpa"``, or
             ``"eager"``. Unavailable accelerated preferences downgrade with a

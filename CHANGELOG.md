@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Use the existing eager attention fallback when an ordinary CUDA
+  availability probe raises, without suppressing process-control exceptions
+  or exposing native exception details in warnings (#3566).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy
