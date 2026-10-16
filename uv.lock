@@ -5724,18 +5724,6 @@ http = [
 ]
 
 [[package]]
-name = "ftfy"
-version = "6.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "wcwidth" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/d3/8650919bc3c7c6e90ee3fa7fd618bf373cbbe55dff043bd67353dbb20cd8/ftfy-6.3.1.tar.gz", hash = "sha256:9b3c3d90f84fb267fe64d375a07b7f8912d817cf86009ae134aa03e1819506ec", size = 308927, upload-time = "2024-10-26T00:50:35.149Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ab/6e/81d47999aebc1b155f81eca4477a616a70f238a2549848c38983f3c22a82/ftfy-6.3.1-py3-none-any.whl", hash = "sha256:7c70eb532015cd2f9adb53f101fb6c7945988d023a085d127d1573dc49dd0083", size = 44821, upload-time = "2024-10-26T00:50:33.425Z" },
-]
-
-[[package]]
 name = "future"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -8405,8 +8393,8 @@ name = "loguru"
 version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
-    { name = "win32-setctime", marker = "sys_platform == 'win32' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "colorama", marker = "(python_full_version >= '3.12' and sys_platform == 'win32') or (python_full_version < '3.12' and extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version < '3.12' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.12' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform != 'win32' and extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-ocr-paddle') or (sys_platform != 'win32' and extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-ocr-paddle') or (sys_platform != 'win32' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "win32-setctime", marker = "(python_full_version >= '3.12' and sys_platform == 'win32') or (python_full_version < '3.12' and extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (python_full_version < '3.12' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (python_full_version < '3.12' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.12' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (sys_platform != 'win32' and extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-ocr-paddle') or (sys_platform != 'win32' and extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-ocr-paddle') or (sys_platform != 'win32' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (sys_platform != 'win32' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
 wheels = [
@@ -12196,7 +12184,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
-    { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
+    { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=1.0,<2" },
 ]
 provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
@@ -13471,19 +13459,6 @@ memory = [
 ]
 redis = [
     { name = "redis" },
-]
-
-[[package]]
-name = "py3langid"
-version = "0.2.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-ocr-paddle' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/06/e4f29386ca954a234f597333ce8acece364c1ca7179def16aed84556d12f/py3langid-0.2.2.tar.gz", hash = "sha256:b4de01dad7e701f29d216a0935e85e096cc8675903d23ea8445b2bb5f090b96f", size = 749464, upload-time = "2022-06-14T13:30:04.416Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/e6/ff3e5902bc4c70b8a1f71a21386dd60b622ff1708163bf44b699d6516e4b/py3langid-0.2.2-py3-none-any.whl", hash = "sha256:a5460ccc565c7b6a7a0e72f42236900b810e73c065a1b769a69fa9d9cff13f00", size = 750603, upload-time = "2022-06-14T13:29:54.695Z" },
 ]
 
 [[package]]
@@ -18752,20 +18727,16 @@ wheels = [
 
 [[package]]
 name = "yasbd-lib"
-version = "0.14.0"
+version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "beartype" },
-    { name = "ftfy" },
-    { name = "loguru" },
-    { name = "py3langid" },
     { name = "radicli" },
     { name = "regex" },
     { name = "retrie" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/29/9117382087c596782e2be3fdc0ee66b4bcf34fe505c0f572d2629f253bad/yasbd_lib-0.14.0.tar.gz", hash = "sha256:6dcda9f6800bdbafa378da25dbffccfa58a6bd3985608de9d60fc4d7bb14b670", size = 92480, upload-time = "2026-08-09T13:58:01.486Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/84/6d854c24c2795bc781d21f159da0f5401c520ff4e5deb4dbe9dfc94da365/yasbd_lib-1.0.3.tar.gz", hash = "sha256:c283ec936889797cbcf0f8c07f93684f58f6d40544fb584a64a3f40f4f607f60", size = 100030, upload-time = "2026-10-11T00:24:39.255Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/07/f3b4689b9227a7f94c400f5cf3ca1a4b465a5494ef10c99f16c819e8fd7b/yasbd_lib-0.14.0-py3-none-any.whl", hash = "sha256:ca2396800f1922c59cbc41aea9722c30da52afca54d1fb1a51c69993365a1d4b", size = 96382, upload-time = "2026-08-09T13:58:00.075Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/f0/26feb406d814619e1d74878e9dfd329ca73b9f1de97240f714a0d1ebfbf1/yasbd_lib-1.0.3-py3-none-any.whl", hash = "sha256:5ce46b9b2b1c6f3917ccee065e01e5a14f1c19cbfd22bab7550787959ba13d83", size = 101527, upload-time = "2026-10-11T00:24:37.526Z" },
 ]
 
 [[package]]

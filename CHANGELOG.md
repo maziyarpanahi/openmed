@@ -200,6 +200,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump the optional `yasbd` extra to `yasbd-lib>=1.0,<2`; the 1.x line keeps the
+  `BoundaryDetector(lang=..., hook=...)` and `detect()` contract the adapter
+  relies on and drops the `ftfy`, `py3langid`, `loguru` and `beartype`
+  transitive dependencies (#3596).
+
 - Map reviewed brief profile fields to existing evidence-class budgets, bind
   value-free estimates into audit records and distinguish length overflow from
   unavailable local models. Export controlled summarizer errors and preserve
