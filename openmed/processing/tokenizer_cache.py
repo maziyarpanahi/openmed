@@ -74,6 +74,8 @@ def get_tokenizer_with_loader(
     """Return a cached tokenizer using an explicit ``from_pretrained`` loader.
 
     Entries are scoped to the loader as well as the name, revision, and kwargs.
+    Supported scalar and container option types stay distinct recursively;
+    mapping/set order is canonical and PathLike values share string keys.
     Repeated bound-method access on the same owner shares an entry; a different
     loader or owner does not. ``refresh_cache`` replaces only that loader's entry.
     """
@@ -137,21 +139,41 @@ def _cache_key(
 
 
 def _freeze_cache_value(value: Any) -> Any:
+    # Container and scalar tags prevent different loader arguments from
+    # aliasing merely because Python considers their flattened values equal.
     if isinstance(value, Mapping):
-        return tuple(
-            sorted((str(key), _freeze_cache_value(item)) for key, item in value.items())
+        return (
+            "mapping",
+            tuple(
+                sorted(
+                    (
+                        (_freeze_cache_value(key), _freeze_cache_value(item))
+                        for key, item in value.items()
+                    ),
+                    key=repr,
+                )
+            ),
         )
-    if isinstance(value, (list, tuple)):
-        return tuple(_freeze_cache_value(item) for item in value)
-    if isinstance(value, set):
-        return tuple(
-            sorted(
-                (_freeze_cache_value(item) for item in value),
-                key=repr,
-            )
+    if isinstance(value, list):
+        return ("list", tuple(_freeze_cache_value(item) for item in value))
+    if isinstance(value, tuple):
+        return ("tuple", tuple(_freeze_cache_value(item) for item in value))
+    if isinstance(value, (set, frozenset)):
+        tag = "frozenset" if isinstance(value, frozenset) else "set"
+        return (
+            tag,
+            tuple(sorted((_freeze_cache_value(item) for item in value), key=repr)),
         )
     if isinstance(value, PathLike):
-        return str(value)
-    if isinstance(value, (str, int, float, bool, type(None))):
-        return value
-    return repr(value)
+        return ("str", str(value))
+    if value is None:
+        return ("none", None)
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, int):
+        return ("int", value)
+    if isinstance(value, float):
+        return ("float", value)
+    if isinstance(value, str):
+        return ("str", value)
+    return ("repr", repr(value))
