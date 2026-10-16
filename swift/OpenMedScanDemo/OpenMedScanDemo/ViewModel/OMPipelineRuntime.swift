@@ -106,6 +106,21 @@ public actor OMPipelineRuntime {
         )
     }
 
+    public func clinicalBrief(
+        maskedText: String,
+        originalIdentifiers: [String],
+        evaluate: @Sendable (String, String) async throws -> Data,
+        privacyCheck: @Sendable (String) throws -> Bool
+    ) async throws -> ClinicalBrief {
+        await unloadPIIRuntimes()
+        await unloadRelationRuntimes()
+        let runtime: OpenMedMaple
+        do { runtime = try await loadMapleRuntime(for: .maplePreview) }
+        catch { throw ClinicalBriefError.modelUnavailable }
+        return try await runtime.brief(source: maskedText, originalIdentifiers: originalIdentifiers,
+            evaluate: evaluate, privacyCheck: privacyCheck)
+    }
+
     public func reason(
         maskedText: String,
         question: String,

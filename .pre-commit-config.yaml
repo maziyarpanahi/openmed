@@ -1,4 +1,13 @@
 repos:
+  - repo: local
+    hooks:
+      - id: effect-paths
+        name: Classified effects and legacy-writer boundaries
+        entry: python3 scripts/security/check_effect_paths.py --check
+        language: system
+        pass_filenames: false
+        always_run: true
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

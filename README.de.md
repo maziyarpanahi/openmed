@@ -102,7 +102,7 @@ Auf unterstützter Apple-Hardware kann OpenMed **MLX** und **[OpenMedKit](swift/
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "2.5.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
 ]
 ```
 
@@ -166,7 +166,7 @@ analyze_text(
 **REST-Dienst**
 
 ```bash
-uvicorn openmed.service.app:app \
+python -m openmed.service.logging \
   --host 0.0.0.0 --port 8080
 ```
 
@@ -275,7 +275,7 @@ Auf Nicht-Apple-Silicon-Hosts werden MLX-Modellnamen automatisch durch den passe
 
 ---
 
-## Mehrsprachige PII (38 unterstützte Routen; 35 modellgestützt)
+## Mehrsprachige PII (42 unterstützte Routen; 35 modellgestützt)
 
 Extraktion und De-Identifikation in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` und `tr`, insgesamt **der registrierte PII-Modellkatalog**.
 
@@ -312,7 +312,7 @@ Ein Docker-freundlicher FastAPI-Dienst mit Request-Validierung, gemeinsamem Pipe
 
 ```bash
 pip install --upgrade "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+python -m openmed.service.logging --host 0.0.0.0 --port 8080
 
 # or with Docker
 docker build -t openmed:local .
@@ -393,7 +393,7 @@ Wenn OpenMed für deine Forschung nützlich ist, zitiere es bitte:
 
 Wenn OpenMed dir nützlich ist, hilft ein Stern anderen, es zu entdecken.
 
-[5,100+ GitHub stars · 30 Aug 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
+[5,400+ GitHub stars · 9 Oct 2026 snapshot](https://github.com/maziyarpanahi/openmed/stargazers)
 
 ---
 

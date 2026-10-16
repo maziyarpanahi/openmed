@@ -521,6 +521,28 @@ _CATEGORY_ENTITY_TYPES = {
         label_taxonomy.DEVICE,
         label_taxonomy.ANATOMY,
     ],
+    # Forward metadata for future Immunology, MentalHealth, and Dentistry
+    # models; no specialty models are registered today (see issue #2358).
+    "Immunology": [
+        label_taxonomy.ALLERGEN,
+        label_taxonomy.FINDING,
+        label_taxonomy.IMMUNIZATION,
+        label_taxonomy.PROTEIN,
+    ],
+    # Substance-use and SDOH entities remain out of scope for this category
+    # and are owned by OM-056. Mental-health spans are high-sensitivity content
+    # for redaction review.
+    "MentalHealth": [
+        label_taxonomy.PSYCH_SYMPTOM,
+        label_taxonomy.PROBLEM,
+        label_taxonomy.MEDICATION,
+        label_taxonomy.PROCEDURE,
+    ],
+    "Dentistry": [
+        label_taxonomy.TOOTH,
+        label_taxonomy.CONDITION,
+        label_taxonomy.PROCEDURE,
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -686,6 +708,12 @@ def _portuguese_ner_category_from_row(row: Dict[str, Any]) -> Optional[str]:
 def _category_from_row(row: Dict[str, Any]) -> str:
     repo = row.get("repo_id", "").lower()
     family = str(row.get("family") or "").lower()
+
+    if family == "clinical-nli" and row.get("task") in {
+        "text-classification",
+        "sequence-classification",
+    }:
+        return "Clinical NLI"
 
     if family == "pii" or "pii" in repo or "privacy-filter" in repo:
         return "Privacy"
@@ -1419,6 +1447,18 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Procedures",
         "Contains procedure/surgical terms",
     ),
+    "allerg|anaphylaxis|vaccine|igg|antibody": (
+        "Immunology",
+        "Contains immunology/allergy terms",
+    ),
+    "depression|anxiety|psychosis|suicidal|antidepressant": (
+        "MentalHealth",
+        "Contains mental-health terms",
+    ),
+    r"caries|extraction|crown|periodontal|tooth\s*#": (
+        "Dentistry",
+        "Contains dentistry/oral-health terms",
+    ),
 }
 
 
@@ -1767,6 +1807,111 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     from ..ner.families.indic import configured_indic_ner_model
 
     return configured_indic_ner_model()
+
+
+def resolve_summarizer_model(model_key: str = "mlx") -> tuple[str, str]:
+    """Resolve a reviewed summarizer alias to a model and immutable revision.
+
+    This is a runtime selection, not a clinical-quality certification. Artifacts
+    must be provisioned with a trusted manifest pin; this function selects
+    the model identity and does not attest to files in a cache.
+    """
+    from openmed.mlx.lm import MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+
+    if model_key in {"mlx", "maple", "maple-preview", MAPLE_MLX_MODEL}:
+        return MAPLE_MLX_MODEL, MAPLE_MLX_REVISION
+    raise ValueError("unregistered local summarizer alias")
+
+
+_SUMMARIZER_PACKAGES: dict[tuple[str, str], tuple[Path, str]] = {}
+
+
+def register_summarizer_package(
+    model_key: str,
+    *,
+    package_root: str | Path,
+    manifest_digest: str,
+) -> None:
+    """Bind a registered summarizer revision to a trusted local package pin.
+
+    Configure this at application startup from reviewed deployment metadata.
+    The digest must come from a trusted channel, independently of package
+    contents. Registration performs no I/O, download or runtime loading.
+    Aliases selecting the same model and revision share the binding.
+
+    Args:
+        model_key: An existing registered summarizer alias or model identifier.
+        package_root: Absolute directory of provisioned regular package files.
+        manifest_digest: Trusted canonical SHA-256 manifest digest.
+
+    Raises:
+        ValueError: If the alias, directory form or digest is invalid.
+    """
+    invalid = False
+    try:
+        identity = resolve_summarizer_model(model_key)
+        root = Path(package_root)
+        if (
+            not root.is_absolute()
+            or type(manifest_digest) is not str
+            or re.fullmatch(r"(?:sha256:)?[0-9a-fA-F]{64}", manifest_digest) is None
+        ):
+            invalid = True
+    except Exception:
+        invalid = True
+    if invalid:
+        raise ValueError("invalid summarizer package registration")
+    _SUMMARIZER_PACKAGES[identity] = (
+        root,
+        "sha256:" + manifest_digest.removeprefix("sha256:").lower(),
+    )
+
+
+def resolve_summarizer_package(model_key: str = "mlx") -> tuple[Path, str] | None:
+    """Return a deployment's package and digest for a registered alias.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+
+    Returns:
+        Absolute package root and trusted digest, or ``None`` if unprovisioned.
+    """
+    return _SUMMARIZER_PACKAGES.get(resolve_summarizer_model(model_key))
+
+
+def clear_summarizer_package(model_key: str = "mlx") -> None:
+    """Remove a deployment binding without changing its local package files.
+
+    Args:
+        model_key: Existing registered summarizer alias or model identifier.
+    """
+    _SUMMARIZER_PACKAGES.pop(resolve_summarizer_model(model_key), None)
+
+
+def get_default_nli_model() -> Optional[str]:
+    """Return a released, pinned clinical NLI model or fail closed with ``None``.
+
+    Registry entries created for training or tests cannot become the default.
+    A model must carry an immutable revision, class mapping, and calibration.
+    """
+
+    candidates = [
+        info
+        for info in OPENMED_MODELS.values()
+        if info.category == "Clinical NLI"
+        and info.task in {"text-classification", "sequence-classification"}
+        and info.license is not None
+        and info.license.casefold() in {"apache-2.0", "mit", "bsd-3-clause"}
+        and isinstance(info.provenance.get("revision"), str)
+        and re.fullmatch(r"[0-9a-fA-F]{40}", info.provenance["revision"])
+        and isinstance(info.provenance.get("nli_label_mapping"), dict)
+        and isinstance(info.provenance.get("nli_calibration"), dict)
+        and info.released
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda info: (info.released or "", info.model_id))
+    return candidates[-1].model_id
 
 
 def resolve_pii_family_transfer_route(

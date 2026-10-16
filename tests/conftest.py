@@ -1,5 +1,13 @@
 """Pytest configuration and fixtures for OpenMed tests."""
 
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, Mock
 
@@ -225,3 +233,73 @@ class TestHelpers:
 def test_helpers():
     """Provide access to test helper methods."""
     return TestHelpers
+
+
+@pytest.fixture
+def openmed_console_script():
+    """Find the installed console script in virtualenv and split Nix layouts."""
+    sibling = Path(sys.executable).with_name("openmed")
+    console = str(sibling) if sibling.is_file() else shutil.which("openmed")
+    assert console is not None, "Install the openmed console entry point before testing"
+    return console
+
+
+@pytest.fixture
+def force_json_recursion_error(monkeypatch):
+    """Exercise decoder refusal without depending on CPython's nesting limit."""
+
+    def install(message="synthetic-private-parser-sentinel"):
+        def refuse(*args, **kwargs):
+            raise RecursionError(message)
+
+        monkeypatch.setattr(json, "loads", refuse)
+
+    return install
+
+
+def pytest_make_parametrize_id(val, argname):
+    """Keep large synthetic payloads out of test IDs and Windows environment values."""
+    if type(val) in (str, bytes) and len(val) > 256:
+        raw = val.encode("utf-8", errors="surrogatepass") if type(val) is str else val
+        digest = hashlib.sha256(raw).hexdigest()[:12]
+        return f"{argname}-{type(val).__name__}-{len(val)}-{digest}"
+    return None
+
+
+@pytest.fixture
+def assert_private_file():
+    """Independently inspect POSIX modes or the native Windows DACL."""
+
+    def check(path):
+        if os.name == "nt":
+            # Query through an independent Windows API (.NET), not the writer helper.
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "(Get-Acl -LiteralPath $env:OPENMED_TEST_OUTPUT)."
+                    "GetSecurityDescriptorSddlForm("
+                    "[System.Security.AccessControl.AccessControlSections]::Access)",
+                ],
+                # CI's parent pwsh can export PowerShell 7 module paths that Windows
+                # PowerShell 5 cannot load. Let this child initialize its own paths.
+                env={
+                    **{
+                        k: v
+                        for k, v in os.environ.items()
+                        if k.lower() != "psmodulepath"
+                    },
+                    "OPENMED_TEST_OUTPUT": str(path),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0, result.stderr
+            assert result.stdout.strip() == "D:P(A;;FA;;;OW)"
+        else:
+            assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+    return check

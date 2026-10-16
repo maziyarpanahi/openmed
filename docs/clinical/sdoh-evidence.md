@@ -1,5 +1,11 @@
 # Social-determinant evidence contract
 
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for section-scoped extraction and a labels/offsets/states-only output projection.
+
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `openmed.clinical.sdoh_evidence` provides a small, deterministic envelope for
 social-determinant extraction results. It preserves provenance and uncertainty
 boundaries so an SDOH signal cannot be mistaken for a diagnosis or an
@@ -65,3 +71,7 @@ This contract is an evidence and review boundary, not a clinical decision
 engine, compliance certification, diagnosis, or eligibility determination.
 Use synthetic or public data in tests and examples. Restricted SHAC data is
 not bundled or loaded by this module.
+
+The [synthetic SDOH counterfactual checks](../evaluation/sdoh-counterfactuals.md)
+test whether non-causal demographic substitutions change finding labels or
+confidence while keeping the Social History evidence fixed.

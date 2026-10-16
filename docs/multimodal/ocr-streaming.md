@@ -54,3 +54,40 @@ does not reconstruct layout or establish content completeness. OCR outputs
 remain `preview`; no clinical language or
 privacy capability is qualified by this adapter. It performs OCR only, without
 redacting pixels, sanitizing a PDF, or verifying that all identifiers were found.
+
+## Reconstruct scanned-page layout
+
+`parse_layout` orders positioned OCR words by page and column, retaining a
+pixel box for every emitted character range. It separates visual lines so
+clinical section headings can be detected on the reconstructed text. When the
+OCR result includes `page_dimensions` metadata, it validates each pixel box
+against that page and identifies isolated top and bottom bands. Repeated rows
+with at least three aligned cells become tables. Ambiguous rows remain ordinary
+text; no table structure is guessed from a two-column note. Without page
+dimensions, only a clearly isolated first or last line is treated as a band.
+
+```python
+from openmed.multimodal import parse_layout
+
+layout = parse_layout(result)
+sections = layout.detect_sections()
+for table in layout.tables:
+    structured_table = table.as_structured_table()
+    # Each cell's start/end indexes layout.text and retains its pixel boxes.
+```
+
+`layout.bbox_for_span(start, end)` projects extracted spans back to source
+pixels. `layout.offsets_for_bbox(page, bbox)` performs the exact reverse lookup.
+Table cells use the existing `openmed.structured.Table` shape, so downstream
+structured extraction can consume their offsets without a second grid schema.
+Synthetic layout fixtures report exact-position reading-order and table-cell
+assignment accuracy through `evaluate_layout`; the committed two-column lab
+fixture scores 1.00 for both. OCR confidence is carried through unchanged and
+does not certify the extracted clinical content.
+
+Layout parsing is bounded to 4,096 input words, 4,096 characters per word or
+separator, and 1 MiB of source word text. Confidence must be finite and within
+[0, 1]; boolean coordinates, ambiguous geometry, conflicting page dimensions,
+and non-integer projection offsets are rejected. Public parse and projection
+errors discard raw conversion and iterator exception context. Output text and
+metadata remain sensitive source data and must not be logged as audit records.

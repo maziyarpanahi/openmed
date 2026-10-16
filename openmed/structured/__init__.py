@@ -272,9 +272,18 @@ from .redaction_contract import (
     redact_resource,
 )
 from .registry import (
+    NAACCR_NAMESPACE,
     REGISTRY_ADVISORY,
     REGISTRY_COMPATIBILITY_POLICY,
     REGISTRY_SCHEMA_VERSION,
+    NAACCRDictionary,
+    NAACCRDictionaryError,
+    NAACCRExportReport,
+    NAACCRFieldMapping,
+    NAACCRItemDefinition,
+    NAACCRLoss,
+    NAACCRProjectionError,
+    NAACCRValueError,
     RegistryAssignment,
     RegistryAssignmentAuthorization,
     RegistryCase,
@@ -303,7 +312,9 @@ from .registry import (
     load_registry_schema,
     mark_registry_case_exported,
     materialize_registry_cases,
+    parse_naaccr_dictionary,
     version_registry_definition,
+    write_naaccr_xml,
 )
 from .reid_report import reid_report
 from .relational import (
@@ -332,6 +343,18 @@ from .scan import (
     TableRoleScan,
 )
 from .scan import scan_table as scan_column_roles
+from .schema_extract import (
+    SCHEMA_EXTRACT_ADVISORY,
+    FieldBinding,
+    FieldSource,
+    MissingRequiredField,
+    ScalarType,
+    SchemaDefinitionError,
+    SchemaExtraction,
+    SchemaValidationIssue,
+    extract_to_schema,
+    normalize_field_key,
+)
 from .schema_policy import (
     ACTION_DATE_SHIFT,
     ACTION_DEIDENTIFY,
@@ -685,6 +708,17 @@ __all__ = [
     "RelationalSchemaError",
     "RedistributionPolicy",
     "RegistryAssignment",
+    "NAACCR_NAMESPACE",
+    "NAACCRDictionary",
+    "NAACCRDictionaryError",
+    "NAACCRExportReport",
+    "NAACCRFieldMapping",
+    "NAACCRItemDefinition",
+    "NAACCRLoss",
+    "NAACCRProjectionError",
+    "NAACCRValueError",
+    "parse_naaccr_dictionary",
+    "write_naaccr_xml",
     "RegistryAssignmentAuthorization",
     "RegistryCase",
     "RegistryCaseEvent",
@@ -841,4 +875,14 @@ __all__ = [
     "write_table",
     "structured_privacy_fixture",
     "validate_schema_policy",
+    "SCHEMA_EXTRACT_ADVISORY",
+    "FieldBinding",
+    "FieldSource",
+    "MissingRequiredField",
+    "ScalarType",
+    "SchemaDefinitionError",
+    "SchemaExtraction",
+    "SchemaValidationIssue",
+    "extract_to_schema",
+    "normalize_field_key",
 ]

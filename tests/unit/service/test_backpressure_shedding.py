@@ -276,19 +276,22 @@ def test_rest_burst_returns_503_retry_after_without_interrupting_inflight_work(
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
 
-    first_started = threading.Event()
     release_first = threading.Event()
-
-    def fake_analyze(text: str, **_: Any) -> PredictionResult:
-        first_started.set()
-        assert release_first.wait(timeout=2)
-        return _prediction_result(text)
-
-    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
-    app = create_app()
 
     async def scenario() -> tuple[httpx.Response, httpx.Response, str, float]:
+        loop = asyncio.get_running_loop()
+        first_started = asyncio.Event()
+
+        def fake_analyze(text: str, **_: Any) -> PredictionResult:
+            # Signal the event loop directly; waiting for startup must not use
+            # another executor worker needed by the request under test.
+            loop.call_soon_threadsafe(first_started.set)
+            assert release_first.wait(timeout=10)
+            return _prediction_result(text)
+
+        monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+        app = create_app()
         async with app.router.lifespan_context(app):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
@@ -298,18 +301,24 @@ def test_rest_burst_returns_503_retry_after_without_interrupting_inflight_work(
                 first_task = asyncio.create_task(
                     client.post("/analyze", json={"text": "inflight"})
                 )
-                assert await asyncio.to_thread(first_started.wait, 1)
-                shed = await client.post("/analyze", json={"text": "excess"})
-                metrics_text = (await client.get("/metrics")).text
-                released_at = time.perf_counter()
-                release_first.set()
-                first = await asyncio.wait_for(first_task, timeout=0.5)
-                return (
-                    first,
-                    shed,
-                    metrics_text,
-                    time.perf_counter() - released_at,
-                )
+                try:
+                    # Fixture scheduling is separate from the response SLO.
+                    # Keep the post-release completion limit unchanged below.
+                    await asyncio.wait_for(first_started.wait(), timeout=5)
+                    shed = await client.post("/analyze", json={"text": "excess"})
+                    metrics_text = (await client.get("/metrics")).text
+                    released_at = time.perf_counter()
+                    release_first.set()
+                    first = await asyncio.wait_for(first_task, timeout=0.5)
+                    return (
+                        first,
+                        shed,
+                        metrics_text,
+                        time.perf_counter() - released_at,
+                    )
+                finally:
+                    # A failed assertion must release the controlled worker.
+                    release_first.set()
 
     first, shed, metrics_text, completion_latency = asyncio.run(scenario())
 

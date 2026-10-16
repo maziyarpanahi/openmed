@@ -1,0 +1,572 @@
+[
+  {
+    "expected_fields": [
+      {
+        "id": "document_type",
+        "name": "document_type",
+        "span_id": null,
+        "value": "discharge_summary",
+        "value_type": "string"
+      },
+      {
+        "id": "subject_reference",
+        "name": "subject_reference",
+        "span_id": "subject_id",
+        "value_type": "identifier"
+      },
+      {
+        "id": "discharge_date",
+        "name": "discharge_date",
+        "span_id": "discharge_date",
+        "value_type": "date"
+      },
+      {
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "id": "diagnosis",
+        "name": "diagnosis",
+        "span_id": "diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "id": "absent_diagnosis",
+        "name": "absent_diagnosis",
+        "span_id": "absent_diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "id": "medication",
+        "name": "medication",
+        "span_id": "medication",
+        "value_type": "coded_concept"
+      },
+      {
+        "id": "follow_up",
+        "name": "follow_up",
+        "span_id": "follow_up",
+        "value_type": "intervention"
+      }
+    ],
+    "fixture_id": "clinical-discharge_summary-7022f12a7fab",
+    "gold_spans": [
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 88,
+        "experiencer": "patient",
+        "id": "subject_id",
+        "label": "ID_NUM",
+        "section": "administrative",
+        "start": 67,
+        "temporality": "current",
+        "text": "SYNTH-SUBJECT-CHARLIE"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 115,
+        "experiencer": "patient",
+        "id": "discharge_date",
+        "label": "DATE",
+        "section": "administrative",
+        "start": 105,
+        "temporality": "current",
+        "text": "2024-08-21"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "end": 159,
+        "experiencer": "patient",
+        "id": "diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 143,
+        "temporality": "current",
+        "text": "viral bronchitis"
+      },
+      {
+        "assertion": "absent",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "end": 184,
+        "experiencer": "patient",
+        "id": "absent_diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 164,
+        "temporality": "current",
+        "text": "respiratory distress"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "end": 238,
+        "experiencer": "patient",
+        "id": "medication",
+        "label": "MEDICATION",
+        "section": "medications",
+        "start": 222,
+        "temporality": "current",
+        "text": "oral rehydration"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 294,
+        "experiencer": "patient",
+        "id": "follow_up",
+        "label": "CARE_PLAN",
+        "section": "follow_up",
+        "start": 273,
+        "temporality": "current",
+        "text": "routine clinic review"
+      }
+    ],
+    "language": "en",
+    "metadata": {
+      "generator_version": "openmed.eval.clinical_fixtures.v1",
+      "medical_device_disclaimer": "Synthetic evaluation data only; not clinical ground truth, a medical device, or a substitute for qualified clinical judgment.",
+      "phi": false,
+      "profile": "discharge_summary",
+      "source": "seeded local synthetic generator",
+      "synthetic": true
+    },
+    "phi": false,
+    "profile": "discharge_summary",
+    "schema_version": "openmed.eval.clinical_fixtures.v1",
+    "sections": [
+      {
+        "end": 116,
+        "name": "administrative",
+        "start": 0
+      },
+      {
+        "end": 201,
+        "name": "diagnosis",
+        "start": 116
+      },
+      {
+        "end": 252,
+        "name": "medications",
+        "start": 201
+      },
+      {
+        "end": 296,
+        "name": "follow_up",
+        "start": 252
+      }
+    ],
+    "seed": 17,
+    "synthetic": true,
+    "text": "ADMINISTRATIVE\nDocument type: discharge summary\nSubject reference: SYNTH-SUBJECT-CHARLIE\nDischarge date: 2024-08-21\nDIAGNOSIS\nFinal diagnosis: viral bronchitis.\nNo respiratory distress was documented.\nMEDICATIONS\nContinue oral rehydration as directed.\nFOLLOW-UP\nFollow-up: routine clinic review.\n",
+    "text_sha256": "sha256:5f841fde52bd2afd3cf10254ba41dc95cc2b03018c5eb1e8319ab66c8733b906"
+  },
+  {
+    "expected_fields": [
+      {
+        "id": "document_type",
+        "name": "document_type",
+        "span_id": null,
+        "value": "discharge_summary",
+        "value_type": "string"
+      },
+      {
+        "id": "subject_reference",
+        "name": "subject_reference",
+        "span_id": "subject_id",
+        "value_type": "identifier"
+      },
+      {
+        "id": "discharge_date",
+        "name": "discharge_date",
+        "span_id": "discharge_date",
+        "value_type": "date"
+      },
+      {
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "id": "diagnosis",
+        "name": "diagnosis",
+        "span_id": "diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "id": "absent_diagnosis",
+        "name": "absent_diagnosis",
+        "span_id": "absent_diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "id": "medication",
+        "name": "medication",
+        "span_id": "medication",
+        "value_type": "coded_concept"
+      },
+      {
+        "id": "follow_up",
+        "name": "follow_up",
+        "span_id": "follow_up",
+        "value_type": "intervention"
+      }
+    ],
+    "fixture_id": "clinical-discharge_summary-676767fff0a2",
+    "gold_spans": [
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 86,
+        "experiencer": "patient",
+        "id": "subject_id",
+        "label": "ID_NUM",
+        "section": "administrative",
+        "start": 67,
+        "temporality": "current",
+        "text": "SYNTH-SUBJECT-ALPHA"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 113,
+        "experiencer": "patient",
+        "id": "discharge_date",
+        "label": "DATE",
+        "section": "administrative",
+        "start": 103,
+        "temporality": "current",
+        "text": "2025-01-17"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "end": 157,
+        "experiencer": "patient",
+        "id": "diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 141,
+        "temporality": "current",
+        "text": "viral bronchitis"
+      },
+      {
+        "assertion": "absent",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "end": 184,
+        "experiencer": "patient",
+        "id": "absent_diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 162,
+        "temporality": "current",
+        "text": "new neurologic deficit"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "end": 239,
+        "experiencer": "patient",
+        "id": "medication",
+        "label": "MEDICATION",
+        "section": "medications",
+        "start": 222,
+        "temporality": "current",
+        "text": "topical emollient"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 293,
+        "experiencer": "patient",
+        "id": "follow_up",
+        "label": "CARE_PLAN",
+        "section": "follow_up",
+        "start": 274,
+        "temporality": "current",
+        "text": "primary care review"
+      }
+    ],
+    "language": "en",
+    "metadata": {
+      "generator_version": "openmed.eval.clinical_fixtures.v1",
+      "medical_device_disclaimer": "Synthetic evaluation data only; not clinical ground truth, a medical device, or a substitute for qualified clinical judgment.",
+      "phi": false,
+      "profile": "discharge_summary",
+      "source": "seeded local synthetic generator",
+      "synthetic": true
+    },
+    "phi": false,
+    "profile": "discharge_summary",
+    "schema_version": "openmed.eval.clinical_fixtures.v1",
+    "sections": [
+      {
+        "end": 114,
+        "name": "administrative",
+        "start": 0
+      },
+      {
+        "end": 201,
+        "name": "diagnosis",
+        "start": 114
+      },
+      {
+        "end": 253,
+        "name": "medications",
+        "start": 201
+      },
+      {
+        "end": 295,
+        "name": "follow_up",
+        "start": 253
+      }
+    ],
+    "seed": 29,
+    "synthetic": true,
+    "text": "ADMINISTRATIVE\nDocument type: discharge summary\nSubject reference: SYNTH-SUBJECT-ALPHA\nDischarge date: 2025-01-17\nDIAGNOSIS\nFinal diagnosis: viral bronchitis.\nNo new neurologic deficit was documented.\nMEDICATIONS\nContinue topical emollient as directed.\nFOLLOW-UP\nFollow-up: primary care review.\n",
+    "text_sha256": "sha256:ed6bfdceb4f76b58b7d9db48002040efe7456c9924df1b0b1c91ba7cd01d8035"
+  },
+  {
+    "expected_fields": [
+      {
+        "id": "document_type",
+        "name": "document_type",
+        "span_id": null,
+        "value": "discharge_summary",
+        "value_type": "string"
+      },
+      {
+        "id": "subject_reference",
+        "name": "subject_reference",
+        "span_id": "subject_id",
+        "value_type": "identifier"
+      },
+      {
+        "id": "discharge_date",
+        "name": "discharge_date",
+        "span_id": "discharge_date",
+        "value_type": "date"
+      },
+      {
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "id": "diagnosis",
+        "name": "diagnosis",
+        "span_id": "diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "id": "absent_diagnosis",
+        "name": "absent_diagnosis",
+        "span_id": "absent_diagnosis",
+        "value_type": "coded_concept"
+      },
+      {
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "id": "medication",
+        "name": "medication",
+        "span_id": "medication",
+        "value_type": "coded_concept"
+      },
+      {
+        "id": "follow_up",
+        "name": "follow_up",
+        "span_id": "follow_up",
+        "value_type": "intervention"
+      }
+    ],
+    "fixture_id": "clinical-discharge_summary-feb29dd9863f",
+    "gold_spans": [
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 86,
+        "experiencer": "patient",
+        "id": "subject_id",
+        "label": "ID_NUM",
+        "section": "administrative",
+        "start": 67,
+        "temporality": "current",
+        "text": "SYNTH-SUBJECT-ALPHA"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 113,
+        "experiencer": "patient",
+        "id": "discharge_date",
+        "label": "DATE",
+        "section": "administrative",
+        "start": 103,
+        "temporality": "current",
+        "text": "2024-02-14"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-unspecified",
+          "display": "illness, unspecified",
+          "system": "openmed.synthetic"
+        },
+        "end": 163,
+        "experiencer": "patient",
+        "id": "diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 141,
+        "temporality": "current",
+        "text": "uncomplicated migraine"
+      },
+      {
+        "assertion": "absent",
+        "certainty": "certain",
+        "code": {
+          "code": "diagnosis-absent",
+          "display": "finding absent",
+          "system": "openmed.synthetic"
+        },
+        "end": 190,
+        "experiencer": "patient",
+        "id": "absent_diagnosis",
+        "label": "CONDITION",
+        "section": "diagnosis",
+        "start": 168,
+        "temporality": "current",
+        "text": "new neurologic deficit"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "code": {
+          "code": "medication-synthetic",
+          "display": "synthetic medication",
+          "system": "openmed.synthetic"
+        },
+        "end": 245,
+        "experiencer": "patient",
+        "id": "medication",
+        "label": "MEDICATION",
+        "section": "medications",
+        "start": 228,
+        "temporality": "current",
+        "text": "topical emollient"
+      },
+      {
+        "assertion": "present",
+        "certainty": "certain",
+        "end": 299,
+        "experiencer": "patient",
+        "id": "follow_up",
+        "label": "CARE_PLAN",
+        "section": "follow_up",
+        "start": 280,
+        "temporality": "current",
+        "text": "primary care review"
+      }
+    ],
+    "language": "en",
+    "metadata": {
+      "generator_version": "openmed.eval.clinical_fixtures.v1",
+      "medical_device_disclaimer": "Synthetic evaluation data only; not clinical ground truth, a medical device, or a substitute for qualified clinical judgment.",
+      "phi": false,
+      "profile": "discharge_summary",
+      "source": "seeded local synthetic generator",
+      "synthetic": true
+    },
+    "phi": false,
+    "profile": "discharge_summary",
+    "schema_version": "openmed.eval.clinical_fixtures.v1",
+    "sections": [
+      {
+        "end": 114,
+        "name": "administrative",
+        "start": 0
+      },
+      {
+        "end": 207,
+        "name": "diagnosis",
+        "start": 114
+      },
+      {
+        "end": 259,
+        "name": "medications",
+        "start": 207
+      },
+      {
+        "end": 301,
+        "name": "follow_up",
+        "start": 259
+      }
+    ],
+    "seed": 41,
+    "synthetic": true,
+    "text": "ADMINISTRATIVE\nDocument type: discharge summary\nSubject reference: SYNTH-SUBJECT-ALPHA\nDischarge date: 2024-02-14\nDIAGNOSIS\nFinal diagnosis: uncomplicated migraine.\nNo new neurologic deficit was documented.\nMEDICATIONS\nContinue topical emollient as directed.\nFOLLOW-UP\nFollow-up: primary care review.\n",
+    "text_sha256": "sha256:2422e82f87e18a30bb92c8bbd37893ec836c9345e949464ccd21b81d96acdf30"
+  }
+]
