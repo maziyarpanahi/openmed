@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Read JSONL/NDJSON by physical file lines, preserving Unicode separators
+  inside strings, blank-line handling, error-line numbering, and object-pair
+  hooks (#4205).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy
