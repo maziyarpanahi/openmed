@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fill missing teacher sources on typed weak-label spans without mutating
+  inputs, restoring typed/mapping consensus parity while retaining explicit
+  sources and acceptance thresholds (#4202).
+
 ### Breaking privacy remediations planned for v4.0.0
 
 - Prepare the existing approval-receipt and aggregate differential-privacy

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
@@ -156,8 +156,11 @@ def weak_label_document(
 
 
 def normalize_weak_span(raw: Any, *, source: str = "", text: str = "") -> WeakLabelSpan:
+    """A supplied teacher source fills a typed span's missing source in a copy.
+    An explicit source and the caller's original span are preserved.
+    """
     if isinstance(raw, WeakLabelSpan):
-        return raw
+        return replace(raw, source=source) if source and not raw.source else raw
     data = raw if isinstance(raw, Mapping) else vars(raw)
     metadata = data.get("metadata") or {}
     if not isinstance(metadata, Mapping):
