@@ -86,6 +86,7 @@ const (
 	LangMR PIILanguage = "mr"
 	LangNE PIILanguage = "ne"
 	LangOR PIILanguage = "or"
+	LangPL PIILanguage = "pl"
 	LangPA PIILanguage = "pa"
 	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
@@ -206,6 +207,39 @@ type JSONObject = map[string]any
 // Request types
 // ---------------------------------------------------------------------------
 
+// GovernedWorkflowReference contains opaque custody references, never action content.
+// Null state/key fields are allowed only for inspection.
+type GovernedWorkflowReference struct {
+	SchemaVersion       string  `json:"schema_version"`
+	RunID               string  `json:"run_id"`
+	WorkflowID          string  `json:"workflow_id"`
+	ActionDigest        string  `json:"action_digest"`
+	ExpectedStateDigest *string `json:"expected_state_digest"`
+	RequestID           *string `json:"request_id"`
+}
+
+// GovernedWorkflowMutation requires explicit state and idempotency metadata.
+type GovernedWorkflowMutation struct {
+	SchemaVersion       string `json:"schema_version"`
+	RunID               string `json:"run_id"`
+	WorkflowID          string `json:"workflow_id"`
+	ActionDigest        string `json:"action_digest"`
+	ExpectedStateDigest string `json:"expected_state_digest"`
+	RequestID           string `json:"request_id"`
+}
+
+// GovernedWorkflowReview transports an existing consumed receipt. Receipt
+// metadata is not approval authority; the server must verify trusted custody.
+type GovernedWorkflowReview struct {
+	SchemaVersion       string     `json:"schema_version"`
+	RunID               string     `json:"run_id"`
+	WorkflowID          string     `json:"workflow_id"`
+	ActionDigest        string     `json:"action_digest"`
+	ExpectedStateDigest string     `json:"expected_state_digest"`
+	RequestID           string     `json:"request_id"`
+	Receipt             JSONObject `json:"receipt"`
+}
+
 // AnalyzeRequest is the request body for POST /analyze.
 type AnalyzeRequest struct {
 	Text                string               `json:"text"`
@@ -218,6 +252,14 @@ type AnalyzeRequest struct {
 	SentenceClean       bool                 `json:"sentence_clean,omitempty"`
 	UseFastTokenizer    *bool                `json:"use_fast_tokenizer,omitempty"`
 	KeepAlive           any                  `json:"keep_alive,omitempty"`
+}
+
+// BriefRequest requests a local guarded brief; review remains application-owned.
+type BriefRequest struct {
+	Text     string  `json:"text"`
+	Model    string  `json:"model,omitempty"`
+	Profile  string  `json:"profile,omitempty"`
+	ReviewID *string `json:"review_id,omitempty"`
 }
 
 // GroundRequest is the request body for POST /ground.
@@ -1170,10 +1212,64 @@ func (c *Client) Analyze(ctx context.Context, req AnalyzeRequest) (*AnalyzeRespo
 	return &out, nil
 }
 
+// Brief calls POST /brief. The response contains protected summary content.
+func (c *Client) Brief(ctx context.Context, req BriefRequest) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/brief", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Ground calls POST /ground.
 func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse, error) {
 	var out GroundResponse
 	if err := c.post(ctx, "/ground", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowPreflight reads permission/policy findings without dispatching effects.
+func (c *Client) WorkflowPreflight(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/preflight", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowPreview inspects content-free effect metadata without execution.
+func (c *Client) WorkflowPreview(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/preview", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowStatus reads current custody metadata without retry or polling.
+func (c *Client) WorkflowStatus(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/status", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowSubmitReceipt submits existing metadata; it does not issue an approval.
+func (c *Client) WorkflowSubmitReceipt(ctx context.Context, req GovernedWorkflowReview) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/review-receipts", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowCancel requests cancellation intent without compensation or automatic retry.
+func (c *Client) WorkflowCancel(ctx context.Context, req GovernedWorkflowMutation) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/cancel", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

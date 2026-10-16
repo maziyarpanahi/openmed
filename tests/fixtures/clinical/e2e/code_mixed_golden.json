@@ -1,0 +1,49 @@
+{
+  "synthetic": true,
+  "source_rights": "generated synthetic fixture",
+  "disclaimer": "Synthetic data only. Advisory pipeline output for engineering regression testing; not a medical device and not for clinical decision-making.",
+  "redacted_pii_labels": [],
+  "phi_surface_strings": [],
+  "note_id": "synthetic-code-mixed-001",
+  "language": "es-en",
+  "source_note": "Nota clínica sintética. El paciente reports fever.",
+  "expected_entities": [
+    {
+      "text": "fever",
+      "ner_label": "CONDITION",
+      "negation": "affirmed",
+      "temporality": "recent",
+      "certainty": "certain",
+      "grounding_system": "hpo",
+      "expected_code": "HP:0001945",
+      "expected_display": "Fever",
+      "fhir_resource_type": "Observation"
+    }
+  ],
+  "expected_pipeline": {
+    "entities": [
+      {
+        "text": "fever",
+        "start": 44,
+        "end": 49,
+        "label": "CONDITION",
+        "negation": "affirmed",
+        "temporality": "recent",
+        "certainty": "certain",
+        "code": "HP:0001945",
+        "system": "http://human-phenotype-ontology.org",
+        "vocab_version": "sha256:46aa1fcaee2118ef8618ff5aaf09716da89425d7a58835d35d909cdd702f886a",
+        "resource_type": "Observation",
+        "status": "active"
+      }
+    ],
+    "fhir_bundle": {
+      "resource_type": "Bundle",
+      "type": "transaction",
+      "entry_types": [
+        "Patient",
+        "Observation"
+      ]
+    }
+  }
+}

@@ -522,11 +522,13 @@ def _register_builtin_specs() -> None:
             "hi",
             "kn",
             "te",
+            "ur",
             "bn",
             "en_IN",
             "hi_IN",
             "kn_IN",
             "te_IN",
+            "ur_IN",
             "bn_BD",
         ),
         id_type="aadhaar",
@@ -914,7 +916,7 @@ def _register_builtin_specs() -> None:
         faker_provider=BCPHNProvider,
     )
     _register_aliases(
-        ("ur", "ur_PK"),
+        ("ur_PK",),
         id_type="cnic",
         validate=validate_pakistani_cnic,
         faker_method="cnic",

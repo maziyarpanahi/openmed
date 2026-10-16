@@ -104,6 +104,16 @@ from openmed.eval.suites.cblue_coverage import (
     run_cblue_task_coverage,
     run_synthetic_cblue_task_coverage_smoke,
 )
+from openmed.eval.suites.chart_abstraction import (
+    AbstractionFieldType,
+    AbstractionMetric,
+    AbstractionScores,
+    ChartAbstractionBenchmarkReport,
+    ChartAbstractionGoldField,
+    ChartAbstractionPrediction,
+    run_chart_abstraction_benchmark,
+    synthetic_chart_abstraction_gold,
+)
 from openmed.eval.suites.chinese_clinical_ner import (
     CHINESE_CLINICAL_NER,
     CHINESE_CLINICAL_NER_MODEL_DIR_ENV,
@@ -273,6 +283,17 @@ from openmed.eval.suites.omop_quality import (
     FrozenOmopQualityFixture,
     load_frozen_omop_quality_fixture,
 )
+from openmed.eval.suites.openmed_synth import (
+    OPENMED_SYNTH,
+    OPENMED_SYNTH_DATASET_CARD,
+    OPENMED_SYNTH_DEFAULT_CORPUS_SIZE,
+    OPENMED_SYNTH_DEFAULT_SEED,
+    OPENMED_SYNTH_REFERENCE_MODEL,
+    load_openmed_synth_fixtures,
+    openmed_synth_reference_runner,
+    openmed_synth_suite_metadata,
+    run_openmed_synth_benchmark,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -296,6 +317,13 @@ from openmed.eval.suites.relations import (
     relation_suite_metadata,
     relation_trap_summary,
     score_relation_fixtures,
+)
+from openmed.eval.suites.sdoh_extraction import (
+    SDOH_EXTRACTION,
+    load_sdoh_extraction_fixtures,
+    run_sdoh_extraction_benchmark,
+    run_shac_sdoh_benchmark,
+    sdoh_extraction_metadata,
 )
 from openmed.eval.suites.shield import (
     SHIELD,
@@ -348,6 +376,7 @@ PROMOTION_ONLY_RELATION_SUITES: tuple[str, ...] = (
 
 DEFAULT_SUITES: tuple[str, ...] = (
     GOLDEN,
+    OPENMED_SYNTH,
     I2B2,
     N2C2,
     SHIELD,
@@ -372,7 +401,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
 SUPPORTED_SUITES: tuple[str, ...] = (
     DEFAULT_SUITES
     + PROMOTION_ONLY_RELATION_SUITES
-    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE)
+    + (GROUNDING_CALIBRATION, CLINICAL_DOMAIN_COVERAGE, SDOH_EXTRACTION)
 )
 REGISTERED_EVAL_SUITES: tuple[str, ...] = SUPPORTED_SUITES
 
@@ -390,6 +419,8 @@ def validate_suite_name(name: str) -> str:
 def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     """Load benchmark fixtures for a named suite."""
     suite = validate_suite_name(name)
+    if suite == SDOH_EXTRACTION:
+        return load_sdoh_extraction_fixtures(kwargs.get("path"))
     if suite == CLINICAL_DOMAIN_COVERAGE:
         raise ValueError(
             "clinical domain coverage is an aggregate gate; "
@@ -397,6 +428,14 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         )
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == OPENMED_SYNTH:
+        return load_openmed_synth_fixtures(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == GROUNDING_CALIBRATION:
         from openmed.eval.suites.grounding_calibration import load_grounding_gold
 
@@ -470,9 +509,40 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
+_TASK_FALLBACKS = {
+    GOLDEN: "clinical_deidentification",
+    OPENMED_SYNTH: "clinical_deidentification",
+    I2B2: "clinical_deidentification",
+    N2C2: "clinical_deidentification",
+    SHIELD: "clinical_deidentification",
+    POLICY_COMPLIANCE: "privacy_policy_compliance",
+    MULTIMODAL_DICOM: "dicom_deidentification",
+    CODE_MIXED_ROUTING: "code_mixed_privacy_routing",
+    INDIA_HEALTH_ID_LEAKAGE: "health_identifier_leakage",
+    INDIAN_MULTI_ID: "multi_identifier_detection",
+    INDIC_NAME_CONSISTENCY: "name_surrogate_consistency",
+    INDIA_CLINICAL_PHI_LEAKAGE: "clinical_deidentification",
+    INDIA_SURROGATE_CONSISTENCY: "identifier_surrogate_consistency",
+    TEMPORAL_CONSISTENCY: "temporal_assertion_consistency",
+    GROUNDING_CALIBRATION: "grounding_calibration",
+    CLINICAL_DOMAIN_COVERAGE: "clinical_domain_coverage",
+}
+
+
 def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
+    """Return registry metadata with an explicit, non-placeholder task."""
+    suite = validate_suite_name(name)
+    metadata = _suite_metadata(suite, **kwargs)
+    if not metadata.get("task"):
+        metadata["task"] = _TASK_FALLBACKS[suite]
+    return metadata
+
+
+def _suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
     """Return suite-specific report metadata."""
     suite = validate_suite_name(name)
+    if suite == SDOH_EXTRACTION:
+        return sdoh_extraction_metadata()
     if suite == CLINICAL_DOMAIN_COVERAGE:
         return domain_coverage_metadata()
     if suite == I2B2:
@@ -500,6 +570,14 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         )
 
         return grounding_calibration_metadata(**kwargs)
+    if suite == OPENMED_SYNTH:
+        return openmed_synth_suite_metadata(
+            seed=kwargs.get("seed", OPENMED_SYNTH_DEFAULT_SEED),
+            corpus_size=kwargs.get(
+                "corpus_size",
+                kwargs.get("size", OPENMED_SYNTH_DEFAULT_CORPUS_SIZE),
+            ),
+        )
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
     if suite == MASAKHANER:
@@ -628,6 +706,19 @@ def _warn_skipped_suite(suite: str, path_env: str) -> None:
 
 
 __all__ = [
+    "AbstractionFieldType",
+    "AbstractionMetric",
+    "AbstractionScores",
+    "ChartAbstractionBenchmarkReport",
+    "ChartAbstractionGoldField",
+    "ChartAbstractionPrediction",
+    "run_chart_abstraction_benchmark",
+    "synthetic_chart_abstraction_gold",
+    "SDOH_EXTRACTION",
+    "load_sdoh_extraction_fixtures",
+    "run_sdoh_extraction_benchmark",
+    "run_shac_sdoh_benchmark",
+    "sdoh_extraction_metadata",
     "DRUG_SAFETY_SUITE_VERSION",
     "DrugSafetyBenchmarkCase",
     "DrugSafetyBenchmarkReport",
@@ -650,6 +741,11 @@ __all__ = [
     "load_frozen_omop_quality_fixture",
     "BIORED",
     "GOLDEN",
+    "OPENMED_SYNTH",
+    "OPENMED_SYNTH_DATASET_CARD",
+    "OPENMED_SYNTH_DEFAULT_CORPUS_SIZE",
+    "OPENMED_SYNTH_DEFAULT_SEED",
+    "OPENMED_SYNTH_REFERENCE_MODEL",
     "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
@@ -724,6 +820,10 @@ __all__ = [
     "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
+    "load_openmed_synth_fixtures",
+    "openmed_synth_reference_runner",
+    "openmed_synth_suite_metadata",
+    "run_openmed_synth_benchmark",
     "run_domain_coverage",
     "run_comparator_matrix",
     "run_indic_encoder_recall_delta",

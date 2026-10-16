@@ -1,0 +1,294 @@
+"""Focused tests for deterministic synthetic lab measurement normalization."""
+
+from __future__ import annotations
+
+import json
+from typing import is_typeddict
+
+import pytest
+
+from openmed.clinical import (
+    LAB_MEASUREMENT_ADVISORY,
+    ParsedLabReferenceRange,
+    normalize_lab_measurement,
+    normalize_lab_measurements,
+)
+
+
+def test_parsed_range_has_a_distinct_public_type_name() -> None:
+    assert is_typeddict(ParsedLabReferenceRange)
+
+
+def test_normalizes_value_range_interpretation_and_offsets() -> None:
+    record = normalize_lab_measurement(
+        {
+            "analyte": "Glucose",
+            "value": 120,
+            "unit": "mg/dL",
+            "reference_range": "70-99 mg/dL",
+            "flag": "H",
+            "qualifiers": ["fasting", " fasting "],
+            "start": 18,
+            "end": 44,
+        }
+    )
+
+    assert record["status"] == "ok"
+    assert record["value"] == 120.0
+    assert record["unit"] == "mg/dL"
+    assert record["canonical_value"] == pytest.approx(1.2)
+    assert record["canonical_unit"] == "g/L"
+    assert record["interpretation"] == "high"
+    assert record["qualifiers"] == ["fasting"]
+    assert record["source_offsets"] == {"start": 18, "end": 44}
+    assert record["reference_range"] == {
+        "low": 70.0,
+        "high": 99.0,
+        "low_inclusive": True,
+        "high_inclusive": True,
+        "unit": "mg/dL",
+        "canonical_low": pytest.approx(0.7),
+        "canonical_high": pytest.approx(0.99),
+        "canonical_unit": "g/L",
+        "status": "ok",
+        "unit_status": "known",
+    }
+
+
+def test_embedded_unit_and_unitless_attached_range_are_supported() -> None:
+    record = normalize_lab_measurement(
+        "4.2 mmol/L",
+        reference_range="3.5-5.1",
+        source_offsets=(2, 14),
+    )
+
+    assert record["status"] == "ok"
+    assert record["value"] == pytest.approx(4.2)
+    assert record["unit"] == "mmol/L"
+    assert record["canonical_unit"] == "mol/L"
+    assert record["reference_range"]["unit"] is None
+    assert record["reference_range"]["canonical_unit"] == "mol/L"
+    assert record["interpretation"] == "normal"
+    assert record["source_offsets"] == {"start": 2, "end": 14}
+
+
+def test_mixed_units_compare_only_when_dimensions_match() -> None:
+    compatible = normalize_lab_measurement(
+        {
+            "value": 120,
+            "unit": "mg/dL",
+            "reference_range": {"low": 0.7, "high": 0.99, "unit": "g/L"},
+        }
+    )
+    incompatible = normalize_lab_measurement(
+        {
+            "value": 120,
+            "unit": "mg/dL",
+            "reference_range": {"low": 3.5, "high": 5.1, "unit": "mmol/L"},
+        }
+    )
+
+    assert compatible["status"] == "ok"
+    assert compatible["interpretation"] == "high"
+    assert compatible["canonical_value"] == pytest.approx(1.2)
+    assert compatible["reference_range"]["canonical_high"] == pytest.approx(0.99)
+    assert incompatible["reference_range"]["status"] == "incommensurable"
+    assert incompatible["interpretation"] == "unknown"
+
+
+def test_typed_range_mapping_keeps_a_private_provenance_link() -> None:
+    fingerprint = "sha256:" + "a" * 64
+    reference_range = {
+        "low": 135,
+        "high": 145,
+        "unit": "mmol/L",
+        "provenance": {
+            "unit": "mmol/L",
+            "population": "adult",
+            "precision": 0,
+            "source_fingerprint": fingerprint,
+            "locale": "en-us",
+            "source": "synthetic-instrument-secret",
+        },
+    }
+    record = normalize_lab_measurement(
+        {"value": 140, "unit": "mmol/L", "reference_range": reference_range}
+    )
+
+    assert record["status"] == "ok"
+    assert record["interpretation"] == "normal"
+    link = record["reference_range_provenance"]
+    assert link["status"] == "linked"
+    assert link["source_fingerprint"] == fingerprint
+    assert link["context_fingerprint"].startswith("sha256:")
+    assert "synthetic-instrument-secret" not in json.dumps(record)
+    assert "adult" not in json.dumps(record)
+
+    reference_range["provenance"]["locale"] = "fr-fr"
+    changed = normalize_lab_measurement(
+        {"value": 140, "unit": "mmol/L", "reference_range": reference_range}
+    )
+    assert (
+        changed["reference_range_provenance"]["context_fingerprint"]
+        != link["context_fingerprint"]
+    )
+
+
+def test_unverified_range_provenance_is_explicitly_unknown() -> None:
+    record = normalize_lab_measurement(
+        {
+            "value": 140,
+            "unit": "mmol/L",
+            "reference_range": {
+                "low": 135,
+                "high": 145,
+                "unit": "mmol/L",
+                "provenance": {
+                    "source_fingerprint": "not-a-hash",
+                    "source": "synthetic-instrument-secret",
+                },
+            },
+        }
+    )
+
+    assert record["reference_range_provenance"] == {"status": "unknown"}
+    assert "synthetic-instrument-secret" not in json.dumps(record)
+
+
+@pytest.mark.parametrize("unit", ["mystery-unit", "units", None])
+def test_unknown_or_missing_unit_fails_closed_without_guessing(unit: object) -> None:
+    record = normalize_lab_measurement(
+        {
+            "value": 7.5,
+            "unit": unit,
+            "reference_range": "4-11",
+            "source_offsets": [4, 7],
+        }
+    )
+
+    assert record["status"] == "unknown_unit"
+    assert record["unit_status"] in {"missing", "unknown", "ambiguous"}
+    assert record["canonical_value"] is None
+    assert record["canonical_unit"] is None
+    assert record["interpretation"] == "unknown"
+
+
+def test_unknown_reference_unit_is_explicit_and_does_not_leak_source_text() -> None:
+    record = normalize_lab_measurement(
+        {
+            "value": 3.2,
+            "unit": "mg/dL",
+            "reference_range": {"low": 1, "high": 2, "unit": "private-unit"},
+            "source_offsets": (9, 22),
+        }
+    )
+
+    serialized = json.dumps(record, sort_keys=True)
+
+    assert record["status"] == "unknown_unit"
+    assert record["reference_range"]["status"] == "unknown_unit"
+    assert record["interpretation"] == "unknown"
+    assert "input_value" not in serialized
+    assert "reference_range_text" not in serialized
+    assert "3.2 mg/dL" not in serialized
+
+
+def test_explicit_flag_is_retained_when_numeric_comparison_is_unavailable() -> None:
+    record = normalize_lab_measurement(
+        8.0,
+        "mystery-unit",
+        "1-2 mystery-unit",
+        flag="critical",
+    )
+
+    assert record["status"] == "unknown_unit"
+    assert record["interpretation"] == "critical"
+    assert record["provenance"]["explicit_flag_provided"] is True
+
+
+def test_batch_normalization_preserves_input_order_and_is_deterministic() -> None:
+    rows = [
+        {"analyte": "Sodium", "value": 140, "unit": "mmol/L"},
+        {"analyte": "Potassium", "value": 4.0, "unit": "mmol/L"},
+    ]
+
+    first = normalize_lab_measurements(rows)
+    second = normalize_lab_measurements(rows)
+
+    assert first == second
+    assert [row["analyte"] for row in first] == ["Sodium", "Potassium"]
+    assert all(row["advisory"] == LAB_MEASUREMENT_ADVISORY for row in first)
+
+
+def test_arbitrary_flag_is_not_copied_into_provenance():
+    record = normalize_lab_measurement(5, "mg/dL", flag="SYNTHETIC-PRIVATE-FLAG")
+    assert "synthetic-private" not in json.dumps(record).lower()
+    assert record["interpretation"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"value": "5 mg/dL", "unit": "mmol/L"},
+        {"value": 5, "unit": "mg/dL", "units": "mmol/L"},
+        {"value": 5, "result": 10, "unit": "mg/dL"},
+    ],
+)
+def test_conflicting_measurement_declarations_are_rejected(row):
+    with pytest.raises(ValueError):
+        normalize_lab_measurement(row)
+
+
+def test_range_provenance_cannot_claim_another_unit():
+    record = normalize_lab_measurement(
+        5,
+        "mg/dL",
+        {
+            "low": 1,
+            "high": 10,
+            "unit": "mg/dL",
+            "provenance": {
+                "unit": "mmol/L",
+                "population": "adult",
+                "precision": 1,
+                "source_fingerprint": "sha256:" + "a" * 64,
+            },
+        },
+    )
+    assert record["reference_range_provenance"]["status"] == "unknown"
+
+
+def test_nonboolean_range_boundary_is_not_promoted_to_inclusive():
+    record = normalize_lab_measurement(
+        5, "mg/dL", {"low": 1, "high": 5, "high_inclusive": "false"}
+    )
+    assert record["reference_range"]["status"] == "invalid"
+    assert record["interpretation"] == "unknown"
+
+
+def test_batch_iterator_error_does_not_retain_source_context():
+    def values():
+        raise RuntimeError("SYNTHETIC-PRIVATE-FLAG")
+        yield
+
+    with pytest.raises(ValueError) as caught:
+        normalize_lab_measurements(values())
+    assert caught.value.__context__ is None
+    assert "SYNTHETIC" not in str(caught.value)
+
+
+def test_normalizer_collections_are_bounded(monkeypatch):
+    from openmed.clinical import lab_measurements as module
+
+    monkeypatch.setattr(module, "_MAX_ITEMS", 2)
+    with pytest.raises(ValueError):
+        normalize_lab_measurements(({"value": 1, "unit": "mg/dL"} for _ in range(3)))
+    with pytest.raises(ValueError):
+        normalize_lab_measurement(1, "mg/dL", qualifiers=(str(i) for i in range(3)))
+
+
+def test_canonical_overflow_is_not_serialized_as_infinity():
+    record = normalize_lab_measurement(1e308, "kg")
+    assert record["status"] == "invalid_value"
+    assert record["canonical_value"] is None
+    json.dumps(record, allow_nan=False)

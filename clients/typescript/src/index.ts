@@ -1,3 +1,6 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
 import {
   JOURNEY_WORKFLOW_RESOURCE_TYPES,
   type JourneyResourcePage,
@@ -46,6 +49,7 @@ export type PIILanguage =
   | "mr"
   | "ne"
   | "or"
+  | "pl"
   | "pa"
   | "ta"
   | "te"
@@ -69,6 +73,7 @@ export type PIILanguage =
   | "xh"
   | "zh"
   | "uk"
+  | "ur"
   | "cs"
   | "el"
   | "vi";
@@ -105,6 +110,35 @@ export interface GroundRequest {
   systems?: string[];
   text?: string | null;
   top_k?: number;
+}
+
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
 }
 
 export interface PIIExtractRequest {
@@ -589,6 +623,7 @@ export class OpenMedApiError extends Error {
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
 
   constructor(options: OpenMedClientOptions) {
     const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
@@ -604,6 +639,7 @@ export class OpenMedClient {
     this.baseUrl = baseUrl;
     this.fetchImpl =
       options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
@@ -612,6 +648,34 @@ export class OpenMedClient {
 
   async ground(request: GroundRequest): Promise<GroundResponse> {
     return this.post("/ground", request);
+  }
+
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
+  }
+
+  async brief(request: BriefRequest): Promise<BriefResponse> {
+    return this.post("/brief", request);
   }
 
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
@@ -922,4 +986,31 @@ function toOpenMedErrorEnvelope(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+export interface BriefRequest {
+  text: string;
+  model?: "mlx" | "extractive" | "maple" | "maple-preview";
+  profile?: "bhc" | "brief_hospital_course" | "clinical_handoff" | "discharge_summary" | "problem_oriented";
+  review_id?: string | null;
+}
+
+/** Protected application response; do not log summary text. */
+export interface BriefResponse {
+  schema_version: 1;
+  status: "needs_review" | "refused";
+  summary: string;
+  refusal_reason: string | null;
+  summary_digest: string;
+  summary_characters: number;
+  digest: string;
+  stages: string[];
+  citations: Record<string, unknown>[];
+  verdicts: Record<string, unknown>[];
+  metrics: Record<string, unknown>;
+  envelope: Record<string, unknown>;
+  review_packet: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  profile_digest: string | null;
+  backend_id: string | null;
 }

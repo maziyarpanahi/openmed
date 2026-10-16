@@ -115,7 +115,10 @@ def test_registry_selects_temporal_consistency_suite() -> None:
     assert load_suite_fixtures(TEMPORAL_CONSISTENCY) == list(
         load_temporal_consistency_fixtures()
     )
-    assert suite_metadata(TEMPORAL_CONSISTENCY) == temporal_consistency_metadata()
+    assert suite_metadata(TEMPORAL_CONSISTENCY) == {
+        **temporal_consistency_metadata(),
+        "task": "temporal_assertion_consistency",
+    }
 
 
 def test_shared_harness_runs_temporal_consistency_suite() -> None:

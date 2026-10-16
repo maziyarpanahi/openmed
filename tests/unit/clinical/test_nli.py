@@ -7,31 +7,106 @@ import pytest
 from openmed.clinical.nli import (
     MEDNLI_DATA_POLICY,
     NLI_LABELS,
+    ClaimVerification,
     HeuristicNLIBackend,
     nli,
     verify,
 )
 
 
-def test_nli_returns_the_documented_two_field_shape() -> None:
+def test_hook_verification_record_is_closed_and_value_free():
+    record = ClaimVerification(
+        0,
+        "contradiction",
+        0.9,
+        "heuristic",
+        (0, 10),
+        (0, 8),
+        "sha256:" + "a" * 64,
+        "sha256:" + "b" * 64,
+        True,
+    )
+    assert ClaimVerification.from_dict(record.to_dict()) == record
+    payload = record.to_dict()
+    payload["source"] = "Synthetic private source"
+    with pytest.raises(
+        ValueError, match="invalid claim verification metadata"
+    ) as raised:
+        ClaimVerification.from_dict(payload)
+    assert "private source" not in str(raised.value)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"score": True},
+        {"score": float("nan")},
+        {"score": 10**500},
+        {"claim_index": False},
+        {"backend_id": "/private/synthetic"},
+        {"source_offset": [0, True]},
+        {"source_digest": None},
+        {"contradicted": True},
+        {"review_required": False, "label": "abstention"},
+    ],
+)
+def test_hook_record_rejects_malformed_or_forged_metadata(override):
+    record = ClaimVerification(
+        0,
+        "entailment",
+        0.9,
+        "heuristic",
+        (0, 10),
+        None,
+        "sha256:" + "a" * 64,
+        "sha256:" + "b" * 64,
+        False,
+    )
+    payload = record.to_dict() | override
+    with pytest.raises(ValueError, match="invalid claim verification metadata"):
+        ClaimVerification.from_dict(payload)
+
+
+@pytest.mark.parametrize("invalid", ["claim", "source"])
+def test_hook_refuses_invalid_encoding_without_retaining_protected_text(invalid):
+    from openmed.clinical.nli import _verify_claim_spans
+    from openmed.clinical.nli_backends import LocalNLIError
+
+    private = "synthetic-private-sentinel\ud800"
+    source = private if invalid == "source" else "Synthetic source."
+    claim = private if invalid == "claim" else "Synthetic claim."
+    with pytest.raises(
+        LocalNLIError, match="verification text encoding is invalid"
+    ) as caught:
+        _verify_claim_spans([claim], source, [(0, len(source))], option="heuristic")
+    assert caught.value.__context__ is None
+    assert caught.value.__cause__ is None
+    assert not hasattr(caught.value, "object")
+    assert "synthetic-private-sentinel" not in str(caught.value)
+
+
+def test_nli_returns_the_documented_value_free_shape() -> None:
     result = nli(
         "Synthetic patient has pneumonia.",
         "The patient has pneumonia.",
+        backend="heuristic",
     )
 
-    assert set(result) == {"label", "score"}
+    assert set(result) == {"label", "score", "backend_id"}
     assert result["label"] in NLI_LABELS
     assert 0.0 <= result["score"] <= 1.0
     assert result["label"] == "entailment"
+    assert result["backend_id"] == "heuristic"
 
 
-def test_verify_flags_contradiction_and_retains_entailed_claim() -> None:
+def test_verify_flags_contradiction_without_echoing_claims() -> None:
     results = verify(
         [
             "The patient has no pneumonia.",
             "The patient has pneumonia.",
         ],
         "Synthetic patient has pneumonia.",
+        backend="heuristic",
     )
 
     assert [result["label"] for result in results] == [
@@ -40,16 +115,15 @@ def test_verify_flags_contradiction_and_retains_entailed_claim() -> None:
     ]
     assert results[0]["contradicted"] is True
     assert results[1]["contradicted"] is False
-    assert [result["claim"] for result in results] == [
-        "The patient has no pneumonia.",
-        "The patient has pneumonia.",
-    ]
+    assert [result["claim_index"] for result in results] == [0, 1]
+    assert "pneumonia" not in str(results)
 
 
 def test_verify_pairs_aligned_source_spans() -> None:
     results = verify(
         ["No fever is present.", "Pneumonia is present."],
         ["Synthetic fever is present.", "Synthetic pneumonia is present."],
+        backend="heuristic",
     )
 
     assert [result["label"] for result in results] == [
@@ -68,7 +142,7 @@ def test_nli_accepts_a_swappable_backend_without_api_changes() -> None:
 
     result = nli("synthetic source", "synthetic claim", backend=StubBackend())
 
-    assert result == {"label": "neutral", "score": 0.25}
+    assert result == {"label": "neutral", "score": 0.25, "backend_id": "custom-local"}
     assert calls == [("synthetic source", "synthetic claim")]
 
 
@@ -120,4 +194,4 @@ def test_malformed_backend_scores_fail_with_a_stable_error(score) -> None:
     ],
 )
 def test_opposites_in_unrelated_claims_remain_neutral(premise, hypothesis) -> None:
-    assert nli(premise, hypothesis)["label"] == "neutral"
+    assert nli(premise, hypothesis, backend="heuristic")["label"] == "neutral"
