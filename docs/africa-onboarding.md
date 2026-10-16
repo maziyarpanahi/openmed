@@ -215,6 +215,19 @@ Before rollout, record at least:
 6. A synthetic leakage test set representative of local names, phone formats,
    addresses, facility identifiers, national IDs, and languages.
 
+### Local-language month-name dates
+
+Hausa (`ha`), Yoruba (`yo`), Igbo (`ig`), and Kinyarwanda (`rw`) have no
+bundled PII model, so deterministic patterns are their main protection. The
+safety sweep masks Gregorian month-name dates such as `15 Satumba 1980`,
+`15 Ṣẹ́rẹ́ 1980`, `15 Jenụwarị 1980`, and `15 Mutarama 1980` in
+day-month-year or month-day-year order. Yoruba and Igbo dates match with tone
+marks, decomposed marks, or no marks. A month word without a day and year is
+left unchanged. These routes still need an explicit `model_name` for
+model-backed inference. See the
+[language guide](languages.md#month-name-dates-in-hausa-yoruba-igbo-and-kinyarwanda)
+for accepted spellings and limits.
+
 ## OpenMRS integration with the FHIR exporter
 
 OpenMRS exposes an R4 FHIR API at `/openmrs/ws/fhir2/R4`. OpenMed's
