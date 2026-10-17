@@ -15,19 +15,31 @@ from openmed.guard.operational_limits import OperationalLimits
 MAX_REQUEST_BYTES_ENV_VAR: Final = "OPENMED_SERVICE_MAX_REQUEST_BYTES"
 
 
-def request_limits_from_env() -> OperationalLimits:
-    """Load the bounded request-byte override from the environment."""
+def request_limits_from_env(
+    env_var: str = MAX_REQUEST_BYTES_ENV_VAR,
+) -> OperationalLimits:
+    """Load the bounded request-byte override from the environment.
+
+    Args:
+        env_var: Setting that holds the byte override. Service surfaces with
+            their own listener, such as the privacy proxy, pass their own name.
+
+    Returns:
+        Operational limits with the override applied, or the defaults.
+
+    Raises:
+        ValueError: If the override is not an integer or is outside the
+            safe operational range.
+    """
 
     default = OperationalLimits()
-    raw = os.getenv(MAX_REQUEST_BYTES_ENV_VAR)
+    raw = os.getenv(env_var)
     if raw is None or not raw.strip():
         return default
     try:
         maximum = int(raw)
     except ValueError:
-        raise ValueError(
-            f"{MAX_REQUEST_BYTES_ENV_VAR} must be an integer number of bytes"
-        ) from None
+        raise ValueError(f"{env_var} must be an integer number of bytes") from None
     return OperationalLimits(max_request_bytes=maximum)
 
 

@@ -6,20 +6,31 @@ transport.  Placeholder mappings stay in the request call stack and are
 never included in transport metadata, responses, or logs.  A second route
 without the ``/v1`` prefix is provided for clients whose base URL already
 contains the version path.
+
+The factory applies the shared service inbound controls before a request body
+is parsed: a loopback-only trusted-host allowlist, opt-in API-key or JWT
+authentication, and the operational request-byte bound.  Message count, total
+text characters and streaming duration are bounded before redaction or any
+transport call, with controlled ``privacy_proxy_*`` error codes.
 """
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 import re
-from collections.abc import AsyncIterable, Callable, Mapping
+import time
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Optional, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from openmed.guard.operational_limits import OperationalLimits
+
+from ..auth import ServiceAuth, ServiceAuthConfig
 from ..privacy_gateway import (
     DEFAULT_PRIVACY_GATEWAY_MIN_CONFIDENCE,
     PrivacyGatewayError,
@@ -32,10 +43,19 @@ from ..privacy_gateway import (
     safety_sweep_tripwire,
     sha256_text,
 )
+from ..request_limits import BoundedRequestBodyMiddleware
+from ..security_headers import ErrorEnvelopeTrustedHostMiddleware
 from .inbound import (
     InboundPlaceholderRestorer,
     InboundRestorationError,
     InboundRestorationState,
+)
+from .settings import (
+    PrivacyProxyLimits,
+    privacy_proxy_limits_from_env,
+    privacy_proxy_request_limits_from_env,
+    resolve_auth_config,
+    resolve_trusted_hosts,
 )
 
 DEFAULT_MODEL = "openmed-local"
@@ -46,6 +66,7 @@ _REQUEST_ID_HEADER = "x-request-id"
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _PLACEHOLDER_PREFIX = "<<OPENMED_PHI_"
 _PLACEHOLDER_PATTERN = re.compile(r"<<OPENMED_PHI_[A-Z0-9_]+_[0-9A-F]{8}_[0-9]{6,}>>")
+_UNREDACTED_KEYS = frozenset({"model", "role", "type"})
 _DONE = object()
 
 EntityExtractor = Callable[..., Any]
@@ -108,6 +129,22 @@ class PrivacyProxyResponseError(PrivacyProxyError):
     status_code = 502
     error_code = "privacy_proxy_response_rejected"
     reason_code = "response_rejected"
+
+
+class PrivacyProxyLimitError(PrivacyProxyError):
+    """Raised when a request exceeds a message or text bound before redaction."""
+
+    status_code = 413
+    error_code = "privacy_proxy_limit_exceeded"
+    reason_code = "limit_exceeded"
+
+
+class PrivacyProxyTimeoutError(PrivacyProxyError):
+    """Raised when a streaming response exceeds its wall-clock bound."""
+
+    status_code = 504
+    error_code = "privacy_proxy_timeout"
+    reason_code = "stream_duration_exceeded"
 
 
 class _MissingTransport:
@@ -207,6 +244,7 @@ class PrivacyProxy:
         tripwire_extractor: Optional[EntityExtractor] = None,
         policy: Optional[PrivacyGatewayPolicy] = None,
         redaction_model: str = DEFAULT_REDACTION_MODEL,
+        limits: Optional[PrivacyProxyLimits] = None,
     ) -> None:
         self.transport: ChatTransport = transport or _MissingTransport()
         self.extractor = extractor or _default_extractor
@@ -215,6 +253,7 @@ class PrivacyProxy:
             min_confidence=DEFAULT_PRIVACY_GATEWAY_MIN_CONFIDENCE
         )
         self.redaction_model = redaction_model
+        self.limits = limits or PrivacyProxyLimits()
 
     @property
     def configured(self) -> bool:
@@ -229,6 +268,7 @@ class PrivacyProxy:
     ) -> RedactedChatRequest:
         """Validate and redact one JSON chat-completion request."""
         normalized = _validate_request_payload(payload)
+        _enforce_request_limits(normalized, self.limits)
         request_id = _stable_request_id(normalized, request_id_header)
         placeholder_map: dict[str, str] = {}
 
@@ -328,7 +368,10 @@ class PrivacyProxy:
         """Yield restored OpenAI-compatible chunks and a final ``[DONE]`` marker."""
         state = _StreamState(prepared)
         try:
-            async for item in _iterate_response(response):
+            async for item in _bounded_items(
+                _iterate_response(response),
+                self.limits.max_stream_seconds,
+            ):
                 for event in _stream_item_events(item, state):
                     if event is _DONE:
                         state.done_sent = True
@@ -421,6 +464,10 @@ def create_app(
     tripwire_extractor: Optional[EntityExtractor] = None,
     policy: Optional[PrivacyGatewayPolicy] = None,
     redaction_model: str = DEFAULT_REDACTION_MODEL,
+    trusted_hosts: Optional[Sequence[str]] = None,
+    operational_limits: Optional[OperationalLimits] = None,
+    limits: Optional[PrivacyProxyLimits] = None,
+    auth_config: Optional[ServiceAuthConfig] = None,
 ) -> FastAPI:
     """Create an import-safe local privacy-proxy FastAPI application.
 
@@ -429,7 +476,40 @@ def create_app(
     synchronous or asynchronous iterable of text chunks or OpenAI-style
     response chunks.  Omitting it leaves the app healthy but makes completion
     requests fail closed without attempting any network call.
+
+    Untrusted ``Host`` headers, missing or invalid credentials (when auth is
+    enabled) and oversized bodies are rejected in that order, before the body
+    is parsed.  Each security argument left as ``None`` is read from the
+    environment with a safe default.
+
+    Args:
+        transport: Injected local inference transport.
+        extractor: PHI extractor used to redact request text.
+        tripwire_extractor: Residual-PHI check run on redacted text.
+        policy: Privacy-gateway policy applied to detected entities.
+        redaction_model: Model name passed to the default extractor.
+        trusted_hosts: Allowed ``Host`` names. Defaults to
+            ``OPENMED_PRIVACY_PROXY_TRUSTED_HOSTS`` or loopback only.
+        operational_limits: Request-byte bound. Defaults to
+            ``OPENMED_PRIVACY_PROXY_MAX_REQUEST_BYTES`` or 16 MiB.
+        limits: Message, text and streaming bounds. Defaults to the
+            ``OPENMED_PRIVACY_PROXY_MAX_*`` settings.
+        auth_config: Authentication settings. Defaults to the shared
+            ``OPENMED_SERVICE_AUTH_*`` settings, which are off unless enabled.
+
+    Returns:
+        The configured FastAPI application.
+
+    Raises:
+        ValueError: If a security setting is invalid. Messages name the
+            setting and never echo its value.
     """
+    hosts = resolve_trusted_hosts(trusted_hosts)
+    request_limits = operational_limits or privacy_proxy_request_limits_from_env()
+    auth = ServiceAuth(
+        resolve_auth_config(auth_config),
+        error_response=_auth_error_response,
+    )
     fastapi_app = FastAPI(
         title="OpenMed Local Privacy Proxy",
         description="OpenAI-compatible local redaction boundary.",
@@ -441,9 +521,29 @@ def create_app(
         tripwire_extractor=tripwire_extractor,
         policy=policy,
         redaction_model=redaction_model,
+        limits=limits or privacy_proxy_limits_from_env(),
     )
     fastapi_app.state.privacy_proxy = proxy
     fastapi_app.state.privacy_proxy_transport = transport
+    fastapi_app.state.trusted_hosts = hosts
+    fastapi_app.state.operational_limits = request_limits
+    fastapi_app.state.auth = auth
+
+    # Starlette runs the last-added middleware first, so the order below is
+    # trusted host, then authentication, then the buffered body bound.  The
+    # header-only checks reject a request before any body bytes are read.
+    fastapi_app.add_middleware(BoundedRequestBodyMiddleware, limits=request_limits)
+    if auth.enabled:
+
+        @fastapi_app.middleware("http")
+        async def _auth_middleware(request: Request, call_next: Any) -> Any:
+            return await auth.dispatch(request, call_next)
+
+    fastapi_app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=hosts,
+        www_redirect=False,
+    )
 
     @fastapi_app.get("/health")
     async def health() -> dict[str, Any]:
@@ -521,6 +621,37 @@ def create_app(
     return fastapi_app
 
 
+async def _bounded_items(
+    items: AsyncIterator[Any],
+    max_seconds: float,
+) -> AsyncIterator[Any]:
+    """Yield transport items until the streaming wall-clock bound passes.
+
+    Asynchronous transports are cancelled at the deadline.  A synchronous
+    iterator cannot be interrupted while it blocks, so the bound is checked
+    again after each item arrives and a late item is dropped, not emitted.
+    """
+    deadline = time.monotonic() + max_seconds
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PrivacyProxyTimeoutError()
+            try:
+                item = await asyncio.wait_for(items.__anext__(), timeout=remaining)
+            except StopAsyncIteration:
+                return
+            except asyncio.TimeoutError:
+                raise PrivacyProxyTimeoutError() from None
+            if time.monotonic() >= deadline:
+                raise PrivacyProxyTimeoutError()
+            yield item
+    finally:
+        aclose = getattr(items, "aclose", None)
+        if callable(aclose):
+            await aclose()
+
+
 async def _stream_body(
     proxy: PrivacyProxy,
     response: Any,
@@ -565,6 +696,33 @@ def _validate_request_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     return dict(payload)
 
 
+def _enforce_request_limits(
+    payload: Mapping[str, Any],
+    limits: PrivacyProxyLimits,
+) -> None:
+    """Reject oversized work before any extractor or transport call."""
+    if len(payload["messages"]) > limits.max_messages:
+        raise PrivacyProxyLimitError(reason_code="message_count_exceeded")
+    # Count the same string leaves that ``_walk_json_strings`` redacts, without
+    # recursion so deeply nested payloads cannot exhaust the stack here.
+    total = 0
+    pending: list[Any] = [payload]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, Mapping):
+            pending.extend(
+                child
+                for key, child in value.items()
+                if str(key) not in _UNREDACTED_KEYS
+            )
+        elif isinstance(value, list):
+            pending.extend(value)
+        elif isinstance(value, str):
+            total += len(value)
+            if total > limits.max_text_chars:
+                raise PrivacyProxyLimitError(reason_code="text_length_exceeded")
+
+
 def _stable_request_id(
     payload: Mapping[str, Any],
     request_id_header: Optional[str],
@@ -592,7 +750,7 @@ def _walk_json_strings(
         for key, child in value.items():
             key_text = str(key)
             child_path = (*path, key_text)
-            if key_text in {"model", "role", "type"}:
+            if key_text in _UNREDACTED_KEYS:
                 result[key_text] = child
             else:
                 result[key_text] = _walk_json_strings(child, redact, child_path)
@@ -927,6 +1085,20 @@ def _error_response(exc: PrivacyProxyError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=_error_payload(exc))
 
 
+def _auth_error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    details: Optional[Any] = None,
+) -> JSONResponse:
+    """Build the shared service envelope for authentication refusals."""
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": {"code": code, "message": message, "details": details}},
+    )
+
+
 app = create_app()
 
 
@@ -938,9 +1110,12 @@ __all__ = [
     "PrivacyProxy",
     "PrivacyProxyConfigurationError",
     "PrivacyProxyError",
+    "PrivacyProxyLimitError",
+    "PrivacyProxyLimits",
     "PrivacyProxyRedactionError",
     "PrivacyProxyRequestError",
     "PrivacyProxyResponseError",
+    "PrivacyProxyTimeoutError",
     "PrivacyProxyTransportError",
     "RedactedChatRequest",
     "app",

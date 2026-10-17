@@ -57,15 +57,28 @@ def parse_cors_origins(raw_value: Optional[str]) -> Tuple[str, ...]:
     return origins
 
 
-def parse_trusted_hosts(raw_value: Optional[str]) -> Tuple[str, ...]:
-    """Parse trusted hosts or return the loopback-only default allowlist."""
+def parse_trusted_hosts(
+    raw_value: Optional[str],
+    *,
+    env_var: str = SERVICE_TRUSTED_HOSTS_ENV_VAR,
+) -> Tuple[str, ...]:
+    """Parse trusted hosts or return the loopback-only default allowlist.
+
+    Args:
+        raw_value: Comma-separated host names, or ``None`` for the default.
+        env_var: Setting name used in the configuration error message.
+
+    Returns:
+        The de-duplicated allowlist, or the loopback default when empty.
+
+    Raises:
+        ValueError: If the allowlist contains the global ``*`` host.
+    """
     hosts = _parse_csv_allowlist(raw_value)
     if not hosts:
         return DEFAULT_TRUSTED_HOSTS
     if "*" in hosts:
-        raise ValueError(
-            f"{SERVICE_TRUSTED_HOSTS_ENV_VAR} must not contain the global '*' host"
-        )
+        raise ValueError(f"{env_var} must not contain the global '*' host")
     return hosts
 
 
