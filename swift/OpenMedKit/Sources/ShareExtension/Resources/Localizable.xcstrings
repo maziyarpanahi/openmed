@@ -1,0 +1,174 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "policy.australia_privacy_act": {
+      "comment": "Display name for the australia_privacy_act policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Australia Privacy Act"
+          }
+        }
+      }
+    },
+    "policy.canada_pipeda": {
+      "comment": "Display name for the canada_pipeda policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canada PIPEDA"
+          }
+        }
+      }
+    },
+    "policy.clinical_minimal_redaction": {
+      "comment": "Display name for the clinical_minimal_redaction policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clinical Minimal Redaction"
+          }
+        }
+      }
+    },
+    "policy.gdpr_art9_health": {
+      "comment": "Display name for the gdpr_art9_health policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR Article 9 Health"
+          }
+        }
+      }
+    },
+    "policy.gdpr_pseudonymization": {
+      "comment": "Display name for the gdpr_pseudonymization policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR Pseudonymization"
+          }
+        }
+      }
+    },
+    "policy.hipaa_expert_review_assist": {
+      "comment": "Display name for the hipaa_expert_review_assist policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA Expert Review Assist"
+          }
+        }
+      }
+    },
+    "policy.hipaa_safe_harbor": {
+      "comment": "Display name for the hipaa_safe_harbor policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA Safe Harbor"
+          }
+        }
+      }
+    },
+    "policy.research_limited_dataset": {
+      "comment": "Display name for the research_limited_dataset policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Research Limited Dataset"
+          }
+        }
+      }
+    },
+    "policy.strict_no_leak": {
+      "comment": "Display name for the strict_no_leak policy.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strict No Leak"
+          }
+        }
+      }
+    },
+    "share.cancel": {
+      "comment": "Button that cancels the share request.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "share.loading": {
+      "comment": "Status while reading shared plain text.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading selected text…"
+          }
+        }
+      }
+    },
+    "share.ready": {
+      "comment": "Ready status and on-device processing notice.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a bundled policy profile. Processing stays on this device."
+          }
+        }
+      }
+    },
+    "share.redact": {
+      "comment": "Button that redacts and returns text to the host app.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redact and Return"
+          }
+        }
+      }
+    },
+    "share.redacting": {
+      "comment": "Status while local redaction runs.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redacting with the local Nano model…"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
