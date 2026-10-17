@@ -1,0 +1,60 @@
+name: Tauri client
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - "js/openmedkit-tauri/**"
+      - "tests/desktop/**"
+      - ".github/workflows/tauri-client.yml"
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - "js/openmedkit-tauri/**"
+      - "tests/desktop/**"
+      - ".github/workflows/tauri-client.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  tauri-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Get the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install Linux helpers Tauri needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install Rust 1.99.0
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup default 1.99.0
+
+      - name: Install Node 22.14.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22.14.0"
+
+      - name: Run the TypeScript tests
+        working-directory: js/openmedkit-tauri
+        run: |
+          npm ci
+          npm test
+
+      - name: Download the Rust parts
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: cargo fetch --locked
+
+      - name: Check and test the Rust code
+        working-directory: js/openmedkit-tauri/src-tauri
+        run: |
+          cargo check --locked --offline
+          cargo test --locked --offline
