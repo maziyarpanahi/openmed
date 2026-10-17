@@ -354,7 +354,15 @@ nav:
       - Federated Update Metadata: training/federated-update-metadata.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
-      - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic Data:
+          - Overview: training/synthetic/index.md
+          - Locale PHI Notes: training/synthetic/locale-phi.md
+          - Burned-in PHI Images: training/synthetic/burned-in.md
+          - Social-history Sections: training/synthetic/social-history.md
+          - Section-label Datasets: training/synthetic/section-labels.md
+          - Span Offset Projection: training/synthetic/offset-projection.md
+          - Translation Augmentation: training/synthetic/translation-augmentation.md
+          - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
