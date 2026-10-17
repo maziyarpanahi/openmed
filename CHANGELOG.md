@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Handle decoding failures through both batch readers' per-file error paths,
+  continue later files in permissive mode, and retain strict propagation
+  without including decoder details in error reports (#4201).
+
 - Read JSONL/NDJSON by physical file lines, preserving Unicode separators
   inside strings, blank-line handling, error-line numbering, and object-pair
   hooks (#4205).
