@@ -1,6 +1,342 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "accessibility.cancel.hint": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close the extension without returning text."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭扩展，不返回文本。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पाठ वापस भेजे बिना एक्सटेंशन बंद करें।"
+          }
+        }
+      }
+    },
+    "accessibility.policy.hint": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the policy used to redact the shared text."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择用于文本脱敏的策略。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "साझा पाठ से पहचान हटाने की नीति चुनें।"
+          }
+        }
+      }
+    },
+    "accessibility.policy.label": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Policy profile"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "策略配置"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नीति प्रोफ़ाइल"
+          }
+        }
+      }
+    },
+    "accessibility.redact.hint": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redact on this device and return the result to the host app."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此设备上进行脱敏，并将结果返回来源应用。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इसी डिवाइस पर पहचान हटाएँ और परिणाम स्रोत ऐप को वापस भेजें।"
+          }
+        }
+      }
+    },
+    "accessibility.status.label": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processing status"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理状态"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "प्रक्रिया की स्थिति"
+          }
+        }
+      }
+    },
+    "accessibility.text.hint": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review the text shared by the host app."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看来源应用分享的文本。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्रोत ऐप से साझा किए गए पाठ की समीक्षा करें।"
+          }
+        }
+      }
+    },
+    "accessibility.text.label": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected text"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文本"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चुना गया पाठ"
+          }
+        }
+      }
+    },
+    "error.input_too_large": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shared text exceeds the extension limits. Share fewer or shorter text items."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享的文本超出扩展限制。请减少文本数量或长度。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "साझा पाठ एक्सटेंशन की सीमा से अधिक है। कम या छोटे पाठ साझा करें।"
+          }
+        }
+      }
+    },
+    "error.invalid_model": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The extension requires valid, bundled local Nano model assets. Contact the app provider."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展需要有效的内置本地 Nano 模型资源。请联系应用提供方。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक्सटेंशन के लिए वैध, अंतर्निहित स्थानीय Nano मॉडल संसाधन आवश्यक हैं। ऐप प्रदाता से संपर्क करें।"
+          }
+        }
+      }
+    },
+    "error.invalid_output": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local model returned an invalid result. No result was returned to the host app."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地模型返回了无效结果。未向来源应用返回任何结果。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थानीय मॉडल ने अमान्य परिणाम दिया। स्रोत ऐप को कोई परिणाम वापस नहीं भेजा गया।"
+          }
+        }
+      }
+    },
+    "error.missing_model": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A required local Nano model asset is missing. Ask the app provider to bundle all extension model assets."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少必需的本地 Nano 模型资源。请联系应用提供方，将所有扩展模型资源打包到应用中。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थानीय Nano मॉडल का एक आवश्यक संसाधन मौजूद नहीं है। ऐप प्रदाता से एक्सटेंशन के सभी मॉडल संसाधन शामिल करने को कहें।"
+          }
+        }
+      }
+    },
+    "error.model_too_large": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The bundled Nano model assets exceed the extension limits. Contact the app provider."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置 Nano 模型资源超出扩展限制。请联系应用提供方。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अंतर्निहित Nano मॉडल संसाधन एक्सटेंशन की सीमा से अधिक हैं। ऐप प्रदाता से संपर्क करें।"
+          }
+        }
+      }
+    },
+    "error.no_text": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No plain text was received. Share some text and try again."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未收到纯文本。请分享文本后重试。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई सादा पाठ प्राप्त नहीं हुआ। पाठ साझा करके फिर कोशिश करें।"
+          }
+        }
+      }
+    },
+    "error.redaction_failed": {
+      "comment": "Static share-extension presentation text. Never interpolate selected text, paths, or errors.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text could not be redacted on this device. Try again or cancel."
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法在此设备上对文本进行脱敏。请重试或取消。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस पर पाठ से पहचान नहीं हटाई जा सकी। फिर कोशिश करें या रद्द करें।"
+          }
+        }
+      }
+    },
     "policy.australia_privacy_act": {
       "comment": "Display name for the australia_privacy_act policy.",
       "extractionState": "manual",
@@ -9,6 +345,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Australia Privacy Act"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "澳大利亚隐私法"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऑस्ट्रेलिया गोपनीयता अधिनियम"
           }
         }
       }
@@ -22,6 +370,18 @@
             "state": "translated",
             "value": "Canada PIPEDA"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加拿大 PIPEDA"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कनाडा PIPEDA"
+          }
         }
       }
     },
@@ -33,6 +393,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clinical Minimal Redaction"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临床最小化脱敏"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नैदानिक न्यूनतम पहचान हटाना"
           }
         }
       }
@@ -46,6 +418,18 @@
             "state": "translated",
             "value": "GDPR Article 9 Health"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR 第 9 条健康数据"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR अनुच्छेद 9 स्वास्थ्य डेटा"
+          }
         }
       }
     },
@@ -57,6 +441,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "GDPR Pseudonymization"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR 假名化"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GDPR छद्मनामकरण"
           }
         }
       }
@@ -70,6 +466,18 @@
             "state": "translated",
             "value": "HIPAA Expert Review Assist"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA 专家审查辅助"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA विशेषज्ञ समीक्षा सहायता"
+          }
         }
       }
     },
@@ -81,6 +489,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "HIPAA Safe Harbor"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA 安全港"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HIPAA सेफ़ हार्बर"
           }
         }
       }
@@ -94,6 +514,18 @@
             "state": "translated",
             "value": "Research Limited Dataset"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "研究用有限数据集"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनुसंधान हेतु सीमित डेटा सेट"
+          }
         }
       }
     },
@@ -105,6 +537,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Strict No Leak"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "严格防泄漏"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सख्त रिसाव रोकथाम"
           }
         }
       }
@@ -118,6 +562,18 @@
             "state": "translated",
             "value": "Cancel"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रद्द करें"
+          }
         }
       }
     },
@@ -129,6 +585,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loading selected text…"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载所选文本…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चुना गया पाठ लोड हो रहा है…"
           }
         }
       }
@@ -142,6 +610,18 @@
             "state": "translated",
             "value": "Choose a bundled policy profile. Processing stays on this device."
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择内置策略配置。所有处理均在此设备上进行。"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अंतर्निहित नीति प्रोफ़ाइल चुनें। सारी प्रक्रिया इसी डिवाइस पर होती है।"
+          }
         }
       }
     },
@@ -154,6 +634,18 @@
             "state": "translated",
             "value": "Redact and Return"
           }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脱敏并返回"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पहचान हटाकर वापस भेजें"
+          }
         }
       }
     },
@@ -165,6 +657,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Redacting with the local Nano model…"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在使用本地 Nano 模型进行脱敏…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थानीय Nano मॉडल से पहचान हटाई जा रही है…"
           }
         }
       }

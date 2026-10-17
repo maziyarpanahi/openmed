@@ -52,9 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add an English string catalog for OpenMedKit share-extension buttons, status
-  messages, and explicit bundled policy display names as the first localization
-  step (#3955).
+- Localize OpenMedKit share-extension buttons, status/error messages, policy
+  display names, and accessibility labels/hints in English, Chinese, and Hindi.
+  Update fonts and picker rows on live Dynamic Type changes, preserve policy
+  selection, and keep controls reachable at accessibility sizes (#3955).
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).

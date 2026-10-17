@@ -11,6 +11,8 @@
         private let statusLabel = UILabel()
         private let redactButton = UIButton(type: .system)
         private let cancelButton = UIButton(type: .system)
+        private let buttonRow = UIStackView()
+        private var pickerHeight: NSLayoutConstraint?
         private let policies = Policy.bundledProfileNames
         private var inputTexts: [String] = []
         private var redactionTask: Task<Void, Never>?
@@ -18,6 +20,10 @@
         public final override func viewDidLoad() {
             super.viewDidLoad()
             configureView()
+            registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+                (controller: RedactionShareViewController, _: UITraitCollection) in
+                controller.updateTypography()
+            }
             Task {
                 await loadInputText()
             }
@@ -28,12 +34,18 @@
 
             textView.isEditable = false
             textView.font = .preferredFont(forTextStyle: .body)
+            textView.adjustsFontForContentSizeCategory = true
+            textView.accessibilityLabel = ShareExtensionStrings.text(.textLabel)
+            textView.accessibilityHint = ShareExtensionStrings.text(.textHint)
             textView.layer.borderColor = UIColor.separator.cgColor
             textView.layer.borderWidth = 1
             textView.layer.cornerRadius = 8
 
             policyPicker.dataSource = self
             policyPicker.delegate = self
+            policyPicker.accessibilityLabel = ShareExtensionStrings.text(.policyLabel)
+            policyPicker.accessibilityHint = ShareExtensionStrings.text(.policyHint)
+            policyPicker.accessibilityValue = ShareExtensionStrings.policyDisplayName(Policy.defaultName)
             policyPicker.selectRow(
                 policies.firstIndex(of: Policy.defaultName) ?? 0,
                 inComponent: 0,
@@ -41,41 +53,94 @@
             )
 
             statusLabel.font = .preferredFont(forTextStyle: .footnote)
+            statusLabel.adjustsFontForContentSizeCategory = true
+            statusLabel.accessibilityLabel = ShareExtensionStrings.text(.statusLabel)
             statusLabel.numberOfLines = 0
             statusLabel.textColor = .secondaryLabel
-            statusLabel.text = ShareExtensionStrings.text(.loading)
+            setStatus(ShareExtensionStrings.text(.loading))
 
             redactButton.setTitle(ShareExtensionStrings.text(.redact), for: .normal)
             redactButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+            redactButton.titleLabel?.adjustsFontForContentSizeCategory = true
+            redactButton.titleLabel?.numberOfLines = 0
+            redactButton.titleLabel?.lineBreakMode = .byWordWrapping
+            redactButton.titleLabel?.textAlignment = .center
+            redactButton.accessibilityLabel = ShareExtensionStrings.text(.redact)
+            redactButton.accessibilityHint = ShareExtensionStrings.text(.redactHint)
             redactButton.isEnabled = false
             redactButton.addTarget(self, action: #selector(redactSelection), for: .touchUpInside)
 
             cancelButton.setTitle(ShareExtensionStrings.text(.cancel), for: .normal)
+            cancelButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+            cancelButton.titleLabel?.adjustsFontForContentSizeCategory = true
+            cancelButton.titleLabel?.numberOfLines = 0
+            cancelButton.titleLabel?.lineBreakMode = .byWordWrapping
+            cancelButton.titleLabel?.textAlignment = .center
+            cancelButton.accessibilityLabel = ShareExtensionStrings.text(.cancel)
+            cancelButton.accessibilityHint = ShareExtensionStrings.text(.cancelHint)
             cancelButton.addTarget(self, action: #selector(cancelRequest), for: .touchUpInside)
 
-            let buttonRow = UIStackView(arrangedSubviews: [cancelButton, redactButton])
-            buttonRow.axis = .horizontal
-            buttonRow.distribution = .equalSpacing
+            buttonRow.addArrangedSubview(cancelButton)
+            buttonRow.addArrangedSubview(redactButton)
+            buttonRow.spacing = 12
+            buttonRow.distribution = .fillEqually
 
             let stack = UIStackView(arrangedSubviews: [textView, policyPicker, statusLabel, buttonRow])
             stack.axis = .vertical
             stack.spacing = 12
             stack.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(stack)
+            let scrollView = UIScrollView()
+            scrollView.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(scrollView)
+            scrollView.addSubview(stack)
+
+            pickerHeight = policyPicker.heightAnchor.constraint(equalToConstant: 112)
+            pickerHeight?.isActive = true
 
             NSLayoutConstraint.activate([
-                stack.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+                scrollView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+                scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+                stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 16),
                 stack.trailingAnchor.constraint(
-                    equalTo: view.safeAreaLayoutGuide.trailingAnchor,
+                    equalTo: scrollView.contentLayoutGuide.trailingAnchor,
                     constant: -16
                 ),
-                stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+                stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
+                stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 16),
                 stack.bottomAnchor.constraint(
-                    equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                    equalTo: scrollView.contentLayoutGuide.bottomAnchor,
                     constant: -16
                 ),
-                policyPicker.heightAnchor.constraint(equalToConstant: 112),
+                textView.heightAnchor.constraint(equalToConstant: 160),
+                cancelButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+                redactButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             ])
+            updateTypography()
+        }
+
+        private func updateTypography() {
+            textView.font = .preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
+            statusLabel.font = .preferredFont(forTextStyle: .footnote, compatibleWith: traitCollection)
+            for button in [cancelButton, redactButton] {
+                button.titleLabel?.font = .preferredFont(forTextStyle: .headline, compatibleWith: traitCollection)
+            }
+            buttonRow.axis = traitCollection.preferredContentSizeCategory.isAccessibilityCategory ? .vertical : .horizontal
+            let selectedRow = policyPicker.selectedRow(inComponent: 0)
+            pickerHeight?.constant = max(112, policyRowHeight * 3)
+            policyPicker.reloadAllComponents()
+            policyPicker.selectRow(selectedRow, inComponent: 0, animated: false)
+        }
+
+        private var policyRowHeight: CGFloat {
+            let font = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
+            return max(44, ceil(font.lineHeight * 3 + 12))
+        }
+
+        private func setStatus(_ text: String) {
+            statusLabel.text = text
+            statusLabel.accessibilityValue = text
         }
 
         private func loadInputText() async {
@@ -85,7 +150,7 @@
                 )
                 inputTexts = texts
                 textView.text = texts.joined(separator: "\n\n")
-                statusLabel.text = ShareExtensionStrings.text(.ready)
+                setStatus(ShareExtensionStrings.text(.ready))
                 redactButton.isEnabled = true
             } catch {
                 show(error)
@@ -96,7 +161,7 @@
             let policyName = policies[policyPicker.selectedRow(inComponent: 0)]
             let texts = inputTexts
             redactButton.isEnabled = false
-            statusLabel.text = ShareExtensionStrings.text(.redacting)
+            setStatus(ShareExtensionStrings.text(.redacting))
 
             redactionTask = Task {
                 defer { redactionTask = nil }
@@ -136,7 +201,7 @@
         }
 
         private func show(_ error: Error) {
-            statusLabel.text = error.localizedDescription
+            setStatus(ShareExtensionStrings.errorMessage(error))
             statusLabel.textColor = .systemRed
         }
     }
@@ -156,6 +221,30 @@
             forComponent component: Int
         ) -> String? {
             ShareExtensionStrings.policyDisplayName(policies[row])
+        }
+
+        public func pickerView(
+            _ pickerView: UIPickerView,
+            viewForRow row: Int,
+            forComponent component: Int,
+            reusing view: UIView?
+        ) -> UIView {
+            let label = view as? UILabel ?? UILabel()
+            label.text = ShareExtensionStrings.policyDisplayName(policies[row])
+            label.font = .preferredFont(forTextStyle: .body, compatibleWith: traitCollection)
+            label.adjustsFontForContentSizeCategory = true
+            label.numberOfLines = 3
+            label.textAlignment = .center
+            label.accessibilityLabel = label.text
+            return label
+        }
+
+        public func pickerView(_ pickerView: UIPickerView, rowHeightForComponent component: Int) -> CGFloat {
+            policyRowHeight
+        }
+
+        public func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+            pickerView.accessibilityValue = ShareExtensionStrings.policyDisplayName(policies[row])
         }
     }
 #endif
