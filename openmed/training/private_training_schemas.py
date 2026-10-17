@@ -2,7 +2,8 @@
 
 The exported schemas are self-contained and use only fragment-local references.
 They describe the public federated training JSON projections (lifecycle,
-schedule, round status, update metadata, and aggregate metric envelopes) without
+schedule, round status, update metadata, aggregate metric envelopes, and
+contribution floor contracts and declarations) without
 importing a validator, reading model contents, or contacting a schema registry.
 Cross-field arithmetic remains enforced by the Python validators.
 """
@@ -14,6 +15,18 @@ from collections.abc import Callable
 from types import MappingProxyType
 from typing import Any, Final, Mapping
 
+from openmed.training.federated_contribution_floors import (
+    _BAND_FIELDS,
+    _DECLARATION_FIELDS,
+    _DP_MECHANISMS,
+    _FLOOR_FIELDS,
+    _POLICY_FIELDS,
+    DEFAULT_DP_CONTRIBUTION_FLOORS,
+    DEFAULT_NON_DP_CONTRIBUTION_FLOORS,
+    FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION,
+    FEDERATED_CONTRIBUTION_SCHEMA_VERSION,
+    FederatedContributionBand,
+)
 from openmed.training.federated_metrics import (
     FEDERATED_METRIC_SCHEMA_VERSION,
     FederatedMetricKind,
@@ -509,6 +522,107 @@ def build_federated_aggregate_metric_schema() -> dict[str, Any]:
     }
 
 
+def build_federated_contribution_floor_policy_schema() -> dict[str, Any]:
+    """Build the JSON Schema for federated contribution floor contracts.
+
+    Returns:
+        A new Draft 2020-12 schema mapping. Floors below the defaults for the
+        declared privacy mechanism require ``allow_floors_below_default``,
+        and that field requires at least one lowered floor.
+    """
+
+    dp = sorted(item.value for item in _DP_MECHANISMS)
+    non_dp = sorted(
+        item.value for item in FederatedPrivacyMechanism if item not in _DP_MECHANISMS
+    )
+    conditions = []
+    for mechanisms, defaults in (
+        (non_dp, DEFAULT_NON_DP_CONTRIBUTION_FLOORS),
+        (dp, DEFAULT_DP_CONTRIBUTION_FLOORS),
+    ):
+        for override in (False, True):
+            condition = {
+                "properties": {
+                    "privacy_mechanism": {"enum": mechanisms},
+                    "allow_floors_below_default": {"const": override},
+                }
+            }
+            if override:
+                consequence = {
+                    "anyOf": [
+                        {"properties": {field: {"maximum": defaults[field] - 1}}}
+                        for field in _FLOOR_FIELDS
+                        if defaults[field] > 1
+                    ]
+                }
+            else:
+                consequence = {
+                    "properties": {
+                        field: {"minimum": defaults[field]} for field in _FLOOR_FIELDS
+                    }
+                }
+            conditions.append({"if": condition, "then": consequence})
+    return {
+        "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": (
+            "urn:openmed:training:federated_contribution_floor_policy:"
+            f"{FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION}"
+        ),
+        "type": "object",
+        "additionalProperties": False,
+        "required": sorted(_POLICY_FIELDS),
+        "allOf": conditions,
+        "properties": {
+            "schema_version": {
+                "type": "string",
+                "const": FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION,
+            },
+            "privacy_mechanism": {
+                "type": "string",
+                "enum": [item.value for item in FederatedPrivacyMechanism],
+            },
+            **{
+                field: {
+                    "type": "integer",
+                    "enum": [band.lower_bound for band in FederatedContributionBand],
+                }
+                for field in _FLOOR_FIELDS
+            },
+            "allow_floors_below_default": {"type": "boolean"},
+        },
+    }
+
+
+def build_federated_contribution_declaration_schema() -> dict[str, Any]:
+    """Build the JSON Schema for band-only federated contribution declarations."""
+
+    return {
+        "$schema": PRIVATE_TRAINING_SCHEMA_DIALECT,
+        "$id": (
+            "urn:openmed:training:federated_contribution_declaration:"
+            f"{FEDERATED_CONTRIBUTION_SCHEMA_VERSION}"
+        ),
+        "type": "object",
+        "additionalProperties": False,
+        "required": sorted(_DECLARATION_FIELDS),
+        "properties": {
+            "schema_version": {
+                "type": "string",
+                "const": FEDERATED_CONTRIBUTION_SCHEMA_VERSION,
+            },
+            "contract_digest": {"type": "string", "pattern": _DIGEST_PATTERN},
+            "update_digest": {"type": "string", "pattern": _DIGEST_PATTERN},
+            **{
+                field: {
+                    "type": "string",
+                    "enum": [band.value for band in FederatedContributionBand],
+                }
+                for field in _BAND_FIELDS
+            },
+        },
+    }
+
+
 PRIVATE_TRAINING_SCHEMA_BUILDERS: Final[Mapping[str, Callable[[], dict[str, Any]]]] = (
     MappingProxyType(
         {
@@ -517,6 +631,12 @@ PRIVATE_TRAINING_SCHEMA_BUILDERS: Final[Mapping[str, Callable[[], dict[str, Any]
             "federated_round_status": build_federated_round_status_schema,
             "federated_update_metadata": build_federated_update_metadata_schema,
             "federated_aggregate_metric": build_federated_aggregate_metric_schema,
+            "federated_contribution_floor_policy": (
+                build_federated_contribution_floor_policy_schema
+            ),
+            "federated_contribution_declaration": (
+                build_federated_contribution_declaration_schema
+            ),
         }
     )
 )
@@ -584,6 +704,8 @@ __all__ = [
     "PRIVATE_TRAINING_SCHEMA_DIALECT",
     "PrivateTrainingSchemaError",
     "build_federated_aggregate_metric_schema",
+    "build_federated_contribution_declaration_schema",
+    "build_federated_contribution_floor_policy_schema",
     "build_federated_round_lifecycle_schema",
     "build_federated_round_schedule_schema",
     "build_federated_round_status_schema",

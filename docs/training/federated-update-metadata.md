@@ -110,6 +110,8 @@ Round manifest verification, actual tensor allowlisting, and numerical clipping
 remain separate work in issues [#2822](https://github.com/maziyarpanahi/openmed/issues/2822),
 [#2824](https://github.com/maziyarpanahi/openmed/issues/2824), and
 [#2825](https://github.com/maziyarpanahi/openmed/issues/2825). This module has no
-imports from those pending implementations. See also
+imports from those pending implementations. Minimum local example, step and
+effective batch size floors for an update are enforced separately by
+[federated contribution floors](federated-contribution-floors.md). See also
 [federated round lifecycle](federated-round-lifecycle.md) and
 [federated round status](federated-round-status.md).
