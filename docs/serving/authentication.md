@@ -72,10 +72,66 @@ When authentication is enabled, the current built-in route scopes are:
 | `POST /v1/decisions` | `decisions:write` |
 | `POST /brief` / `POST /ground` | `brief:write` / `ground:write` |
 | `/graphql` | Selected field scopes; see [GraphQL](graphql.md) |
+| `GET /service/metadata` | Any authenticated principal |
 
-`GET /health`, `GET /livez`, `GET /readyz`, `GET /metrics`, `/docs`,
-`/redoc`, and `/openapi.json` are exempt so health checks, local API docs, and
-metrics scraping can remain separate from model-work authorization.
+`GET /health`, `GET /livez`, `GET /readyz`, and `GET /metrics` are exempt so
+health checks and metrics scraping can remain separate from model-work
+authorization. In the `dev` profile, `/docs`, `/redoc`, and `/openapi.json`
+are exempt too.
+
+## API Docs and Service Metadata
+
+The live API docs are a development aid. Only `OPENMED_PROFILE=dev` serves
+Swagger UI at `/docs`, ReDoc at `/redoc`, and the live `/openapi.json`, without
+authentication. Every other profile, including an unset profile (which means
+`prod`), does not register these routes. With authentication off they return
+`404`. With deny-by-default authentication, an anonymous caller gets the same
+`401` as any other unregistered path, and an authenticated caller gets `404`.
+The committed [`docs/api/openapi.json`](../api/openapi.json) remains the
+published contract.
+
+To serve the live schema outside `dev`, opt in:
+
+```bash
+OPENMED_PROFILE=prod \
+OPENMED_SERVICE_AUTH_ENABLED=true \
+OPENMED_SERVICE_AUTH_API_KEYS='[...]' \
+OPENMED_SERVICE_OPENAPI_ENABLED=true \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+In this mode only `GET /openapi.json` is served, and it requires any
+authenticated principal; a request without credentials returns `401`. Swagger
+UI and ReDoc stay off because their pages load scripts from a public CDN. If
+authentication is disabled, the opted-in schema is as open as every other
+route. Set `OPENMED_SERVICE_OPENAPI_ENABLED=false` to turn the docs off in
+`dev` too. Values other than a boolean fail startup.
+
+Outside `dev`, the unauthenticated `GET /health` response is only:
+
+```json
+{"status": "ok", "service": "openmed-rest"}
+```
+
+Read the package version and active profile from `GET /service/metadata`,
+which requires authentication whenever authentication is enabled:
+
+```bash
+curl -H "X-API-Key: $OPENMED_API_KEY" http://127.0.0.1:8080/service/metadata
+```
+
+```json
+{"service": "openmed-rest", "version": "<installed version>", "profile": "prod"}
+```
+
+The `dev` profile keeps `version` and `profile` in `/health`. The metadata
+route is an operator route like `/metrics`, so it is not part of the published
+OpenAPI contract.
+
+The reference launcher, `python -m openmed.service.logging`, starts uvicorn
+with its `server` response header turned off. The Dockerfiles, Helm chart, and
+Compose files use this launcher. If you run uvicorn directly, pass
+`--no-server-header`.
 
 Route scope requirements can be overridden with
 `OPENMED_SERVICE_AUTH_ROUTE_SCOPES`:

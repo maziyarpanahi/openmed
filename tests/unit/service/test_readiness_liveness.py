@@ -127,10 +127,7 @@ def test_health_alias_still_ok():
         response = client.get("/health")
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["service"] == "openmed-rest"
-    assert payload["profile"] == "test"
+    assert response.json() == {"status": "ok", "service": "openmed-rest"}
 
 
 def test_shutdown_flips_ready_and_drains(monkeypatch):

@@ -356,7 +356,13 @@ def main() -> None:
             "uvicorn.access": {"handlers": [], "level": "CRITICAL", "propagate": False},
         },
     }
-    uvicorn.run(**options, access_log=False, log_config=log_config)
+    # ``server_header=False`` keeps uvicorn from announcing itself.
+    uvicorn.run(
+        **options,
+        access_log=False,
+        log_config=log_config,
+        server_header=False,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - exercised by process-level tests

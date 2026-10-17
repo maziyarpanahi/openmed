@@ -34,6 +34,8 @@ SERVICE_AUTH_ROUTE_SCOPES_ENV_VAR = "OPENMED_SERVICE_AUTH_ROUTE_SCOPES"
 SERVICE_AUTH_FAILURE_RPS_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_RPS"
 SERVICE_AUTH_FAILURE_BURST_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_BURST"
 SERVICE_AUTH_FAILURE_KEY_ENV_VAR = "OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY"
+SERVICE_OPENAPI_ENABLED_ENV_VAR = "OPENMED_SERVICE_OPENAPI_ENABLED"
+DEVELOPMENT_PROFILE = "dev"
 
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_RPS = 5.0
 DEFAULT_AUTH_FAILURE_RATE_LIMIT_BURST = 10
@@ -43,11 +45,12 @@ DEFAULT_AUTH_EXEMPT_PATHS = frozenset(
         "/livez",
         "/readyz",
         "/metrics",
-        "/openapi.json",
-        "/docs",
-        "/redoc",
     }
 )
+# Live API docs are public only in the development profile; see
+# ``parse_api_docs_config``.
+DEVELOPMENT_DOCS_EXEMPT_PATHS = frozenset({"/openapi.json", "/docs", "/redoc"})
+SERVICE_METADATA_PATH = "/service/metadata"
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,8 @@ ROUTE_POLICIES = {
     ("POST", "/v1/workflows/cancel"): RoutePolicy(("workflow:cancel",), "control"),
     ("POST", "/jobs"): RoutePolicy(("jobs:write",), "model"),
     ("GET", "/jobs/{job_id}"): RoutePolicy(("jobs:read",), "control"),
+    # Any authenticated principal may read version and profile metadata.
+    ("GET", SERVICE_METADATA_PATH): RoutePolicy((), "control"),
     # GraphQL authorizes the selected operation's fields before execution.
     ("GET", "/graphql"): RoutePolicy((), "model"),
     ("POST", "/graphql"): RoutePolicy((), "model"),
@@ -91,6 +96,7 @@ ROUTE_POLICIES = {
 }
 for _path in (
     *DEFAULT_AUTH_EXEMPT_PATHS,
+    *DEVELOPMENT_DOCS_EXEMPT_PATHS,
     "/docs/oauth2-redirect",
     "/openhim/heartbeat",
 ):
@@ -305,6 +311,66 @@ def parse_service_auth_config() -> ServiceAuthConfig:
         ),
         failure_rate_limit_key_by=failure_key_by,
     )
+
+
+@dataclass(frozen=True)
+class APIDocsConfig:
+    """Live API documentation routes for the REST service.
+
+    A ``None`` URL means FastAPI does not register that route, so it returns
+    ``404``. ``public`` marks the development-only mode in which the docs
+    routes are exempt from authentication.
+    """
+
+    openapi_url: Optional[str] = None
+    docs_url: Optional[str] = None
+    redoc_url: Optional[str] = None
+    public: bool = False
+
+
+def is_development_profile(profile: Optional[str]) -> bool:
+    """Return whether ``profile`` is the explicit development profile.
+
+    Args:
+        profile: Active ``OPENMED_PROFILE`` value; unset means ``prod``.
+
+    Returns:
+        True only for the ``dev`` profile.
+    """
+    return profile == DEVELOPMENT_PROFILE
+
+
+def parse_api_docs_config() -> APIDocsConfig:
+    """Read live API documentation exposure from the process environment.
+
+    The development profile keeps Swagger UI, ReDoc, and ``/openapi.json``
+    public. Every other profile, including an unset profile, disables them.
+    Outside development, ``OPENMED_SERVICE_OPENAPI_ENABLED=true`` serves only
+    ``/openapi.json`` behind authentication; the HTML docs UIs load assets from
+    a public CDN and stay disabled.
+
+    Returns:
+        The docs routes to register and whether they skip authentication.
+
+    Raises:
+        ValueError: If ``OPENMED_SERVICE_OPENAPI_ENABLED`` is not a boolean.
+    """
+    development = is_development_profile(os.getenv("OPENMED_PROFILE", "prod"))
+    enabled = parse_bool(
+        os.getenv(SERVICE_OPENAPI_ENABLED_ENV_VAR),
+        env_var=SERVICE_OPENAPI_ENABLED_ENV_VAR,
+        default=development,
+    )
+    if not enabled:
+        return APIDocsConfig()
+    if development:
+        return APIDocsConfig(
+            openapi_url="/openapi.json",
+            docs_url="/docs",
+            redoc_url="/redoc",
+            public=True,
+        )
+    return APIDocsConfig(openapi_url="/openapi.json")
 
 
 def parse_bool(raw_value: Optional[str], *, env_var: str, default: bool) -> bool:
