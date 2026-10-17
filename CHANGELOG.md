@@ -138,6 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output files without loading NER models or downloading artifacts.
 ### Security
 
+- Reject revoked REST mTLS client certificates from operator-supplied local CRL
+  files. CRL signatures are verified against the configured CA bundle at
+  startup, revocation and `nextUpdate` freshness (with a configurable grace
+  period) are checked per request before principal mapping, and invalid or
+  stale CRLs fail closed outside the `dev` and `test` profiles. Errors and logs
+  use only `client_certificate_revoked`, `crl_stale` and `crl_invalid`, never
+  subjects, SANs, serial numbers or file paths (#3922).
+
 - Refresh explicitly configured SMART credentials through atomic injected custody,
   validate token type/lifetime/granted permission unions, rotate refresh secrets,
   and revoke uncertain or invalid refreshes with value-free findings. Bulk export
