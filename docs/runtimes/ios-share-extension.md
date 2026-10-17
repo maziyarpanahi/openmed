@@ -68,6 +68,19 @@ The controller reads `NSExtensionItem` plain-text attachments, displays the
 selected text and every bundled policy profile, runs the Nano model after the
 user confirms, and completes the request with a new plain-text attachment.
 
+The share extension's button titles, loading/processing messages, and policy
+display names come from its `Localizable.xcstrings` resource catalog. English is
+the base language. Policy identifiers remain unchanged; the picker uses explicit
+display names, including the HIPAA, GDPR, and PIPEDA acronyms. Error messages
+still use the support layer's descriptions.
+
+Run the catalog resource and policy display-name checks with:
+
+```bash
+cd swift/OpenMedKit
+swift test --filter ShareExtensionLocalizationTests
+```
+
 ## Add the Action extension
 
 1. In Xcode, add an iOS Action Extension target.

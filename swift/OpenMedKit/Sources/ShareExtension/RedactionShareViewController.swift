@@ -43,14 +43,14 @@
             statusLabel.font = .preferredFont(forTextStyle: .footnote)
             statusLabel.numberOfLines = 0
             statusLabel.textColor = .secondaryLabel
-            statusLabel.text = "Loading selected text…"
+            statusLabel.text = ShareExtensionStrings.text(.loading)
 
-            redactButton.setTitle("Redact and Return", for: .normal)
+            redactButton.setTitle(ShareExtensionStrings.text(.redact), for: .normal)
             redactButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
             redactButton.isEnabled = false
             redactButton.addTarget(self, action: #selector(redactSelection), for: .touchUpInside)
 
-            cancelButton.setTitle("Cancel", for: .normal)
+            cancelButton.setTitle(ShareExtensionStrings.text(.cancel), for: .normal)
             cancelButton.addTarget(self, action: #selector(cancelRequest), for: .touchUpInside)
 
             let buttonRow = UIStackView(arrangedSubviews: [cancelButton, redactButton])
@@ -85,7 +85,7 @@
                 )
                 inputTexts = texts
                 textView.text = texts.joined(separator: "\n\n")
-                statusLabel.text = "Choose a bundled policy profile. Processing stays on this device."
+                statusLabel.text = ShareExtensionStrings.text(.ready)
                 redactButton.isEnabled = true
             } catch {
                 show(error)
@@ -96,7 +96,7 @@
             let policyName = policies[policyPicker.selectedRow(inComponent: 0)]
             let texts = inputTexts
             redactButton.isEnabled = false
-            statusLabel.text = "Redacting with the local Nano model…"
+            statusLabel.text = ShareExtensionStrings.text(.redacting)
 
             redactionTask = Task {
                 defer { redactionTask = nil }
@@ -155,9 +155,7 @@
             titleForRow row: Int,
             forComponent component: Int
         ) -> String? {
-            policies[row]
-                .replacingOccurrences(of: "_", with: " ")
-                .capitalized
+            ShareExtensionStrings.policyDisplayName(policies[row])
         }
     }
 #endif
