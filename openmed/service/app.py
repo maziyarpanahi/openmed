@@ -114,6 +114,7 @@ from .privacy_gateway import (
     PrivacyTransportError,
 )
 from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
+from .request_signing import install_request_signing
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -1939,6 +1940,12 @@ def create_app(
             OpenTelemetryMiddleware,
             tracing=app.state.tracing,
         )
+    # Signature checks sit inside both body-limit layers and before routing.
+    install_request_signing(
+        app,
+        error_response=_error_response,
+        max_body_bytes=app.state.operational_limits.max_request_bytes,
+    )
     body_limit = (
         int(max_request_body_bytes)
         if max_request_body_bytes is not None

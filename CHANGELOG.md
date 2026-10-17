@@ -138,6 +138,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   output files without loading NER models or downloading artifacts.
 ### Security
 
+- Add opt-in inbound HMAC signature enforcement for configured REST route
+  templates. Checks run after body limits and before routing, load the secret
+  from a file, fail closed at startup on bad settings and return value-free
+  `401` codes (`signature_missing`, `signature_invalid`, `signature_stale`,
+  `signature_replayed`); replay protection is per process (#3924).
+
 - Refresh explicitly configured SMART credentials through atomic injected custody,
   validate token type/lifetime/granted permission unions, rotate refresh secrets,
   and revoke uncertain or invalid refreshes with value-free findings. Bulk export
