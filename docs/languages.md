@@ -250,6 +250,32 @@ dates, and ages in Igbo and English-Igbo clinical text, including decomposed or
 unmarked context cues. Replacement spans expand to whole base-plus-diacritic
 clusters so dot-below vowels cannot be split or left behind.
 
+Kinyarwanda (`rw`) is available through the same deterministic path with an
+`rw_RW` surrogate locale. It recognizes Rwanda national IDs next to an
+`indangamuntu` or national-ID cue, `+250` phones, and numeric dates.
+
+### Month-name dates in Hausa, Yoruba, Igbo, and Kinyarwanda
+
+Because these four routes ship no bundled model, deterministic patterns also
+recognize Gregorian month-name dates in day-month-year (`15 Satumba 1980`) and
+month-day-year (`Satumba 15, 1980`) order, with an optional comma before the
+year. The vocabulary follows the CLDR month names plus common spellings:
+
+| Code | Month names (January to December) | Also accepted |
+|------|-----------------------------------|---------------|
+| `ha` | Janairu, Faburairu, Maris, Afirilu, Mayu, Yuni, Yuli, Agusta, Satumba, Oktoba, Nuwamba, Disamba | Fabrairu, Afrilu; `15 ga watan Satumba 1980` |
+| `yo` | Ṣẹ́rẹ́, Èrèlè, Ẹrẹ̀nà, Ìgbé, Ẹ̀bibi, Òkúdu, Agẹmọ, Ògún, Owewe, Ọ̀wàrà, Bélú, Ọ̀pẹ̀ | dot-below forms without tone marks; `15 oṣù Ṣẹ́rẹ́ ọdún 1980` |
+| `ig` | Jenụwarị, Febrụwarị, Maachị, Epreel, Mee, Jun, Julaị, Ọgọọst, Septemba, Ọktoba, Novemba, Disemba | Febụwarị, Machị, Mach, Eprel, Juun, Ọgọstụ, Nọvemba |
+| `rw` | Mutarama, Gashyantare, Werurwe, Mata, Gicurasi, Kamena, Nyakanga, Kanama, Nzeri, Ukwakira, Ugushyingo, Ukuboza | Nzeli |
+
+Yoruba and Igbo names match in precomposed (NFC), decomposed (NFD), and fully
+unmarked spellings, and spans never split a base letter from its tone or
+dot-below marks. A month word alone, such as a clinic schedule naming
+`Mutarama` or the Kinyarwanda word `mata` (milk), is not flagged: a day and a
+four-digit year from 1900 to 2099 must be attached. Hausa Ajami month names,
+Igbo ordinal month names (`ọnwa mbụ`), and native or lunar calendars are not
+covered.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The
