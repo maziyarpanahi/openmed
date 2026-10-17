@@ -11,6 +11,12 @@ beyond its proven epsilon range. Sensitivity is the caller's
 responsibility: it must match the adjacency relation and any clipping or
 bounded contribution assumptions for the aggregate.
 
+The ``*_discrete_*`` helpers and :func:`release_snapped` draw noise with the
+exact integer samplers in :mod:`openmed.risk.discrete_sampling`, so their
+output distributions do not depend on floating-point rounding. The original
+float helpers remain available for compatibility; every spend record names the
+sampler that produced it.
+
 This module does not accept or persist raw rows, identifiers, or query values
 in its accounting records. A noisy aggregate is not a clinical decision,
 compliance certification, or guarantee of zero disclosure risk.
@@ -22,7 +28,19 @@ import math
 import random
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from fractions import Fraction
+from numbers import Integral
 from typing import Any, Literal, Protocol, TypeVar
+
+from .discrete_sampling import (
+    DP_SAMPLERS,
+    DPRandomSource,
+    DPSampler,
+    _discrete_gaussian,
+    _discrete_laplace,
+    _dp_source,
+    _positive_rational,
+)
 
 __all__ = [
     "AggregateKind",
@@ -36,6 +54,7 @@ __all__ = [
     "PrivacySpend",
     "UtilityPoint",
     "UtilityReport",
+    "discrete_gaussian_sigma_squared",
     "gaussian_mechanism",
     "gaussian_noise",
     "gaussian_privacy_delta",
@@ -46,9 +65,13 @@ __all__ = [
     "laplace_scale",
     "release_aggregate",
     "release_count",
+    "release_discrete_count",
+    "release_discrete_histogram",
     "release_histogram",
     "release_mean",
+    "release_snapped",
     "release_sum",
+    "snapped_epsilon",
     "utility_report",
     "utility_vs_epsilon",
 ]
@@ -57,6 +80,17 @@ DPMechanism = Literal["laplace", "gaussian"]
 AggregateKind = Literal["count", "sum", "mean", "histogram", "aggregate"]
 
 _HistogramKey = TypeVar("_HistogramKey")
+
+# Snapped outputs are integer multiples of a power-of-two grid. Keeping the
+# multiple within 2**52 makes every output exactly representable as a float.
+_MAX_GRID_STEPS = 2**52
+# Relative safety margin and dyadic rounding for discrete Gaussian calibration.
+_ZCDP_MARGIN = 2.0**-30
+_SIGMA_SQUARED_GRID = 2**32
+_GAUSSIAN_SAMPLERS = frozenset({"float_gaussian", "discrete_gaussian"})
+_LAPLACE_SAMPLERS = frozenset(
+    {"float_laplace", "discrete_laplace", "grid_discrete_laplace"}
+)
 
 
 class _RandomSource(Protocol):
@@ -124,6 +158,39 @@ def _aggregate_kind(value: Any) -> AggregateKind:
             "aggregate kind must be count, sum, mean, histogram, or aggregate"
         )
     return normalized  # type: ignore[return-value]
+
+
+def _positive_sensitivity(value: Any) -> float:
+    result = _sensitivity(value)
+    if result <= 0.0:
+        raise ValueError("sensitivity must be greater than zero")
+    return result
+
+
+def _integer(value: Any, *, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise TypeError(f"{field_name} must be an integer")
+    return int(value)
+
+
+def _sampler(value: Any, mechanism: DPMechanism) -> DPSampler:
+    if not isinstance(value, str):
+        raise TypeError("sampler must be a string")
+    if value not in DP_SAMPLERS:
+        raise ValueError("sampler is not a supported noise sampler")
+    if (value in _GAUSSIAN_SAMPLERS and mechanism != "gaussian") or (
+        value in _LAPLACE_SAMPLERS and mechanism != "laplace"
+    ):
+        raise ValueError("sampler does not match the mechanism")
+    return value  # type: ignore[return-value]
+
+
+def _calibration_method(mechanism: DPMechanism, sampler: DPSampler) -> str:
+    if sampler == "discrete_gaussian":
+        return "zcdp_discrete_gaussian"
+    if sampler == "grid_discrete_laplace":
+        return "grid_snapped_laplace"
+    return "analytic_gaussian" if mechanism == "gaussian" else "laplace"
 
 
 def _random_source(rng: _RandomSource | None) -> _RandomSource:
@@ -229,6 +296,59 @@ def gaussian_scale(sensitivity: float, epsilon: float, delta: float) -> float:
 gaussian_stddev = gaussian_scale
 
 
+def discrete_gaussian_sigma_squared(
+    sensitivity: float,
+    epsilon: float,
+    delta: float,
+) -> Fraction:
+    """Return an exact discrete Gaussian variance parameter for ``(epsilon, delta)``.
+
+    The discrete Gaussian with variance parameter ``sigma_squared`` added to
+    an integer query with L2 sensitivity ``sensitivity`` satisfies
+    ``rho = sensitivity**2 / (2 * sigma_squared)``-zCDP (Canonne, Kamath and
+    Steinke 2020, Theorems 4 and 14). ``rho``-zCDP implies
+    ``(rho + 2 * sqrt(rho * log(1 / delta)), delta)``-DP (Bun and Steinke
+    2016, Proposition 1.3). This helper solves that conversion for ``rho``,
+    applies a small relative safety margin, rounds ``sigma_squared`` up to a
+    multiple of ``2**-32``, and re-checks the conversion. The conversion is
+    conservative, so the variance is larger than the analytic continuous
+    Gaussian calibration in :func:`gaussian_scale` for the same budget.
+
+    Args:
+        sensitivity: Positive L2 sensitivity of the integer-valued query.
+        epsilon: Positive finite epsilon.
+        delta: Delta in ``(0, 1)``.
+
+    Returns:
+        The variance parameter as an exact ``Fraction``.
+
+    Raises:
+        TypeError: If a parameter is not a real number.
+        ValueError: If a parameter is out of range or the calibration is not
+            representable.
+    """
+
+    sensitivity_value = _positive_sensitivity(sensitivity)
+    epsilon_value = _epsilon(epsilon)
+    delta_value = _delta(delta)
+    if delta_value <= 0.0:
+        raise ValueError("Gaussian mechanism requires delta greater than zero")
+    log_term = -math.log(delta_value)
+    # Stable form of (sqrt(log_term + epsilon) - sqrt(log_term)) ** 2.
+    root_sum = math.sqrt(log_term + epsilon_value) + math.sqrt(log_term)
+    rho = (epsilon_value / root_sum) ** 2 * (1.0 - _ZCDP_MARGIN)
+    if not math.isfinite(rho) or rho <= 0.0:
+        raise ValueError("Gaussian calibration is not representable")
+    exact = Fraction(sensitivity_value) ** 2 / (2 * Fraction(rho))
+    sigma_squared = Fraction(
+        math.ceil(exact * _SIGMA_SQUARED_GRID), _SIGMA_SQUARED_GRID
+    )
+    achieved = float(Fraction(sensitivity_value) ** 2 / (2 * sigma_squared))
+    if achieved + 2.0 * math.sqrt(achieved * log_term) > epsilon_value:
+        raise ValueError("Gaussian calibration failed its privacy check")
+    return sigma_squared
+
+
 def laplace_noise(
     sensitivity: float,
     epsilon: float,
@@ -279,7 +399,11 @@ def gaussian_noise(
 class PrivacySpend:
     """Numeric metadata for one aggregate release.
 
-    No aggregate value, row, identifier, or caller-provided label is stored.
+    No aggregate value, row, identifier, noise draw, or caller-provided label
+    is stored. ``sampler`` names the noise sampler: ``float_laplace`` and
+    ``float_gaussian`` for the floating-point helpers, ``discrete_laplace``,
+    ``discrete_gaussian`` and ``grid_discrete_laplace`` for the exact
+    samplers, and ``unspecified`` for spends recorded directly.
     """
 
     sequence: int
@@ -289,6 +413,7 @@ class PrivacySpend:
     delta: float
     sensitivity: float
     noise_scale: float
+    sampler: DPSampler = "unspecified"
 
     def __post_init__(self) -> None:
         if isinstance(self.sequence, bool) or not isinstance(self.sequence, int):
@@ -304,6 +429,7 @@ class PrivacySpend:
         if scale < 0.0:
             raise ValueError("noise_scale must be non-negative")
         object.__setattr__(self, "noise_scale", scale)
+        object.__setattr__(self, "sampler", _sampler(self.sampler, self.mechanism))
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible, PHI-free spend record."""
@@ -316,9 +442,8 @@ class PrivacySpend:
             "delta": self.delta,
             "sensitivity": self.sensitivity,
             "noise_scale": self.noise_scale,
-            "calibration_method": (
-                "analytic_gaussian" if self.mechanism == "gaussian" else "laplace"
-            ),
+            "calibration_method": _calibration_method(self.mechanism, self.sampler),
+            "sampler": self.sampler,
         }
 
 
@@ -584,6 +709,7 @@ class PrivacyBudget:
         mechanism: DPMechanism = "laplace",
         sensitivity: float = 1.0,
         noise_scale: float = 0.0,
+        sampler: DPSampler = "unspecified",
     ) -> PrivacySpend:
         """Record one spend, or raise before mutating the ledger."""
 
@@ -598,6 +724,7 @@ class PrivacyBudget:
             delta=decision.requested_delta,
             sensitivity=sensitivity,
             noise_scale=noise_scale,
+            sampler=sampler,
         )
         self._spends.append(spend)
         return spend
@@ -689,6 +816,7 @@ def _commit_query(
     mechanism: DPMechanism,
     sensitivity: float,
     noise_scale: float,
+    sampler: DPSampler,
 ) -> None:
     if budget is not None:
         budget.spend(
@@ -698,6 +826,7 @@ def _commit_query(
             mechanism=mechanism,
             sensitivity=sensitivity,
             noise_scale=noise_scale,
+            sampler=sampler,
         )
 
 
@@ -737,6 +866,7 @@ def laplace_mechanism(
         mechanism="laplace",
         sensitivity=sensitivity_value,
         noise_scale=scale,
+        sampler="float_laplace",
     )
     return released
 
@@ -775,6 +905,7 @@ def _gaussian_release(
         mechanism="gaussian",
         sensitivity=sensitivity_value,
         noise_scale=scale,
+        sampler="float_gaussian",
     )
     return released
 
@@ -985,6 +1116,7 @@ def release_histogram(
         mechanism=selected,
         sensitivity=sensitivity_value,
         noise_scale=scale,
+        sampler="float_laplace" if selected == "laplace" else "float_gaussian",
     )
     if output_kind == "mapping":
         return {key: noisy for (key, _), noisy in zip(items, released_values)}
@@ -1045,6 +1177,335 @@ def release_aggregate(
         budget=budget,
         rng=rng,
     )
+
+
+def _integer_values(
+    histogram: Any,
+) -> tuple[list[Any], list[int], bool]:
+    if isinstance(histogram, Mapping):
+        items = list(histogram.items())
+        values = [_integer(value, field_name="histogram bin") for _, value in items]
+        return [key for key, _ in items], values, True
+    if isinstance(histogram, Sequence) and not isinstance(
+        histogram, (str, bytes, bytearray)
+    ):
+        values = [_integer(value, field_name="histogram bin") for value in histogram]
+        return [], values, False
+    raise TypeError("histogram must be a mapping or an integer sequence")
+
+
+def _discrete_release(
+    values: list[int],
+    *,
+    aggregate: AggregateKind,
+    epsilon: float,
+    sensitivity: float,
+    delta: float,
+    mechanism: DPMechanism,
+    budget: PrivacyBudget | None,
+    rng: DPRandomSource | None,
+) -> list[int]:
+    selected = _mechanism(mechanism)
+    sensitivity_value = _positive_sensitivity(sensitivity)
+    source = _dp_source(rng)
+    epsilon_value, delta_value = _prepare_query(
+        budget=budget,
+        epsilon=epsilon,
+        delta=delta,
+    )
+    if selected == "laplace":
+        scale = Fraction(sensitivity_value) / Fraction(epsilon_value)
+        released = [value + _discrete_laplace(scale, source) for value in values]
+        noise_scale = float(scale)
+        sampler: DPSampler = "discrete_laplace"
+    else:
+        sigma_squared = discrete_gaussian_sigma_squared(
+            sensitivity_value,
+            epsilon_value,
+            delta_value,
+        )
+        released = [
+            value + _discrete_gaussian(sigma_squared, source) for value in values
+        ]
+        noise_scale = math.sqrt(sigma_squared)
+        sampler = "discrete_gaussian"
+    _commit_query(
+        budget,
+        epsilon=epsilon_value,
+        delta=delta_value,
+        aggregate=aggregate,
+        mechanism=selected,
+        sensitivity=sensitivity_value,
+        noise_scale=noise_scale,
+        sampler=sampler,
+    )
+    return released
+
+
+def release_discrete_count(
+    count: int,
+    *,
+    epsilon: float,
+    sensitivity: float = 1.0,
+    delta: float = 0.0,
+    mechanism: DPMechanism = "laplace",
+    budget: PrivacyBudget | None = None,
+    rng: DPRandomSource | None = None,
+) -> int:
+    """Release an integer count with exact discrete noise.
+
+    ``mechanism="laplace"`` adds discrete Laplace noise with scale
+    ``sensitivity / epsilon``, which is pure ``epsilon``-DP for integer
+    queries whose L1 sensitivity is at most ``sensitivity``.
+    ``mechanism="gaussian"`` adds discrete Gaussian noise calibrated by
+    :func:`discrete_gaussian_sigma_squared` and requires ``delta > 0``.
+    The budget is checked before any noise is drawn and charged once after
+    sampling succeeds. The spend record names the sampler but never the
+    count, the noise draw, or the released value.
+
+    Args:
+        count: Integer count to release.
+        epsilon: Positive finite epsilon charged for this query.
+        sensitivity: Positive sensitivity bound; one for add/remove counts.
+        delta: Delta charged for this query.
+        mechanism: ``"laplace"`` or ``"gaussian"``.
+        budget: Optional budget charged for this query.
+        rng: Optional :class:`DPRandomSource`; system randomness when omitted.
+
+    Returns:
+        The noisy count as an ``int``. It may be negative; clamping is left
+        to the caller as post-processing.
+
+    Raises:
+        TypeError: If ``count`` is not an integer or ``rng`` is not a
+            :class:`DPRandomSource`.
+        ValueError: If a privacy parameter is invalid.
+        PrivacyBudgetExceeded: If the query would exceed ``budget``.
+        DiscreteSamplerError: If a sampler reaches its rejection bound.
+    """
+
+    values = [_integer(count, field_name="count")]
+    return _discrete_release(
+        values,
+        aggregate="count",
+        epsilon=epsilon,
+        sensitivity=sensitivity,
+        delta=delta,
+        mechanism=mechanism,
+        budget=budget,
+        rng=rng,
+    )[0]
+
+
+def release_discrete_histogram(
+    histogram: Mapping[_HistogramKey, int] | Sequence[int],
+    *,
+    epsilon: float,
+    sensitivity: float = 1.0,
+    delta: float = 0.0,
+    mechanism: DPMechanism = "laplace",
+    budget: PrivacyBudget | None = None,
+    rng: DPRandomSource | None = None,
+) -> dict[_HistogramKey, int] | list[int]:
+    """Release integer histogram bins as one exact discrete vector query.
+
+    Each bin receives independent discrete noise. ``sensitivity`` is the L1
+    sensitivity for ``"laplace"`` and the L2 sensitivity for ``"gaussian"``;
+    the default of one matches add/remove histograms. The full histogram
+    consumes one budget charge.
+
+    Args:
+        histogram: Mapping or sequence of integer bin counts.
+        epsilon: Positive finite epsilon charged for this query.
+        sensitivity: Positive vector sensitivity bound.
+        delta: Delta charged for this query.
+        mechanism: ``"laplace"`` or ``"gaussian"``.
+        budget: Optional budget charged for this query.
+        rng: Optional :class:`DPRandomSource`; system randomness when omitted.
+
+    Returns:
+        Noisy integer bins with the same keys or order as the input.
+
+    Raises:
+        TypeError: If a bin is not an integer or ``rng`` is not a
+            :class:`DPRandomSource`.
+        ValueError: If a privacy parameter is invalid.
+        PrivacyBudgetExceeded: If the query would exceed ``budget``.
+        DiscreteSamplerError: If a sampler reaches its rejection bound.
+    """
+
+    keys, values, is_mapping = _integer_values(histogram)
+    released = _discrete_release(
+        values,
+        aggregate="histogram",
+        epsilon=epsilon,
+        sensitivity=sensitivity,
+        delta=delta,
+        mechanism=mechanism,
+        budget=budget,
+        rng=rng,
+    )
+    if is_mapping:
+        return dict(zip(keys, released))
+    return released
+
+
+def _snapping_grid(value: Any) -> Fraction:
+    grid = _positive_rational(value, field_name="grid")
+    numerator, denominator = grid.numerator, grid.denominator
+    if not (
+        (numerator == 1 and denominator & (denominator - 1) == 0)
+        or (denominator == 1 and numerator & (numerator - 1) == 0)
+    ):
+        raise ValueError("grid must be a power of two")
+    if grid < Fraction(2) ** -1022 or grid > Fraction(2) ** 1023:
+        raise ValueError("grid must be a normal floating-point power of two")
+    return grid
+
+
+def _snapping_bound(value: Any, grid: Fraction) -> Fraction:
+    bound = _positive_rational(value, field_name="bound")
+    steps = bound / grid
+    if steps.denominator != 1:
+        raise ValueError("bound must be an integer multiple of grid")
+    if steps > _MAX_GRID_STEPS:
+        raise ValueError("bound must be at most 2**52 grid steps")
+    return bound
+
+
+def _float_at_least(value: Fraction) -> float:
+    result = float(value)
+    if Fraction(result) < value:
+        result = math.nextafter(result, math.inf)
+    if not math.isfinite(result):
+        raise ValueError("adjusted epsilon is not representable")
+    return result
+
+
+def _snapped_epsilon_exact(
+    epsilon: float,
+    sensitivity: float,
+    grid: Fraction,
+) -> Fraction:
+    exact_sensitivity = Fraction(sensitivity)
+    steps = math.ceil(exact_sensitivity / grid)
+    return steps * grid * Fraction(epsilon) / exact_sensitivity
+
+
+def snapped_epsilon(epsilon: float, *, sensitivity: float, grid: float) -> float:
+    """Return the epsilon charged by :func:`release_snapped`.
+
+    Rounding the clamped query to the grid can move neighboring inputs by up
+    to ``ceil(sensitivity / grid)`` grid steps, while the noise scale stays
+    ``sensitivity / epsilon``. The exact privacy loss is therefore
+    ``ceil(sensitivity / grid) * grid * epsilon / sensitivity``, which equals
+    ``epsilon`` when ``sensitivity / grid`` is an integer and is at most
+    ``epsilon * (1 + grid / sensitivity)`` otherwise. The returned float is
+    the smallest float not below that exact value.
+
+    Args:
+        epsilon: Requested positive finite epsilon for the noise scale.
+        sensitivity: Positive L1 sensitivity of the real-valued query.
+        grid: Positive power-of-two output grid.
+
+    Returns:
+        The adjusted epsilon as a float rounded up.
+
+    Raises:
+        TypeError: If a parameter is not a real number.
+        ValueError: If a parameter is out of range.
+    """
+
+    epsilon_value = _epsilon(epsilon)
+    sensitivity_value = _positive_sensitivity(sensitivity)
+    grid_value = _snapping_grid(grid)
+    return _float_at_least(
+        _snapped_epsilon_exact(epsilon_value, sensitivity_value, grid_value)
+    )
+
+
+def release_snapped(
+    value: float,
+    *,
+    epsilon: float,
+    sensitivity: float,
+    bound: float,
+    grid: float,
+    delta: float = 0.0,
+    budget: PrivacyBudget | None = None,
+    rng: DPRandomSource | None = None,
+    aggregate: AggregateKind = "aggregate",
+) -> float:
+    """Release a real value on a declared power-of-two grid with exact noise.
+
+    The value is clamped to ``[-bound, bound]``, rounded half up to the
+    nearest multiple of ``grid`` with exact rational arithmetic, perturbed by
+    exact discrete Laplace noise in grid units with scale
+    ``sensitivity / (epsilon * grid)``, and clamped again to
+    ``[-bound, bound]``. Every output is an integer multiple of ``grid`` and
+    exactly representable as a float. The budget is charged the adjusted
+    epsilon from :func:`snapped_epsilon`; the query is pure DP at that value.
+
+    ``bound`` must be an integer multiple of ``grid`` and at most ``2**52``
+    grid steps, and ``grid`` must be a normal floating-point power of two.
+    Like Mironov's snapping mechanism (CCS 2012) the output lies on a
+    power-of-two grid inside a clamp, but no floating-point Laplace draw or
+    logarithm is involved, so no correctly rounded math library is assumed.
+
+    Args:
+        value: Finite real aggregate to release.
+        epsilon: Requested positive finite epsilon for the noise scale.
+        sensitivity: Positive L1 sensitivity of the real-valued query.
+        bound: Positive clamp bound, an integer multiple of ``grid``.
+        grid: Positive power-of-two output grid.
+        delta: Delta charged for this query.
+        budget: Optional budget charged the adjusted epsilon.
+        rng: Optional :class:`DPRandomSource`; system randomness when omitted.
+        aggregate: Aggregate kind recorded in the spend.
+
+    Returns:
+        The noisy value, an exact multiple of ``grid`` in ``[-bound, bound]``.
+
+    Raises:
+        TypeError: If a parameter has an unsupported type or ``rng`` is not a
+            :class:`DPRandomSource`.
+        ValueError: If a parameter is out of range.
+        PrivacyBudgetExceeded: If the adjusted epsilon would exceed ``budget``.
+        DiscreteSamplerError: If the sampler reaches its rejection bound.
+    """
+
+    aggregate_value = _scalar(value)
+    sensitivity_value = _positive_sensitivity(sensitivity)
+    aggregate_kind = _aggregate_kind(aggregate)
+    grid_value = _snapping_grid(grid)
+    bound_value = _snapping_bound(bound, grid_value)
+    source = _dp_source(rng)
+    requested_epsilon = _epsilon(epsilon)
+    charged_epsilon = _float_at_least(
+        _snapped_epsilon_exact(requested_epsilon, sensitivity_value, grid_value)
+    )
+    epsilon_value, delta_value = _prepare_query(
+        budget=budget,
+        epsilon=charged_epsilon,
+        delta=delta,
+    )
+    scale = Fraction(sensitivity_value) / (Fraction(requested_epsilon) * grid_value)
+    limit = int(bound_value / grid_value)
+    clamped = min(max(Fraction(aggregate_value), -bound_value), bound_value)
+    center = math.floor(clamped / grid_value + Fraction(1, 2))
+    steps = min(max(center + _discrete_laplace(scale, source), -limit), limit)
+    released = float(steps * grid_value)
+    _commit_query(
+        budget,
+        epsilon=epsilon_value,
+        delta=delta_value,
+        aggregate=aggregate_kind,
+        mechanism="laplace",
+        sensitivity=sensitivity_value,
+        noise_scale=laplace_scale(sensitivity_value, requested_epsilon),
+        sampler="grid_discrete_laplace",
+    )
+    return released
 
 
 @dataclass(frozen=True)

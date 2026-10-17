@@ -33,6 +33,7 @@ from .aggregate_dp import (
     DPBudgetSpend,
     laplace_aggregate,
     release_aggregate,
+    release_discrete_aggregate,
 )
 from .audit_diff import AuditDiff, diff_audit_reports
 from .audit_retention import (
@@ -149,6 +150,7 @@ from .differential_privacy import (
     PrivacySpend,
     UtilityPoint,
     UtilityReport,
+    discrete_gaussian_sigma_squared,
     gaussian_mechanism,
     gaussian_noise,
     gaussian_privacy_delta,
@@ -158,14 +160,26 @@ from .differential_privacy import (
     laplace_noise,
     laplace_scale,
     release_count,
+    release_discrete_count,
+    release_discrete_histogram,
     release_histogram,
     release_mean,
+    release_snapped,
     release_sum,
+    snapped_epsilon,
     utility_report,
     utility_vs_epsilon,
 )
 from .differential_privacy import (
     release_aggregate as release_dp_aggregate,
+)
+from .discrete_sampling import (
+    DP_SAMPLERS,
+    DiscreteSamplerError,
+    DPRandomSource,
+    DPSampler,
+    sample_discrete_gaussian,
+    sample_discrete_laplace,
 )
 from .evidence_check import (
     DEFAULT_REQUIRED_SECTIONS,
@@ -594,6 +608,10 @@ __all__ = [
     "DPBudgetLedger",
     "DPBudgetSpend",
     "DPAggregateBudgetExceeded",
+    "DP_SAMPLERS",
+    "DPRandomSource",
+    "DPSampler",
+    "DiscreteSamplerError",
     "AggregateKind",
     "CompositionRule",
     "DeletionFingerprint",
@@ -793,6 +811,7 @@ __all__ = [
     "PrivacySpend",
     "UtilityPoint",
     "UtilityReport",
+    "discrete_gaussian_sigma_squared",
     "gaussian_mechanism",
     "gaussian_noise",
     "gaussian_privacy_delta",
@@ -803,9 +822,16 @@ __all__ = [
     "laplace_scale",
     "release_dp_aggregate",
     "release_count",
+    "release_discrete_aggregate",
+    "release_discrete_count",
+    "release_discrete_histogram",
     "release_histogram",
     "release_mean",
+    "release_snapped",
     "release_sum",
+    "sample_discrete_gaussian",
+    "sample_discrete_laplace",
+    "snapped_epsilon",
     "fit_tabular_profile",
     "generate_dependency_risk_report",
     "longitudinal_attack_fingerprint",

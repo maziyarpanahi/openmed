@@ -506,6 +506,7 @@ classification:
     - reidentification-risk.md
     - security/minimum-necessary.md
     - privacy/structured-risk-lab.md
+    - privacy/dp-samplers.md
     - security/deletion-plans.md
     - security/surrogate-audit.md
     - security/redaction-idempotence.md

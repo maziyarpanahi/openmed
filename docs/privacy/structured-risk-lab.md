@@ -125,6 +125,13 @@ cancellation it returns a conservative tail bound. Unrepresentable scales fail c
 Seeded Gaussian outputs change deliberately because the old classical scale
 was not valid for general epsilon. Laplace calibration is unchanged.
 
+These Laplace and Gaussian helpers draw noise in floating point. For integer
+counts and histograms, prefer `release_discrete_count`,
+`release_discrete_histogram`, or `release_discrete_aggregate`; for real values
+on a declared grid, use `release_snapped`. See
+[Exact differential-privacy noise samplers](dp-samplers.md) for the exact
+samplers, the snapping epsilon adjustment, and test mode.
+
 ## Limitations
 
 The lab is intentionally bounded and local. k/l/t metrics depend on the

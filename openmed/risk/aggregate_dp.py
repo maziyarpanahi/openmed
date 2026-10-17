@@ -4,6 +4,11 @@ This module is deliberately separate from row-level de-identification. The
 ledger accounts only for named aggregate queries, and the Laplace mechanism
 rejects row-shaped inputs. A budget entry is never evidence that individual
 rows were anonymized.
+
+:func:`release_aggregate` keeps its floating-point Laplace sampler for
+compatibility. :func:`release_discrete_aggregate` releases integer counts with
+the exact discrete Laplace sampler from :mod:`openmed.risk.discrete_sampling`
+and should be preferred for counts.
 """
 
 from __future__ import annotations
@@ -13,9 +18,18 @@ import math
 import random
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from fractions import Fraction
+from numbers import Integral
 from typing import Any
 
 from openmed.core.audit import stable_hash
+
+from .discrete_sampling import (
+    DP_SAMPLERS,
+    DPRandomSource,
+    _discrete_laplace,
+    _dp_source,
+)
 
 __all__ = [
     "AggregateDPBudgetLedger",
@@ -27,6 +41,7 @@ __all__ = [
     "DPAggregateBudgetExceeded",
     "laplace_aggregate",
     "release_aggregate",
+    "release_discrete_aggregate",
 ]
 
 
@@ -39,7 +54,13 @@ DPBudgetExhausted = DPAggregateBudgetExceeded
 
 @dataclass(frozen=True)
 class DPBudgetSpend:
-    """One aggregate-query privacy spend."""
+    """One aggregate-query privacy spend.
+
+    ``sampler`` names the noise sampler when a release helper recorded the
+    spend. Spends recorded directly through
+    :meth:`AggregateDPBudgetLedger.spend` keep ``None`` and serialize without
+    a ``sampler`` key, so their ledger digests are unchanged.
+    """
 
     sequence: int
     label: str
@@ -47,6 +68,7 @@ class DPBudgetSpend:
     epsilon: float
     delta: float
     scope: str = "aggregate"
+    sampler: str | None = None
 
     def __post_init__(self) -> None:
         if type(self.sequence) is not int or self.sequence < 1:
@@ -57,11 +79,15 @@ class DPBudgetSpend:
         _delta(self.delta)
         if self.scope != "aggregate":
             raise ValueError("the differential-privacy ledger is aggregate-only")
+        if self.sampler is not None and (
+            not isinstance(self.sampler, str) or self.sampler not in DP_SAMPLERS
+        ):
+            raise ValueError("sampler is not a supported noise sampler")
 
     def to_dict(self) -> dict[str, Any]:
         """Return JSON-safe accounting metadata."""
 
-        return {
+        record: dict[str, Any] = {
             "sequence": self.sequence,
             "label": self.label,
             "mechanism": self.mechanism,
@@ -69,6 +95,9 @@ class DPBudgetSpend:
             "delta": self.delta,
             "scope": self.scope,
         }
+        if self.sampler is not None:
+            record["sampler"] = self.sampler
+        return record
 
 
 @dataclass(frozen=True)
@@ -155,6 +184,7 @@ class AggregateDPBudgetLedger:
         label: str = "aggregate_query",
         mechanism: str = "laplace",
         scope: str = "aggregate",
+        sampler: str | None = None,
     ) -> DPBudgetSpend:
         """Commit one aggregate spend or raise without mutating the ledger."""
 
@@ -167,6 +197,7 @@ class AggregateDPBudgetLedger:
             epsilon=epsilon,
             delta=delta,
             scope=scope,
+            sampler=sampler,
         )
         projected_epsilon = math.fsum(
             [self.spent_epsilon, spend.epsilon],
@@ -221,7 +252,7 @@ DPBudgetLedger = AggregateDPBudgetLedger
 class AggregateDPRelease:
     """One aggregate-only Laplace release and its accounting evidence."""
 
-    value: float | dict[str, float]
+    value: float | int | dict[str, float] | dict[str, int]
     spend: DPBudgetSpend
     composition: DPBudgetComposition
     mechanism: str = "laplace"
@@ -283,6 +314,7 @@ def release_aggregate(
         delta,
         label=label,
         mechanism="laplace",
+        sampler="float_laplace",
     )
     if isinstance(normalized, dict):
         noise = {name: _laplace_noise(rng, scale) for name in normalized}
@@ -319,6 +351,98 @@ def laplace_aggregate(
         label=label,
         seed=seed,
     )
+
+
+def release_discrete_aggregate(
+    value: int | Mapping[str, int],
+    *,
+    ledger: AggregateDPBudgetLedger,
+    epsilon: float,
+    sensitivity: float = 1.0,
+    delta: float = 0.0,
+    label: str = "aggregate_query",
+    rng: DPRandomSource | None = None,
+) -> AggregateDPRelease:
+    """Release an integer count or named integer counts with exact noise.
+
+    Each count receives independent discrete Laplace noise with scale
+    ``sensitivity / epsilon``, drawn with integer arithmetic only. The query
+    is pure ``epsilon``-DP when ``sensitivity`` bounds the L1 change of the
+    integer counts. The spend records ``sampler="discrete_laplace"`` and is
+    committed before noise is drawn, as in :func:`release_aggregate`. Pass
+    ``DPRandomSource.for_testing(seed)`` for reproducible synthetic tests;
+    such results are marked ``test_only``.
+
+    Args:
+        value: Integer count or non-empty mapping of names to integer counts.
+        ledger: Aggregate budget ledger charged for this query.
+        epsilon: Positive finite epsilon.
+        sensitivity: Positive L1 sensitivity bound.
+        delta: Must be zero for the discrete Laplace mechanism.
+        label: Short accounting label.
+        rng: Optional :class:`DPRandomSource`; system randomness when omitted.
+
+    Returns:
+        The release with integer values and accounting evidence.
+
+    Raises:
+        TypeError: If an input has an unsupported type or shape.
+        ValueError: If a parameter is out of range.
+        DPAggregateBudgetExceeded: If the query would exceed the budget.
+    """
+
+    if not isinstance(ledger, AggregateDPBudgetLedger):
+        raise TypeError("ledger must be an AggregateDPBudgetLedger")
+    scale = Fraction(_positive_finite(sensitivity, field_name="sensitivity")) / (
+        Fraction(_positive_finite(epsilon, field_name="epsilon"))
+    )
+    if delta != 0.0:
+        raise ValueError("the Laplace mechanism uses delta=0")
+    normalized = _integer_aggregate_value(value)
+    _validate_label(label)
+    source = _dp_source(rng)
+    spend = ledger.spend(
+        epsilon,
+        delta,
+        label=label,
+        mechanism="laplace",
+        sampler="discrete_laplace",
+    )
+    released: int | dict[str, int]
+    if isinstance(normalized, dict):
+        released = {
+            name: count + _discrete_laplace(scale, source)
+            for name, count in normalized.items()
+        }
+    else:
+        released = normalized + _discrete_laplace(scale, source)
+    return AggregateDPRelease(
+        value=released,
+        spend=spend,
+        composition=ledger.compose(),
+        test_only=source.test_mode,
+    )
+
+
+def _integer_aggregate_value(value: Any) -> int | dict[str, int]:
+    if isinstance(value, Mapping):
+        if not value:
+            raise ValueError("aggregate mapping must not be empty")
+        result: dict[str, int] = {}
+        for name, item in sorted(value.items(), key=lambda pair: str(pair[0])):
+            if not isinstance(name, str) or not name:
+                raise ValueError("aggregate names must be non-empty strings")
+            result[name] = _integer_count(item)
+        return result
+    if isinstance(value, (list, tuple, set, frozenset)):
+        raise TypeError("row-level release is not supported by aggregate DP")
+    return _integer_count(value)
+
+
+def _integer_count(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise TypeError("aggregate counts must be integers")
+    return int(value)
 
 
 def _aggregate_value(value: Any) -> float | dict[str, float]:

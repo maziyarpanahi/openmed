@@ -27,7 +27,10 @@ The envelope records one of three privacy mechanisms:
 
 `privacy_mechanism_version` is a required stable version such as `v1`. The
 envelope records what was applied; computing noise and choosing privacy budgets
-remain outside this module.
+remain outside this module. When an upstream step adds noise to a count, use
+`openmed.risk.release_discrete_count` so the released count is an integer drawn
+with an exact sampler; see
+[Exact differential-privacy noise samplers](../privacy/dp-samplers.md).
 
 ## Minimum-group rule
 
