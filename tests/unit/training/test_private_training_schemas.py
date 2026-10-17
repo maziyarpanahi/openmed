@@ -28,6 +28,8 @@ from openmed.training.federated_round import (
 )
 from openmed.training.federated_schedule import (
     FEDERATED_SCHEDULE_SCHEMA_VERSION,
+    FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+    MAX_FEDERATED_CLOCK_SKEW_SECONDS,
     FederatedRoundSchedule,
 )
 from openmed.training.federated_status import (
@@ -51,6 +53,7 @@ from openmed.training.private_training_schemas import (
     build_private_training_schemas,
     build_schema,
     render_private_training_schemas,
+    render_schema,
 )
 
 MODEL = "sha256:" + "a" * 64
@@ -70,6 +73,18 @@ def _schedule_payload() -> dict[str, Any]:
         aggregation_starts_at=_BASE + 2 * _DAY,
         evaluation_starts_at=_BASE + 3 * _DAY,
         finishes_at=_BASE + 4 * _DAY,
+    ).to_dict()
+
+
+def _schedule_v2_payload() -> dict[str, Any]:
+    return FederatedRoundSchedule(
+        enrollment_starts_at=_BASE,
+        update_submission_starts_at=_BASE + _DAY,
+        aggregation_starts_at=_BASE + 2 * _DAY,
+        evaluation_starts_at=_BASE + 3 * _DAY,
+        finishes_at=_BASE + 4 * _DAY,
+        schema_version=FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+        max_clock_skew_seconds=120,
     ).to_dict()
 
 
@@ -123,6 +138,7 @@ def _metric_payload() -> dict[str, Any]:
 _VALID_PAYLOADS: dict[str, Callable[[], dict[str, Any]]] = {
     "federated_round_lifecycle": _lifecycle_payload,
     "federated_round_schedule": _schedule_payload,
+    "federated_round_schedule_v2": _schedule_v2_payload,
     "federated_round_status": _status_payload,
     "federated_update_metadata": _update_payload,
     "federated_aggregate_metric": _metric_payload,
@@ -170,6 +186,38 @@ def test_catalog_schemas_are_valid_draft_2020_12_and_accept_payloads(
         (
             "federated_round_schedule",
             lambda p: p["maximum_duration_seconds"].update({"enrollment": 0}),
+        ),
+        (
+            "federated_round_schedule",
+            lambda p: p.update({"max_clock_skew_seconds": 60}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.pop("max_clock_skew_seconds"),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"max_clock_skew_seconds": -1}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"max_clock_skew_seconds": 901}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"max_clock_skew_seconds": True}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"max_clock_skew_seconds": 1.5}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"schema_version": FEDERATED_SCHEDULE_SCHEMA_VERSION}),
+        ),
+        (
+            "federated_round_schedule_v2",
+            lambda p: p.update({"site_clock_offset_seconds": 3}),
         ),
         ("federated_round_status", lambda p: p.update({"site_ids": ["site-a"]})),
         (
@@ -221,6 +269,7 @@ def test_catalog_exposes_every_schema_name_exactly_once() -> None:
     assert set(catalog) == {
         "federated_round_lifecycle",
         "federated_round_schedule",
+        "federated_round_schedule_v2",
         "federated_round_status",
         "federated_update_metadata",
         "federated_aggregate_metric",
@@ -246,6 +295,20 @@ def test_schemas_are_bounded_and_closed() -> None:
         ][0]["maximum"]
         == 365 * 24 * 60 * 60
     )
+    schedule_v2 = build_schema("federated_round_schedule_v2")
+    skew = schedule_v2["properties"]["max_clock_skew_seconds"]
+    assert skew == {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": MAX_FEDERATED_CLOCK_SKEW_SECONDS,
+    }
+    assert (
+        schedule_v2["properties"]["boundaries"] == schedule["properties"]["boundaries"]
+    )
+    assert (
+        schedule_v2["properties"]["maximum_duration_seconds"]
+        == schedule["properties"]["maximum_duration_seconds"]
+    )
     update = build_schema("federated_update_metadata")
     assert update["properties"]["total_elements"]["minimum"] == 1
     metric = build_schema("federated_aggregate_metric")
@@ -267,6 +330,10 @@ def test_schema_fields_enums_and_versions_track_python_sources() -> None:
     ]
     assert schedule["properties"]["schema_version"]["const"] == (
         FEDERATED_SCHEDULE_SCHEMA_VERSION
+    )
+    schedule_v2 = build_schema("federated_round_schedule_v2")
+    assert schedule_v2["properties"]["schema_version"]["const"] == (
+        FEDERATED_SCHEDULE_V2_SCHEMA_VERSION
     )
     assert status["properties"]["schema_version"]["const"] == (
         FEDERATED_ROUND_STATUS_SCHEMA_VERSION
@@ -312,7 +379,16 @@ def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
     assert build_private_training_schemas()["federated_round_lifecycle"]["properties"]
     assert encoded == render_private_training_schemas()
     assert hashlib.sha256(encoded.encode("ascii")).hexdigest() == (
-        "39baf45336aa417a4d17576cf7f61eaa24cccd4051e604bef76a0984815c2be8"
+        "d0cc039ad325d6ff270a65f0d752da3eaa9093ef8600f1ef6e1ca0244243ccf1"
+    )
+
+
+def test_v1_schedule_schema_render_is_unchanged_by_the_v2_schema() -> None:
+    encoded = render_schema("federated_round_schedule")
+
+    assert "max_clock_skew_seconds" not in encoded
+    assert hashlib.sha256(encoded.encode("ascii")).hexdigest() == (
+        "a0524be7ca290cb802d62b7e474cb6f62ad41f0274d2cda12d8b8d13bee9370e"
     )
 
 
