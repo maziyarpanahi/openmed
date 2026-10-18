@@ -448,14 +448,18 @@ PII_PATTERNS = [
         context_boost=0.1,
         validator=validate_iban,
     ),
-    # SWIFT/BIC codes have fixed 8/11-character structure but no checksum, so
-    # require context during deterministic safety sweeps.
+    # SWIFT/BIC codes have fixed 8/11-character structure but no checksum, and
+    # the bare shape also matches all-caps clinical section headers such as
+    # "FINDINGS" or "DIAGNOSIS". Require nearby banking context everywhere, not
+    # only during deterministic safety sweeps, so headers are never emitted as
+    # pattern-only BIC entities.
     PIIPattern(
         r"\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
         "bic",
         priority=8,
         flags=0,
         base_score=0.25,
+        requires_context=True,
         context_words=[
             "bic",
             "swift",
