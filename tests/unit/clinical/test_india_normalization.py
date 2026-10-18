@@ -107,7 +107,9 @@ def test_transliterated_person_and_location_fragments_bridge_exact_offsets() -> 
     )
 
 
-def test_same_script_person_spans_are_not_widened() -> None:
+def test_same_script_person_spans_are_not_widened_by_the_india_bridge() -> None:
+    # The India script-boundary bridge must stay narrow. General adjacent
+    # fragment merging is disabled here so this test isolates that rule.
     text = "Patient Asha Sharma"
     entities = [
         {
@@ -132,6 +134,7 @@ def test_same_script_person_spans_are_not_widened() -> None:
             text,
             use_semantic_patterns=False,
             india_clinical=True,
+            merge_adjacent_spans=False,
         )
         == entities
     )

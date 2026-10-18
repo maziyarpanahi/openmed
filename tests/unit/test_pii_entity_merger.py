@@ -3,10 +3,12 @@
 import pytest
 
 from openmed.core.pii_entity_merger import (
+    ADJACENT_SPAN_FAMILIES,
     PIIPattern,
     calculate_dominant_label,
     find_context_words,
     find_semantic_units,
+    merge_adjacent_identifier_spans,
     merge_entities_with_semantic_units,
     validate_luhn,
     validate_npi,
@@ -689,3 +691,188 @@ class TestMultilingualPatterns:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def _span(text, surface, label, score=0.9, occurrence=0):
+    start = -1
+    for _ in range(occurrence + 1):
+        start = text.index(surface, start + 1)
+    return {
+        "entity_type": label,
+        "score": score,
+        "start": start,
+        "end": start + len(surface),
+        "word": surface,
+    }
+
+
+class TestAdjacentIdentifierSpanMerging:
+    """Adjacent same-family identifier fragments are masked as one span."""
+
+    def test_first_and_last_name_fragments_merge_into_one_span(self):
+        text = "Patient Imani Underhill was seen today."
+        entities = [
+            _span(text, "Imani", "first_name", 1.0),
+            _span(text, "Underhill", "last_name", 1.0),
+        ]
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        assert [(e["word"], e["start"], e["end"]) for e in merged] == [
+            ("Imani Underhill", 8, 23)
+        ]
+        assert merged[0]["adjacent_span_merge"] == {"family": "name", "fragments": 2}
+        assert merged[0]["source_labels"] == ["first_name", "last_name"]
+        assert merged[0]["merged_from"] == 2
+
+    def test_untagged_middle_initial_is_covered_by_the_merged_name(self):
+        text = "Seen by Dr. Maria J. Delgado-Ruiz on 03/14/2024."
+        entities = [
+            _span(text, "Dr", "occupation", 0.51),
+            _span(text, "Maria", "first_name", 0.64),
+            _span(text, "Delgado-Ruiz", "last_name", 0.99),
+        ]
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        assert [(e["entity_type"], e["word"]) for e in merged] == [
+            ("occupation", "Dr"),
+            ("last_name", "Maria J. Delgado-Ruiz"),
+        ]
+
+    def test_address_fragments_merge_within_their_policy_class_only(self):
+        text = "Lives at 42 Oak Street, Springfield, IL 62704. MRN: 93363534."
+        entities = [
+            _span(text, "42 Oak Street", "street_address", 0.96),
+            _span(text, "Springfield", "city", 1.0),
+            _span(text, "IL", "state", 1.0),
+            _span(text, "62704", "postcode", 0.76),
+            _span(text, "MRN: 93363534", "medical_record_number", 0.67),
+        ]
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        # The direct-identifier street address is not widened into the
+        # quasi-identifier city/state/ZIP, which a Limited Data Set keeps.
+        assert [(e["entity_type"], e["word"]) for e in merged] == [
+            ("street_address", "42 Oak Street"),
+            ("city", "Springfield, IL 62704"),
+            ("medical_record_number", "MRN: 93363534"),
+        ]
+        assert merged[1]["adjacent_span_merge"] == {
+            "family": "geographic_subdivision",
+            "fragments": 3,
+        }
+
+    def test_line_break_between_street_address_lines_is_bridged(self):
+        text = "Admitted from 1180 Harbor View Rd\nApt 4B, Portland, OR 97209."
+        entities = [
+            _span(text, "1180 Harbor View Rd", "street_address", 0.87),
+            _span(text, "Apt 4B", "street_address", 0.98),
+            _span(text, "Portland", "city", 1.0),
+            _span(text, "OR", "state", 1.0),
+            _span(text, "97209", "postcode", 0.76),
+        ]
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        assert [e["word"] for e in merged] == [
+            "1180 Harbor View Rd\nApt 4B",
+            "Portland, OR 97209",
+        ]
+
+    @pytest.mark.parametrize(
+        ("text", "labels", "expected_words"),
+        [
+            # A title is not part of the name family.
+            (
+                "Dr Smith reviewed the film.",
+                [("Dr", "occupation"), ("Smith", "last_name")],
+                ["Dr", "Smith"],
+            ),
+            # A name next to a city is not an address.
+            (
+                "Smith, Boston",
+                [("Smith", "last_name"), ("Boston", "city")],
+                ["Smith", "Boston"],
+            ),
+            # Two connectives or a long gap are not bridged.
+            (
+                "Smith -- Jones",
+                [("Smith", "last_name"), ("Jones", "last_name")],
+                ["Smith", "Jones"],
+            ),
+            (
+                "Smith      Jones",
+                [("Smith", "last_name"), ("Jones", "last_name")],
+                ["Smith", "Jones"],
+            ),
+            # Only a single capitalised initial bridges name fragments.
+            (
+                "Maria de Delgado",
+                [("Maria", "first_name"), ("Delgado", "last_name")],
+                ["Maria", "Delgado"],
+            ),
+        ],
+    )
+    def test_non_adjacent_or_mixed_family_spans_are_left_alone(
+        self, text, labels, expected_words
+    ):
+        entities = []
+        seen = {}
+        for surface, label in labels:
+            entities.append(
+                _span(text, surface, label, occurrence=seen.get(surface, 0))
+            )
+            seen[surface] = seen.get(surface, 0) + 1
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        assert [e["word"] for e in merged] == expected_words
+        assert all("adjacent_span_merge" not in e for e in merged)
+
+    def test_people_joined_by_a_word_become_separate_whole_names(self):
+        text = "Consulted John Smith and Mary Jones."
+        entities = [
+            _span(text, "John", "first_name"),
+            _span(text, "Smith", "last_name"),
+            _span(text, "Mary", "first_name"),
+            _span(text, "Jones", "last_name"),
+        ]
+
+        merged = merge_adjacent_identifier_spans(entities, text)
+
+        assert [e["word"] for e in merged] == ["John Smith", "Mary Jones"]
+        assert all(e["adjacent_span_merge"]["fragments"] == 2 for e in merged)
+
+    def test_merge_entities_applies_adjacent_merge_and_can_disable_it(self):
+        text = "Patient Imani Underhill, DOB 01/15/1970"
+        entities = [
+            _span(text, "Imani", "first_name", 1.0),
+            _span(text, "Underhill", "last_name", 1.0),
+            _span(text, "01/15/1970", "date_of_birth", 0.9),
+        ]
+
+        merged = merge_entities_with_semantic_units(
+            entities, text, prefer_model_labels=True
+        )
+        kept_apart = merge_entities_with_semantic_units(
+            entities, text, prefer_model_labels=True, merge_adjacent_spans=False
+        )
+
+        assert [e["word"] for e in merged] == ["Imani Underhill", "01/15/1970"]
+        assert [e["word"] for e in kept_apart] == [
+            "Imani",
+            "Underhill",
+            "01/15/1970",
+        ]
+
+    def test_adjacent_merge_never_changes_the_policy_action_of_a_fragment(self):
+        """Every family maps to one action per bundled profile, by construction."""
+        from openmed.core.policy import CANONICAL_POLICY_NAMES, load_policy
+
+        for policy_name in CANONICAL_POLICY_NAMES:
+            profile = load_policy(policy_name)
+            for family, labels in ADJACENT_SPAN_FAMILIES.items():
+                actions = {label: profile.action_for(label) for label in labels}
+                assert len(set(actions.values())) == 1, (policy_name, family, actions)
