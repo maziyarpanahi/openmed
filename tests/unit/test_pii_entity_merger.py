@@ -3,6 +3,7 @@
 import pytest
 
 from openmed.core.pii_entity_merger import (
+    PII_PATTERNS,
     PIIPattern,
     calculate_dominant_label,
     find_context_words,
@@ -689,3 +690,79 @@ class TestMultilingualPatterns:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestBicPatternRequiresContext:
+    """SWIFT/BIC regex must not fire on all-caps clinical section headers."""
+
+    @staticmethod
+    def _bic_pattern():
+        return next(p for p in PII_PATTERNS if p.entity_type == "bic")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "FINDINGS: The lungs are clear bilaterally.",
+            "DIAGNOSIS: Community-acquired pneumonia.",
+            "PROCEDURE: Colonoscopy with biopsy.",
+            "ALLERGIES: No known drug allergies.",
+            "MEDICATIONS: Lisinopril 10 mg daily.",
+            "COMPLAINT: Chest pain for two days.",
+            "DISCHARGE DIAGNOSES: Sepsis, resolved.",
+        ],
+    )
+    def test_section_headers_are_not_bic_units(self, text):
+        units = find_semantic_units(text, [self._bic_pattern()])
+        assert units == []
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "FINDINGS: The lungs are clear bilaterally.",
+            "DIAGNOSIS: Community-acquired pneumonia.",
+        ],
+    )
+    def test_section_headers_are_not_emitted_as_pattern_only_entities(self, text):
+        merged = merge_entities_with_semantic_units(
+            [],
+            text,
+            prefer_model_labels=True,
+            allow_semantic_only_matches=True,
+        )
+        assert merged == []
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("Wire transfer via SWIFT/BIC DEUTDEFF500.", "DEUTDEFF500"),
+            ("Bank identifier: COBADEFFXXX", "COBADEFFXXX"),
+            ("Remit to BIC AGRIFRPPXXX before Friday.", "AGRIFRPPXXX"),
+        ],
+    )
+    def test_bic_with_banking_context_is_still_detected(self, text, expected):
+        units = find_semantic_units(text, [self._bic_pattern()])
+        assert len(units) == 1
+        start, end, entity_type, score, _pattern, validated = units[0]
+        assert entity_type == "bic"
+        assert text[start:end] == expected
+        assert validated is True
+        assert score >= 0.85
+
+    def test_model_entity_overlapping_a_header_passes_through_unchanged(self):
+        text = "FINDINGS: Seen by Dr. Smith."
+        entities = [
+            {
+                "entity_type": "person",
+                "score": 0.9,
+                "start": 22,
+                "end": 27,
+                "word": "Smith",
+            }
+        ]
+        merged = merge_entities_with_semantic_units(
+            entities,
+            text,
+            prefer_model_labels=True,
+            allow_semantic_only_matches=True,
+        )
+        assert [(e["entity_type"], e["word"]) for e in merged] == [("person", "Smith")]
