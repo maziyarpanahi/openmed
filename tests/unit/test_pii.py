@@ -1717,12 +1717,17 @@ class TestAccentNormalization:
 
         result = extract_pii("María López", lang="es")
 
-        assert result.entities[0].text == "María"
+        # Smart merging unions the adjacent first_name/last_name fragments
+        # into one name span; the remapped offsets must still cover the
+        # accented source text exactly.
+        assert len(result.entities) == 1
+        assert result.entities[0].text == "María López"
         assert result.entities[0].start == 0
-        assert result.entities[0].end == 5
-        assert result.entities[1].text == "López"
-        assert result.entities[1].start == 6
-        assert result.entities[1].end == 11
+        assert result.entities[0].end == 11
+        assert result.entities[0].metadata["adjacent_span_merge"] == {
+            "family": "name",
+            "fragments": 2,
+        }
 
     @patch("openmed.analyze_text")
     def test_normalize_accents_false_skips(self, mock_analyze):

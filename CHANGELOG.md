@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Load GLiNER2 checkpoints with the `gliner2[local]` package's architecture-aware
   extractor and retain native span offsets and confidence scores instead of
   attempting to use older `gliner` classes (#4329).
+- Merge adjacent same-family identifier fragments (`first_name` +
+  `last_name`, `street_address` lines, `city` + `state` + `postcode`)
+  into one span during smart merging, so names and addresses are
+  masked whole and an untagged middle initial no longer sits between
+  two masked fragments. Merging stays within one policy class and can
+  be disabled with `merge_adjacent_spans=False` (#4152).
 
 ## [3.1.0] - 2026-10-20
 
