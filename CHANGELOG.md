@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add the `hipaa_safe_harbor_clinical` policy profile: masks the 18 HIPAA
+  Safe Harbor identifier classes (names, dates, ages, geography, contact
+  details, identifiers, organizations) and keeps clinical concepts,
+  demographics and roles outside them, so Safe Harbor output stays
+  readable. `hipaa_safe_harbor` is unchanged (#4152).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and

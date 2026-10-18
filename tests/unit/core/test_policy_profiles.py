@@ -1066,3 +1066,118 @@ def test_hipaa_safe_harbor_applies_safe_harbor_action_map(monkeypatch):
     assert load_policy("hipaa_safe_harbor").action_for("DATE") == "mask"
     assert result.deidentified_text == "Visit on [DATE]"
     assert result.pii_entities[0].metadata["policy_action"]["action"] == "mask"
+
+
+def test_hipaa_safe_harbor_clinical_profile_loads_and_lints_clean():
+    from openmed.core.policy_lint import lint_policy as lint_policy_report
+
+    profile = load_policy("hipaa_safe_harbor_clinical")
+
+    assert profile.name == "hipaa_safe_harbor_clinical"
+    assert profile.posture == "hipaa_safe_harbor_clinical_deidentification"
+    assert profile.default_action == "mask"
+    assert profile.safety_sweep_mandatory is True
+    assert profile.forced_cascade_tiers == ("R0", "R1", "R2")
+    assert profile.keep_mapping is False
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+    assert lint_policy("hipaa_safe_harbor_clinical") == ()
+
+    report = lint_policy_report(profile.to_dict())
+    assert report["errors"] == []
+    assert report["warnings"] == []
+
+
+def test_hipaa_safe_harbor_clinical_masks_identifiers_and_keeps_clinical_labels():
+    from openmed.core.labels import (
+        CLINICAL_CONCEPT,
+        DIRECT_IDENTIFIER,
+        SENSITIVE_ATTRIBUTE,
+        policy_label_for,
+    )
+
+    clinical = load_policy("hipaa_safe_harbor_clinical")
+    strict = load_policy("hipaa_safe_harbor")
+
+    # Every direct identifier keeps the hipaa_safe_harbor action.
+    for label in sorted(CANONICAL_LABELS):
+        if policy_label_for(label) == DIRECT_IDENTIFIER:
+            assert clinical.action_for(label) == "mask", label
+
+    # Quasi-identifiers that are Safe Harbor categories stay masked: dates,
+    # ages, geography smaller than a state, and employer/provider names.
+    for label in (
+        "AGE",
+        "DATE",
+        "TIME",
+        "LOCATION",
+        "ZIPCODE",
+        "ORDINAL_DIRECTION",
+        "ORGANIZATION",
+    ):
+        assert clinical.action_for(label) == "mask", label
+
+    # Demographics, roles and clinical content outside the 18 categories are
+    # kept, where hipaa_safe_harbor masks them.
+    for label in (
+        "GENDER",
+        "ETHNICITY",
+        "OCCUPATION",
+        "JOB_TITLE",
+        "CONDITION",
+        "MEDICATION",
+        "DISEASE",
+        "DRUG",
+        "LAB_TEST",
+        "PROCEDURE",
+    ):
+        assert clinical.action_for(label) == "keep", label
+        assert strict.action_for(label) == "mask", label
+
+    for label in sorted(CANONICAL_LABELS):
+        if policy_label_for(label) in {CLINICAL_CONCEPT, SENSITIVE_ATTRIBUTE}:
+            assert clinical.action_for(label) == "keep", label
+
+
+def test_hipaa_safe_harbor_clinical_compiles_with_verified_coverage():
+    from openmed.core.policy import compile_policy
+
+    compiled = compile_policy("hipaa_safe_harbor_clinical")
+
+    assert compiled.proof.verified is True
+    required = {entry.label for entry in compiled.plan.entries}
+    assert {"PERSON", "DATE", "AGE", "LOCATION", "ID_NUM", "PHONE"} <= required
+    assert not ({"GENDER", "ETHNICITY", "CONDITION", "MEDICATION"} & required)
+
+
+def test_hipaa_safe_harbor_clinical_keeps_clinical_text_that_safe_harbor_masks(
+    monkeypatch,
+):
+    text = "John Doe, male, has hypertension on lisinopril, seen 01/15/2024."
+    _patch_extract_many(
+        monkeypatch,
+        [
+            _entity(text, "John Doe", "NAME", 0.95),
+            _entity(text, "male", "GENDER", 0.9),
+            _entity(text, "hypertension", "DISEASE", 0.9),
+            _entity(text, "lisinopril", "DRUG", 0.9),
+            _entity(text, "01/15/2024", "DATE", 0.95),
+        ],
+    )
+
+    clinical = deidentify(
+        text,
+        policy="hipaa_safe_harbor_clinical",
+        use_safety_sweep=False,
+    )
+    strict = deidentify(text, policy="hipaa_safe_harbor", use_safety_sweep=False)
+
+    assert (
+        clinical.deidentified_text
+        == "[NAME], male, has hypertension on lisinopril, seen [date]."
+    )
+    assert clinical.metadata["policy"]["name"] == "hipaa_safe_harbor_clinical"
+    assert "John Doe" not in strict.deidentified_text
+    assert "01/15/2024" not in strict.deidentified_text
+    assert "male," not in strict.deidentified_text
+    assert "hypertension" not in strict.deidentified_text
+    assert "lisinopril" not in strict.deidentified_text

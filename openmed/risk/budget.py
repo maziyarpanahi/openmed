@@ -1019,6 +1019,12 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
         max_surviving_direct_ids=0,
         max_singleton_records=0,
     ),
+    "hipaa_safe_harbor_clinical": RiskBudget(
+        name="hipaa_safe_harbor_clinical",
+        max_residual_qi_weight=3.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
     "hipaa_expert_review_assist": RiskBudget(
         name="hipaa_expert_review_assist",
         max_residual_qi_weight=4.0,

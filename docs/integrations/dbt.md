@@ -44,7 +44,8 @@ itself.
 
 `redact()` and `redact_columns()` accept only canonical OpenMed policy names:
 
-`hipaa_safe_harbor`, `hipaa_expert_review_assist`, `gdpr_pseudonymization`,
+`hipaa_safe_harbor`, `hipaa_safe_harbor_clinical`, `hipaa_expert_review_assist`,
+`gdpr_pseudonymization`,
 `gdpr_art9_health`, `research_limited_dataset`, `strict_no_leak`,
 `clinical_minimal_redaction`, `canada_pipeda`, `uk_ico_anonymisation`,
 `australia_privacy_act`, `china_pipl`, `india_dpdp_act`,

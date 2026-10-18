@@ -87,6 +87,7 @@ Use these exact literals in docs, examples, and deployment configuration:
 | Literal | Posture | Default action bias | Arbitration mode |
 |---|---|---|---|
 | `hipaa_safe_harbor` | Redact all 18 HIPAA identifiers, no exceptions. | `remove`/`mask` | High-recall union; safety sweep mandatory; residual-risk ~0. |
+| `hipaa_safe_harbor_clinical` | Mask the 18 HIPAA identifier classes only; keep clinical concepts, demographics and roles outside them. | `mask` identifiers, `keep` clinical | Balanced; safety sweep mandatory; readable Safe Harbor output. |
 | `hipaa_expert_review_assist` | Flag + surrogate, leave clinical content; produce expert-review audit. | `replace` surrogates | Balanced, with reviewer escalation on low confidence. |
 | `gdpr_pseudonymization` | Reversible pseudonyms, mapping retained under key. | `replace` + `reversible_id` | Balanced; `keep_mapping=True`; HMAC reversible IDs. |
 | `africa_malabo_baseline` | Conservative Article 14(1) sensitive-data baseline; national law prevails where stricter. | `mask` | High-recall union; safety sweep mandatory; no replacement mapping. |
