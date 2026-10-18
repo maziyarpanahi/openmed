@@ -154,6 +154,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now rejects invalid or insufficient token responses and expired dispatches
   (#3773).
 
+- Add exact discrete Laplace and discrete Gaussian samplers that use only
+  integer and `Fraction` arithmetic, with integer count, histogram and
+  aggregate-ledger releases built on them. Add grid-snapped real-valued
+  releases that charge the documented adjusted epsilon. Operational sampling
+  uses `secrets`; seeded draws require `DPRandomSource.for_testing`. Spend
+  records now name their sampler, so ledgers built by `release_aggregate`
+  gain a `sampler` entry and a different digest; direct `spend()` records are
+  unchanged. Existing float helpers and their outputs are otherwise unchanged
+  (#3875).
+
 ### Added
 
 - Import-free effect-path inventory and local/CI guards for unclassified
