@@ -100,6 +100,16 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
     }
 
+    func testPolicyOptionsPromptIncludesTheAvailableCountInEveryLanguage() {
+        for language in languages {
+            for count in [1, Policy.bundledProfileNames.count, 12] {
+                let prompt = ShareExtensionStrings.policyOptionsText(count: count, language: language)
+                XCTAssertTrue(prompt.contains(String(count)))
+                XCTAssertFalse(prompt.contains("%ld"))
+            }
+        }
+    }
+
     private var requiredKeys: [String] {
         ShareExtensionStrings.Key.allCases.map(\.rawValue)
             + Policy.bundledProfileNames.map { "policy.\($0)" }
@@ -157,7 +167,10 @@ final class ShareExtensionLocalizationTests: XCTestCase {
 
             let views = descendants(of: controller.view)
             let text = try XCTUnwrap(views.compactMap { $0 as? UITextView }.first)
-            let picker = try XCTUnwrap(views.compactMap { $0 as? UIPickerView }.first)
+            let selector = try XCTUnwrap(
+                views.compactMap { $0 as? UIButton }.first {
+                    $0.accessibilityLabel == ShareExtensionStrings.text(.policyLabel)
+                })
             let status = try XCTUnwrap(
                 views.compactMap { $0 as? UILabel }.first {
                     $0.accessibilityLabel == ShareExtensionStrings.text(.statusLabel)
@@ -170,9 +183,9 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             let bodySize = try XCTUnwrap(text.font).pointSize
             let statusSize = try XCTUnwrap(status.font).pointSize
             let buttonSizes = buttons.map { $0.titleLabel?.font.pointSize ?? 0 }
-            let rowHeight = controller.pickerView(picker, rowHeightForComponent: 0)
-            picker.selectRow(3, inComponent: 0, animated: false)
-            controller.pickerView(picker, didSelectRow: 3, inComponent: 0)
+            let policyFontSize = try XCTUnwrap(selector.titleLabel?.font).pointSize
+            let actions = try XCTUnwrap(selector.menu).children.compactMap { $0 as? UIAction }
+            selector.sendAction(actions[3])
 
             controller.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
             controller.view.setNeedsLayout()
@@ -188,9 +201,20 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             }
             XCTAssertTrue(text.adjustsFontForContentSizeCategory)
             XCTAssertTrue(status.adjustsFontForContentSizeCategory)
-            XCTAssertEqual(picker.selectedRow(inComponent: 0), 3)
-            XCTAssertEqual(picker.accessibilityValue, ShareExtensionStrings.policyDisplayName(Policy.bundledProfileNames[3]))
-            XCTAssertGreaterThan(controller.pickerView(picker, rowHeightForComponent: 0), rowHeight)
+            XCTAssertEqual(selector.accessibilityValue, ShareExtensionStrings.policyDisplayName(Policy.bundledProfileNames[3]))
+            XCTAssertEqual(selector.configuration?.title, selector.accessibilityValue)
+            XCTAssertGreaterThan(try XCTUnwrap(selector.titleLabel?.font).pointSize, policyFontSize)
+            XCTAssertEqual(selector.frame.minY, text.frame.maxY, accuracy: 0.5)
+            XCTAssertGreaterThanOrEqual(selector.bounds.height, 52)
+            XCTAssertTrue(text.isScrollEnabled)
+            XCTAssertGreaterThanOrEqual(text.bounds.height, 160)
+            let previewHeight = text.bounds.height
+            text.text = Array(repeating: "Synthetic shared text for scrolling.", count: 80).joined(separator: "\n")
+            text.layoutIfNeeded()
+            XCTAssertGreaterThan(text.contentSize.height, text.bounds.height)
+            text.setContentOffset(CGPoint(x: 0, y: text.contentSize.height - text.bounds.height), animated: false)
+            XCTAssertGreaterThan(text.contentOffset.y, 0)
+            XCTAssertEqual(text.bounds.height, previewHeight, accuracy: 0.5)
             XCTAssertEqual((buttons.first?.superview as? UIStackView)?.axis, .vertical)
             let scrollView = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? UIScrollView }.first)
             XCTAssertGreaterThan(scrollView.contentSize.height, scrollView.bounds.height)
@@ -207,6 +231,94 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
 
         @MainActor
+        func testActionsHaveDistinctStylesAndWrapInEveryLanguage() throws {
+            for appearance in [UIUserInterfaceStyle.light, .dark] {
+                for size in [UIContentSizeCategory.large, .accessibilityExtraExtraExtraLarge] {
+                    let controller = RedactionShareViewController()
+                    controller.traitOverrides.userInterfaceStyle = appearance
+                    controller.traitOverrides.preferredContentSizeCategory = size
+                    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 568))
+                    window.rootViewController = controller
+                    window.makeKeyAndVisible()
+                    defer { window.isHidden = true }
+                    let buttons = descendants(of: controller.view).compactMap { $0 as? UIButton }
+                    let primary = try XCTUnwrap(buttons.first { $0.accessibilityHint == ShareExtensionStrings.text(.redactHint) })
+                    let cancel = try XCTUnwrap(buttons.first { $0.accessibilityHint == ShareExtensionStrings.text(.cancelHint) })
+                    primary.isEnabled = true
+                    let row = try XCTUnwrap(primary.superview as? UIStackView)
+                    XCTAssertEqual(row.axis, .vertical)
+                    XCTAssertTrue(row.arrangedSubviews.first === primary)
+                    XCTAssertTrue(row.arrangedSubviews.last === cancel)
+                    let primaryStyle = try XCTUnwrap(primary.configuration)
+                    let cancelStyle = try XCTUnwrap(cancel.configuration)
+                    let fill = try XCTUnwrap(primaryStyle.baseBackgroundColor).resolvedColor(with: controller.traitCollection)
+                    let foreground = try XCTUnwrap(primaryStyle.baseForegroundColor).resolvedColor(with: controller.traitCollection)
+                    let cancelFill = try XCTUnwrap(cancelStyle.background.backgroundColor).resolvedColor(with: controller.traitCollection)
+                    XCTAssertFalse(fill.isEqual(foreground))
+                    XCTAssertFalse(fill.isEqual(cancelFill))
+                    XCTAssertGreaterThan(cancelStyle.background.strokeWidth, 0)
+                    for language in languages {
+                        for (button, key) in [(primary, ShareExtensionStrings.Key.redact), (cancel, .cancel)] {
+                            var configuration = try XCTUnwrap(button.configuration)
+                            configuration.title = ShareExtensionStrings.text(key, language: language)
+                            button.configuration = configuration
+                        }
+                        controller.view.setNeedsLayout()
+                        controller.view.layoutIfNeeded()
+                        XCTAssertGreaterThanOrEqual(cancel.frame.minY - primary.frame.maxY, 12 - 0.5)
+                        for button in [primary, cancel] {
+                            XCTAssertEqual(button.bounds.width, row.bounds.width, accuracy: 0.5)
+                            XCTAssertGreaterThanOrEqual(button.bounds.height, 52)
+                            let label = try XCTUnwrap(button.titleLabel)
+                            XCTAssertGreaterThan(label.bounds.width, 0)
+                            let required = label.sizeThatFits(CGSize(width: label.bounds.width, height: .greatestFiniteMagnitude))
+                            XCTAssertLessThanOrEqual(required.height, label.bounds.height + 0.5)
+                            XCTAssertGreaterThanOrEqual(button.bounds.height, label.bounds.height + 28 - 0.5)
+                            XCTAssertTrue(button.accessibilityTraits.contains(.button))
+                        }
+                        if appearance == .light, language == "en" {
+                            let scrollView = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? UIScrollView }.first)
+                            scrollView.scrollRectToVisible(row.convert(row.bounds, to: scrollView), animated: false)
+                            let renderer = UIGraphicsImageRenderer(bounds: controller.view.bounds)
+                            let image = renderer.image { context in
+                                controller.view.layer.render(in: context.cgContext)
+                            }
+                            let attachment = XCTAttachment(image: image)
+                            attachment.name = size == .large ? "actions-default" : "actions-largest"
+                            attachment.lifetime = .keepAlways
+                            add(attachment)
+                        }
+                    }
+                }
+            }
+        }
+
+        @MainActor
+        func testPolicyMenuExposesEveryOptionAndUpdatesItsCheckmark() throws {
+            let controller = RedactionShareViewController()
+            controller.loadViewIfNeeded()
+            let selector = try XCTUnwrap(
+                descendants(of: controller.view).compactMap { $0 as? UIButton }.first {
+                    $0.accessibilityLabel == ShareExtensionStrings.text(.policyLabel)
+                })
+            XCTAssertTrue(selector.showsMenuAsPrimaryAction)
+            XCTAssertNotNil(selector.configuration?.image)
+            XCTAssertEqual(selector.configuration?.subtitle, ShareExtensionStrings.policyOptionsText(count: Policy.bundledProfileNames.count))
+            XCTAssertEqual(selector.accessibilityValue, ShareExtensionStrings.policyDisplayName(Policy.defaultName))
+            for profile in Policy.bundledProfileNames {
+                let actions = try XCTUnwrap(selector.menu).children.compactMap { $0 as? UIAction }
+                XCTAssertEqual(actions.count, Policy.bundledProfileNames.count)
+                XCTAssertEqual(actions.map(\.identifier.rawValue), Policy.bundledProfileNames)
+                let action = try XCTUnwrap(actions.first { $0.identifier.rawValue == profile })
+                selector.sendAction(action)
+                XCTAssertEqual(selector.configuration?.title, ShareExtensionStrings.policyDisplayName(profile))
+                XCTAssertEqual(selector.accessibilityValue, ShareExtensionStrings.policyDisplayName(profile))
+                let checked = try XCTUnwrap(selector.menu).children.compactMap { $0 as? UIAction }.filter { $0.state == .on }
+                XCTAssertEqual(checked.map(\.identifier.rawValue), [profile])
+            }
+        }
+
+        @MainActor
         func testAccessibilityHintsDoNotIncludeSelectedText() throws {
             let controller = RedactionShareViewController()
             controller.loadViewIfNeeded()
@@ -215,13 +327,16 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             let privateText = "SYNTHETIC_SELECTED_TEXT_DO_NOT_ANNOUNCE_IN_HINTS"
             text.text = privateText
             XCTAssertEqual(text.accessibilityLabel, ShareExtensionStrings.text(.textLabel))
-            let picker = try XCTUnwrap(views.compactMap { $0 as? UIPickerView }.first)
-            XCTAssertEqual(picker.accessibilityLabel, ShareExtensionStrings.text(.policyLabel))
-            XCTAssertEqual(picker.accessibilityHint, ShareExtensionStrings.text(.policyHint))
+            let selector = try XCTUnwrap(
+                views.compactMap { $0 as? UIButton }.first {
+                    $0.accessibilityLabel == ShareExtensionStrings.text(.policyLabel)
+                })
+            XCTAssertEqual(selector.accessibilityLabel, ShareExtensionStrings.text(.policyLabel))
+            XCTAssertEqual(selector.accessibilityHint, ShareExtensionStrings.text(.policyHint))
             for view in views {
                 XCTAssertFalse(view.accessibilityHint?.contains(privateText) ?? false)
             }
-            let label = try XCTUnwrap(controller.pickerView(picker, viewForRow: 0, forComponent: 0, reusing: nil) as? UILabel)
+            let label = try XCTUnwrap(controller.pickerView(UIPickerView(), viewForRow: 0, forComponent: 0, reusing: nil) as? UILabel)
             XCTAssertTrue(label.adjustsFontForContentSizeCategory)
             XCTAssertEqual(label.accessibilityLabel, ShareExtensionStrings.policyDisplayName(Policy.defaultName))
         }

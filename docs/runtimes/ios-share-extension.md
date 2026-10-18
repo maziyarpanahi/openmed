@@ -10,7 +10,7 @@ The package provides three products:
 - `OpenMedExtensionSupport` contains the item handler, span result, local model
   guard, and memory budget.
 - `OpenMedShareExtension` contains `RedactionShareViewController` and a policy
-  picker backed by `Policy.bundledProfileNames`.
+  menu backed by `Policy.bundledProfileNames`.
 - `OpenMedActionExtension` contains `RedactionActionRequestHandler` for a non-UI
   Action extension.
 
@@ -71,7 +71,7 @@ user confirms, and completes the request with a new plain-text attachment.
 The share extension's button titles, status/error messages, accessibility labels
 and hints, and policy display names come from its `Localizable.xcstrings`
 resource catalog. English (`en`) is the base language; Chinese (`zh`) and Hindi
-(`hi`) are included. Policy identifiers remain unchanged; the picker uses
+(`hi`) are included. Policy identifiers remain unchanged; the menu uses
 explicit display names, including the HIPAA, GDPR, and PIPEDA acronyms.
 
 Declare the supported languages in the containing app and extension's
@@ -83,9 +83,19 @@ different languages can opt into `CFBundleAllowMixedLocalizations` instead.
 See Apple's [app language selection guide](https://developer.apple.com/library/archive/qa/qa1828/_index.html).
 
 Fonts update while the extension remains open when the preferred text size
-changes. At accessibility sizes, the action buttons stack vertically; the
-screen scrolls and the policy rows grow to accommodate larger text. Changing
+changes. The full-width action buttons are consistently stacked: a filled
+**Redact and Return** primary action above an outlined **Cancel** secondary
+action, following the demo's button hierarchy. They have at least 52-point touch
+targets, padded wrapping titles, and adaptive light/dark colors. The
+screen scrolls and the policy control grows to accommodate larger text. Changing
 text size preserves the selected policy.
+
+The selected-text preview has a 160-point minimum height and scrolls internally
+for long selections. At accessibility text sizes, there is no extra stack spacing
+between the preview and policy control. The control shows the selected profile,
+a chevron, and a localized prompt with the number of available profiles. Tap it
+to open the native policy menu; every bundled profile is listed and the selected
+one has a checkmark. Selecting a profile updates the title and VoiceOver value.
 
 Accessibility hints are static catalog strings and never include selected text.
 The text preview itself remains readable through VoiceOver. Error presentation

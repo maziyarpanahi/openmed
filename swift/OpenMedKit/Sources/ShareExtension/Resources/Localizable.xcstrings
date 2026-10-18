@@ -32,19 +32,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose the policy used to redact the shared text."
+            "value": "Opens the list of available policy profiles."
           }
         },
         "zh": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择用于文本脱敏的策略。"
+            "value": "打开可选策略配置列表。"
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "साझा पाठ से पहचान हटाने की नीति चुनें।"
+            "value": "उपलब्ध नीति प्रोफ़ाइल की सूची खोलता है।"
           }
         }
       }
@@ -597,6 +597,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "चुना गया पाठ लोड हो रहा है…"
+          }
+        }
+      }
+    },
+    "share.policy_options": {
+      "comment": "Policy menu subtitle. %ld is the count of bundled profiles; keep the format specifier in every translation.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a profile · %ld available"
+          }
+        },
+        "zh": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择策略 · 共 %ld 项"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "प्रोफ़ाइल चुनें · %ld उपलब्ध"
           }
         }
       }

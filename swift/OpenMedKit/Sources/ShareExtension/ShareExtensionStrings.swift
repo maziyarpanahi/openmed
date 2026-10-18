@@ -9,6 +9,7 @@ enum ShareExtensionStrings {
         case redacting = "share.redacting"
         case redact = "share.redact"
         case cancel = "share.cancel"
+        case policyOptions = "share.policy_options"
         case textLabel = "accessibility.text.label"
         case textHint = "accessibility.text.hint"
         case policyLabel = "accessibility.policy.label"
@@ -33,6 +34,10 @@ enum ShareExtensionStrings {
 
     static func policyDisplayName(_ profileName: String, language: String? = nil) -> String {
         localized("policy.\(profileName)", language: language)
+    }
+
+    static func policyOptionsText(count: Int, language: String? = nil) -> String {
+        String(format: text(.policyOptions, language: language), count)
     }
 
     static func localized(_ key: String, language: String? = nil) -> String {
