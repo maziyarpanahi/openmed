@@ -25,6 +25,7 @@ class PolicyName(str, Enum):
     """Canonical policy profile names accepted by the de-identification runtime."""
 
     HIPAA_SAFE_HARBOR = "hipaa_safe_harbor"
+    HIPAA_SAFE_HARBOR_CLINICAL = "hipaa_safe_harbor_clinical"
     HIPAA_EXPERT_REVIEW_ASSIST = "hipaa_expert_review_assist"
     GDPR_PSEUDONYMIZATION = "gdpr_pseudonymization"
     GDPR_ART9_HEALTH = "gdpr_art9_health"

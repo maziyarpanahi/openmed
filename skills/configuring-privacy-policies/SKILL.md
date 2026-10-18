@@ -52,6 +52,7 @@ actually configures:
 | Profile | Default action | Quasi-identifiers | Mapping | Safety sweep | Use case |
 | --- | --- | --- | --- | --- | --- |
 | `hipaa_safe_harbor` | **mask** all | masked | none | **mandatory** | HIPAA §164.514(b)(2) Safe Harbor — strip all 18 identifier classes |
+| `hipaa_safe_harbor_clinical` | mask identifiers | dates, age, geography, org **masked**; gender, ethnicity, roles, clinical concepts **kept** | none | **mandatory** | Safe Harbor output that stays readable — strip the 18 identifier classes, keep the clinical narrative |
 | `hipaa_expert_review_assist` | **redact** | redacted; clinical concepts **kept** | none | optional | Assist Expert Determination (§164.514(b)(1)); keeps microbiology/clinical terms for a statistician to assess residual risk |
 | `gdpr_pseudonymization` | **replace** | replaced; clinical kept | **kept + reversible** | mandatory | GDPR Art. 4(5) pseudonymization — reversible under controlled key |
 | `canada_pipeda` | **replace** (IDs **masked**) | replaced | **kept + reversible** | mandatory | PIPEDA-aligned; like GDPR but masks ID_NUM/SSN outright |
@@ -83,6 +84,7 @@ Key dimensions to reason about:
   `hipaa_expert_review_assist`, then human Expert Determination.
 - **EU subjects, need reversibility under a key** → `gdpr_pseudonymization`.
 - **Canadian subjects** → `canada_pipeda`.
+- **Safe Harbor release that must stay clinically readable** → `hipaa_safe_harbor_clinical`.
 - **Research cohort needing dates/age/geography** → `research_limited_dataset`
   (requires a Data Use Agreement).
 - **Internal clinical workflow, readability first** → `clinical_minimal_redaction`.
