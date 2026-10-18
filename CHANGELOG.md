@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Require nearby banking context before the SWIFT/BIC regex emits a
+  pattern-only entity, so all-caps clinical section headers such as
+  `FINDINGS` or `DIAGNOSIS` are no longer masked as `BIC` (#4152).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
