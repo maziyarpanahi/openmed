@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pool per-label federated evaluation counts through an injected secure-sum
+  port and release precision and recall with Wilson intervals only as
+  federated metric envelopes. Below-quorum and out-of-bound contributions fail
+  closed with stable codes, small label slices are suppressed, and
+  direct-identifier labels are reported in a separate, non-compensable
+  partition; no per-site counts or metrics reach the coordinator (#3856).
+
 ### Fixed
 
 - Handle decoding failures through both batch readers' per-file error paths,

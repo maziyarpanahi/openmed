@@ -96,3 +96,112 @@ The builder accepts only aggregate inputs. It immediately removes a value when
 the participant minimum is not met and never stores the exact participant
 count. This envelope does not aggregate client values, compute differential
 privacy noise, choose privacy budgets, or decide release and promotion gates.
+
+## Pooled evaluation counts
+
+`openmed.training.federated_pooled_eval` produces envelopes for federation-wide
+precision and recall without exposing any site's confusion counts or metrics.
+
+1. Every participant agrees on a `PooledEvaluationLayout`: an ordered, closed
+   label list and `max_count_per_entry`, the largest count one site may
+   contribute to a single entry. Its `digest` binds the labels, the
+   direct-identifier partition and the bound.
+2. Each site counts strict exact-span matches on its committed local holdout
+   with `build_site_count_vector()`, or encodes precomputed `(tp, fp, fn)`
+   triples with `encode_site_counts()`. Encoding runs at the site and fails
+   closed before anything leaves it when a count is negative, non-integer,
+   above the bound, or uses an undeclared label.
+3. Sites submit their `SiteCountVector` to an injected secure-sum port. The
+   coordinator calls `pool_federated_evaluation()`, which sends the port a
+   `SecureSumRequest` (layout digest, vector length, per-entry bound, quorum
+   and declared privacy mechanism) and receives only a `SecureSumOutcome`: the
+   pooled vector, the contributor count, and whether the port verified every
+   contribution against the bound.
+4. Pooled precision (`tp / (tp + fp)`) and recall (`tp / (tp + fn)`) are
+   released through `build_federated_metric_envelope()` with Wilson score
+   intervals and the declared mechanism.
+
+The secure-sum protocol, disclosure budgeting and sealed evaluation are not
+part of this module. The port is any object with a
+`secure_sum(request) -> SecureSumOutcome` method; tests use an in-memory fake.
+
+### Fail-closed rules
+
+`pool_federated_evaluation()` raises `PooledEvaluationError` with a stable
+`code` and a fixed message. Messages never contain labels, counts, site
+identities, paths or port exception text.
+
+| Code | Condition |
+| --- | --- |
+| `configuration_invalid` | Invalid layout, reference, quorum, support, confidence level or mechanism |
+| `secure_sum_failed` | The port raised; its exception is not chained |
+| `secure_sum_malformed` | The outcome has the wrong type, length or non-negative integer entries |
+| `layout_mismatch` | The outcome was computed for another layout |
+| `mechanism_mismatch` | The port applied a different mechanism or version |
+| `quorum_not_met` | Fewer than `minimum_sites` contributed; checked before the vector is read |
+| `contribution_out_of_bounds` | The port did not verify every bound, or a pooled entry exceeds `contributor_count * max_count_per_entry` |
+
+Site-side encoding additionally uses `contribution_malformed`,
+`contribution_out_of_bounds` and `undeclared_label`.
+
+### Label slice suppression
+
+Each released rate passes its pooled support (`tp + fp` for precision,
+`tp + fn` for recall) to the envelope builder as the participant count, with
+`minimum_label_support` as the minimum group size. A slice below the minimum
+is suppressed with a `null` value and no interval. For these envelopes the
+participant band therefore describes pooled support, while
+`site_count_band` on the report describes contributing sites.
+
+### Direct identifiers
+
+Direct-identifier labels come from the canonical label catalog, and callers
+may add custom ones with `extra_direct_identifier_labels`; a catalog direct
+identifier cannot be reclassified. Metrics are partitioned:
+
+| Partition | Metric ids |
+| --- | --- |
+| Direct identifiers | `pooled.di.label.<label>.precision`, `pooled.di.label.<label>.recall`, `pooled.di.micro.*` |
+| Other labels | `pooled.other.label.<label>.precision`, `pooled.other.label.<label>.recall`, `pooled.other.micro.*` |
+
+Micro aggregates pool counts only within their own partition, and no metric
+mixes the two. `report.direct_identifier_recall_gate(minimum_recall=...)`
+checks every direct-identifier label recall on its own. A low or suppressed
+label fails the gate even when other labels, or the partition micro recall,
+are high.
+
+```python
+from openmed.training.federated_pooled_eval import (
+    PooledEvaluationLayout,
+    build_site_count_vector,
+    pool_federated_evaluation,
+)
+
+layout = PooledEvaluationLayout(
+    labels=("EMAIL", "PHONE", "AGE", "DISEASE"),
+    max_count_per_entry=5000,
+)
+
+# At each site, on its committed local holdout:
+vector = build_site_count_vector(layout, site_documents)
+secure_sum_client.submit(vector)
+
+# At the coordinator:
+report = pool_federated_evaluation(
+    layout=layout,
+    port=secure_sum_port,
+    evaluation_ref="sha256:" + "0" * 64,
+    minimum_sites=5,
+    minimum_label_support=20,
+)
+gate = report.direct_identifier_recall_gate(minimum_recall=0.95)
+artifact = report.to_json()
+```
+
+`site_documents`, `secure_sum_client` and `secure_sum_port` stand for the
+deployment's own holdout loader and secure-sum transport.
+
+With `threshold_only`, released rates are exact ratios of pooled counts, so a
+released value can still reveal a pooled ratio. Declare `laplace` or
+`gaussian` only when the port applies that mechanism and post-processes the
+pooled vector into non-negative integers within the bound.
