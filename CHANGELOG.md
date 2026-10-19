@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Commit patient-level federated site holdout splits before training with
+  keyed patient assignment, reused holdout-commitment primitives and a
+  digest-and-count-band-only export. The training port refuses batches with
+  committed holdout members, and a digest-only ledger refuses re-commitment
+  without a recorded rotation and invalidates evaluation evidence citing a
+  different or rotated-out commitment (#3857).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 

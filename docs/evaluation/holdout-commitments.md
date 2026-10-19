@@ -81,3 +81,102 @@ manifests or raw proof source values.
 Merkle commitments establish pre-publication integrity and selective
 membership. They do not establish dataset quality, regulatory compliance, or
 an autonomous clinical decision guarantee.
+
+## Federated patient-level site holdouts
+
+Federated sites reuse the same commitment primitives to fix a patient-level
+train/holdout split before the first training round. A site assigns each
+opaque patient key with a keyed HMAC-SHA256 under a site-held secret, so every
+note of one patient lands in the same partition and the assignment is
+reproducible only with that secret. Holdout membership is committed as keyed
+membership tags; the split policy, federation binding, and a keyed secret
+fingerprint fill the remaining manifests.
+
+```python
+from openmed.training.federated_holdout_split import (
+    FederatedHoldoutLedger,
+    FederatedHoldoutSplitError,
+    HoldoutRotationReason,
+    build_site_holdout_split,
+)
+
+notes = [
+    (f"note-{index}-{part}", f"patient-{index:03d}")
+    for index in range(40)
+    for part in range(3)
+]
+split = build_site_holdout_split(
+    [patient for _, patient in notes],
+    site_secret=b"site-held-secret-of-32-bytes-min",
+    federation_id="fed-2026-q4",
+    holdout_fraction=0.25,
+)
+train, holdout = split.partition_examples(notes, patient_key_of=lambda n: n[1])
+evidence = split.export_evidence()
+assert set(evidence.to_dict()) == {
+    "commitment_digest",
+    "holdout_patient_count_band",
+    "schema_version",
+    "train_patient_count_band",
+}
+```
+
+`export_evidence()` is the only artifact that may leave the site. It contains
+the commitment digest and coarse patient-count bands (`suppressed` below the
+minimum group size, then `under_100`, `100_to_999`, `1000_to_9999`, and
+`10000_or_more`). Patient keys, note identifiers, membership tags, exact
+counts, and the site secret stay local; the split object excludes them from
+`repr` and refuses pickling. Callers canonicalize patient keys before building
+the split; keys are not normalized.
+
+The training port admits a batch only when every example belongs to the
+committed train partition. A batch containing a committed holdout member is
+refused in full with the stable code `holdout_member_in_training`, and patients
+that were not part of the committed split are refused with
+`unassigned_patient`:
+
+```python
+split.admit_training_examples(train, patient_key_of=lambda n: n[1])
+try:
+    split.admit_training_examples(
+        [*train, holdout[0]], patient_key_of=lambda n: n[1]
+    )
+except FederatedHoldoutSplitError as error:
+    assert error.code.value == "holdout_member_in_training"
+```
+
+The coordinator keeps a digest-only `FederatedHoldoutLedger`. Training for a
+site may start only after `require_active_commitment()` returns its digest.
+Re-registering the same digest is idempotent; any different split, including
+one built with a new secret, fraction, cohort, or epoch, fails closed with
+`recommitment_without_rotation` until `record_rotation()` records a controlled
+reason. A retired digest can never become active again
+(`retired_commitment_reused`). Evaluation evidence must cite the active digest
+in `holdout_commitment_digest`; citing a different commitment fails with
+`evaluation_commitment_mismatch`, and results that cite a rotated-out digest
+fail with `holdout_commitment_rotated`:
+
+```python
+ledger = FederatedHoldoutLedger("fed-2026-q4")
+ledger.register("site-a", evidence.to_dict())
+result = {"holdout_commitment_digest": ledger.require_active_commitment("site-a")}
+assert ledger.verify_evaluation_evidence("site-a", result).valid
+
+ledger.record_rotation("site-a", HoldoutRotationReason.COHORT_REFRESH)
+rotated = build_site_holdout_split(
+    [patient for _, patient in notes],
+    site_secret=b"site-held-secret-of-32-bytes-new",
+    federation_id="fed-2026-q4",
+    holdout_fraction=0.25,
+    rotation_epoch=1,
+)
+ledger.register("site-a", rotated.export_evidence())
+stale = ledger.verify_evaluation_evidence("site-a", result)
+assert stale.reason_codes == ("holdout_commitment_rotated",)
+```
+
+`to_json()` and `from_dict()` persist the ledger as digests, site references,
+and rotation reasons only; restoring tampered state fails with
+`invalid_ledger_state`. The split governs evaluation integrity only. It does
+not grant training authorization, establish cohort representativeness, or
+trigger any clinical action.
