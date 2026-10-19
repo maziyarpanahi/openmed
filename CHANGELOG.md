@@ -62,6 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Purge per-client update payloads, masked inputs, share material, local caches
+  and resume checkpoints through `deletion_plan` once a federated round commits,
+  a client submits or a round aborts. Round policies declare retention classes,
+  commitments and evidence are preserved, finalization and evidence emission
+  wait for mandatory purges, restarts resume idempotently, and receipts carry
+  only digests and counts (#3858).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
