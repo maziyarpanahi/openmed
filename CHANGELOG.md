@@ -380,6 +380,11 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Renew the maintainer-reviewed exception for unpatched NLTK
+  `CVE-2026-81726` in the universal lockfile through 2026-11-03. NLTK remains
+  optional and absent from the core closure and service image. The exception
+  rejects other packages or targets, any reported fix, and expiry; this is
+  temporary risk acceptance, not remediation.
 - Raise optional dependency floors to patched aiohttp 3.14.4, banks 2.5.1,
   Mako 1.4.2, multidict 6.9.1 and tinytag 2.3.0. Apply the same floors to
   published extras and the frozen lockfile, preserving AWQ's Linux-only
