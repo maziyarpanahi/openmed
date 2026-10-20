@@ -42,6 +42,12 @@ Release candidates such as `1.9.0rc1` are reserved for pre-stable cuts.
 - MAJOR: breaking API change, label-schema break, or migration that requires a
   downstream code change.
 
+The sole approved security exception is the v3.1.0
+[privacy-remediation boundary](../compliance/api-deprecation-policy.md#v31-security-remediation-exception).
+Its two existing privacy fixes remain intentionally breaking and require the
+[3.0-to-3.1 migration](../migration/3.0-to-3.1.md). The exception does not
+authorize unrelated breaks or carry forward into v3.2.
+
 ## Deprecation Policy
 
 Public APIs receive at least one full minor-version warning window before
@@ -114,7 +120,8 @@ policy may add strict thresholds; it cannot rewrite existing model evidence.
 These catalog edits are not clinical model qualification. Changed artifacts,
 pointers or retained metrics, and missing evidence, still fail closed.
 
-Minor and patch SDK releases must have no breaking APIs. A major release may
+Minor and patch SDK releases must have no breaking APIs except for the exact
+v3.1.0 security removals documented above. A major release may
 include intentional breaking APIs only when every reported symbol is covered
 by its migration guide; the readiness report retains their count and guide hash.
 Model candidates use `--gate-report` with signed evaluation evidence; the two

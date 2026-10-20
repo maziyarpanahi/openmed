@@ -43,16 +43,16 @@ dependencyResolutionManagement {
 }
 ```
 
-After v3.0.0 is published, add this release coordinate in the module
+After v3.1.0 is published, add this release coordinate in the module
 `build.gradle.kts`. The candidate's coordinate is not yet a published artifact:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.1.0")
 }
 ```
 
-After tag publication, JitPack resolves the immutable `v3.0.0` tag and builds the `openmedkit`
+After tag publication, JitPack resolves the immutable `v3.1.0` tag and builds the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials.
 
