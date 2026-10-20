@@ -180,9 +180,9 @@ change makes none of those changes.
 
 ## Temporary NLTK exception for the universal lockfile
 
-On 2026-10-03, the maintainer approved a time-limited exception for
+On 2026-10-20, the maintainer reviewed and renewed the existing exception for
 `CVE-2026-81726` / [GHSA-8mgp-746c-j5xp](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp),
-scoped to the `nltk` package in `uv.lock` through **2026-10-17**. At review,
+scoped to the `nltk` package in `uv.lock` through **2026-11-03**. At review,
 upstream listed no patched release and the latest published NLTK was 3.10.3.
 The finding remains present in scanner evidence; it is not considered fixed.
 

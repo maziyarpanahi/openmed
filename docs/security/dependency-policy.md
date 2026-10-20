@@ -23,6 +23,14 @@ upgraded.
 
 ## Optional storage dependencies
 
+The v3.1 release review raises the existing optional dependency closures to
+`aiohttp>=3.14.4`, `banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and
+`tinytag>=2.3.0` for the fixes reported by the October 20 lockfile scan.
+Each affected extra publishes its minimum version, and the universal lock
+uses the same floors. No package is added to the core install; AWQ retains
+its Linux-only markers. The unpatched NLTK finding is evaluated separately
+under the [time-limited dependency review](dependency-risk.md).
+
 Every optional profile that resolves `fsspec` requires `fsspec>=2026.6.0` in
 published package metadata as well as the frozen dependency graph. The same
 profiles require `jinja2>=3.1.6`, since an older sandbox can still admit
