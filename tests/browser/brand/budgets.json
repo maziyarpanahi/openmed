@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 5055146
+    "json": 5056239
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 5055146
+    "docs/search/search_index.json": 5056239
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 6530530,
-    "/docs/model-tokenizer-script-coverage/": 8627182
+    "/docs/": 6531623,
+    "/docs/model-tokenizer-script-coverage/": 8628275
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,7 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The v3.1 release and privacy migration documentation measures 5053460 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. Other artifact, image, runtime and page-metric limits are unchanged.",
+    "The v3.1 release, privacy migration and dependency-security documentation measures 5054553 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. Other artifact, image, runtime and page-metric limits are unchanged.",
     "The reviewed governance API deprecation policy and major privacy-boundary announcement measure 5046074 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance. Docs route totals add only this governed search ceiling to unchanged fixed-asset ceilings; aggregate, non-JSON, duplicate, source-map and page-metric limits remain unchanged.",
     "The tokenizer docs route applies the same component checks: its fixed-asset ceiling is 3572036 bytes, retaining the prior 7992837-byte route ceiling minus the 4420801-byte search ceiling at revision 429403b7f687fa6c94f3446917be050069afeef5. The current total adds only the independently reviewed search ceiling; fixed assets receive no extra allowance.",
     "The docs route now budgets fixed assets separately from its independently reviewed search index. The fixed-asset ceiling remains 1475384 bytes: the prior 5817753-byte route ceiling minus its recorded 4342369-byte index. The total is the same fixed ceiling plus the current governed search ceiling. Browser checks enforce both components, so index growth cannot grant extra room to other assets. No other route or artifact limits change.",

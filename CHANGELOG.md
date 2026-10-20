@@ -380,6 +380,11 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Raise optional dependency floors to patched aiohttp 3.14.4, banks 2.5.1,
+  Mako 1.4.2, multidict 6.9.1 and tinytag 2.3.0. Apply the same floors to
+  published extras and the frozen lockfile, preserving AWQ's Linux-only
+  boundary and the base SDK's dependency set.
+
 - Require MCP 1.30 or newer for patched session handling in the optional
   MCP and development dependency profiles (#4221).
 
