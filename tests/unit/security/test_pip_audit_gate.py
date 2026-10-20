@@ -398,14 +398,28 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
 @pytest.mark.parametrize(
     ("package", "unsafe", "fixed", "extras"),
     [
-        ("banks", "2.4.4", "2.4.5", ("agents", "llamaindex")),
+        (
+            "aiohttp",
+            "3.14.3",
+            "3.14.4",
+            ("agents", "awq", "cloud", "gptq", "llamaindex", "operator"),
+        ),
+        ("banks", "2.5.0", "2.5.1", ("agents", "llamaindex")),
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
         ("mcp", "1.29.1", "1.30.0", ("dev", "mcp")),
+        ("mako", "1.4.1", "1.4.2", ("airflow", "dagster", "prefect")),
+        (
+            "multidict",
+            "6.9.0",
+            "6.9.1",
+            ("agents", "awq", "beam", "cloud", "gptq", "llamaindex", "operator"),
+        ),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
         ("pymongo", "4.18.1", "4.18.2", ("beam",)),
+        ("tinytag", "2.2.1", "2.3.0", ("agents", "llamaindex")),
     ],
 )
 def test_fixable_optional_dependency_floors_are_published_and_locked(
