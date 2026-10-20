@@ -104,10 +104,10 @@ gates.
 For an SDK candidate that retains model targets, use the explicit SDK stream:
 
 ```bash
-python -m openmed.eval.release_readiness --sdk-baseline v2.5.0 \
-  --migration-guide docs/migration/2.5-to-3.0.md \
+python -m openmed.eval.release_readiness --sdk-baseline v3.0.0 \
+  --migration-guide docs/migration/3.0-to-3.1.md \
   --api-compat-report api-surface-diff.json \
-  --e2e-report e2e-golden-report.json --version 3.0.0 \
+  --e2e-report e2e-golden-report.json --version 3.1.0 \
   --output release-readiness-report.json --json
 ```
 
