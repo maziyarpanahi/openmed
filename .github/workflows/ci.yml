@@ -295,6 +295,7 @@ jobs:
         tests/unit/agent/permissions/test_access_events.py
         tests/unit/agent/workflows/test_journal_retirement.py
         tests/integration/test_clinical_cli_offline.py
+        tests/integration/test_clinical_workflow_examples.py
         tests/integration/test_clinical_review_cli.py
         tests/integration/test_multilingual_clinical_brief.py
         tests/integration/test_governed_mcp_offline.py
