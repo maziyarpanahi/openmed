@@ -23,37 +23,19 @@ upgraded.
 
 ## Image dependencies and Python compatibility
 
-The October 21 CI audit requires `certifi>=2026.10.19` and Pillow 13.0.0 in the
-Python 3.11+ development environment. Every extra that brings Pillow into its
-dependency graph (`agents`, `beam`, `llamaindex`, `mlx`, `multimodal`, and
-`ocr-paddle`) publishes the Pillow 13 minimum. These extras require Python 3.11+
-because upstream Pillow 13 does; pip must not fall back to a vulnerable release
-on Python 3.10. The frozen resolver applies the same security floor to
-transitive image dependencies. Pillow remains outside the core
-SDK dependency set. No audit findings are ignored by this update.
+The `agents`, `beam`, `llamaindex`, `mlx`, `multimodal`, and `ocr-paddle` extras
+require Pillow 13 and Python 3.11+ in both wheel metadata and the frozen lock.
+[Pillow 13 drops Python 3.10](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
+Core Python 3.10 remains Pillow-free. Upgrade legacy image environments before
+processing untrusted input; vulnerable Pillow is unsupported. The lock also
+requires Certifi 2026.10.19. No audit exception is added.
 
-[Pillow 13 drops Python 3.10 support](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
-OpenMed preserves Python 3.10 support for the core SDK, which does not require
-Pillow. Pillow-backed image processing and brand rendering require Python 3.11+
-and Pillow 13. No vulnerable Python 3.10 fallback is retained in the lockfile or
-development environment. Tests that require Pillow run on the Python 3.11+
-matrix; Python 3.10 still runs the core suite, pure image-header tests, and all
-homepage analytics checks. Existing Python 3.10 image deployments must upgrade
-Python and reinstall their image extras before processing untrusted input;
-installing legacy Pillow manually is unsupported. Audit the actual deployment
-environment, including optional transitive dependencies installed outside uv.
-
-Beam's Pillow upper bound is overridden on Python 3.11+ to permit the patched
-release; the existing DirectRunner integration tests validate that combination.
-This project-level override is not included in wheel metadata. Plain pip cannot
-resolve the `beam` extra while upstream declares `Pillow<13`; use the tested
-[Beam installation recipe](../integrations/beam.md) with the repository's Pillow,
-cryptography, and httplib2 overrides and the validated Beam version. Do not lower
-the security floors to resolve those conflicts. Other Beam runners and image
-transforms still need deployment-specific validation.
-Brand reproduction retains the recorded generator version as provenance while
-checking approved master bytes, derivative pixels, and committed file hashes
-with the current Pillow. A dependency upgrade does not authorize image drift.
+Pillow tests run on Python 3.11+; core, image-header and homepage analytics checks
+still run on 3.10. Beam needs the explicit, DirectRunner-tested
+[installation overrides](../integrations/beam.md); pip does not inherit uv
+project overrides. Other runners and image transforms need separate validation.
+Brand checks retain generator-version provenance, master bytes, derivative
+pixels and committed hashes; upgrades do not authorize image drift.
 
 ## Optional storage dependencies
 

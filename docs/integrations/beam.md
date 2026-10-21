@@ -1,16 +1,9 @@
 # Apache Beam Redaction Transform
 
-OpenMed provides a small Apache Beam-compatible redaction contract for bounded
-batch pipelines. The Beam SDK remains optional; the direct synthetic harness
-can validate serialization and retry behavior without installing Beam.
-
-For v3.1, use Python 3.11+ and the validated Beam 2.75/Pillow 13 combination.
-Beam currently declares `Pillow<13`, while OpenMed requires the patched Pillow
-13 release. It also caps cryptography and httplib2 below the repository's
-security floors. A plain `pip install "openmed[beam]"` cannot resolve the Pillow
-requirements. Use the same three explicit overrides as the repository in a
-dedicated environment; do not downgrade these packages or disable dependency
-installation.
+OpenMed supports bounded Beam redaction pipelines and a Beam-free synthetic
+harness. For v3.1, use Python 3.11+ and the tested versions below. Plain pip
+cannot resolve Beam's Pillow cap. Its cryptography and httplib2 caps also need
+these security overrides; never downgrade or disable dependency installation.
 
 ```bash
 uv venv --python 3.11 .venv
@@ -20,13 +13,9 @@ uv pip install --no-config --override beam-security-overrides.txt \
   "openmed[beam]==3.1.0" "apache-beam==2.75.0"
 ```
 
-The overrides change only these three dependencies. The synthetic DirectRunner
-integration tests pass with these versions, but this does not qualify other
-Beam runners or image transforms. `pip check` reports Beam's declared conflicts
-until upstream widens its bounds. Review any other dependency conflict
-separately. See the
-[dependency policy](../security/dependency-policy.md#image-dependencies-and-python-compatibility)
-for the security floor and Python compatibility details.
+DirectRunner tests pass with these versions. `pip check` still reports Beam's
+three upstream bounds; investigate any other conflict. See the
+[dependency policy](../security/dependency-policy.md#image-dependencies-and-python-compatibility).
 
 ## Contract
 
