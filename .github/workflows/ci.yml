@@ -301,6 +301,7 @@ jobs:
         tests/integration/test_governed_mcp_offline.py
         tests/integration/test_dqd_adapter.py
         tests/integration/agent/test_access_event_log.py
+        tests/fuzz/test_format_parsers_fuzz.py
 
     - name: Test with pytest
       # Leave bounded completion time for the full Windows suite and coverage.
