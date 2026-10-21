@@ -448,6 +448,70 @@ def test_fixable_optional_dependency_floors_are_published_and_locked(
     }
 
 
+@pytest.mark.parametrize(
+    "extra", ["dev", "multimodal", "mlx", "agents", "beam", "llamaindex", "ocr-paddle"]
+)
+@pytest.mark.parametrize("python_version", ["3.10", "3.11", "3.12", "3.13"])
+def test_pillow_security_floor_preserves_interpreter_compatibility(
+    extra: str, python_version: str
+) -> None:
+    project, _ = _model_dependency_metadata()
+    requirements = [
+        Requirement(value)
+        for value in project["project"]["optional-dependencies"][extra]
+    ]
+    active = [
+        requirement
+        for requirement in requirements
+        if requirement.name.lower() == "pillow"
+        and (
+            requirement.marker is None
+            or requirement.marker.evaluate({"python_version": python_version})
+        )
+    ]
+    if python_version == "3.10" and extra == "dev":
+        assert not active
+    else:
+        assert len(active) == 1
+        assert "12.3.0" not in active[0].specifier
+        assert "13.0.0" in active[0].specifier
+    assert not any(
+        Requirement(value).name.lower() == "pillow"
+        for value in project["project"]["dependencies"]
+    )
+
+
+def test_image_lock_never_retains_an_unsafe_legacy_release() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "pillow"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("13.0.0") for item in resolved)
+    for extra in _dependency_extras(lock, "pillow") - {"dev"}:
+        requirement = next(
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+            if Requirement(value).name.lower() == "pillow"
+        )
+        assert requirement.marker is None
+        assert "12.3.0" not in requirement.specifier
+        assert "13.0.0" in requirement.specifier
+
+
+def test_certificate_bundle_lock_uses_patched_release() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "certifi"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("2026.10.19") for item in resolved)
+    floor = next(
+        requirement
+        for value in project["tool"]["uv"]["constraint-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == "certifi"
+    )
+    assert "2025.10.5" not in floor.specifier
+    assert "2026.10.19" in floor.specifier
+
+
 def test_awq_dataset_floor_retains_linux_only_installation() -> None:
     project, _ = _model_dependency_metadata()
     floor = next(
