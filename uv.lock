@@ -11694,6 +11694,7 @@ agents = [
     { name = "langgraph-sdk" },
     { name = "llama-index-core" },
     { name = "multidict" },
+    { name = "pillow", marker = "python_full_version >= '3.11' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "tinytag" },
 ]
 airflow = [
@@ -11716,6 +11717,7 @@ beam = [
     { name = "apache-beam" },
     { name = "h2" },
     { name = "multidict" },
+    { name = "pillow", marker = "python_full_version >= '3.11' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "pymongo" },
 ]
 cli = [
@@ -11890,6 +11892,7 @@ llamaindex = [
     { name = "jinja2" },
     { name = "llama-index-core" },
     { name = "multidict" },
+    { name = "pillow", marker = "python_full_version >= '3.11' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "tinytag" },
 ]
 mcp = [
@@ -11935,6 +11938,7 @@ notebook = [
 ]
 ocr-paddle = [
     { name = "paddleocr" },
+    { name = "pillow", marker = "python_full_version >= '3.11' or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
 onnx = [
     { name = "fsspec" },
@@ -12253,8 +12257,12 @@ requires-dist = [
     { name = "piexif", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "pikepdf", marker = "extra == 'multimodal'", specifier = ">=9.0" },
     { name = "pillow", marker = "python_full_version >= '3.11' and extra == 'dev'", specifier = "==13.0.0" },
-    { name = "pillow", marker = "python_full_version >= '3.11' and extra == 'mlx'", specifier = ">=13.0.0" },
-    { name = "pillow", marker = "python_full_version >= '3.11' and extra == 'multimodal'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'agents'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'beam'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'llamaindex'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'mlx'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'multimodal'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'ocr-paddle'", specifier = ">=13.0.0" },
     { name = "pkuseg", marker = "extra == 'zh-pkuseg'", specifier = ">=0.0.25,<0.1" },
     { name = "polars", marker = "extra == 'dev'", specifier = ">=0.20" },
     { name = "polars", marker = "extra == 'polars'", specifier = ">=0.20" },

@@ -448,7 +448,9 @@ def test_fixable_optional_dependency_floors_are_published_and_locked(
     }
 
 
-@pytest.mark.parametrize("extra", ["dev", "multimodal", "mlx"])
+@pytest.mark.parametrize(
+    "extra", ["dev", "multimodal", "mlx", "agents", "beam", "llamaindex", "ocr-paddle"]
+)
 @pytest.mark.parametrize("python_version", ["3.10", "3.11", "3.12", "3.13"])
 def test_pillow_security_floor_preserves_interpreter_compatibility(
     extra: str, python_version: str
@@ -462,10 +464,12 @@ def test_pillow_security_floor_preserves_interpreter_compatibility(
         requirement
         for requirement in requirements
         if requirement.name.lower() == "pillow"
-        and requirement.marker is not None
-        and requirement.marker.evaluate({"python_version": python_version})
+        and (
+            requirement.marker is None
+            or requirement.marker.evaluate({"python_version": python_version})
+        )
     ]
-    if python_version == "3.10":
+    if python_version == "3.10" and extra == "dev":
         assert not active
     else:
         assert len(active) == 1
@@ -478,10 +482,19 @@ def test_pillow_security_floor_preserves_interpreter_compatibility(
 
 
 def test_image_lock_never_retains_an_unsafe_legacy_release() -> None:
-    _, lock = _model_dependency_metadata()
+    project, lock = _model_dependency_metadata()
     resolved = [item for item in lock["package"] if item["name"] == "pillow"]
     assert resolved
     assert all(Version(item["version"]) >= Version("13.0.0") for item in resolved)
+    for extra in _dependency_extras(lock, "pillow") - {"dev"}:
+        requirement = next(
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+            if Requirement(value).name.lower() == "pillow"
+        )
+        assert requirement.marker is None
+        assert "12.3.0" not in requirement.specifier
+        assert "13.0.0" in requirement.specifier
 
 
 def test_certificate_bundle_lock_uses_patched_release() -> None:

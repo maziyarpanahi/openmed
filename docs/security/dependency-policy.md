@@ -24,9 +24,12 @@ upgraded.
 ## Image dependencies and Python compatibility
 
 The October 21 CI audit requires `certifi>=2026.10.19` and Pillow 13.0.0 in the
-Python 3.11+ development environment. The `multimodal` and `mlx` extras publish
-the Pillow 13 minimum for those interpreters, and the frozen resolver applies
-it to transitive image dependencies as well. Pillow remains outside the core
+Python 3.11+ development environment. Every extra that brings Pillow into its
+dependency graph (`agents`, `beam`, `llamaindex`, `mlx`, `multimodal`, and
+`ocr-paddle`) publishes the Pillow 13 minimum. These extras require Python 3.11+
+because upstream Pillow 13 does; pip must not fall back to a vulnerable release
+on Python 3.10. The frozen resolver applies the same security floor to
+transitive image dependencies. Pillow remains outside the core
 SDK dependency set. No audit findings are ignored by this update.
 
 [Pillow 13 drops Python 3.10 support](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
