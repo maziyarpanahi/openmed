@@ -63,7 +63,6 @@ dev = [
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
   # Pillow 13 fixes the image-parser advisories but requires Python 3.11+.
-  "Pillow==12.3.0; python_version < '3.11'",
   "Pillow==13.0.0; python_version >= '3.11'",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -216,7 +215,6 @@ multimodal = [
   "pdfplumber>=0.11",
   "python-docx>=1.1",
   "python-pptx>=1.0",
-  "Pillow>=12.3.0; python_version < '3.11'",
   "Pillow>=13.0.0; python_version >= '3.11'",
   "python-doctr>=1.0",
   "piexif>=1.1",
@@ -436,7 +434,6 @@ mlx = [
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
-  "Pillow>=12.3.0; python_version < '3.11'",
   "Pillow>=13.0.0; python_version >= '3.11'",
   "transformers>=4.50",
   "tokenizers>=0.15",
@@ -547,7 +544,6 @@ override-dependencies = [
   "cryptography>=50,<51",
   "httplib2>=0.32",
   # Beam also caps Pillow below the patched release on Python 3.11+.
-  "Pillow==12.3.0; python_version < '3.11'",
   "Pillow>=13.0.0; python_version >= '3.11'",
 ]
 conflicts = [

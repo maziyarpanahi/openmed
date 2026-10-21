@@ -30,13 +30,15 @@ it to transitive image dependencies as well. Pillow remains outside the core
 SDK dependency set. No audit findings are ignored by this update.
 
 [Pillow 13 drops Python 3.10 support](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
-OpenMed preserves its Python 3.10 SDK compatibility and the Pillow 12.3.0
-development pin on that interpreter, including the existing synthetic image
-tests. This legacy Pillow version does **not** contain the image-parser fixes
-in Pillow 13. Python 3.10 users must upgrade to Python 3.11+ and Pillow 13 before
-processing untrusted images with Pillow-backed features. A passing Python 3.11
-CI audit is not security clearance for a Python 3.10 image deployment; audit the
-actual deployment environment. The base SDK can still run without Pillow.
+OpenMed preserves Python 3.10 support for the core SDK, which does not require
+Pillow. Pillow-backed image processing and brand rendering require Python 3.11+
+and Pillow 13. No vulnerable Python 3.10 fallback is retained in the lockfile or
+development environment. Tests that require Pillow run on the Python 3.11+
+matrix; Python 3.10 still runs the core suite, pure image-header tests, and all
+homepage analytics checks. Existing Python 3.10 image deployments must upgrade
+Python and reinstall their image extras before processing untrusted input;
+installing legacy Pillow manually is unsupported. Audit the actual deployment
+environment, including optional transitive dependencies installed outside uv.
 
 Beam's Pillow upper bound is overridden on Python 3.11+ to permit the patched
 release; the existing DirectRunner integration tests validate that combination.

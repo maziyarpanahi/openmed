@@ -24,6 +24,7 @@ def _load_validator():
 
 
 def _load_social_renderer():
+    pytest.importorskip("PIL")
     spec = importlib.util.spec_from_file_location(
         "render_social_assets", SOCIAL_RENDERER
     )
@@ -33,9 +34,29 @@ def _load_social_renderer():
     return module
 
 
-def test_brand_system_contract_and_reproducibility() -> None:
+def test_brand_system_contract() -> None:
+    pytest.importorskip("PIL")
     validator = _load_validator()
-    assert validator.validate() == []
+    assert validator.validate(reproduce=False) == []
+
+
+def test_brand_fonts_consumers_and_homepage_on_every_interpreter() -> None:
+    validator = _load_validator()
+    errors = []
+    validator._validate_fonts_and_consumers(errors)
+    validator._validate_governance(errors)
+    assert errors == []
+
+
+@pytest.mark.parametrize("command", _load_validator().GENERATOR_CHECKS)
+def test_brand_generator_reproducibility(command, monkeypatch) -> None:
+    if command[0] == "scripts/brand/render_social_assets.py":
+        pytest.importorskip("PIL")
+    validator = _load_validator()
+    monkeypatch.setattr(validator, "GENERATOR_CHECKS", (command,))
+    errors = []
+    validator._run_generator_checks(errors)
+    assert errors == []
 
 
 def test_brand_package_version_tracks_candidate_and_rejects_stale_claim(monkeypatch):
@@ -118,15 +139,21 @@ def test_social_manifest_portability_preserves_pixel_contract_across_pillow() ->
 
 def test_brand_validation_is_python310_and_crlf_portable(tmp_path: Path) -> None:
     validator = _load_validator()
-    renderer = _load_social_renderer()
     crlf_source = tmp_path / "provenance.md"
     crlf_source.write_bytes(b"approved\r\nmetadata\r\n")
     expected = hashlib.sha256(b"approved\nmetadata\n").hexdigest()
 
     assert abs(validator._cube_root(-8.0) + 2.0) < 1e-12
     assert validator._source_sha256(crlf_source) == expected
-    assert renderer._source_sha256(crlf_source) == expected
     assert validator._sha256(crlf_source) != expected
+
+
+def test_social_renderer_provenance_is_crlf_portable(tmp_path: Path) -> None:
+    renderer = _load_social_renderer()
+    crlf_source = tmp_path / "provenance.md"
+    crlf_source.write_bytes(b"approved\r\nmetadata\r\n")
+    expected = hashlib.sha256(b"approved\nmetadata\n").hexdigest()
+    assert renderer._source_sha256(crlf_source) == expected
 
 
 def test_faq_parity_rejects_visible_answer_drift() -> None:
@@ -171,9 +198,9 @@ def test_brand_rejects_substituted_national_id_only_language(monkeypatch):
         return value
 
     monkeypatch.setattr(validator, "_load_json", changed)
-    assert any(
-        "national-ID-only language claim" in error for error in validator.validate()
-    )
+    errors = []
+    validator._validate_claims(errors)
+    assert any("national-ID-only language claim" in error for error in errors)
 
 
 @pytest.mark.parametrize(

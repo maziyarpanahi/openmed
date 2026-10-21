@@ -276,6 +276,14 @@ jobs:
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
+    - name: Verify secure image dependency selection
+      run: >-
+        uv run --frozen python -c
+        "import importlib.util, sys; from importlib.metadata import version;
+        assert (int(version('Pillow').split('.')[0]) >= 13
+        if sys.version_info >= (3, 11)
+        else importlib.util.find_spec('PIL') is None)"
+
     - name: Windows portability regression checks
       if: runner.os == 'Windows'
       timeout-minutes: 10

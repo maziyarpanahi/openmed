@@ -465,16 +465,23 @@ def test_pillow_security_floor_preserves_interpreter_compatibility(
         and requirement.marker is not None
         and requirement.marker.evaluate({"python_version": python_version})
     ]
-    assert len(active) == 1
     if python_version == "3.10":
-        assert "12.3.0" in active[0].specifier
+        assert not active
     else:
+        assert len(active) == 1
         assert "12.3.0" not in active[0].specifier
         assert "13.0.0" in active[0].specifier
     assert not any(
         Requirement(value).name.lower() == "pillow"
         for value in project["project"]["dependencies"]
     )
+
+
+def test_image_lock_never_retains_an_unsafe_legacy_release() -> None:
+    _, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "pillow"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("13.0.0") for item in resolved)
 
 
 def test_certificate_bundle_lock_uses_patched_release() -> None:
