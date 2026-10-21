@@ -21,6 +21,29 @@ an active ignore fail CI so exceptions stay visible. Each ignore must include:
 Expired ignores fail CI. Remove an ignore as soon as the dependency can be
 upgraded.
 
+## Image dependencies and Python compatibility
+
+The October 21 CI audit requires `certifi>=2026.10.19` and Pillow 13.0.0 in the
+Python 3.11+ development environment. The `multimodal` and `mlx` extras publish
+the Pillow 13 minimum for those interpreters, and the frozen resolver applies
+it to transitive image dependencies as well. Pillow remains outside the core
+SDK dependency set. No audit findings are ignored by this update.
+
+[Pillow 13 drops Python 3.10 support](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
+OpenMed preserves its Python 3.10 SDK compatibility and the Pillow 12.3.0
+development pin on that interpreter, including the existing synthetic image
+tests. This legacy Pillow version does **not** contain the image-parser fixes
+in Pillow 13. Python 3.10 users must upgrade to Python 3.11+ and Pillow 13 before
+processing untrusted images with Pillow-backed features. A passing Python 3.11
+CI audit is not security clearance for a Python 3.10 image deployment; audit the
+actual deployment environment. The base SDK can still run without Pillow.
+
+Beam's Pillow upper bound is overridden on Python 3.11+ to permit the patched
+release; the existing DirectRunner integration tests validate that combination.
+Brand reproduction retains the recorded generator version as provenance while
+checking approved master bytes, derivative pixels, and committed file hashes
+with the current Pillow. A dependency upgrade does not authorize image drift.
+
 ## Optional storage dependencies
 
 The v3.1 release review raises the existing optional dependency closures to

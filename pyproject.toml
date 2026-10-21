@@ -62,7 +62,9 @@ dev = [
   "mcp>=1.30,<2",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
-  "Pillow==12.3.0",
+  # Pillow 13 fixes the image-parser advisories but requires Python 3.11+.
+  "Pillow==12.3.0; python_version < '3.11'",
+  "Pillow==13.0.0; python_version >= '3.11'",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "openpyxl>=3.1,<4",
@@ -214,7 +216,8 @@ multimodal = [
   "pdfplumber>=0.11",
   "python-docx>=1.1",
   "python-pptx>=1.0",
-  "Pillow>=10.0",
+  "Pillow>=12.3.0; python_version < '3.11'",
+  "Pillow>=13.0.0; python_version >= '3.11'",
   "python-doctr>=1.0",
   "piexif>=1.1",
   "pikepdf>=9.0",
@@ -433,7 +436,8 @@ mlx = [
   "mlx>=0.22",
   "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
-  "Pillow>=10.0",
+  "Pillow>=12.3.0; python_version < '3.11'",
+  "Pillow>=13.0.0; python_version >= '3.11'",
   "transformers>=4.50",
   "tokenizers>=0.15",
   "safetensors>=0.4",
@@ -514,6 +518,8 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "certifi>=2026.10.19",
+  "Pillow>=13.0.0; python_version >= '3.11'",
   "tinytag>=2.3.0",
   "mako>=1.4.2",
   "multidict>=6.9.1",
@@ -540,6 +546,9 @@ override-dependencies = [
   # DirectRunner remains compatible with the secure versions.
   "cryptography>=50,<51",
   "httplib2>=0.32",
+  # Beam also caps Pillow below the patched release on Python 3.11+.
+  "Pillow==12.3.0; python_version < '3.11'",
+  "Pillow>=13.0.0; python_version >= '3.11'",
 ]
 conflicts = [
   [

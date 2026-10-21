@@ -93,26 +93,27 @@ def test_social_masters_are_exact_approved_handoff_exports() -> None:
         assert master.read_bytes() == approved.read_bytes()
 
 
-def test_social_manifest_portability_ignores_only_derivative_encoding_bytes() -> None:
+def test_social_manifest_portability_preserves_pixel_contract_across_pillow() -> None:
     renderer = _load_social_renderer()
     manifest = json.loads(
         (REPO_ROOT / "docs/brand/social/manifest.json").read_text(encoding="utf-8")
     )
     platform_variant = deepcopy(manifest)
+    platform_variant["synchronizer"]["pillow_version"] = "13.0.0"
     platform_variant["assets"][0]["native_sha256"] = "platform-specific-png"
     platform_variant["assets"][1]["safe_zone_preview_sha256"] = (
         "platform-specific-preview"
     )
     platform_variant["derived_assets"][0]["sha256"] = "platform-specific-encoding"
 
-    assert renderer._manifest_without_derivative_byte_hashes(
-        platform_variant
-    ) == renderer._manifest_without_derivative_byte_hashes(manifest)
+    assert renderer._portable_manifest(platform_variant) == renderer._portable_manifest(
+        manifest
+    )
 
     platform_variant["assets"][0]["native_pixel_sha256"] = "pixel-drift"
-    assert renderer._manifest_without_derivative_byte_hashes(
-        platform_variant
-    ) != renderer._manifest_without_derivative_byte_hashes(manifest)
+    assert renderer._portable_manifest(platform_variant) != renderer._portable_manifest(
+        manifest
+    )
 
 
 def test_brand_validation_is_python310_and_crlf_portable(tmp_path: Path) -> None:
