@@ -45,6 +45,12 @@ environment, including optional transitive dependencies installed outside uv.
 
 Beam's Pillow upper bound is overridden on Python 3.11+ to permit the patched
 release; the existing DirectRunner integration tests validate that combination.
+This project-level override is not included in wheel metadata. Plain pip cannot
+resolve the `beam` extra while upstream declares `Pillow<13`; use the tested
+[Beam installation recipe](../integrations/beam.md) with the repository's Pillow,
+cryptography, and httplib2 overrides and the validated Beam version. Do not lower
+the security floors to resolve those conflicts. Other Beam runners and image
+transforms still need deployment-specific validation.
 Brand reproduction retains the recorded generator version as provenance while
 checking approved master bytes, derivative pixels, and committed file hashes
 with the current Pillow. A dependency upgrade does not authorize image drift.
