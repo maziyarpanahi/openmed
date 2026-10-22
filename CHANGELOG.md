@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Charge privacy budget for private hyperparameter and checkpoint selection.
+  `openmed.risk.private_selection.TuningLedger` records every candidate,
+  including abandoned ones, with mechanism parameters, a lineage digest and a
+  banded outcome, and charges the composition of all trials plus every private
+  selection evaluation (best-of-k, early stopping, checkpoint or round
+  selection) by default. Declared random-stopping schemes draw the trial count
+  with an injected CSPRNG and apply the Liu and Talwar (2019) and Papernot and
+  Steinke (2022) private-selection bounds; fixed trial counts are refused.
+  Promotion evidence citing only the selected trial is refused. Records hold
+  no metric values, seeds or site identities (#3853).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
