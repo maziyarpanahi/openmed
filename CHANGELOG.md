@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added content-free per-site label coverage declarations for federated
+  training, validated against a coordinator-owned round label schema with a
+  guideline-version digest and text form; a framework-neutral BIO loss-mask
+  builder that removes each site's unannotated labels from the negative class;
+  a coordinator gate that blocks rounds where a critical direct-identifier
+  label has no annotating site; and band-only coverage evidence with stable
+  reason codes (#3851).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
