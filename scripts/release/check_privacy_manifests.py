@@ -82,25 +82,103 @@ SYMBOL_PATTERNS = {
     category: re.compile(r"\b(?:" + "|".join(symbols) + r")\b")
     for category, symbols in REQUIRED_REASON_SYMBOLS.items()
 }
-# String literals match first so "//" inside them is not read as a comment.
-COMMENT_OR_STRING = re.compile(r'"(?:\\.|[^"\\\n])*"|//[^\n]*|/\*.*?\*/', re.DOTALL)
+# Opening delimiter of a Swift string literal: optional raw-string hashes, then
+# a multiline or single-line quote.
+STRING_START = re.compile(r'(#*)("""|")')
 
 
-def strip_comments(source: str) -> str:
-    """Blank Swift comments while keeping string literals and line numbers.
+def _blank(text: str) -> str:
+    return re.sub(r"[^\n]", " ", text)
+
+
+def _skip_block_comment(source: str, index: int) -> int:
+    depth = 0
+    while index < len(source):
+        if source.startswith("/*", index):
+            depth += 1
+            index += 2
+        elif source.startswith("*/", index):
+            depth -= 1
+            index += 2
+            if depth == 0:
+                break
+        else:
+            index += 1
+    return index
+
+
+def _scan_string(source: str, index: int, out: list[str]) -> int:
+    match = STRING_START.match(source, index)
+    assert match is not None
+    hashes, quote = match.groups()
+    close = quote + hashes
+    escape = "\\" + hashes
+    out.append(_blank(match.group()))
+    index = match.end()
+    while index < len(source):
+        if source.startswith(close, index):
+            out.append(_blank(close))
+            return index + len(close)
+        if quote == '"' and source[index] == "\n":
+            break  # unterminated single-line literal
+        if source.startswith(escape, index):
+            after = index + len(escape)
+            if source.startswith("(", after):
+                out.append(_blank(source[index:after]) + "(")
+                index = _scan_code(source, after + 1, out, nested=True)
+                continue
+            # Ordinary escape: skip the escaped character with the delimiter.
+            out.append(_blank(source[index : after + 1]))
+            index = after + 1
+            continue
+        out.append(_blank(source[index]))
+        index += 1
+    return index
+
+
+def _scan_code(source: str, index: int, out: list[str], nested: bool) -> int:
+    depth = 0
+    while index < len(source):
+        char = source[index]
+        if source.startswith("//", index):
+            end = source.find("\n", index)
+            end = len(source) if end == -1 else end
+            out.append(_blank(source[index:end]))
+            index = end
+        elif source.startswith("/*", index):
+            end = _skip_block_comment(source, index)
+            out.append(_blank(source[index:end]))
+            index = end
+        elif STRING_START.match(source, index):
+            index = _scan_string(source, index, out)
+        else:
+            out.append(char)
+            index += 1
+            if nested and char == "(":
+                depth += 1
+            elif nested and char == ")":
+                if depth == 0:
+                    return index
+                depth -= 1
+    return index
+
+
+def strip_comments_and_strings(source: str) -> str:
+    """Blank Swift comments and string-literal text, keeping line numbers.
+
+    String interpolations such as ``"\\(value)"`` are executable code and are
+    kept, including in raw (``#"..."#``) and multiline literals.
 
     Args:
         source: Swift source text.
 
     Returns:
-        The source with every comment replaced by its newlines.
+        The source with comments and literal text replaced by spaces, newlines
+        preserved.
     """
-
-    def blank(match: re.Match[str]) -> str:
-        text = match.group()
-        return text if text.startswith('"') else "\n" * text.count("\n")
-
-    return COMMENT_OR_STRING.sub(blank, source)
+    out: list[str] = []
+    _scan_code(source, 0, out, nested=False)
+    return "".join(out)
 
 
 def find_required_reason_apis(source_dir: Path, root: Path) -> dict[str, list[str]]:
@@ -115,7 +193,7 @@ def find_required_reason_apis(source_dir: Path, root: Path) -> dict[str, list[st
     """
     found: dict[str, list[str]] = {}
     for path in sorted(source_dir.rglob("*.swift")):
-        code = strip_comments(path.read_text(encoding="utf-8"))
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
         relative = path.relative_to(root).as_posix()
         for category, pattern in SYMBOL_PATTERNS.items():
             for match in pattern.finditer(code):

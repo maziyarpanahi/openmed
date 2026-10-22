@@ -128,6 +128,35 @@ def test_comments_are_not_api_use(tmp_path):
     assert privacy_manifests.check_target(tmp_path, manifest, tmp_path) == []
 
 
+def test_string_literal_text_is_not_api_use(tmp_path):
+    (tmp_path / "Labels.swift").write_text(
+        'let message = "UserDefaults \\"stat\\" // creationDate"\n'
+        'let raw = #"systemUptime "quoted" \\(AppStorage)"#\n'
+        'let help = """\n  Reads "UserDefaults" and \\\n  activeInputModes\n  """\n'
+        "let value = 1\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path / MANIFEST_NAME)
+
+    assert privacy_manifests.check_target(tmp_path, manifest, tmp_path) == []
+
+
+def test_api_use_inside_string_interpolation_is_detected(tmp_path):
+    (tmp_path / "Status.swift").write_text(
+        'let text = """\n  Saved: \\(UserDefaults.standard.string(forKey: "k") ?? "-")\n'
+        '  """\nlet raw = #"Up \\#(ProcessInfo.processInfo.systemUptime)s"#\n',
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path / MANIFEST_NAME)
+
+    assert privacy_manifests.check_target(tmp_path, manifest, tmp_path) == [
+        "Status.swift:4 systemUptime: NSPrivacyAccessedAPICategorySystemBootTime "
+        "is not declared in PrivacyInfo.xcprivacy",
+        "Status.swift:2 UserDefaults: NSPrivacyAccessedAPICategoryUserDefaults "
+        "is not declared in PrivacyInfo.xcprivacy",
+    ]
+
+
 def test_tracking_collected_data_and_unapproved_reasons_fail(tmp_path):
     manifest = _write_manifest(
         tmp_path / MANIFEST_NAME,
