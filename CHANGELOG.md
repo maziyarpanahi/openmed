@@ -250,6 +250,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extractor and retain native span offsets and confidence scores instead of
   attempting to use older `gliner` classes (#4329).
 
+### Security
+
+- Load ONNX Runtime Web external-data shards only through the typed
+  `externalData` option: reject remote and query-bearing shard locations and
+  untyped `sessionOptions.externalData`, enforce declared per-shard and total
+  byte limits before session creation, and key cached sessions by shard
+  (#3934).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
