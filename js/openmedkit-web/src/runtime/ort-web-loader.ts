@@ -136,7 +136,9 @@ export function assertOfflineAssetPath(path: string, label = "asset path"): stri
   if (trimmed.length === 0) {
     throw new Error(`ONNX Runtime Web ${label} must not be empty.`);
   }
-  if (trimmed.startsWith("//") || trimmed.startsWith("\\\\")) {
+  // Browsers drop tab/CR/LF and read "/\" or "\/" as "//", which would turn the
+  // path into a remote URL.
+  if (/[\t\n\r]/.test(trimmed) || /^[\\/]{2}/.test(trimmed)) {
     throw new Error(`ONNX Runtime Web ${label} must be local/offline, not remote.`);
   }
   if (/^[A-Za-z]:[\\/]/.test(trimmed)) {

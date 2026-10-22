@@ -39,8 +39,9 @@ const result = await deidentify(
 
 `modelPath` and `assetPath` must point to local or offline paths such as
 `/models/...`, `./models/...`, `../models/...`, or `file://...`. HTTP(S),
-protocol-relative, `data:`, and `blob:` paths are rejected so tests and browser
-bundles do not silently fetch PHI-processing assets from a CDN.
+protocol-relative (including `/\` and `\/`), `data:`, and `blob:` paths, and
+paths containing tabs or line breaks, are rejected so tests and browser bundles
+do not silently fetch PHI-processing assets from a CDN.
 
 Session construction is cached by model path, wasm asset path, backend choice,
 session options, and external-data shard paths and locations. Repeated calls
