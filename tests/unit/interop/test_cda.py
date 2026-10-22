@@ -321,3 +321,24 @@ def test_coverage_inventory_refuses_unbounded_xml_without_partial_metadata(case)
     assert report == {}
     assert "PrivateSyntheticAddress" not in str(caught.value)
     assert caught.value.__context__ is None
+
+
+def test_generated_ccda_documents_stay_cda_and_inventory_unmapped_actors():
+    import json
+
+    from openmed.training.synthetic.cda_documents import generate_cda_documents
+
+    for doc in generate_cda_documents(3, seed=4):
+        report = {}
+        redacted = str(
+            cda.redact_cda(doc.xml, date_shift_days=3, coverage_report=report)
+        )
+        assert cda.is_cda_document(redacted)
+        assert _parse(redacted).tag == f"{{{CDA_NAMESPACE}}}ClinicalDocument"
+        paths = {row["path"] for row in report["unmapped_elements"]}
+        assert "/ClinicalDocument/author/assignedAuthor/telecom" in paths
+        assert any(
+            path.endswith("/assignedEntity/assignedPerson/name") for path in paths
+        )
+        rendered = json.dumps(report)
+        assert all(truth.value not in rendered for truth in doc.truth)
