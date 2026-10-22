@@ -82,17 +82,26 @@ let package = Package(
         ),
         .target(
             name: "OpenMedExtensionSupport",
-            dependencies: ["OpenMedKit"]
+            dependencies: ["OpenMedKit"],
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMedShareExtension",
             dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
-            path: "Sources/ShareExtension"
+            path: "Sources/ShareExtension",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMedActionExtension",
             dependencies: ["OpenMedExtensionSupport"],
-            path: "Sources/ActionExtension"
+            path: "Sources/ActionExtension",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "OpenMedKitTests",

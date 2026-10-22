@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ship privacy manifests with the OpenMedKit and extension products, declare
+  the scan demo's user defaults access, and fail CI when Swift sources use an
+  undeclared required-reason API (#3946).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
