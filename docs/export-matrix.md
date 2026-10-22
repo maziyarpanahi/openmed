@@ -76,6 +76,7 @@ truth is the backend code, but the essentials are:
 
 - [MLX Backend](mlx-backend.md)
 - [MLX Quantized Export Certification](export-mlx-quant.md)
+- [Private Candidate Quantized-deployment Recall Deltas](evaluation/private-candidate-quant-gate.md)
 - [CoreML Packaging](coreml-export.md)
 - [ONNX and WebGPU Export](export-onnx-webgpu.md)
 - [Android ONNX Export](export-onnx-android.md)

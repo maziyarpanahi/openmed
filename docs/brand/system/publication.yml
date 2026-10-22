@@ -723,6 +723,7 @@ classification:
     - compliance/za-popia-identifier-checklist.md
     - compliance/waiver-ledger.md
     - demo/browser-egress.md
+    - evaluation/private-candidate-quant-gate.md
     - integrations-llamaindex.md
     - i18n/glossary.md
     - leaderboard/index.md
