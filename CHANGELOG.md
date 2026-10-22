@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Select federated round participants by secret Poisson sampling with an
+  injected OS random source and exact integer inclusion, and emit a sampling
+  declaration for privacy accounting. Fixed-size, availability-driven and
+  operator-chosen rosters, seeded test selection and rounds whose ledger or
+  status records disclose participation are accounted at `q = 1` with stable
+  reason codes; accountant inputs whose rate differs from the declaration are
+  rejected. Records carry only rates, a population band and a keyed roster
+  commitment, never pseudonyms, rosters or seeds (#3848).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
