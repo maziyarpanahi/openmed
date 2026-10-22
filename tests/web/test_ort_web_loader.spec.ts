@@ -105,13 +105,33 @@ test("rejects remote model and wasm asset paths", async () => {
   );
 });
 
-test("rejects UNC and remote-host file asset paths", () => {
+test("rejects UNC and remote-host file asset paths", async () => {
   for (const path of [
     "\\\\models.example.invalid\\share\\model.onnx",
     "file://models.example.invalid/share/model.onnx",
     "file:////models.example.invalid/share/model.onnx",
+    "\u0000https://models.example.invalid/model.onnx",
+    "\u001f//models.example.invalid/model.onnx",
   ]) {
     assert.throws(() => assertOfflineAssetPath(path), /local\/offline/);
+  }
+  for (const [modelPath, assetPath] of [
+    ["\u0000https://cdn.example.invalid/model.onnx", "/models/openmed/ort/"],
+    ["/models/openmed/model.onnx", "\u001f//cdn.example.invalid/ort/"],
+  ]) {
+    await assert.rejects(
+      () =>
+        loadOrtWebSession({
+          modelPath: modelPath!,
+          assetPath: assetPath!,
+          runtime: () => {
+            throw new Error("runtime must not be imported");
+          },
+          capabilities: basicWasmProfile,
+          cache: new Map(),
+        }),
+      valueFreeError(/local\/offline/),
+    );
   }
 
   assert.equal(
@@ -162,6 +182,8 @@ test("rejects remote and query-bearing shards before importing the runtime", asy
     "/\\cdn.example.invalid/model.onnx.data.000",
     "/\t/cdn.example.invalid/model.onnx.data.000",
     "ht\ttps://cdn.example.invalid/model.onnx.data.000",
+    "\u0000https://cdn.example.invalid/model.onnx.data.000",
+    "\u001f//cdn.example.invalid/model.onnx.data.000",
     "https://user:secret@cdn.example.invalid/model.onnx.data.000",
     "file://user:secret@localhost/models/model.onnx.data.000",
     "/models/openmed/model.onnx.data.000?token=secret",
