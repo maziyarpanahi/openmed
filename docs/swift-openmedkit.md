@@ -219,9 +219,10 @@ access with reason `CA92.1` for its saved engine choice and clinical presets.
 CI runs an offline scan that maps Apple's required-reason API symbols in the
 kit and scan demo Swift sources to their categories: file timestamps, system
 boot time, disk space, active keyboards and user defaults, including SwiftUI
-`@AppStorage`. Comments are ignored. The scan fails when a category is used
-without an approved reason in the covering manifest, when a kit target has no
-manifest, or when a manifest declares tracking or collected data:
+`@AppStorage`. Comments and string-literal text are ignored, but code inside
+string interpolation is scanned. The scan fails when a category is used without
+an approved reason in the covering manifest, when a kit target has no manifest,
+or when a manifest declares tracking or collected data:
 
 ```bash
 python scripts/release/check_privacy_manifests.py
