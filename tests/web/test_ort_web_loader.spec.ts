@@ -159,6 +159,9 @@ test("rejects remote and query-bearing shards before importing the runtime", asy
   for (const location of [
     "https://cdn.example.invalid/model.onnx.data.000",
     "//cdn.example.invalid/model.onnx.data.000",
+    "/\\cdn.example.invalid/model.onnx.data.000",
+    "/\t/cdn.example.invalid/model.onnx.data.000",
+    "ht\ttps://cdn.example.invalid/model.onnx.data.000",
     "https://user:secret@cdn.example.invalid/model.onnx.data.000",
     "file://user:secret@localhost/models/model.onnx.data.000",
     "/models/openmed/model.onnx.data.000?token=secret",
