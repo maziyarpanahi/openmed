@@ -24,6 +24,7 @@ from openmed.training.federated_round import (
     FederatedRoundStateError,
 )
 from openmed.training.federated_schedule import (
+    FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
     FederatedRoundSchedule,
     FederatedScheduleError,
 )
@@ -86,6 +87,18 @@ def _schedule_payload() -> dict[str, Any]:
         aggregation_starts_at=_START + timedelta(hours=2),
         evaluation_starts_at=_START + timedelta(hours=3),
         finishes_at=_START + timedelta(hours=4),
+    ).to_dict()
+
+
+def _schedule_v2_payload() -> dict[str, Any]:
+    return FederatedRoundSchedule(
+        enrollment_starts_at=_START,
+        update_submission_starts_at=_START + timedelta(hours=1),
+        aggregation_starts_at=_START + timedelta(hours=2),
+        evaluation_starts_at=_START + timedelta(hours=3),
+        finishes_at=_START + timedelta(hours=4),
+        schema_version=FEDERATED_SCHEDULE_V2_SCHEMA_VERSION,
+        max_clock_skew_seconds=120,
     ).to_dict()
 
 
@@ -159,6 +172,18 @@ SURFACES: dict[str, Surface] = {
         FederatedScheduleError,
         "invalid federated schedule durations",
         ("maximum_duration_seconds",),
+    ),
+    "schedule-v2-dict": Surface(
+        _schedule_v2_payload,
+        FederatedRoundSchedule.from_dict,
+        FederatedScheduleError,
+        "invalid federated schedule payload",
+    ),
+    "schedule-v2-json": Surface(
+        _schedule_v2_payload,
+        _as_json(FederatedRoundSchedule.from_json),
+        FederatedScheduleError,
+        "invalid federated schedule payload",
     ),
     "round-lifecycle-dict": Surface(
         _round_payload,

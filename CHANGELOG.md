@@ -41,6 +41,13 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Tolerate bounded clock skew between federated sites and the coordinator with
+  a v2 round schedule that declares `max_clock_skew_seconds` (0 to 900). Sites
+  start a phase only inside the skew-shrunk window, and the coordinator admits
+  arrivals by receipt time only, with stable reason codes. Admission evidence
+  is ordered by coordinator sequence and carries no site timestamps or clock
+  offsets; v1 schedules parse and serialize unchanged (#3878).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
