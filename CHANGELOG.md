@@ -41,6 +41,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Package controlled synthetic recipes and evidence into canonical offline-verifiable release capsules (#2854).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
