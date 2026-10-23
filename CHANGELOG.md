@@ -381,8 +381,9 @@ clinical efficacy. Package publication remains a separate release action.
 ### Security
 
 - Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
-  `service` profiles, and lock patched virtualenv 21.14.13, Brotli 1.2.1 and
-  graphql-core 3.2.12. A lock-only packaging override lifts Prefect 3.7's
+  `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
+  patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A
+  lock-only packaging override lifts Prefect 3.7's
   `packaging<26.3` cap so the lock keeps Airflow on patched 3.3.2; the base
   SDK's dependency set is unchanged.
 - Refresh the service image's exact Debian forky pins for ca-certificates,

@@ -407,6 +407,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
         ("banks", "2.5.0", "2.5.1", ("agents", "llamaindex")),
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
+        ("gitpython", "3.1.62", "3.2.1", ("docs",)),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
         ("mcp", "1.29.1", "1.30.0", ("dev", "mcp")),

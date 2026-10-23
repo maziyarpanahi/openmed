@@ -501,7 +501,7 @@ docs = [
   "mkdocs-minify-plugin>=0.8.0",
   "mkdocs-static-i18n>=1.3,<2",
   "pymdown-extensions>=11.0.1,<12",
-  "gitpython>=3.1.60,<4",
+  "gitpython>=3.2.1,<4",
   "mkdocstrings[python]",
   "griffe",
 ]
@@ -542,6 +542,7 @@ constraint-dependencies = [
   "brotli>=1.2.1",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
+  "gitpython>=3.2.1",
   "betterproto==2.0.0b6; python_version >= '3.11'",
   "pyjwt>=2.14.0",
 ]
