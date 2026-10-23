@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a local `meddecider` NLI runtime for permissively licensed MedDecider
+  decision models (currently `lion-ai/MedDecider-4B`, Apache-2.0). It loads a
+  caller-provisioned adapter/base directory offline, merges the LoRA adapter in
+  memory without new dependencies, and exposes calibrated three-class
+  probabilities to `EncoderNLIBackend`, `qualify_local_nli()`,
+  `bind_qualified_nli()` and `openmed nli-qualify --runtime meddecider`. Gating,
+  qualification and receipts are unchanged; no registry default or calibration
+  ships with it.
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and

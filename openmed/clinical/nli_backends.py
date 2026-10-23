@@ -56,7 +56,7 @@ class EncoderNLIBackend:
         reference = str(model_ref)
         if _is_remote(reference):
             raise RemoteNLIBackendError("remote NLI backends are prohibited")
-        if runtime not in {"torch", "onnx"}:
+        if runtime not in {"torch", "onnx", "meddecider"}:
             raise LocalNLIError("unsupported local NLI runtime")
         if not isinstance(thresholds, NLIThresholds):
             raise LocalNLIError("calibrated NLI thresholds are required")
@@ -131,7 +131,7 @@ class EncoderNLIBackend:
             encoded = tokenizer(
                 premise,
                 hypothesis,
-                return_tensors="pt" if self.runtime == "torch" else "np",
+                return_tensors="np" if self.runtime == "onnx" else "pt",
                 truncation=False,
             )
             limits = [512]
@@ -143,11 +143,11 @@ class EncoderNLIBackend:
                     limits.append(limit)
             if len(encoded["input_ids"][0]) > min(limits):
                 raise NLIContextLimitError("NLI pair exceeds local context limit")
-            if self.runtime == "torch":
-                logits = model(**encoded).logits[0].tolist()
-            else:
+            if self.runtime == "onnx":
                 feeds = {item.name: encoded[item.name] for item in model.get_inputs()}
                 logits = model.run(None, feeds)[0][0].tolist()
+            else:
+                logits = model(**encoded).logits[0].tolist()
             if len(logits) != 3 or not all(math.isfinite(float(x)) for x in logits):
                 raise ValueError("invalid classifier output")
             peak = max(float(x) for x in logits)

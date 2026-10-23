@@ -181,7 +181,7 @@ def _split(value: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _binding(path, mapping, development, evaluation, policy, runtime):
-    if runtime not in ("torch", "onnx"):
+    if runtime not in ("torch", "onnx", "meddecider"):
         raise NLIQualificationError("invalid_runtime")
     return {
         "artifact_digest": _artifact_digest(Path(path)),
@@ -270,7 +270,7 @@ def qualify_local_nli(
         development: Provenance and source-grouped records for threshold selection.
         evaluation: Separate held-out records, never used to select thresholds.
         policy: Explicit operating constraints and minimum per-class support.
-        runtime: Existing local torch or ONNX runtime.
+        runtime: Existing local ``torch``, ``onnx`` or ``meddecider`` runtime.
         loader: Optional injected local loader for offline adapter tests.
 
     Returns:

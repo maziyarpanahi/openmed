@@ -152,6 +152,45 @@ only and cannot establish clinical qualification. Human review is always
 required. Keep input datasets in caller-controlled private storage; receipts
 and diagnostics contain no raw text, identifiers or local paths.
 
+### Local MedDecider runtime
+
+A MedDecider artifact provisioned as described in
+[local backends](../clinical/local-backends.md#local-meddecider-runtime) uses
+the same protocol with `--runtime meddecider` and its declared class map:
+
+```bash
+echo '{"0":"entailment","1":"neutral","2":"contradiction"}' > labels.json
+openmed nli-qualify --artifact /local/meddecider-artifact --runtime meddecider \
+  --label-mapping labels.json --development /local/development.json \
+  --evaluation /local/evaluation.json --json
+```
+
+In Python, pass `runtime="meddecider"` and
+`label_mapping=MEDDECIDER_NLI_LABEL_MAPPING` (from
+`openmed.torch.meddecider_nli`) to `qualify_local_nli()` and
+`bind_qualified_nli()`. For standalone `verify()`, construct the backend with
+the receipt's operating point:
+
+```python
+from openmed.clinical.nli import verify
+from openmed.clinical.nli_backends import EncoderNLIBackend
+from openmed.clinical.nli_gate import NLIThresholds
+from openmed.torch.meddecider_nli import MEDDECIDER_NLI_LABEL_MAPPING
+
+data = receipt.to_dict()
+backend = EncoderNLIBackend(
+    "/local/meddecider-artifact",
+    runtime="meddecider",
+    label_mapping=MEDDECIDER_NLI_LABEL_MAPPING,
+    thresholds=NLIThresholds(
+        **data["thresholds"],
+        calibration_id=data["receipt_digest"],
+        calibration_method="openmed-nli-qualification",
+    ),
+)
+verify(claims, source, backend=backend)
+```
+
 ### Bind the receipt to BriefContext
 
 ```python

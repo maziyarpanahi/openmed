@@ -176,6 +176,33 @@ is a development baseline, not a qualified encoder or a brief provider.
 Empty claims return an empty list without resolving a backend; absence of a
 verdict is not a successful verification.
 
+## Local MedDecider runtime
+
+`runtime="meddecider"` runs a permissively licensed MedDecider decision model
+(currently `lion-ai/MedDecider-4B`, Apache-2.0) through the same classifier
+contract. The model answers "is this statement supported by the text?" with
+three lettered options and returns calibrated probabilities from its option
+letter logits; `EncoderNLIBackend`, the selective gate, qualification and
+receipt binding are unchanged. Provision a local artifact directory once, with
+pinned revisions, holding the adapter in `adapter/` and the base model it names
+in `base/`:
+
+```bash
+hf download lion-ai/MedDecider-4B --revision <commit> --local-dir artifact/adapter
+hf download Qwen/Qwen3.5-4B --revision <commit> --local-dir artifact/base
+```
+
+The runtime reads only that directory: no hub lookup, no remote code and no
+truncation. It requires the optional `hf` runtime with a transformers release
+that supports the base architecture, merges the LoRA adapter in memory, and
+uses `OPENMED_TORCH_DEVICE` or the configured device. Both model cards must
+declare `apache-2.0`, `mit` or `bsd-3-clause`; other licences, incomplete
+artifacts and unsupported adapter types are refused. Declare the class map
+`{"0": "entailment", "1": "neutral", "2": "contradiction"}` (exported as
+`MEDDECIDER_NLI_LABEL_MAPPING`) and take thresholds from your own
+[qualification receipt](../evaluation/nli-calibration.md#local-meddecider-runtime);
+no registry default or calibration ships with this runtime.
+
 ## Artifact, capability and memory gates before construction
 
 For a caller-owned runtime, verify the [artifact manifest](../models/clinical-slm-manifest.md),

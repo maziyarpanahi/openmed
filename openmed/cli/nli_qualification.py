@@ -17,7 +17,9 @@ def add_nli_qualification_command(subparsers: argparse._SubParsersAction) -> Non
     parser.add_argument("--development", type=Path)
     parser.add_argument("--evaluation", type=Path)
     parser.add_argument("--policy", type=Path)
-    parser.add_argument("--runtime", choices=("torch", "onnx"), default="torch")
+    parser.add_argument(
+        "--runtime", choices=("torch", "onnx", "meddecider"), default="torch"
+    )
     add_json_flag(parser)
     parser.set_defaults(handler=handle_nli_qualification)
 

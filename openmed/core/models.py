@@ -176,14 +176,25 @@ class ModelLoader:
 
         A repository reference requires an immutable commit revision. Local
         directory references are useful for predownloaded and test artifacts.
-        The returned objects stay in memory; no input text is logged or cached.
+        The ``meddecider`` runtime reads a local MedDecider artifact directory
+        (see :mod:`openmed.torch.meddecider_nli`). The returned objects stay in
+        memory; no input text is logged or cached.
         """
 
         import re
 
-        if runtime not in {"torch", "onnx"}:
+        if runtime not in {"torch", "onnx", "meddecider"}:
             raise ValueError("unsupported local sequence-classifier runtime")
         local_path = self._as_existing_local_path(model_name)
+        if runtime == "meddecider":
+            if local_path is None or not local_path.is_dir():
+                raise ValueError("MedDecider artifacts load from a local directory")
+            from openmed.torch.meddecider_nli import load_meddecider_classifier
+
+            with network_blocked_if_offline(self.config, local_only=True):
+                return load_meddecider_classifier(
+                    local_path, device=getattr(self.config, "device", None)
+                )
         if local_path is None and (
             not isinstance(revision, str)
             or re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None

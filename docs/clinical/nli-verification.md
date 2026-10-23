@@ -37,7 +37,8 @@ selecting `backend="heuristic"`; it is not a trained clinical model.
 backend id, and contradiction or review flags. It never returns premise or
 hypothesis text. Structured numeric and medication-status prechecks run before
 the model when both records provide those fields. The local backend accepts
-only cached PyTorch or ONNX sequence-classification artifacts. Model class
+only cached PyTorch or ONNX sequence-classification artifacts, or a local
+permissively licensed [MedDecider artifact](local-backends.md#local-meddecider-runtime). Model class
 meanings and calibrated thresholds come from the pinned release metadata; the
 runtime never guesses them or falls back to a remote service.
 
