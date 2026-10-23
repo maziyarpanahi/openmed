@@ -41,6 +41,9 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Add deterministic metadata-only native-review selection with scarcity, disagreement,
+  diversity ties, and simultaneous language, label and total budget caps (#2863).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
