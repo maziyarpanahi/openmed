@@ -392,6 +392,7 @@ nav:
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - XLSX Cell Redaction: multimodal/xlsx-cell-redaction.md
+      - HL7 aECG Reader: multimodal/aecg-reader.md
       - ODT/ODF Text Extraction: multimodal/odt-extraction.md
       - PPTX Redaction: multimodal/pptx-redaction.md
       - RTF Extraction: multimodal/rtf-extraction.md
