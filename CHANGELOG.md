@@ -41,6 +41,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
