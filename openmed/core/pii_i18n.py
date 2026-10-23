@@ -3951,6 +3951,66 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Novemba",
         "Disemba",
     ],
+    # Hausa, Igbo, Kinyarwanda and Yoruba use the CLDR gregorian wide names.
+    # Yoruba drops CLDR's leading "Oṣù" ("month"), which the date patterns
+    # accept as an optional particle. Detection-only spelling variants live in
+    # ``_MONTH_NAME_VARIANTS`` so this table keeps one name per month.
+    "ha": [
+        "Janairu",
+        "Faburairu",
+        "Maris",
+        "Afirilu",
+        "Mayu",
+        "Yuni",
+        "Yuli",
+        "Agusta",
+        "Satumba",
+        "Oktoba",
+        "Nuwamba",
+        "Disamba",
+    ],
+    "ig": [
+        "Jenụwarị",
+        "Febrụwarị",
+        "Maachị",
+        "Epreel",
+        "Mee",
+        "Jun",
+        "Julaị",
+        "Ọgọọst",
+        "Septemba",
+        "Ọktoba",
+        "Novemba",
+        "Disemba",
+    ],
+    "rw": [
+        "Mutarama",
+        "Gashyantare",
+        "Werurwe",
+        "Mata",
+        "Gicurasi",
+        "Kamena",
+        "Nyakanga",
+        "Kanama",
+        "Nzeri",
+        "Ukwakira",
+        "Ugushyingo",
+        "Ukuboza",
+    ],
+    "yo": [
+        "Ṣẹ́rẹ́",
+        "Èrèlè",
+        "Ẹrẹ̀nà",
+        "Ìgbé",
+        "Ẹ̀bibi",
+        "Òkúdu",
+        "Agẹmọ",
+        "Ògún",
+        "Owewe",
+        "Ọ̀wàrà",
+        "Bélú",
+        "Ọ̀pẹ̀",
+    ],
     "sv": [
         "januari",
         "februari",
@@ -4837,13 +4897,15 @@ _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
 # NINs, and Nigerian/Nigerien phone numbers are recognized in Western,
 # Arabic-Indic, and Eastern Arabic-Indic digits. No Ajami lexical matching or
 # transliteration is claimed; those require a separately reviewed lexicon.
+_HAUSA_DATE_CONTEXT = ["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"]
+
 _HAUSA_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
         "date",
         priority=9,
         base_score=0.6,
-        context_words=["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"],
+        context_words=_HAUSA_DATE_CONTEXT,
         context_boost=0.3,
         flags=re.IGNORECASE,
     ),
@@ -5088,6 +5150,137 @@ _IGBO_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Hausa, Yoruba, Igbo and Kinyarwanda month-name dates
+# ---------------------------------------------------------------------------
+
+# Attested spellings accepted in addition to each ``LANGUAGE_MONTH_NAMES``
+# entry. Yoruba entries keep dot-below vowels without tone marks; NFC, NFD and
+# fully unmarked forms of every name are added by the diacritic helper.
+_MONTH_NAME_VARIANTS: Dict[str, Dict[str, tuple[str, ...]]] = {
+    "ha": {"Faburairu": ("Fabrairu",), "Afirilu": ("Afrilu",)},
+    "ig": {
+        "Febrụwarị": ("Febụwarị",),
+        "Maachị": ("Machị", "Mach"),
+        "Epreel": ("Eprel",),
+        "Jun": ("Juun",),
+        "Ọgọọst": ("Ọgọstụ",),
+        "Novemba": ("Nọvemba",),
+    },
+    "rw": {"Nzeri": ("Nzeli",)},
+    "yo": {
+        "Ṣẹ́rẹ́": ("Ṣẹrẹ",),
+        "Ẹrẹ̀nà": ("Ẹrẹna",),
+        "Ẹ̀bibi": ("Ẹbibi",),
+        "Ọ̀wàrà": ("Ọwara",),
+        "Ọ̀pẹ̀": ("Ọpẹ",),
+    },
+}
+
+_KINYARWANDA_DATE_CONTEXT = [
+    "itariki y'amavuko",
+    "itariki y’amavuko",
+    "itariki",
+    "amavuko",
+    "yavutse",
+    "date of birth",
+    "dob",
+    "born",
+]
+
+_DAY_OF_MONTH_PATTERN = r"(?:0?[1-9]|[12][0-9]|3[01])"
+_MONTH_NAME_YEAR_PATTERN = r"(?:19|20)[0-9]{2}"
+
+
+def _diacritic_alternation(values: Iterable[str]) -> str:
+    """Return a longest-first regex alternation over diacritic variants."""
+
+    return "|".join(
+        re.escape(value)
+        for value in sorted(
+            _diacritic_context_variants(*values),
+            key=len,
+            reverse=True,
+        )
+    )
+
+
+def _month_name_date_patterns(
+    lang: str,
+    context_words: List[str],
+    *,
+    month_particles: tuple[str, ...] = (),
+    year_particles: tuple[str, ...] = (),
+) -> List[PIIPattern]:
+    """Compile day-month-year and month-day-year patterns for ``lang``.
+
+    A month word only matches with both a day and a year attached, so month
+    names that are also ordinary words or place names stay unflagged in prose.
+    Optional particles cover native phrasing such as Hausa "15 ga watan" and
+    Yoruba "oṣù ... ọdún".
+    """
+
+    variants = _MONTH_NAME_VARIANTS.get(lang, {})
+    month_names = [
+        name
+        for month in LANGUAGE_MONTH_NAMES[lang]
+        for name in (month, *variants.get(month, ()))
+    ]
+    months = _diacritic_alternation(month_names)
+    month_prefix = (
+        rf"(?:(?:{_diacritic_alternation(month_particles)})\s+)?"
+        if month_particles
+        else ""
+    )
+    year_prefix = (
+        rf"(?:(?:{_diacritic_alternation(year_particles)})\s+)?"
+        if year_particles
+        else ""
+    )
+    return [
+        PIIPattern(
+            rf"(?<!\d){_DAY_OF_MONTH_PATTERN}\s+{month_prefix}(?:{months}),?\s+"
+            rf"{year_prefix}{_MONTH_NAME_YEAR_PATTERN}(?!\d)",
+            "date",
+            priority=8,
+            base_score=0.7,
+            context_words=context_words,
+            context_boost=0.25,
+            flags=re.IGNORECASE,
+        ),
+        # The look-behind also rejects a preceding combining mark so a match
+        # never starts inside another grapheme cluster.
+        PIIPattern(
+            rf"(?<![\w\u0300-\u036f])(?:{months})\s+{_DAY_OF_MONTH_PATTERN},?\s+"
+            rf"{_MONTH_NAME_YEAR_PATTERN}(?!\d)",
+            "date",
+            priority=8,
+            base_score=0.7,
+            context_words=context_words,
+            context_boost=0.25,
+            flags=re.IGNORECASE,
+        ),
+    ]
+
+
+_HAUSA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "ha",
+    _HAUSA_DATE_CONTEXT,
+    month_particles=("ga watan", "ga"),
+)
+_YORUBA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "yo",
+    _YORUBA_DATE_CONTEXT,
+    month_particles=("oṣù",),
+    year_particles=("ọdún",),
+)
+_IGBO_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns("ig", _IGBO_DATE_CONTEXT)
+_KINYARWANDA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "rw",
+    _KINYARWANDA_DATE_CONTEXT,
+)
 
 
 _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
@@ -11732,9 +11925,21 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _AFRIKAANS_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
-    "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
-    "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
-    "yo": [*_NIGERIAN_PII_PATTERNS, *_YORUBA_PII_PATTERNS],
+    "ha": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_HAUSA_PII_PATTERNS,
+        *_HAUSA_MONTH_DATE_PII_PATTERNS,
+    ],
+    "ig": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_IGBO_PII_PATTERNS,
+        *_IGBO_MONTH_DATE_PII_PATTERNS,
+    ],
+    "yo": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_YORUBA_PII_PATTERNS,
+        *_YORUBA_MONTH_DATE_PII_PATTERNS,
+    ],
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -11805,7 +12010,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
-    "rw": _RWANDA_ID_PII_PATTERNS,
+    "rw": [*_RWANDA_ID_PII_PATTERNS, *_KINYARWANDA_MONTH_DATE_PII_PATTERNS],
     "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
