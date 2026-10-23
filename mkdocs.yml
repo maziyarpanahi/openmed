@@ -348,6 +348,7 @@ nav:
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
+      - Synthetic Non-IID Partitions: private-learning/non-iid-simulation.md
       - Federated Aggregate Metrics: training/federated-metrics.md
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md

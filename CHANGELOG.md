@@ -41,6 +41,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Simulate exact-quota non-IID synthetic federation partitions with recorded skews, seeds and achieved statistics (#2833).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
