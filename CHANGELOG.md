@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add per-format quantized-deployment recall-delta evidence for private model
+  candidates. Each declared INT8 or INT4 format is judged separately against
+  the full-precision merge with the existing quant-delta limits, the base
+  precision used during training is recorded, and a quantized training base
+  deployed at another precision fails with `base_precision_incompatible`
+  unless an explicit compatibility declaration applies. Results bind the
+  candidate, base, format and harness digests and contain no text or spans
+  (#3859).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
