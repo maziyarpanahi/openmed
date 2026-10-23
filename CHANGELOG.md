@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Verify a signed, consistent round roster before releasing secure-aggregation
+  shares: canonical roster commitments, threshold co-signatures through
+  injected signers, an operator-attested peer floor and a per-round client
+  guard that aborts on equivocation and refuses double mask reveals (#3854).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
