@@ -41,6 +41,10 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Add deterministic synthetic dataset partitions that preserve shared trajectory,
+  derivation lineage and transitive ancestry, with explicit unmet-stratum export
+  refusal (#3692).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
