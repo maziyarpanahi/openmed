@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added compromised site key holds for federated training. A signed incident
+  record resolves accepted updates inside the exposure window through injected
+  identity, commitment and lineage ports, holds the affected rounds and every
+  descendant checkpoint, refuses their promotion, classifies remediation, and
+  requires signed operator authority to lift a hold. Reports and audit records
+  are digest-only (#3861).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
