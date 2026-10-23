@@ -123,6 +123,37 @@ OPENMED_SERVICE_AUTH_FAILURE_RATE_LIMIT_KEY=peer
 The failure limiter only counts failed authentication attempts. Successful
 authenticated requests are not charged against it.
 
+## Middleware Order
+
+Authentication reads request headers only. The service runs its HTTP layers in
+this order, outermost first:
+
+1. Trusted-host validation. An unexpected `Host` returns the `400` envelope
+   before authentication, the failure limiter, or the request throttle runs.
+2. CORS, when `OPENMED_SERVICE_CORS_ORIGINS` is set. Preflight requests are
+   answered here and do not need credentials.
+3. mTLS, API-key and JWT authentication, scope checks and the failed-attempt
+   limiter. Missing or invalid credentials are rejected before the request
+   body is read.
+4. Request-body limits, correlation IDs, tracing, the request throttle,
+   metrics and readiness.
+
+Because authentication runs before the correlation layer, `401`, `403` and
+`auth_rate_limited` `429` responses do not carry an `X-Request-ID` header or a
+`request_id` field.
+
+## Browser Clients
+
+When CORS and authentication are both enabled, preflight responses allow the
+`Authorization`, `X-API-Key` and `X-OpenMed-Priority` request headers in
+addition to the default content and `X-Request-ID` headers. Credential headers
+are not offered while authentication is off. Responses to allowed origins
+expose `X-Request-ID` and `Retry-After`, and error responses such as `401`,
+`403`, `413` and `429` keep their CORS headers so browser code can read the
+JSON error envelope. Origins must still be listed exactly; wildcard origins are
+rejected at startup, and requests from other origins receive no
+`Access-Control-Allow-Origin` header.
+
 ## Mutual TLS
 
 For certificate-bearing workload identity, including deployments that require
