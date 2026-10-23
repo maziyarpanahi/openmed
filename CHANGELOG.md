@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Require site approval of a byte-stable, value-free egress report before a
+  federated update is submitted. Reports carry only parameter names, shapes,
+  element counts, clipping and noise codes, privacy-spend bands and digests;
+  approvals bind the report, sealed update and round digests to an expiry,
+  and the guard refuses mismatched, unverified or expired approvals with
+  stable reason codes (#3874).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
