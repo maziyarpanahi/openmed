@@ -41,6 +41,14 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Bind declared federated `update_digest` values to a versioned canonical
+  tensor encoding: name-sorted entries with fixed name, dtype and shape
+  headers, contiguous little-endian payloads and exact lengths, hashed with
+  domain-separated SHA-256. Admission verifies the digest alongside the schema
+  fingerprint before aggregation and rejects padding, trailing bytes, metadata
+  sections, unsorted or duplicate entries and dtype or length mismatches with
+  stable, value-free reason codes (#3850).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
