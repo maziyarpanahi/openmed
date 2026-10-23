@@ -70,3 +70,96 @@ This is an accounting gate, not a compliance certification or clinical
 decision guarantee. It does not select a privacy mechanism, prove a claimed
 epsilon/delta value, or replace review of the release population and threat
 model.
+
+## Federated participant sampling and amplification
+
+Subsampling amplification lowers a federated round's privacy cost only when
+each eligible client was included independently at the declared rate `q` and
+nobody outside the coordinator learns who took part. The
+`openmed.training.federated_participant_sampling` module selects participants
+that way and emits the declaration an accountant must follow.
+
+```python
+import random
+from dataclasses import dataclass
+
+from openmed.training.federated_participant_sampling import (
+    ParticipationDisclosure,
+    PoissonParticipantSelector,
+    require_accountant_rate,
+)
+
+
+@dataclass(frozen=True)
+class AccountantRound:
+    """Stand-in for the accountant's per-round input."""
+
+    round_index: int
+    sampling_rate: float
+
+
+selector = PoissonParticipantSelector(0.25, rng=random.SystemRandom())
+selection = selector.select(
+    round_index=0,
+    eligible_pseudonyms=["site-a", "site-b", "site-c", "site-d", "site-e"],
+    disclosure=ParticipationDisclosure(
+        ledger_discloses_participation=False,
+        status_discloses_participation=False,
+    ),
+)
+declaration = selection.declaration  # exportable record
+roster = selection.roster  # stays inside the coordinator
+
+# Raises ParticipantSamplingError unless the accountant charges this rate.
+require_accountant_rate(
+    declaration,
+    AccountantRound(0, declaration.accountant_sampling_rate),
+)
+```
+
+`PoissonParticipantSelector` accepts a rate only when it equals `k / 1_000_000`
+for an integer `k`. For each eligible pseudonym, in sorted order, it draws a
+uniform integer from `[0, 1_000_000)` with the injected random source and
+includes the client when the draw is below `k`, so the inclusion probability is
+exactly `k / 1_000_000` with no floating-point comparison. A round index can be
+selected once per selector, so a coordinator cannot redraw a round until it
+gets a preferred roster.
+
+The accountant rate is `declaration.accountant_sampling_rate`. It equals `q`
+only for operational-mode Poisson selection with `q < 1` and no per-round
+participation disclosure (reason code `poisson_selection_undisclosed`). Every
+other round is accounted at `q = 1` with one or more stable reason codes:
+
+| Reason code | Cause |
+| --- | --- |
+| `full_participation_rate` | Poisson selection at `q = 1` |
+| `fixed_size_roster` | Fixed-size roster from `declare_unsampled_round()` |
+| `availability_driven_roster` | Clients that happened to be available |
+| `operator_chosen_roster` | Clients chosen by an operator |
+| `ledger_discloses_participation` | Contribution-ledger receipts reveal who took part |
+| `status_discloses_participation` | Round status releases participant counts |
+| `seeded_test_randomness` | Selection used `SeededTestRandom` |
+
+`ParticipationDisclosure.for_round_status()` marks a built
+`FederatedRoundStatus` as disclosing when it releases a participant or
+completed-participant count; counts suppressed below the minimum group size do
+not disclose. No alternative amplification bound is supported.
+
+`require_accountant_rate()` rejects an accountant input whose `round_index` or
+`sampling_rate` differs from the declaration, and `require_accountant_rates()`
+rejects a whole schedule when any round is mismatched, missing or duplicated.
+Accountant inputs are duck-typed: any object exposing `round_index` and
+`sampling_rate` is checked.
+
+Operational mode accepts only a `random.SystemRandom` instance (the default)
+and refuses `random.Random`, `SystemRandom` subclasses and `SeededTestRandom`
+with `non_cryptographic_randomness` or `seeded_randomness_refused`. Test mode
+requires `SeededTestRandom(seed)` and never permits amplification.
+
+The declaration contains only the round index, procedure, mode, selection and
+accountant rates, reason codes, an eligible-population band and a keyed
+`sha256:` roster commitment bound to the round. It never contains pseudonyms,
+the realized roster, its size or seeds. The `ParticipantRoster` has a redacted
+`repr`, refuses pickling and can check the published commitment with
+`matches_commitment()`. Errors carry a fixed code and field name and never echo
+caller values.
