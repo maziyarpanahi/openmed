@@ -9,6 +9,7 @@ from openmed.interop import adapter_spec, available_adapters, get_adapter
 from openmed.interop.hl7v2 import (
     DEFAULT_FIELD_MAP,
     HL7FieldRule,
+    HL7V2Encoding,
     parse_hl7v2,
     redact_hl7v2,
 )
@@ -353,3 +354,38 @@ def test_serialize_ignores_blank_line_positions_beyond_the_segment_list():
     parsed.blank_line_positions = (99,)
 
     assert parsed.serialize() == BLANK_LINE_BASE
+
+
+@pytest.mark.parametrize(
+    "encoding",
+    [
+        HL7V2Encoding(),
+        HL7V2Encoding(
+            field="#", component="$", repetition="*", escape="?", subcomponent="%"
+        ),
+    ],
+    ids=["default", "alternate"],
+)
+def test_generated_messages_round_trip_and_keep_framing_after_redaction(encoding):
+    from openmed.training.synthetic.hl7v2_messages import (
+        HL7V2SynthesisConfig,
+        generate_hl7v2_messages,
+    )
+
+    messages = generate_hl7v2_messages(
+        6,
+        seed=11,
+        config=HL7V2SynthesisConfig(encoding=encoding, escape_probability=1.0),
+    )
+
+    for message in messages:
+        parsed = parse_hl7v2(message.text)
+        assert parsed.serialize() == message.text
+        redacted = parse_hl7v2(
+            redact_hl7v2(
+                message.text, deidentifier=fake_deidentifier, date_shift_days=2
+            )
+        )
+        assert redacted.encoding == encoding
+        assert redacted.segment_names() == parsed.segment_names()
+        assert redacted.trailing_separator
