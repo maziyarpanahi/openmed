@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic federated server optimizers that apply aggregated adapter
+  deltas through declared server SGD, heavy-ball or Nesterov momentum, FedAdagrad,
+  FedAdam, and FedYogi rules, with canonical hyperparameter codes, versioned
+  integrity-checked state checkpoints, digest-only lineage records, and
+  post-processing privacy accounting (#3876).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
