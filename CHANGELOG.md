@@ -590,6 +590,9 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Bounded, offline DICOM ECG multiplex decoding with physical calibration,
+  source-coded channels, relative skew, withheld annotation counts, static
+  rejection codes and explicit reviewer confirmation (#3825).
 - Offline synthetic clinical-brief walkthrough, golden pipeline test, explicit
   fixture-provider disclaimers and a recording script.
 - OpenMedKit guarded clinical-brief packets, local Maple brief generation,
