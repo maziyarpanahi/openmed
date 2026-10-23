@@ -41,6 +41,9 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Report independent synthetic fidelity axes, Wilson intervals and aggregate
+  reference distribution comparisons without retaining reference records (#2852).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
