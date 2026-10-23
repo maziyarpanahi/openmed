@@ -3268,6 +3268,10 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     )
     load_parser.set_defaults(handler=_handle_eval_load_test)
 
+    from .sealed_eval import add_sealed_eval_command
+
+    add_sealed_eval_command(eval_sub)
+
 
 def main(
     argv: Optional[Sequence[str]] = None, *, governance_service: Any = None
