@@ -734,6 +734,7 @@ classification:
     - status/index.md
     - status/open-benchmark-publication.md
     - status/trust-status-contract.md
+    - training/synthetic/cda-documents.md
   excluded:
     - _hooks.py
     - __pycache__/**

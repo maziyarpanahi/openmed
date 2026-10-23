@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Generate seeded synthetic C-CDA documents (CCD, discharge summary, progress
+  note) with element-level PHI truth, narrative-to-structured links and
+  placeholder codes, plus a value-free leakage harness over `redact_cda()`
+  that reports residuals by element path and label and rejects remote schema
+  or entity-bearing options (#3885).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
