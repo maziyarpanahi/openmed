@@ -41,6 +41,13 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Render versioned differential-privacy and federation disclosures in
+  artifact-backed model cards, with byte-stable Markdown and JSON. DP claims
+  require a privacy unit, delta and accountant evidence whose digest matches
+  the disclosed epsilon; federated models without DP state that no formal
+  differential-privacy guarantee applies. Cards carry only codes, bands and
+  digests, and cards without a disclosure are unchanged (#3872).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
