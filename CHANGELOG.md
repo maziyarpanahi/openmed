@@ -41,6 +41,9 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Add synthetic omop cohorts with bounded offline contracts, synthetic controls
+  and documented behavior (#2841).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
