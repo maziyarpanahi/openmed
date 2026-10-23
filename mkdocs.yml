@@ -459,6 +459,7 @@ nav:
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
