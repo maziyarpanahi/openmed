@@ -41,6 +41,13 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
+  numbers, context-gated citizenship-certificate and national identity card
+  numbers without checksum claims, numeric Bikram Sambat dates and postal
+  codes, in Devanagari and ASCII digits. Add the `ne` number-separator entry
+  and a synthetic `ne.jsonl` golden fixture. Nepali remains a user-supplied
+  model route, and Hindi and Marathi outputs are unchanged (#3864).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
