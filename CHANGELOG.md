@@ -41,6 +41,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Validate synthetic artifact facts, times, labels and coordinates against shared Journey truth (#3694).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
