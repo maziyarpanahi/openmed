@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-ABSTENTION_SCHEMA_VERSION: Final = 1
+ABSTENTION_SCHEMA_VERSION: Final = 2
 
 
 class AbstentionValidationError(ValueError):
@@ -50,12 +50,39 @@ class AbstentionReason(str, Enum):
     SPEAKER_UNCERTAINTY = "speaker_uncertainty"
     TEMPORAL_INSTABILITY = "temporal_instability"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
+    CONSENT_UNAVAILABLE = "consent_unavailable"
+    CONSENT_WITHDRAWN = "consent_withdrawn"
+    CAPTURE_INTERRUPTED = "capture_interrupted"
+    LANGUAGE_UNSUPPORTED = "language_unsupported"
+    LANGUAGE_UNCERTAIN = "language_uncertain"
+    POLICY_REFUSED = "policy_refused"
+
+    @property
+    def schema_version(self) -> int:
+        """Return the wire version required by this controlled code."""
+        return 2 if self in _V2_REASONS else 1
+
+
+_V2_REASONS: Final = frozenset(
+    {
+        AbstentionReason.CONSENT_UNAVAILABLE,
+        AbstentionReason.CONSENT_WITHDRAWN,
+        AbstentionReason.CAPTURE_INTERRUPTED,
+        AbstentionReason.LANGUAGE_UNSUPPORTED,
+        AbstentionReason.LANGUAGE_UNCERTAIN,
+        AbstentionReason.POLICY_REFUSED,
+    }
+)
 
 
 _ALLOWED_REASONS: Final = {
     AbstentionStage.PREFLIGHT: frozenset(
         {
             AbstentionReason.UNSUPPORTED_MEDIA,
+            AbstentionReason.CONSENT_UNAVAILABLE,
+            AbstentionReason.CONSENT_WITHDRAWN,
+            AbstentionReason.LANGUAGE_UNSUPPORTED,
+            AbstentionReason.POLICY_REFUSED,
             AbstentionReason.RESOURCE_LIMIT,
             AbstentionReason.PROVIDER_UNAVAILABLE,
         }
@@ -63,6 +90,8 @@ _ALLOWED_REASONS: Final = {
     AbstentionStage.DECODE: frozenset(
         {
             AbstentionReason.MALFORMED_MEDIA,
+            AbstentionReason.CONSENT_WITHDRAWN,
+            AbstentionReason.CAPTURE_INTERRUPTED,
             AbstentionReason.RESOURCE_LIMIT,
             AbstentionReason.LOW_QUALITY,
         }
@@ -72,6 +101,11 @@ _ALLOWED_REASONS: Final = {
             AbstentionReason.RESOURCE_LIMIT,
             AbstentionReason.LOW_QUALITY,
             AbstentionReason.PHI_UNCERTAINTY,
+            AbstentionReason.CONSENT_WITHDRAWN,
+            AbstentionReason.CAPTURE_INTERRUPTED,
+            AbstentionReason.LANGUAGE_UNSUPPORTED,
+            AbstentionReason.LANGUAGE_UNCERTAIN,
+            AbstentionReason.POLICY_REFUSED,
             AbstentionReason.SPEAKER_UNCERTAINTY,
             AbstentionReason.TEMPORAL_INSTABILITY,
             AbstentionReason.PROVIDER_UNAVAILABLE,
@@ -82,6 +116,11 @@ _ALLOWED_REASONS: Final = {
             AbstentionReason.RESOURCE_LIMIT,
             AbstentionReason.LOW_QUALITY,
             AbstentionReason.PHI_UNCERTAINTY,
+            AbstentionReason.CONSENT_WITHDRAWN,
+            AbstentionReason.CAPTURE_INTERRUPTED,
+            AbstentionReason.LANGUAGE_UNSUPPORTED,
+            AbstentionReason.LANGUAGE_UNCERTAIN,
+            AbstentionReason.POLICY_REFUSED,
             AbstentionReason.SPEAKER_UNCERTAINTY,
             AbstentionReason.TEMPORAL_INSTABILITY,
         }
@@ -119,23 +158,26 @@ class AbstentionRecord:
     Args:
         stage: Pipeline stage at which processing stopped.
         reason: Stable reason code valid for that stage.
-        schema_version: Serialization contract version. Only version 1 is
-            currently accepted.
+        schema_version: Omit to select version 1 for legacy codes or version 2
+            for consent, capture, language and policy codes. An explicit version
+            must match the code's required version.
     """
 
     stage: AbstentionStage
     reason: AbstentionReason
-    schema_version: int = ABSTENTION_SCHEMA_VERSION
+    schema_version: int | None = None
 
     def __post_init__(self) -> None:
         stage = _stage(self.stage)
         reason = _reason(self.reason)
-        if type(self.schema_version) is not int or (
-            self.schema_version != ABSTENTION_SCHEMA_VERSION
+        version = reason.schema_version
+        if self.schema_version is not None and (
+            type(self.schema_version) is not int or self.schema_version != version
         ):
             raise AbstentionValidationError("schema_version is unsupported")
         if reason not in _ALLOWED_REASONS[stage]:
             raise AbstentionValidationError("reason is not valid for stage")
+        object.__setattr__(self, "schema_version", version)
         object.__setattr__(self, "stage", stage)
         object.__setattr__(self, "reason", reason)
 
@@ -143,7 +185,7 @@ class AbstentionRecord:
         """Return the fixed-shape metadata-only representation."""
 
         return {
-            "schema_version": self.schema_version,
+            "schema_version": self.reason.schema_version,
             "stage": self.stage.value,
             "reason": self.reason.value,
         }
@@ -165,6 +207,8 @@ class AbstentionRecord:
             raise AbstentionValidationError("payload could not be read") from None
         if frozenset(fields) != _REQUIRED_FIELDS:
             raise AbstentionValidationError("payload fields are invalid")
+        if type(fields["schema_version"]) is not int:
+            raise AbstentionValidationError("schema_version is unsupported")
         return cls(
             schema_version=fields["schema_version"],
             stage=fields["stage"],
