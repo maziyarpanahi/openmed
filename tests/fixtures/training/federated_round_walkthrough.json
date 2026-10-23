@@ -1,0 +1,90 @@
+{
+  "lifecycle_states": [
+    "planned",
+    "preflight",
+    "collecting",
+    "aggregating",
+    "evaluating",
+    "held"
+  ],
+  "metrics": [
+    {
+      "aggregate_value": null,
+      "clipping_lower_bound": 0.0,
+      "clipping_upper_bound": 1.0,
+      "confidence_level": null,
+      "metric_id": "synthetic_subset_rate",
+      "metric_kind": "rate",
+      "minimum_group_size": 5,
+      "participant_count_band": "suppressed",
+      "privacy_mechanism": "threshold_only",
+      "privacy_mechanism_version": "v1",
+      "schema_version": "openmed.training.federated_metric.v1",
+      "uncertainty_lower_bound": null,
+      "uncertainty_method": "suppressed",
+      "uncertainty_upper_bound": null
+    },
+    {
+      "aggregate_value": 0.8,
+      "clipping_lower_bound": 0.0,
+      "clipping_upper_bound": 1.0,
+      "confidence_level": null,
+      "metric_id": "synthetic_round_rate",
+      "metric_kind": "rate",
+      "minimum_group_size": 5,
+      "participant_count_band": "minimum_to_under_double",
+      "privacy_mechanism": "threshold_only",
+      "privacy_mechanism_version": "v1",
+      "schema_version": "openmed.training.federated_metric.v1",
+      "uncertainty_lower_bound": null,
+      "uncertainty_method": "none",
+      "uncertainty_upper_bound": null
+    }
+  ],
+  "schedule": {
+    "boundaries": {
+      "aggregation_starts_at": "2026-09-01T02:00:00Z",
+      "enrollment_starts_at": "2026-09-01T00:00:00Z",
+      "evaluation_starts_at": "2026-09-01T03:00:00Z",
+      "finishes_at": "2026-09-01T04:00:00Z",
+      "update_submission_starts_at": "2026-09-01T01:00:00Z"
+    },
+    "maximum_duration_seconds": {
+      "aggregation": 3600,
+      "enrollment": 3600,
+      "evaluation": 3600,
+      "update_submission": 3600
+    },
+    "schema_version": "openmed.training.federated_schedule.v1"
+  },
+  "schedule_phases_at_boundaries": {
+    "aggregation_starts_at": "aggregation",
+    "enrollment_starts_at": "enrollment",
+    "evaluation_starts_at": "evaluation",
+    "finishes_at": null,
+    "update_submission_starts_at": "update_submission"
+  },
+  "schema_groups": [
+    {
+      "schema_fingerprint": "sha256:33ce7495b3e804919db8b2c94f5b073055a2b0513b9e8fc06d940eee22906470",
+      "update_count": 5
+    }
+  ],
+  "status": {
+    "aggregate_digest_refs": [],
+    "completed_participant_count": 5,
+    "completion_band": "complete",
+    "minimum_group_size": 5,
+    "participant_count": 5,
+    "quorum_status": "met",
+    "reason_code": "quality_review_required",
+    "schema_version": "openmed.training.federated_status.v1",
+    "state": "held"
+  },
+  "synthetic_only": true,
+  "updates": {
+    "accepted_count": 5,
+    "rejected_count": 1,
+    "rejection_code": "unknown_parameter"
+  }
+}
