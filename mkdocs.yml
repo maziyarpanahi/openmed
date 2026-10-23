@@ -349,6 +349,7 @@ nav:
       - Training Schema Registry: reference/training-schemas.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Federated Aggregate Metrics: training/federated-metrics.md
+      - Federated LoRA Aggregation: training/federated-lora-aggregation.md
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md

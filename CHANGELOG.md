@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Aggregate federated LoRA updates in the low-rank product space with a
+  versioned paired-factor descriptor, round-declared frozen-A, product-space or
+  reject modes, exact digest-ordered summation and deterministic truncated
+  re-factorization. Naive per-factor averaging, unpaired factors, rank and
+  scaling mismatches fail closed with stable reason codes; evidence records only
+  the mode, rank, residual band and digests (#3847).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
