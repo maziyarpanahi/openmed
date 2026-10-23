@@ -456,6 +456,7 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/cross-lingual-regressions.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md

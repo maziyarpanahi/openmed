@@ -41,6 +41,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Gate paired multilingual checkpoint changes against every declared last-green language/label cell (#2870).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
