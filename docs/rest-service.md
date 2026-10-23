@@ -390,6 +390,26 @@ and the service waits up to this timeout for in-flight `/analyze`,
 `/pii/extract`, `/pii/deidentify`, `/pii/deidentify/stream`, and
 `/privacy-gateway/complete` requests to finish. The default is `30`.
 
+Bulk Data and SMART ingestion job bounds:
+
+```bash
+OPENMED_SERVICE_BULK_MAX_RUNNING_JOBS=4 \
+OPENMED_SERVICE_BULK_MAX_RETAINED_JOBS=256 \
+OPENMED_SERVICE_BULK_JOB_TTL_SECONDS=3600 \
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
+```
+
+The `/fhir/bulk/*` and `/fhir/smart-backend/ingestions` job managers each apply
+these ceilings on their own. All three values are positive integers, and the
+running ceiling must not exceed the retained cap; invalid values fail at
+startup. A start beyond the running ceiling returns `503` with error code
+`bulk_jobs_saturated` and a `Retry-After` header before any output directory
+or task is created. Terminal job records expire after the TTL, and the oldest
+terminal records are evicted first when the retained cap is reached. Running
+jobs are never evicted. An expired job id returns the same `404` as an unknown
+id. See [FHIR Bulk Data](interop/fhir-bulk-data.md#job-admission-and-retention)
+for the per-request tuning limits.
+
 Optional pull-only Prometheus metrics endpoint:
 
 ```bash
@@ -479,6 +499,7 @@ names, counts, labels, lengths, and durations. See
   breaker. Open breakers fail fast with `503` and `Retry-After`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+- Bulk Data and SMART ingestion jobs have running, retained and TTL ceilings; saturated starts fail fast with `503` `bulk_jobs_saturated` and `Retry-After`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
 - Application endpoint errors and invalid Host headers use one JSON envelope
