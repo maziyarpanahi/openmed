@@ -54,3 +54,12 @@ Applications that need typed token tensors, a `run(tokens) -> logits` contract,
 separate WebGPU and WASM model artifacts, parity/recall certification, and
 per-device timing should use the production
 [WebGPU Token-Classification Runtime](webgpu.md).
+
+## Content-Security-Policy
+
+A synthetic WebAssembly fixture exercises a strict CSP (`script-src 'self'
+'wasm-unsafe-eval'`, `connect-src 'self' blob:`, `worker-src 'self' blob:`) plus
+COOP/COEP. See [Content-Security-Policy profile](../../js/openmedkit-web/README.md#content-security-policy-profile)
+for the full header set and what each directive is for. Removing
+`'wasm-unsafe-eval'` makes WebAssembly compilation fail with a `CompileError`
+rather than falling back silently.
