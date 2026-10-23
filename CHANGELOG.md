@@ -41,6 +41,13 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Added
 
+- Add federated round-contract floors for local examples, local steps and
+  effective batch size, with stricter defaults when no DP mechanism is declared
+  and an explicit policy field required to lower a floor. A client guard refuses
+  to seal updates below the floors and a coordinator check rejects declared
+  bands below them; records carry only power-of-two bands, digests and reason
+  codes, never exact local counts (#3873).
+
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
 
