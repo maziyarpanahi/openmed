@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "OpenMedKit",
+    defaultLocalization: "en",
     platforms: [
         .iOS(.v17),
         .macOS(.v14),
@@ -80,7 +81,8 @@ let package = Package(
         .target(
             name: "OpenMedShareExtension",
             dependencies: ["OpenMedExtensionSupport", "OpenMedKit"],
-            path: "swift/OpenMedKit/Sources/ShareExtension"
+            path: "swift/OpenMedKit/Sources/ShareExtension",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "OpenMedActionExtension",
