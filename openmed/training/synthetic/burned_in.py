@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING, Any, Final, Mapping, Sequence
 from faker import Faker
 
 from openmed.core import labels as L
+from openmed.core.anonymizer.locales import resolve_locale
 from openmed.core.anonymizer.providers import clinical_ids
+from openmed.training.synthetic.provider_versions import surrogate_provider_stamp
 
 from .locale_phi import LocalePhiGenerator, SyntheticPhiSpan
 
@@ -307,6 +309,9 @@ class BurnedInGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "burned_in",
+            "surrogate_providers": surrogate_provider_stamp(
+                "en_US", resolve_locale(language, warn_approximation=False)
+            ),
         }
         image.info.update(
             {
