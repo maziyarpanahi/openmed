@@ -547,6 +547,10 @@ def _gen_phone(faker, original, *, locale):
             if african_surrogate is not None:
                 return african_surrogate
         return preserve_phone_format(original, rng=faker.random)
+    if not hasattr(faker, "phone_number") and hasattr(faker, "mobile_number"):
+        # Faker's Philippine locales (fil_PH, tl_PH, en_PH) ship carrier mobile
+        # and landline providers but no generic ``phone_number`` method.
+        return faker.mobile_number()
     return faker.phone_number()
 
 
