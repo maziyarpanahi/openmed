@@ -63,6 +63,7 @@ from .locale_formats import (
     date_order_for_locale,
     parse_date,
 )
+from .medical_record_labels import MEDICAL_RECORD_LABELS, medical_record_label_patterns
 from .registry_service import manifest_pii_languages
 
 # ---------------------------------------------------------------------------
@@ -11826,6 +11827,18 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "vi": _VIETNAMESE_PII_PATTERNS,
     "ur": _URDU_PII_PATTERNS,
 }
+
+# Localized medical-record-number labels are table data compiled in
+# ``medical_record_labels``; append them without mutating shared pack lists.
+LANGUAGE_PII_PATTERNS.update(
+    {
+        language: [
+            *LANGUAGE_PII_PATTERNS.get(language, []),
+            *medical_record_label_patterns(language),
+        ]
+        for language in MEDICAL_RECORD_LABELS
+    }
+)
 
 
 AFRICAN_FR_PT_PHONE_PREFIXES: Dict[str, str] = {
