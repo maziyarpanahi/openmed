@@ -7115,13 +7115,21 @@ _BENGALI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=0,
     ),
+    # The year of a dotted date such as ``২০.০৭.২০২৬`` or ``২০২৬.০৭.২০`` is not
+    # a postcode. Dash-joined groups are left alone: they may be the only rule
+    # covering part of a domestic phone number.
     PIIPattern(
-        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.)"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\."
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2}}\.)(?:"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
         rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}|"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
         rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{5}})"
-        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?!\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\."
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
         "postcode",
         priority=9,
         base_score=0.4,
