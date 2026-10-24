@@ -383,6 +383,18 @@ def _system_one_answers(change: Callable[[dict[str, Any]], None]) -> dict[str, A
             {"probabilities": None, "score": None}
         ),
         lambda answers: answers["urgency"].update({"probabilities": None, "score": 3}),
+        lambda answers: answers["urgency"].update({"legend": ["Low", "Medium"]}),
+        lambda answers: answers["urgency"].update({"legend": "Low"}),
+        lambda answers: answers["urgency"].update({"level": 3}),
+        lambda answers: answers["urgency"].update({"level": True}),
+        lambda answers: answers["urgency"].update({"level": "Critical"}),
+        lambda answers: answers["urgency"].update({"probabilities": [0.5, 0.5]}),
+        lambda answers: answers["urgency"].update(
+            {"probabilities": {"Low": 0.1, "Medium": 0.2, "Critical": 0.7}}
+        ),
+        lambda answers: answers["urgency"].update(
+            {"probabilities": None, "score": None, "expected_level": 2.5}
+        ),
     ],
 )
 def test_malformed_system_one_answers_are_conflicts(
@@ -400,6 +412,38 @@ def test_malformed_system_one_answers_are_conflicts(
     assert result.state is DecisionState.CONFLICT
     assert result.code == "backend_conflict"
     assert all(item.choice is None for item in result.questions)
+
+
+@pytest.mark.parametrize(
+    "urgency",
+    [
+        # Legend as a label list (shape left open by some model cards).
+        {"legend": ["Low", "Medium", "High"]},
+        # Probabilities keyed by level label, or listed in level order.
+        {"probabilities": {"Low": 0.0625, "Medium": 0.125, "High": 0.8125}},
+        {"probabilities": [0.0625, 0.125, 0.8125]},
+        # ``level`` and ``expected_level`` instead of ``legend`` and ``score``.
+        {
+            "legend": None,
+            "score": None,
+            "confidence": None,
+            "level": 2,
+            "expected_level": 1.75,
+        },
+        {"legend": None, "level": "High"},
+        {"legend": None, "level": "2"},
+    ],
+)
+def test_published_score_answer_variants_parse_identically(
+    urgency: dict[str, Any],
+) -> None:
+    request = from_system_one_request(SYSTEM_ONE_REQUEST)
+    expected = from_system_one_response(request, SYSTEM_ONE_RESPONSE)
+    response = _system_one_answers(lambda answers: answers["urgency"].update(urgency))
+
+    outputs = from_system_one_response(request, response)
+
+    assert outputs == expected
 
 
 def test_score_answers_without_probabilities_use_the_reported_level() -> None:

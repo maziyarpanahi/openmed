@@ -178,10 +178,122 @@ inputs must be text; message and media inputs are rejected.
 answers into one backend output per question, so OpenMed applies its own
 calibration and abstention instead of trusting a server's choice or
 confidence. Answers that do not match the declared questions, options, levels,
-or probability bounds raise `DecisionConflictError`. `to_system_one_response`
+or probability bounds raise `DecisionConflictError`. Published servers shape
+`score` answers differently, so the System One parser accepts a `legend` given
+as `{"0": label}` or as a label list, `probabilities` keyed by level index or
+level label or listed in level order, and an expected level reported as
+`score` or `expected_level`; every variant must still match the declared
+levels. `to_system_one_response`
 and `to_openai_decisions_response` render OpenMed results; a question that did
 not succeed carries a `null` answer plus its OpenMed `state` and `code` and is
 never given a fabricated answer.
+
+## Local decision servers
+
+Many decision models need a CUDA serving stack, a custom head, or a pinned
+runtime, and ship their own server for `POST /v1/systemone` or the
+OpenAI-compatible `POST /v1/decisions`. `DecisionServerBackend` is a
+`specialist` backend that sends text requests to such a server through the
+converters above and parses its probabilities, so OpenMed's calibration and
+abstention still decide every question.
+
+```python
+from openmed.structured import decide
+from openmed.structured.decision_server import DecisionServerBackend
+
+backend = DecisionServerBackend(
+    endpoint="http://127.0.0.1:8000/v1/systemone",
+    model_id="vllm-sr/d3-mini",
+    revision="<commit of the served weights>",
+    license_id="Apache-2.0",
+)
+result = decide(request, backend=backend)  # a question set is sent once
+```
+
+Pass `protocol="openai_decisions"` for a `/v1/decisions` route, and
+`served_model` when the server knows the model by another name; it is sent as
+`model` and accepted when the server reports it. Reported model names are
+compared without their organization prefix and letter case, and a different
+model yields `conflict` (`decision_server_model_mismatch`). The model ID,
+revision, and declared license are recorded in the backend identity, whose
+`runtime` names the protocol and scope, for example
+`system_one_server:loopback`. Undeclared or non-permissive licenses are
+rejected as for every backend. An optional `bearer_token` is sent as
+`Authorization: Bearer` and never appears in representations, errors, or logs.
+
+**Endpoint policy.** Endpoints are checked with the shared
+[upstream endpoint policy](../security/mcp-upstream-policy.md):
+
+- loopback is accepted by default: `127.0.0.0/8`, `::1`, or `localhost` when
+  every resolved address is loopback, plus a Unix domain socket given as
+  `unix_socket="/run/decider.sock"` (requests carry `Host: localhost`);
+- a private-network host is reachable only when the operator lists its exact
+  origin in `allowed_private_origins` **and** constructs the backend with
+  `contains_phi=False`; every resolved address must be private (RFC 1918 or
+  unique-local), and offline mode (`OPENMED_OFFLINE`) refuses it;
+- `contains_phi` defaults to `True`, so requests marked as containing PHI never
+  leave loopback; public hosts are always refused.
+
+The endpoint is validated again on every call, and the client connects only to
+the addresses approved for that call. Same-origin `307` and `308` redirects
+are followed up to `max_redirects` (two by default); any other redirect, or a
+redirect to another scheme, host, or port, is refused. Connection-level
+retries (`max_retries`, one by default) reuse the same approved addresses, so
+a request body is never resent to a different host. `timeout_ms` bounds the
+whole exchange, including connection, redirects, and retries, and response
+bodies are capped by `max_response_bytes` (1 MiB by default).
+
+**States.** Server problems are typed states, never fabricated answers:
+
+| Outcome | State | Code |
+| --- | --- | --- |
+| HTTP 400, 413, or 422 (for example over the server's input limit) | `unsupported` | `decision_server_input_rejected` |
+| HTTP 404, 405, or 501 | `unsupported` | `decision_server_route_unsupported` |
+| A question type without a wire shape | `unsupported` | `backend_unsupported` |
+| Timeout, HTTP 408, or HTTP 504 | `failure` | `backend_timeout` |
+| Refused or reset connection after retries | `failure` | `decision_server_unreachable` |
+| HTTP 401 or 403 | `failure` | `decision_server_unauthorized` |
+| HTTP 429 or 5xx | `failure` | `decision_server_unavailable` |
+| Body that is not a JSON object, or answers that do not match the request | `failure` | `decision_server_response_invalid` |
+| Body larger than `max_response_bytes` | `failure` | `decision_server_response_too_large` |
+| Refused redirect | `failure` | `decision_server_redirect_refused` |
+| Endpoint refused when the call is made | `failure` | `decision_server_endpoint_refused` |
+| Reported model differs from the declaration | `conflict` | `decision_server_model_mismatch` |
+
+Backend exceptions may carry a controlled `decision_code`, which `decide`
+reports as the result code; the exception class still selects the state.
+Errors and log records contain codes, counts, and timings only; error bodies
+from the server are never read into results. Inputs are text or JSON text;
+image and video inputs are not sent.
+
+**Recipe: one model behind its own server.** The integration test
+`tests/integration/test_decision_server_recipe.py` sends a synthetic
+three-question request to a running server. It is marked `integration` and
+`slow` and skips unless `OPENMED_DECISION_SERVER_ENDPOINT` is set, so it never
+runs in CI. For example, with `vllm-sr/d3-mini` and the stdlib server packaged
+with the model (follow its model card for hardware and dependencies; the
+server binds `127.0.0.1` by default):
+
+```bash
+# In a separate environment for the model's own runtime:
+hf download vllm-sr/d3-mini --local-dir d3-mini
+pip install -r d3-mini/requirements.txt
+python d3-mini/d3_server.py --model ./d3-mini --device cuda:0 --port 8000
+
+# In the OpenMed development environment:
+OPENMED_DECISION_SERVER_ENDPOINT=http://127.0.0.1:8000/v1/systemone \
+OPENMED_DECISION_SERVER_MODEL=vllm-sr/d3-mini \
+OPENMED_DECISION_SERVER_REVISION=<commit of the downloaded weights> \
+pytest tests/integration/test_decision_server_recipe.py -m integration -q
+```
+
+Other servers documented by their model cards work the same way, for example
+the h2o-lightning-4b shim on port 8741 (set
+`OPENMED_DECISION_SERVER_PROTOCOL=openai_decisions` for `/v1/decisions`) or a
+Mica server on port 8010. Optional variables set the license
+(`OPENMED_DECISION_SERVER_LICENSE`, `Apache-2.0` by default), the served model
+name, and a bearer key. Serve only weights whose license you have declared;
+weights under non-commercial or other non-permissive licenses are rejected.
 
 ## MCP
 
@@ -209,7 +321,10 @@ cross-surface drift tests compare complete synthetic results.
   IDs, modes, option and level counts, and a SHA-256 digest of each question
   definition, never the input, instructions, options, or option descriptions.
 
-The default path makes no network calls. Model weights, calibration fixtures,
+The default path makes no network calls. `DecisionServerBackend` is opt-in
+and reaches only loopback, a Unix socket, or an operator-approved
+private-network origin for requests not marked as containing PHI. Model
+weights, calibration fixtures,
 and restricted clinical datasets are not bundled. Calibration reports use
 synthetic or operator-provided fixtures and emit aggregate metrics and digests
 without retaining source text.

@@ -108,6 +108,7 @@ def test_allowlisted_https_endpoint_is_authorized_and_resolution_is_recorded() -
         "port": 443,
         "resolved_address_count": 1,
         "loopback": False,
+        "private_network": False,
     }
     assert calls == [(host, 443)]
 
@@ -183,6 +184,109 @@ def test_allowlisted_private_resolution_is_still_rejected() -> None:
         policy.validate(f"https://{host}/fhir")
 
     assert raised.value.reason_code == "private_address"
+
+
+def test_private_network_origins_require_exact_operator_approval() -> None:
+    host = "decider.example.test"
+    origin = f"http://{host}:8000"
+    resolver, calls = _resolver({host: ["10.24.8.9"]})
+    policy = UpstreamEndpointPolicy(
+        resolver=resolver,
+        allowed_private_origins={origin, "https://10.24.8.10"},
+    )
+
+    approval = policy.validate(f"{origin}/v1/systemone?token={SYNTHETIC_TOKEN}")
+    assert approval.is_private_network is True
+    assert approval.is_loopback is False
+    assert approval.address_classes == (ResolvedAddressClass.PRIVATE,)
+    assert approval.to_safe_dict()["private_network"] is True
+    assert policy.validate("https://10.24.8.10/v1").is_private_network is True
+    assert calls == [(host, 8000)]
+
+    for endpoint, reason_code in (
+        (f"http://{host}:8001/v1/systemone", "non_https_origin"),
+        (f"https://{host}:8000/v1/systemone", "origin_not_allowed"),
+        ("http://10.24.8.11/v1", "non_https_origin"),
+        ("http://localhost:8000/v1", "loopback_not_allowed"),
+    ):
+        with pytest.raises(UpstreamEndpointPolicyError) as raised:
+            policy.validate(endpoint)
+        assert raised.value.reason_code == reason_code
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [
+        ["127.0.0.1"],
+        ["169.254.169.254"],
+        ["169.254.8.9"],
+        [PUBLIC_ADDRESS],
+        ["10.24.8.9", PUBLIC_ADDRESS],
+        ["10.24.8.9", "127.0.0.1"],
+    ],
+)
+def test_private_network_origins_reject_non_private_resolution(
+    answers: list[str],
+) -> None:
+    host = "decider.example.test"
+    resolver, _ = _resolver({host: answers})
+    policy = UpstreamEndpointPolicy(
+        resolver=resolver,
+        allowed_private_origins={f"http://{host}"},
+    )
+
+    with pytest.raises(UpstreamEndpointPolicyError) as raised:
+        policy.validate(f"http://{host}/v1/systemone")
+
+    assert raised.value.reason_code == "private_only_violation"
+
+
+@pytest.mark.parametrize(
+    ("origins", "reason_code"),
+    [
+        ({"http://127.0.0.1:8000"}, "invalid_private_origin"),
+        ({"http://localhost:8000"}, "invalid_private_origin"),
+        ({"http://93.184.216.34"}, "invalid_private_origin"),
+        ({"http://169.254.169.254"}, "invalid_private_origin"),
+        ({"ftp://10.0.0.5"}, "invalid_private_origin"),
+        ({"http://10.0.0.5/v1"}, "invalid_allowed_origin_path"),
+        ("http://10.0.0.5", "invalid_private_origin"),
+    ],
+)
+def test_private_network_origin_configuration_fails_closed(
+    origins: Any,
+    reason_code: str,
+) -> None:
+    with pytest.raises(UpstreamEndpointPolicyError) as raised:
+        UpstreamEndpointPolicy(allowed_private_origins=origins)
+
+    assert raised.value.reason_code == reason_code
+
+
+def test_private_network_redirects_cannot_change_policy_mode() -> None:
+    host = "decider.example.test"
+    resolver, _ = _resolver({host: ["10.24.8.9"], "localhost": ["127.0.0.1"]})
+    policy = UpstreamEndpointPolicy(
+        resolver=resolver,
+        allow_loopback=True,
+        allowed_private_origins={f"http://{host}"},
+    )
+
+    with pytest.raises(UpstreamEndpointPolicyError) as raised:
+        policy.validate_redirect(
+            "http://localhost:8081/v1",
+            base_url=f"http://{host}/v1/systemone",
+        )
+    assert raised.value.reason_code == "redirect_mode_change"
+
+    with pytest.raises(UpstreamEndpointPolicyError) as raised:
+        policy.validate_redirect(
+            f"http://{host}/v1/systemone",
+            base_url="http://localhost:8081/v1",
+        )
+    assert raised.value.reason_code == "redirect_mode_change"
+    same_mode = policy.validate_redirect("/v1/next", base_url=f"http://{host}/v1")
+    assert same_mode.is_private_network is True
 
 
 def test_redirect_targets_are_revalidated_and_cannot_change_policy_mode() -> None:
