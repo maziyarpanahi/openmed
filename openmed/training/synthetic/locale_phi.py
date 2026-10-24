@@ -53,6 +53,7 @@ from openmed.core.pii_i18n import (
     validate_vietnamese_cccd,
     validate_za_id_number,
 )
+from openmed.training.synthetic.provider_versions import surrogate_provider_stamp
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "as",
@@ -670,6 +671,7 @@ class LocalePhiGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "locale_phi",
+            "surrogate_providers": surrogate_provider_stamp(locale),
         }
         return LocalePhiExample(
             text=text,
