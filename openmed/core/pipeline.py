@@ -1195,7 +1195,7 @@ class Pipeline:
             lang = decision.language
             script = decision.dominant_script
             model_name = pii._resolve_effective_pii_model(self.model_name, lang)
-            available_default_model = decision.dominant_pack.default_model
+            available_default_model: str | None = decision.dominant_pack.default_model
             if available_default_model == USER_SUPPLIED_PII_MODEL:
                 # User-supplied-model route packs ship no weights; report no
                 # default model, as the explicit-language path below does.
