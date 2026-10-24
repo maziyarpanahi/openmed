@@ -39,9 +39,9 @@ Schema `1.1.0` of the contract carries the rest of a System One request: a
 that can be raised to 131,072 characters. `openmed.structured.decision_interop`
 converts System One and OpenAI-compatible Decisions bodies to and from OpenMed
 requests and results without network I/O. See
-[Question sets and score levels](api/fixed-option-decisions.md#question-sets-and-score-levels)
+[Question sets and score levels](api/fixed-option-decisions.md)
 and
-[System One and OpenAI-compatible Decisions bodies](api/fixed-option-decisions.md#system-one-and-openai-compatible-decisions-bodies).
+[System One and OpenAI-compatible Decisions bodies](api/fixed-option-decisions.md).
 
 Two differences matter when you bring an existing client:
 
@@ -97,7 +97,7 @@ These rules apply to every backend and every path on this page.
   released calibration. Run `openmed decision-qualify` on your own labelled
   development and held-out evaluation cases, then pass the profiles it emits to
   `decide()` explicitly. See
-  [Qualify a backend offline](api/fixed-option-decisions.md#qualify-a-backend-offline).
+  [Qualify a backend offline](api/fixed-option-decisions.md).
   A qualified report means only that the backend met the floors you chose on
   the files you supplied. It is not clinical validation.
 - **No autonomous clinical action.** Decisions can flag, rank and route work
@@ -161,17 +161,17 @@ else:
 | --- | --- | --- | --- | --- |
 | Deterministic baseline | `DeterministicDecisionBackend` (the default) | base package | in process, no model | [Python](api/fixed-option-decisions.md#python) |
 | Your own local scorer | `EncoderDecisionBackend`, `CrossEncoderDecisionBackend`, `SpecialistDecisionBackend` | base package | in process | [Python](api/fixed-option-decisions.md#python) |
-| GLiNER2.5 | `GLiNER2DecisionBackend` | `openmed[gliner2]` | in process, CPU | [GLiNER2.5 decision backend](zero-shot-ner.md#gliner25-decision-backend) |
-| GLiClass v4 | `GLiClassDecisionBackend` | `openmed[gliclass]` (torch) or `openmed[onnx-runtime]` (ONNX int8) | in process, CPU | [GLiClass v4 backend](api/fixed-option-decisions.md#gliclass-v4-backend) |
-| Local decision server | `DecisionServerBackend` | base package | the model in its own process; OpenMed connects over loopback by default | [Local decision servers](api/fixed-option-decisions.md#local-decision-servers) |
+| GLiNER2.5 | `GLiNER2DecisionBackend` | `openmed[gliner2]` | in process, CPU | [GLiNER2.5 decision backend](zero-shot-ner.md) |
+| GLiClass v4 | `GLiClassDecisionBackend` | `openmed[gliclass]` (torch) or `openmed[onnx-runtime]` (ONNX int8) | in process, CPU | [GLiClass v4 backend](api/fixed-option-decisions.md) |
+| Local decision server | `DecisionServerBackend` | base package | the model in its own process; OpenMed connects over loopback by default | [Local decision servers](api/fixed-option-decisions.md) |
 | MedDecider-4B-NLI | `EncoderNLIBackend` (an NLI verifier, not a decision backend) | `openmed[hf]` | in process, CPU | [MedDecider-4B-NLI recipe](clinical/local-backends.md#recipe-meddecider-4b-nli) |
 
 **GLiNER2.5.** Each request becomes one GLiNER2 `classify_text` task over the
 caller's options; all six public GLiNER2.5 checkpoints load through the
 `gliner2` package with no remote code. The
-[GLiNER2.5 checkpoints](zero-shot-ner.md#gliner25-checkpoints) table lists
+[GLiNER2.5 checkpoints](zero-shot-ner.md) table lists
 them. For language routing, the
-[multilingual language-decision evaluation](zero-shot-ner.md#multilingual-language-decision-evaluation)
+[multilingual language-decision evaluation](zero-shot-ner.md)
 measured `fastino/GLiNER2.5-multi-Decide` against the deterministic router. It
 is evidence only; routing defaults do not change.
 
