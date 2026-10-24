@@ -9,7 +9,15 @@ Install the optional extra in the environment that creates the registration:
 
 ```bash
 pip install "openmed[snowflake]"
+pip install "filelock>=4.2.1"
 ```
+
+The second command replaces the vulnerable filelock 3.x release that pip
+selects for the Snowflake connector, which caps `filelock` below 4. pip then
+reports that declared cap as a conflict; the connector's cache locks use only the
+`FileLock` API that filelock 4 keeps. OpenMed's frozen uv lock applies the same
+override. See the [dependency policy](security/dependency-policy.md) for the
+review behind it.
 
 ## Register with Snowpark
 
