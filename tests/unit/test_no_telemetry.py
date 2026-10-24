@@ -88,6 +88,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
+    "structured/decision_server.py": (
+        "opt-in caller-configured loopback or Unix-socket decision server; "
+        "private-network hosts only by explicit operator approval for non-PHI"
+    ),
     "structured/store/postgres.py": "explicit caller-DSN PostgreSQL TLS context",
     "training/recipe.py": "opt-in training distributed rendezvous",
 }

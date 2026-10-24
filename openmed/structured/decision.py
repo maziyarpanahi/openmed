@@ -1610,13 +1610,25 @@ def _decide_question_set(
 
 
 def _backend_error_state(error: Exception) -> tuple[DecisionState, str]:
+    """Map a backend exception to a typed state and a controlled code.
+
+    The exception class selects the state. A backend may refine the code with
+    a ``decision_code`` attribute; anything that is not a controlled
+    identifier is ignored, so exception text never reaches a result.
+    """
+
     if isinstance(error, DecisionUnsupportedError):
-        return DecisionState.UNSUPPORTED, "backend_unsupported"
-    if isinstance(error, DecisionConflictError):
-        return DecisionState.CONFLICT, "backend_conflict"
-    if isinstance(error, TimeoutError):
-        return DecisionState.FAILURE, "backend_timeout"
-    return DecisionState.FAILURE, "backend_failure"
+        state, code = DecisionState.UNSUPPORTED, "backend_unsupported"
+    elif isinstance(error, DecisionConflictError):
+        state, code = DecisionState.CONFLICT, "backend_conflict"
+    elif isinstance(error, TimeoutError):
+        state, code = DecisionState.FAILURE, "backend_timeout"
+    else:
+        state, code = DecisionState.FAILURE, "backend_failure"
+    detail = getattr(error, "decision_code", None)
+    if isinstance(detail, str) and _CONTROLLED_RE.fullmatch(detail) is not None:
+        code = detail
+    return state, code
 
 
 def _result_from_output(
