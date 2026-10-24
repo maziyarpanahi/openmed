@@ -38,11 +38,14 @@ COPY openmed /app/openmed
 COPY gates/baseline.json gates/registry_state.json /app/gates/
 COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/
 
+# The PyTorch CPU index mirrors filelock only up to an unpatched 3.x release.
+# Install the patched PyPI release first so Torch's requirement is satisfied.
 RUN python -m pip install --no-cache-dir --upgrade \
         "pip==26.2.0" \
-        "setuptools==83.0.0" \
+        "setuptools==84.2.1" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
+        "filelock==4.2.4" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0,<3" \
     && pip install --no-cache-dir ".[hf,journey,mcp,service]" \
     && python -m pip check \
