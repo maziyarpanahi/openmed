@@ -25,6 +25,7 @@ from faker.config import AVAILABLE_LOCALES
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer import locales as L
+from openmed.core.anonymizer.digit_systems import detect_digit_system, fold_digits
 from openmed.core.anonymizer.locales import (
     CONCEPTUAL_LOCALE_LANGUAGES,
     FAKER_BACKEND_LOCALE,
@@ -250,7 +251,9 @@ class TestLocaleResolution:
         assert any(
             surname in person for surname in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
         )
-        assert validate_aadhaar(aadhaar)
+        # Native-digit sources keep their digit system (#3871).
+        assert detect_digit_system(aadhaar).name == "bengali"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
         pack = get_language_pack("or")
@@ -296,7 +299,8 @@ class TestLocaleResolution:
         ]
         assert re.fullmatch(r"[\u0B00-\u0B7F ]+", person)
         assert person != "ଅରୁଣ ଦାସ"
-        assert validate_aadhaar(aadhaar)
+        assert detect_digit_system(aadhaar).name == "oriya"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_gujarati_pack_uses_native_locale_and_gender_suffixes(self):
         pack = get_language_pack("gu")
@@ -481,7 +485,8 @@ class TestLocaleResolution:
         assert re.fullmatch(r"[A-Za-z]+\.[ \t]*[A-Za-z]+\.[ \t]*[A-Za-z]+", code_mixed)
         assert native != "ಕೆ. ಎಸ್. ರವಿ"
         assert code_mixed != "K. S. Ravi"
-        assert validate_aadhaar(aadhaar)
+        assert detect_digit_system(aadhaar).name == "kannada"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
     def test_conceptual_locale_resolves_to_installed_backend(self, locale):

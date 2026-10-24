@@ -360,6 +360,47 @@ deidentify("Email: john@hospital.org", method="replace", lang="en")
 #  -> "Email: alice@hospital.org"  (domain kept, local part faked)
 ```
 
+### Native digit systems
+
+`replace`, `format_preserve` and `shift_dates` render their output in the digit
+system of the source span. A Persian national ID such as `۰۰۱۲۳۴۵۶۷۹` gets a
+surrogate in Persian digits, an Arabic-Indic date `١٥/٠٣/٢٠٢٦` shifted by three
+days becomes `١٨/٠٣/٢٠٢٦`, and a grouped Devanagari Aadhaar keeps its digits
+and its `#### #### ####` layout. ASCII surrogates in a native-digit note would
+otherwise mark every replaced span.
+
+Generators and validators still work on ASCII digits. OpenMed folds the source
+span to ASCII, runs the generator or the date shifter on the folded value, and
+then renders the digits of the result back. The folded surrogate therefore
+passes the same checksum and structure validators as an ASCII surrogate. In
+deterministic mode the same identifier written in different digit systems gets
+the same surrogate digits. The helpers live in
+`openmed.core.anonymizer.digit_systems`.
+
+The rules are:
+
+- Any Unicode decimal digit system works, including Arabic-Indic, Extended
+  Arabic-Indic (Persian and Urdu), Devanagari, Bengali, Thai, Myanmar and
+  fullwidth digits.
+- Spans whose digits are all ASCII, or that contain no digits, are unchanged.
+- A mixed-digit span uses its dominant system, the one with the most digits.
+  A tie goes to the system whose first digit comes earliest. The whole
+  surrogate uses that one system.
+- The Arabic date separator `؍` and the fullwidth `／`, `－` and `．` are kept
+  in shifted and generated dates. If the span also contains the matching ASCII
+  separator, the native separator is left as it is.
+- If a generator returns bare digits for a grouped source with the same digit
+  count, the source grouping and separators are applied to the surrogate.
+- Ethiopic numerals (U+1369 to U+137C) are not positional decimal digits and
+  have no zero, so they are never converted. Spans that use them behave as
+  before.
+- Only digits and separators are rendered here. Calendar handling for Jalali,
+  Buddhist-era and other non-Gregorian dates is a separate step.
+
+The mapping and audit report hold the same values as for ASCII input: the
+mapping links each rendered surrogate to its source span, and the audit report
+stores no extra copy of the source span or of its ASCII form.
+
 ### Clinical ID checksums
 
 OpenMed reuses the existing checksum validators in

@@ -2983,12 +2983,19 @@ def _redact_entity(
         if _is_mixed_label_union(entity):
             return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(
+            from .anonymizer.digit_systems import render_in_source_digits
+
+            # Shift the ASCII fold and render the result in the source span's
+            # digit system and date separators.
+            return render_in_source_digits(
                 entity.text,
-                date_shift_days,
-                keep_year,
-                lang=lang,
-                require_dateutil=require_dateutil,
+                lambda source: _shift_date(
+                    source,
+                    date_shift_days,
+                    keep_year,
+                    lang=lang,
+                    require_dateutil=require_dateutil,
+                ),
             )
         else:
             # Non-date entities get masked
