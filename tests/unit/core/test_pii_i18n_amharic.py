@@ -116,6 +116,7 @@ def test_synthetic_amharic_registers_have_exact_offsets():
     assert [fixture.metadata["register"] for fixture in fixtures] == [
         "amharic_only",
         "amharic_latin_mixed",
+        "amharic_ethiopian_calendar",
     ]
 
     for fixture in fixtures:

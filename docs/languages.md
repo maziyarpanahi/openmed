@@ -682,3 +682,58 @@ from Article 12 of the 2023 Law on Identification, with no public checksum.
 Before: Bệnh nhân Nguyễn Minh Anh, CCCD 001203123456
 After:  Bệnh nhân [NAME], CCCD [ID]
 ```
+
+## Non-Gregorian calendar dates
+
+Deterministic patterns also recognize month-name dates written in four
+non-Gregorian calendars. They run in the safety sweep and the semantic merger,
+so they protect these dates even with an empty or user-supplied model.
+
+| Calendar | Metadata code | Routes | Example | Orders and ranges |
+|----------|---------------|--------|---------|-------------------|
+| Lunar Hijri | `hijri` | `ar`, `fa`, `ur` | `١٥ رمضان ١٤٤٧ هـ` | day month year; years 1300-1499 |
+| Ethiopian | `ethiopian` | `am` | `መስከረም 15 ቀን 2017 ዓ.ም` | day month year or month day year; 13 months; years 1900-2099 |
+| Bikram Sambat | `bikram_sambat` | `ne` | `२०८२ असार १५ गते` | year month day, day month year or month day year; days up to 32; years 1900-2199 |
+| Hebrew | `hebrew` | `he` | `ט״ו בשבט תשפ״ו` | day month year; years 5500-5899 or Hebrew-numeral years |
+
+- Days and years accept ASCII digits and the route's native numerals:
+  Arabic-Indic and Persian digits for Hijri dates, Devanagari digits for Bikram
+  Sambat, Ethiopic numerals such as `፲፭ ጥር ፲፱፻፹፭`, and Hebrew-numeral days
+  and years with geresh and gershayim (`ט״ו`, `תשפ״ו`, `ה׳תשפ״ו`). ASCII
+  apostrophes and quotation marks are accepted in place of geresh and
+  gershayim.
+- Era markers stay inside the span: `هـ`, `هجري` and `للهجرة` (Arabic), `ه.ق`
+  and `قمری` (Persian), `ہجری` and `ھ` (Urdu), `ዓ.ም` (Amharic), and `वि.सं.`
+  (Nepali). Optional words such as Arabic `من شهر`, Persian `ماه`, Amharic
+  `ቀን` and Nepali `साल` and `गते` are also accepted.
+- Hijri month names match Arabic, Persian and Urdu letter forms, with or
+  without hamza, harakat or a zero-width non-joiner (`ربيع الأول`,
+  `ربیع‌الاول`, `ربیع الاوّل`), and with honorifics such as `رمضان المبارک`.
+  Hebrew one-letter prefixes (`בט״ו`, `ב-15`) and the Amharic prefix `በ` stay
+  outside the span, while `ב` on the month name (`בשבט`) stays inside it.
+- A month name only matches with a day and a year attached. Month words used
+  as ordinary words or names, such as `رمضان` in a sentence about fasting,
+  Hebrew `שבט` ("tribe") or Nepali `जेठ` ("brother-in-law"), and partial dates
+  such as `15 رمضان` or `رمضان 1447`, are not flagged. Gregorian month-name
+  detection is unchanged.
+
+Each matched span carries a value-free calendar code in
+`metadata["calendar"]`, which shifting and surrogate stages can use to select
+a calendar. Safety-sweep spans also record it under
+`metadata["safety_sweep"]["calendar"]`. Spans without the key are Gregorian or
+unspecified. The code never includes the date value, and nothing is logged.
+
+```python
+from openmed.core.safety_sweep import safety_sweep
+
+spans = safety_sweep("تاريخ الميلاد: ١٥ رمضان ١٤٤٧ هـ", [], lang="ar")
+print([(span.start, span.end, span.metadata["calendar"]) for span in spans])
+# [(15, 31, 'hijri')]
+```
+
+Detection does not convert or shift these dates. `method="shift_dates"`
+replaces them with the `[DATE_SHIFTED]` placeholder, and `method="replace"`
+uses the existing date surrogate. Latin transliterations such as `Ramadan`,
+`Meskerem` or `Asar`, dates written out in words, and lunisolar Vikram Samvat
+dates written with a tithi are not covered. Persian solar-calendar month names
+are matched by the Persian pack without a calendar code.

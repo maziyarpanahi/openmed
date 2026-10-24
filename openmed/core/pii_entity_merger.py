@@ -51,6 +51,9 @@ class PIIPattern:
       deterministic safety sweep accepts this pattern
     - context_normalizer: Optional language-scoped context-key folding; never
       used to rewrite source text or returned entity surfaces
+    - calendar: Optional value-free calendar code (for example ``"hijri"``)
+      copied into the metadata of matched date spans; ``None`` means Gregorian
+      or unspecified
 
     Example:
         PIIPattern(
@@ -80,6 +83,7 @@ class PIIPattern:
     reject_on_validation_failure: bool = False
     match_normalizer: Optional[Callable[[str], OffsetMappedText]] = None
     context_normalizer: Optional[Callable[[str], str]] = None
+    calendar: Optional[str] = None
 
 
 def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int, int]]:
@@ -999,6 +1003,7 @@ def merge_entities_with_semantic_units(
                     "source_labels": source_labels,
                     "mixed_label_union": mixed_label_union,
                     "detector_sources": ["ml", "locale_rule"],
+                    **_calendar_entry(unit_pattern),
                 }
             )
 
@@ -1017,6 +1022,7 @@ def merge_entities_with_semantic_units(
                     "source_labels": [str(unit_type)],
                     "mixed_label_union": False,
                     "detector_sources": ["locale_rule"],
+                    **_calendar_entry(unit_pattern),
                 }
             )
 
@@ -1029,6 +1035,12 @@ def merge_entities_with_semantic_units(
     if india_clinical:
         return merge_india_code_mixed_spans(coalesced, text)
     return coalesced
+
+
+def _calendar_entry(pattern: Any) -> Dict[str, str]:
+    """Return the value-free calendar code a semantic unit's pattern carries."""
+    calendar = getattr(pattern, "calendar", None)
+    return {"calendar": calendar} if calendar else {}
 
 
 def _coalesce_overlapping_merged_entities(
@@ -1097,6 +1109,9 @@ def _coalesce_overlapping_merged_entities(
                 if source
             }
         )
+        calendars = {
+            str(entity["calendar"]) for entity in cluster if entity.get("calendar")
+        }
         result.append(
             {
                 "entity_type": winner["entity_type"],
@@ -1113,6 +1128,8 @@ def _coalesce_overlapping_merged_entities(
                 )
                 > 1,
                 "detector_sources": detector_sources,
+                # Keep a calendar code only when the cluster agrees on one.
+                **({"calendar": calendars.pop()} if len(calendars) == 1 else {}),
             }
         )
 

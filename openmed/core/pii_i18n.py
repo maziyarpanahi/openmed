@@ -13315,6 +13315,12 @@ def get_patterns_for_language(
             if not any(pattern is existing for existing in combined)
         ]
 
+    # Non-Gregorian month-name dates (Hijri, Ethiopian, Bikram Sambat and
+    # Hebrew) compile from their own declarative tables.
+    from .calendar_month_dates import calendar_month_date_patterns
+
+    combined = combined + calendar_month_date_patterns(base_lang)
+
     for locale_key in _locale_pattern_keys(lang, locale):
         combined = combined + [
             pattern
