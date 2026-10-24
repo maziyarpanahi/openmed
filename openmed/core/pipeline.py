@@ -1170,6 +1170,7 @@ class Pipeline:
             NATIONAL_ID_ONLY_LANGUAGES,
             SUPPORTED_LANGUAGES,
             USER_SUPPLIED_MODEL_LANGUAGES,
+            USER_SUPPLIED_PII_MODEL,
         )
         from .script_detect import detect_script
 
@@ -1194,13 +1195,18 @@ class Pipeline:
             lang = decision.language
             script = decision.dominant_script
             model_name = pii._resolve_effective_pii_model(self.model_name, lang)
+            available_default_model = decision.dominant_pack.default_model
+            if available_default_model == USER_SUPPLIED_PII_MODEL:
+                # User-supplied-model route packs ship no weights; report no
+                # default model, as the explicit-language path below does.
+                available_default_model = None
             return LanguageRoute(
                 lang=lang,
                 script=script,
                 model_name=model_name,
                 decision=decision,
                 metadata={
-                    "available_default_model": decision.dominant_pack.default_model,
+                    "available_default_model": available_default_model,
                     "dominant_pack": decision.dominant_pack.code,
                     "routing_confidence": decision.confidence,
                     "lid_backend": decision.lid_backend,

@@ -88,6 +88,7 @@ const (
 	LangOR PIILanguage = "or"
 	LangPL PIILanguage = "pl"
 	LangPA PIILanguage = "pa"
+	LangSI PIILanguage = "si"
 	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
 	LangUR PIILanguage = "ur"

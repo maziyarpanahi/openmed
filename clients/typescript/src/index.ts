@@ -51,6 +51,7 @@ export type PIILanguage =
   | "or"
   | "pl"
   | "pa"
+  | "si"
   | "ta"
   | "te"
   | "ur"

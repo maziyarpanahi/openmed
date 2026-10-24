@@ -54,8 +54,11 @@ otherwise Hindi-first Devanagari route. Install
 runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
 routing is first requested, and do not download or bundle model weights.
 
-Thai and Hebrew script runs select `th` and `he`. Myanmar, Khmer, Lao,
-Sinhala, Thaana, Tibetan and other unregistered scripts are reported with
+Thai and Hebrew script runs select `th` and `he`. Sinhala script runs select
+the experimental [`si` user-supplied-model route](#sinhala-si) instead of
+English; it ships no weights, so automatic routing still needs an explicit
+`model_name`. Myanmar, Khmer, Lao, Thaana, Tibetan and other unregistered
+scripts are reported with
 `source="stdlib:unknown-script"`, `reason="unsupported_script"` and low
 confidence. `Pipeline(lang="auto")` rejects letter-bearing unsupported runs
 before model inference. If a caller has independently qualified a fallback,
@@ -131,6 +134,7 @@ repeatable seed.
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
+| `si`   | Sinhala    | `user-supplied`                                             | `si_LK`      | Experimental; no bundled weights — pass `model_name`. Sri Lanka NIC and `+94` patterns; synthetic Sinhala surrogates. |
 | `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `ta`   | Tamil      | `OpenMed/privacy-filter-multilingual`                       | `ta_IN`      | Public placeholder; dedicated weights are not bundled.       |
@@ -172,10 +176,10 @@ Malayalam route has a different fallback contract:
 
 - `ml` now has a built-in multilingual fallback. The optional Indic NER adapter
   remains available when the caller supplies its weights explicitly.
-- `ne` reads `user-supplied`. It has no adapter and no env-var path,
-  so omitting `model_name` raises `ValueError: Language '<code>' has no bundled
-  OpenMed PII model; pass an explicit model_name (user-supplied-model
-  languages: ne)`.
+- `ne` and `si` read `user-supplied`. They have no adapter and no env-var
+  path, so omitting `model_name` raises `ValueError: Language '<code>' has no
+  bundled OpenMed PII model; pass an explicit model_name (user-supplied-model
+  languages: ne, si)`.
 
 The `user-supplied` column value is a registry placeholder rather than a
 loadable repository. Passing it back as `model_name` raises the same error as
@@ -582,6 +586,45 @@ After:  Pacient [NAME], CNP [ID]
 ```text
 Before: Пациент Иван Петров, СНИЛС 112-233-445 95
 After:  Пациент [NAME], СНИЛС [ID]
+```
+
+### Sinhala — `si`
+
+- Model: `user-supplied` · locale `si_LK`. This route is experimental and
+  ships no weights: pass `model_name`, including with `lang="auto"`.
+- Sinhala script runs route to `si` rather than to English. Names, places,
+  and organizations need the user-supplied model. Tamil-script Sri Lankan
+  text still routes to `ta`, which does not run the patterns below.
+- Deterministic Sinhala patterns run on this route even with an empty model
+  detector:
+  - `+94` and `0094` numbers, with the country code inside the masked span,
+    and domestic `070`-`078` mobiles. Domestic landlines need nearby phone
+    context such as `දුරකථන`.
+  - Sri Lanka National Identity Card (NIC) numbers in both layouts, nine
+    digits plus `V` or `X` and twelve digits, only near NIC context such as
+    `ජාතික හැඳුනුම්පත`, `ජා.හැ.අ` or `NIC`. Values whose day field is outside
+    001-366 and 501-866, or whose twelve-digit birth year is before 1900 or
+    after the current year, are rejected. No check digit is claimed.
+  - Numeric dates in the shared day-first order, house-numbered Sinhala
+    street addresses ending in a road word such as `පාර` or `මාවත` near
+    address context, and five-digit postal codes after `තැපැල් කේතය`.
+- The NIC layout adds 500 to the day field for one sex. That offset is a
+  structural rule of the identifier. OpenMed accepts both ranges and never
+  derives, reports, or carries a sex over to a surrogate.
+- `si_LK` is a documented approximation that warns once. Names, cities, and
+  street addresses come from a small repository-authored synthetic Sinhala
+  inventory, other fields use the `en_IN` Faker backend, and NIC surrogates
+  keep only the source layout while every embedded field is drawn at random.
+- Limits: Sinhala month names are not covered. `lang="auto"` picks the
+  dominant script run, so a mostly English note with a few Sinhala words
+  routes to `en` and skips these patterns; pass `lang="si"` for such notes.
+  The synthetic `openmed/eval/golden/fixtures/i18n/si.jsonl` fixture checks
+  spans and leakage. It is not a trained Sinhala model or a clinical-quality
+  claim.
+
+```text
+Before: උපන් දිනය 14/03/1985. ජාතික හැඳුනුම්පත් අංකය 657546289V. ජංගම +94 71 234 5678.
+After:  උපන් දිනය [DATE]. ජාතික හැඳුනුම්පත් අංකය [ID_NUM]. ජංගම [PHONE].
 ```
 
 ### Swedish — `sv`
