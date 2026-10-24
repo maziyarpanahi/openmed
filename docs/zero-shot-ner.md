@@ -178,6 +178,79 @@ question-like name can sharpen decisions. Results stay assistive review
 artifacts: they always require human review, and clinical uses go through
 `GuardedSuggestion`.
 
+### Multilingual language-decision evaluation
+
+`openmed.eval.language_decisions` measures whether
+`fastino/GLiNER2.5-multi-Decide` decisions could supply a fallback or
+abstention signal for language routing. It is an evaluation only: routing
+defaults and language-pack activation do not change.
+
+The evaluation set is built from the synthetic language-pack fixtures
+(`openmed/eval/golden/fixtures/i18n/`, the regional checksum fixtures and the
+code-mixed Hinglish fixture). Gold answers come from fixture declarations only:
+the record language and locale, annotated script runs, declared code-mixing and
+the script a pack declares. Each sample is asked one question:
+
+| Kind | Question | Options |
+| --- | --- | --- |
+| `language` | Which language is this? | every pack and fixture language (55) |
+| `language_in_script` | Same question | languages natively written in the scripts the text contains |
+| `script` | Which script is this? | scripts that packs declare (19) |
+| `dialect` | Which regional variety? | the pack's default locale plus fixture locales |
+| `code_switch` | Does this mix languages? | yes / no |
+
+The baseline is the stdlib `LanguageRouter` (optional CLD2 disabled),
+`detect_script` for scripts, and the pack's default locale for dialects. A
+router answer counts as evidence-backed when script, marker, context or cue
+evidence decided it rather than the pack-priority fallback; script answers
+always do, and default-locale dialect answers never do. The model side runs
+through `decide()` with the default calibration (confidence 0.70, margin 0.15).
+Five policies are compared: always trust the router, trust only
+evidence-backed router answers, trust the model, accept the router answer only
+when the model confidently agrees, and fall back to the model's confident
+answer when the router has no evidence. A silent error is an accepted wrong
+answer.
+
+Results for the pinned revision `e173bca1f0c4217d7a55b3b0c705d5ece8a0218d`
+(462 samples, CPU):
+
+| Kind | n | Router accuracy | Evidence-backed router: coverage / accuracy | Model top-1 | Model coverage / accuracy | Model fallback: coverage / silent errors |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `language` | 133 | 42.9% | 25.6% / 100% | 23.3% | 9.8% / 76.9% | 34.6% / 1.5% |
+| `language_in_script` | 114 | 34.2% | 14.9% / 100% | 45.6% | 34.2% / 84.6% | 43.9% / 5.3% |
+| `script` | 81 | 100% | 100% / 100% | 9.9% | 1.2% / 0% | 100% / 0% |
+| `dialect` | 17 | 58.8% | 0% / n/a | 70.6% | 70.6% / 91.7% | 70.6% / 5.9% |
+| `code_switch` | 117 | 91.5% | 15.4% / 100% | 68.4% | 64.1% / 76.0% | 67.5% / 15.4% |
+
+Evidence-backed router answers were never wrong, and Unicode script detection
+was exact, so the deterministic path already has a zero-silent-error abstention
+signal; its limit is coverage. The model helps only when its options are
+limited to the text's script candidates, where it recovers Latin- and
+Cyrillic-script languages the router sends to the pack-priority fallback, at
+the cost of confident errors between close languages. It is unusable for
+script detection, collapses toward abstention over 55 open-set options, and
+answers "no" for most declared code-mixed notes (3 of 25 correct). On dialects
+it beats the default locale (12 of 17 against 10 of 17), but the set has 17
+notes whose locale tags follow the identifier locale and includes one confident
+error, which is too little evidence for a routing change. Per-language and
+low-resource counts are in
+[`benchmarks/gliner2-language-decisions.json`](benchmarks/gliner2-language-decisions.json);
+the report holds counts, rates, codes and a dataset digest, never fixture text.
+
+Reproduce the summary with `openmed[gliner2]` installed:
+
+```bash
+python scripts/benchmarks/gliner2_language_decisions.py \
+  --output docs/benchmarks/gliner2-language-decisions.json
+```
+
+`--check docs/benchmarks/gliner2-language-decisions.json` compares a fresh run
+with the committed summary instead; router counts must match exactly and model
+counts may drift by two samples. The opt-in integration test
+`tests/integration/test_gliner2_language_decisions.py` runs the same check
+with every socket blocked after the first download
+(`OPENMED_RUN_GLINER2_CHECKPOINT_TESTS=1`).
+
 ## Inference API
 
 Programmatic usage:
