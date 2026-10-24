@@ -28,9 +28,9 @@ from openmed.eval.native_review_packets import (
 )
 
 # Synthetic marker values. None of them may surface in errors or packets.
-SECRET_SOURCE_PREFIX = "synthetic-ward7-bed"
-SECRET_NAME = "Zuri Amani"
-SECRET_REVIEWER = "Synthetic Reviewer Okafor"
+MARKER_SOURCE_PREFIX = "synthetic-ward7-bed"
+MARKER_NAME = "Zuri Amani"
+MARKER_REVIEWER = "Synthetic Reviewer Okafor"
 
 
 def _digest(label: str) -> str:
@@ -68,9 +68,9 @@ def _items(count: int = 6) -> tuple[NativeReviewItem, ...]:
     items = []
     for index in range(count):
         if index % 2 == 0:
-            text = f"Mgonjwa {SECRET_NAME} ana homa siku {index + 2}."
+            text = f"Mgonjwa {MARKER_NAME} ana homa siku {index + 2}."
             spans = (
-                _span(text, SECRET_NAME, "PERSON"),
+                _span(text, MARKER_NAME, "PERSON"),
                 _span(text, "homa", "CONDITION"),
             )
             task_code = "label_check"
@@ -80,7 +80,7 @@ def _items(count: int = 6) -> tuple[NativeReviewItem, ...]:
             task_code = "fluency_check"
         items.append(
             NativeReviewItem(
-                source_ref=f"{SECRET_SOURCE_PREFIX}-{index:02d}",
+                source_ref=f"{MARKER_SOURCE_PREFIX}-{index:02d}",
                 task_code=task_code,
                 privacy_status=(
                     ReviewPrivacyStatus.SYNTHETIC
@@ -188,7 +188,7 @@ def test_packet_carries_instructions_provenance_and_no_private_values() -> None:
         "synthetic",
     }
 
-    assert SECRET_SOURCE_PREFIX not in serialized
+    assert MARKER_SOURCE_PREFIX not in serialized
     assert "20261024" not in serialized
     for entry in manifest.entries:
         assert entry.provenance_digest not in serialized
@@ -216,14 +216,14 @@ def test_only_used_tasks_enter_the_packet() -> None:
 def test_items_not_marked_synthetic_or_deidentified_are_refused(status) -> None:
     with pytest.raises(NativeReviewPacketError, match="not_reviewable") as caught:
         NativeReviewItem(
-            source_ref=f"{SECRET_SOURCE_PREFIX}-99",
+            source_ref=f"{MARKER_SOURCE_PREFIX}-99",
             task_code="fluency_check",
             privacy_status=status,
             provenance_digest=_digest("provenance-99"),
-            text=f"Mgonjwa {SECRET_NAME} ana homa.",
+            text=f"Mgonjwa {MARKER_NAME} ana homa.",
         )
 
-    _assert_value_free(caught.value, SECRET_NAME, SECRET_SOURCE_PREFIX)
+    _assert_value_free(caught.value, MARKER_NAME, MARKER_SOURCE_PREFIX)
 
 
 def test_items_must_stay_within_minimal_context() -> None:
@@ -271,7 +271,7 @@ def test_build_rejects_invalid_inputs(overrides, message) -> None:
     with pytest.raises(NativeReviewPacketError, match=message) as caught:
         _build(**overrides)
 
-    _assert_value_free(caught.value, SECRET_NAME, SECRET_SOURCE_PREFIX, "Okafor")
+    _assert_value_free(caught.value, MARKER_NAME, MARKER_SOURCE_PREFIX, "Okafor")
 
 
 def test_build_rejects_duplicate_sources_and_unknown_labels() -> None:
@@ -364,11 +364,11 @@ def test_packet_and_manifest_round_trip_through_strict_json() -> None:
         NativeReviewPacket.from_json(json.dumps(relabelled))
 
     extended = packet.to_dict()
-    extended["source_refs"] = [SECRET_SOURCE_PREFIX]
+    extended["source_refs"] = [MARKER_SOURCE_PREFIX]
     with pytest.raises(NativeReviewPacketError) as caught:
         NativeReviewPacket.from_dict(extended)
     assert str(caught.value) == "packet: unknown_field"
-    _assert_value_free(caught.value, SECRET_SOURCE_PREFIX)
+    _assert_value_free(caught.value, MARKER_SOURCE_PREFIX)
 
 
 def test_manifest_verification_detects_tampering() -> None:
@@ -390,7 +390,7 @@ def test_manifest_verification_detects_tampering() -> None:
     )
     with pytest.raises(NativeReviewPacketError, match="provenance_mismatch") as caught:
         verify_native_review_manifest(packet, NativeReviewManifest.from_dict(swapped))
-    _assert_value_free(caught.value, SECRET_SOURCE_PREFIX)
+    _assert_value_free(caught.value, MARKER_SOURCE_PREFIX)
 
     other_packet, other_manifest = _build(packet_ref="sw-review-assignment-002")
     with pytest.raises(NativeReviewPacketError, match="manifest: packet_mismatch"):
@@ -445,7 +445,7 @@ def test_import_resolves_opaque_items_without_reviewer_identity() -> None:
         }
 
     serialized = imported.to_json()
-    assert SECRET_NAME not in serialized
+    assert MARKER_NAME not in serialized
     assert not re.search(r'"(reviewer_id|reviewer_name|email|name)"', serialized)
 
 
@@ -491,13 +491,13 @@ def test_import_rejects_identity_free_text_and_unknown_fields(
     packet, manifest = _build()
     submission = _filled_submission(packet)
     target = submission if location == "top" else submission["decisions"][0]
-    target[key] = SECRET_REVIEWER
+    target[key] = MARKER_REVIEWER
 
     with pytest.raises(NativeReviewPacketError) as caught:
         import_native_review_decisions(submission, packet=packet, manifest=manifest)
 
     assert str(caught.value) == message
-    _assert_value_free(caught.value, SECRET_REVIEWER)
+    _assert_value_free(caught.value, MARKER_REVIEWER)
 
 
 def test_import_validates_completeness_against_the_manifest() -> None:
@@ -539,10 +539,10 @@ def test_import_rejects_unknown_duplicate_and_mismatched_submissions() -> None:
     packet, manifest = _build()
 
     unknown = _filled_submission(packet)
-    unknown["decisions"][0]["item_id"] = f"nri_{SECRET_SOURCE_PREFIX}"
+    unknown["decisions"][0]["item_id"] = f"nri_{MARKER_SOURCE_PREFIX}"
     with pytest.raises(NativeReviewPacketError, match="decisions: unknown_item") as c:
         import_native_review_decisions(unknown, packet=packet, manifest=manifest)
-    _assert_value_free(c.value, SECRET_SOURCE_PREFIX)
+    _assert_value_free(c.value, MARKER_SOURCE_PREFIX)
 
     duplicate = _filled_submission(packet)
     duplicate["decisions"].append(dict(duplicate["decisions"][0]))
@@ -695,11 +695,11 @@ def test_imported_decisions_round_trip_and_bind_lineage() -> None:
         NativeReviewDecision.from_dict(moved)
 
     with_identity = decision.to_dict()
-    with_identity["reviewer_name"] = SECRET_REVIEWER
+    with_identity["reviewer_name"] = MARKER_REVIEWER
     with pytest.raises(NativeReviewPacketError) as caught:
         NativeReviewDecision.from_dict(with_identity)
     assert str(caught.value) == "decision_record: reviewer_identity_forbidden"
-    _assert_value_free(caught.value, SECRET_REVIEWER)
+    _assert_value_free(caught.value, MARKER_REVIEWER)
 
 
 @pytest.mark.parametrize(
@@ -710,7 +710,7 @@ def test_imported_decisions_round_trip_and_bind_lineage() -> None:
         (b"\xff\xfe", "submission: invalid_encoding"),
         (b"[1, 2]", "submission: invalid_object"),
         (b" " * (8 * 1024 * 1024 + 1), "submission: byte_limit_exceeded"),
-        (f'{{"reviewer_note": "{SECRET_NAME}"'.encode(), "submission: invalid_json"),
+        (f'{{"reviewer_note": "{MARKER_NAME}"'.encode(), "submission: invalid_json"),
     ],
 )
 def test_submission_json_is_parsed_strictly(payload, message) -> None:
@@ -721,7 +721,7 @@ def test_submission_json_is_parsed_strictly(payload, message) -> None:
 
     assert str(caught.value) == message
     assert caught.value.__context__ is None
-    _assert_value_free(caught.value, SECRET_NAME)
+    _assert_value_free(caught.value, MARKER_NAME)
 
 
 def test_task_vocabularies_are_validated() -> None:
@@ -753,9 +753,9 @@ def test_reprs_do_not_expose_review_text() -> None:
     packet, _ = _build()
     item = _items()[0]
 
-    assert SECRET_NAME not in repr(item)
-    assert SECRET_NAME not in repr(packet.items[0])
-    assert SECRET_NAME not in repr(packet)
+    assert MARKER_NAME not in repr(item)
+    assert MARKER_NAME not in repr(packet.items[0])
+    assert MARKER_NAME not in repr(packet)
 
 
 def test_build_and_import_make_no_network_calls(monkeypatch) -> None:
