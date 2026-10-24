@@ -427,6 +427,7 @@ nav:
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
+      - Language Adapter Distillation: languages/adapter-distillation.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
