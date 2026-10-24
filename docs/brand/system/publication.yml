@@ -381,6 +381,7 @@ classification:
     - structured/schema-guided-extraction.md
     - medical-tokenizer.md
     - indic-normalization.md
+    - languages/morphology-projection.md
     - configuration.md
     - configuration/precedence-audit.md
     - profiles.md
