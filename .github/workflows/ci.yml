@@ -239,13 +239,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-        exclude:
-          # Exclude some combinations to reduce CI time
-          - os: windows-latest
-            python-version: "3.10"
-          - os: macos-latest
-            python-version: "3.10"
+        python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -279,10 +273,8 @@ jobs:
     - name: Verify secure image dependency selection
       run: >-
         uv run --frozen python -c
-        "import importlib.util, sys; from importlib.metadata import version;
-        assert (int(version('Pillow').split('.')[0]) >= 13
-        if sys.version_info >= (3, 11)
-        else importlib.util.find_spec('PIL') is None)"
+        "from importlib.metadata import version;
+        assert int(version('Pillow').split('.')[0]) >= 13"
 
     - name: Windows portability regression checks
       if: runner.os == 'Windows'
@@ -349,7 +341,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -554,7 +546,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.11", "3.12"]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
