@@ -750,6 +750,21 @@ class TestEastAfricanNationalIds:
         assert not validate_tanzania_nida("19850712-1234-567890-12")
         assert not validate_tanzania_nida(None)
 
+    @pytest.mark.parametrize("separator", ["", "-", " "])
+    def test_swahili_nida_rule_validates_every_grouping(self, separator):
+        from openmed.core.safety_sweep import safety_sweep
+
+        valid = separator.join(["19850712", "12345", "67890", "12"])
+        invalid = separator.join(["19851312", "12345", "67890", "12"])
+
+        for value, expected in ((valid, [valid]), (invalid, [])):
+            text = f"Namba ya NIDA {value} imerekodiwa."
+            assert [
+                span.text
+                for span in safety_sweep(text, [], lang="sw")
+                if span.label == "national_id"
+            ] == expected
+
     def test_uganda_nin_validator_checks_class_gender_and_length(self):
         assert validate_uganda_nin("CM123456789ABC")
         assert validate_uganda_nin("cf123456789abc")
@@ -6274,6 +6289,26 @@ class TestNigerianIdentifiers:
     )
     def test_nin_validator_rejects_trivial_or_malformed_values(self, value):
         assert not validate_nigeria_nin(value)
+
+    @pytest.mark.parametrize("lang", ["ha", "ig", "yo"])
+    @pytest.mark.parametrize(
+        ("value", "masked"),
+        [
+            ("36787753186", True),
+            ("٣٦٧٨٧٧٥٣١٨٦", True),
+            ("11111111111", False),
+            ("١١١١١١١١١١١", False),
+            ("98765432109", False),
+        ],
+    )
+    def test_language_pack_nin_rules_apply_nin_validation(self, lang, value, masked):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = f"NIN {value}."
+
+        assert [span.text for span in safety_sweep(text, [], lang=lang)] == (
+            [value] if masked else []
+        )
 
     def test_bvn_validator_accepts_non_trivial_eleven_digit_values(self):
         assert validate_nigeria_bvn("24107152688")

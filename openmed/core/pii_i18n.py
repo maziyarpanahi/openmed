@@ -2054,6 +2054,11 @@ def validate_tanzania_nida(text: str) -> bool:
     return date(1900, 1, 1) <= birth_date <= date.today()
 
 
+def _validate_grouped_tanzania_nida(text: str) -> bool:
+    """Validate a NIDA number printed compact, dash-grouped or space-grouped."""
+    return isinstance(text, str) and validate_tanzania_nida(text.replace(" ", ""))
+
+
 def validate_uganda_nin(text: str) -> bool:
     """Validate the stable structure of a Uganda NIRA NIN.
 
@@ -4766,6 +4771,24 @@ _EGYPT_NATIONAL_ID_PII_PATTERNS = _locale_patterns_named(
 _MOROCCO_CIN_PII_PATTERNS = _locale_patterns_named("ar_ma", "moroccan_cin")
 
 NIGERIA_NIN_PATTERN = r"(?<!\d)\d{11}(?!\d)"
+
+
+def _validate_nigeria_nin_any_digits(text: str) -> bool:
+    """Apply NIN placeholder rules to a value in any decimal digit script.
+
+    Language-pack NIN rules match ``\\d`` so Ajami spans keep their native
+    digits; each digit is read by its decimal value only for validation.
+    """
+    if not isinstance(text, str):
+        return False
+    return validate_nigeria_nin(
+        "".join(
+            str(unicodedata.decimal(char)) if char.isdecimal() else char
+            for char in text
+        )
+    )
+
+
 _NIGERIA_INTERNATIONAL_PHONE_BODY = (
     r"(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}[\s.-]?\d{3}[\s.-]?\d{4}"
 )
@@ -4878,6 +4901,7 @@ _HAUSA_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=["nin", "lambar nin", "lambar shaida", "lambar ƙasa", "lamba"],
         context_boost=0.4,
+        validator=_validate_nigeria_nin_any_digits,
         flags=re.IGNORECASE,
     ),
 ]
@@ -4957,6 +4981,7 @@ _YORUBA_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.45,
         context_words=_YORUBA_NIN_CONTEXT,
         context_boost=0.5,
+        validator=_validate_nigeria_nin_any_digits,
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
@@ -5063,6 +5088,7 @@ _IGBO_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.45,
         context_words=_IGBO_NIN_CONTEXT,
         context_boost=0.5,
+        validator=_validate_nigeria_nin_any_digits,
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
@@ -8076,8 +8102,8 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=0,
     ),
-    # Fayda recognition is format-only: exactly 12 decimal digits. No checksum
-    # or validity claim is made because none is publicly specified.
+    # Fayda FAN: exactly 12 decimal digits with the MOSIP UIN leading-digit
+    # rule and Verhoeff check digit, as in ``_ETHIOPIA_FAYDA_PII_PATTERNS``.
     PIIPattern(
         r"(?<!\w)[0-9]{12}(?!\w)",
         "national_id",
@@ -8085,6 +8111,7 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=_AMHARIC_ID_CONTEXT,
         context_boost=0.45,
+        validator=validate_ethiopia_fayda,
         requires_context=True,
         safety_sweep_requires_context=True,
         flags=0,
@@ -10217,8 +10244,9 @@ _SWAHILI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         safety_sweep_requires_context=True,
     ),
-    # Tanzanian NIDA NIN: format-only recognition of the 20-digit value,
-    # including its commonly grouped 8-5-5-2 rendering. No checksum is claimed.
+    # Tanzanian NIDA NIN: the 20-digit value, including its commonly grouped
+    # 8-5-5-2 rendering. No checksum is claimed; the embedded birth date must
+    # be a real Gregorian date, as in ``_TANZANIA_NIDA_PII_PATTERNS``.
     PIIPattern(
         r"(?<!\d)\d{8}(?P<nida_sep>[ -]?)\d{5}(?P=nida_sep)"
         r"\d{5}(?P=nida_sep)\d{2}(?!\d)",
@@ -10227,6 +10255,7 @@ _SWAHILI_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=_SWAHILI_ID_CONTEXT,
         context_boost=0.45,
+        validator=_validate_grouped_tanzania_nida,
         safety_sweep_requires_context=True,
     ),
     PIIPattern(
@@ -12402,7 +12431,7 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LAST_NAME": ["ተስፋዬ", "ከበደ", "አለሙ", "ገብረ"],
         "EMAIL": ["takami@example.et", "contact@example.org"],
         "PHONE": ["+251 911 234 567", "0911 765 432"],
-        "ID_NUM": ["123456789012", "987654321098"],
+        "ID_NUM": ["234567890124", "987654321096"],
         "STREET_ADDRESS": ["አዲስ አበባ ቦሌ 12", "ባሕር ዳር ቀበሌ 5"],
         "URL_PERSONAL": ["https://example.et"],
         "USERNAME": ["takami123", "fayda456"],
