@@ -18,6 +18,9 @@ from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
+# Bounds the wait for a model worker thread to start. A loaded runner can
+# stall thread scheduling for most of a second; passing runs return at once.
+_WORKER_START_WAIT_SECONDS = 5
 
 _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_PRELOAD_MODELS",
@@ -179,7 +182,9 @@ def test_concurrency_limit_returns_503_after_bounded_wait(
                 first_task = asyncio.create_task(
                     client.post("/analyze", json={"text": "held"})
                 )
-                assert await asyncio.to_thread(first_started.wait, 1)
+                assert await asyncio.to_thread(
+                    first_started.wait, _WORKER_START_WAIT_SECONDS
+                )
                 busy = await client.post("/analyze", json={"text": "queued"})
                 release_first.set()
                 first = await first_task
@@ -314,6 +319,13 @@ async def _wait_for_work_to_finish(app) -> None:
     await asyncio.wait_for(wait(), 2)
 
 
+def _advance_loop_clock(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """Make the running loop's pending timers due *seconds* early."""
+    loop = asyncio.get_running_loop()
+    clock = loop.time
+    monkeypatch.setattr(loop, "time", lambda: clock() + seconds)
+
+
 def _model_request(mode: str, text: str) -> tuple[str, dict[str, Any]]:
     if mode == "graphql":
         return "/graphql", {
@@ -361,17 +373,26 @@ def test_timeout_retains_capacity_until_model_work_finishes(
 
     monkeypatch.setattr(openmed, "analyze_text", model)
     app = create_app()
+    timeout_seconds = 30.0
 
     async def scenario():
         async with app.router.lifespan_context(app):
-            app.state.runtime.config.timeout = 0.1
+            # The timeout cannot elapse on its own: the loop clock jumps past it
+            # once the worker holds the model. A loaded runner therefore cannot
+            # time out (or, for batches, abandon) the request before work starts.
+            app.state.runtime.config.timeout = timeout_seconds
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport, base_url=LOOPBACK_BASE_URL
             ) as client:
                 path, body = _model_request(mode, "SYNTHETIC_PRIVATE_INPUT")
                 try:
-                    first = await client.post(path, json=body)
+                    request = asyncio.create_task(client.post(path, json=body))
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
+                    _advance_loop_clock(monkeypatch, timeout_seconds)
+                    first = await request
                     assert started.is_set()
                     if mode == "graphql":
                         assert first.status_code == 200
@@ -381,7 +402,9 @@ def test_timeout_retains_capacity_until_model_work_finishes(
                         )
                     else:
                         payload = _assert_error_payload(first, 504, "timeout")
-                        assert payload["error"]["details"] == {"timeout_seconds": 0.1}
+                        assert payload["error"]["details"] == {
+                            "timeout_seconds": timeout_seconds
+                        }
                     assert "SYNTHETIC_PRIVATE_INPUT" not in first.text
                     assert _orphaned_work(app) == 1
                     assert app.state.inflight == 1
@@ -441,7 +464,9 @@ def test_cancelled_http_wait_retains_running_work(
                     client.post("/analyze", json={"text": "synthetic"})
                 )
                 try:
-                    assert await asyncio.to_thread(started.wait, 2)
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
                     task.cancel()
                     with pytest.raises(asyncio.CancelledError):
                         await task
@@ -506,7 +531,9 @@ def test_parallel_graphql_resolvers_obey_model_concurrency_bound(
                     )
                 )
                 try:
-                    assert await asyncio.to_thread(started.wait, 2)
+                    assert await asyncio.to_thread(
+                        started.wait, _WORKER_START_WAIT_SECONDS
+                    )
                     assert state["calls"] == limit
                     assert state["peak"] == limit
                     busy = await client.post("/analyze", json={"text": "synthetic"})
@@ -537,7 +564,10 @@ def test_abandoned_queued_batch_does_not_start_model_work(
     monkeypatch.setenv("OPENMED_SERVICE_METRICS_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "8")
-    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "1000")
+    # Only the request timeout or cancellation may end the queued wait. A one
+    # second flush could win that race on a stalled runner and start the model;
+    # abandoning the job cancels this timer.
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "60000")
     calls = []
 
     def model(text: str, **_: Any) -> PredictionResult:
