@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import re
 import string
 import unicodedata
@@ -113,6 +114,13 @@ def _surrogates(lang: str, locale: str | None, *, seed: int = SEED) -> list[str]
 
 def _digest(values: list[str]) -> str:
     return hashlib.sha256("\x1f".join(values).encode("utf-8")).hexdigest()[:16]
+
+
+def _locked_faker_version() -> str:
+    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    match = re.search(r'name = "faker"\nversion = "([^"]+)"', lock)
+    assert match is not None
+    return match.group(1)
 
 
 @pytest.mark.parametrize(("lang", "locale"), AFRICAN_CASES)
@@ -403,9 +411,12 @@ def test_non_african_locales_reach_the_fallback_with_identical_faker_state(
 
 
 # Digests of five address/location surrogates per locale, captured on master
-# before the African providers existed. ``it_IT`` is omitted because Faker's
-# ``it_IT`` city draw depends on PYTHONHASHSEED; the fallback-state test above
-# covers it in-process instead.
+# before the African providers existed, with the Faker version pinned in
+# uv.lock. Other Faker releases ship different locale data, so the digests are
+# only compared under that version; the fallback-state test above checks the
+# same routing invariant under any version. ``it_IT`` is omitted because Faker's
+# ``it_IT`` city draw depends on PYTHONHASHSEED; the fallback-state test covers
+# it in-process instead.
 _NON_AFRICAN_DIGEST_PROBES = (
     ("12 Example Road", "STREET_ADDRESS"),
     ("Plot 7 Sample Lane", "ADDRESS"),
@@ -489,6 +500,8 @@ def test_non_african_address_outputs_match_pre_change_digests(
     lang: str,
     locale: str,
 ) -> None:
+    if importlib.metadata.version("faker") != _locked_faker_version():
+        pytest.skip("digests are pinned to the Faker version in uv.lock")
     anonymizer = Anonymizer(lang=lang, locale=locale, consistent=True, seed=SEED)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
