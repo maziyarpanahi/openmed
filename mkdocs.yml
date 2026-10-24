@@ -458,6 +458,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md

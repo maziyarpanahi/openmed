@@ -12,7 +12,7 @@ Beam's DirectRunner before submitting it to Dataflow:
 pip install --upgrade "openmed" "apache-beam>=2.60,<3"
 ```
 
-The integration is tested with Python 3.10-3.12. Apache Beam remains a separate
+The integration is tested with Python 3.11-3.12. Apache Beam remains a separate
 runtime dependency so it does not enlarge OpenMed's core dependency surface.
 
 ```python

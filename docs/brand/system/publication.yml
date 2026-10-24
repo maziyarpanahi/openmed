@@ -516,6 +516,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - languages/graduation-contract.md
     - language-packs.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
