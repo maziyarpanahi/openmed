@@ -20,7 +20,7 @@ import re
 import unicodedata
 import warnings
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
@@ -33,6 +33,7 @@ from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 if TYPE_CHECKING:
     from ..processing.legacy_encoding import LegacyFontMap
+    from ..processing.zawgyi import ZawgyiDetection
 
 UNKNOWN_SCRIPT = "Unknown"
 
@@ -592,6 +593,8 @@ class DetectionNormalization:
     opencc_available: bool | None = None
     removed_bidi_controls: int = 0
     folded_perso_arabic_letters: int = 0
+    legacy_encoding_reason: str | None = None
+    zawgyi_detection: ZawgyiDetection | None = None
 
     @property
     def changed(self) -> bool:
@@ -640,6 +643,12 @@ class DetectionNormalization:
             "indic_scripts": list(self.indic_scripts),
             "converted_legacy_bytes": self.converted_legacy_bytes,
             "legacy_encoding": self.legacy_encoding,
+            "legacy_encoding_reason": self.legacy_encoding_reason,
+            "zawgyi": (
+                None
+                if self.zawgyi_detection is None
+                else self.zawgyi_detection.to_metadata()
+            ),
             "mixed_script": self.mixed_script,
             "opencc_available": self.opencc_available,
             "removed_zero_width": self.removed_zero_width,
@@ -1433,12 +1442,15 @@ def normalize_for_pii_detection(
     lang: str | None = None,
     preserve_script_letters: bool = False,
 ) -> DetectionNormalization:
-    """Convert legacy Indic text, then apply offset-safe Unicode defenses.
+    """Convert legacy Indic and Burmese text, then apply Unicode defenses.
 
-    Likely ISCII-1991 input and caller-mapped legacy-font runs are converted
-    before script routing. The resulting offsets are composed back to the
-    original source-byte coordinate system; ordinary Unicode text follows the
-    existing normalization path unchanged.
+    Likely ISCII-1991 input, caller-mapped legacy-font runs and suspected
+    Zawgyi-encoded Burmese are converted before script routing. The resulting
+    offsets are composed back to the original source coordinate system;
+    ordinary Unicode text follows the existing normalization path unchanged.
+    The Zawgyi decision for Myanmar text, including ambiguous text left
+    unconverted, is exposed through :meth:`DetectionNormalization.to_metadata`
+    as codes and counts only.
 
     ``preserve_script_letters`` keeps native letters, marks and orthography for
     language-pack regexes while still folding decimal digits, width, scoped
@@ -1461,7 +1473,13 @@ def normalize_for_pii_detection(
         preserve_script_letters=preserve_script_letters,
     )
     if legacy_conversion.encoding == "unicode":
-        return normalized
+        if legacy_conversion.zawgyi is None:
+            return normalized
+        return replace(
+            normalized,
+            legacy_encoding_reason=legacy_conversion.reason,
+            zawgyi_detection=legacy_conversion.zawgyi,
+        )
 
     legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
     starts: list[int] = []
@@ -1498,6 +1516,8 @@ def normalize_for_pii_detection(
         indic_scripts=normalized.indic_scripts,
         converted_legacy_bytes=len(converted_sources),
         legacy_encoding=legacy_conversion.encoding,
+        legacy_encoding_reason=legacy_conversion.reason,
+        zawgyi_detection=legacy_conversion.zawgyi,
         scripts=normalized.scripts,
         mixed_script=normalized.mixed_script,
         chinese_variant_normalized=normalized.chinese_variant_normalized,

@@ -1,4 +1,4 @@
-"""Convert legacy Devanagari encodings to Unicode with byte offsets.
+"""Convert legacy Devanagari and Burmese encodings to Unicode with offsets.
 
 The ISCII assignments in this module follow the public Indian standard
 IS 13194:1991 and the Unicode Consortium's published description of ISCII
@@ -16,13 +16,17 @@ are encountered, but full Vedic round-trip coverage is outside this module's
 lossless guarantee.  The guarantee covers the standard non-Vedic Devanagari
 repertoire represented below, excluding contextual ``INV`` presentation
 controls.
+
+Zawgyi-encoded Burmese is detected and converted by :mod:`.zawgyi`, whose
+OpenMed-original rule table carries its own license and provenance record
+(:data:`ZAWGYI_RULE_PROVENANCE`).
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Literal
@@ -30,13 +34,26 @@ from typing import Literal
 import yaml
 
 from .text import normalize_indic_text
+from .zawgyi import (
+    ZAWGYI_CONFIDENCE_THRESHOLD,
+    ZAWGYI_RULE_PROVENANCE,
+    ZawgyiDetection,
+    convert_zawgyi_with_origins,
+    detect_zawgyi,
+)
 
-LegacyEncoding = Literal["unicode", "iscii", "legacy-font"]
+LegacyEncoding = Literal["unicode", "iscii", "legacy-font", "zawgyi"]
 ErrorMode = Literal["strict", "replace"]
+OffsetUnit = Literal["byte", "code_point"]
 
 ISCII_MAPPING_PROVENANCE = (
     "IS 13194:1991 public-standard assignments; OpenMed-original table, Apache-2.0"
 )
+
+#: Reason code: Zawgyi was suspected but conversion was disabled by the caller.
+LEGACY_ENCODING_UNCONVERTED = "legacy_encoding_unconverted"
+#: Reason code: Myanmar text was too short or mixed to classify; not converted.
+LEGACY_ENCODING_UNDETERMINED = "legacy_encoding_undetermined"
 
 _ISCII_ATR = 0xEF
 _ISCII_EXT = 0xF0
@@ -249,18 +266,50 @@ class ConversionOffsetMap:
 
 @dataclass(frozen=True)
 class LegacyConversion:
-    """Unicode conversion result and alignment to the original byte stream."""
+    """Unicode conversion result and alignment to the original source.
+
+    Attributes:
+        text: Converted Unicode text.
+        original: Source bytes: the input itself for ``bytes``; for ``str``
+            input, its Latin-1 bytes on the ISCII and legacy-font paths and
+            its UTF-8 bytes otherwise.
+        encoding: Encoding that produced ``text``. Unconverted input reports
+            ``"unicode"``.
+        offset_map: Alignment between ``text`` and the source.
+        changed: Whether conversion rewrote the source.
+        offset_unit: ``"byte"`` when offsets index ``original``;
+            ``"code_point"`` when Zawgyi was converted from ``str`` input, in
+            which case offsets index the caller's input string.
+        zawgyi: Zawgyi detection decision when Myanmar text was examined.
+        reason: :data:`LEGACY_ENCODING_UNCONVERTED` when Zawgyi was suspected
+            but conversion was disabled, :data:`LEGACY_ENCODING_UNDETERMINED`
+            when Myanmar text was too ambiguous to convert, otherwise ``None``.
+    """
 
     text: str
     original: bytes
     encoding: LegacyEncoding
     offset_map: ConversionOffsetMap
     changed: bool
+    offset_unit: OffsetUnit = "byte"
+    zawgyi: ZawgyiDetection | None = None
+    reason: str | None = None
 
     def to_original_span(self, start: int, end: int) -> tuple[int, int]:
-        """Map a converted span to the original byte stream."""
+        """Map a converted span to source offsets in ``offset_unit``."""
 
         return self.offset_map.to_original_span(start, end)
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return PHI-free conversion diagnostics: decisions and counts only."""
+
+        return {
+            "encoding": self.encoding,
+            "changed": self.changed,
+            "offset_unit": self.offset_unit,
+            "reason": self.reason,
+            "zawgyi": None if self.zawgyi is None else self.zawgyi.to_metadata(),
+        }
 
 
 @dataclass(frozen=True)
@@ -354,19 +403,33 @@ def detect_legacy_encoding(
     *,
     legacy_font_map: LegacyFontMap | None = None,
 ) -> LegacyEncoding:
-    """Conservatively detect ISCII or a supplied ASCII-remapped font.
+    """Conservatively detect ISCII, Zawgyi or a supplied ASCII-remapped font.
 
     A Devanagari ISCII attribute prefix or a dense run containing at least
     four core ISCII consonants identifies a candidate. The complete candidate
     must also decode as strict ISCII; malformed candidates remain Unicode. A
     legacy-font candidate needs a dense run of at least three mapped bytes and
-    must produce Devanagari letters. These gates intentionally prefer a false
-    negative over corrupting an ordinary Latin clinical note.
+    must produce Devanagari letters. Unicode text and valid non-ASCII UTF-8
+    bytes are reported as ``"zawgyi"`` only when :func:`detect_zawgyi`
+    suspects Zawgyi-encoded Burmese at its default threshold. These gates
+    intentionally prefer a false negative over corrupting an ordinary note.
     """
 
     raw = _coerce_legacy_bytes(data)
     if raw is None:
-        return "unicode"
+        assert isinstance(data, str)
+        return "zawgyi" if detect_zawgyi(data).suspected else "unicode"
+    if _is_non_ascii_utf8(raw):
+        decoded = raw.decode("utf-8")
+        return "zawgyi" if detect_zawgyi(decoded).suspected else "unicode"
+    return _detect_byte_legacy_encoding(raw, legacy_font_map=legacy_font_map)
+
+
+def _detect_byte_legacy_encoding(
+    raw: bytes,
+    *,
+    legacy_font_map: LegacyFontMap | None,
+) -> LegacyEncoding:
     if _is_non_ascii_utf8(raw):
         return "unicode"
     content_bytes = [byte for byte in raw if byte not in _LEGACY_GAP_BYTES]
@@ -547,35 +610,115 @@ def unicode_to_iscii(
     return bytes(output)
 
 
+def zawgyi_to_unicode(
+    data: bytes | str,
+    *,
+    errors: ErrorMode = "strict",
+) -> LegacyConversion:
+    """Convert Zawgyi-encoded Burmese to Unicode with exact source offsets.
+
+    Conversion is unconditional and deterministic: callers that are unsure
+    whether text is Zawgyi should use ``convert_legacy_encoding`` with
+    ``encoding="auto"``, which converts only above the detection threshold.
+    Non-Myanmar characters are copied unchanged. Reordered syllable
+    characters map to the whole source range they were moved across.
+
+    Args:
+        data: UTF-8 bytes or decoded text holding Zawgyi code points.
+        errors: UTF-8 decoding policy for ``bytes`` input.
+
+    Returns:
+        Conversion whose offsets index ``data``: bytes for ``bytes`` input and
+        code points for ``str`` input. The detector's decision is attached as
+        ``zawgyi`` for diagnostics.
+    """
+
+    _validate_errors(errors)
+    if isinstance(data, str):
+        return _convert_zawgyi_text(
+            data,
+            base_origins=None,
+            original=data.encode("utf-8"),
+            original_length=len(data),
+            offset_unit="code_point",
+            detection=detect_zawgyi(data),
+        )
+    if not isinstance(data, bytes):
+        raise TypeError("legacy input must be bytes or str")
+    decoded = _decode_unicode(data, original=data, errors=errors)
+    return _convert_zawgyi_text(
+        decoded.text,
+        base_origins=decoded.offset_map.converted_to_original_spans,
+        original=decoded.original,
+        original_length=decoded.offset_map.original_length,
+        offset_unit="byte",
+        detection=detect_zawgyi(decoded.text),
+    )
+
+
 def convert_legacy_encoding(
     data: bytes | str,
     *,
-    encoding: Literal["auto", "unicode", "iscii", "legacy-font"] = "auto",
+    encoding: Literal["auto", "unicode", "iscii", "legacy-font", "zawgyi"] = "auto",
     legacy_font_map: LegacyFontMap | None = None,
     errors: ErrorMode = "strict",
+    convert_zawgyi: bool = True,
 ) -> LegacyConversion:
-    """Convert detected ISCII or caller-mapped legacy-font runs to Unicode.
+    """Convert detected ISCII, Zawgyi or caller-mapped legacy-font runs.
 
     ``bytes`` are preferred whenever original-stream byte offsets matter. A
     ``str`` containing Latin-1 code points is accepted for compatibility with
     systems that decoded legacy bytes without conversion; its code-point and
-    original-byte offsets are then identical.
+    original-byte offsets are then identical. Zawgyi converted from ``str``
+    input reports ``offset_unit="code_point"`` so offsets index that string.
+
+    With ``encoding="auto"``, Myanmar-script text is classified by
+    :func:`detect_zawgyi`. Suspected Zawgyi is converted unless
+    ``convert_zawgyi`` is false; the text is then returned unchanged with
+    reason :data:`LEGACY_ENCODING_UNCONVERTED` so callers can refuse to route
+    it. Ambiguous Myanmar text is never converted and reports
+    :data:`LEGACY_ENCODING_UNDETERMINED`. Pass ``encoding="unicode"`` to skip
+    detection for known Unicode text, including Mon, Shan and other
+    Myanmar-script languages.
+
+    Args:
+        data: Source bytes or text.
+        encoding: ``"auto"`` to detect, or an explicit source encoding.
+        legacy_font_map: Caller-supplied map for ``"legacy-font"`` input.
+        errors: Decoding policy, ``"strict"`` or ``"replace"``.
+        convert_zawgyi: Convert auto-detected Zawgyi. Explicit
+            ``encoding="zawgyi"`` always converts.
+
+    Returns:
+        Unicode conversion with source offsets and content-free diagnostics.
     """
 
     _validate_errors(errors)
-    if encoding not in {"auto", "unicode", "iscii", "legacy-font"}:
+    if encoding not in {"auto", "unicode", "iscii", "legacy-font", "zawgyi"}:
         raise ValueError(f"unknown legacy encoding: {encoding!r}")
+    if encoding == "zawgyi":
+        return zawgyi_to_unicode(data, errors=errors)
 
     raw = _coerce_legacy_bytes(data)
     if raw is None:
         if encoding in {"iscii", "legacy-font"}:
             raise ValueError("legacy conversion requires bytes or Latin-1 text")
         assert isinstance(data, str)
-        return _unicode_identity(data)
+        identity = _unicode_identity(data)
+        if encoding != "auto":
+            return identity
+        return _resolve_auto_zawgyi(
+            identity,
+            text=data,
+            base_origins=None,
+            original_length=len(data),
+            offset_unit="code_point",
+            convert_zawgyi=convert_zawgyi,
+        )
 
     detected: LegacyEncoding
     if encoding == "auto":
-        detected = detect_legacy_encoding(raw, legacy_font_map=legacy_font_map)
+        detected = _detect_byte_legacy_encoding(raw, legacy_font_map=legacy_font_map)
     else:
         detected = encoding
 
@@ -590,7 +733,98 @@ def convert_legacy_encoding(
             auto_detected=encoding == "auto",
             errors=errors,
         )
-    return _decode_unicode(raw, original=data, errors=errors)
+    decoded = _decode_unicode(raw, original=data, errors=errors)
+    if encoding != "auto":
+        return decoded
+    return _resolve_auto_zawgyi(
+        decoded,
+        text=decoded.text,
+        base_origins=decoded.offset_map.converted_to_original_spans,
+        original_length=decoded.offset_map.original_length,
+        offset_unit=decoded.offset_unit,
+        convert_zawgyi=convert_zawgyi,
+    )
+
+
+def _resolve_auto_zawgyi(
+    unicode_result: LegacyConversion,
+    *,
+    text: str,
+    base_origins: tuple[tuple[int, int], ...] | None,
+    original_length: int,
+    offset_unit: OffsetUnit,
+    convert_zawgyi: bool,
+) -> LegacyConversion:
+    """Attach the Zawgyi decision to ``unicode_result`` or convert the text."""
+
+    detection = detect_zawgyi(text)
+    if detection.decision == "not-myanmar":
+        return unicode_result
+    if detection.suspected and convert_zawgyi:
+        return _convert_zawgyi_text(
+            text,
+            base_origins=base_origins,
+            original=unicode_result.original,
+            original_length=original_length,
+            offset_unit=offset_unit,
+            detection=detection,
+        )
+    reason: str | None = None
+    if detection.suspected:
+        reason = LEGACY_ENCODING_UNCONVERTED
+    elif detection.decision == "undetermined":
+        reason = LEGACY_ENCODING_UNDETERMINED
+    return replace(unicode_result, zawgyi=detection, reason=reason)
+
+
+def _convert_zawgyi_text(
+    text: str,
+    *,
+    base_origins: tuple[tuple[int, int], ...] | None,
+    original: bytes,
+    original_length: int,
+    offset_unit: OffsetUnit,
+    detection: ZawgyiDetection,
+) -> LegacyConversion:
+    """Convert decoded Zawgyi and compose offsets back to the source."""
+
+    converted, char_origins = convert_zawgyi_with_origins(text)
+    if base_origins is None:
+        origins = char_origins
+    else:
+        origins = tuple(
+            (base_origins[start][0], base_origins[end - 1][1])
+            for start, end in char_origins
+        )
+    return LegacyConversion(
+        text=converted,
+        original=original,
+        encoding="zawgyi",
+        offset_map=_build_offset_map(original_length, origins),
+        changed=converted != text,
+        offset_unit=offset_unit,
+        zawgyi=detection,
+    )
+
+
+def _changed_source_units(source: str, conversion: LegacyConversion) -> int:
+    """Count ``source`` code points whose converted text differs.
+
+    ``conversion`` must index ``source`` by code point, as every ``str``
+    conversion does except the non-Latin-1 Unicode identity.
+    """
+
+    by_span: dict[tuple[int, int], list[str]] = {}
+    for char, span in zip(
+        conversion.text,
+        conversion.offset_map.converted_to_original_spans,
+    ):
+        by_span.setdefault(span, []).append(char)
+    changed: set[int] = set()
+    for (start, end), chars in by_span.items():
+        if source[start:end] != "".join(chars):
+            changed.update(range(start, end))
+    return len(changed)
 
 
 def _convert_legacy_font(
@@ -919,11 +1153,19 @@ def _validate_errors(errors: str) -> None:
 __all__ = [
     "ConversionOffsetMap",
     "ISCII_MAPPING_PROVENANCE",
+    "LEGACY_ENCODING_UNCONVERTED",
+    "LEGACY_ENCODING_UNDETERMINED",
     "LegacyConversion",
     "LegacyEncoding",
     "LegacyFontMap",
+    "OffsetUnit",
+    "ZAWGYI_CONFIDENCE_THRESHOLD",
+    "ZAWGYI_RULE_PROVENANCE",
+    "ZawgyiDetection",
     "convert_legacy_encoding",
     "detect_legacy_encoding",
+    "detect_zawgyi",
     "iscii_to_unicode",
     "unicode_to_iscii",
+    "zawgyi_to_unicode",
 ]
