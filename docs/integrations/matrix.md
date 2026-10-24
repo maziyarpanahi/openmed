@@ -5,7 +5,7 @@ This page is the human-readable view of the machine-readable
 the integration module, optional requirements, network or resource policy, and
 the offline test files that provide its current support evidence.
 
-All rows support Python `>=3.10`. A `core` requirement means the surface uses
+All rows support Python `>=3.11`. A `core` requirement means the surface uses
 OpenMed's base dependencies and does not require an optional extra. Optional
 requirements are copied from the matching `pyproject.toml` extra; they are
 install-time metadata, not runtime imports performed by the matrix.

@@ -9,7 +9,7 @@ O runtime local principal do OpenMed realiza extração e desidentificação dep
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
