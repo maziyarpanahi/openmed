@@ -629,8 +629,7 @@ class LanguagePackAdapters:
         self.script_language_hints: dict[str, tuple[str, ...]] = {}
         registry._add_listener(self.refresh)
 
-    def _ordered_codes(self) -> tuple[str, ...]:
-        codes = tuple(self.registry.iter_codes())
+    def _ordered_codes(self, codes: Sequence[str]) -> tuple[str, ...]:
         known = set(codes)
         ordered = [code for code in self._builtin_order if code in known]
         ordered.extend(code for code in codes if code not in self._builtin_order)
@@ -639,8 +638,11 @@ class LanguagePackAdapters:
     def refresh(self) -> None:
         """Refresh every public projection from one registry snapshot."""
 
-        codes = self._ordered_codes()
-        packs = tuple(self.registry.get(code) for code in codes)
+        # Read packs once: an atomic generation may remove codes, so separate
+        # code and pack lookups could otherwise observe two generations.
+        snapshot = {pack.code: pack for pack in self.registry.iter_packs()}
+        codes = self._ordered_codes(tuple(snapshot))
+        packs = tuple(snapshot[code] for code in codes)
 
         self.supported_languages.clear()
         self.supported_languages.update(codes)
