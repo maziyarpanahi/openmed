@@ -842,14 +842,25 @@ def openmed_decide(
     purpose: str = "care_review",
     calibration_id: str = "openmed.synthetic.fixed_option.v1",
     timeout_ms: int = 5000,
-    schema_version: str = "1.0.0",
+    schema_version: Optional[str] = None,
     compatibility_policy: str = "same_major",
+    question_id: Optional[str] = None,
+    instructions: Optional[str] = None,
+    option_descriptions: Optional[Sequence[Optional[str]]] = None,
+    levels: Sequence[str] = (),
+    questions: Sequence[Mapping[str, Any]] = (),
+    input_format: str = "text",
+    max_input_chars: Optional[int] = None,
     *,
     backend: Optional[DecisionBackend] = None,
     access_policy: Optional[DecisionAccessPolicy] = None,
     calibration_profiles: Optional[Mapping[str, DecisionCalibrationProfile]] = None,
 ) -> Dict[str, Any]:
-    """Evaluate one bounded, local, explicitly review-only decision."""
+    """Evaluate one bounded, local, explicitly review-only decision.
+
+    Unset 1.1.0 fields are treated as absent, so a call without them resolves
+    to schema 1.0.0 exactly like the REST endpoint.
+    """
 
     request = DecisionRequest.from_dict(
         {
@@ -862,6 +873,15 @@ def openmed_decide(
             "timeout_ms": timeout_ms,
             "schema_version": schema_version,
             "compatibility_policy": compatibility_policy,
+            "question_id": question_id,
+            "instructions": instructions,
+            "option_descriptions": (
+                None if option_descriptions is None else list(option_descriptions)
+            ),
+            "levels": list(levels),
+            "questions": list(questions),
+            "input_format": input_format,
+            "max_input_chars": max_input_chars,
         }
     )
     return decide(

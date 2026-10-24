@@ -1,0 +1,1281 @@
+{
+  "description": "Synthetic requests and results frozen from the 1.0.0 fixed-option decision contract. They must keep validating and deciding exactly as recorded.",
+  "request_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://openmed.dev/schemas/decision-request/1.0.0",
+    "title": "OpenMed Fixed-Option Decision Request",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "mode",
+      "input_text"
+    ],
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "scalar_score"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "maxItems": 0
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "const": "boolean_choice"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "mode": {
+              "enum": [
+                "fixed_choice",
+                "ordered_preference",
+                "multi_label"
+              ]
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "options": {
+              "minItems": 2,
+              "maxItems": 64
+            }
+          }
+        }
+      }
+    ],
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "fixed_choice",
+          "boolean_choice",
+          "ordered_preference",
+          "scalar_score",
+          "multi_label"
+        ]
+      },
+      "input_text": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 8192
+      },
+      "options": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "default": []
+      },
+      "namespace": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "default": "default"
+      },
+      "purpose": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "default": "care_review"
+      },
+      "calibration_id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+        "default": "openmed.synthetic.fixed_option.v1"
+      },
+      "timeout_ms": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 30000,
+        "default": 5000
+      },
+      "schema_version": {
+        "type": "string",
+        "const": "1.0.0",
+        "default": "1.0.0"
+      },
+      "compatibility_policy": {
+        "type": "string",
+        "const": "same_major",
+        "default": "same_major"
+      }
+    }
+  },
+  "result_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://openmed.dev/schemas/decision-result/1.0.0",
+    "title": "OpenMed Fixed-Option Decision Result",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "mode",
+      "state",
+      "code",
+      "option_scores",
+      "choice",
+      "choices",
+      "ranking",
+      "scalar_score",
+      "confidence",
+      "margin",
+      "calibration",
+      "backend",
+      "access",
+      "warnings",
+      "review",
+      "advisory",
+      "autonomous_action",
+      "schema_version",
+      "compatibility_policy",
+      "extensions"
+    ],
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "fixed_choice",
+          "boolean_choice",
+          "ordered_preference",
+          "scalar_score",
+          "multi_label"
+        ]
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "success",
+          "abstained",
+          "partial",
+          "unknown",
+          "conflict",
+          "unsupported",
+          "denied",
+          "failure"
+        ]
+      },
+      "code": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "option_scores": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "index",
+            "option",
+            "score"
+          ],
+          "properties": {
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "option": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      "choice": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 256
+      },
+      "choices": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "ranking": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "scalar_score": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 1
+      },
+      "confidence": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 1
+      },
+      "margin": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 1
+      },
+      "calibration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "calibration_id",
+          "version",
+          "method",
+          "minimum_confidence",
+          "minimum_margin",
+          "multi_label_threshold",
+          "in_domain_digest",
+          "out_of_domain_digest"
+        ],
+        "properties": {
+          "calibration_id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+          },
+          "method": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+          },
+          "minimum_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minimum_margin": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "multi_label_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "in_domain_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "out_of_domain_digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      },
+      "backend": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend_id",
+          "kind",
+          "runtime",
+          "model_id",
+          "revision",
+          "license_id",
+          "local",
+          "deterministic"
+        ],
+        "properties": {
+          "backend_id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "deterministic",
+              "encoder",
+              "cross_encoder",
+              "specialist"
+            ]
+          },
+          "runtime": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "model_id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "revision": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "license_id": {
+            "type": "string",
+            "enum": [
+              "Apache-2.0",
+              "BSD-2-Clause",
+              "BSD-3-Clause",
+              "MIT",
+              "MPL-2.0"
+            ]
+          },
+          "local": {
+            "type": "boolean",
+            "const": true
+          },
+          "deterministic": {
+            "type": "boolean"
+          }
+        }
+      },
+      "access": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "allowed",
+          "code",
+          "namespace",
+          "purpose",
+          "policy_version"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+          },
+          "purpose": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+          },
+          "policy_version": {
+            "type": "string",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+          }
+        }
+      },
+      "warnings": {
+        "type": "array",
+        "maxItems": 32,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+        }
+      },
+      "review": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "required",
+          "reasons"
+        ],
+        "properties": {
+          "required": {
+            "type": "boolean",
+            "const": true
+          },
+          "reasons": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$"
+            }
+          }
+        }
+      },
+      "advisory": {
+        "type": "string",
+        "const": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action."
+      },
+      "autonomous_action": {
+        "type": "boolean",
+        "const": false
+      },
+      "schema_version": {
+        "type": "string",
+        "const": "1.0.0"
+      },
+      "compatibility_policy": {
+        "type": "string",
+        "const": "same_major"
+      },
+      "extensions": {
+        "type": "object"
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "fixed_choice_success",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "fixed_choice",
+        "input_text": "Synthetic review priority is urgent.",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "result": {
+        "mode": "fixed_choice",
+        "state": "success",
+        "code": null,
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          }
+        ],
+        "choice": "urgent",
+        "choices": [
+          "urgent"
+        ],
+        "ranking": [
+          "urgent",
+          "routine"
+        ],
+        "scalar_score": null,
+        "confidence": 1.0,
+        "margin": 0.95,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "fixed_choice_tie_abstains",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "fixed_choice",
+        "input_text": "Synthetic evidence is unclear.",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "result": {
+        "mode": "fixed_choice",
+        "state": "abstained",
+        "code": "low_confidence",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 0.05
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          }
+        ],
+        "choice": null,
+        "choices": [],
+        "ranking": [
+          "urgent",
+          "routine"
+        ],
+        "scalar_score": null,
+        "confidence": 0.05,
+        "margin": 0.0,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required",
+          "low_confidence"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review",
+            "low_confidence"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "fixed_choice_ambiguous",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "fixed_choice",
+        "input_text": "Synthetic note says urgent and routine.",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "result": {
+        "mode": "fixed_choice",
+        "state": "abstained",
+        "code": "ambiguous_scores",
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 1.0
+          }
+        ],
+        "choice": null,
+        "choices": [],
+        "ranking": [
+          "urgent",
+          "routine"
+        ],
+        "scalar_score": null,
+        "confidence": 1.0,
+        "margin": 0.0,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required",
+          "ambiguous_scores"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review",
+            "ambiguous_scores"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "boolean_choice_success",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "boolean_choice",
+        "input_text": "Synthetic answer is yes.",
+        "options": [
+          "no",
+          "yes"
+        ]
+      },
+      "result": {
+        "mode": "boolean_choice",
+        "state": "success",
+        "code": null,
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "no",
+            "score": 0.05
+          },
+          {
+            "index": 1,
+            "option": "yes",
+            "score": 1.0
+          }
+        ],
+        "choice": "yes",
+        "choices": [
+          "yes"
+        ],
+        "ranking": [
+          "yes",
+          "no"
+        ],
+        "scalar_score": null,
+        "confidence": 1.0,
+        "margin": 0.95,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "ordered_preference_success",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "ordered_preference",
+        "input_text": "Synthetic review priority is urgent.",
+        "options": [
+          "urgent",
+          "routine",
+          "deferred"
+        ]
+      },
+      "result": {
+        "mode": "ordered_preference",
+        "state": "success",
+        "code": null,
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          },
+          {
+            "index": 2,
+            "option": "deferred",
+            "score": 0.05
+          }
+        ],
+        "choice": "urgent",
+        "choices": [
+          "urgent"
+        ],
+        "ranking": [
+          "urgent",
+          "routine",
+          "deferred"
+        ],
+        "scalar_score": null,
+        "confidence": 1.0,
+        "margin": 0.95,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "multi_label_success",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "multi_label",
+        "input_text": "Synthetic labels are urgent and cardiology.",
+        "options": [
+          "urgent",
+          "routine",
+          "cardiology"
+        ]
+      },
+      "result": {
+        "mode": "multi_label",
+        "state": "success",
+        "code": null,
+        "option_scores": [
+          {
+            "index": 0,
+            "option": "urgent",
+            "score": 1.0
+          },
+          {
+            "index": 1,
+            "option": "routine",
+            "score": 0.05
+          },
+          {
+            "index": 2,
+            "option": "cardiology",
+            "score": 1.0
+          }
+        ],
+        "choice": "urgent",
+        "choices": [
+          "urgent",
+          "cardiology"
+        ],
+        "ranking": [
+          "urgent",
+          "cardiology",
+          "routine"
+        ],
+        "scalar_score": null,
+        "confidence": 1.0,
+        "margin": 0.0,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "scalar_score_success",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "scalar_score",
+        "input_text": "Synthetic scalar is 0.42.",
+        "options": []
+      },
+      "result": {
+        "mode": "scalar_score",
+        "state": "success",
+        "code": null,
+        "option_scores": [],
+        "choice": null,
+        "choices": [],
+        "ranking": [],
+        "scalar_score": 0.42,
+        "confidence": 1.0,
+        "margin": null,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "scalar_score_unsupported",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "scalar_score",
+        "input_text": "Synthetic value is unavailable.",
+        "options": []
+      },
+      "result": {
+        "mode": "scalar_score",
+        "state": "unsupported",
+        "code": "backend_unsupported",
+        "option_scores": [],
+        "choice": null,
+        "choices": [],
+        "ranking": [],
+        "scalar_score": null,
+        "confidence": null,
+        "margin": null,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required",
+          "backend_unsupported"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review",
+            "backend_unsupported"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "calibration_unavailable",
+      "request": {
+        "namespace": "default",
+        "purpose": "care_review",
+        "calibration_id": "missing.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "fixed_choice",
+        "input_text": "Synthetic review priority is urgent.",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "result": {
+        "mode": "fixed_choice",
+        "state": "unsupported",
+        "code": "calibration_unavailable",
+        "option_scores": [],
+        "choice": null,
+        "choices": [],
+        "ranking": [],
+        "scalar_score": null,
+        "confidence": null,
+        "margin": null,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": true,
+          "code": null,
+          "namespace": "default",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required",
+          "calibration_unavailable"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review",
+            "calibration_unavailable"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    },
+    {
+      "name": "namespace_denied",
+      "request": {
+        "namespace": "other",
+        "purpose": "care_review",
+        "calibration_id": "openmed.synthetic.fixed_option.v1",
+        "timeout_ms": 5000,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "mode": "fixed_choice",
+        "input_text": "Synthetic review priority is urgent.",
+        "options": [
+          "urgent",
+          "routine"
+        ]
+      },
+      "result": {
+        "mode": "fixed_choice",
+        "state": "denied",
+        "code": "namespace_denied",
+        "option_scores": [],
+        "choice": null,
+        "choices": [],
+        "ranking": [],
+        "scalar_score": null,
+        "confidence": null,
+        "margin": null,
+        "calibration": {
+          "calibration_id": "openmed.synthetic.fixed_option.v1",
+          "version": "1.0.0",
+          "method": "deterministic_margin",
+          "minimum_confidence": 0.7,
+          "minimum_margin": 0.15,
+          "multi_label_threshold": 0.7,
+          "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c",
+          "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289"
+        },
+        "backend": {
+          "backend_id": "openmed.deterministic.fixed_option.v1",
+          "kind": "deterministic",
+          "runtime": "python",
+          "model_id": "openmed/deterministic-fixed-option",
+          "revision": "1.0.0",
+          "license_id": "Apache-2.0",
+          "local": true,
+          "deterministic": true
+        },
+        "access": {
+          "allowed": false,
+          "code": "namespace_denied",
+          "namespace": "other",
+          "purpose": "care_review",
+          "policy_version": "1.0.0"
+        },
+        "warnings": [
+          "human_review_required",
+          "namespace_denied"
+        ],
+        "review": {
+          "required": true,
+          "reasons": [
+            "clinical_use_requires_review",
+            "namespace_denied"
+          ]
+        },
+        "advisory": "Decision scores are assistive review evidence, not a diagnosis, treatment recommendation, enrollment decision, or autonomous clinical action.",
+        "autonomous_action": false,
+        "schema_version": "1.0.0",
+        "compatibility_policy": "same_major",
+        "extensions": {}
+      }
+    }
+  ]
+}

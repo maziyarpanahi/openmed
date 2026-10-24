@@ -14,6 +14,7 @@ from openmed.structured.decision import (
     DECISION_ADVISORY,
     DEFAULT_CALIBRATION_PROFILE,
     MAX_BATCH_SIZE,
+    MAX_CONFIGURABLE_INPUT_CHARS,
     MAX_INPUT_CHARS,
     MAX_OPTIONS,
     CrossEncoderDecisionBackend,
@@ -23,6 +24,7 @@ from openmed.structured.decision import (
     DecisionBackendOutput,
     DecisionCalibrationExample,
     DecisionError,
+    DecisionInputFormat,
     DecisionMode,
     DecisionRequest,
     DecisionState,
@@ -39,6 +41,9 @@ from openmed.structured.decision import (
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "tests" / "fixtures" / "structured" / "decision_calibration.json"
+COMPAT_FIXTURE = (
+    ROOT / "tests" / "fixtures" / "structured" / "decision_compat_v1_0_0.json"
+)
 
 
 def _request(
@@ -386,6 +391,177 @@ def test_same_major_migration_preserves_unknown_fields_without_loss() -> None:
     assert migrated["extensions"]["future_metadata"] == {"synthetic": True}
     with pytest.raises(DecisionError, match="major"):
         migrate_decision_result(payload, target_version="2.0.0")
+
+
+def test_1_0_0_compatibility_fixtures_validate_and_decide_exactly_as_before() -> None:
+    frozen = json.loads(COMPAT_FIXTURE.read_text(encoding="utf-8"))
+    frozen_request = Draft202012Validator(frozen["request_schema"])
+    frozen_result = Draft202012Validator(frozen["result_schema"])
+    current_request = Draft202012Validator(decision_request_schema())
+    current_result = Draft202012Validator(decision_result_schema())
+    assert len(frozen["cases"]) >= 10
+
+    for case in frozen["cases"]:
+        declared = case["request"]
+        undeclared = {
+            key: value for key, value in declared.items() if key != "schema_version"
+        }
+        for payload in (declared, undeclared):
+            frozen_request.validate(payload)
+            current_request.validate(payload)
+            request = DecisionRequest.from_dict(payload)
+            assert request.schema_version == "1.0.0"
+            assert request.to_dict() == declared
+            result = decide(request).to_dict()
+            assert result == case["result"], case["name"]
+            frozen_result.validate(result)
+            current_result.validate(result)
+
+
+def test_1_0_0_requests_cannot_use_1_1_fields() -> None:
+    validator = Draft202012Validator(decision_request_schema())
+    for field_name, value in (
+        ("instructions", "Synthetic wording."),
+        ("question_id", "synthetic"),
+        ("max_input_chars", 100),
+        ("input_format", "json"),
+    ):
+        payload = _request(input_text='{"synthetic": "urgent"}').to_dict()
+        payload[field_name] = value
+        with pytest.raises(DecisionError, match="1.1.0"):
+            DecisionRequest.from_dict(payload)
+        assert not validator.is_valid(payload)
+        payload.pop("schema_version")
+        assert DecisionRequest.from_dict(payload).schema_version == "1.1.0"
+        assert validator.is_valid(payload)
+
+
+def test_input_bound_is_configurable_and_json_inputs_are_checked() -> None:
+    long_text = "Synthetic urgent " + "x" * MAX_INPUT_CHARS
+    with pytest.raises(DecisionError, match="input limit"):
+        _request(input_text=long_text)
+    raised = _request(input_text=long_text, max_input_chars=len(long_text))
+    assert raised.input_char_limit == len(long_text)
+    assert decide(raised).choice == "urgent"
+    with pytest.raises(DecisionError, match="max_input_chars"):
+        _request(max_input_chars=MAX_CONFIGURABLE_INPUT_CHARS + 1)
+    with pytest.raises(DecisionError, match="input limit"):
+        _request(input_text="Synthetic urgent note.", max_input_chars=5)
+
+    structured = _request(
+        input_text='{"note": "Synthetic priority is urgent."}',
+        input_format="json",
+    )
+    assert structured.input_format is DecisionInputFormat.JSON
+    assert decide(structured).choice == "urgent"
+    for invalid in ("not json", '"a string"', '{"value": NaN}'):
+        with pytest.raises(DecisionError, match="JSON object or array"):
+            _request(input_text=invalid, input_format="json")
+
+
+def test_levelled_scalar_reports_expected_level_and_abstains_when_flat() -> None:
+    levelled = decide(
+        _request(
+            mode=DecisionMode.SCALAR_SCORE,
+            input_text="Synthetic urgency is high.",
+            options=(),
+            levels=("Low", "Medium", "High"),
+        )
+    )
+    assert levelled.schema_version == "1.1.0"
+    assert levelled.state is DecisionState.SUCCESS
+    assert [item["level"] for item in levelled.level_scores] == [
+        "Low",
+        "Medium",
+        "High",
+    ]
+    assert levelled.expected_level == pytest.approx(2 * 1.0 / 1.1 + 0.05 / 1.1)
+    assert levelled.scalar_score == pytest.approx(levelled.expected_level / 2)
+    assert levelled.confidence == pytest.approx(1.0 / 1.1)
+    Draft202012Validator(decision_result_schema()).validate(levelled.to_dict())
+
+    distribution = EncoderDecisionBackend(
+        backend_id="synthetic.levels.v1",
+        model_id="synthetic/levels",
+        revision="abc123",
+        license_id="Apache-2.0",
+        scorer=lambda _text, levels, _mode: [0.0, 0.25, 0.75][: len(levels)],
+    )
+    scored = decide(
+        _request(
+            mode=DecisionMode.SCALAR_SCORE,
+            options=(),
+            levels=("Low", "Medium", "High"),
+            input_text="Synthetic level request.",
+        ),
+        backend=distribution,
+    )
+    assert scored.expected_level == pytest.approx(1.75)
+    assert scored.scalar_score == pytest.approx(0.875)
+
+    flat = decide(
+        _request(
+            mode=DecisionMode.SCALAR_SCORE,
+            options=(),
+            levels=("Low", "Medium", "High"),
+            input_text="Synthetic level request.",
+        ),
+        backend=EncoderDecisionBackend(
+            backend_id="synthetic.flat.v1",
+            model_id="synthetic/flat",
+            revision="abc123",
+            license_id="Apache-2.0",
+            scorer=lambda *_args: [0.4, 0.3, 0.3],
+        ),
+    )
+    assert flat.state is DecisionState.ABSTAINED
+    assert flat.code == "low_confidence"
+    assert flat.expected_level is None
+    assert flat.scalar_score is None
+    assert [item["score"] for item in flat.level_scores] == [0.4, 0.3, 0.3]
+
+
+def test_migration_moves_1_1_fields_through_1_0_0_without_loss() -> None:
+    frozen = json.loads(COMPAT_FIXTURE.read_text(encoding="utf-8"))
+    levelled = decide(
+        _request(
+            mode=DecisionMode.SCALAR_SCORE,
+            input_text="Synthetic urgency is high.",
+            options=(),
+            levels=("Low", "Medium", "High"),
+        )
+    ).to_dict()
+
+    downgraded = migrate_decision_result(levelled, target_version="1.0.0")
+    Draft202012Validator(frozen["result_schema"]).validate(downgraded)
+    assert "level_scores" not in downgraded
+    assert downgraded["extensions"]["expected_level"] == levelled["expected_level"]
+    upgraded = migrate_decision_result(downgraded, target_version="1.1.0")
+    assert upgraded == levelled
+
+    legacy = frozen["cases"][0]["result"]
+    lifted = migrate_decision_result(legacy)
+    assert lifted["schema_version"] == "1.1.0"
+    assert lifted["questions"] == lifted["level_scores"] == []
+    assert lifted["expected_level"] is None
+    Draft202012Validator(decision_result_schema()).validate(lifted)
+    assert migrate_decision_result(lifted, target_version="1.0.0") == legacy
+
+    question_set = decide(
+        {
+            "mode": "question_set",
+            "input_text": "Synthetic priority is urgent.",
+            "questions": [
+                {
+                    "question_id": "priority",
+                    "mode": "fixed_choice",
+                    "options": ["urgent", "routine"],
+                }
+            ],
+        }
+    ).to_dict()
+    with pytest.raises(DecisionError, match="1.1.0"):
+        migrate_decision_result(question_set, target_version="1.0.0")
 
 
 def test_safe_metadata_never_contains_input_or_option_values() -> None:

@@ -198,7 +198,8 @@ export type DecisionMode =
   | "boolean_choice"
   | "ordered_preference"
   | "scalar_score"
-  | "multi_label";
+  | "multi_label"
+  | "question_set";
 
 export type DecisionState =
   | "success"
@@ -210,6 +211,17 @@ export type DecisionState =
   | "denied"
   | "failure";
 
+export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
+
+export interface DecisionQuestion {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  options?: string[];
+  option_descriptions?: (string | null)[];
+  instructions?: string | null;
+  levels?: string[];
+}
+
 export interface FixedOptionDecisionRequest {
   mode: DecisionMode;
   input_text: string;
@@ -218,14 +230,45 @@ export interface FixedOptionDecisionRequest {
   purpose?: string;
   calibration_id?: string;
   timeout_ms?: number;
-  schema_version?: "1.0.0";
+  schema_version?: "1.0.0" | "1.1.0";
   compatibility_policy?: "same_major";
+  question_id?: string;
+  instructions?: string | null;
+  option_descriptions?: (string | null)[];
+  levels?: string[];
+  questions?: DecisionQuestion[];
+  input_format?: "text" | "json";
+  max_input_chars?: number;
 }
 
 export interface DecisionOptionScore {
   index: number;
   option: string;
   score: number;
+}
+
+export interface DecisionLevelScore {
+  index: number;
+  level: string;
+  score: number;
+}
+
+export interface DecisionQuestionResult {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores: DecisionLevelScore[];
+  expected_level: number | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
 }
 
 export interface FixedOptionDecisionResult {
@@ -239,6 +282,9 @@ export interface FixedOptionDecisionResult {
   scalar_score: number | null;
   confidence: number | null;
   margin: number | null;
+  level_scores?: DecisionLevelScore[];
+  expected_level?: number | null;
+  questions?: DecisionQuestionResult[];
   calibration: JsonObject;
   backend: JsonObject;
   access: JsonObject;
@@ -246,7 +292,7 @@ export interface FixedOptionDecisionResult {
   review: { required: true; reasons: string[] };
   advisory: string;
   autonomous_action: false;
-  schema_version: "1.0.0";
+  schema_version: "1.0.0" | "1.1.0";
   compatibility_policy: "same_major";
   extensions: JsonObject;
 }
