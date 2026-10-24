@@ -352,6 +352,53 @@ de-identified values when the reporting purpose does not require person-level
 data. Keep the FHIR-to-DHIS2 mapping in version control, test it with synthetic
 fixtures, and treat changes to DHIS2 metadata UIDs as deployment changes.
 
+## Local address surrogates
+
+Faker has no address data for Swahili, Hausa, Igbo, or Yoruba, and OpenMed
+backs Kinyarwanda with `en_US`. Through Faker alone, `method="replace"` would
+fill US street, unit, and town templates with local names. Address
+(`STREET_ADDRESS`, `ADDRESS`) and town (`LOCATION`, `CITY`) surrogates for
+these packs use local address shapes instead:
+
+| Pack | Locales | Address shapes |
+|---|---|---|
+| Swahili | `sw`, `sw_TZ` | `Mtaa wa` / `Barabara ya` street with `Na.` number, `Kitalu Na.` plot, landmark, `S.L.P.` box |
+| Hausa | `ha_NG` | `Titin` / `Layin` street with `Lamba` number, `Unguwar` / `Tudun` area, landmark, `P.M.B.` box |
+| Yoruba | `yo_NG` | `Òpópónà` / `Ọ̀nà` street with `Ilé` number, `Òkè-` / `Ìsàlẹ̀-` area, landmark, `P.M.B.` box |
+| Igbo | `ig_NG` | `Okporo ụzọ` street with `Nọmba` number, `Ama-` / `Umu-` / market-day area, landmark, `P.M.B.` box |
+| Kinyarwanda | `rw_RW` | `Umudugudu` / `Akagari` / `Umurenge` hierarchy, `Inzu No.` number, landmark, `B.P.` box |
+
+```python
+from openmed.core.anonymizer import Anonymizer
+
+swahili = Anonymizer(lang="sw", consistent=True, seed=42)
+print(swahili.surrogate("12 Synthetic Example Road", "STREET_ADDRESS"))
+# Nyuma ya shule ya msingi Mnarani, Mnazini
+print(swahili.surrogate("P.O. Box 400", "STREET_ADDRESS"))
+# Sanduku la Posta 4907, Mperani
+print(swahili.surrogate("Sampletown", "CITY"))
+# Mchungwani
+```
+
+A post-office box stays a box, and any other address becomes a street, plot,
+area, or landmark address. The surrogate shares no street, area, or town name
+with the source and reuses none of its numbers. Output is deterministic for a
+given `seed`. An explicit locale such as `locale="ha_NG"` selects the same
+shapes.
+
+All street, area, and town names are synthetic, written for this repository
+from common local place-name patterns and generic tree, plant, and landform
+words. They are not taken from a gazetteer and are not people's names. House,
+plot, and box numbers are random, so no value is a real address. Any match
+with a real place is a coincidence.
+
+Other locales, including `zu_ZA`, `xh_ZA`, `en_KE`, `en_NG`, and `am_ET`, use
+their usual generators. isiXhosa addresses come from the `zu_ZA` Faker
+backend. Building-number and postcode surrogates use the general generators
+for every locale. The `address_approximation` field of
+`openmed.core.anonymizer.locales.locale_coherence_report()` records the
+address source for each of these languages.
+
 ## African developer communities
 
 - [Masakhane](https://www.masakhane.io/) — a pan-African community for African

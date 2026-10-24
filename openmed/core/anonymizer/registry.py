@@ -1963,6 +1963,33 @@ def register_india_label_generators() -> None:
 register_india_label_generators()
 
 
+def _register_african_place_generators() -> None:
+    """Route African language-pack address and town surrogates to local shapes.
+
+    Faker ships no address data for the ``sw``, ``ha_NG``, ``ig_NG`` and
+    ``yo_NG`` locales, and ``rw_RW`` is backed by ``en_US``, so the generic
+    path emitted US street, unit and city templates. Each dispatcher keeps the
+    previously registered generator as its fallback for every other locale.
+    """
+
+    from .providers.african_places import (
+        AFRICAN_PLACE_GENERATORS,
+        AfricanPlaceDispatcher,
+    )
+
+    for canonical_label, generator in AFRICAN_PLACE_GENERATORS.items():
+        register_label_generator(
+            canonical_label,
+            AfricanPlaceDispatcher(
+                generator=generator,
+                fallback=LABEL_GENERATORS[canonical_label],
+            ),
+        )
+
+
+_register_african_place_generators()
+
+
 __all__ = [
     "Generator",
     "LANGUAGE_PACK_GENERATORS",
