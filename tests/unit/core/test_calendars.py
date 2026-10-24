@@ -15,8 +15,10 @@ import pytest
 
 from openmed.core import calendars
 from openmed.core.calendars import (
+    BIKRAM_SAMBAT,
     ETHIOPIAN,
     GREGORIAN,
+    LUNAR_HIJRI,
     SOLAR_HIJRI,
     THAI_BUDDHIST,
     CalendarConverter,
@@ -202,7 +204,14 @@ def test_gregorian_converter_matches_datetime():
 
 
 def test_registry_lists_builtin_calendars():
-    assert {GREGORIAN, SOLAR_HIJRI, ETHIOPIAN, THAI_BUDDHIST} <= set(calendar_codes())
+    assert {
+        GREGORIAN,
+        SOLAR_HIJRI,
+        ETHIOPIAN,
+        THAI_BUDDHIST,
+        LUNAR_HIJRI,
+        BIKRAM_SAMBAT,
+    } <= set(calendar_codes())
     assert get_calendar("hebrew") is None
     assert get_calendar(None) is None
 
@@ -275,7 +284,9 @@ def test_language_packs_declare_default_calendars():
     assert get_language_pack("am").default_calendar == ETHIOPIAN
     assert get_language_pack("th").default_calendar == THAI_BUDDHIST
     assert get_language_pack("en").default_calendar == GREGORIAN
-    assert get_language_pack("ar").default_calendar == GREGORIAN
+    assert get_language_pack("ar").default_calendar == LUNAR_HIJRI
+    assert get_language_pack("ur").default_calendar == LUNAR_HIJRI
+    assert get_language_pack("de").default_calendar == GREGORIAN
 
     with pytest.raises(ValueError, match="registered calendar"):
         LanguagePack(

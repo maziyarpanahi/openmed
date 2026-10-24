@@ -14,7 +14,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .calendars import ETHIOPIAN, GREGORIAN, SOLAR_HIJRI, THAI_BUDDHIST
+from .calendars import (
+    ETHIOPIAN,
+    GREGORIAN,
+    LUNAR_HIJRI,
+    SOLAR_HIJRI,
+    THAI_BUDDHIST,
+)
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackRegistry
 from .language_packs import (
     CHINESE_LANGUAGE_PACK,
@@ -226,11 +232,16 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("pt_BR", "cpf"),
     ),
+    # Lunar Hijri years (1356-1450 in the bundled table) never overlap the
+    # Gregorian years 1800-2299, so unmarked Arabic and Urdu dates in the
+    # table's years are read as Umm al-Qura Hijri dates and others stay
+    # Gregorian.
     _pack(
         "ar",
         "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
         "ar_EG",
         ("Arabic",),
+        default_calendar=LUNAR_HIJRI,
     ),
     _pack(
         "fa",
@@ -256,6 +267,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Arabic",),
         national_id_provider=("ur_IN", "aadhaar"),
         routing_markers=("مریض", "آدھار", "پتہ", "جناب", "محترمہ"),
+        default_calendar=LUNAR_HIJRI,
     ),
     _pack(
         "he",

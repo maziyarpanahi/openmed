@@ -148,9 +148,10 @@ The calendar of a date span is chosen in this order:
 2. Month names that belong to one calendar: the Persian Solar Hijri months and
    the Amharic Ethiopian months, including Pagume.
 3. The language pack's `default_calendar` (`fa`: `solar_hijri`, `am`:
-   `ethiopian`, `th`: `thai_buddhist`; every other pack: `gregorian`) when the
-   year falls inside that calendar's supported range. Otherwise a year from
-   1800 to 2299 is treated as Gregorian and shifted exactly as before.
+   `ethiopian`, `th`: `thai_buddhist`, `ar` and `ur`: `hijri`; every other
+   pack: `gregorian`) when the year falls inside that calendar's supported
+   range. Otherwise a year from 1800 to 2299 is treated as Gregorian and
+   shifted exactly as before.
 
 The conversions are exact standard-library arithmetic over these ranges:
 
@@ -164,8 +165,9 @@ A native-calendar date keeps the `[DATE_SHIFTED]` placeholder instead of being
 guessed when it does not exist in its calendar (`۳۰ اسفند ۱۴۰۴`, Pagume 6 of a
 common year), when its year or the shifted result is outside the supported
 range, when the year has only two digits, when the day/month order or the era
-markers conflict, or when the calendar has no converter (lunar Hijri dates
-marked `هـ` stay unshifted). The returned reason codes never contain the date.
+markers conflict, or when the calendar or variant has no converter (a span
+tagged `{"calendar": "hijri_diyanet"}` stays unshifted). The returned reason
+codes never contain the date.
 
 Numeric dates in Amharic text are read as Ethiopian dates. Mark Gregorian
 dates with `እ.ኤ.አ` or `G.C.`, or attach `{"calendar": "gregorian"}` from
@@ -182,6 +184,87 @@ To add a calendar, subclass `openmed.core.calendars.CalendarConverter`
 month lengths, and the supported year range), register it once with
 `register_calendar(...)`, and reference its code from a pack's
 `default_calendar` or a span's `calendar` metadata.
+
+#### Lunar Hijri and Bikram Sambat dates
+
+Lunar Hijri and Bikram Sambat months cannot be computed with arithmetic: Hijri
+month starts follow a declared variant, and Bikram Sambat months last 29 to 32
+days according to published tables. OpenMed ships two bounded, versioned
+month-length tables and shifts these dates through them with the same
+per-patient offset as the other calendars:
+
+| Code            | Calendar                                  | Years        | Gregorian span            |
+| --------------- | ----------------------------------------- | ------------ | ------------------------- |
+| `hijri`         | Lunar Hijri, Umm al-Qura (Saudi civil)    | 1356–1450 AH | 14 Mar 1937 – 13 May 2029 |
+| `bikram_sambat` | Bikram Sambat as published in Nepal       | 2000–2083 BS | 14 Apr 1943 – 13 Apr 2027 |
+
+| Pack or span metadata                | Source span           | `date_shift_days=3`   |
+| ------------------------------------ | --------------------- | --------------------- |
+| `ar` (Safar 1447 has 29 days)        | `28/02/1447`          | `02/03/1447`          |
+| `ar`                                 | `١٥ رمضان ١٤٤٧ هـ`     | `١٨ رمضان ١٤٤٧ هـ`     |
+| `{"calendar": "bikram_sambat"}`      | `2082/03/30`          | `2082/04/01`          |
+| any (Asar 2082 has 32 days)          | `२०८२ असार ३२ गते`      | `२०८२ साउन ३ गते`       |
+
+These dates are recognized from era markers (`هـ`, `ه`, `هجري`, `ه.ق`, `قمری`,
+`ھ`, `A.H.` for Hijri; `वि.सं.`, `विक्रम संवत्`, `B.S.` for Bikram Sambat; `ई.सं.`
+marks a Gregorian date in Nepali text), from the `{"calendar": "hijri"}` and
+`{"calendar": "bikram_sambat"}` codes that month-name detection attaches, and
+from Hijri month names in Arabic, Persian and Urdu spelling or Bikram Sambat
+month names in colloquial and formal Nepali spelling, written day-month-year,
+month-day-year or year-month-day. When a shift changes the month, the new month
+is written in the source's convention (`ذی‌القعده` in Persian, `ذوالقعدہ` in
+Urdu, `भाद्र` after `श्रावण`). The `ar` and `ur` packs declare `hijri`, so an
+unmarked numeric date whose year is in the table is read as an Umm al-Qura date;
+the Gregorian years 1800–2299 never overlap the table and keep shifting as
+before. No bundled pack declares `bikram_sambat`, so unmarked numeric dates in
+Nepali text stay Gregorian unless they are marked or tagged.
+
+The placeholder is kept when the year or the shifted result is outside the
+table, when the day does not exist in the table (30 Safar 1447, 32 Shrawan
+2082), when markers or codes conflict, and when a span declares a variant
+without a registered table, such as `{"calendar": "hijri_diyanet"}`.
+`replace` and `format_preserve` surrogates stay in the table's calendar,
+between 1356 and 1446 AH or 2000 and 2081 BS.
+
+Each table in `openmed/core/data/calendars/` records its format and table
+version, SPDX license, copyright and license text, source project, version and
+retrieval date, a verification record, and a SHA-256 digest of its canonical
+JSON. The loader recomputes the digest, requires a permissive license, and
+checks the bundled tables against digests pinned in
+`openmed.core.calendar_tables`; a failing table is refused with a
+`ConfigurationError` that names only the failing field.
+
+- `hijri_umm_al_qura.json` keeps the 1356–1450 AH month starts of
+  [hijridate](https://github.com/dralshehri/hijridate) 2.6.0 (MIT), which
+  tabulates the archived Umm al-Qura almanac. Every month start matches R.H.
+  van Gent's Umm al-Qura table except 1427-06 and 1446-06, where ICU 77.1
+  `islamic-umalqura` matches the bundled value, and ICU matches every month
+  from 1420 AH. Earlier years have no second tabulation and later years are
+  projections on which the references diverge. Shaban 1364 AH has 28 days in
+  both almanac tabulations and is kept.
+- `bikram_sambat.json` keeps the 2000–2083 BS month lengths of
+  [py-nepali](https://github.com/opensource-nepal/py-nepali) 1.2.0 (MIT).
+  nepali-datetime 1.0.8.5 and pyBSDate 0.3.2 (both MIT) match every year except
+  2062 and 2000 respectively, where the other two tables agree. Earlier years
+  disagree across the tables and from 2084 BS their projections diverge.
+
+Load a table for another variant, or a longer range, from your own file. A
+table registered as `hijri` replaces the Umm al-Qura table for every Hijri
+date; a table registered under a new code, such as `hijri_pk`, applies only to
+spans whose `calendar` metadata names that code:
+
+```python
+from openmed.core.calendar_tables import load_calendar_table
+from openmed.core.calendars import register_calendar
+
+converter = load_calendar_table("hijri_local.json", expected_sha256="<sha256>")
+register_calendar(converter, replace=True)
+```
+
+A caller-supplied table under a non-permissive license loads only with
+`allow_non_permissive_license=True` and must never be bundled with OpenMed.
+`calendar_table_digest(document)` computes the `sha256` field for a table you
+write.
 
 ### Reversing a de-identification: `reidentify()`
 
