@@ -101,3 +101,11 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''tests/unit/test_privacy_scan_action\.py$''']
 regexes = ['''key: AKIA(?:ABCDEFGHIJKLMNOP)''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Exact public Cloudflare site identifier used by analytics regression tests"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^tests/browser/brand/brand\.spec\.ts$''', '''^tests/unit/test_brand_system\.py$''']
+regexes = ['''^86108e13d57f44f69a4c67a445df1f17$''']

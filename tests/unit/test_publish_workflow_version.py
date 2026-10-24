@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +68,111 @@ def test_about_version_is_parseable_without_runtime_dependencies():
 
     assert match is not None
     assert re.fullmatch(r"\d+\.\d+\.\d+", match.group(1))
+
+
+@pytest.fixture
+def release_preflight():
+    spec = importlib.util.spec_from_file_location(
+        "release_version_preflight", ROOT / "scripts/release/check_release_version.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    "stale_path",
+    [
+        "packaging/standalone_manifest.py",
+        "docs/rest-recipes.md",
+        "examples/openhim-mediator/mediator-config.json",
+        "docs/android-quickstart.md",
+        "android/openmedkit/README.md",
+        "android/openmedkit/src/main/kotlin/com/openmed/openmedkit/OpenMedKit.kt",
+        "docs/index.zh.md",
+        "docs/index.hi.md",
+        "docs/feature-map.md",
+        "js/openmedkit-web/package-lock.json",
+        "deploy/operator/deployment.yaml",
+    ],
+)
+def test_release_preflight_rejects_stale_active_surfaces(
+    release_preflight, monkeypatch, capsys, stale_path
+):
+    monkeypatch.setattr(sys, "argv", ["preflight", "--skip-origin-tag-check"])
+    monkeypatch.setattr(release_preflight, "tag_exists_locally", lambda _tag: False)
+    monkeypatch.setattr(
+        release_preflight, "has_text", lambda path, _expected: path != stale_path
+    )
+
+    assert release_preflight.main() == 1
+    assert stale_path in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("returncode,exists", [(0, True), (2, False)])
+def test_release_preflight_distinguishes_existing_and_absent_remote_tags(
+    release_preflight, monkeypatch, returncode, exists
+):
+    monkeypatch.setattr(
+        release_preflight,
+        "run_git",
+        lambda _args: subprocess.CompletedProcess([], returncode, "", ""),
+    )
+    assert release_preflight.tag_exists_on_origin("v3.0.0") is exists
+
+
+def test_release_preflight_does_not_treat_network_failure_as_an_unused_tag(
+    release_preflight, monkeypatch, capsys
+):
+    monkeypatch.setattr(sys, "argv", ["preflight"])
+    monkeypatch.setattr(release_preflight, "tag_exists_locally", lambda _tag: False)
+    monkeypatch.setattr(release_preflight, "has_text", lambda _path, _expected: True)
+    monkeypatch.setattr(
+        release_preflight,
+        "run_git",
+        lambda _args: subprocess.CompletedProcess(
+            [], 128, "", "Could not resolve host: github.com"
+        ),
+    )
+
+    assert release_preflight.main() == 1
+    assert "Could not verify origin tag" in capsys.readouterr().err
+
+
+def test_release_preflight_accepts_current_active_surface_versions(
+    release_preflight, monkeypatch, capsys
+):
+    monkeypatch.setattr(sys, "argv", ["preflight", "--skip-origin-tag-check"])
+    monkeypatch.setattr(release_preflight, "tag_exists_locally", lambda _tag: False)
+
+    assert release_preflight.main() == 0
+    assert "Release version preflight passed" in capsys.readouterr().out
+
+
+def test_release_preflight_does_not_require_release_note_drafts(
+    release_preflight, monkeypatch
+):
+    """A clean checkout must pass without ignored notes or a new release page."""
+    version = _release_version()
+    private_notes = f"RELEASE_NOTES_v{version}.md"
+    public_notes = f"docs/release/v{version}.md"
+    checked_paths = []
+    has_text = release_preflight.has_text
+
+    def without_notes(path, expected):
+        checked_paths.append(path)
+        if path in {private_notes, public_notes}:
+            return False
+        return has_text(path, expected)
+
+    monkeypatch.setattr(sys, "argv", ["preflight", "--skip-origin-tag-check"])
+    monkeypatch.setattr(release_preflight, "tag_exists_locally", lambda _tag: False)
+    monkeypatch.setattr(release_preflight, "has_text", without_notes)
+
+    assert release_preflight.main() == 0
+    assert private_notes not in checked_paths
+    assert public_notes not in checked_paths
 
 
 def test_npm_package_tracks_openmed_release_version():
@@ -390,21 +499,12 @@ def test_readme_install_guidance_uses_stable_release_coordinates():
     swift_requirement = f'from: "{version}"'
     android_coordinate = f"com.github.maziyarpanahi:openmed:v{version}"
     root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    release_notes = ROOT / "docs" / "release" / f"v{version}.md"
 
     assert swift_requirement in root_readme
     assert swift_requirement in SWIFT_GUIDE.read_text(encoding="utf-8")
     assert android_coordinate in root_readme
     assert android_coordinate in ANDROID_README.read_text(encoding="utf-8")
     assert android_coordinate in ANDROID_ONNX_GUIDE.read_text(encoding="utf-8")
-    assert release_notes.is_file()
-    assert f"openmed=={version}" in release_notes.read_text(encoding="utf-8")
-    assert f"openmed@{version}" in release_notes.read_text(encoding="utf-8")
-    assert swift_requirement in release_notes.read_text(encoding="utf-8")
-    assert android_coordinate in release_notes.read_text(encoding="utf-8")
-    assert f"ghcr.io/maziyarpanahi/openmed:v{version}" in release_notes.read_text(
-        encoding="utf-8"
-    )
 
     readmes = set(ROOT.glob("README*.md"))
     for directory in ("android", "deploy", "examples", "js", "openmed", "swift"):

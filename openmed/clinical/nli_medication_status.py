@@ -18,6 +18,7 @@ from enum import Enum
 from typing import Any, Final
 
 from openmed.clinical.med_reconciliation import normalize_medication_timestamp
+from openmed.core.iso_temporal import parse_iso_datetime
 
 NLI_MEDICATION_STATUS_SCHEMA_VERSION: Final[int] = 1
 
@@ -459,7 +460,7 @@ def _sortable_timestamp(value: str | None) -> datetime | None:
         return datetime(int(match.group("year")), int(match.group("month")), 1)
     candidate = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
-        parsed = datetime.fromisoformat(candidate)
+        parsed = parse_iso_datetime(candidate)
     except ValueError as exc:
         raise MedicationStatusPrecheckError("invalid medication event time") from exc
     if parsed.tzinfo is not None:

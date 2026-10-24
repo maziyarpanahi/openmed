@@ -4,11 +4,103 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
+
+from openmed.core.pii import _resolve_date_shift_days, _shift_date
+from openmed.core.surrogate_vault import SurrogateSource
+from openmed.eval.golden_journey import (
+    JourneyPrivacyContext,
+    JourneyPrivacySource,
+    JourneyPrivacySpan,
+    JourneyPrivacyTransformation,
+)
+
+
+def privacy_control_sources() -> tuple[JourneyPrivacySource, ...]:
+    """Five extra synthetic controls, separate from the frozen golden sources."""
+
+    return (
+        JourneyPrivacySource("text", "Patient SYNTH-001: 2026-01-02 to 2026-01-07."),
+        JourneyPrivacySource(
+            "fhir_r4",
+            json.dumps(
+                {
+                    "resourceType": "Observation",
+                    "subject": {"identifier": {"value": "SYNTH-001"}},
+                    "effectivePeriod": {"start": "2026-01-02", "end": "2026-01-07"},
+                }
+            ),
+        ),
+        JourneyPrivacySource(
+            "hl7v2", "MSH|^~\\&|||||20260102\rPID|1||SYNTH-001||||20260107"
+        ),
+        JourneyPrivacySource(
+            "csv", "patient,start,end\nSYNTH-001,2026-01-02,2026-01-07\n"
+        ),
+        JourneyPrivacySource(
+            "dicom_sr", "Derived SR: SYNTH-001; 2026-01-02; 2026-01-07."
+        ),
+    )
+
+
+def privacy_control_processor(
+    source: JourneyPrivacySource,
+    context: JourneyPrivacyContext,
+) -> JourneyPrivacyTransformation:
+    """Annotated fixture processor using the unchanged shift and subject vault.
+
+    This is an offline witness double, not native format detection or a claim
+    of complete FHIR, HL7 or DICOM de-identification coverage.
+    """
+
+    offset = _resolve_date_shift_days(
+        date_shift_days=None,
+        patient_key=context.patient_key,
+        date_shift_max_days=context.date_shift_max_days,
+        date_shift_secret=context.date_shift_secret,
+        seed=None,
+    )
+    changes: list[tuple[int, int, str, str]] = []
+    for match in re.finditer(
+        r"(?<![0-9])(?:[0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{8})(?![0-9])",
+        source.text,
+    ):
+        value = match.group()
+        compact = "-" not in value
+        iso = f"{value[:4]}-{value[4:6]}-{value[6:]}" if compact else value
+        shifted = _shift_date(iso, offset, require_dateutil=True)
+        changes.append(
+            (
+                match.start(),
+                match.end(),
+                shifted.replace("-", "") if compact else shifted,
+                "date",
+            )
+        )
+    for match in re.finditer("SYNTH-001", source.text):
+        surrogate = context.vault.resolve_subject(
+            context.patient_key,
+            aliases=(SurrogateSource("SYNTH-001", "ID_NUM", "en"),),
+        )
+        changes.append((match.start(), match.end(), surrogate, "identifier"))
+    output = ""
+    cursor = 0
+    dates: list[JourneyPrivacySpan] = []
+    identifiers: list[JourneyPrivacySpan] = []
+    for start, end, replacement, kind in sorted(changes):
+        output += source.text[cursor:start]
+        output_start = len(output)
+        output += replacement
+        span = JourneyPrivacySpan(start, end, output_start, len(output))
+        (dates if kind == "date" else identifiers).append(span)
+        cursor = end
+    output += source.text[cursor:]
+    return JourneyPrivacyTransformation(output, True, tuple(dates), tuple(identifiers))
 
 
 def make_release_repository(
@@ -68,7 +160,7 @@ def make_passing_manifest(root: Path, commit: str) -> dict[str, Any]:
     evaluated_at = "2026-01-02T00:00:00Z"
     generated_at = "2026-01-01T23:00:00Z"
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "compatibility_policy": "same_major",
         "release": {
             "version": "3.0.0",
@@ -126,6 +218,10 @@ def make_passing_manifest(root: Path, commit: str) -> dict[str, Any]:
                 evaluated_case_count=400,
                 critical_leakage_count=0,
                 raw_value_finding_count=0,
+                date_shift_inconsistency_count=0,
+                surrogate_inconsistency_count=0,
+                consistency_checked_format_count=5,
+                consistency_unsupported_format_count=0,
             ),
             report(
                 "interoperability",
@@ -223,7 +319,7 @@ def report(gate: str, generated_at: str, **metrics: Any) -> dict[str, Any]:
     """Build one successful aggregate gate report."""
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "compatibility_policy": "same_major",
         "gate": gate,
         "state": "success",

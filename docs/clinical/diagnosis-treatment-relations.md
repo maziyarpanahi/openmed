@@ -1,5 +1,8 @@
 # Diagnosis-to-treatment relation candidates
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+for candidate generation, explicit evidence binding and human-review priorities.
+
 `generate_diagnosis_treatment_candidates()` requires explicit linking language
 between existing diagnosis and treatment spans. Supported guarded patterns
 include diagnosis-first forms such as “treated with” and treatment-first forms
