@@ -56,7 +56,7 @@ INPUT_TEXT = "Synthetic ticket ZX-4471: checkout fails for every synthetic custo
 INSTRUCTIONS = "Which synthetic queue should review ticket ZX-4471?"
 OPTION_TEXT = "synthetic-payments-queue"
 QUERY_TOKEN = "synthetic-query-token-5521"
-BEARER_TOKEN = "synthetic-bearer-key-0042"
+SENTINEL_BEARER_VALUE = "synthetic-bearer-key-0042"
 PUBLIC_ADDRESS = "93.184.216.34"
 LEVELS = ("Low", "Medium", "High")
 
@@ -1151,13 +1151,15 @@ def test_reported_models_must_match_the_declaration(start_server) -> None:
 
 def test_bearer_tokens_are_sent_but_never_exposed(start_server) -> None:
     server = start_server()
-    backend = _backend(server.origin, bearer_token=BEARER_TOKEN)
+    backend = _backend(server.origin, bearer_token=SENTINEL_BEARER_VALUE)
 
     decide(_question_set(), backend=backend)
 
-    assert server.received[0].headers["authorization"] == f"Bearer {BEARER_TOKEN}"
-    assert BEARER_TOKEN not in repr(backend)
-    assert BEARER_TOKEN not in json.dumps(backend.safe_metadata())
+    assert (
+        server.received[0].headers["authorization"] == f"Bearer {SENTINEL_BEARER_VALUE}"
+    )
+    assert SENTINEL_BEARER_VALUE not in repr(backend)
+    assert SENTINEL_BEARER_VALUE not in json.dumps(backend.safe_metadata())
     assert backend.safe_metadata()["authenticated"] is True
     with pytest.raises(DecisionError):
         _backend(server.origin, bearer_token="has space")
@@ -1191,7 +1193,7 @@ def test_errors_results_and_logs_never_carry_query_input_or_instructions(
     server = start_server()
     echo = f"{INPUT_TEXT} {INSTRUCTIONS} {OPTION_TEXT} {QUERY_TOKEN}"
     endpoint = f"{server.origin}/v1/systemone?token={QUERY_TOKEN}"
-    backend = _backend(endpoint, bearer_token=BEARER_TOKEN)
+    backend = _backend(endpoint, bearer_token=SENTINEL_BEARER_VALUE)
     server.queue(
         reply_json({"detail": echo}, status=422),
         reply_raw(echo.encode("utf-8")),
@@ -1231,7 +1233,13 @@ def test_errors_results_and_logs_never_carry_query_input_or_instructions(
             json.dumps(backend.safe_metadata()),
         ]
     )
-    for secret in (INPUT_TEXT, INSTRUCTIONS, OPTION_TEXT, QUERY_TOKEN, BEARER_TOKEN):
+    for secret in (
+        INPUT_TEXT,
+        INSTRUCTIONS,
+        OPTION_TEXT,
+        QUERY_TOKEN,
+        SENTINEL_BEARER_VALUE,
+    ):
         assert secret not in exposed
     assert endpoint not in exposed
     assert any(
