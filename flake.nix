@@ -82,6 +82,24 @@
                   changelog = "https://github.com/fsspec/filesystem_spec/blob/2026.6.0/docs/source/changelog.rst";
                 };
               });
+
+              # Only fsspec above should run its upstream suite here. The
+              # packages below would otherwise rebuild as a side effect of
+              # that override or of Python 3.12 cache gaps, rerunning
+              # unchanged upstream suites with memory- and timing-bound
+              # tests that flake on shared runners.
+              #
+              # pyarrow and duckdb use fsspec only as a test input, so their
+              # cached builds carry no fsspec at runtime.
+              inherit (pkgs.python312.pkgs) duckdb pyarrow;
+              # dask imports fsspec at runtime and must be rebuilt against it.
+              dask = prev.dask.overridePythonAttrs (_: {
+                doCheck = false;
+              });
+              # The Python 3.12 build is not in cache.nixos.org.
+              sse-starlette = prev.sse-starlette.overridePythonAttrs (_: {
+                doCheck = false;
+              });
             };
           };
           openmed = self.packages.${system}.openmed;
@@ -121,6 +139,9 @@
               tag = "v1.27.1";
               hash = "sha256-LhoLcFC5+7xOCfud23sbHyTMxKYmdeZh0c+UtGdvzCs=";
             };
+            # The OpenMed suite covers the MCP surface it uses. The upstream
+            # suite drives live SSE servers and times out on shared runners.
+            doCheck = false;
           });
           crossWeb = python.pkgs.cross-web.overridePythonAttrs (_: {
             version = "0.7.0";
