@@ -4032,9 +4032,15 @@ class TestVietnameseLanguagePack:
         )
         negative_entities = safety_sweep(hard_negative, [], lang="vi")
         assert not any(
-            entity.text in {"003203123456", "123456789", "10000", "02838221234"}
+            entity.text in {"123456789", "10000", "02838221234"}
             for entity in negative_entities
         )
+        # "Mã bệnh án" labels a medical record number, never a CCCD.
+        assert {
+            entity.label
+            for entity in negative_entities
+            if entity.text == "003203123456"
+        } == {"medical_record_number"}
 
     def test_replace_surrogates_render_vietnamese_dates_day_first(self):
         """`method="replace"` must honour the `dmy` locale contract for `vi`.

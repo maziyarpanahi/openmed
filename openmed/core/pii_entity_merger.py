@@ -82,13 +82,18 @@ class PIIPattern:
     context_normalizer: Optional[Callable[[str], str]] = None
 
 
+_VALUE_GROUP = "value"
+
+
 def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int, int]]:
     """Yield original-text spans for one optionally normalized pattern.
 
     A language pack may canonicalize encoding variants before matching as long
     as its normalizer returns an offset map. Validators and context checks still
     receive the untouched source surface, so downstream spans never refer to a
-    normalized copy.
+    normalized copy. A pattern that names a ``value`` group yields only that
+    group, so a required label (for example a record-number label) stays
+    context rather than becoming part of the identifier span.
     """
 
     matching_text = text
@@ -98,12 +103,12 @@ def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int
         matching_text = normalized.text
         remap_span = normalized.remap_span
 
-    for match in re.finditer(
-        pii_pattern.pattern,
-        matching_text,
-        pii_pattern.flags,
-    ):
-        start, end = match.span()
+    compiled = re.compile(pii_pattern.pattern, pii_pattern.flags)
+    group = _VALUE_GROUP if _VALUE_GROUP in compiled.groupindex else 0
+    for match in compiled.finditer(matching_text):
+        start, end = match.span(group)
+        if start < 0:
+            continue
         if remap_span is not None:
             start, end = remap_span(start, end)
         if start < end:
