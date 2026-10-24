@@ -423,7 +423,38 @@ SUPPLEMENTAL_LOCALES: Mapping[str, str] = {
 # advertising model support that OpenMed does not ship yet.
 USER_SUPPLIED_MODEL_LANGUAGES: set[str] = {
     "ne",
+    "si",
 }
+
+# Registry placeholder carried by user-supplied-model route packs. It equals
+# ``openmed.core.pii_i18n.USER_SUPPLIED_PII_MODEL``, which model resolution maps
+# back to ``None``, so it is never treated as a downloadable repository.
+_USER_SUPPLIED_MODEL_PLACEHOLDER = "user-supplied"
+
+# User-supplied-model routes that own a script no registered pack serves. The
+# router can only select a ``LanguagePack``, so each route is declared as one,
+# but these packs are deliberately not registered: registration would add the
+# code to ``SUPPORTED_LANGUAGES`` and ``DEFAULT_PII_MODELS`` and advertise a
+# bundled model that OpenMed does not ship. Their locale and national-ID
+# provider still reach ``LANG_TO_LOCALE`` and ``NATIONAL_ID_PROVIDERS``.
+USER_SUPPLIED_MODEL_ROUTE_PACKS: tuple[LanguagePack, ...] = (
+    # Sinhala (experimental). Faker ships no Sinhala locale, so the conceptual
+    # ``si_LK`` locale draws names and places from a small synthetic Sinhala
+    # inventory and leaves script-free fields to the ``en_IN`` backend.
+    LanguagePack(
+        code="si",
+        scripts=("Sinhala",),
+        default_model=_USER_SUPPLIED_MODEL_PLACEHOLDER,
+        segmenter_id="unicode-sentence",
+        recognizers=("builtin-patterns", "model"),
+        surrogate_locale="si_LK",
+        surrogate_locale_approximation=(
+            "No Faker Sinhala locale: synthetic curated Sinhala names and "
+            "places, en_IN backend for script-free fields"
+        ),
+        national_id_providers={"sri_lanka_nic": "si_LK"},
+    ),
+)
 
 _SCRIPT_ORDER = (
     "Latin",
@@ -445,6 +476,7 @@ _SCRIPT_ORDER = (
     "Greek",
     "Hebrew",
     "Thai",
+    "Sinhala",
     UNKNOWN_SCRIPT,
 )
 
@@ -482,6 +514,7 @@ _SCRIPT_LANGUAGE_CANDIDATES: Mapping[str, tuple[str, ...]] = {
     "Kannada": ("kn",),
     "Malayalam": ("ml",),
     "Greek": ("el",),
+    "Sinhala": ("si",),
 }
 
 _LOCALE_ORDER = (
@@ -500,6 +533,7 @@ _LOCALE_ORDER = (
     "bn",
     "te",
     "ta",
+    "si",
     "am",
     "pt",
     "ar",
@@ -552,6 +586,7 @@ _NATIONAL_ID_PROVIDER_ORDER = (
     "kn",
     "te",
     "ta",
+    "si",
     "am",
     "pt",
     "fa",
@@ -610,14 +645,29 @@ class LanguagePackAdapters:
         supplemental_locales: Mapping[str, str] | None = None,
         user_supplied_model_languages: Sequence[str] = (),
         script_language_candidates: Mapping[str, Sequence[str]] | None = None,
+        user_supplied_route_packs: Sequence[LanguagePack] = (),
     ) -> None:
-        """Create and subscribe a live adapter bundle."""
+        """Create and subscribe a live adapter bundle.
+
+        Args:
+            registry: Registry whose packs back every projection.
+            builtin_order: Preferred projection order for built-in codes.
+            national_id_only: Pattern-only national-ID capabilities.
+            supplemental_locales: Extra ``LANG_TO_LOCALE`` entries.
+            user_supplied_model_languages: Routable codes without bundled models.
+            script_language_candidates: Explicit script routing hint order.
+            user_supplied_route_packs: Unregistered packs for user-supplied-model
+                routes. They feed the locale, national-ID provider and script
+                hint projections, and :meth:`routing_packs`, but never
+                ``supported_languages`` or ``default_pii_models``.
+        """
 
         self.registry = registry
         self._builtin_order = tuple(builtin_order)
         self._national_id_only = dict(national_id_only or {})
         self._supplemental_locales = dict(supplemental_locales or {})
         self._user_supplied_model_languages = set(user_supplied_model_languages)
+        self._user_supplied_route_packs = tuple(user_supplied_route_packs)
         self._script_language_candidates = {
             script: tuple(codes)
             for script, codes in (script_language_candidates or {}).items()
@@ -636,11 +686,34 @@ class LanguagePackAdapters:
         ordered.extend(code for code in codes if code not in self._builtin_order)
         return tuple(ordered)
 
+    def _unregistered_route_packs(
+        self, registered: set[str]
+    ) -> tuple[LanguagePack, ...]:
+        # A registered pack always wins over a user-supplied route of the same
+        # code, so a later bundled model replaces the route without an edit here.
+        return tuple(
+            pack
+            for pack in self._user_supplied_route_packs
+            if pack.code not in registered
+        )
+
+    def routing_packs(self) -> tuple[LanguagePack, ...]:
+        """Return registered packs plus unregistered user-supplied route packs.
+
+        The language router selects from this tuple by default. Route packs
+        carry a ``user-supplied`` placeholder model, so routing a script to one
+        never implies that OpenMed ships weights for that language.
+        """
+
+        packs = tuple(self.registry.iter_packs())
+        return (*packs, *self._unregistered_route_packs({p.code for p in packs}))
+
     def refresh(self) -> None:
         """Refresh every public projection from one registry snapshot."""
 
         codes = self._ordered_codes()
         packs = tuple(self.registry.get(code) for code in codes)
+        route_packs = self._unregistered_route_packs(set(codes))
 
         self.supported_languages.clear()
         self.supported_languages.update(codes)
@@ -651,6 +724,7 @@ class LanguagePackAdapters:
         )
 
         locale_values = dict((pack.code, pack.surrogate_locale) for pack in packs)
+        locale_values.update((pack.code, pack.surrogate_locale) for pack in route_packs)
         locale_values.update(self._supplemental_locales)
         locale_values.update(
             (code, capability.locale)
@@ -660,7 +734,7 @@ class LanguagePackAdapters:
         self.lang_to_locale.update(_ordered_items(locale_values, _LOCALE_ORDER))
 
         provider_values: dict[str, tuple[str, str]] = {}
-        for pack in packs:
+        for pack in (*packs, *route_packs):
             if pack.national_id_providers:
                 method, locale = next(iter(pack.national_id_providers.items()))
                 provider_values[pack.code] = (locale, method)
@@ -678,7 +752,7 @@ class LanguagePackAdapters:
             sorted(
                 {
                     script
-                    for pack in packs
+                    for pack in (*packs, *route_packs)
                     for script in pack.scripts
                     if script not in _SCRIPT_ORDER and script != UNROUTED_SCRIPT
                 }
@@ -689,11 +763,16 @@ class LanguagePackAdapters:
             self.supported_languages
             | set(self._national_id_only)
             | self._user_supplied_model_languages
+            | {pack.code for pack in route_packs}
         )
         for script in script_names:
             configured_hints = self._script_language_candidates.get(script)
             if configured_hints is None:
-                hints = tuple(pack.code for pack in packs if script in pack.scripts)
+                hints = tuple(
+                    pack.code
+                    for pack in (*packs, *route_packs)
+                    if script in pack.scripts
+                )
             else:
                 hints = tuple(
                     code for code in configured_hints if code in routable_languages
@@ -721,6 +800,7 @@ LANGUAGE_PACK_ADAPTERS = LanguagePackAdapters(
     supplemental_locales=SUPPLEMENTAL_LOCALES,
     user_supplied_model_languages=USER_SUPPLIED_MODEL_LANGUAGES,
     script_language_candidates=_SCRIPT_LANGUAGE_CANDIDATES,
+    user_supplied_route_packs=USER_SUPPLIED_MODEL_ROUTE_PACKS,
 )
 
 SUPPORTED_LANGUAGES = LANGUAGE_PACK_ADAPTERS.supported_languages
@@ -745,5 +825,6 @@ __all__ = [
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_LANGUAGES",
     "USER_SUPPLIED_MODEL_LANGUAGES",
+    "USER_SUPPLIED_MODEL_ROUTE_PACKS",
     "is_registered_segmenter",
 ]

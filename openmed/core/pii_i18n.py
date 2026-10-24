@@ -110,8 +110,8 @@ USER_SUPPLIED_PII_MODEL = "user-supplied"
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
 for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
-# Remaining user-supplied routes (Nepali and Urdu) have neither bundled weights
-# nor an optional Indic NER adapter, so they take the explicit sentinel. This
+# Remaining user-supplied routes (Nepali and Sinhala) have neither bundled
+# weights nor an optional Indic NER adapter, so they take the explicit sentinel. This
 # only touches the compatibility copy; the language-pack catalog keeps claiming
 # no default model for them.
 for _language in USER_SUPPLIED_MODEL_LANGUAGES:
@@ -138,6 +138,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ne": "Nepali",
     "or": "Odia",
     "pa": "Punjabi",
+    "si": "Sinhala",
     "ta": "Tamil",
     "te": "Telugu",
     "ur": "Urdu",
@@ -184,6 +185,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ne": "Nepali-",
     "or": "Odia-",
     "pa": "Punjabi-",
+    "si": "Sinhala-",
     "ta": "Tamil-",
     "te": "Telugu-",
     "ur": "Urdu-",
@@ -8543,6 +8545,191 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# Sinhala (``si``) deterministic coverage for the user-supplied-model route.
+# Modern Sinhala clinical text writes numbers with ASCII digits; the archaic
+# Sinhala Lith digits are folded to ASCII by detection normalization before
+# these patterns run. No checksum is claimed for any Sri Lankan identifier.
+_SINHALA_LETTER = r"[\u0D80-\u0DE5\u0DF0-\u0DFF\u200D]"
+_SINHALA_WORD = rf"{_SINHALA_LETTER}+"
+_SRI_LANKA_NUMBER_END = r"(?![0-9]|[-/][0-9])"
+_SRI_LANKA_NIC_OLD_LAYOUT = re.compile(r"[0-9]{2}([0-9]{3})[0-9]{4}[VvXx]")
+_SRI_LANKA_NIC_NEW_LAYOUT = re.compile(r"([0-9]{4})([0-9]{3})[0-9]{5}")
+_SRI_LANKA_NIC_MIN_BIRTH_YEAR = 1900
+# The NIC layout adds this offset to the day-of-year field for one sex. It is
+# a structural rule of the identifier; OpenMed never derives a sex from it.
+_SRI_LANKA_NIC_DAY_OFFSET = 500
+
+
+def _valid_sri_lanka_nic_day(day: int) -> bool:
+    """Return whether a NIC day field is 001-366, with or without +500."""
+
+    return any(1 <= day - offset <= 366 for offset in (0, _SRI_LANKA_NIC_DAY_OFFSET))
+
+
+def validate_sri_lanka_nic(text: str, *, reference_year: int | None = None) -> bool:
+    """Validate the structure of a Sri Lanka National Identity Card number.
+
+    The older layout is nine digits and a ``V`` or ``X``: a two-digit birth
+    year, a three-digit day of the year, then serial and check digits. The
+    twelve-digit layout has a four-digit birth year, the same day field, and
+    five serial and check digits. The layout adds 500 to the day field for one
+    sex, so day values 001-366 and 501-866 are valid. That offset is a
+    structural rule of the identifier: this validator accepts both ranges and
+    never reports or infers anything about a person. Day 366 is accepted for
+    every year, and no check-digit algorithm is claimed.
+
+    Args:
+        text: Candidate NIC. Surrounding whitespace is ignored.
+        reference_year: Latest birth year accepted for the twelve-digit
+            layout. Defaults to the current calendar year.
+
+    Returns:
+        True when the value matches either layout and its embedded day field,
+        and for the twelve-digit layout its birth year, are in range.
+    """
+
+    if not isinstance(text, str):
+        return False
+    value = text.strip()
+    old_layout = _SRI_LANKA_NIC_OLD_LAYOUT.fullmatch(value)
+    if old_layout is not None:
+        return _valid_sri_lanka_nic_day(int(old_layout.group(1)))
+    new_layout = _SRI_LANKA_NIC_NEW_LAYOUT.fullmatch(value)
+    if new_layout is None:
+        return False
+    latest_year = date.today().year if reference_year is None else reference_year
+    birth_year = int(new_layout.group(1))
+    return _SRI_LANKA_NIC_MIN_BIRTH_YEAR <= birth_year <= latest_year and (
+        _valid_sri_lanka_nic_day(int(new_layout.group(2)))
+    )
+
+
+_SINHALA_PHONE_CONTEXT = [
+    "දුරකථන",
+    "දුරකථන අංකය",
+    "ජංගම",
+    "ජංගම දුරකථන",
+    "phone",
+    "mobile",
+    "telephone",
+    "contact",
+]
+_SRI_LANKA_NIC_CONTEXT = [
+    "ජාතික හැඳුනුම්පත",
+    "ජාතික හැඳුනුම්පත් අංකය",
+    "හැඳුනුම්පත",
+    "හැඳුනුම්පත් අංකය",
+    "ජා.හැ.අ",
+    "nic",
+    "n.i.c",
+    "national identity card",
+    "identity card",
+]
+_SINHALA_ADDRESS_CONTEXT = [
+    "ලිපිනය",
+    "පදිංචි ලිපිනය",
+    "නිවස",
+    "address",
+    "residence",
+]
+_SINHALA_POSTCODE_CONTEXT = [
+    "තැපැල් කේතය",
+    "තැපැල් අංකය",
+    "postal code",
+    "postcode",
+]
+_SINHALA_STREET_SUFFIX = r"(?:පාර|මාවත|වීදිය|පටුමඟ|පටුමග|පෙදෙස)"
+
+_SINHALA_PII_PATTERNS: List[PIIPattern] = [
+    # +94 or 0094 numbers keep the country code inside the span. Sri Lankan
+    # numbers have nine national digits after the country code.
+    PIIPattern(
+        r"(?<![0-9+])(?:\+|00)94[ -]?(?:\(0\)[ -]?)?[1-9][0-9](?:[ -]?[0-9]){7}"
+        + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.7,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # Domestic mobile numbers: 070-078 followed by seven digits.
+    PIIPattern(
+        r"(?<![0-9+])07[0-8](?:[ -]?[0-9]){7}" + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # Domestic landlines share the ten-digit shape with many other numbers, so
+    # the sweep needs nearby phone context.
+    PIIPattern(
+        r"(?<![0-9+])0(?!7[0-8])[1-9][0-9](?:[ -]?[0-9]){7}" + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.5,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # NIC, nine-digit layout with the V/X letter. Context-gated: the day and
+    # year fields are validated, but no check digit is claimed.
+    PIIPattern(
+        r"(?<![0-9A-Za-z])[0-9]{9}[VvXx](?![0-9A-Za-z])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_SRI_LANKA_NIC_CONTEXT,
+        context_boost=0.4,
+        requires_context=True,
+        validator=validate_sri_lanka_nic,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    # NIC, twelve-digit layout. The shape collides with other twelve-digit
+    # numbers, so it is context-gated as well.
+    PIIPattern(
+        r"(?<![0-9])(?<![0-9][-/.])[0-9]{12}" + _SRI_LANKA_NUMBER_END,
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_SRI_LANKA_NIC_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        validator=validate_sri_lanka_nic,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    # House-numbered Sinhala street addresses ending in a road word such as
+    # පාර (road), මාවත (avenue), වීදිය (street) or පටුමඟ (lane).
+    PIIPattern(
+        rf"(?<![\w/])[0-9]{{1,4}}(?:/[0-9A-Za-z]{{1,3}})?,?[ \t]+"
+        rf"(?:{_SINHALA_WORD}[ \t]+){{1,3}}{_SINHALA_STREET_SUFFIX}"
+        rf"(?!{_SINHALA_LETTER})",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_SINHALA_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Sri Lankan postal codes are five digits; context-gated like other packs.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5}(?![0-9])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_SINHALA_POSTCODE_CONTEXT,
+        context_boost=0.5,
+        requires_context=True,
+        flags=0,
+    ),
+]
+
 _HEBREW_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -11799,6 +11986,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
+    # Sri Lanka is not India: the India-only multi-ID pack is deliberately absent.
+    "si": _SINHALA_PII_PATTERNS,
     "lv": _LATVIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
@@ -12078,6 +12267,58 @@ LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "FIRST_NAME_FEMALE": ["अनघा", "मृणाल", "गौरी", "ईशा"],
         "FIRST_NAME_MALE": ["अमोल", "नितीन", "रोहन", "विवेक"],
         "LAST_NAME": ["कुलकर्णी", "गोखले", "जाधव", "शिंदे", "भोसले", "आपटे"],
+    },
+    "si_LK": {
+        # Repository-authored synthetic values used because Faker has no
+        # Sinhala locale. Each NAME pairs a common given name with a common
+        # family name; the pairs are invented, not people. Places are public
+        # city names and generic road names.
+        "NAME": [
+            "නිමල් පෙරේරා",
+            "චමිලා සිල්වා",
+            "කසුන් ජයසූරිය",
+            "දිලානි බණ්ඩාර",
+            "රුවන් රත්නායක",
+            "සඳුනි විජේසිංහ",
+            "ලහිරු ගුණසේකර",
+            "අමාලි දිසානායක",
+        ],
+        "FIRST_NAME": [
+            "නිමල්",
+            "චමිලා",
+            "කසුන්",
+            "දිලානි",
+            "රුවන්",
+            "සඳුනි",
+            "ලහිරු",
+            "අමාලි",
+        ],
+        "LAST_NAME": [
+            "පෙරේරා",
+            "සිල්වා",
+            "ජයසූරිය",
+            "බණ්ඩාර",
+            "රත්නායක",
+            "විජේසිංහ",
+            "ගුණසේකර",
+            "දිසානායක",
+        ],
+        "LOCATION": [
+            "කොළඹ",
+            "මහනුවර",
+            "ගාල්ල",
+            "කුරුණෑගල",
+            "මාතර",
+            "බදුල්ල",
+            "රත්නපුර",
+            "අනුරාධපුරය",
+        ],
+        "STREET_ADDRESS": [
+            "18, පන්සල් පාර",
+            "27/3, මල් වීදිය",
+            "64, පොල් මාවත",
+            "9, ගංගා පටුමඟ",
+        ],
     },
     "fr_SN": {
         "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],

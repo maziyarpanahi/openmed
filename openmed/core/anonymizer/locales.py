@@ -43,6 +43,11 @@ Notes:
   national-ID dispatch routes to the CCCD provider on the same locale.
 - Urdu uses a conceptual ``ur_IN`` locale backed by ``en_IN`` for non-name
   values; bundled name surrogates remain in Urdu script.
+- Sinhala (``si``, an experimental user-supplied-model route) has no Faker
+  locale. The conceptual ``si_LK`` locale is a documented approximation: names,
+  cities and street addresses come from a small repository-authored synthetic
+  Sinhala inventory, script-free fields use the ``en_IN`` backend, and NIC
+  surrogates come from the structural ``sri_lanka_nic`` provider.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -89,6 +94,7 @@ _APPROXIMATE_LOCALES: Final = frozenset(
         "ms",
         "pa",
         "rw",
+        "si",
         "sr",
         "te",
         "ur",
@@ -136,6 +142,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "pt_MZ": "pt_PT",
     "pt_AO": "pt_PT",
     "rw_RW": "en_US",
+    "si_LK": "en_IN",
     "sr_RS": "hr_HR",
     "sw_TZ": "sw",
     "ur_IN": "en_IN",

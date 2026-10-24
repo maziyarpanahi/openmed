@@ -19,7 +19,6 @@ from openmed.processing.outputs import PredictionResult
         ("မြန်မာ", "Myanmar"),
         ("ខ្មែរ", "Khmer"),
         ("ລາວ", "Lao"),
-        ("සිංහල", "Sinhala"),
         ("ދިވެހި", "Thaana"),
         ("བོད", "Tibetan"),
     ],

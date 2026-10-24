@@ -280,7 +280,11 @@ class Anonymizer:
             locale or self.config.locale,
             warn_approximation=not is_script_specific,
         )
-        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
+        if (
+            canonical == L.ID_NUM
+            and _is_aadhaar_surrogate_source(original)
+            and not _is_sri_lanka_nic_source(original, effective_locale)
+        ):
             # Aadhaar stays checksum-valid even when an English/code-mixed
             # note routes through the generic en_US locale.
             effective_locale = "en_IN"
@@ -531,6 +535,20 @@ def _is_aadhaar_surrogate_source(value: str) -> bool:
         return True
     source, separator, attempt = value.rpartition("|")
     return bool(separator and attempt.isdigit() and _is_valid_aadhaar(source))
+
+
+def _is_sri_lanka_nic_source(value: str, locale: str) -> bool:
+    """Return whether a Sinhala-route identifier is a structural Sri Lanka NIC.
+
+    Some twelve-digit NICs also pass the Aadhaar check. On the ``si_LK`` locale
+    the NIC reading wins, so the surrogate keeps the NIC layout.
+    """
+
+    if locale != "si_LK":
+        return False
+    from ..pii_i18n import validate_sri_lanka_nic
+
+    return validate_sri_lanka_nic(value)
 
 
 __all__ = ["Anonymizer", "AnonymizerConfig"]

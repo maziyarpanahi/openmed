@@ -814,6 +814,7 @@ _LOCALE_ID_METHODS = {
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
     "rw_RW": "rwanda_id",
+    "si_LK": "sri_lanka_nic",
     "sw_TZ": "tanzania_nida",
     "ur_PK": "cnic",
 }
@@ -1026,6 +1027,13 @@ def _gen_id_num(faker, original, *, locale):
 
         if validate_chinese_resident_id(original.strip()):
             return _generate_distinct_chinese_resident_id(faker, original)
+    if locale == "si_LK" and hasattr(faker, "sri_lanka_nic") and original:
+        from openmed.core.pii_i18n import validate_sri_lanka_nic
+
+        # Checked before the generic shapes: a nine-digit NIC with an
+        # upper-case V or X also looks like an M-Pesa transaction code.
+        if validate_sri_lanka_nic(original):
+            return faker.sri_lanka_nic(original)
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
