@@ -1223,7 +1223,7 @@ class _IntakeScript:
     def turn(self, speaker_role: str, act: str) -> _TurnDraft:
         return _TurnDraft(len(self.turns), speaker_role, act)
 
-    def commit(self, draft: _TurnDraft) -> IntakeTurn:
+    def append_turn(self, draft: _TurnDraft) -> IntakeTurn:
         turn = draft.build(consent_state=self.consent_state, stream_offset=self._offset)
         self.turns.append(turn)
         self._offset += len(turn.text) + len(STREAM_TURN_SEPARATOR)
@@ -1238,7 +1238,7 @@ class _IntakeScript:
     def ask(self, text: str, act: str) -> None:
         draft = self.turn("clinician", act)
         draft.say(text)
-        self.commit(draft)
+        self.append_turn(draft)
 
     def run(self) -> tuple[IntakeTurn, ...]:
         decline = self.index % 5 == 3
@@ -1278,7 +1278,7 @@ class _IntakeScript:
             draft.say("My name is ")
             draft.value(cast.clinician_first, L.PERSON, "clinician", "name")
             draft.say(", and I'm the nurse doing your intake today.")
-        self.commit(draft)
+        self.append_turn(draft)
         if self.scenario == "interpreter":
             draft = self.turn("interpreter", "interpreter_introduction")
             draft.say("Hello, this is ")
@@ -1286,7 +1286,7 @@ class _IntakeScript:
             draft.say(f", your {cast.interpreter_language} interpreter, ID number ")
             draft.value(cast.interpreter_id, L.ID_NUM, "interpreter", "badge_number")
             draft.say(". I will interpret everything in the first person.")
-            self.commit(draft)
+            self.append_turn(draft)
 
     def consent(self, *, decline: bool) -> None:
         draft = self.turn("clinician", "consent_request")
@@ -1299,7 +1299,7 @@ class _IntakeScript:
             subject_role="patient",
         )
         draft.say(" You can ask me to pause it at any time.")
-        self.commit(draft)
+        self.append_turn(draft)
 
         draft = self.turn(self.voice, "consent_response")
         if decline:
@@ -1322,7 +1322,7 @@ class _IntakeScript:
                 subject_role="patient",
             )
             draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
         if decline:
             self.ask("No problem at all. I'll type my notes instead.", "consent_ack")
@@ -1336,7 +1336,7 @@ class _IntakeScript:
                 subject_role="caregiver",
             )
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
 
     def caregiver_introduction(self) -> None:
         cast = self.cast
@@ -1352,7 +1352,7 @@ class _IntakeScript:
             f", {cast.pronouns.possessive} {cast.relationship}. I usually come "
             f"with {cast.pronouns.object} to appointments."
         )
-        self.commit(draft)
+        self.append_turn(draft)
 
     def identity(self) -> None:
         cast = self.cast
@@ -1381,7 +1381,7 @@ class _IntakeScript:
             )
             draft.event("uncertainty", cue_start, cue_end, span_id=guess)
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
 
             draft = self.turn("patient", "identity_correction")
             cue_start, cue_end = draft.say("no")
@@ -1400,7 +1400,7 @@ class _IntakeScript:
                 "correction", cue_start, cue_end, supersedes=guess, repair=fixed
             )
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
             return
 
         self.ask("Can you tell me your full name and date of birth?", "identity_prompt")
@@ -1408,7 +1408,7 @@ class _IntakeScript:
             draft = self.turn("patient", "identity_answer")
             draft.value(full_name, L.PERSON, "patient", "name")
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
             draft = self.turn("interpreter", "identity_answer")
             draft.say("My name is ")
             draft.value(full_name, L.PERSON, "patient", "name")
@@ -1440,7 +1440,7 @@ class _IntakeScript:
         )
         draft.event("self_repair", cue_start, cue_end, reparandum=wrong, repair=right)
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def readback(self, *, misheard: bool) -> None:
         cast = self.cast
@@ -1455,7 +1455,7 @@ class _IntakeScript:
             _format_date(shown, "long"), L.DATE_OF_BIRTH, "patient", "date_of_birth"
         )
         draft.say(", is that right?")
-        self.commit(draft)
+        self.append_turn(draft)
 
         draft = self.turn(self.voice, "readback_response")
         if misheard:
@@ -1475,7 +1475,7 @@ class _IntakeScript:
             draft.say(".")
         else:
             draft.say("Yes, that's right.")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def phone(self) -> None:
         cast = self.cast
@@ -1508,7 +1508,7 @@ class _IntakeScript:
                 "self_repair", cue_start, cue_end, reparandum=wrong, repair=right
             )
             draft.say(f". I'm {cast.pronouns.possessive} emergency contact.")
-            self.commit(draft)
+            self.append_turn(draft)
             return
         draft = self.turn(self.voice, "phone_answer")
         draft.hesitate(self.rng)
@@ -1517,7 +1517,7 @@ class _IntakeScript:
             _format_phone(cast.phone, cast.phone_style), L.PHONE, "patient", "phone"
         )
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def address(self, *, interrupted: bool) -> None:
         cast = self.cast
@@ -1543,7 +1543,7 @@ class _IntakeScript:
             )
             cut_start, cut_end = draft.say("--")
             draft.event("interruption", cut_start, cut_end, position="interrupted")
-            interrupted_turn = self.commit(draft)
+            interrupted_turn = self.append_turn(draft)
 
             draft = self.turn("clinician", "interruption")
             draft.cue(
@@ -1553,7 +1553,7 @@ class _IntakeScript:
                 interrupts_turn=interrupted_turn.index,
             )
             draft.say(" -- I missed that. Go ahead.")
-            self.commit(draft)
+            self.append_turn(draft)
             draft = self.turn(speaker, "address_answer")
         else:
             draft = self.turn(speaker, "address_answer")
@@ -1569,7 +1569,7 @@ class _IntakeScript:
         draft.say(", in ")
         draft.value(cast.city, L.LOCATION, "patient", "city")
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def email(self) -> None:
         cast = self.cast
@@ -1583,7 +1583,7 @@ class _IntakeScript:
             draft.say("Yes, it's ")
             draft.value(cast.email, L.EMAIL, "patient", "email")
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def complaint(self) -> None:
         cast = self.cast
@@ -1595,7 +1595,7 @@ class _IntakeScript:
             draft.say(" since ")
             draft.value(_format_month_day(cast.onset), L.DATE, "patient", "onset")
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
 
             pronouns = cast.pronouns
             draft = self.turn("caregiver", "complaint_addition")
@@ -1604,7 +1604,7 @@ class _IntakeScript:
                 cast.second_symptom, L.CONDITION, "patient", "additional_symptom"
             )
             draft.say(" at night.")
-            self.commit(draft)
+            self.append_turn(draft)
 
             draft = self.turn("patient", "complaint_disagreement")
             draft.say("No, I haven't had ")
@@ -1617,7 +1617,7 @@ class _IntakeScript:
                 conflicts_with=(reported,),
             )
             draft.say(".")
-            self.commit(draft)
+            self.append_turn(draft)
             return
         draft.say(" since, ")
         cue_start, cue_end = draft.say("I think")
@@ -1631,7 +1631,7 @@ class _IntakeScript:
         )
         draft.event("uncertainty", cue_start, cue_end, span_id=onset)
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def allergies(self) -> None:
         cast = self.cast
@@ -1663,7 +1663,7 @@ class _IntakeScript:
             draft.say("Yes, ")
             draft.value(cast.allergen, L.MEDICATION, "patient", "allergy")
             draft.say(". I break out in a rash.")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def medications(self) -> None:
         cast = self.cast
@@ -1674,7 +1674,7 @@ class _IntakeScript:
             cast.medication, L.MEDICATION, "patient", "current_medication"
         )
         draft.say(", once a day.")
-        self.commit(draft)
+        self.append_turn(draft)
         if self.scenario != "caregiver":
             return
         draft = self.turn("caregiver", "medication_correction")
@@ -1692,7 +1692,7 @@ class _IntakeScript:
             "correction", cue_start, cue_end, supersedes=current, repair=replacement
         )
         draft.say(" last month.")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def private_pause(self) -> None:
         cast = self.cast
@@ -1705,7 +1705,7 @@ class _IntakeScript:
             **consent,
         )
         draft.say(" This next part is private.")
-        self.commit(draft)
+        self.append_turn(draft)
         self.ask("Of course, it's paused.", "consent_ack")
         draft = self.turn(self.voice, "private_disclosure")
         draft.say("My work number is ")
@@ -1713,7 +1713,7 @@ class _IntakeScript:
             _format_phone(cast.work_phone, "dashed"), L.PHONE, "patient", "work_phone"
         )
         draft.say(", but please don't call me there.")
-        self.commit(draft)
+        self.append_turn(draft)
         draft = self.turn("clinician", "consent_request")
         draft.say("Understood. ")
         draft.cue(
@@ -1722,11 +1722,11 @@ class _IntakeScript:
             action="request",
             **consent,
         )
-        self.commit(draft)
+        self.append_turn(draft)
         draft = self.turn(self.voice, "consent_resume")
         draft.cue("yes, go ahead", "consent", action="resume", **consent)
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def late_phone_correction(self) -> None:
         cast = self.cast
@@ -1747,7 +1747,7 @@ class _IntakeScript:
             "correction", cue_start, cue_end, supersedes=previous, repair=replacement
         )
         draft.say(".")
-        self.commit(draft)
+        self.append_turn(draft)
 
     def closing(self) -> None:
         cast = self.cast
@@ -1758,7 +1758,7 @@ class _IntakeScript:
             draft.say(". The nurse will take your vitals next.")
         else:
             draft.say(". The doctor will be in shortly.")
-        self.commit(draft)
+        self.append_turn(draft)
 
 
 def _generate_conversation(
