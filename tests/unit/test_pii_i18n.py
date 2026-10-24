@@ -3242,6 +3242,47 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Thai address pattern should match"
 
+    @pytest.mark.parametrize(
+        "date_text",
+        [
+            "15/03/2567",
+            "15-03-67",
+            "๑๕/๐๓/๒๕๖๗",
+            "2024-03-15",
+            "15 มกราคม 2567",
+            "15 ม.ค. 2567",
+        ],
+    )
+    def test_thai_address_tail_stops_before_a_following_date(self, date_text):
+        from openmed.core.safety_sweep import safety_sweep
+
+        address = "12 ถนนสุขุมวิท แขวงคลองเตย วันที่"
+        text = f"ที่อยู่ {address} {date_text} ติดตามผล"
+        address_start = text.index(address)
+        date_start = text.index(date_text, address_start + len(address))
+        expected = {
+            (address_start, address_start + len(address), "street_address"),
+            (date_start, date_start + len(date_text), "date"),
+        }
+
+        swept = safety_sweep(text, [], lang="th")
+        units = find_semantic_units(text, get_patterns_for_language("th"))
+
+        assert {(span.start, span.end, span.label) for span in swept} == expected
+        assert {(unit[0], unit[1], unit[2]) for unit in units} == expected
+
+    def test_thai_address_keeps_house_number_ranges_in_its_tail(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = "ที่อยู่ 99 ซอย 3/12-14 แขวงคลองเตย"
+        address = "99 ซอย 3/12-14 แขวงคลองเตย"
+
+        swept = safety_sweep(text, [], lang="th")
+
+        assert [(span.text, span.label) for span in swept] == [
+            (address, "street_address")
+        ]
+
     def test_thai_postcode_pattern(self):
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "postcode"

@@ -9092,6 +9092,19 @@ _THAI_MONTH_PATTERN = (
     r"พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\."
 )
 
+# The address tail accepts Thai letters, digits, dots, slashes and dashes, so
+# it must stop before a following date instead of swallowing it. Only shapes
+# that an unvalidated date rule always emits stop the tail (the Thai day-first
+# and month-name rules and the English ISO rule), so a truncated tail never
+# leaves a date unmasked. Day-first dates must repeat their separator, which
+# keeps house-number ranges such as ``3/12-14`` inside the address.
+_THAI_ADDRESS_TAIL_DATE_STOP = (
+    r"\s*(?:(?<!\d)\d{1,2}(?P<th_tail_date_sep>[/-])\d{1,2}"
+    r"(?P=th_tail_date_sep)\d{2,4}(?!\d)"
+    rf"|(?<!\d)\d{{1,2}}\s+(?:{_THAI_MONTH_PATTERN})\s+(?:พ\.ศ\.\s*)?\d{{4}}(?!\d)"
+    r"|(?<!\w)\d{4}-\d{2}-\d{2}(?!\w))"
+)
+
 _THAI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-](?:25\d{2}|\d{2,4})(?!\d)",
@@ -9171,7 +9184,8 @@ _THAI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
     ),
     PIIPattern(
-        r"(?<!\w)\d{1,5}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)[\u0E00-\u0E7F0-9\s./-]{3,80}",
+        r"(?<!\w)\d{1,5}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)"
+        rf"(?:(?!{_THAI_ADDRESS_TAIL_DATE_STOP})[\u0E00-\u0E7F0-9\s./-]){{3,80}}",
         "street_address",
         priority=7,
         base_score=0.65,
