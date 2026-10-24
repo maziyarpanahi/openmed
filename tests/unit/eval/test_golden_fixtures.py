@@ -40,22 +40,26 @@ from openmed.core.pii_i18n import (
     validate_assam_pin,
     validate_assamese_aadhaar,
     validate_assamese_indian_phone,
+    validate_bangladesh_nid,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
     validate_egyptian_national_id,
+    validate_ethiopia_fayda,
     validate_french_nir,
     validate_german_steuer_id,
     validate_gujarat_daman_diu_pin,
     validate_gujarati_aadhaar,
     validate_gujarati_indian_phone,
     validate_hungarian_taj,
+    validate_iran_national_id,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_japanese_my_number,
     validate_kannada_aadhaar,
     validate_kannada_indian_phone,
     validate_karnataka_pin,
+    validate_kenya_national_id,
     validate_kerala_lakshadweep_pin,
     validate_latvian_personas_kods,
     validate_maharashtra_pin,
@@ -64,6 +68,7 @@ from openmed.core.pii_i18n import (
     validate_malaysian_mykad,
     validate_marathi_aadhaar,
     validate_marathi_indian_phone,
+    validate_nigeria_nin,
     validate_odia_aadhaar,
     validate_odia_indian_phone,
     validate_odisha_pin,
@@ -73,13 +78,17 @@ from openmed.core.pii_i18n import (
     validate_punjab_chandigarh_pin,
     validate_punjabi_indian_phone,
     validate_romanian_cnp,
+    validate_rwanda_id,
     validate_spanish_dni,
     validate_tamil_aadhaar,
     validate_tamil_nadu_puducherry_pin,
+    validate_tanzania_nida,
+    validate_thai_national_id,
     validate_turkish_tckn,
     validate_urdu_belt_pin,
     validate_urdu_indian_phone,
     validate_vietnamese_cccd,
+    validate_za_id_number,
 )
 from openmed.core.rtl_render import LRI, PDI, render_redacted, strip_bidi_controls
 from openmed.eval import harness
@@ -1788,6 +1797,63 @@ OM_120_WIRED_LANGUAGES = frozenset(
     {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
 )
 
+# Issue #3894 extends the traps to the African, South Asian, Persian, Thai and
+# Hebrew packs whose day-first dates, native digits and ID checksums had no
+# golden coverage.
+LOW_RESOURCE_TRAP_LANGUAGES = frozenset(
+    {"am", "bn", "fa", "ha", "he", "ig", "rw", "sw", "ta", "th", "ur", "xh", "yo", "zu"}
+)
+PER_LANGUAGE_TRAP_LANGUAGES = OM_120_WIRED_LANGUAGES | LOW_RESOURCE_TRAP_LANGUAGES
+
+# Registered packs that still have no per-language date and ID traps. The list
+# is explicit so the coverage test fails when a trapped pack loses its traps and
+# when a newly registered pack ships without them. Sinhala is not a registered
+# pack yet (its NIC detection is #3890); registering it must add traps here or
+# list it.
+PACKS_WITHOUT_PER_LANGUAGE_TRAPS = frozenset(
+    {
+        "af",
+        "as",
+        "bg",
+        "cs",
+        "da",
+        "el",
+        "et",
+        "fi",
+        "gu",
+        "hr",
+        "hu",
+        "id",
+        "kn",
+        "ko",
+        "lv",
+        "ml",
+        "mr",
+        "ms",
+        "ne",
+        "no",
+        "or",
+        "pa",
+        "pl",
+        "ro",
+        "ru",
+        "sk",
+        "sr",
+        "sv",
+        "tl",
+        "uk",
+        "vi",
+        "zh",
+    }
+)
+
+# A trap span or hard negative may carry ``known_gap`` metadata naming the
+# deterministic engines that currently get it wrong: ``language_patterns`` is
+# find_semantic_units over the language's patterns and ``safety_sweep`` is the
+# sweep run without model spans. The tests below assert those gaps still fail,
+# so a fix must remove the marker (``issue`` names the tracked fix, if any).
+KNOWN_GAP_DETECTORS = frozenset({"language_patterns", "safety_sweep"})
+
 _ID_TRAP_VALIDATORS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "en": (validate_ssn,),
     "fr": (validate_french_nir,),
@@ -1801,6 +1867,20 @@ _ID_TRAP_VALIDATORS: dict[str, tuple[Callable[[str], bool], ...]] = {
     "ar": (validate_egyptian_national_id,),
     "ja": (validate_japanese_my_number,),
     "tr": (validate_turkish_tckn,),
+    "am": (validate_ethiopia_fayda,),
+    "bn": (validate_bangladesh_nid,),
+    "fa": (validate_iran_national_id,),
+    "ha": (validate_nigeria_nin,),
+    "he": (validate_israeli_teudat_zehut,),
+    "ig": (validate_nigeria_nin,),
+    "rw": (validate_rwanda_id,),
+    "sw": (validate_kenya_national_id, validate_tanzania_nida),
+    "ta": (validate_tamil_aadhaar,),
+    "th": (validate_thai_national_id,),
+    "ur": (validate_aadhaar,),
+    "xh": (validate_za_id_number,),
+    "yo": (validate_nigeria_nin,),
+    "zu": (validate_za_id_number,),
 }
 
 
@@ -1827,12 +1907,30 @@ def _mask_gold_spans(fixture: GoldenFixture) -> str:
     return masked
 
 
+def _known_gap_detectors(marker) -> frozenset[str]:
+    if not marker:
+        return frozenset()
+    return frozenset(marker["detectors"])
+
+
+def _span_gap_detectors(span) -> frozenset[str]:
+    return _known_gap_detectors(span.metadata.get("known_gap"))
+
+
+def _hard_negative_gap_detectors(hard_negative) -> frozenset[str]:
+    return _known_gap_detectors(hard_negative.get("known_gap"))
+
+
+def _overlaps(start: int, end: int, other_start: int, other_end: int) -> bool:
+    return start < other_end and other_start < end
+
+
 def test_per_language_id_traps_cover_all_wired_languages():
     fixtures = _id_trap_fixtures()
     languages = {fixture.language for fixture in fixtures}
 
-    assert languages == OM_120_WIRED_LANGUAGES
-    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
+    assert languages == PER_LANGUAGE_TRAP_LANGUAGES
+    assert len(fixtures) == len(PER_LANGUAGE_TRAP_LANGUAGES)
 
     for fixture in fixtures:
         assert fixture.category == "checksum_ids"
@@ -1858,16 +1956,32 @@ def test_per_language_date_traps_cover_all_wired_languages():
     fixtures = _date_trap_fixtures()
     languages = {fixture.language for fixture in fixtures}
 
-    assert languages == OM_120_WIRED_LANGUAGES
-    assert len(fixtures) == len(OM_120_WIRED_LANGUAGES)
+    assert languages == PER_LANGUAGE_TRAP_LANGUAGES
+    assert len(fixtures) == len(PER_LANGUAGE_TRAP_LANGUAGES)
 
     for fixture in fixtures:
         assert fixture.category == "multilingual"
         assert fixture.metadata["synthetic"] is True
         date_spans = [span for span in fixture.gold_spans if span.label == "DATE"]
-        assert len(date_spans) == 3
+        if fixture.language in OM_120_WIRED_LANGUAGES:
+            assert len(date_spans) == 3
+        else:
+            # A three-date day-first chain, optionally followed by a dated
+            # form the pack does not detect yet (recorded as a known gap).
+            assert len(date_spans) >= 3
+            assert all(_span_gap_detectors(span) for span in date_spans[3:])
+            hard_negatives = fixture.metadata["hard_negatives"]
+            assert len(hard_negatives) == 1
+            hn = hard_negatives[0]
+            assert hn["label"] == "DATE" and hn["reason"]
+            assert fixture.text[hn["start"] : hn["end"]] == hn["text"]
+            assert hn["text"] in fixture.expected_output["text"]
+            assert not any(
+                _overlaps(hn["start"], hn["end"], span.start, span.end)
+                for span in fixture.gold_spans
+            )
         assert fixture.expected_output["method"] == "mask"
-        assert fixture.expected_output["text"].count("[DATE]") == 3
+        assert fixture.expected_output["text"].count("[DATE]") == len(date_spans)
         assert fixture.expected_output["text"] == _mask_gold_spans(fixture)
 
 
@@ -1909,15 +2023,15 @@ def test_per_language_id_traps_invalid_ids_fail_validators():
     """
     for fixture in _id_trap_fixtures():
         lang = fixture.language
-        valid_span = fixture.gold_spans[0]
-        valid_id = valid_span.text
         hn = fixture.metadata["hard_negatives"][0]
         invalid_id = hn["text"]
 
         validators = _ID_TRAP_VALIDATORS[lang]
-        assert any(v(valid_id) for v in validators), (
-            f"{lang}: valid ID {valid_id!r} should pass at least one validator"
-        )
+        for valid_span in fixture.gold_spans:
+            valid_id = valid_span.text
+            assert any(v(valid_id) for v in validators), (
+                f"{lang}: valid ID {valid_id!r} should pass at least one validator"
+            )
         assert all(not v(invalid_id) for v in validators), (
             f"{lang}: invalid ID {invalid_id!r} should fail all validators"
         )
@@ -1927,6 +2041,8 @@ def test_per_language_traps_recover_through_language_patterns():
     """Every gold span in the per-language trap fixtures is recovered by the
     language's PII patterns at the exact recorded offset.  This catches
     regressions where a language pack's regex stops matching native formats.
+    Spans and hard negatives recorded as ``language_patterns`` known gaps must
+    still be missed or accepted, so fixing a gap forces its marker off.
     """
     for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
         units = find_semantic_units(
@@ -1944,22 +2060,195 @@ def test_per_language_traps_recover_through_language_patterns():
             if validated
         }
         for span in fixture.gold_spans:
-            assert (span.start, span.end, span.label, span.text) in recovered, (
+            key = (span.start, span.end, span.label, span.text)
+            if "language_patterns" in _span_gap_detectors(span):
+                assert key not in recovered, (
+                    f"{fixture.fixture_id}: known gap at [{span.start}:{span.end}] "
+                    "is now recovered by language patterns; remove its marker"
+                )
+                continue
+            assert key in recovered, (
                 f"{fixture.fixture_id}: span {span.text!r} ({span.label}) "
                 f"at [{span.start}:{span.end}] not recovered by "
                 f"{fixture.language} patterns"
             )
 
         for hard_negative in fixture.metadata.get("hard_negatives", []):
-            assert not any(
+            accepted = any(
                 start < hard_negative["end"]
                 and end > hard_negative["start"]
                 and validated
                 for start, end, _entity_type, _score, _pattern, validated in units
-            ), (
+            )
+            if "language_patterns" in _hard_negative_gap_detectors(hard_negative):
+                assert accepted, (
+                    f"{fixture.fixture_id}: known false positive at "
+                    f"[{hard_negative['start']}:{hard_negative['end']}] is no "
+                    "longer accepted by language patterns; remove its marker"
+                )
+                continue
+            assert not accepted, (
                 f"{fixture.fixture_id}: hard negative {hard_negative['text']!r} "
                 "was accepted by a production pattern"
             )
+
+
+def test_per_language_traps_reproduce_expected_mask_through_safety_sweep():
+    """The deterministic sweep alone, with no model spans, finds exactly the
+    gold spans of every trap: same offsets and labels, nothing on the hard
+    negative and nothing else in the text, so masking its output yields the
+    fixture's expected mask. Recorded ``safety_sweep`` known gaps must still
+    fail, so fixing a gap forces its marker off.
+    """
+    from openmed.core.safety_sweep import safety_sweep
+
+    for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
+        lang = fixture.language
+        found = {
+            (entity.start, entity.end, normalize_label(entity.label, lang))
+            for entity in safety_sweep(fixture.text, [], lang=lang)
+        }
+        expected = set()
+        for span in fixture.gold_spans:
+            key = (span.start, span.end, span.label)
+            if "safety_sweep" in _span_gap_detectors(span):
+                assert key not in found, (
+                    f"{fixture.fixture_id}: known gap at [{span.start}:{span.end}] "
+                    "is now found by the safety sweep; remove its marker"
+                )
+                continue
+            expected.add(key)
+
+        false_positives = set()
+        for hard_negative in fixture.metadata.get("hard_negatives", []):
+            hits = {
+                item
+                for item in found
+                if _overlaps(
+                    item[0], item[1], hard_negative["start"], hard_negative["end"]
+                )
+            }
+            if "safety_sweep" in _hard_negative_gap_detectors(hard_negative):
+                assert hits, (
+                    f"{fixture.fixture_id}: known false positive at "
+                    f"[{hard_negative['start']}:{hard_negative['end']}] is no "
+                    "longer flagged by the safety sweep; remove its marker"
+                )
+                false_positives |= hits
+                continue
+            assert not hits, (
+                f"{fixture.fixture_id}: hard negative at "
+                f"[{hard_negative['start']}:{hard_negative['end']}] was "
+                "flagged by the safety sweep"
+            )
+
+        assert found - false_positives == expected, (
+            f"{fixture.fixture_id}: sweep spans "
+            f"{sorted(found - false_positives)} != gold {sorted(expected)}"
+        )
+        if len(expected) == len(fixture.gold_spans) and not false_positives:
+            masked = fixture.text
+            for start, end, label in sorted(found, reverse=True):
+                masked = masked[:start] + f"[{label}]" + masked[end:]
+            assert masked == fixture.expected_output["text"]
+
+
+def test_per_language_trap_known_gaps_are_explicit_and_well_formed():
+    """Detection gaps the traps expose are recorded per span, never skipped:
+    each marker names the failing engines and a reason code, and tracked
+    fixes carry their issue number so the marker can be flipped on merge.
+    """
+    markers = []
+    for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
+        for span in fixture.gold_spans:
+            if "known_gap" in span.metadata:
+                markers.append((fixture, span.metadata["known_gap"]))
+        for hard_negative in fixture.metadata.get("hard_negatives", []):
+            if "known_gap" in hard_negative:
+                markers.append((fixture, hard_negative["known_gap"]))
+
+    assert markers
+    for fixture, marker in markers:
+        assert fixture.language in LOW_RESOURCE_TRAP_LANGUAGES
+        assert set(marker) <= {"detectors", "issue", "reason"}
+        assert marker["detectors"]
+        assert set(marker["detectors"]) <= KNOWN_GAP_DETECTORS
+        assert list(marker["detectors"]) == sorted(set(marker["detectors"]))
+        assert marker["reason"].replace("_", "").isalpha()
+        assert marker["reason"] == marker["reason"].lower()
+        if "issue" in marker:
+            assert isinstance(marker["issue"], int) and marker["issue"] > 0
+
+
+def test_low_resource_id_traps_declare_checksum_or_format_only_validation():
+    """Checksum validators get ``checksum_status: valid`` gold and a
+    ``fails_checksum`` hard negative; structure-only validators are marked
+    ``format_only`` and their hard negative fails the format rule.
+    """
+    for fixture in _id_trap_fixtures():
+        if fixture.language not in LOW_RESOURCE_TRAP_LANGUAGES:
+            continue
+        assert fixture.metadata["locale"].startswith(f"{fixture.language}_")
+        statuses = set()
+        for span in fixture.gold_spans:
+            assert span.label == "ID_NUM"
+            assert span.metadata["identifier_type"]
+            status = span.metadata["checksum_status"]
+            statuses.add(status)
+            if status == "unvalidated":
+                assert span.metadata["validation"] == "format_only"
+            else:
+                assert status == "valid"
+                assert "validation" not in span.metadata
+        hn = fixture.metadata["hard_negatives"][0]
+        expected_reason = "fails_checksum" if statuses == {"valid"} else "fails_format"
+        assert hn["reason"] == expected_reason
+        assert hn["text"] in fixture.expected_output["text"]
+
+
+def test_low_resource_trap_offsets_fall_on_grapheme_boundaries():
+    """Gold spans and hard negatives never split a grapheme cluster, so tone
+    marks, Yoruba and Igbo diacritics and Indic vowel signs stay intact.
+    """
+    for fixture in [*_id_trap_fixtures(), *_date_trap_fixtures()]:
+        if fixture.language not in LOW_RESOURCE_TRAP_LANGUAGES:
+            continue
+        offsets = [(span.start, span.end) for span in fixture.gold_spans]
+        offsets += [
+            (item["start"], item["end"]) for item in fixture.metadata["hard_negatives"]
+        ]
+        for start, end in offsets:
+            assert is_grapheme_boundary(start, fixture.text), fixture.fixture_id
+            assert is_grapheme_boundary(end, fixture.text), fixture.fixture_id
+
+
+def test_registered_packs_without_per_language_traps_are_listed():
+    """Every registered pack either has both date and ID traps or is listed
+    in ``PACKS_WITHOUT_PER_LANGUAGE_TRAPS``.
+    """
+    from openmed.core.pii_i18n import USER_SUPPLIED_MODEL_LANGUAGES
+
+    registered = (
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
+    )
+    date_languages = {fixture.language for fixture in _date_trap_fixtures()}
+    id_languages = {fixture.language for fixture in _id_trap_fixtures()}
+    trapped = date_languages & id_languages
+
+    assert date_languages == id_languages == PER_LANGUAGE_TRAP_LANGUAGES
+    assert PER_LANGUAGE_TRAP_LANGUAGES <= registered
+    assert PACKS_WITHOUT_PER_LANGUAGE_TRAPS.isdisjoint(PER_LANGUAGE_TRAP_LANGUAGES)
+    untrapped = registered - trapped
+    assert untrapped == PACKS_WITHOUT_PER_LANGUAGE_TRAPS, (
+        "registered packs without per-language traps changed; add traps or "
+        "update PACKS_WITHOUT_PER_LANGUAGE_TRAPS. Unlisted: "
+        f"{sorted(untrapped - PACKS_WITHOUT_PER_LANGUAGE_TRAPS)}; listed but "
+        "trapped or unregistered: "
+        f"{sorted(PACKS_WITHOUT_PER_LANGUAGE_TRAPS - untrapped)}"
+    )
 
 
 def test_polish_fixtures_preserve_spans_and_pass_zero_leakage_gate_offline():

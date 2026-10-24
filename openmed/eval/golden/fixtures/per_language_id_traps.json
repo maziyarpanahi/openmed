@@ -421,6 +421,559 @@
           "text": "Sentetik not: TCKN [ID_NUM] geçerli, TCKN 13198785261 geçersiz test hastası için."
         }
       }
+    },
+    {
+      "id": "golden-per-language-id-trap-am",
+      "language": "am",
+      "text": "ሰው ሠራሽ ማስታወሻ፡ የፋይዳ መለያ ቁጥር፡ 384726195056 ትክክል ነው። የፋይዳ መለያ ቁጥር፡ 384726195057 ልክ አይደለም።",
+      "gold_spans": [
+        {
+          "start": 28,
+          "end": 40,
+          "label": "ID_NUM",
+          "text": "384726195056",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "ethiopian_fayda"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "am_ET",
+        "hard_negatives": [
+          {
+            "start": 64,
+            "end": 76,
+            "text": "384726195057",
+            "identifier_type": "ethiopian_fayda",
+            "reason": "fails_checksum",
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "reason": "accepted_by_unvalidated_national_id_pattern"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "ሰው ሠራሽ ማስታወሻ፡ የፋይዳ መለያ ቁጥር፡ [ID_NUM] ትክክል ነው። የፋይዳ መለያ ቁጥር፡ 384726195057 ልክ አይደለም።"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-bn",
+      "language": "bn",
+      "text": "কৃত্রিম নোট: জাতীয় পরিচয়পত্র ৪৮২৭১৯৩৬০৫ সঠিক, জাতীয় পরিচয়পত্র ৪৮২৭১৯৩৬০৫২ ভুল।",
+      "gold_spans": [
+        {
+          "start": 31,
+          "end": 41,
+          "label": "ID_NUM",
+          "text": "৪৮২৭১৯৩৬০৫",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "bangladesh_nid",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "bn_BD",
+        "hard_negatives": [
+          {
+            "start": 66,
+            "end": 77,
+            "text": "৪৮২৭১৯৩৬০৫২",
+            "identifier_type": "bangladesh_nid",
+            "reason": "fails_format"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "কৃত্রিম নোট: জাতীয় পরিচয়পত্র [ID_NUM] সঠিক, জাতীয় পরিচয়পত্র ৪৮২৭১৯৩৬০৫২ ভুল।"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-fa",
+      "language": "fa",
+      "text": "یادداشت آزمایشی: کد ملی ۲۹۳۵۰۷۱۶۴۶ معتبر است و کد ملی ۲۹۳۵۰۷۱۶۴۷ نامعتبر است.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 34,
+          "label": "ID_NUM",
+          "text": "۲۹۳۵۰۷۱۶۴۶",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "iran_national_id"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "fa_IR",
+        "hard_negatives": [
+          {
+            "start": 54,
+            "end": 64,
+            "text": "۲۹۳۵۰۷۱۶۴۷",
+            "identifier_type": "iran_national_id",
+            "reason": "fails_checksum",
+            "known_gap": {
+              "detectors": [
+                "safety_sweep"
+              ],
+              "reason": "rejected_id_masked_as_phone"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "یادداشت آزمایشی: کد ملی [ID_NUM] معتبر است و کد ملی ۲۹۳۵۰۷۱۶۴۷ نامعتبر است."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ha",
+      "language": "ha",
+      "text": "Takardar gwaji: lambar NIN 48291736054 ingantacciya ce, lambar NIN 11111111111 ba ta da inganci ga majinyacin gwaji.",
+      "gold_spans": [
+        {
+          "start": 27,
+          "end": 38,
+          "label": "ID_NUM",
+          "text": "48291736054",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "nin",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ha_NG",
+        "hard_negatives": [
+          {
+            "start": 67,
+            "end": 78,
+            "text": "11111111111",
+            "identifier_type": "nin",
+            "reason": "fails_format",
+            "known_gap": {
+              "detectors": [
+                "safety_sweep"
+              ],
+              "reason": "accepted_by_unvalidated_national_id_pattern"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Takardar gwaji: lambar NIN [ID_NUM] ingantacciya ce, lambar NIN 11111111111 ba ta da inganci ga majinyacin gwaji."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-he",
+      "language": "he",
+      "text": "רשומה סינתטית: ת.ז. 408173623 תקינה, תעודת זהות 408173624 שגויה.",
+      "gold_spans": [
+        {
+          "start": 20,
+          "end": 29,
+          "label": "ID_NUM",
+          "text": "408173623",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "teudat_zehut"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "he_IL",
+        "hard_negatives": [
+          {
+            "start": 48,
+            "end": 57,
+            "text": "408173624",
+            "identifier_type": "teudat_zehut",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "רשומה סינתטית: ת.ז. [ID_NUM] תקינה, תעודת זהות 408173624 שגויה."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ig",
+      "language": "ig",
+      "text": "Ndekọ nnwale: nọmba NIN 48291736054 ziri ezi, nọmba NIN 11111111111 ezighi ezi maka onye ọrịa nnwale.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 35,
+          "label": "ID_NUM",
+          "text": "48291736054",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "nin",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ig_NG",
+        "hard_negatives": [
+          {
+            "start": 56,
+            "end": 67,
+            "text": "11111111111",
+            "identifier_type": "nin",
+            "reason": "fails_format",
+            "known_gap": {
+              "detectors": [
+                "safety_sweep"
+              ],
+              "reason": "accepted_by_unvalidated_national_id_pattern"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Ndekọ nnwale: nọmba NIN [ID_NUM] ziri ezi, nọmba NIN 11111111111 ezighi ezi maka onye ọrịa nnwale."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-rw",
+      "language": "rw",
+      "text": "Inyandiko y'igerageza: nimero y'indangamuntu 1199080012345067 ni yo, nimero y'indangamuntu 1199050012345067 si yo.",
+      "gold_spans": [
+        {
+          "start": 45,
+          "end": 61,
+          "label": "ID_NUM",
+          "text": "1199080012345067",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "rwanda_national_id",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "rw_RW",
+        "hard_negatives": [
+          {
+            "start": 91,
+            "end": 107,
+            "text": "1199050012345067",
+            "identifier_type": "rwanda_national_id",
+            "reason": "fails_format"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Inyandiko y'igerageza: nimero y'indangamuntu [ID_NUM] ni yo, nimero y'indangamuntu 1199050012345067 si yo."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-sw",
+      "language": "sw",
+      "text": "Kumbukumbu bandia: nambari ya kitambulisho 23456781 halali, nambari ya NIDA 19871103-41205-00017-26 halali, nambari ya NIDA 19871332-41205-00017-26 batili kwa mgonjwa wa majaribio.",
+      "gold_spans": [
+        {
+          "start": 43,
+          "end": 51,
+          "label": "ID_NUM",
+          "text": "23456781",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "kenya_national_id",
+            "validation": "format_only"
+          }
+        },
+        {
+          "start": 76,
+          "end": 99,
+          "label": "ID_NUM",
+          "text": "19871103-41205-00017-26",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "tanzania_nida_nin",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "sw_KE",
+        "hard_negatives": [
+          {
+            "start": 124,
+            "end": 147,
+            "text": "19871332-41205-00017-26",
+            "identifier_type": "tanzania_nida_nin",
+            "reason": "fails_format",
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "reason": "accepted_by_unvalidated_national_id_pattern"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Kumbukumbu bandia: nambari ya kitambulisho [ID_NUM] halali, nambari ya NIDA [ID_NUM] halali, nambari ya NIDA 19871332-41205-00017-26 batili kwa mgonjwa wa majaribio."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ta",
+      "language": "ta",
+      "text": "செயற்கை குறிப்பு: ஆதார் ௪௫௧௨ ௦௯௩௭ ௮௧௬௬ சரியானது, ஆதார் ௪௫௧௨ ௦௯௩௭ ௮௧௬௭ தவறானது.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 38,
+          "label": "ID_NUM",
+          "text": "௪௫௧௨ ௦௯௩௭ ௮௧௬௬",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ta_IN",
+        "hard_negatives": [
+          {
+            "start": 55,
+            "end": 69,
+            "text": "௪௫௧௨ ௦௯௩௭ ௮௧௬௭",
+            "identifier_type": "aadhaar",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "செயற்கை குறிப்பு: ஆதார் [ID_NUM] சரியானது, ஆதார் ௪௫௧௨ ௦௯௩௭ ௮௧௬௭ தவறானது."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-th",
+      "language": "th",
+      "text": "บันทึกสังเคราะห์: เลขประจำตัวประชาชน 3-1005-01234-56-3 ถูกต้อง เลขประจำตัวประชาชน 3-1005-01234-56-4 ไม่ถูกต้อง",
+      "gold_spans": [
+        {
+          "start": 37,
+          "end": 54,
+          "label": "ID_NUM",
+          "text": "3-1005-01234-56-3",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "thai_national_id"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "th_TH",
+        "hard_negatives": [
+          {
+            "start": 82,
+            "end": 99,
+            "text": "3-1005-01234-56-4",
+            "identifier_type": "thai_national_id",
+            "reason": "fails_checksum",
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "reason": "rejected_id_segment_masked_as_postcode"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "บันทึกสังเคราะห์: เลขประจำตัวประชาชน [ID_NUM] ถูกต้อง เลขประจำตัวประชาชน 3-1005-01234-56-4 ไม่ถูกต้อง"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-ur",
+      "language": "ur",
+      "text": "مصنوعی نوٹ: آدھار ۵۸۶۰ ۳۱۷۲ ۴۴۹۸ درست ہے، آدھار ۵۸۶۰ ۳۱۷۲ ۴۴۹۹ غلط ہے۔",
+      "gold_spans": [
+        {
+          "start": 18,
+          "end": 32,
+          "label": "ID_NUM",
+          "text": "۵۸۶۰ ۳۱۷۲ ۴۴۹۸",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "aadhaar"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "ur_IN",
+        "hard_negatives": [
+          {
+            "start": 48,
+            "end": 62,
+            "text": "۵۸۶۰ ۳۱۷۲ ۴۴۹۹",
+            "identifier_type": "aadhaar",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "مصنوعی نوٹ: آدھار [ID_NUM] درست ہے، آدھار ۵۸۶۰ ۳۱۷۲ ۴۴۹۹ غلط ہے۔"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-xh",
+      "language": "xh",
+      "text": "Ingxelo eyenziweyo: inombolo yesazisi 8706120141084 isebenza, inombolo yesazisi 8706120141085 ayisebenzi.",
+      "gold_spans": [
+        {
+          "start": 38,
+          "end": 51,
+          "label": "ID_NUM",
+          "text": "8706120141084",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "sa_id_number"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "xh_ZA",
+        "hard_negatives": [
+          {
+            "start": 80,
+            "end": 93,
+            "text": "8706120141085",
+            "identifier_type": "sa_id_number",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Ingxelo eyenziweyo: inombolo yesazisi [ID_NUM] isebenza, inombolo yesazisi 8706120141085 ayisebenzi."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-yo",
+      "language": "yo",
+      "text": "Àkọsílẹ̀ àdánwò: nọ́mbà ìdánimọ̀ NIN 48291736054 tọ́, NIN 11111111111 kò tọ́ fún aláìsàn àdánwò.",
+      "gold_spans": [
+        {
+          "start": 37,
+          "end": 48,
+          "label": "ID_NUM",
+          "text": "48291736054",
+          "metadata": {
+            "checksum_status": "unvalidated",
+            "identifier_type": "nin",
+            "validation": "format_only"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "yo_NG",
+        "hard_negatives": [
+          {
+            "start": 58,
+            "end": 69,
+            "text": "11111111111",
+            "identifier_type": "nin",
+            "reason": "fails_format",
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "reason": "accepted_by_unvalidated_national_id_pattern"
+            }
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Àkọsílẹ̀ àdánwò: nọ́mbà ìdánimọ̀ NIN [ID_NUM] tọ́, NIN 11111111111 kò tọ́ fún aláìsàn àdánwò."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-id-trap-zu",
+      "language": "zu",
+      "text": "Umlando wokwenziwa: inombolo kamazisi 9203155123087 ivumelekile, inombolo kamazisi 9203155123088 ayivumelekile.",
+      "gold_spans": [
+        {
+          "start": 38,
+          "end": 51,
+          "label": "ID_NUM",
+          "text": "9203155123087",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "sa_id_number"
+          }
+        }
+      ],
+      "metadata": {
+        "category": "checksum_ids",
+        "synthetic": true,
+        "locale": "zu_ZA",
+        "hard_negatives": [
+          {
+            "start": 83,
+            "end": 96,
+            "text": "9203155123088",
+            "identifier_type": "sa_id_number",
+            "reason": "fails_checksum"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Umlando wokwenziwa: inombolo kamazisi [ID_NUM] ivumelekile, inombolo kamazisi 9203155123088 ayivumelekile."
+        }
+      }
     }
   ],
   "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",

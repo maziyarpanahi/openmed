@@ -60,6 +60,51 @@ critical-finding disclaimers, and language coverage. The JSON and JSONL files
 are also compatible with `openmed.eval.harness.load_fixtures`; golden-specific
 expected output remains available through each fixture's metadata.
 
+## Per-Language Date and ID Traps
+
+`fixtures/per_language_date_traps.json` and `fixtures/per_language_id_traps.json`
+hold one date trap and one ID trap per covered pack: the twelve baseline
+languages from #285 (`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`,
+`pt`, `te`, `tr`) plus the low-resource packs `am`, `bn`, `fa`, `ha`, `he`,
+`ig`, `rw`, `sw`, `ta`, `th`, `ur`, `xh`, `yo` and `zu`.
+
+Each date trap chains three day-first dates written with slash, dot and
+native-digit (or dash) separators. The low-resource traps also place dates in
+harder contexts, such as bidi isolates, Hebrew prefixes, Ethiopic punctuation
+and unspaced Thai text, and record one date-like hard negative (a blood
+pressure reading, dose schedule or follow-up interval) that must stay unmasked.
+
+Each ID trap pairs a valid identifier with one hard negative that fails the
+pack's validator. Packs with a checksum (Ethiopian Fayda, Iranian, Israeli and
+Thai national IDs, South African ID, Aadhaar) record `checksum_status: valid`
+gold and a `fails_checksum` hard negative. Packs whose validator checks only
+structure (Kenya ID, Tanzania NIDA, Nigeria NIN, Rwanda ID, Bangladesh NID)
+mark gold `validation: format_only` and use a `fails_format` hard negative.
+Hard negatives are never gold spans and stay unchanged in the expected output.
+
+A detection gap that a trap exposes stays in the gold and is marked on the span
+or hard negative instead of being skipped:
+
+```json
+"known_gap": {
+  "detectors": ["language_patterns", "safety_sweep"],
+  "issue": 3866,
+  "reason": "non_gregorian_month_name_date_not_detected"
+}
+```
+
+`detectors` names the deterministic engines that currently get the value wrong:
+`language_patterns` is `find_semantic_units` over the pack's patterns and
+`safety_sweep` is the sweep run without model spans. `issue` names the tracked
+fix, when one exists. The tests assert that every marked gap still fails, so
+the change that closes it must also remove the marker. Everything else must
+match exactly: both engines recover each gold span at its recorded offsets and
+label, and the sweep alone reproduces the expected mask output.
+
+`tests/unit/eval/test_golden_fixtures.py` lists the registered packs that have
+no traps yet. The coverage test fails when a trapped pack loses its traps and
+when a newly registered pack is neither trapped nor listed.
+
 ## Multi-annotator annotation imports
 
 The golden loader also provides local-only adapters for multi-annotator

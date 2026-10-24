@@ -507,6 +507,744 @@
           "text": "Sentetik not: ziyaret [DATE], kontrol [DATE], son değerlendirme [DATE]."
         }
       }
+    },
+    {
+      "id": "golden-per-language-date-trap-am",
+      "language": "am",
+      "text": "ሰው ሠራሽ ማስታወሻ፡ የጉብኝት ቀን፡14/03/2026፣ የክትትል ቀን፡ 20.07.2026፣ የመጨረሻ ግምገማ ቀን፡ ፭/፲፩/፳፻፳፮፣ የትውልድ ቀን፡ 9 ጥር 1976። የደም ግፊት 120/80።",
+      "gold_spans": [
+        {
+          "start": 23,
+          "end": 33,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 45,
+          "end": 55,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 72,
+          "end": 81,
+          "label": "DATE",
+          "text": "፭/፲፩/፳፻፳፮"
+        },
+        {
+          "start": 93,
+          "end": 102,
+          "label": "DATE",
+          "text": "9 ጥር 1976",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3866,
+              "reason": "non_gregorian_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "am_ET",
+        "hard_negatives": [
+          {
+            "start": 112,
+            "end": 118,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "ሰው ሠራሽ ማስታወሻ፡ የጉብኝት ቀን፡[DATE]፣ የክትትል ቀን፡ [DATE]፣ የመጨረሻ ግምገማ ቀን፡ [DATE]፣ የትውልድ ቀን፡ [DATE]። የደም ግፊት 120/80።"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-bn",
+      "language": "bn",
+      "text": "কৃত্রিম নোট: সাক্ষাৎ 14/03/2026, ফলো-আপ ২০.০৭.২০২৬, চূড়ান্ত পর্যালোচনা ০৫/১১/২০২৬; ওষুধ ১-০-১।",
+      "gold_spans": [
+        {
+          "start": 21,
+          "end": 31,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 40,
+          "end": 50,
+          "label": "DATE",
+          "text": "২০.০৭.২০২৬",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns"
+              ],
+              "reason": "dotted_date_year_claimed_as_postcode"
+            }
+          }
+        },
+        {
+          "start": 72,
+          "end": 82,
+          "label": "DATE",
+          "text": "০৫/১১/২০২৬"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "bn_BD",
+        "hard_negatives": [
+          {
+            "start": 89,
+            "end": 94,
+            "text": "১-০-১",
+            "label": "DATE",
+            "reason": "dose_schedule"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "কৃত্রিম নোট: সাক্ষাৎ [DATE], ফলো-আপ [DATE], চূড়ান্ত পর্যালোচনা [DATE]; ওষুধ ১-০-১।"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-fa",
+      "language": "fa",
+      "text": "یادداشت آزمایشی: مراجعه ⁦14/03/2026⁩، پیگیری 20.07.2026، بازبینی نهایی ۰۵/۱۱/۲۰۲۶، تاریخ تولد ۱۰ محرم ۱۴۰۶؛ فشار خون ۱۲۰/۸۰.",
+      "gold_spans": [
+        {
+          "start": 25,
+          "end": 35,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 45,
+          "end": 55,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 71,
+          "end": 81,
+          "label": "DATE",
+          "text": "۰۵/۱۱/۲۰۲۶"
+        },
+        {
+          "start": 94,
+          "end": 106,
+          "label": "DATE",
+          "text": "۱۰ محرم ۱۴۰۶",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3866,
+              "reason": "non_gregorian_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "fa_IR",
+        "hard_negatives": [
+          {
+            "start": 117,
+            "end": 123,
+            "text": "۱۲۰/۸۰",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "یادداشت آزمایشی: مراجعه ⁦[DATE]⁩، پیگیری [DATE]، بازبینی نهایی [DATE]، تاریخ تولد [DATE]؛ فشار خون ۱۲۰/۸۰."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ha",
+      "language": "ha",
+      "text": "Takardar gwaji: ziyara 14/03/2026, bibiya 20.07.2026, duba na ƙarshe 05-11-2026; ranar haihuwa 9 Satumba 1984. Hawan jini 120/80.",
+      "gold_spans": [
+        {
+          "start": 23,
+          "end": 33,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 42,
+          "end": 52,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 69,
+          "end": 79,
+          "label": "DATE",
+          "text": "05-11-2026"
+        },
+        {
+          "start": 95,
+          "end": 109,
+          "label": "DATE",
+          "text": "9 Satumba 1984",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3865,
+              "reason": "native_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ha_NG",
+        "hard_negatives": [
+          {
+            "start": 122,
+            "end": 128,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Takardar gwaji: ziyara [DATE], bibiya [DATE], duba na ƙarshe [DATE]; ranar haihuwa [DATE]. Hawan jini 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-he",
+      "language": "he",
+      "text": "רשומה סינתטית: ביקור ב-14/03/2026, מעקב ב20.07.2026, סקירה סופית 05.11.2026, נולד ב-12 בתשרי 5747; לחץ דם 120/80.",
+      "gold_spans": [
+        {
+          "start": 23,
+          "end": 33,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 41,
+          "end": 51,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 65,
+          "end": 75,
+          "label": "DATE",
+          "text": "05.11.2026"
+        },
+        {
+          "start": 84,
+          "end": 97,
+          "label": "DATE",
+          "text": "12 בתשרי 5747",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3866,
+              "reason": "non_gregorian_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "he_IL",
+        "hard_negatives": [
+          {
+            "start": 106,
+            "end": 112,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "רשומה סינתטית: ביקור ב-[DATE], מעקב ב[DATE], סקירה סופית [DATE], נולד ב-[DATE]; לחץ דם 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ig",
+      "language": "ig",
+      "text": "Ndekọ nnwale: nleta 14/03/2026, nlebanya 20.07.2026, nyocha ikpeazụ 05-11-2026; ụbọchị ọmụmụ 9 Jenụwarị 1984. Mgbali ọbara 120/80.",
+      "gold_spans": [
+        {
+          "start": 20,
+          "end": 30,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 41,
+          "end": 51,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 68,
+          "end": 78,
+          "label": "DATE",
+          "text": "05-11-2026"
+        },
+        {
+          "start": 93,
+          "end": 108,
+          "label": "DATE",
+          "text": "9 Jenụwarị 1984",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3865,
+              "reason": "native_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ig_NG",
+        "hard_negatives": [
+          {
+            "start": 123,
+            "end": 129,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Ndekọ nnwale: nleta [DATE], nlebanya [DATE], nyocha ikpeazụ [DATE]; ụbọchị ọmụmụ [DATE]. Mgbali ọbara 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-rw",
+      "language": "rw",
+      "text": "Inyandiko y'igerageza: gusura 14/03/2026, gukurikirana 20.07.2026, isuzuma rya nyuma 05-11-2026; itariki y'amavuko 9 Mutarama 1984. Umuvuduko w'amaraso 120/80.",
+      "gold_spans": [
+        {
+          "start": 30,
+          "end": 40,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 55,
+          "end": 65,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 85,
+          "end": 95,
+          "label": "DATE",
+          "text": "05-11-2026"
+        },
+        {
+          "start": 115,
+          "end": 130,
+          "label": "DATE",
+          "text": "9 Mutarama 1984",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3865,
+              "reason": "native_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "rw_RW",
+        "hard_negatives": [
+          {
+            "start": 152,
+            "end": 158,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Inyandiko y'igerageza: gusura [DATE], gukurikirana [DATE], isuzuma rya nyuma [DATE]; itariki y'amavuko [DATE]. Umuvuduko w'amaraso 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-sw",
+      "language": "sw",
+      "text": "Kumbukumbu bandia: ziara tarehe 14/03/2026, ufuatiliaji tarehe 20.07.2026, tathmini ya mwisho tarehe 05-11-2026; rudi kliniki baada ya 2/52.",
+      "gold_spans": [
+        {
+          "start": 32,
+          "end": 42,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 63,
+          "end": 73,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 101,
+          "end": 111,
+          "label": "DATE",
+          "text": "05-11-2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "sw_KE",
+        "hard_negatives": [
+          {
+            "start": 135,
+            "end": 139,
+            "text": "2/52",
+            "label": "DATE",
+            "reason": "follow_up_interval_shorthand"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Kumbukumbu bandia: ziara tarehe [DATE], ufuatiliaji tarehe [DATE], tathmini ya mwisho tarehe [DATE]; rudi kliniki baada ya 2/52."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ta",
+      "language": "ta",
+      "text": "செயற்கை குறிப்பு: வருகை 14/03/2026, தொடர் பரிசோதனை ௨௦.௦௭.௨௦௨௬, இறுதி மதிப்பாய்வு ௦௫/௧௧/௨௦௨௬; மருந்து 1-0-1.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 34,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 51,
+          "end": 61,
+          "label": "DATE",
+          "text": "௨௦.௦௭.௨௦௨௬"
+        },
+        {
+          "start": 81,
+          "end": 91,
+          "label": "DATE",
+          "text": "௦௫/௧௧/௨௦௨௬"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ta_IN",
+        "hard_negatives": [
+          {
+            "start": 101,
+            "end": 106,
+            "text": "1-0-1",
+            "label": "DATE",
+            "reason": "dose_schedule"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "செயற்கை குறிப்பு: வருகை [DATE], தொடர் பரிசோதனை [DATE], இறுதி மதிப்பாய்வு [DATE]; மருந்து 1-0-1."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-th",
+      "language": "th",
+      "text": "บันทึกสังเคราะห์: นัดตรวจวันที่14/03/2569 ติดตามผลวันที่๒๐.๐๗.๒๕๖๙ ทบทวนครั้งสุดท้าย ๐๕/๑๑/๒๕๖๙ ความดันโลหิต 120/80",
+      "gold_spans": [
+        {
+          "start": 31,
+          "end": 41,
+          "label": "DATE",
+          "text": "14/03/2569"
+        },
+        {
+          "start": 56,
+          "end": 66,
+          "label": "DATE",
+          "text": "๒๐.๐๗.๒๕๖๙"
+        },
+        {
+          "start": 85,
+          "end": 95,
+          "label": "DATE",
+          "text": "๐๕/๑๑/๒๕๖๙"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "th_TH",
+        "hard_negatives": [
+          {
+            "start": 109,
+            "end": 115,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "บันทึกสังเคราะห์: นัดตรวจวันที่[DATE] ติดตามผลวันที่[DATE] ทบทวนครั้งสุดท้าย [DATE] ความดันโลหิต 120/80"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-ur",
+      "language": "ur",
+      "text": "مصنوعی نوٹ: معائنہ ⁦14/03/2026⁩، فالو اپ 20.07.2026، حتمی جائزہ ۰۵/۱۱/۲۰۲۶، تاریخ پیدائش ۱۰ محرم ۱۴۰۶؛ خوراک 1-0-1۔",
+      "gold_spans": [
+        {
+          "start": 20,
+          "end": 30,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 41,
+          "end": 51,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 64,
+          "end": 74,
+          "label": "DATE",
+          "text": "۰۵/۱۱/۲۰۲۶"
+        },
+        {
+          "start": 89,
+          "end": 101,
+          "label": "DATE",
+          "text": "۱۰ محرم ۱۴۰۶",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3866,
+              "reason": "non_gregorian_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "ur_PK",
+        "hard_negatives": [
+          {
+            "start": 109,
+            "end": 114,
+            "text": "1-0-1",
+            "label": "DATE",
+            "reason": "dose_schedule"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "مصنوعی نوٹ: معائنہ ⁦[DATE]⁩، فالو اپ [DATE]، حتمی جائزہ [DATE]، تاریخ پیدائش [DATE]؛ خوراک 1-0-1۔"
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-xh",
+      "language": "xh",
+      "text": "Ingxelo eyenziweyo: utyelelo 14/03/2026, ulandelelo 20.07.2026, uphononongo lokugqibela 05-11-2026; uxinzelelo lwegazi 120/80.",
+      "gold_spans": [
+        {
+          "start": 29,
+          "end": 39,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 52,
+          "end": 62,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 88,
+          "end": 98,
+          "label": "DATE",
+          "text": "05-11-2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "xh_ZA",
+        "hard_negatives": [
+          {
+            "start": 119,
+            "end": 125,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Ingxelo eyenziweyo: utyelelo [DATE], ulandelelo [DATE], uphononongo lokugqibela [DATE]; uxinzelelo lwegazi 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-yo",
+      "language": "yo",
+      "text": "Àkọsílẹ̀ àdánwò: ìbẹ̀wò 14/03/2026, àtúnyẹ̀wò 20.07.2026, àyẹ̀wò ìkẹyìn 05-11-2026; ọjọ́ ìbí 9 Ṣẹ́rẹ́ 1984. Ìfúnpá ẹ̀jẹ̀ 120/80.",
+      "gold_spans": [
+        {
+          "start": 24,
+          "end": 34,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 46,
+          "end": 56,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 72,
+          "end": 82,
+          "label": "DATE",
+          "text": "05-11-2026"
+        },
+        {
+          "start": 93,
+          "end": 106,
+          "label": "DATE",
+          "text": "9 Ṣẹ́rẹ́ 1984",
+          "metadata": {
+            "known_gap": {
+              "detectors": [
+                "language_patterns",
+                "safety_sweep"
+              ],
+              "issue": 3865,
+              "reason": "native_month_name_date_not_detected"
+            }
+          }
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "yo_NG",
+        "hard_negatives": [
+          {
+            "start": 121,
+            "end": 127,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Àkọsílẹ̀ àdánwò: ìbẹ̀wò [DATE], àtúnyẹ̀wò [DATE], àyẹ̀wò ìkẹyìn [DATE]; ọjọ́ ìbí [DATE]. Ìfúnpá ẹ̀jẹ̀ 120/80."
+        }
+      }
+    },
+    {
+      "id": "golden-per-language-date-trap-zu",
+      "language": "zu",
+      "text": "Umlando wokwenziwa: ukuvakasha 14/03/2026, ukulandelela 20.07.2026, ukubuyekeza kokugcina 05-11-2026; umfutho wegazi 120/80.",
+      "gold_spans": [
+        {
+          "start": 31,
+          "end": 41,
+          "label": "DATE",
+          "text": "14/03/2026"
+        },
+        {
+          "start": 56,
+          "end": 66,
+          "label": "DATE",
+          "text": "20.07.2026"
+        },
+        {
+          "start": 90,
+          "end": 100,
+          "label": "DATE",
+          "text": "05-11-2026"
+        }
+      ],
+      "metadata": {
+        "category": "multilingual",
+        "synthetic": true,
+        "locale": "zu_ZA",
+        "hard_negatives": [
+          {
+            "start": 117,
+            "end": 123,
+            "text": "120/80",
+            "label": "DATE",
+            "reason": "blood_pressure_reading"
+          }
+        ],
+        "expected_output": {
+          "method": "mask",
+          "text": "Umlando wokwenziwa: ukuvakasha [DATE], ukulandelela [DATE], ukubuyekeza kokugcina [DATE]; umfutho wegazi 120/80."
+        }
+      }
     }
   ],
   "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
