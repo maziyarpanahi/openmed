@@ -96,7 +96,11 @@
               dask = prev.dask.overridePythonAttrs (_: {
                 doCheck = false;
               });
-              # The Python 3.12 build is not in cache.nixos.org.
+              # The Python 3.12 builds are not in cache.nixos.org. Skipping
+              # sse-starlette's suite also drops tenacity from the build.
+              coverage = prev.coverage.overridePythonAttrs (_: {
+                doCheck = false;
+              });
               sse-starlette = prev.sse-starlette.overridePythonAttrs (_: {
                 doCheck = false;
               });
