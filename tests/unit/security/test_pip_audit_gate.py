@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -354,7 +355,7 @@ def test_frozen_torch_resolution_and_core_boundaries() -> None:
     resolved = [item for item in lock["package"] if item["name"] == "torch"]
     assert resolved
     assert all(Version(item["version"]) >= Version("2.13.0") for item in resolved)
-    assert project["project"]["requires-python"] == ">=3.10"
+    assert project["project"]["requires-python"] == ">=3.11"
     assert all(
         Requirement(value).name != "torch"
         for value in project["project"]["dependencies"]
@@ -453,7 +454,7 @@ def test_fixable_optional_dependency_floors_are_published_and_locked(
 @pytest.mark.parametrize(
     "extra", ["dev", "multimodal", "mlx", "agents", "beam", "llamaindex", "ocr-paddle"]
 )
-@pytest.mark.parametrize("python_version", ["3.10", "3.11", "3.12", "3.13"])
+@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13"])
 def test_pillow_security_floor_preserves_interpreter_compatibility(
     extra: str, python_version: str
 ) -> None:
@@ -471,12 +472,9 @@ def test_pillow_security_floor_preserves_interpreter_compatibility(
             or requirement.marker.evaluate({"python_version": python_version})
         )
     ]
-    if python_version == "3.10" and extra == "dev":
-        assert not active
-    else:
-        assert len(active) == 1
-        assert "12.3.0" not in active[0].specifier
-        assert "13.0.0" in active[0].specifier
+    assert len(active) == 1
+    assert "12.3.0" not in active[0].specifier
+    assert "13.0.0" in active[0].specifier
     assert not any(
         Requirement(value).name.lower() == "pillow"
         for value in project["project"]["dependencies"]
@@ -488,7 +486,7 @@ def test_image_lock_never_retains_an_unsafe_legacy_release() -> None:
     resolved = [item for item in lock["package"] if item["name"] == "pillow"]
     assert resolved
     assert all(Version(item["version"]) >= Version("13.0.0") for item in resolved)
-    for extra in _dependency_extras(lock, "pillow") - {"dev"}:
+    for extra in _dependency_extras(lock, "pillow"):
         requirement = next(
             Requirement(value)
             for value in project["project"]["optional-dependencies"][extra]
@@ -518,7 +516,9 @@ def test_certificate_bundle_lock_uses_patched_release() -> None:
     ("package", "unsafe", "fixed"),
     [
         ("brotli", "1.2.0", "1.2.1"),
+        ("brotlicffi", "1.2.0.1", "1.2.1.0"),
         ("graphql-core", "3.2.11", "3.2.12"),
+        ("setuptools", "83.0.0", "84.1.0"),
         ("virtualenv", "21.14.5", "21.14.9"),
     ],
 )
@@ -537,6 +537,41 @@ def test_transitive_dependency_lock_uses_patched_release(
     )
     assert unsafe not in floor.specifier
     assert fixed in floor.specifier
+
+
+@pytest.mark.parametrize("path", ["Dockerfile", "deploy/docker/Dockerfile"])
+@pytest.mark.parametrize(
+    ("package", "fixed"), [("filelock", "4.2.1"), ("setuptools", "84.1.0")]
+)
+def test_service_images_bootstrap_patched_packages_before_torch_index(
+    path: str, package: str, fixed: str
+) -> None:
+    source = (ROOT / path).read_text(encoding="utf-8")
+    pins = re.findall(rf'"{re.escape(package)}==([^"]+)"', source)
+    assert len(pins) == 1
+    assert Version(pins[0]) >= Version(fixed)
+    # The PyTorch CPU index serves older copies of Torch's dependencies.
+    assert source.index(f'"{package}=={pins[0]}"') < source.index(
+        "download.pytorch.org/whl/cpu"
+    )
+
+
+def test_universal_lock_overrides_snowflake_connector_filelock_cap() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "filelock"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("4.2.1") for item in resolved)
+    # Snowflake Connector 4.x caps filelock below 4; only the uv override lifts it.
+    override = next(
+        requirement
+        for value in project["tool"]["uv"]["override-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == "filelock"
+    )
+    assert override.marker is None
+    assert "4.2.0" not in override.specifier
+    assert "4.2.1" in override.specifier
+    assert project["project"]["requires-python"] == ">=3.11"
 
 
 def test_awq_dataset_floor_retains_linux_only_installation() -> None:

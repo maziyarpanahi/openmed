@@ -401,6 +401,81 @@ def my_first_name(faker, original, *, locale):
 register_label_generator("FIRST_NAME", my_first_name)
 ```
 
+### Live surrogate quality
+
+`openmed.eval.surrogate_quality` grades committed fixture records.
+`openmed.eval.surrogate_quality_live` grades the surrogates the registered
+providers generate today. It reads the language-pack registry when it runs, so
+a pack registered later is scored without code changes. National-ID-only
+languages are scored as well.
+
+For each language it builds seeded synthetic originals in the language's
+expected script and generates surrogates for six labels: `name`, `address`,
+`city`, `phone`, `id` and `date`. Each sample is scored on the fixture
+scorer's dimensions:
+
+| Dimension     | Live check                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `script`      | Letters in names, addresses and cities fall in the scripts the pack declares.                            |
+| `format`      | Dates follow the locale date order. Addresses and cities do not reuse the US Faker template. Phones outside NANP regions do not take a NANP shape. |
+| `checksum`    | National-ID surrogates pass the language's registered validators.                                        |
+| `consistency` | A fresh provider with the same seed reproduces the value, which neither equals nor retains the original. |
+| `naturalness` | No fallback placeholders, digits in names or cities, inserted honorifics, or implausible name shapes.    |
+
+Script expectations come from each pack's declared scripts. Packs routed
+without a script claim (`id`, `ro`) and national-ID-only languages use
+`LIVE_SURROGATE_SCRIPT_FALLBACKS`. A cell that cannot be scored is reported as
+`unscored` with a reason code such as `no_script_expectation` or
+`no_national_id_provider` instead of being skipped.
+
+```python
+from openmed.eval.release_gates import evaluate_live_surrogate_quality_gate
+from openmed.eval.surrogate_quality_live import evaluate_live_surrogate_quality
+
+report = evaluate_live_surrogate_quality()  # every registered pack, offline
+report.matrix()["fr"]    # {"name": "pass", "address": "pass", ...}
+report.failing_cells     # ("<language>/<label>", ...) below the floor
+report.unscored_cells    # cells the live scorer could not grade
+
+gate = evaluate_live_surrogate_quality_gate(report)
+gate.details["failing_cells"]  # rates and reason counts per failing cell
+```
+
+Each cell passes when at least 90% of its seeded samples pass every applicable
+dimension. The gate fails closed: it passes only when every language and label
+is covered and every cell passes or carries an exemption. A cell can be
+exempted only for a locale with a documented surrogate-locale approximation
+(a pack's `surrogate_locale_approximation`, or a documented locale
+approximation such as Telugu's `en_IN` backend), and the exemption must record
+a reason:
+
+```python
+report = evaluate_live_surrogate_quality(
+    exemptions=[
+        {
+            "language": "te",
+            "labels": ["address", "city"],
+            "reason": "Telugu generic fields use the en_IN backend",
+        }
+    ]
+)
+```
+
+Reports and gate details contain status codes, counts, rates and truncated
+SHA-256 digests of generated values. They never contain an original or a
+surrogate value. To run the gate from the command line:
+
+```bash
+python -m openmed.eval.release_gates --live-surrogate-quality \
+  --output live-surrogate-quality.json
+```
+
+The command exits with `1` when any cell fails or is unscored. A release
+benchmark report opts in with `surrogate_quality_live: true` in its metrics or
+metadata, and `surrogate_quality_live_required: true` makes that evidence
+mandatory. Release evidence may add exemptions, but it can only raise the
+pass-rate floor and the sample count, and the seed is fixed.
+
 ## Chinese word segmentation
 
 Chinese routing uses a pluggable word segmenter that preserves exact Python
