@@ -166,9 +166,15 @@ def from_system_one_response(
     """Parse a System One response into per-question backend outputs.
 
     Server metadata such as ``model``, ``usage`` or ``probability_source`` is
-    ignored. Server-reported ``choice``, ``confidence`` and ``score`` values are
-    checked for shape only; OpenMed recomputes them under its calibration
-    profile from the probabilities.
+    ignored. Server-reported ``choice``, ``confidence``, ``level`` and ``score``
+    values are checked for shape only; OpenMed recomputes them under its
+    calibration profile from the probabilities.
+
+    Score answers differ between published servers, so they are read
+    tolerantly: ``legend`` may be ``{"0": label, ...}`` or a label list;
+    ``probabilities`` may be keyed by level index or level label, or listed in
+    level order; and the expected level may be reported as ``score`` or
+    ``expected_level``. Every variant must still match the declared levels.
 
     Args:
         request: The request the server answered.
@@ -575,23 +581,71 @@ def _system_one_output(
             calibration_id=calibration_id,
         )
     legend = answer.get("legend")
-    if legend is not None and legend != {
-        str(index): level for index, level in enumerate(question.levels)
-    }:
+    if legend is not None and _legend_levels(legend, question) != question.levels:
         raise DecisionConflictError("System One legend does not match the levels")
+    level = answer.get("level")
+    if level is not None and not _is_level_reference(level, question):
+        raise DecisionConflictError("System One level is not a declared level")
     probabilities = answer.get("probabilities")
     if probabilities is not None:
-        keys = tuple(str(index) for index in range(len(question.levels)))
         return DecisionBackendOutput(
-            option_scores=_aligned(
-                _mapping(
-                    probabilities, "System One probabilities", DecisionConflictError
-                ),
-                keys,
-            ),
+            option_scores=_level_probabilities(probabilities, question),
             calibration_id=calibration_id,
         )
     return _scalar_output(question, answer, calibration_id)
+
+
+def _legend_levels(legend: Any, question: DecisionQuestion) -> tuple[Any, ...]:
+    """Return a legend's labels in index order.
+
+    Servers publish the legend as ``{"0": label, ...}``; a plain label list in
+    index order is accepted too. Anything else cannot match the levels.
+    """
+
+    if isinstance(legend, Mapping):
+        keys = tuple(str(index) for index in range(len(question.levels)))
+        if set(legend) != set(keys):
+            return ()
+        return tuple(legend[key] for key in keys)
+    if isinstance(legend, list):
+        return tuple(legend)
+    return ()
+
+
+def _is_level_reference(level: Any, question: DecisionQuestion) -> bool:
+    """Return whether a reported ``level`` names a declared level.
+
+    The most likely level is reported as an index, an index string or a label.
+    """
+
+    indices = range(len(question.levels))
+    if isinstance(level, bool):
+        return False
+    if isinstance(level, int):
+        return level in indices
+    return isinstance(level, str) and (
+        level in question.levels or level in {str(index) for index in indices}
+    )
+
+
+def _level_probabilities(value: Any, question: DecisionQuestion) -> tuple[float, ...]:
+    """Align score-level probabilities with the declared levels.
+
+    Probabilities keyed by level index (``{"0": p, ...}``) are the published
+    System One shape. Probabilities keyed by level label, or listed in level
+    order, are accepted as well; keys that are exactly the level indices are
+    always read as indices.
+    """
+
+    if isinstance(value, Mapping):
+        keys = tuple(str(index) for index in range(len(question.levels)))
+        if set(value) == set(keys):
+            return _aligned(value, keys)
+        return _aligned(value, question.levels)
+    values = _sequence(value, "System One probabilities", DecisionConflictError)
+    if len(values) != len(question.levels):
+        raise DecisionConflictError("answer probabilities do not match the declaration")
+    return tuple(_wire_probability(item) for item in values)
 
 
 def _openai_output(
@@ -661,7 +715,10 @@ def _scalar_output(
     calibration_id: str,
 ) -> DecisionBackendOutput:
     highest = len(question.levels) - 1
+    # Some servers report the expected level as ``expected_level``.
     score = answer.get("score")
+    if score is None:
+        score = answer.get("expected_level")
     if (
         isinstance(score, bool)
         or not isinstance(score, int | float)

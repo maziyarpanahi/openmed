@@ -55,9 +55,13 @@ _SAFE_ERROR_MESSAGES = {
     "origin_not_allowed": "The upstream endpoint origin is not approved.",
     "loopback_not_allowed": "Loopback upstream endpoints require development policy.",
     "loopback_only_violation": "A development endpoint did not resolve to loopback only.",
+    "private_only_violation": (
+        "A private-network endpoint did not resolve to private addresses only."
+    ),
     "invalid_allowed_origin": "An approved upstream origin is invalid.",
     "invalid_allowed_origin_scheme": "Approved upstream origins must use HTTPS.",
     "invalid_allowed_origin_path": "Approved upstream origins must not include a path.",
+    "invalid_private_origin": "An approved private-network origin is invalid.",
     "invalid_resolver": "The upstream endpoint resolver is invalid.",
     "dns_resolution_failed": "The upstream endpoint could not be resolved safely.",
     "no_resolved_addresses": "The upstream endpoint returned no usable addresses.",
@@ -76,7 +80,9 @@ _SAFE_ERROR_MESSAGES = {
     "mixed_prohibited_addresses": (
         "The upstream endpoint returned multiple prohibited address classes."
     ),
-    "redirect_mode_change": "A redirect changed between remote and loopback policy.",
+    "redirect_mode_change": (
+        "A redirect changed between remote, private-network, and loopback policy."
+    ),
     "invalid_redirect_chain": "The upstream redirect chain is invalid.",
 }
 
@@ -182,6 +188,7 @@ class ValidatedUpstreamEndpoint:
     addresses: tuple[str, ...] = field(repr=False)
     address_classes: tuple[ResolvedAddressClass, ...] = field(repr=False)
     is_loopback: bool
+    is_private_network: bool = False
 
     @property
     def resolved_addresses(self) -> tuple[str, ...]:
@@ -197,6 +204,7 @@ class ValidatedUpstreamEndpoint:
             "port": self.port,
             "resolved_address_count": len(self.addresses),
             "loopback": self.is_loopback,
+            "private_network": self.is_private_network,
         }
 
 
@@ -329,6 +337,25 @@ def _normalize_allowed_origin(origin: Any) -> str:
         or parsed.split.fragment
     ):
         raise UpstreamEndpointConfigurationError("invalid_allowed_origin_path")
+    return parsed.origin
+
+
+def _normalize_private_origin(origin: Any) -> str:
+    try:
+        parsed = _parse_endpoint(origin)
+    except UpstreamEndpointPolicyError:
+        raise UpstreamEndpointConfigurationError("invalid_private_origin") from None
+    if (
+        parsed.split.path not in {"", "/"}
+        or parsed.split.query
+        or parsed.split.fragment
+    ):
+        raise UpstreamEndpointConfigurationError("invalid_allowed_origin_path")
+    if _is_loopback_host(parsed.host, parsed.ip_address) or (
+        parsed.ip_address is not None
+        and _address_class(parsed.ip_address) is not ResolvedAddressClass.PRIVATE
+    ):
+        raise UpstreamEndpointConfigurationError("invalid_private_origin")
     return parsed.origin
 
 
@@ -482,6 +509,12 @@ class UpstreamEndpointPolicy:
         allow_loopback: Explicit development-only mode for ``localhost`` and
             literal loopback URLs.  Every answer must be loopback, and remote
             origins remain subject to the HTTPS allowlist.
+        allowed_private_origins: Exact ``http`` or ``https`` origins of
+            operator-run services on a private network.  Every answer must be
+            a private (RFC 1918 or unique-local) address; loopback, link-local,
+            cloud-metadata, and public answers never qualify.  Empty by
+            default, so private networks stay unreachable unless an operator
+            names each origin.
     """
 
     allowed_origins: frozenset[str] = field(default_factory=frozenset)
@@ -489,6 +522,7 @@ class UpstreamEndpointPolicy:
         default=resolve_hostname, repr=False, compare=False
     )
     allow_loopback: bool = False
+    allowed_private_origins: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
         if not isinstance(self.allow_loopback, bool) or not callable(self.resolver):
@@ -510,6 +544,18 @@ class UpstreamEndpointPolicy:
                     "invalid_allowed_origin"
                 ) from None
         object.__setattr__(self, "allowed_origins", frozenset(normalized))
+        if isinstance(self.allowed_private_origins, str):
+            raise UpstreamEndpointConfigurationError("invalid_private_origin")
+        try:
+            private_values = tuple(self.allowed_private_origins)
+        except TypeError:
+            raise UpstreamEndpointConfigurationError("invalid_private_origin") from None
+        private = frozenset(
+            _normalize_private_origin(value) for value in private_values
+        )
+        if private & self.allowed_origins:
+            raise UpstreamEndpointConfigurationError("invalid_private_origin")
+        object.__setattr__(self, "allowed_private_origins", private)
 
     @classmethod
     def development_loopback(
@@ -537,17 +583,24 @@ class UpstreamEndpointPolicy:
 
         parsed = _parse_endpoint(endpoint)
         loopback_host = _is_loopback_host(parsed.host, parsed.ip_address)
-        if parsed.scheme == "http" and not loopback_host:
+        private_origin = (
+            not loopback_host and parsed.origin in self.allowed_private_origins
+        )
+        if parsed.scheme == "http" and not (loopback_host or private_origin):
             raise UpstreamEndpointPolicyError("non_https_origin")
         if loopback_host:
             if not self.allow_loopback:
                 raise UpstreamEndpointPolicyError("loopback_not_allowed")
-        elif parsed.origin not in self.allowed_origins:
+        elif not private_origin and parsed.origin not in self.allowed_origins:
             raise UpstreamEndpointPolicyError("origin_not_allowed")
 
         addresses = _resolve_addresses(parsed, self.resolver)
         classes = tuple(_address_class(address) for address in addresses)
-        _validate_address_classes(classes, loopback_only=loopback_host)
+        if private_origin:
+            if set(classes) != {ResolvedAddressClass.PRIVATE}:
+                raise UpstreamEndpointResolutionError("private_only_violation")
+        else:
+            _validate_address_classes(classes, loopback_only=loopback_host)
         return ValidatedUpstreamEndpoint(
             url=parsed.url,
             origin=parsed.origin,
@@ -556,6 +609,7 @@ class UpstreamEndpointPolicy:
             addresses=tuple(str(address) for address in addresses),
             address_classes=classes,
             is_loopback=loopback_host,
+            is_private_network=private_origin,
         )
 
     def authorize(self, endpoint: str) -> str:
@@ -572,9 +626,9 @@ class UpstreamEndpointPolicy:
         """Validate an absolute or relative redirect target.
 
         A base URL is validated again before a relative target is joined.  A
-        redirect cannot switch between the remote and loopback policy modes;
-        this prevents a permitted remote service from redirecting a development
-        request into a local service, or vice versa.
+        redirect cannot switch between the remote, private-network, and
+        loopback policy modes; this prevents a permitted remote service from
+        redirecting a development request into a local service, or vice versa.
         """
 
         if base_url is None:
@@ -587,7 +641,10 @@ class UpstreamEndpointPolicy:
         except (TypeError, ValueError):
             raise UpstreamEndpointRedirectError("invalid_endpoint") from None
         candidate = self.validate(target)
-        if candidate.is_loopback != base.is_loopback:
+        if (candidate.is_loopback, candidate.is_private_network) != (
+            base.is_loopback,
+            base.is_private_network,
+        ):
             raise UpstreamEndpointRedirectError("redirect_mode_change")
         return candidate
 
