@@ -265,6 +265,7 @@ class Pipeline:
         normalize_accents: Optional[bool] = None,
         use_safety_sweep: bool = True,
         preserve_whitespace: bool = False,
+        convert_zawgyi: bool = True,
         loader: Any = None,
         privacy_filter_pipeline: Any = None,
         model_detector: ModelDetector | None = None,
@@ -324,6 +325,7 @@ class Pipeline:
         self.normalize_accents = normalize_accents
         self.use_safety_sweep = use_safety_sweep
         self.preserve_whitespace = bool(preserve_whitespace)
+        self.convert_zawgyi = bool(convert_zawgyi)
         self.loader = loader
         self.privacy_filter_pipeline = privacy_filter_pipeline
         self.model_detector = model_detector
@@ -467,6 +469,7 @@ class Pipeline:
                 stage_telemetry.set_input_length(len(original_text))
         if budget_clock is not None:
             budget_clock.check("pipeline.stage1_normalize")
+        _reject_unconverted_legacy_text(normalized)
         with _stage_timer(
             stage_durations_ms,
             STAGE_NAMES[1],
@@ -1076,15 +1079,22 @@ class Pipeline:
         return tuple(normalized_tags)
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
-        from ..processing.legacy_encoding import convert_legacy_encoding
+        from ..processing.legacy_encoding import (
+            _changed_source_units,
+            convert_legacy_encoding,
+        )
 
-        legacy_conversion = convert_legacy_encoding(text)
+        legacy_conversion = convert_legacy_encoding(
+            text,
+            convert_zawgyi=self.convert_zawgyi,
+        )
         legacy_text = legacy_conversion.text
         if legacy_conversion.encoding == "unicode":
             legacy_origins = tuple((index, index + 1) for index in range(len(text)))
         else:
             # Auto-detected ISCII reaches this API as a Latin-1 surrogate
             # string, so original byte and source-character offsets coincide.
+            # Zawgyi converted from a ``str`` is indexed by code point.
             legacy_origins = legacy_conversion.offset_map.converted_to_original_spans
 
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
@@ -1136,6 +1146,21 @@ class Pipeline:
             normalized_to_original=tuple(normalized_to_original),
             normalized_to_original_span=tuple(normalized_to_original_span),
         )
+        if legacy_conversion.encoding == "iscii":
+            converted_bytes = sum(ord(char) >= 0x80 for char in text)
+        elif legacy_conversion.encoding == "zawgyi":
+            converted_bytes = _changed_source_units(text, legacy_conversion)
+        else:
+            converted_bytes = 0
+        legacy_metadata: dict[str, Any] = {
+            "encoding": legacy_conversion.encoding,
+            "changed": legacy_conversion.changed,
+            "converted_bytes": converted_bytes,
+        }
+        if legacy_conversion.zawgyi is not None:
+            # Decision codes and counts only; never source text.
+            legacy_metadata["reason"] = legacy_conversion.reason
+            legacy_metadata["zawgyi"] = legacy_conversion.zawgyi.to_metadata()
         document = NormalizedDocument(
             original_text=text,
             normalized_text=normalized_text,
@@ -1146,15 +1171,7 @@ class Pipeline:
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
                 "encoding_repair": encoding_repair_metadata,
-                "legacy_encoding": {
-                    "encoding": legacy_conversion.encoding,
-                    "changed": legacy_conversion.changed,
-                    "converted_bytes": (
-                        sum(ord(char) >= 0x80 for char in text)
-                        if legacy_conversion.encoding == "iscii"
-                        else 0
-                    ),
-                },
+                "legacy_encoding": legacy_metadata,
             },
         )
         target_script = getattr(self.config, "chinese_target_script", None)
@@ -2040,6 +2057,27 @@ def _iter_normalization_segments(text: str):
 
 def _identity_text(text: str) -> str:
     return text
+
+
+def _reject_unconverted_legacy_text(document: NormalizedDocument) -> None:
+    """Refuse to route text whose suspected legacy encoding was left as-is."""
+
+    from ..processing.legacy_encoding import LEGACY_ENCODING_UNCONVERTED
+
+    legacy = document.metadata.get("legacy_encoding") or {}
+    if legacy.get("reason") != LEGACY_ENCODING_UNCONVERTED:
+        return
+    zawgyi = legacy.get("zawgyi") or {}
+    raise InputError(
+        "Zawgyi-encoded Burmese was detected but Zawgyi conversion is disabled. "
+        "Enable convert_zawgyi or convert the text to Unicode before routing.",
+        details={
+            "reason": LEGACY_ENCODING_UNCONVERTED,
+            "suspected_encoding": "zawgyi",
+            "confidence": zawgyi.get("confidence"),
+            "myanmar_chars": zawgyi.get("myanmar_chars"),
+        },
+    )
 
 
 def _normalize_chinese_document(
