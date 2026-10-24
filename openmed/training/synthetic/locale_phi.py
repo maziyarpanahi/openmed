@@ -17,7 +17,9 @@ from openmed.core.anonymizer.locales import (
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii_i18n import (
     INDIC_NER_LANGUAGES,
+    NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     validate_aadhaar,
     validate_bangladesh_nid,
     validate_chinese_resident_id,
@@ -39,11 +41,14 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_malayalam_aadhaar,
     validate_marathi_aadhaar,
+    validate_nigeria_nin,
     validate_norwegian_fodselsnummer,
+    validate_philsys_psn,
     validate_polish_pesel,
     validate_portuguese_cpf,
     validate_romanian_cnp,
     validate_russian_snils,
+    validate_rwanda_id,
     validate_spanish_nie,
     validate_swedish_personnummer,
     validate_tamil_aadhaar,
@@ -98,6 +103,30 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "el",
     "vi",
 )
+
+NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    "ha",
+    "ig",
+    "yo",
+    "rw",
+    "tl",
+)
+"""National-ID-only routes with repository-authored locale PHI templates."""
+
+USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = ("ne",)
+"""User-supplied-model routes with repository-authored locale PHI templates."""
+
+AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
+    *NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES,
+    *USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES,
+)
+"""Languages without a bundled model whose examples are augmentation-only.
+
+These codes are accepted explicitly rather than through a catch-all over
+``NATIONAL_ID_ONLY_LANGUAGES`` or ``USER_SUPPLIED_MODEL_LANGUAGES``, so a newly
+wired route stays unsupported until it gains a reviewed template. They are
+excluded from :meth:`LocalePhiGenerator.generate_all` unless requested.
+"""
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
     L.PERSON,
@@ -598,6 +627,108 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "vi": "pii_i18n.validate_vietnamese_cccd",
 }
 
+_NATIONAL_ID_ONLY_ROUTE: Final = "national_id_only"
+_USER_SUPPLIED_MODEL_ROUTE: Final = "user_supplied_model"
+
+_AUGMENTATION_ONLY_ROUTES: Final[Mapping[str, str]] = {
+    **{code: _NATIONAL_ID_ONLY_ROUTE for code in NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES},
+    **{
+        code: _USER_SUPPLIED_MODEL_ROUTE
+        for code in USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES
+    },
+}
+
+# Repository-authored note skeletons for routes without a bundled model. Each
+# tuple holds the literal text around the ``_FIELD_ORDER`` slots. The literals
+# carry clinical vocabulary and the context cues the deterministic pattern
+# packs recognize, but never a name, address, or digit: every PHI value is
+# drawn from a surrogate or identifier provider at render time.
+_AUGMENTATION_ONLY_TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
+    "ha": (
+        "Bayanin asibiti: majiyyaci ",
+        ", ranar haihuwa ",
+        ". Lambar NIN ",
+        ". Lambar waya ",
+        ". Adireshi ",
+        ". Ranar ziyara ta gaba ",
+        ".",
+    ),
+    "ig": (
+        "Ndetu ụlọ ọgwụ: onye ọrịa bụ ",
+        ". Ụbọchị ọmụmụ: ",
+        ". Nọmba NIN: ",
+        ". Nọmba ekwentị: ",
+        ". Adreesị: ",
+        ". Ụbọchị nleta ọzọ: ",
+        ".",
+    ),
+    "yo": (
+        "Àkọsílẹ̀ aláìsàn: orúkọ ",
+        "; ọjọ́ ìbí ",
+        "; nọ́mbà ìdánimọ̀ NIN ",
+        "; nọ́ńbà tẹlifóònù ",
+        "; àdírẹ́sì ",
+        "; ọjọ́ ìpàdé tó ń bọ̀ ",
+        ".",
+    ),
+    "rw": (
+        "Inyandiko y'ubuvuzi: umurwayi ",
+        ". Itariki y'amavuko ",
+        ". Nimero y'indangamuntu ",
+        ". Telefoni ",
+        ". Aderesi ",
+        ". Itariki yo kugaruka ",
+        ".",
+    ),
+    "tl": (
+        "Klinikal na tala: pasyente ",
+        ", petsa ng kapanganakan ",
+        ". PhilSys PSN ",
+        ". Telepono ",
+        ". Tirahan ",
+        ". Susunod na konsulta ",
+        ".",
+    ),
+    "ne": (
+        "क्लिनिकल टिप्पणी: बिरामी ",
+        " को जन्म मिति ",
+        "। बिरामी परिचय नम्बर ",
+        "। फोन ",
+        "। ठेगाना ",
+        "। अर्को भेट मिति ",
+        "।",
+    ),
+}
+
+# Validator-backed national-ID providers for the national-ID-only routes. The
+# user-supplied-model route ``ne`` has no OpenMed national-ID provider, so it
+# takes the Luhn fallback in ``LocalePhiGenerator._identifier``.
+_AUGMENTATION_ONLY_ID_VALIDATORS: Final[
+    Mapping[str, tuple[Callable[[str], bool], str]]
+] = {
+    "ha": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "ig": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "yo": (validate_nigeria_nin, "pii_i18n.validate_nigeria_nin"),
+    "rw": (validate_rwanda_id, "pii_i18n.validate_rwanda_id"),
+    "tl": (validate_philsys_psn, "pii_i18n.validate_philsys_psn"),
+}
+
+
+def _template_literals(language: str) -> tuple[str, ...]:
+    """Return the note skeleton for a model-backed or augmentation-only code."""
+
+    if language in _AUGMENTATION_ONLY_TEMPLATES:
+        return _AUGMENTATION_ONLY_TEMPLATES[language]
+    return _TEMPLATES[language]
+
+
+def _national_id_validator(language: str) -> tuple[Callable[[str], bool], str]:
+    """Return the validator and its stable name for ``language``'s national ID."""
+
+    if language in _AUGMENTATION_ONLY_ID_VALIDATORS:
+        return _AUGMENTATION_ONLY_ID_VALIDATORS[language]
+    return _NATIONAL_ID_VALIDATORS[language], _NATIONAL_ID_VALIDATOR_NAMES[language]
+
 
 @dataclass(frozen=True)
 class SyntheticPhiSpan:
@@ -649,12 +780,33 @@ class LocalePhiGenerator:
         self._rng = random.Random(seed)
 
     def generate(self, language: str) -> LocalePhiExample:
-        """Generate one synthetic PHI example for ``language``."""
+        """Generate one synthetic PHI example for ``language``.
 
+        Codes in :data:`SUPPORTED_LOCALE_PHI_LANGUAGES` render their existing
+        templates. Codes in :data:`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`
+        render repository-authored templates for routes without a bundled
+        model and record ``bundled_model=False`` plus their ``language_route``.
+
+        Args:
+            language: OpenMed ISO 639-1 language code.
+
+        Returns:
+            One synthetic example whose gold spans match their text slices.
+
+        Raises:
+            ValueError: If ``language`` has no locale PHI template, or its
+                route is no longer wired in OpenMed.
+            RuntimeError: If a provider returns an identifier that fails its
+                validator, or an augmentation-only field gets a placeholder.
+        """
+
+        if language in AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES:
+            return self._generate_augmentation_only(language)
         if language not in SUPPORTED_LOCALE_PHI_LANGUAGES:
             raise ValueError(
                 f"unsupported locale PHI language {language!r}; "
-                f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}"
+                f"supported={list(SUPPORTED_LOCALE_PHI_LANGUAGES)!r}; "
+                f"augmentation_only={list(AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)!r}"
             )
         if language not in SUPPORTED_LANGUAGES | INDIC_NER_LANGUAGES:
             raise ValueError(f"language {language!r} is not wired in OpenMed")
@@ -679,11 +831,64 @@ class LocalePhiGenerator:
             metadata=metadata,
         )
 
-    def generate_all(self) -> tuple[LocalePhiExample, ...]:
-        """Generate one example for every wired locale PHI language."""
+    def generate_all(
+        self, *, include_augmentation_only: bool = False
+    ) -> tuple[LocalePhiExample, ...]:
+        """Generate one example for every wired locale PHI language.
 
-        return tuple(
-            self.generate(language) for language in SUPPORTED_LOCALE_PHI_LANGUAGES
+        Args:
+            include_augmentation_only: Also append one example for each code in
+                :data:`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`. The default keeps
+                the model-backed output unchanged.
+
+        Returns:
+            Examples in :data:`SUPPORTED_LOCALE_PHI_LANGUAGES` order, followed by
+            the augmentation-only languages when requested.
+        """
+
+        languages = SUPPORTED_LOCALE_PHI_LANGUAGES
+        if include_augmentation_only:
+            languages = (*languages, *AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)
+        return tuple(self.generate(language) for language in languages)
+
+    def _generate_augmentation_only(self, language: str) -> LocalePhiExample:
+        route = _AUGMENTATION_ONLY_ROUTES[language]
+        wired = (
+            NATIONAL_ID_ONLY_LANGUAGES
+            if route == _NATIONAL_ID_ONLY_ROUTE
+            else USER_SUPPLIED_MODEL_LANGUAGES
+        )
+        if language not in wired:
+            raise ValueError(f"language {language!r} is not wired in OpenMed")
+
+        locale = resolve_locale(language)
+        values = self._values_for(language, locale)
+        for field_name, (value, _) in values.items():
+            # The anonymizer degrades to ``[LABEL]`` when a provider fails; a
+            # placeholder must never become a gold PHI span.
+            if not value or value == f"[{_FIELD_LABELS[field_name]}]":
+                raise RuntimeError(
+                    f"surrogate provider returned a placeholder for "
+                    f"{language!r} field {field_name!r}"
+                )
+        text, spans = self._render(language, values)
+        metadata = {
+            "augmentation_only": True,
+            "bundled_model": False,
+            "contains_real_phi": False,
+            "language": language,
+            "language_route": route,
+            "locale": locale,
+            "seed": self.seed,
+            "synthetic": True,
+            "synthetic_source": "locale_phi",
+        }
+        return LocalePhiExample(
+            text=text,
+            gold_spans=spans,
+            language=language,
+            locale=locale,
+            metadata=metadata,
         )
 
     def _values_for(
@@ -725,7 +930,7 @@ class LocalePhiGenerator:
                 id_locale,
                 seed=seed,
             )
-            validator = _NATIONAL_ID_VALIDATORS[language]
+            validator, validator_name = _national_id_validator(language)
             if not validator(value):
                 raise RuntimeError(
                     f"generated invalid national ID for {language!r}: {value!r}"
@@ -735,7 +940,7 @@ class LocalePhiGenerator:
                 "id_locale": id_locale,
                 "id_method": method,
                 "id_subtype": "national_id",
-                "validator": _NATIONAL_ID_VALIDATOR_NAMES[language],
+                "validator": validator_name,
             }
 
         rng = random.Random(seed)
@@ -770,7 +975,7 @@ class LocalePhiGenerator:
     def _render(
         self, language: str, values: Mapping[str, tuple[str, Mapping[str, Any]]]
     ) -> tuple[str, tuple[SyntheticPhiSpan, ...]]:
-        literals = _TEMPLATES[language]
+        literals = _template_literals(language)
         chunks: list[str] = []
         spans: list[SyntheticPhiSpan] = []
         cursor = 0
@@ -817,8 +1022,11 @@ def generate_locale_phi_examples(
 
 
 __all__ = [
+    "AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES",
     "LOCALE_PHI_LABELS",
+    "NATIONAL_ID_ONLY_LOCALE_PHI_LANGUAGES",
     "SUPPORTED_LOCALE_PHI_LANGUAGES",
+    "USER_SUPPLIED_MODEL_LOCALE_PHI_LANGUAGES",
     "LocalePhiExample",
     "LocalePhiGenerator",
     "SyntheticPhiSpan",

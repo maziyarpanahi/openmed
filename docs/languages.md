@@ -184,6 +184,37 @@ download attempt.
 `SUPPORTED_LANGUAGES` includes registered fallback packs such as `pa` but excludes
 the route that requires user-supplied weights.
 
+### Synthetic notes for routes without a bundled model
+
+`openmed.training.synthetic.locale_phi.LocalePhiGenerator` also renders
+repository-authored clinical note templates for the national-ID-only routes
+`ha`, `ig`, `yo`, `rw`, and `tl`, and for the user-supplied-model route `ne`
+(`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`). These codes are listed explicitly;
+other national-ID-only codes such as `af` or `ms` still raise
+`unsupported locale PHI language` until they get a reviewed template.
+
+```python
+from openmed.training.synthetic.locale_phi import LocalePhiGenerator
+
+example = LocalePhiGenerator(seed=7).generate("ha")
+example.metadata["bundled_model"]   # False
+example.metadata["language_route"]  # "national_id_only"
+```
+
+- Templates hold only clinical vocabulary and context cues. Every name, date,
+  phone, address, and identifier comes from the surrogate or identifier
+  providers, and every gold span equals its text slice.
+- Nigerian NINs (`ha`, `ig`, `yo`), Rwanda IDs (`rw`), and PhilSys PSNs (`tl`)
+  pass their `pii_i18n` validators. `ne` has no national-ID provider, so it
+  uses the Luhn fallback. The `ID_NUM` span metadata records which provider
+  and validator were used.
+- Examples carry `augmentation_only=True` and `bundled_model=False`. Use them
+  for augmentation, not as evidence of model coverage.
+- `generate_all()` still returns only the model-backed languages; pass
+  `include_augmentation_only=True` to append these six.
+- Names and addresses come from each route's existing surrogate locale, so
+  `rw` values follow its documented `en_US` Faker backend.
+
 ## Indian-English and code-mixed clinical notes
 
 Latin-script Hinglish routing remains explicit. Set `code_mixed=True` to add
