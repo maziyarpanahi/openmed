@@ -32,7 +32,8 @@ graduate to a fine-tuned model once the schema stabilises.
 ## Install
 
 ```bash
-pip install "openmed[gliner]"   # pulls GLiNER (and GLiNER2 if a recent gliner is installed)
+pip install "openmed[gliner]"   # GLiNER v1 span models
+pip install "openmed[gliner2]"  # GLiNER2.5 checkpoints via gliner2.AutoExtractor
 openmed zero deps               # diagnostic: prints "GLiNER v1: ok" / "GLiNER v2: ok"
 ```
 
@@ -143,7 +144,8 @@ see spurious spans.
   valid `--index-path`; the `--model-id` must exist in that index.
 - **`zero deps` doesn't install.** It reports status only — install with
   `pip install "openmed[gliner]"`.
-- **GLiNER2 needs a recent `gliner`** (≈0.3.0+) and a GLiNER2/Fastino checkpoint;
+- **GLiNER2.5 needs the `gliner2` extra**, not a newer `gliner`: checkpoints such
+  as `fastino/gliner2.5-small-v1` load through `gliner2.AutoExtractor`;
   `openmed zero deps` shows whether v2 is available.
 - **Accuracy vs. flexibility.** Zero-shot is for coverage of new/custom types, not
   for squeezing out maximum F1 on a standard schema.

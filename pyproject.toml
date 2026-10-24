@@ -432,6 +432,17 @@ gliner = [
   "torch>=2.13.0"
 ]
 
+# GLiNER2.5 checkpoints load through gliner2.AutoExtractor; the gliner package
+# above only provides the v1 span models.
+gliner2 = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliner2[local]>=2.1.0,<3",
+  "huggingface-hub>=0.30",
+  "safetensors>=0.4",
+  "torch>=2.13.0",
+]
+
 mlx = [
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",

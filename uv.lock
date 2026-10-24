@@ -5935,6 +5935,31 @@ tokenizers = [
 ]
 
 [[package]]
+name = "gliner2"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "tqdm" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/ab/cebcf92279c85f988bf3853530ec3aa16bfb9f21cc15bde1fba9d2c6db2e/gliner2-2.1.0.tar.gz", hash = "sha256:cfded5eeaa5e95a4ea325ed205889beda3e00b486c69c9d369a1c4cf616fe4f1", size = 399121, upload-time = "2026-10-09T17:49:14.471Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/b1/cae13092a6ca796dd17493c8129d48e38fc370f23b9cce6f616020ed3654/gliner2-2.1.0-py3-none-any.whl", hash = "sha256:0c242c5de53f37020df835788fc4eb820e1673b5212c202cd90e9234a7e786bc", size = 355814, upload-time = "2026-10-09T17:49:12.815Z" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13' or extra == 'extra-7-openmed-scispacy' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra == 'extra-7-openmed-multimodal') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-ocr-paddle' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner')" },
+    { name = "peft" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "transformers" },
+]
+
+[[package]]
 name = "google-api-core"
 version = "2.30.3"
 source = { registry = "https://pypi.org/simple" }
@@ -11877,6 +11902,14 @@ gliner = [
     { name = "jinja2" },
     { name = "torch" },
 ]
+gliner2 = [
+    { name = "fsspec" },
+    { name = "gliner2", extra = ["local"] },
+    { name = "huggingface-hub" },
+    { name = "jinja2" },
+    { name = "safetensors" },
+    { name = "torch" },
+]
 gptq = [
     { name = "aiohttp" },
     { name = "auto-gptq" },
@@ -12159,6 +12192,7 @@ requires-dist = [
     { name = "fsspec", marker = "extra == 'dev'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'edge-sbc'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'gliner'", specifier = ">=2026.6.0" },
+    { name = "fsspec", marker = "extra == 'gliner2'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'gptq'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'hf'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'journey'", specifier = ">=2026.6.0" },
@@ -12175,6 +12209,7 @@ requires-dist = [
     { name = "gcsfs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "gitpython", marker = "extra == 'docs'", specifier = ">=3.2.1,<4" },
     { name = "gliner", extras = ["tokenizers"], marker = "extra == 'gliner'", specifier = ">=0.2.0" },
+    { name = "gliner2", extras = ["local"], marker = "extra == 'gliner2'", specifier = ">=2.1.0,<3" },
     { name = "griffe", marker = "extra == 'docs'" },
     { name = "grpcio", marker = "extra == 'dev'", specifier = ">=1.64" },
     { name = "grpcio", marker = "extra == 'service'", specifier = ">=1.64" },
@@ -12192,6 +12227,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'triton'", specifier = ">=0.27" },
     { name = "huggingface-hub", marker = "extra == 'coreml'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'dev'", specifier = ">=0.30" },
+    { name = "huggingface-hub", marker = "extra == 'gliner2'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'onnx-runtime'", specifier = ">=0.30" },
@@ -12210,6 +12246,7 @@ requires-dist = [
     { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1.6" },
     { name = "jinja2", marker = "extra == 'edge-sbc'", specifier = ">=3.1.6" },
     { name = "jinja2", marker = "extra == 'gliner'", specifier = ">=3.1.6" },
+    { name = "jinja2", marker = "extra == 'gliner2'", specifier = ">=3.1.6" },
     { name = "jinja2", marker = "extra == 'gptq'", specifier = ">=3.1.6" },
     { name = "jinja2", marker = "extra == 'hf'", specifier = ">=3.1.6" },
     { name = "jinja2", marker = "extra == 'journey'", specifier = ">=3.1.6" },
@@ -12341,6 +12378,7 @@ requires-dist = [
     { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.22" },
     { name = "s3fs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
+    { name = "safetensors", marker = "extra == 'gliner2'", specifier = ">=0.4" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
     { name = "scispacy", marker = "extra == 'scispacy'", specifier = ">=0.5.4,<1" },
     { name = "scrubadub", marker = "extra == 'scrubadub'", specifier = ">=2.0,<3" },
@@ -12362,6 +12400,7 @@ requires-dist = [
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'awq'", specifier = ">=2.13.0" },
     { name = "torch", marker = "extra == 'coreml'", specifier = ">=2.13.0" },
     { name = "torch", marker = "extra == 'gliner'", specifier = ">=2.13.0" },
+    { name = "torch", marker = "extra == 'gliner2'", specifier = ">=2.13.0" },
     { name = "torch", marker = "extra == 'gptq'", specifier = ">=2.13.0" },
     { name = "torch", marker = "extra == 'hf'", specifier = ">=2.13.0" },
     { name = "torch", marker = "extra == 'multimodal'", specifier = ">=2.13.0" },
@@ -12379,7 +12418,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliner", "gliner2", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"

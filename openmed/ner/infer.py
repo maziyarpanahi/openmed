@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -227,22 +227,28 @@ def _run_gliner2_inference(
     token = effective_config.hf_token
     cache_dir = effective_config.cache_dir
     device = effective_config.device
+    local_only = bool(getattr(effective_config, "local_only", False))
+    # Indexed local checkpoints load from their directory instead of the Hub.
+    source = record.path if record.path and Path(record.path).is_dir() else record.id
 
     handle = load_gliner2_handle(
-        record.id,
+        source,
         cache_dir=cache_dir,
         token=token,
         device=device,
+        local_files_only=local_only or None,
     )
 
-    raw_entities = handle.predict_entities(
+    entities = handle.extract_entities(
         request.text,
-        labels=labels,
+        labels,
         threshold=request.threshold,
-        flat_ner=True,
     )
 
-    return [_convert_gliner_entity(item) for item in raw_entities]
+    return [
+        replace(entity, label=_normalise_gliner_label(entity.label))
+        for entity in entities
+    ]
 
 
 def _convert_gliner_entity(item: Any) -> Entity:
