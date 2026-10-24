@@ -34,6 +34,7 @@ from openmed.core.anonymizer.locales import (
     resolve_faker_backend_locale,
     resolve_locale,
 )
+from openmed.core.anonymizer.person_surrogates import URDU_MASCULINE_GIVEN_NAMES
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
@@ -890,10 +891,16 @@ def test_urdu_pack_warns_once_and_uses_bundled_names():
         warning for warning in caught if issubclass(warning.category, UserWarning)
     ]
     assert len(user_warnings) == 1
-    assert name in {
+    # The honorifics ``جناب`` and ``صاحب`` are kept verbatim around a bundled
+    # Urdu name whose given name matches their masculine gender (#3887).
+    assert name.startswith("جناب ")
+    assert name.endswith(" صاحب")
+    core = name.removeprefix("جناب ").removesuffix(" صاحب")
+    assert core in {
         f"{given} {family}"
         for given in L.URDU_GIVEN_NAMES
         for family in L.URDU_FAMILY_NAMES
     }
+    assert core.split()[0] in URDU_MASCULINE_GIVEN_NAMES
     assert name != "جناب سیّد علی خان صاحب"
     assert validate_aadhaar(aadhaar)
