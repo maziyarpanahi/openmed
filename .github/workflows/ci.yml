@@ -62,6 +62,10 @@ jobs:
       run: |
         python scripts/release/check_repo_policy.py
 
+    - name: Enforce Apple privacy manifests
+      run: |
+        python scripts/release/check_privacy_manifests.py
+
     - name: Enforce dependency license policy
       run: |
         python scripts/release/check_license_policy.py
