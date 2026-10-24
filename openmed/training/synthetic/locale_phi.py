@@ -53,6 +53,11 @@ from openmed.core.pii_i18n import (
     validate_vietnamese_cccd,
     validate_za_id_number,
 )
+from openmed.training.synthetic.native_dates import (
+    NativeDateProfile,
+    generate_native_date,
+    resolve_native_date_profiles,
+)
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "as",
@@ -642,11 +647,28 @@ class LocalePhiExample:
 
 
 class LocalePhiGenerator:
-    """Generate deterministic locale PHI augmentation examples."""
+    """Generate deterministic locale PHI augmentation examples.
 
-    def __init__(self, *, seed: int | None = None) -> None:
+    Args:
+        seed: Seed for deterministic output. ``None`` draws fresh randomness.
+        date_profiles: Optional ``{language: profile}`` mapping that opts a
+            language in to native-digit or native-calendar dates. Values are
+            names from
+            :data:`~openmed.training.synthetic.native_dates.NATIVE_DATE_PROFILES`
+            or :class:`~openmed.training.synthetic.native_dates.NativeDateProfile`
+            instances. Languages left out keep ISO Gregorian ASCII dates, and
+            ``None`` leaves every example byte-identical to the default.
+    """
+
+    def __init__(
+        self,
+        *,
+        seed: int | None = None,
+        date_profiles: Mapping[str, str | NativeDateProfile] | None = None,
+    ) -> None:
         self.seed = seed
         self._rng = random.Random(seed)
+        self._date_profiles = resolve_native_date_profiles(date_profiles)
 
     def generate(self, language: str) -> LocalePhiExample:
         """Generate one synthetic PHI example for ``language``."""
@@ -670,6 +692,7 @@ class LocalePhiGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "locale_phi",
+            **self._date_profile_metadata(language, spans),
         }
         return LocalePhiExample(
             text=text,
@@ -695,9 +718,8 @@ class LocalePhiGenerator:
                 self._surrogate(language, L.PERSON, "Example Patient", locale),
                 {"field": "person"},
             ),
-            "date_of_birth": (
-                self._surrogate(language, L.DATE_OF_BIRTH, "1970-01-15", locale),
-                {"field": "date_of_birth"},
+            "date_of_birth": self._date_value(
+                language, locale, "date_of_birth", L.DATE_OF_BIRTH, "1970-01-15"
             ),
             "identifier": (identifier, identifier_metadata),
             "phone": (
@@ -708,10 +730,7 @@ class LocalePhiGenerator:
                 self._surrogate(language, L.STREET_ADDRESS, "", locale),
                 {"field": "street_address"},
             ),
-            "date": (
-                self._surrogate(language, L.DATE, "2024-04-18", locale),
-                {"field": "date"},
-            ),
+            "date": self._date_value(language, locale, "date", L.DATE, "2024-04-18"),
         }
 
     def _identifier(self, language: str) -> tuple[str, Mapping[str, Any]]:
@@ -804,15 +823,66 @@ class LocalePhiGenerator:
         digest = hashlib.blake2b(material, digest_size=8).digest()
         return int.from_bytes(digest, "big", signed=False)
 
+    def _date_value(
+        self,
+        language: str,
+        locale: str,
+        field_name: str,
+        label: str,
+        original: str,
+    ) -> tuple[str, Mapping[str, Any]]:
+        """Render one date field with the language's opt-in date profile.
+
+        Without a profile this is the original ISO Gregorian surrogate call, so
+        default output and random-state consumption stay unchanged.
+        """
+
+        profile = self._date_profiles.get(language)
+        if profile is None:
+            return (
+                self._surrogate(language, label, original, locale),
+                {"field": field_name},
+            )
+        rng = random.Random(self._field_seed(language, label))
+        value, metadata = generate_native_date(profile, rng, field=field_name)
+        return value, {"field": field_name, **metadata}
+
+    def _date_profile_metadata(
+        self, language: str, spans: Sequence[SyntheticPhiSpan]
+    ) -> dict[str, Any]:
+        """Return value-free example metadata for a profiled language."""
+
+        profile = self._date_profiles.get(language)
+        if profile is None:
+            return {}
+        gaps = {
+            span.metadata["field"]: span.metadata["detection_gap"]
+            for span in spans
+            if span.metadata.get("date_profile") == profile.name
+            and span.metadata.get("detection_gap") is not None
+        }
+        return {"date_detection_gaps": gaps, "date_profile": profile.name}
+
 
 def generate_locale_phi_examples(
     *,
     languages: Sequence[str] = SUPPORTED_LOCALE_PHI_LANGUAGES,
     seed: int | None = None,
+    date_profiles: Mapping[str, str | NativeDateProfile] | None = None,
 ) -> tuple[LocalePhiExample, ...]:
-    """Generate synthetic PHI examples for ``languages``."""
+    """Generate synthetic PHI examples for ``languages``.
 
-    generator = LocalePhiGenerator(seed=seed)
+    Args:
+        languages: Language codes to render, one example each.
+        seed: Seed for deterministic output.
+        date_profiles: Optional ``{language: profile}`` native date selection;
+            see :class:`LocalePhiGenerator`.
+
+    Returns:
+        One example per requested language, in order.
+    """
+
+    generator = LocalePhiGenerator(seed=seed, date_profiles=date_profiles)
     return tuple(generator.generate(language) for language in languages)
 
 
