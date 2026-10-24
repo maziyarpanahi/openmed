@@ -1,0 +1,626 @@
+{
+  "advisory": "Language decisions are routing evidence on synthetic fixtures, not a measurement of extraction or de-identification accuracy and not a clinical qualification.",
+  "backends": {
+    "code_switch": {"backend_id": "openmed.gliner2.classify_text.v1", "deterministic": false, "kind": "encoder", "license_id": "Apache-2.0", "local": true, "model_id": "fastino/GLiNER2.5-multi-Decide", "revision": "e173bca1f0c4217d7a55b3b0c705d5ece8a0218d", "runtime": "gliner2"},
+    "dialect": {"backend_id": "openmed.gliner2.classify_text.v1", "deterministic": false, "kind": "encoder", "license_id": "Apache-2.0", "local": true, "model_id": "fastino/GLiNER2.5-multi-Decide", "revision": "e173bca1f0c4217d7a55b3b0c705d5ece8a0218d", "runtime": "gliner2"},
+    "language": {"backend_id": "openmed.gliner2.classify_text.v1", "deterministic": false, "kind": "encoder", "license_id": "Apache-2.0", "local": true, "model_id": "fastino/GLiNER2.5-multi-Decide", "revision": "e173bca1f0c4217d7a55b3b0c705d5ece8a0218d", "runtime": "gliner2"},
+    "language_in_script": {"backend_id": "openmed.gliner2.classify_text.v1", "deterministic": false, "kind": "encoder", "license_id": "Apache-2.0", "local": true, "model_id": "fastino/GLiNER2.5-multi-Decide", "revision": "e173bca1f0c4217d7a55b3b0c705d5ece8a0218d", "runtime": "gliner2"},
+    "script": {"backend_id": "openmed.gliner2.classify_text.v1", "deterministic": false, "kind": "encoder", "license_id": "Apache-2.0", "local": true, "model_id": "fastino/GLiNER2.5-multi-Decide", "revision": "e173bca1f0c4217d7a55b3b0c705d5ece8a0218d", "runtime": "gliner2"}
+  },
+  "calibration": {"calibration_id": "openmed.synthetic.fixed_option.v1", "in_domain_digest": "sha256:a6a2e0596c95b0568fe8871c99774fb1edc5b1db6de692e86172df952642dd6c", "method": "deterministic_margin", "minimum_confidence": 0.7, "minimum_margin": 0.15, "multi_label_threshold": 0.7, "out_of_domain_digest": "sha256:d20c55e3877710223c6c37f87f6a8aaf9dea1b326087b37c60a81522ac0c9289", "version": "1.0.0"},
+  "contains_source_text": false,
+  "dataset": {
+    "digest": "sha256:a6bc5e03900aa692f8fd3888a94a7fdf65015c48db1dee526f12a432eecfd499",
+    "kinds": {"code_switch": 117, "dialect": 17, "language": 133, "language_in_script": 114, "script": 81},
+    "languages": {"code_switch": 56, "dialect": 5, "language": 55, "language_in_script": 51, "script": 39},
+    "samples": 462,
+    "sources": ["be.jsonl", "ch.jsonl", "es_mx.jsonl", "fixtures/code_mixed_hinglish.jsonl", "fixtures/i18n/af.jsonl", "fixtures/i18n/all_script_routing.jsonl", "fixtures/i18n/am.jsonl", "fixtures/i18n/ar.jsonl", "fixtures/i18n/as.jsonl", "fixtures/i18n/bg.jsonl", "fixtures/i18n/bn.jsonl", "fixtures/i18n/cs.jsonl", "fixtures/i18n/da.jsonl", "fixtures/i18n/de.jsonl", "fixtures/i18n/el.jsonl", "fixtures/i18n/es.jsonl", "fixtures/i18n/et.jsonl", "fixtures/i18n/fa.jsonl", "fixtures/i18n/fi.jsonl", "fixtures/i18n/fr.jsonl", "fixtures/i18n/gu.jsonl", "fixtures/i18n/he.jsonl", "fixtures/i18n/hi.jsonl", "fixtures/i18n/hr.jsonl", "fixtures/i18n/hu.jsonl", "fixtures/i18n/id.jsonl", "fixtures/i18n/ig.jsonl", "fixtures/i18n/india_clinical.jsonl", "fixtures/i18n/it.jsonl", "fixtures/i18n/ja.jsonl", "fixtures/i18n/kn.jsonl", "fixtures/i18n/ko.jsonl", "fixtures/i18n/lv.jsonl", "fixtures/i18n/ml.jsonl", "fixtures/i18n/mr.jsonl", "fixtures/i18n/ms.jsonl", "fixtures/i18n/nl.jsonl", "fixtures/i18n/no.jsonl", "fixtures/i18n/or.jsonl", "fixtures/i18n/pa.jsonl", "fixtures/i18n/pl.jsonl", "fixtures/i18n/pt.jsonl", "fixtures/i18n/relations_indic.jsonl", "fixtures/i18n/relations_zh.jsonl", "fixtures/i18n/ro.jsonl", "fixtures/i18n/ru.jsonl", "fixtures/i18n/sk.jsonl", "fixtures/i18n/sr.jsonl", "fixtures/i18n/sv.jsonl", "fixtures/i18n/sw.jsonl", "fixtures/i18n/ta.jsonl", "fixtures/i18n/te.jsonl", "fixtures/i18n/th.jsonl", "fixtures/i18n/tl.jsonl", "fixtures/i18n/tr.jsonl", "fixtures/i18n/uk.jsonl", "fixtures/i18n/ur.jsonl", "fixtures/i18n/vi.jsonl", "fixtures/i18n/xh.jsonl", "fixtures/i18n/yo.jsonl", "fixtures/i18n/zu.jsonl", "ie.jsonl"],
+    "synthetic": true
+  },
+  "kinds": {
+    "code_switch": {
+      "by_mix": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "declared": [25, 15, 0, 3, 17, 1, 6, 1, 17, 1],
+          "none": [92, 92, 18, 77, 58, 56, 56, 56, 62, 60]
+        }
+      },
+      "by_tier": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "dedicated_model": [57, 52, 4, 33, 27, 21, 22, 21, 29, 23],
+          "multiple": [1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+          "no_pack": [19, 17, 0, 17, 13, 11, 13, 11, 13, 11],
+          "shared_model": [40, 37, 14, 30, 34, 25, 27, 25, 36, 27]
+        }
+      },
+      "confidence_sweep": [
+        {"correct": 80, "coverage": 1.0, "covered": 117, "min_confidence": 0.5, "selective_accuracy": 0.6838},
+        {"correct": 57, "coverage": 0.641, "covered": 75, "min_confidence": 0.7, "selective_accuracy": 0.76},
+        {"correct": 0, "coverage": 0.0, "covered": 0, "min_confidence": 0.9, "selective_accuracy": null}
+      ],
+      "languages": {
+        "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "af": ["no_pack", 3, 2, 0, 2, 3, 2, 3, 2, 3, 2],
+          "am": ["shared_model", 2, 2, 1, 1, 2, 1, 1, 1, 2, 1],
+          "ar": ["dedicated_model", 3, 3, 0, 3, 1, 1, 1, 1, 1, 1],
+          "as": ["shared_model", 1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+          "bg": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "bn": ["dedicated_model", 3, 3, 0, 3, 2, 2, 2, 2, 2, 2],
+          "cs": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "da": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "de": ["dedicated_model", 4, 4, 0, 3, 2, 2, 2, 2, 2, 2],
+          "el": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "en": ["dedicated_model", 1, 1, 0, 1, 0, 0, 0, 0, 0, 0],
+          "es": ["dedicated_model", 4, 4, 0, 2, 1, 1, 1, 1, 1, 1],
+          "et": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "fa": ["shared_model", 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          "fi": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "fr": ["dedicated_model", 3, 3, 0, 2, 1, 1, 1, 1, 1, 1],
+          "gu": ["shared_model", 2, 2, 1, 1, 2, 1, 1, 1, 2, 1],
+          "he": ["shared_model", 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          "hi": ["dedicated_model", 13, 8, 0, 4, 5, 2, 3, 2, 5, 2],
+          "hr": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "hu": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "id": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "ig": ["no_pack", 2, 1, 0, 1, 1, 0, 1, 0, 1, 0],
+          "it": ["dedicated_model", 3, 3, 0, 2, 1, 1, 1, 1, 1, 1],
+          "ja": ["dedicated_model", 3, 3, 1, 1, 2, 1, 1, 1, 2, 1],
+          "kn": ["shared_model", 2, 2, 1, 1, 2, 1, 1, 1, 2, 1],
+          "ko": ["dedicated_model", 2, 2, 2, 2, 1, 1, 1, 1, 2, 2],
+          "lv": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "ml": ["shared_model", 1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+          "mr": ["shared_model", 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+          "ms": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "mul": ["multiple", 1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+          "nl": ["dedicated_model", 4, 4, 0, 1, 2, 1, 1, 1, 2, 1],
+          "no": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "or": ["shared_model", 1, 1, 0, 0, 1, 0, 0, 0, 1, 0],
+          "pa": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "pl": ["shared_model", 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+          "pt": ["dedicated_model", 4, 4, 0, 3, 2, 2, 2, 2, 2, 2],
+          "ro": ["shared_model", 2, 2, 0, 2, 2, 2, 2, 2, 2, 2],
+          "ru": ["shared_model", 2, 2, 0, 2, 1, 1, 1, 1, 1, 1],
+          "sk": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "sr": ["no_pack", 2, 2, 0, 2, 0, 0, 0, 0, 0, 0],
+          "sv": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "sw": ["shared_model", 3, 1, 0, 2, 2, 1, 2, 1, 2, 1],
+          "ta": ["shared_model", 4, 4, 2, 2, 2, 1, 1, 1, 3, 2],
+          "te": ["dedicated_model", 2, 2, 1, 0, 1, 0, 0, 0, 2, 1],
+          "th": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+          "tl": ["no_pack", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "tr": ["dedicated_model", 3, 3, 0, 1, 1, 1, 1, 1, 1, 1],
+          "uk": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+          "ur": ["shared_model", 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+          "vi": ["dedicated_model", 2, 2, 0, 2, 2, 2, 2, 2, 2, 2],
+          "xh": ["shared_model", 2, 1, 0, 1, 1, 0, 1, 0, 1, 0],
+          "yo": ["no_pack", 3, 3, 0, 3, 0, 0, 0, 0, 0, 0],
+          "zh": ["dedicated_model", 3, 3, 0, 3, 3, 3, 3, 3, 3, 3],
+          "zu": ["shared_model", 1, 1, 0, 1, 1, 1, 1, 1, 1, 1]
+        }
+      },
+      "low_resource": {
+        "model": {"abstained": 12, "agrees_with_router": 50, "covered": 47, "covered_correct": 36, "failed": 0, "top1_correct": 47},
+        "policies": {
+          "model_agreement": {"accepted": 40, "correct": 36},
+          "model_fallback": {"accepted": 49, "correct": 38},
+          "model_only": {"accepted": 47, "correct": 36},
+          "router_always": {"accepted": 59, "correct": 54},
+          "router_evidence": {"accepted": 14, "correct": 14}
+        },
+        "rates": {
+          "model_coverage": 0.7966,
+          "model_selective_accuracy": 0.766,
+          "model_top1_accuracy": 0.7966,
+          "policies": {
+            "model_agreement": {"coverage": 0.678, "selective_accuracy": 0.9, "silent_error_rate": 0.0678},
+            "model_fallback": {"coverage": 0.8305, "selective_accuracy": 0.7755, "silent_error_rate": 0.1864},
+            "model_only": {"coverage": 0.7966, "selective_accuracy": 0.766, "silent_error_rate": 0.1864},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.9153, "silent_error_rate": 0.0847},
+            "router_evidence": {"coverage": 0.2373, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.9153,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 54, "decisive": 14, "decisive_correct": 14},
+        "samples": 59
+      },
+      "summary": {
+        "model": {"abstained": 42, "agrees_with_router": 88, "covered": 75, "covered_correct": 57, "failed": 0, "top1_correct": 80},
+        "policies": {
+          "model_agreement": {"accepted": 62, "correct": 57},
+          "model_fallback": {"accepted": 79, "correct": 61},
+          "model_only": {"accepted": 75, "correct": 57},
+          "router_always": {"accepted": 117, "correct": 107},
+          "router_evidence": {"accepted": 18, "correct": 18}
+        },
+        "rates": {
+          "model_coverage": 0.641,
+          "model_selective_accuracy": 0.76,
+          "model_top1_accuracy": 0.6838,
+          "policies": {
+            "model_agreement": {"coverage": 0.5299, "selective_accuracy": 0.9194, "silent_error_rate": 0.0427},
+            "model_fallback": {"coverage": 0.6752, "selective_accuracy": 0.7722, "silent_error_rate": 0.1538},
+            "model_only": {"coverage": 0.641, "selective_accuracy": 0.76, "silent_error_rate": 0.1538},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.9145, "silent_error_rate": 0.0855},
+            "router_evidence": {"coverage": 0.1538, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.9145,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 107, "decisive": 18, "decisive_correct": 18},
+        "samples": 117
+      }
+    },
+    "dialect": {
+      "by_mix": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "none": [17, 10, 0, 12, 12, 11, 7, 7, 12, 11]
+        }
+      },
+      "by_tier": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "dedicated_model": [17, 10, 0, 12, 12, 11, 7, 7, 12, 11]
+        }
+      },
+      "confidence_sweep": [
+        {"correct": 12, "coverage": 1.0, "covered": 17, "min_confidence": 0.5, "selective_accuracy": 0.7059},
+        {"correct": 11, "coverage": 0.7059, "covered": 12, "min_confidence": 0.7, "selective_accuracy": 0.9167},
+        {"correct": 6, "coverage": 0.4118, "covered": 7, "min_confidence": 0.9, "selective_accuracy": 0.8571}
+      ],
+      "languages": {
+        "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "de": ["dedicated_model", 4, 3, 0, 3, 3, 3, 3, 3, 3, 3],
+          "en": ["dedicated_model", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "es": ["dedicated_model", 4, 3, 0, 2, 2, 2, 1, 1, 2, 2],
+          "nl": ["dedicated_model", 4, 3, 0, 3, 3, 3, 3, 3, 3, 3],
+          "pt": ["dedicated_model", 4, 1, 0, 3, 3, 2, 0, 0, 3, 2]
+        }
+      },
+      "low_resource": {
+        "model": {"abstained": 0, "agrees_with_router": 0, "covered": 0, "covered_correct": 0, "failed": 0, "top1_correct": 0},
+        "policies": {
+          "model_agreement": {"accepted": 0, "correct": 0},
+          "model_fallback": {"accepted": 0, "correct": 0},
+          "model_only": {"accepted": 0, "correct": 0},
+          "router_always": {"accepted": 0, "correct": 0},
+          "router_evidence": {"accepted": 0, "correct": 0}
+        },
+        "rates": {
+          "model_coverage": null,
+          "model_selective_accuracy": null,
+          "model_top1_accuracy": null,
+          "policies": {
+            "model_agreement": {"coverage": null, "selective_accuracy": null, "silent_error_rate": null},
+            "model_fallback": {"coverage": null, "selective_accuracy": null, "silent_error_rate": null},
+            "model_only": {"coverage": null, "selective_accuracy": null, "silent_error_rate": null},
+            "router_always": {"coverage": null, "selective_accuracy": null, "silent_error_rate": null},
+            "router_evidence": {"coverage": null, "selective_accuracy": null, "silent_error_rate": null}
+          },
+          "router_accuracy": null,
+          "router_decisive_accuracy": null
+        },
+        "router": {"correct": 0, "decisive": 0, "decisive_correct": 0},
+        "samples": 0
+      },
+      "summary": {
+        "model": {"abstained": 5, "agrees_with_router": 9, "covered": 12, "covered_correct": 11, "failed": 0, "top1_correct": 12},
+        "policies": {
+          "model_agreement": {"accepted": 7, "correct": 7},
+          "model_fallback": {"accepted": 12, "correct": 11},
+          "model_only": {"accepted": 12, "correct": 11},
+          "router_always": {"accepted": 17, "correct": 10},
+          "router_evidence": {"accepted": 0, "correct": 0}
+        },
+        "rates": {
+          "model_coverage": 0.7059,
+          "model_selective_accuracy": 0.9167,
+          "model_top1_accuracy": 0.7059,
+          "policies": {
+            "model_agreement": {"coverage": 0.4118, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.7059, "selective_accuracy": 0.9167, "silent_error_rate": 0.0588},
+            "model_only": {"coverage": 0.7059, "selective_accuracy": 0.9167, "silent_error_rate": 0.0588},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.5882, "silent_error_rate": 0.4118},
+            "router_evidence": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.5882,
+          "router_decisive_accuracy": null
+        },
+        "router": {"correct": 10, "decisive": 0, "decisive_correct": 0},
+        "samples": 17
+      }
+    },
+    "language": {
+      "by_mix": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "declared": [19, 3, 2, 2, 2, 1, 0, 0, 4, 3],
+          "none": [103, 46, 26, 28, 11, 9, 0, 0, 36, 35],
+          "undeclared": [11, 8, 6, 1, 0, 0, 0, 0, 6, 6]
+        }
+      },
+      "by_tier": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "dedicated_model": [61, 26, 6, 19, 7, 7, 0, 0, 13, 13],
+          "no_pack": [19, 0, 0, 5, 4, 3, 0, 0, 4, 3],
+          "shared_model": [53, 31, 28, 7, 2, 0, 0, 0, 29, 28]
+        }
+      },
+      "confidence_sweep": [
+        {"correct": 15, "coverage": 0.1955, "covered": 26, "min_confidence": 0.5, "selective_accuracy": 0.5769},
+        {"correct": 10, "coverage": 0.0977, "covered": 13, "min_confidence": 0.7, "selective_accuracy": 0.7692},
+        {"correct": 2, "coverage": 0.0226, "covered": 3, "min_confidence": 0.9, "selective_accuracy": 0.6667}
+      ],
+      "languages": {
+        "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "af": ["no_pack", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "am": ["shared_model", 2, 2, 2, 1, 0, 0, 0, 0, 2, 2],
+          "ar": ["dedicated_model", 3, 3, 0, 2, 0, 0, 0, 0, 0, 0],
+          "as": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "bg": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "bn": ["dedicated_model", 4, 4, 0, 0, 0, 0, 0, 0, 0, 0],
+          "cs": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "da": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "de": ["dedicated_model", 4, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "el": ["shared_model", 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+          "en": ["dedicated_model", 2, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+          "es": ["dedicated_model", 4, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "et": ["no_pack", 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+          "fa": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "fi": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "fr": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
+          "gu": ["shared_model", 3, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "he": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "hi": ["dedicated_model", 11, 7, 0, 2, 1, 1, 0, 0, 1, 1],
+          "hr": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "hu": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "id": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "ig": ["no_pack", 2, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "it": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
+          "ja": ["dedicated_model", 3, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "kn": ["shared_model", 3, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "ko": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "lv": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "ml": ["shared_model", 3, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "mr": ["shared_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "ms": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "nl": ["dedicated_model", 4, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "no": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "or": ["shared_model", 3, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "pa": ["shared_model", 3, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "pl": ["shared_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "pt": ["dedicated_model", 4, 0, 0, 3, 1, 1, 0, 0, 1, 1],
+          "ro": ["shared_model", 2, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "ru": ["shared_model", 2, 2, 0, 2, 0, 0, 0, 0, 0, 0],
+          "sk": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "sr": ["no_pack", 2, 0, 0, 2, 1, 1, 0, 0, 1, 1],
+          "sv": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "sw": ["shared_model", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "ta": ["shared_model", 5, 4, 4, 0, 2, 0, 0, 0, 5, 4],
+          "te": ["dedicated_model", 5, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "th": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "tl": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "tr": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
+          "uk": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "ur": ["shared_model", 4, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "vi": ["dedicated_model", 2, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "xh": ["shared_model", 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "yo": ["no_pack", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "zh": ["dedicated_model", 4, 4, 0, 2, 0, 0, 0, 0, 0, 0],
+          "zu": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        }
+      },
+      "low_resource": {
+        "model": {"abstained": 66, "agrees_with_router": 3, "covered": 6, "covered_correct": 3, "failed": 0, "top1_correct": 12},
+        "policies": {
+          "model_agreement": {"accepted": 0, "correct": 0},
+          "model_fallback": {"accepted": 33, "correct": 31},
+          "model_only": {"accepted": 6, "correct": 3},
+          "router_always": {"accepted": 72, "correct": 31},
+          "router_evidence": {"accepted": 28, "correct": 28}
+        },
+        "rates": {
+          "model_coverage": 0.0833,
+          "model_selective_accuracy": 0.5,
+          "model_top1_accuracy": 0.1667,
+          "policies": {
+            "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.4583, "selective_accuracy": 0.9394, "silent_error_rate": 0.0278},
+            "model_only": {"coverage": 0.0833, "selective_accuracy": 0.5, "silent_error_rate": 0.0417},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.4306, "silent_error_rate": 0.5694},
+            "router_evidence": {"coverage": 0.3889, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.4306,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 31, "decisive": 28, "decisive_correct": 28},
+        "samples": 72
+      },
+      "summary": {
+        "model": {"abstained": 120, "agrees_with_router": 9, "covered": 13, "covered_correct": 10, "failed": 0, "top1_correct": 31},
+        "policies": {
+          "model_agreement": {"accepted": 0, "correct": 0},
+          "model_fallback": {"accepted": 46, "correct": 44},
+          "model_only": {"accepted": 13, "correct": 10},
+          "router_always": {"accepted": 133, "correct": 57},
+          "router_evidence": {"accepted": 34, "correct": 34}
+        },
+        "rates": {
+          "model_coverage": 0.0977,
+          "model_selective_accuracy": 0.7692,
+          "model_top1_accuracy": 0.2331,
+          "policies": {
+            "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.3459, "selective_accuracy": 0.9565, "silent_error_rate": 0.015},
+            "model_only": {"coverage": 0.0977, "selective_accuracy": 0.7692, "silent_error_rate": 0.0226},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.4286, "silent_error_rate": 0.5714},
+            "router_evidence": {"coverage": 0.2556, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.4286,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 57, "decisive": 34, "decisive_correct": 34},
+        "samples": 133
+      }
+    },
+    "language_in_script": {
+      "by_mix": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "declared": [18, 3, 2, 2, 1, 0, 0, 0, 3, 2],
+          "none": [85, 28, 9, 48, 38, 33, 16, 16, 41, 36],
+          "undeclared": [11, 8, 6, 2, 0, 0, 0, 0, 6, 6]
+        }
+      },
+      "by_tier": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "dedicated_model": [56, 22, 2, 28, 24, 19, 9, 9, 25, 20],
+          "no_pack": [19, 0, 0, 6, 5, 4, 0, 0, 5, 4],
+          "shared_model": [39, 17, 15, 18, 10, 10, 7, 7, 20, 20]
+        }
+      },
+      "confidence_sweep": [
+        {"correct": 40, "coverage": 0.4474, "covered": 51, "min_confidence": 0.5, "selective_accuracy": 0.7843},
+        {"correct": 33, "coverage": 0.3421, "covered": 39, "min_confidence": 0.7, "selective_accuracy": 0.8462},
+        {"correct": 25, "coverage": 0.2193, "covered": 25, "min_confidence": 0.9, "selective_accuracy": 1.0}
+      ],
+      "languages": {
+        "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "af": ["no_pack", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "am": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+          "ar": ["dedicated_model", 3, 3, 0, 3, 3, 3, 3, 3, 3, 3],
+          "as": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "bg": ["no_pack", 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+          "bn": ["dedicated_model", 4, 4, 0, 3, 3, 2, 2, 2, 3, 2],
+          "cs": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "da": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "de": ["dedicated_model", 4, 0, 0, 2, 0, 0, 0, 0, 0, 0],
+          "en": ["dedicated_model", 2, 2, 0, 0, 0, 0, 0, 0, 0, 0],
+          "es": ["dedicated_model", 4, 0, 0, 1, 2, 1, 0, 0, 2, 1],
+          "et": ["no_pack", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "fa": ["shared_model", 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+          "fi": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "fr": ["dedicated_model", 3, 0, 0, 2, 1, 1, 0, 0, 1, 1],
+          "gu": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "hi": ["dedicated_model", 10, 7, 0, 1, 2, 0, 0, 0, 2, 0],
+          "hr": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "hu": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "id": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "ig": ["no_pack", 2, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "it": ["dedicated_model", 3, 0, 0, 2, 2, 1, 0, 0, 2, 1],
+          "ja": ["dedicated_model", 3, 1, 1, 3, 2, 2, 1, 1, 2, 2],
+          "kn": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "lv": ["no_pack", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "ml": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "mr": ["shared_model", 3, 3, 3, 3, 2, 2, 2, 2, 3, 3],
+          "ms": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "nl": ["dedicated_model", 4, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "no": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+          "or": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "pa": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "pl": ["shared_model", 2, 2, 2, 1, 0, 0, 0, 0, 2, 2],
+          "pt": ["dedicated_model", 4, 0, 0, 3, 2, 2, 0, 0, 2, 2],
+          "ro": ["shared_model", 2, 0, 0, 2, 2, 2, 0, 0, 2, 2],
+          "ru": ["shared_model", 2, 2, 0, 2, 2, 2, 2, 2, 2, 2],
+          "sk": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "sr": ["no_pack", 2, 0, 0, 2, 2, 2, 0, 0, 2, 2],
+          "sv": ["shared_model", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "sw": ["shared_model", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "ta": ["shared_model", 2, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "te": ["dedicated_model", 3, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "tl": ["no_pack", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "tr": ["dedicated_model", 3, 0, 0, 2, 2, 2, 0, 0, 2, 2],
+          "uk": ["shared_model", 1, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "ur": ["shared_model", 4, 3, 3, 3, 2, 2, 2, 2, 3, 3],
+          "vi": ["dedicated_model", 2, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+          "xh": ["shared_model", 2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "yo": ["no_pack", 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          "zh": ["dedicated_model", 4, 4, 0, 4, 3, 3, 3, 3, 3, 3],
+          "zu": ["shared_model", 1, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+        }
+      },
+      "low_resource": {
+        "model": {"abstained": 43, "agrees_with_router": 14, "covered": 15, "covered_correct": 14, "failed": 0, "top1_correct": 24},
+        "policies": {
+          "model_agreement": {"accepted": 7, "correct": 7},
+          "model_fallback": {"accepted": 25, "correct": 24},
+          "model_only": {"accepted": 15, "correct": 14},
+          "router_always": {"accepted": 58, "correct": 17},
+          "router_evidence": {"accepted": 15, "correct": 15}
+        },
+        "rates": {
+          "model_coverage": 0.2586,
+          "model_selective_accuracy": 0.9333,
+          "model_top1_accuracy": 0.4138,
+          "policies": {
+            "model_agreement": {"coverage": 0.1207, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.431, "selective_accuracy": 0.96, "silent_error_rate": 0.0172},
+            "model_only": {"coverage": 0.2586, "selective_accuracy": 0.9333, "silent_error_rate": 0.0172},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.2931, "silent_error_rate": 0.7069},
+            "router_evidence": {"coverage": 0.2586, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.2931,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 17, "decisive": 15, "decisive_correct": 15},
+        "samples": 58
+      },
+      "summary": {
+        "model": {"abstained": 75, "agrees_with_router": 32, "covered": 39, "covered_correct": 33, "failed": 0, "top1_correct": 52},
+        "policies": {
+          "model_agreement": {"accepted": 16, "correct": 16},
+          "model_fallback": {"accepted": 50, "correct": 44},
+          "model_only": {"accepted": 39, "correct": 33},
+          "router_always": {"accepted": 114, "correct": 39},
+          "router_evidence": {"accepted": 17, "correct": 17}
+        },
+        "rates": {
+          "model_coverage": 0.3421,
+          "model_selective_accuracy": 0.8462,
+          "model_top1_accuracy": 0.4561,
+          "policies": {
+            "model_agreement": {"coverage": 0.1404, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 0.4386, "selective_accuracy": 0.88, "silent_error_rate": 0.0526},
+            "model_only": {"coverage": 0.3421, "selective_accuracy": 0.8462, "silent_error_rate": 0.0526},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 0.3421, "silent_error_rate": 0.6579},
+            "router_evidence": {"coverage": 0.1491, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 0.3421,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 39, "decisive": 17, "decisive_correct": 17},
+        "samples": 114
+      }
+    },
+    "script": {
+      "by_mix": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "none": [81, 81, 81, 8, 1, 0, 0, 0, 81, 81]
+        }
+      },
+      "by_tier": {
+        "columns": ["samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "dedicated_model": [47, 47, 47, 1, 0, 0, 0, 0, 47, 47],
+          "no_pack": [2, 2, 2, 1, 0, 0, 0, 0, 2, 2],
+          "shared_model": [32, 32, 32, 6, 1, 0, 0, 0, 32, 32]
+        }
+      },
+      "confidence_sweep": [
+        {"correct": 1, "coverage": 0.0864, "covered": 7, "min_confidence": 0.5, "selective_accuracy": 0.1429},
+        {"correct": 0, "coverage": 0.0123, "covered": 1, "min_confidence": 0.7, "selective_accuracy": 0.0},
+        {"correct": 0, "coverage": 0.0, "covered": 0, "min_confidence": 0.9, "selective_accuracy": null}
+      ],
+      "languages": {
+        "columns": ["resource_tier", "samples", "router_correct", "router_decisive", "model_top1_correct", "model_covered", "model_covered_correct", "model_agreement_accepted", "model_agreement_correct", "model_fallback_accepted", "model_fallback_correct"],
+        "rows": {
+          "am": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "ar": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "bn": ["dedicated_model", 4, 4, 4, 0, 0, 0, 0, 0, 4, 4],
+          "cs": ["shared_model", 1, 1, 1, 0, 1, 0, 0, 0, 1, 1],
+          "da": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "de": ["dedicated_model", 4, 4, 4, 0, 0, 0, 0, 0, 4, 4],
+          "el": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "en": ["dedicated_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "es": ["dedicated_model", 4, 4, 4, 1, 0, 0, 0, 0, 4, 4],
+          "fa": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "fr": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "gu": ["shared_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "he": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "hi": ["dedicated_model", 5, 5, 5, 0, 0, 0, 0, 0, 5, 5],
+          "it": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "kn": ["shared_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "ko": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "ml": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+          "mr": ["shared_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "nl": ["dedicated_model", 4, 4, 4, 0, 0, 0, 0, 0, 4, 4],
+          "no": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "or": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "pa": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "pl": ["shared_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "pt": ["dedicated_model", 4, 4, 4, 0, 0, 0, 0, 0, 4, 4],
+          "ru": ["shared_model", 2, 2, 2, 2, 0, 0, 0, 0, 2, 2],
+          "sr": ["no_pack", 2, 2, 2, 1, 0, 0, 0, 0, 2, 2],
+          "sv": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "sw": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "ta": ["shared_model", 3, 3, 3, 2, 0, 0, 0, 0, 3, 3],
+          "te": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "th": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "tr": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "uk": ["shared_model", 1, 1, 1, 1, 0, 0, 0, 0, 1, 1],
+          "ur": ["shared_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "vi": ["dedicated_model", 2, 2, 2, 0, 0, 0, 0, 0, 2, 2],
+          "xh": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1],
+          "zh": ["dedicated_model", 3, 3, 3, 0, 0, 0, 0, 0, 3, 3],
+          "zu": ["shared_model", 1, 1, 1, 0, 0, 0, 0, 0, 1, 1]
+        }
+      },
+      "low_resource": {
+        "model": {"abstained": 33, "agrees_with_router": 7, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 7},
+        "policies": {
+          "model_agreement": {"accepted": 0, "correct": 0},
+          "model_fallback": {"accepted": 34, "correct": 34},
+          "model_only": {"accepted": 1, "correct": 0},
+          "router_always": {"accepted": 34, "correct": 34},
+          "router_evidence": {"accepted": 34, "correct": 34}
+        },
+        "rates": {
+          "model_coverage": 0.0294,
+          "model_selective_accuracy": 0.0,
+          "model_top1_accuracy": 0.2059,
+          "policies": {
+            "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_only": {"coverage": 0.0294, "selective_accuracy": 0.0, "silent_error_rate": 0.0294},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "router_evidence": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 1.0,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 34, "decisive": 34, "decisive_correct": 34},
+        "samples": 34
+      },
+      "summary": {
+        "model": {"abstained": 80, "agrees_with_router": 8, "covered": 1, "covered_correct": 0, "failed": 0, "top1_correct": 8},
+        "policies": {
+          "model_agreement": {"accepted": 0, "correct": 0},
+          "model_fallback": {"accepted": 81, "correct": 81},
+          "model_only": {"accepted": 1, "correct": 0},
+          "router_always": {"accepted": 81, "correct": 81},
+          "router_evidence": {"accepted": 81, "correct": 81}
+        },
+        "rates": {
+          "model_coverage": 0.0123,
+          "model_selective_accuracy": 0.0,
+          "model_top1_accuracy": 0.0988,
+          "policies": {
+            "model_agreement": {"coverage": 0.0, "selective_accuracy": null, "silent_error_rate": 0.0},
+            "model_fallback": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "model_only": {"coverage": 0.0123, "selective_accuracy": 0.0, "silent_error_rate": 0.0123},
+            "router_always": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0},
+            "router_evidence": {"coverage": 1.0, "selective_accuracy": 1.0, "silent_error_rate": 0.0}
+          },
+          "router_accuracy": 1.0,
+          "router_decisive_accuracy": 1.0
+        },
+        "router": {"correct": 81, "decisive": 81, "decisive_correct": 81},
+        "samples": 81
+      }
+    }
+  },
+  "policies": ["router_always", "router_evidence", "model_only", "model_agreement", "model_fallback"],
+  "router": {"dialect_baseline": "pack_default_locale", "evidence_confidence": 0.99, "lid_backend": null},
+  "schema_version": "openmed.eval.language_decisions.v1",
+  "tasks": {"code_switch": "mixes_languages", "dialect": "regional_variety", "language": "language", "language_in_script": "language", "script": "writing_script"}
+}
