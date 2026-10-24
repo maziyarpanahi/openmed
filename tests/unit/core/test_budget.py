@@ -169,8 +169,8 @@ def test_wall_time_clock_raises_after_deadline(monkeypatch):
 # be discovered on Windows CI. Until CPython 3.13 (gh-88494), Windows backs
 # time.monotonic() with GetTickCount64(), whose resolution is 15.6 ms, while
 # time.perf_counter() is backed by QueryPerformanceCounter() with sub-
-# microsecond resolution. openmed supports Python >= 3.10, so the coarse clock
-# is live for 3.10-3.12 on Windows. _WindowsTickClock below reproduces that
+# microsecond resolution. openmed supports Python >= 3.11, so the coarse clock
+# is live for 3.11-3.12 on Windows. _WindowsTickClock below reproduces that
 # platform on any host: monotonic() is quantized to a 15.6 ms tick, while
 # perf_counter() is exact.
 
