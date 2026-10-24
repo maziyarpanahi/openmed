@@ -10,7 +10,8 @@ import pytest
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import ID_SUBTYPE_NPI
 from openmed.core.pii import _apply_safety_sweep_to_result, deidentify
-from openmed.core.pii_entity_merger import PIIPattern
+from openmed.core.pii_entity_merger import PIIPattern, find_semantic_units
+from openmed.core.pii_i18n import get_patterns_for_language
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
     SAFETY_SWEEP_PATTERNS_VERSION,
@@ -257,6 +258,113 @@ def test_safety_sweep_rejects_invalid_checksum_identifiers():
 
     assert "credit_debit_card" not in swept
     assert "iban" not in swept
+
+
+# Each synthetic note labels a valid identifier and an invalid one of the same
+# type. The invalid value must stay unmasked: no duplicate national-ID rule may
+# accept it, and no lower-priority rule may relabel it or one of its segments.
+_LABELLED_INVALID_ID_NOTES = [
+    pytest.param(
+        "am",
+        "የፋይዳ መለያ ቁጥር፡ 384726195056 ትክክል ነው። የፋይዳ መለያ ቁጥር፡ 384726195057 ልክ አይደለም።",
+        "384726195056",
+        "384726195057",
+        id="am-fayda-checksum",
+    ),
+    pytest.param(
+        "sw",
+        "nambari ya kitambulisho 23456781 halali, "
+        "nambari ya NIDA 19871103-41205-00017-26 halali, "
+        "nambari ya NIDA 19871332-41205-00017-26 batili.",
+        "19871103-41205-00017-26",
+        "19871332-41205-00017-26",
+        id="sw-nida-birth-month",
+    ),
+    pytest.param(
+        "yo",
+        "nọ́mbà ìdánimọ̀ NIN 48291736054 tọ́, NIN 11111111111 kò tọ́.",
+        "48291736054",
+        "11111111111",
+        id="yo-nin-placeholder",
+    ),
+    pytest.param(
+        "ha",
+        "lambar NIN 48291736054 ingantacciya ce, lambar NIN 11111111111 ba ta da "
+        "inganci.",
+        "48291736054",
+        "11111111111",
+        id="ha-nin-placeholder",
+    ),
+    pytest.param(
+        "ig",
+        "nọmba NIN 48291736054 ziri ezi, nọmba NIN 11111111111 ezighi ezi.",
+        "48291736054",
+        "11111111111",
+        id="ig-nin-placeholder",
+    ),
+    pytest.param(
+        "fa",
+        "کد ملی ۲۹۳۵۰۷۱۶۴۶ معتبر است و کد ملی ۲۹۳۵۰۷۱۶۴۷ نامعتبر است.",
+        "۲۹۳۵۰۷۱۶۴۶",
+        "۲۹۳۵۰۷۱۶۴۷",
+        id="fa-melli-checksum-not-phone",
+    ),
+    pytest.param(
+        "th",
+        "เลขประจำตัวประชาชน 3-1005-01234-56-3 ถูกต้อง "
+        "เลขประจำตัวประชาชน 3-1005-01234-56-4 ไม่ถูกต้อง",
+        "3-1005-01234-56-3",
+        "3-1005-01234-56-4",
+        id="th-id-checksum-not-postcode",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("lang", "text", "valid_id", "invalid_id"), _LABELLED_INVALID_ID_NOTES
+)
+def test_labelled_invalid_national_id_is_not_masked_under_any_label(
+    lang, text, valid_id, invalid_id
+):
+    valid_span = (text.index(valid_id), text.index(valid_id) + len(valid_id))
+    invalid_start = text.index(invalid_id)
+    invalid_end = invalid_start + len(invalid_id)
+
+    swept = [(span.start, span.end) for span in safety_sweep(text, [], lang=lang)]
+    validated_units = [
+        (unit[0], unit[1])
+        for unit in find_semantic_units(text, get_patterns_for_language(lang))
+        if unit[5]
+    ]
+
+    for spans in (swept, validated_units):
+        assert valid_span in spans
+        assert [
+            (start, end)
+            for start, end in spans
+            if start < invalid_end and invalid_start < end
+        ] == []
+
+
+def test_unlabelled_rejected_value_keeps_lower_priority_sweep_match():
+    labelled = "Card ID: 12345-67890"
+    unlabelled = "Card ID on file; reference 12345-67890"
+    patterns = [
+        PIIPattern(
+            r"\b\d{5}-\d{5}\b",
+            "national_id",
+            priority=10,
+            context_words=["card id"],
+            validator=lambda value: False,
+        ),
+        PIIPattern(r"\b\d{5}\b", "postcode", priority=5),
+    ]
+
+    assert safety_sweep(labelled, [], patterns=patterns) == []
+    assert [span.text for span in safety_sweep(unlabelled, [], patterns=patterns)] == [
+        "12345",
+        "67890",
+    ]
 
 
 def test_safety_sweep_delegates_checksum_validation_to_clinical_ids(monkeypatch):
