@@ -176,6 +176,68 @@ is a development baseline, not a qualified encoder or a brief provider.
 Empty claims return an empty list without resolving a backend; absence of a
 verdict is not a successful verification.
 
+### Recipe: MedDecider-4B-NLI
+
+[`lion-ai/MedDecider-4B-NLI`](https://huggingface.co/lion-ai/MedDecider-4B-NLI)
+exports the MedDecider-4B decision model as a standard three-class sequence
+classifier. It loads through the existing `runtime="torch"` path of
+`ModelLoader.load_local_sequence_classifier()` unchanged, with no new runtime,
+remote code or third-party package, and works with
+`openmed nli-qualify --runtime torch`. These facts were checked against the
+model repository on 2026-10-24:
+
+| Property | Value |
+| --- | --- |
+| License | Apache-2.0. The larger MedDecider models (9B, 27B, 31B) are CC BY-NC 4.0 and do not apply here. |
+| Size | 4.2B parameters, about 8.4 GB of safetensors, loaded as float32 |
+| Class indices | `0` entailment, `1` neutral, `2` contradiction (`id2label` in its `config.json`) |
+| Input | English premise and claim pairs; the tokenizer's pair template adds the MedDecider prompt |
+| Runtime | `openmed[hf]` with a `transformers` release that registers the `qwen3_5_text` architecture; the checkpoint was exported with 5.12.1 |
+| Resources | About 17 GB of memory and roughly 4 seconds per pair on a recent laptop CPU, per the model card |
+
+The `hf` extra's floor (`transformers>=4.50`) is older than the architecture,
+so check the installed `transformers` version before loading. Download a
+pinned snapshot into a caller-controlled directory once; this is the only step
+that needs the network:
+
+```bash
+hf download lion-ai/MedDecider-4B-NLI \
+  --revision 04a82a4828abca06982aa1133c3439c9df86c31e \
+  --local-dir /local/meddecider-4b-nli
+```
+
+Write the class mapping from the checkpoint's `config.json`, not from its
+predictions, then qualify the directory on your own data. The development and
+evaluation files use the split shape described in
+[Qualify an existing local artifact](../evaluation/nli-calibration.md#qualify-an-existing-local-artifact):
+
+```bash
+echo '{"0":"entailment","1":"neutral","2":"contradiction"}' > /local/labels.json
+openmed nli-qualify --artifact /local/meddecider-4b-nli --runtime torch \
+  --label-mapping /local/labels.json \
+  --development /local/development.json \
+  --evaluation /local/evaluation.json --json
+```
+
+Qualification loads the directory offline with remote code disabled. The
+receipt's thresholds are the operating point: bind them with
+`bind_qualified_nli()` before supplying the verifier to a `BriefContext`.
+At verification time, pairs longer than 512 tokens, including the prompt the
+pair template adds, abstain instead of being truncated.
+
+The model's author reported in
+[issue #4250](https://github.com/maziyarpanahi/openmed/issues/4250) and on the
+model card that, on a 720-pair synthetic NLI suite run through this unchanged
+loader on CPU, its selective decisions matched MedDecider-4B's own readout on
+718 of 720 pairs, with the same held-out precision (contradiction recall 0.983
+instead of 0.992). That figure compares two
+readouts of the same model on synthetic data. It is not a clinical benchmark
+and does not replace qualification: synthetic provenance never qualifies, and
+no registry default or calibration ships for this checkpoint, so
+`verify(..., backend=None)` still raises `LocalNLIError`. For decision models
+that choose among caller-declared options, see
+[Local decision models](../decision-models.md).
+
 ## Artifact, capability and memory gates before construction
 
 For a caller-owned runtime, verify the [artifact manifest](../models/clinical-slm-manifest.md),
