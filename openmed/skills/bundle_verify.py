@@ -648,9 +648,6 @@ class BundleVerifier:
     def _canonical_manifest_bytes(self, manifest: SkillBundleManifest) -> bytes:
         """Return canonical JSON encoding for signature verification.
 
-        Uses sorted keys and no extra whitespace for deterministic output.
-        Excludes the signature field itself from the canonical form.
-
         Args:
             manifest: Manifest to canonicalize.
 
@@ -658,16 +655,31 @@ class BundleVerifier:
             UTF-8 encoded canonical JSON bytes excluding the signature field.
         """
 
-        payload = {
-            "manifest_version": manifest.manifest_version,
-            "bundle_id": manifest.bundle_id,
-            "entry_points": list(manifest.entry_points),
-            "files": dict(manifest.files),
-            "signature_scheme": manifest.signature_scheme,
-        }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
+        return canonical_manifest_bytes(manifest)
+
+
+def canonical_manifest_bytes(manifest: SkillBundleManifest) -> bytes:
+    """Return the canonical manifest bytes covered by a bundle signature.
+
+    Uses sorted keys and no extra whitespace for deterministic output.
+    Excludes the signature field itself from the canonical form. Bundle
+    producers sign exactly these bytes so verification stays byte-compatible.
+
+    Args:
+        manifest: Manifest to canonicalize.
+
+    Returns:
+        UTF-8 encoded canonical JSON bytes excluding the signature field.
+    """
+
+    payload = {
+        "manifest_version": manifest.manifest_version,
+        "bundle_id": manifest.bundle_id,
+        "entry_points": list(manifest.entry_points),
+        "files": dict(manifest.files),
+        "signature_scheme": manifest.signature_scheme,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def verify_bundle(
@@ -718,5 +730,6 @@ __all__ = [
     "BundleVerificationResult",
     "BundleVerifier",
     "SkillBundleManifest",
+    "canonical_manifest_bytes",
     "verify_bundle",
 ]
