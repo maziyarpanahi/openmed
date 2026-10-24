@@ -3606,6 +3606,8 @@ class TestGetPatternsForLanguage:
         sorted((SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES) - {"en"}),
     )
     def test_language_includes_universal_base_and_language_patterns(self, lang):
+        from openmed.core.calendar_month_dates import calendar_month_date_patterns
+
         patterns = get_patterns_for_language(lang)
         base_count = (
             len(PII_PATTERNS)
@@ -3629,7 +3631,11 @@ class TestGetPatternsForLanguage:
             not any(pattern is existing for existing in LANGUAGE_PII_PATTERNS[lang])
             for pattern in locale_patterns
         )
-        assert len(patterns) == base_count + language_count + locale_count + 1
+        # Non-Gregorian month-name date patterns compile from their own tables.
+        calendar_count = len(calendar_month_date_patterns(lang))
+        assert len(patterns) == (
+            base_count + language_count + locale_count + calendar_count + 1
+        )
 
     @pytest.mark.parametrize(
         "lang",

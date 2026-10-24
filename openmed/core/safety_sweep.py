@@ -130,11 +130,17 @@ def _candidate_metadata(candidate: _Candidate) -> dict[str, Any]:
     }
     if id_subtype is not None:
         safety_sweep_metadata["id_subtype"] = id_subtype
+    # A value-free calendar code lets shifting and surrogate stages select a
+    # non-Gregorian calendar without re-reading the matched date.
+    calendar = getattr(candidate.pattern, "calendar", None)
+    if calendar is not None:
+        safety_sweep_metadata["calendar"] = calendar
     return {
         "source": SAFETY_SWEEP_SOURCE,
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "safety_sweep": safety_sweep_metadata,
         **({"id_subtype": id_subtype} if id_subtype is not None else {}),
+        **({"calendar": calendar} if calendar is not None else {}),
     }
 
 

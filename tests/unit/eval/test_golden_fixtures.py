@@ -1269,8 +1269,8 @@ def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    fixture = GoldenFixture.from_mapping(rows[0])
+    row = next(row for row in rows if row["id"] == "golden-i18n-he-rtl-pii")
+    fixture = GoldenFixture.from_mapping(row)
     assert fixture.language == "he"
 
     gold_by_label = {span.label: span.text for span in fixture.gold_spans}
