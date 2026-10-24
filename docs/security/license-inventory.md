@@ -137,7 +137,6 @@ a dependency also declared in another extra.
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `tomli` | `default (Python < 3.11)` | `MIT` |
 | `torch` | `awq, coreml, gliner, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
