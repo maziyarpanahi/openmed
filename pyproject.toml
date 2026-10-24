@@ -432,6 +432,19 @@ gliner = [
   "torch>=2.13.0"
 ]
 
+# GLiClass v4 decision backend on torch. gliclass needs transformers>=5 and
+# scikit-learn, so they stay out of the base install. The ONNX path uses the
+# onnx-runtime extra instead.
+gliclass = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliclass>=0.1.21,<0.2",
+  "huggingface-hub>=0.30",
+  "scikit-learn>=1.0",
+  "torch>=2.13.0",
+  "transformers>=5.0",
+]
+
 mlx = [
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -572,6 +585,11 @@ conflicts = [
   ],
   [
     { extra = "multimodal" },
+    { extra = "scispacy" },
+  ],
+  # gliclass requires numpy>=2 and scispacy 0.6 caps numpy below 2.
+  [
+    { extra = "gliclass" },
     { extra = "scispacy" },
   ],
 ]
