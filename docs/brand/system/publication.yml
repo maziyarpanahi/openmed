@@ -486,6 +486,7 @@ classification:
     - runtimes/awq-grounding.md
     - runtimes/gguf-grounding.md
     - tiers.md
+    - languages/adapter-distillation.md
     - export-awq.md
     - export-gptq.md
     - export-gguf.md
