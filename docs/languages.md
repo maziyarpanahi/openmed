@@ -87,6 +87,96 @@ repeatable seed.
     prohibited; only permissively licensed implementations may be bundled or
     referenced by the router.
 
+### Dialect-aware fallback and abstention
+
+Script routing picks a language pack, but a route validated on one variety,
+such as `de-DE` clinical notes, can return confident but unsafe extraction or
+de-identification results on an unvalidated dialect such as Swiss German.
+`openmed.clinical.languages.dialect_abstention` estimates how far an input sits
+from the varieties a route was validated on. A declared `DialectPolicy` then
+accepts the route, requires a fallback or an ensemble, or abstains.
+
+```python
+from openmed.clinical.languages.dialect_abstention import (
+    DialectPolicy,
+    assess_dialect,
+    build_validated_variety,
+    enforce_dialect_decision,
+)
+
+german = build_validated_variety(
+    "de-de.clinical",
+    validation_notes,  # synthetic or governed evaluation documents
+    locale="de-DE",
+    tasks=("deidentification",),
+    domains=("clinical_note",),
+    evidence_digest=validation_report_sha256,
+    language_pack="de",
+)
+policy = DialectPolicy(
+    policy_id="site-de",
+    intermediate_action="fallback",
+    fallback_variety="mul.fallback",
+)
+decision = assess_dialect(
+    note,
+    [german, multilingual],
+    task="deidentification",
+    declared_locale="de-CH",
+    declared_domain="clinical_note",
+    policy=policy,
+)
+if decision.abstained:
+    ...  # send to human review and emit no automated output
+else:
+    executed = run_routes(decision.selected)  # your pipeline
+    enforce_dialect_decision(decision, executed)
+result_metadata.update(decision.to_metadata())
+```
+
+- **Validated evidence.** A `ValidatedVariety` records the locale, task codes,
+  domain codes, optional language pack and a SHA-256 evidence digest, plus
+  aggregate statistics pooled over at least three validation documents. It
+  keeps no text or n-grams and round-trips through `to_dict()`/`from_dict()`.
+  A reference built from a restricted corpus is still a derived artifact of
+  that corpus and must stay where its data use agreement permits.
+- **Privacy-safe features.** Distances use script shares, character-class
+  shares, letter bigrams and trigrams hashed into 512 keyed buckets (digits
+  and punctuation never contribute), the declared BCP 47 locale, the declared
+  domain code and the deterministic `LanguageRouter` result. The default
+  router is stdlib-only. Pass a router with a local language-ID backend to
+  confirm Latin-script languages when no locale is declared.
+- **Distances.** Dialect distance is `0.3 * locale + 0.2 * script + 0.5 *
+  n-gram` (cosine distance). Domain distance is `0.5 * declared-domain
+  mismatch + 0.5 * character-class shape`. Both lie in `[0, 1]`. A different
+  region, an undeclared locale or an unconfirmed language all add locale
+  distance.
+- **Declared policy.** By default, dialect distance up to 0.2 is accepted and
+  distance above 0.4 abstains. Domain distance is accepted up to 0.35 and
+  abstains above 0.75. The stricter band applies. In between,
+  `intermediate_action` requires the declared `fallback_variety`, an ensemble
+  of up to `ensemble_size` validated varieties, or abstention. Inputs with
+  fewer than `min_letters` letters (default 40) use
+  `insufficient_evidence_action`. The defaults abstain. A fallback must be
+  validated for the task, run on a registered pack and sit within the
+  abstention distance. An ensemble needs at least two such varieties. Run every
+  member and combine conservatively; for de-identification, redact the union
+  of their spans.
+- **Surfaced limitations.** `DialectDecision` lists controlled codes such as
+  `dialect_shift`, `domain_unvalidated`, `locale_undeclared` and
+  `insufficient_evidence` (see `DIALECT_LIMITATIONS`), plus `requires_review`,
+  the policy identifier and digest, and a fixed disclaimer.
+  `to_metadata()` returns a `dialect_assessment` entry for result metadata.
+  `enforce_dialect_decision()` raises `DialectRouteError` when a decision
+  abstained or the executed varieties differ from the required set.
+
+Assessment is deterministic and offline, and it does not log. Reports and
+errors carry codes, counts, shares and distances, never input text. The
+distances are routing heuristics, not a measurement of extraction or
+de-identification accuracy, and an accepted route is not a clinical
+qualification. Calibrate the thresholds on local, governed evaluation data
+before relying on them.
+
 !!! note "Kept in sync with the code"
     The table below lists every built-in code in `SUPPORTED_LANGUAGES`, plus
     the optional `INDIC_NER_LANGUAGES` and the `USER_SUPPLIED_MODEL_LANGUAGES`
