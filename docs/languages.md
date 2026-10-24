@@ -81,6 +81,35 @@ or model-quality qualification. The robustness operators `bidi_in_value` and
 `native_digit_substitution` can exercise these matching boundaries with a
 repeatable seed.
 
+Synthetic training notes can carry native date forms too. `LocalePhiGenerator`
+keeps ISO Gregorian ASCII dates by default; `date_profiles=` opts a language in
+to Solar Hijri (`fa`), Thai Buddhist-era (`th`), Ethiopian (`am`), Lunar Hijri
+with an era marker (`ar`, `ur`), or Bikram Sambat (`ne`, once its note route is
+generated) dates, in numeric or month-name form and in native digits. The
+profiles live in `openmed.training.synthetic.native_dates.NATIVE_DATE_PROFILES`;
+`DEFAULT_NATIVE_DATE_PROFILES` picks one native-calendar profile per language.
+
+```python
+from openmed.training.synthetic.locale_phi import LocalePhiGenerator
+
+example = LocalePhiGenerator(
+    seed=7, date_profiles={"fa": "fa_solar_hijri_month_name"}
+).generate("fa")
+example.metadata["date_profile"]         # "fa_solar_hijri_month_name"
+example.metadata["date_detection_gaps"]  # {}: the Persian patterns match it
+```
+
+Dates are sampled directly in their calendar, with no conversion. Months whose
+length depends on an astronomical or published table (Esfand, every Lunar
+Hijri month, every Bikram Sambat month) only use days 1-29. Each date span
+records value-free `calendar`, `numeral_system`, `form`, `date_profile`, and
+`detection_gap` metadata, never the rendered date. `detection_gap` is `None`
+when the language's deterministic date patterns return exactly the span, and
+otherwise names the miss: `month_name_not_matched` (Ethiopian, Lunar Hijri, and
+Bikram Sambat month names), `era_marker_not_matched` (Hijri `هـ` and `ہجری`
+markers), or `gregorian_fallback_only` (Bikram Sambat numerals). Languages left
+out of `date_profiles` produce byte-identical examples.
+
 !!! warning "Language-ID license boundary"
     This router deliberately excludes CLD3, which is outside this roadmap
     task's approved dependency scope. Non-commercial language-ID assets remain
