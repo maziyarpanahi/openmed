@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from .calendars import ETHIOPIAN, GREGORIAN, SOLAR_HIJRI, THAI_BUDDHIST
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackRegistry
 from .language_packs import (
     CHINESE_LANGUAGE_PACK,
@@ -49,6 +50,7 @@ def _pack(
     national_id_provider: tuple[str, str] | None = None,
     context_scripts: Sequence[str] = (),
     routing_markers: Sequence[str] = (),
+    default_calendar: str = GREGORIAN,
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -64,6 +66,7 @@ def _pack(
         national_id_providers=providers,
         context_scripts=tuple(context_scripts),
         routing_markers=tuple(routing_markers),
+        default_calendar=default_calendar,
     )
 
 
@@ -214,6 +217,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "am_ET",
         ("Ethiopic",),
         national_id_provider=("am_ET", "ethiopia_fayda"),
+        default_calendar=ETHIOPIAN,
     ),
     _pack(
         "pt",
@@ -243,6 +247,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
             "فروردین",
             "اسفند",
         ),
+        default_calendar=SOLAR_HIJRI,
     ),
     _pack(
         "ur",
@@ -288,6 +293,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "th_TH",
         ("Thai",),
         national_id_provider=("th_TH", "thai_national_id"),
+        default_calendar=THAI_BUDDHIST,
     ),
     _pack(
         "ko",

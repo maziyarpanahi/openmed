@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from threading import RLock
 from types import MappingProxyType
 
+from .calendars import GREGORIAN, get_calendar
+
 _LANGUAGE_CODE = re.compile(r"^[a-z]{2}$")
 
 
@@ -120,6 +122,10 @@ class LanguagePack:
         context_scripts: Neighboring scripts that strongly identify this pack.
         routing_markers: Language-specific words that disambiguate packs sharing
             the same script before an optional language-ID backend is consulted.
+        default_calendar: Registered calendar code assumed for dates that carry
+            no era marker or calendar-specific month name when their year falls
+            inside that calendar's supported range, for example
+            ``"solar_hijri"``. Defaults to ``"gregorian"``.
 
     Collection inputs are copied into immutable tuples or read-only mappings,
     so callers cannot mutate a registered pack through an object they retained.
@@ -138,6 +144,7 @@ class LanguagePack:
     context_scripts: tuple[str, ...] = ()
     routing_markers: tuple[str, ...] = ()
     surrogate_locale_approximation: str | None = None
+    default_calendar: str = GREGORIAN
 
     def __post_init__(self) -> None:
         """Validate and freeze the complete pack declaration."""
@@ -209,6 +216,9 @@ class LanguagePack:
             "routing_markers",
             _freeze_optional_names(self.routing_markers, "routing_markers"),
         )
+        default_calendar = _require_text(self.default_calendar, "default_calendar")
+        if get_calendar(default_calendar) is None:
+            raise ValueError("default_calendar must name a registered calendar")
 
     def priority_for(self, script: str) -> int:
         """Return the pack's deterministic routing priority for ``script``."""

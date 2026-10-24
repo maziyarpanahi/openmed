@@ -69,6 +69,7 @@ def preserve_date_format(
     day_first: bool = False,
     date_order: str | None = None,
     rng: Optional[random.Random] = None,
+    locale: str | None = None,
 ) -> str:
     """Generate a fake date that uses the same separator and ordering.
 
@@ -77,10 +78,21 @@ def preserve_date_format(
     original is ambiguous (e.g. ``05/06/2020``). ``date_order`` (``dmy``,
     ``mdy`` or ``ymd``) takes precedence over that legacy fallback.
 
+    Solar Hijri, Ethiopian and Thai Buddhist-era originals, recognized from
+    era markers, calendar month names or the default calendar of the
+    ``locale``'s language pack, get a surrogate in that calendar, digit
+    system, separators and month-name form.
+
     Returns a surrogate date in the same format, drawn uniformly from the
     last 100 years.
     """
     rng = rng or random
+
+    from ..calendar_dates import calendar_date_surrogate
+
+    native = calendar_date_surrogate(original, lang=locale, rng=rng)
+    if native is not None:
+        return native
 
     days = rng.randint(0, 365 * 100)
     fake = datetime(1925, 1, 1) + timedelta(days=days)

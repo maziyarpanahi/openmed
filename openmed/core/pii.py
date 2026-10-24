@@ -2989,12 +2989,23 @@ def _redact_entity(
                 keep_year,
                 lang=lang,
                 require_dateutil=require_dateutil,
+                calendar=_entity_calendar_hint(entity),
             )
         else:
             # Non-date entities get masked
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _entity_calendar_hint(entity: PIIEntity) -> Optional[Any]:
+    """Return the detection-stage calendar code attached to a date span."""
+    from .calendar_dates import CALENDAR_METADATA_KEY
+
+    metadata = getattr(entity, "metadata", None)
+    if isinstance(metadata, Mapping):
+        return metadata.get(CALENDAR_METADATA_KEY)
+    return None
 
 
 def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
@@ -3373,6 +3384,7 @@ def _shift_date(
     lang: str = "en",
     *,
     require_dateutil: bool = False,
+    calendar: Optional[Any] = None,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -3382,6 +3394,8 @@ def _shift_date(
     - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
     - Month DD, YYYY / DD Month YYYY (with localized month names)
+    - Solar Hijri, Ethiopian and Thai Buddhist-era dates, shifted within
+      their own calendar (see :mod:`openmed.core.calendar_dates`)
 
     Args:
         date_str: Date string to shift
@@ -3391,10 +3405,24 @@ def _shift_date(
         require_dateutil: Raise a clear optional-dependency error when
             python-dateutil is unavailable. When false, fall back to the basic
             regex shifter.
+        calendar: Optional detection-stage calendar code for the span, such
+            as ``"solar_hijri"``.
 
     Returns:
         Shifted date string in the same format as input
     """
+    from .calendar_dates import shift_calendar_date
+
+    native = shift_calendar_date(
+        date_str,
+        shift_days,
+        lang=lang,
+        calendar=calendar,
+        keep_year=keep_year,
+    )
+    if native.handled:
+        return native.text if native.text is not None else "[DATE_SHIFTED]"
+
     localized = _parse_localized_month_date(date_str, lang)
     if localized is not None:
         try:
