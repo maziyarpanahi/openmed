@@ -248,6 +248,50 @@ For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
 default PII model, Faker locale, and a before/after example — see
 [Per-Language De-identification](languages.md).
 
+### Devanagari and Telugu name surrogates
+
+Hindi and Telugu names written in their own script are replaced with
+pronounceable names built from aksara, the written syllables of both scripts.
+This covers the `PERSON`, `FIRST_NAME`, `MIDDLE_NAME`, and `LAST_NAME`
+labels. Each aksara is a consonant or a virama conjunct, an optional
+dependent vowel sign, and an occasional anusvara or visarga. A name may also
+start with an independent vowel. The consonants, vowel signs, and conjuncts
+come from small inventories in
+`openmed.core.anonymizer.providers.aksara_names`. OpenMed bundles no list of
+real names for these scripts.
+
+Every surrogate:
+
+- has the same number of space-separated tokens as the source, in the same
+  order. An initial such as `ए.` stays a one-aksara initial, and hyphens are
+  kept;
+- gives each token the source token's aksara count, between 2 and 4 for
+  Devanagari or 2 and 5 for Telugu;
+- reuses none of the source's code points in that script: consonants,
+  vowels, vowel signs, virama, anusvara, or visarga. A surrogate therefore
+  never equals its source;
+- splits, under the grapheme rules in `openmed.core.decoding.spans`, into
+  aksara that are each well formed; and
+- is reproducible for a fixed `seed`.
+
+```python
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.providers.aksara_names import (
+    is_well_formed_aksara_name,
+)
+
+anonymizer = Anonymizer(lang="hi", consistent=True, seed=11)
+surrogate = anonymizer.surrogate("अनीता शर्मा", "PERSON")
+# -> "पजूग वके": two tokens, no consonant shared with the source
+assert is_well_formed_aksara_name(surrogate, script="Devanagari")
+```
+
+Latin-script names in Hindi or Telugu notes still use Faker. Marathi keeps
+its own generator, which handles honorifics and three-part names. Other
+language packs that use Devanagari can register
+`generate_devanagari_aksara_name` with `register_label_generator(...,
+language_pack=pack, script="Devanagari")`.
+
 ### Determinism
 
 Three modes:

@@ -1943,6 +1943,31 @@ def _register_marathi_name_generators() -> None:
 _register_marathi_name_generators()
 
 
+def _register_aksara_name_generators() -> None:
+    """Install pronounceable aksara name generators for Hindi and Telugu.
+
+    They replace the letter-inventory generators installed for the ``hi``
+    Devanagari and ``te`` Telugu name labels by
+    :func:`_register_builtin_script_name_generators`. Marathi keeps its native
+    three-part generators.
+    """
+
+    from .providers.aksara_names import AKSARA_NAME_PACKS
+
+    name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
+    for language_pack, script, generator in AKSARA_NAME_PACKS:
+        for canonical_label in name_labels:
+            register_label_generator(
+                canonical_label,
+                generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_aksara_name_generators()
+
+
 def register_india_label_generators() -> None:
     """Install locale-gated India surrogate generators in the label registry."""
 
