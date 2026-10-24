@@ -20,6 +20,7 @@ Example:
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, List, Optional, Protocol, Tuple
 
@@ -645,6 +646,102 @@ def find_context_words(
     return False
 
 
+# Whitespace, label punctuation and bidi controls that may sit between a label
+# and its value, as in "NIN: 123", "کد ملی ⁦۱۲۳⁩" or "ቁጥር፡ 123".
+_LABEL_SEPARATORS_SUFFIX = re.compile(r"[\s:：፡#№=.\-–—‎‏‪-‮⁦-⁩]+$")
+_LABEL_WINDOW = 80
+
+
+def _is_label_word_char(char: str) -> bool:
+    return char == "_" or unicodedata.category(char)[0] in {"L", "M", "N"}
+
+
+def is_labelled_value(
+    text: str,
+    start: int,
+    context_words: List[str],
+    *,
+    normalizer: Optional[Callable[[str], str]] = None,
+) -> bool:
+    """Check whether a context word directly labels the value at ``start``.
+
+    A label is a context word that ends right before the value, separated only
+    by whitespace, label punctuation such as ``:`` or ``#``, or bidi controls,
+    and that starts at a word boundary. Unlike :func:`find_context_words`, a
+    context word elsewhere in the window does not count, so a label on one
+    value never applies to a neighbouring value.
+
+    Args:
+        text: Full input text.
+        start: Start offset of the candidate value.
+        context_words: Label keywords for the candidate's identifier type.
+        normalizer: Optional language-scoped folding applied to both the text
+            before the value and each keyword.
+
+    Returns:
+        True when one of the keywords labels the value.
+
+    Example:
+        >>> is_labelled_value("NIN: 12345678901", 5, ["nin"])
+        True
+        >>> is_labelled_value("NIN 1, phone 12345678901", 13, ["nin"])
+        False
+    """
+    if not context_words:
+        return False
+
+    window_start = max(0, start - _LABEL_WINDOW)
+    prefix = _LABEL_SEPARATORS_SUFFIX.sub("", text[window_start:start]).lower()
+    if normalizer is not None:
+        prefix = normalizer(prefix)
+
+    for word in context_words:
+        label = _LABEL_SEPARATORS_SUFFIX.sub("", word.lower())
+        if normalizer is not None:
+            label = normalizer(label)
+        if not label or not prefix.endswith(label):
+            continue
+        before = prefix[: len(prefix) - len(label)]
+        if before:
+            boundary_char = before[-1]
+        elif window_start > 0:
+            boundary_char = text[window_start - 1]
+        else:
+            return True
+        if not _is_label_word_char(boundary_char):
+            return True
+
+    return False
+
+
+def within_labelled_rejection(
+    start: int,
+    end: int,
+    priority: int,
+    rejections: List[Tuple[int, int, int]],
+) -> bool:
+    """Check whether a match sits inside a labelled value a validator rejected.
+
+    When the text labels a value as one identifier type and that type's
+    validator rejects it, lower-priority patterns must not relabel the value or
+    any segment of it, for example as a phone number or a postcode.
+
+    Args:
+        start: Start offset of the lower-ranked match.
+        end: End offset of the lower-ranked match.
+        priority: Priority of the pattern that produced the match.
+        rejections: ``(start, end, priority)`` spans of labelled values whose
+            validator failed.
+
+    Returns:
+        True when the match lies inside a rejection of a higher-priority pattern.
+    """
+    return any(
+        rejected_start <= start and end <= rejected_end and priority < rejected_priority
+        for rejected_start, rejected_end, rejected_priority in rejections
+    )
+
+
 def find_semantic_units(
     text: str, patterns: Optional[List[PIIPattern]] = None
 ) -> List[Tuple[int, int, str, float, PIIPattern]]:
@@ -673,6 +770,7 @@ def find_semantic_units(
         patterns = PII_PATTERNS
 
     units = []
+    labelled_rejections: List[Tuple[int, int, int]] = []
 
     # Sort patterns by priority (highest first)
     sorted_patterns = sorted(patterns, key=lambda p: p.priority, reverse=True)
@@ -687,7 +785,9 @@ def find_semantic_units(
                     overlaps = True
                     break
 
-            if overlaps:
+            if overlaps or within_labelled_rejection(
+                start, end, pii_pattern.priority, labelled_rejections
+            ):
                 continue
 
             matched_text = text[start:end]
@@ -729,6 +829,15 @@ def find_semantic_units(
                 is_valid = pii_pattern.validator(matched_text)
                 if not is_valid:
                     if pii_pattern.reject_on_validation_failure:
+                        if is_labelled_value(
+                            text,
+                            start,
+                            pii_pattern.context_words,
+                            normalizer=pii_pattern.context_normalizer,
+                        ):
+                            labelled_rejections.append(
+                                (start, end, pii_pattern.priority)
+                            )
                         continue
                     # Failed validation - significantly reduce score
                     score = score * 0.3  # Reduce to 30% confidence

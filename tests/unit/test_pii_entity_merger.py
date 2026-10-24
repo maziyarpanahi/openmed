@@ -7,6 +7,7 @@ from openmed.core.pii_entity_merger import (
     calculate_dominant_label,
     find_context_words,
     find_semantic_units,
+    is_labelled_value,
     merge_entities_with_semantic_units,
     validate_luhn,
     validate_npi,
@@ -103,6 +104,48 @@ class TestContextDetection:
         # Should NOT match "ssn" inside "assignment"
         assert find_context_words(text, 19, 30, ["ssn"]) == False
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "NIN 12345678901",
+            "Patient NIN: 12345678901",
+            "nin #12345678901",
+            "NIN - 12345678901",
+            "NIN \u206612345678901\u2069",
+            "ቁጥር፡ 12345678901",
+        ],
+    )
+    def test_is_labelled_value_accepts_label_separators(self, text):
+        start = text.index("12345678901")
+
+        assert is_labelled_value(text, start, ["nin", "ቁጥር"])
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # The keyword labels a different value or sits elsewhere nearby.
+            "NIN 1, phone 12345678901",
+            "phone 12345678901 (NIN on file)",
+            # The keyword ends inside a longer word.
+            "Kanin 12345678901",
+            "12345678901",
+        ],
+    )
+    def test_is_labelled_value_requires_an_adjacent_whole_word_label(self, text):
+        start = text.index("12345678901")
+
+        assert not is_labelled_value(text, start, ["nin"])
+
+    def test_is_labelled_value_applies_the_context_normalizer(self):
+        text = "كد ملي 1234567890"
+        start = text.index("1234567890")
+
+        def fold(value: str) -> str:
+            return value.replace("ك", "ک").replace("ي", "ی")
+
+        assert not is_labelled_value(text, start, ["کد ملی"])
+        assert is_labelled_value(text, start, ["کد ملی"], normalizer=fold)
+
 
 class TestSemanticUnitsWithScoring:
     """Test semantic unit detection with context-aware scoring."""
@@ -179,6 +222,43 @@ class TestSemanticUnitsWithScoring:
         # Failed validation, so score reduced to 30% of (base + context)
         # (0.3 + 0.55) * 0.3 = 0.255
         assert score < 0.3  # Significantly reduced
+
+    @staticmethod
+    def _labelled_rejection_patterns():
+        return [
+            PIIPattern(
+                r"\b\d{5}-\d{5}\b",
+                "national_id",
+                priority=10,
+                context_words=["card id"],
+                validator=lambda value: False,
+                reject_on_validation_failure=True,
+            ),
+            PIIPattern(r"\b\d{5}\b", "postcode", priority=5),
+            PIIPattern(r"\b\d{5}\b", "account_number", priority=10),
+        ]
+
+    def test_labelled_rejection_blocks_lower_priority_segments(self):
+        text = "Card ID: 12345-67890"
+
+        units = find_semantic_units(text, self._labelled_rejection_patterns())
+
+        # Equal-priority patterns are not suppressed; lower-priority ones are.
+        assert [(text[u[0] : u[1]], u[2]) for u in units] == [
+            ("12345", "account_number"),
+            ("67890", "account_number"),
+        ]
+
+    def test_unlabelled_rejection_keeps_lower_priority_segments(self):
+        text = "Card ID on file; reference 12345-67890"
+        patterns = self._labelled_rejection_patterns()[:2]
+
+        units = find_semantic_units(text, patterns)
+
+        assert [(text[u[0] : u[1]], u[2]) for u in units] == [
+            ("12345", "postcode"),
+            ("67890", "postcode"),
+        ]
 
     def test_phone_vs_npi_ambiguity(self):
         """Test that 10-digit numbers prioritize by context and validation."""
