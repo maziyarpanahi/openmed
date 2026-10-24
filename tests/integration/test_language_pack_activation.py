@@ -136,7 +136,10 @@ print(json.dumps(result, sort_keys=True))
 
 
 def test_signed_bundle_activates_and_rolls_back_through_live_adapters() -> None:
-    env = {**os.environ, "PYTHONPATH": str(_REPO_ROOT), "HF_HUB_OFFLINE": "1"}
+    pythonpath = os.pathsep.join(
+        filter(None, (str(_REPO_ROOT), os.environ.get("PYTHONPATH")))
+    )
+    env = {**os.environ, "PYTHONPATH": pythonpath, "HF_HUB_OFFLINE": "1"}
     completed = subprocess.run(
         [sys.executable, "-c", _RUNNER],
         cwd=_REPO_ROOT,
