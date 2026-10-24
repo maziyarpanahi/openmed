@@ -587,7 +587,10 @@ def test_parallel_graphql_fields_reuse_capacity_after_worker_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
-    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "1")
+    # The second field queues until the first worker releases its slot, so this
+    # budget only bounds a failure. A loaded runner can stall the first worker
+    # past one second; a slot leaked until the response ends still fails here.
+    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "10")
     lock = threading.Lock()
     state = {"active": 0, "peak": 0, "calls": 0}
 
