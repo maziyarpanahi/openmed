@@ -1,18 +1,25 @@
 """Shift and synthesize dates written in non-Gregorian calendars.
 
 This module recognizes a date surface such as ``۱۴۰۴/۰۷/۳۰``,
-``۲۸ اردیبهشت ۱۴۰۴``, ``28 กุมภาพันธ์ พ.ศ. 2567`` or ``05/13/2015 ዓ.ም``,
-chooses its calendar, shifts it through the shared day number of
-:mod:`openmed.core.calendars`, and renders the result in the source calendar,
-digit system, separators and month-name form.
+``۲۸ اردیبهشت ۱۴۰۴``, ``28 กุมภาพันธ์ พ.ศ. 2567``, ``05/13/2015 ዓ.ም``,
+``١٥ رمضان ١٤٤٧ هـ`` or ``२०८२ असार ३२ गते``, chooses its calendar, shifts it
+through the shared day number of :mod:`openmed.core.calendars`, and renders
+the result in the source calendar, digit system, separators and month-name
+form.
 
 The calendar is chosen from, in order:
 
-1. explicit era markers inside the span (``ه.ش``, ``พ.ศ.``, ``ዓ.ም``,
-   ``میلادی`` and similar), or a detection-stage calendar code;
-2. month names that belong to a single calendar (Solar Hijri or Ethiopian);
+1. explicit era markers inside the span (``ه.ش``, ``هـ``, ``พ.ศ.``, ``ዓ.ም``,
+   ``वि.सं.``, ``میلادی`` and similar), or a detection-stage calendar code;
+2. month names that belong to a single calendar (Solar Hijri, lunar Hijri,
+   Ethiopian or Bikram Sambat);
 3. the language pack's declared ``default_calendar`` when the year falls in
    that calendar's supported range.
+
+Lunar Hijri (``hijri``, the Umm al-Qura variant) and Bikram Sambat
+(``bikram_sambat``) dates are converted through the bounded month-length
+tables of :mod:`openmed.core.calendar_tables`, so dates outside those tables
+keep the placeholder.
 
 Plain Gregorian dates are left to the existing Gregorian shifter. Conflicting
 signals, two-digit years and years outside every plausible range are reported
@@ -30,8 +37,10 @@ from datetime import date
 from typing import Final, Iterable, Mapping, Optional
 
 from .calendars import (
+    BIKRAM_SAMBAT,
     ETHIOPIAN,
     GREGORIAN,
+    LUNAR_HIJRI,
     SOLAR_HIJRI,
     THAI_BUDDHIST,
     CalendarConverter,
@@ -42,8 +51,8 @@ from .calendars import (
 CALENDAR_METADATA_KEY: Final = "calendar"
 """Entity metadata key a detector can set to declare a span's calendar code."""
 
-LUNAR_HIJRI_MARKER: Final = "islamic"
-"""Calendar code implied by lunar Hijri era markers; no converter ships yet."""
+LUNAR_HIJRI_MARKER: Final = LUNAR_HIJRI
+"""Calendar code implied by lunar Hijri era markers (Umm al-Qura by default)."""
 
 GREGORIAN_PLAUSIBLE_YEARS: Final = (1800, 2299)
 """Gregorian years accepted when a pack's default calendar does not apply."""
@@ -64,11 +73,66 @@ _SURROGATE_WINDOW_DAYS: Final = 365 * 100
 
 @dataclass(frozen=True)
 class _MonthStyle:
-    """One family of month names and the calendars it can denote."""
+    """One family of month names and the calendars it can denote.
+
+    ``names`` lists every accepted spelling of each month, canonical first.
+    ``forms`` optionally splits those spellings into writing conventions,
+    such as Arabic and Persian spellings of the Hijri months; a shifted month
+    is then written in the convention of the source spelling.
+    """
 
     key: str
     calendars: tuple[str, ...]
     names: tuple[tuple[str, ...], ...]
+    forms: tuple[tuple[tuple[str, ...], ...], ...] = ()
+    form_signals: tuple[frozenset[str], ...] = ()
+
+    def spelling(
+        self,
+        month: int,
+        source: str,
+        signals: frozenset[str] = frozenset(),
+    ) -> str:
+        """Return ``month`` in the writing convention of ``source``.
+
+        A source spelling shared by several conventions, such as ``رمضان``,
+        is resolved with ``signals``: the era markers and the zero digit of
+        the span, matched against each convention's ``form_signals``.
+        """
+        candidates = [
+            index
+            for index, form in enumerate(self.forms)
+            if any(source in spellings for spellings in form)
+        ]
+        if not candidates:
+            return self.names[month - 1][0]
+        best = max(
+            candidates,
+            key=lambda index: (
+                len(self.form_signals[index] & signals) if self.form_signals else 0,
+                -index,
+            ),
+        )
+        return self.forms[best][month - 1][0]
+
+
+def _style_from_forms(
+    key: str,
+    calendars: tuple[str, ...],
+    forms: tuple[tuple[tuple[str, ...], ...], ...],
+    form_signals: tuple[frozenset[str], ...] = (),
+) -> _MonthStyle:
+    names = tuple(
+        tuple(dict.fromkeys(spelling for form in forms for spelling in form[index]))
+        for index in range(len(forms[0]))
+    )
+    return _MonthStyle(
+        key=key,
+        calendars=calendars,
+        names=names,
+        forms=forms,
+        form_signals=form_signals,
+    )
 
 
 def _with_arabic_letter_variants(name: str) -> tuple[str, ...]:
@@ -160,15 +224,122 @@ _THAI_ABBREVIATED_MONTHS: Final = _MonthStyle(
         )
     ),
 )
+# Lunar Hijri months in Arabic, Persian and Urdu spelling. The first spelling
+# of each month is written when a shift moves the date into that month.
+_LUNAR_HIJRI_MONTHS: Final = _style_from_forms(
+    "hijri",
+    (LUNAR_HIJRI,),
+    (
+        (
+            ("محرم", "محرم الحرام"),
+            ("صفر", "صفر المظفر", "صفر الخير"),
+            ("ربيع الأول", "ربيع الاول", "ربيع أول"),
+            ("ربيع الآخر", "ربيع الثاني", "ربيع الاخر", "ربيع ثاني"),
+            ("جمادى الأولى", "جمادى الاولى", "جمادى الأول", "جمادى أولى"),
+            ("جمادى الآخرة", "جمادى الاخرة", "جمادى الآخر", "جمادى الثانية"),
+            ("رجب", "رجب المرجب"),
+            ("شعبان", "شعبان المعظم"),
+            ("رمضان", "رمضان المبارك", "رمضان الكريم"),
+            ("شوال", "شوال المكرم"),
+            ("ذو القعدة", "ذي القعدة", "ذوالقعدة"),
+            ("ذو الحجة", "ذي الحجة", "ذوالحجة"),
+        ),
+        (
+            ("محرم",),
+            ("صفر",),
+            ("ربیع\u200cالاول", "ربیع الاول", "ربیع\u200cالأول"),
+            ("ربیع\u200cالثانی", "ربیع الثانی", "ربیع\u200cالآخر", "ربیع الآخر"),
+            ("جمادی\u200cالاول", "جمادی الاول", "جمادی\u200cالاولی", "جمادی الاولی"),
+            ("جمادی\u200cالثانی", "جمادی الثانی", "جمادی\u200cالآخر", "جمادی الآخر"),
+            ("رجب",),
+            ("شعبان",),
+            ("رمضان",),
+            ("شوال",),
+            ("ذی\u200cالقعده", "ذی القعده", "ذیقعده"),
+            ("ذی\u200cالحجه", "ذی الحجه", "ذیحجه"),
+        ),
+        (
+            ("محرم",),
+            ("صفر",),
+            ("ربیع الاول",),
+            ("ربیع الثانی",),
+            ("جمادی الاول", "جمادی الاولیٰ"),
+            ("جمادی الثانی", "جمادی الآخر"),
+            ("رجب",),
+            ("شعبان",),
+            ("رمضان", "رمضان المبارک"),
+            ("شوال", "شوال المکرم"),
+            ("ذوالقعدہ", "ذی قعدہ", "ذیقعدہ"),
+            ("ذوالحجہ", "ذی الحجہ"),
+        ),
+    ),
+    (
+        frozenset({"٠", "هـ", "ه", "هجري", "هجرية", "هجرى", "للهجرة"}),
+        frozenset(
+            {
+                "۰",
+                "ه.ق",
+                "ه.ق.",
+                "هـ.ق",
+                "هـ.ق.",
+                "ه. ق",
+                "هـ. ق",
+                "ه ق",
+                "ق",
+                "قمری",
+                "هجری قمری",
+            }
+        ),
+        frozenset({"۰", "ہجری", "ھ", "ہ"}),
+    ),
+)
+# Bikram Sambat months in colloquial Nepali and formal (tatsama) spelling.
+_BIKRAM_SAMBAT_MONTHS: Final = _style_from_forms(
+    "nepali",
+    (BIKRAM_SAMBAT,),
+    (
+        (
+            ("बैशाख", "बैसाख"),
+            ("जेठ",),
+            ("असार", "असाढ"),
+            ("साउन", "सावन"),
+            ("भदौ",),
+            ("असोज", "असौज"),
+            ("कात्तिक", "कातिक"),
+            ("मंसिर", "मङ्सिर", "मंसीर"),
+            ("पुस", "पूस"),
+            ("माघ",),
+            ("फागुन", "फागुण"),
+            ("चैत",),
+        ),
+        (
+            ("वैशाख",),
+            ("ज्येष्ठ", "जेष्ठ"),
+            ("आषाढ",),
+            ("श्रावण",),
+            ("भाद्र", "भाद्रपद"),
+            ("आश्विन",),
+            ("कार्तिक",),
+            ("मार्गशीर्ष",),
+            ("पौष", "पुष"),
+            ("माघ",),
+            ("फाल्गुन",),
+            ("चैत्र",),
+        ),
+    ),
+)
 MONTH_STYLES: Final = (
     _SOLAR_HIJRI_MONTHS,
     _ETHIOPIAN_MONTHS,
     _THAI_FULL_MONTHS,
     _THAI_ABBREVIATED_MONTHS,
+    _LUNAR_HIJRI_MONTHS,
+    _BIKRAM_SAMBAT_MONTHS,
 )
 
-# Era markers recognized inside a date span. Lunar Hijri markers resolve to a
-# calendar without a registered converter, so those dates stay unshifted.
+# Era markers recognized inside a date span. Lunar Hijri markers resolve to
+# the ``hijri`` code, which the bundled Umm al-Qura table serves unless a
+# caller registers another variant's table under that code.
 ERA_MARKERS: Final[Mapping[str, str]] = {
     # Solar Hijri.
     "هجری شمسی": SOLAR_HIJRI,
@@ -211,6 +382,11 @@ ERA_MARKERS: Final[Mapping[str, str]] = {
     "እኤአ": GREGORIAN,
     "G.C.": GREGORIAN,
     "GC": GREGORIAN,
+    "ईस्वी संवत्": GREGORIAN,
+    "ई.सं.": GREGORIAN,
+    "ई.सं": GREGORIAN,
+    "ई. सं.": GREGORIAN,
+    "ई. सं": GREGORIAN,
     # Lunar Hijri.
     "هجری قمری": LUNAR_HIJRI_MARKER,
     "ه.ق.": LUNAR_HIJRI_MARKER,
@@ -222,9 +398,51 @@ ERA_MARKERS: Final[Mapping[str, str]] = {
     "هجري": LUNAR_HIJRI_MARKER,
     "هجرى": LUNAR_HIJRI_MARKER,
     "هـ": LUNAR_HIJRI_MARKER,
+    "ه. ق": LUNAR_HIJRI_MARKER,
+    "هـ. ق": LUNAR_HIJRI_MARKER,
+    "ه ق": LUNAR_HIJRI_MARKER,
+    "ق": LUNAR_HIJRI_MARKER,
+    "للهجرة": LUNAR_HIJRI_MARKER,
+    "ه": LUNAR_HIJRI_MARKER,
+    "ہجری": LUNAR_HIJRI_MARKER,
+    "ھ": LUNAR_HIJRI_MARKER,
+    "ہ": LUNAR_HIJRI_MARKER,
     "A.H.": LUNAR_HIJRI_MARKER,
     "AH": LUNAR_HIJRI_MARKER,
+    # Bikram Sambat.
+    "विक्रम संवत्": BIKRAM_SAMBAT,
+    "विक्रम संवत": BIKRAM_SAMBAT,
+    "विक्रम सम्वत्": BIKRAM_SAMBAT,
+    "बिक्रम संवत्": BIKRAM_SAMBAT,
+    "बिक्रम सम्वत्": BIKRAM_SAMBAT,
+    "वि.सं.": BIKRAM_SAMBAT,
+    "वि.सं": BIKRAM_SAMBAT,
+    "वि. सं.": BIKRAM_SAMBAT,
+    "वि. सं": BIKRAM_SAMBAT,
+    "बि.सं.": BIKRAM_SAMBAT,
+    "बि.सं": BIKRAM_SAMBAT,
+    "बि. सं.": BIKRAM_SAMBAT,
+    "बि. सं": BIKRAM_SAMBAT,
+    "B.S.": BIKRAM_SAMBAT,
+    "BS": BIKRAM_SAMBAT,
 }
+
+# Particles a detected month-name date may carry: "day" (Amharic ቀን, Nepali
+# गते), "month" (Arabic شهر, Persian ماه, Urdu ماہ), "year" (Arabic عام and
+# سنة, Persian سال, Nepali साल) and Arabic من ("of").
+_FILLER_WORDS: Final = (
+    "ቀን",
+    "गते",
+    "साल",
+    "من شهر",
+    "شهر",
+    "من",
+    "عام",
+    "سنة",
+    "ماه",
+    "سال",
+    "ماہ",
+)
 
 _MONTH_LOOKUP: Final[Mapping[str, tuple[_MonthStyle, int]]] = {
     spelling: (style, index + 1)
@@ -251,12 +469,14 @@ _NATIVE_MONTH_NAME_RE: Final = re.compile(
     )
     + r")(?!\w)"
 )
+# Particles are tried before era markers so ``من`` is not read as the
+# Gregorian marker ``م``; month names come first so ``شهریور`` stays a month.
 _TOKEN_RE: Final = re.compile(
     rf"(?P<month>{_alternation(_MONTH_LOOKUP)})"
+    rf"|(?P<space>[\s,،]+|{_alternation(_FILLER_WORDS)})"
     rf"|(?P<marker>{_alternation(ERA_MARKERS)})"
     r"|(?P<number>\d+)"
     r"|(?P<sep>[./\-])"
-    r"|(?P<space>[\s,،]+|ቀን)"
 )
 
 
@@ -551,9 +771,18 @@ def _parse_surface(text: str) -> Optional[_ParsedSurface]:
 
     if len(months) == 1 and len(numbers) == 2:
         (month_index,) = months
-        day_index, year_index = numbers
-        if not (day_index < month_index < year_index or month_index < day_index):
-            return None
+        first, second = numbers
+        if (
+            first < month_index < second
+            and len(tokens[first].text) == 4
+            and len(tokens[second].text) <= 2
+        ):
+            # Year-first month-name dates, as in ``२०८२ असार ३२ गते``.
+            year_index, day_index = first, second
+        else:
+            day_index, year_index = first, second
+            if not (day_index < month_index < year_index or month_index < day_index):
+                return None
         if len(tokens[day_index].text) > 2:
             return None
         year_width = len(tokens[year_index].text)
@@ -713,7 +942,14 @@ def _render(
             width=width,
         )
     elif month != source_month:
-        pieces[month_index] = parsed.month_style.names[month - 1][0]
+        signals = frozenset(
+            token.text if token.kind == "marker" else _digit_zero(token.text) or ""
+            for token in tokens
+            if token.kind in {"marker", "number"}
+        )
+        pieces[month_index] = parsed.month_style.spelling(
+            month, tokens[month_index].text, signals
+        )
     return "".join(pieces)
 
 

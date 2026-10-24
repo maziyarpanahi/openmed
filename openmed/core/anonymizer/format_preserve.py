@@ -78,10 +78,10 @@ def preserve_date_format(
     original is ambiguous (e.g. ``05/06/2020``). ``date_order`` (``dmy``,
     ``mdy`` or ``ymd``) takes precedence over that legacy fallback.
 
-    Solar Hijri, Ethiopian and Thai Buddhist-era originals, recognized from
-    era markers, calendar month names or the default calendar of the
-    ``locale``'s language pack, get a surrogate in that calendar, digit
-    system, separators and month-name form.
+    Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and Bikram
+    Sambat originals, recognized from era markers, calendar month names or
+    the default calendar of the ``locale``'s language pack, get a surrogate in
+    that calendar, digit system, separators and month-name form.
 
     Returns a surrogate date in the same format, drawn uniformly from the
     last 100 years.

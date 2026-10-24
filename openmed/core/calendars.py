@@ -10,7 +10,10 @@ Each converter declares the inclusive year range over which its arithmetic is
 exact. Callers must treat dates outside that range as unsupported instead of
 extrapolating. Converters are registered in one process-local registry so
 other calendars, including table-driven ones, can be added without changing
-the date-shift code that consumes them.
+the date-shift code that consumes them. The table-driven Umm al-Qura Hijri
+(``hijri``) and Bikram Sambat (``bikram_sambat``) calendars come from
+:mod:`openmed.core.calendar_tables` and are registered when this module is
+imported.
 
 The module is standard-library only. Errors never include the date values that
 were passed in.
@@ -29,6 +32,8 @@ GREGORIAN: Final = "gregorian"
 SOLAR_HIJRI: Final = "solar_hijri"
 ETHIOPIAN: Final = "ethiopian"
 THAI_BUDDHIST: Final = "thai_buddhist"
+LUNAR_HIJRI: Final = "hijri"
+BIKRAM_SAMBAT: Final = "bikram_sambat"
 
 _GREGORIAN_MONTH_DAYS: Final = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 
@@ -428,10 +433,16 @@ for _converter in (
 ):
     register_calendar(_converter)
 
+# The table-driven calendars register themselves on import. The import stays
+# below the registry so calendar_tables can subclass CalendarConverter whichever
+# of the two modules is imported first.
+from . import calendar_tables as _calendar_tables  # noqa: E402,F401
 
 __all__ = [
+    "BIKRAM_SAMBAT",
     "ETHIOPIAN",
     "GREGORIAN",
+    "LUNAR_HIJRI",
     "SOLAR_HIJRI",
     "THAI_BUDDHIST",
     "CalendarConverter",
