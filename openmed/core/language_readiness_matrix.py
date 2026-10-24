@@ -255,6 +255,9 @@ def build_language_readiness_matrix(
 
     if not isinstance(version, str) or not version.strip():
         raise LanguageReadinessError("version must be a non-empty string")
+    if not version.isprintable():
+        # A line break or control character could open new Markdown structure.
+        raise LanguageReadinessError("version must be a single printable line")
 
     normalized = normalize_readiness_entries(entries)
     totals = {
@@ -287,6 +290,20 @@ def render_language_readiness_json(
         separators=(",", ":"),
         sort_keys=True,
     )
+
+
+def _code_span(text: str) -> str:
+    """Return ``text`` as one CommonMark code span, whatever backticks it holds.
+
+    The fence is one backtick longer than the longest backtick run inside the
+    text, and padding spaces keep a leading or trailing backtick or space from
+    merging with the fence; CommonMark strips exactly that padding again.
+    """
+
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    fence = "`" * (longest + 1)
+    padding = " " if text[:1] in ("`", " ") or text[-1:] in ("`", " ") else ""
+    return f"{fence}{padding}{text}{padding}{fence}"
 
 
 def _matrix_cell(
@@ -326,7 +343,7 @@ def render_language_readiness_markdown(
         "",
         f"Schema: `{matrix['schema_version']}`",
         "",
-        f"Version: `{matrix['version']}`",
+        f"Version: {_code_span(matrix['version'])}",
         "",
         "## Capability matrix",
         "",

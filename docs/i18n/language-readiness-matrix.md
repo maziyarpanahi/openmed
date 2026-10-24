@@ -56,6 +56,11 @@ therefore produces identical bytes. The unit tests pin the SHA-256 digests of a
 fixed JSON render and a fixed Markdown render, so any change in the wire shape
 fails the suite instead of silently changing released artifacts.
 
+The registry `version` is the only free text in the Markdown. It renders as one
+code span whose fence is longer than any backtick run it contains, and a version
+with a line break or other control character is rejected, so no version can
+open new Markdown structure.
+
 ## Deriving from registered packs
 
 `readiness_entries_from_packs(registry=...)` reads the coherence report for the
@@ -94,6 +99,7 @@ The direct constructor stays strict and accepts normalized tags only, so
 requires an evidence digest`, the evidence-digest shape message,
 `duplicate readiness entry for locale ... capability ...`,
 `locale must be a non-empty string`, `version must be a non-empty string`,
+`version must be a single printable line`,
 `entries must be an iterable of LanguageReadinessEntry values`, and
 `aliases must be a mapping of locale tags` / `alias keys and values must be
 strings`. Alias grammar, canonical targets, colliding keys and alias chains stay
@@ -111,5 +117,9 @@ The focused suite is offline and needs no model weights. It covers the closed
 vocabularies, golden JSON and Markdown payloads, byte digests, reordered and
 duplicated records, alias folding (including underscore spellings), malformed
 aliases, an empty matrix, and derivation from both a custom registry and the
-built-in catalog. Related grammar reference:
+built-in catalog. `tests/fixtures/language_readiness_expected.md` holds golden
+Markdown for empty, complete, partial, blocked, aliased and missing-evidence
+registries plus a locale-ordering and version-escaping case; each is checked
+byte for byte against reordered inputs, and its table cells may hold only
+closed states, locales and evidence digests. Related grammar reference:
 [Offline structural locale tags](locale-tags.md).
