@@ -123,6 +123,13 @@ not an interactive package-installation environment. Scan the actual final
 image, including vendored dependencies, rather than assuming the installed
 top-level versions or the repository lock describe all of its contents.
 
+The PyTorch CPU wheel index also serves its own, older copies of Torch's
+dependencies. The service images therefore install patched PyPI releases of
+`filelock` and `setuptools` before Torch, so Torch's unpinned `filelock`
+requirement is already satisfied and the CPU index cannot replace it. The
+universal lock separately requires `brotlicffi>=1.2.1.0` and
+`setuptools>=84.1.0`.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency
