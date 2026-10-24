@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 5062882
+    "json": 5060639
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 5062882
+    "docs/search/search_index.json": 5060639
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 6538266,
-    "/docs/model-tokenizer-script-coverage/": 8634918
+    "/docs/": 6536023,
+    "/docs/model-tokenizer-script-coverage/": 8632675
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,7 +31,7 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
-    "The native-calendar date shifting documentation measures 5061196 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. All other artifact, payload and page-metric limits are unchanged.",
+    "The Python 3.11 support and Snowflake filelock documentation measures 5058953 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. All other artifact, payload and page-metric limits are unchanged.",
     "The v3.1 image-upgrade documentation with refreshed synthetic status measures 5056584 search-index bytes, including 476 bytes absent from the former PR build. PRs now render the same status content before staging. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. All other artifact, payload and page-metric limits are unchanged.",
     "The v3.1 release, privacy migration and dependency-security documentation measures 5054563 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. Other artifact, image, runtime and page-metric limits are unchanged.",
     "The reviewed governance API deprecation policy and major privacy-boundary announcement measure 5046074 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance. Docs route totals add only this governed search ceiling to unchanged fixed-asset ceilings; aggregate, non-JSON, duplicate, source-map and page-metric limits remain unchanged.",
