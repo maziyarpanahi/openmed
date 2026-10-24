@@ -472,6 +472,7 @@ class Anonymizer:
                     original_value,
                     date_order=date_order_for_locale(effective_locale),
                     rng=faker.random,
+                    locale=effective_locale,
                 ),
             )
         if canonical == L.EMAIL:
