@@ -303,7 +303,9 @@ def test_import_openmed_does_not_import_gliner2(tmp_path) -> None:
     )
     environment = dict(os.environ)
     environment.pop("OPENMED_OFFLINE", None)
-    environment["PYTHONPATH"] = os.pathsep.join([str(tmp_path), str(REPO_ROOT)])
+    environment["PYTHONPATH"] = os.pathsep.join(
+        filter(None, (str(tmp_path), str(REPO_ROOT), environment.get("PYTHONPATH")))
+    )
     completed = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
