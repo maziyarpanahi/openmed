@@ -1,6 +1,7 @@
 """Offline command/library composition for decision-backend qualification."""
 
 import json
+import os
 import stat
 
 import pytest
@@ -77,7 +78,8 @@ def test_factory_encoder_writes_private_profile_usable_by_decide(tmp_path, capsy
     assert status == 0
     data = json.loads(capsys.readouterr().out)["data"]
     assert data["backend"]["kind"] == "encoder"
-    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    if os.name != "nt":
+        assert stat.S_IMODE(output.stat().st_mode) == 0o600
     written = json.loads(output.read_text("utf-8"))
     assert written == data["profiles"]
     profiles = {
