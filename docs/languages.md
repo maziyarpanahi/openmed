@@ -338,6 +338,16 @@ Before: Patient John Doe was seen on 03/14/2025; call 555-0142
 After:  Patient [NAME] was seen on [DATE]; call [PHONE]
 ```
 
+Pass `locale="en_GB"` for UK clinical text; with `lang="en"`, the `gb` and `uk`
+aliases select the same detection overlay. The UK overlay adds deterministic NHS
+Number, National Insurance number, and postcode rules. Postcodes are matched
+without context, in every Royal Mail outward-code shape plus `GIR 0AA`, with a
+single space, no space, or lowercase, and are labelled `ZIPCODE`. A full UK
+postcode covers about 15 addresses, so the rule does not wait for the model.
+Tokens whose inward code reads as a data size or an ordinal, such as `8GB` or
+`2ND`, count only near address words. Other locales, including plain `en`, keep
+the US ZIP rule alone.
+
 ### Spanish — `es`
 
 - Model: `OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1` · locale `es_ES`
