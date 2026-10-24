@@ -608,6 +608,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .nli_qualification import add_nli_qualification_command
 
     add_nli_qualification_command(subparsers)
+    from .decision_qualification import add_decision_qualification_command
+
+    add_decision_qualification_command(subparsers)
     from .clinical_review import add_clinical_review_commands
 
     add_clinical_review_commands(subparsers)
