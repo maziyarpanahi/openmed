@@ -9,7 +9,7 @@ platforms = [
 
 [dependencies]
 # Keep the cross-platform optional wheels available while pyproject.toml
-# continues to support Python >=3.10.
+# continues to support Python >=3.11.
 python = "3.12.*"
 pip = "*"
 
