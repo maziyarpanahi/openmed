@@ -5207,6 +5207,68 @@ _IRISH_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# UK postcodes follow the Royal Mail outward/inward grammar. The outward code
+# has one of six shapes (A9, A99, A9A, AA9, AA99, AA9A): Q, V and X never open
+# it, only ABCDEFGHJKPSTUW close an A9A district and only ABEHMNPRVWXY close an
+# AA9A district. Royal Mail never puts I, J or Z second; Z is still accepted
+# there so the NHS pseudo-postcode area ZZ (ZZ99 codes) stays covered. The
+# inward code is a digit and two letters, never C, I, K, M, O or V. GIR 0AA is
+# the one code outside this grammar.
+_UK_POSTCODE_SEPARATOR = r"[ \u00a0]?"
+_UK_POSTCODE_OUTWARD = (
+    r"[A-PR-UWYZ](?:[0-9][0-9A-HJKPSTUW]?|[A-HK-Z][0-9][0-9ABEHMNPRVWXY]?)"
+)
+_UK_POSTCODE_INWARD = r"[0-9][ABD-HJLNP-UW-Z]{2}"
+_UK_POSTCODE_RE = re.compile(
+    rf"GIR{_UK_POSTCODE_SEPARATOR}0AA"
+    rf"|{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}{_UK_POSTCODE_INWARD}"
+)
+# Inward codes that also read as a data size (8GB, 1TB) or an English ordinal
+# (1ST, 2ND), as in product specs and ward or floor labels. Only nearby
+# address context makes these count as postcodes.
+_UK_POSTCODE_LOOKALIKE_INWARD = r"(?:[0-9][GPT]B|1ST|2ND|3RD|[04-9]TH)"
+# A postcode is a standalone token: not glued to a word character, not
+# hyphen-joined to a product or reference code, and not followed by a dotted
+# version continuation.
+_UK_POSTCODE_START = r"(?<!\w)(?<!\w-)"
+_UK_POSTCODE_END = r"(?!\w)(?!-\w)(?!\.\d)"
+_UK_POSTCODE_CONTEXT = [
+    "postcode",
+    "post code",
+    "postal code",
+    "postal",
+    "address",
+    "street",
+    "road",
+    "lane",
+    "avenue",
+]
+
+
+def validate_uk_postcode(text: str) -> bool:
+    """Return whether ``text`` is a well-formed UK postcode.
+
+    Checks the Royal Mail format only: the six outward-code shapes with their
+    positional letter rules, the inward code with C, I, K, M, O and V
+    excluded, and the special ``GIR 0AA``. It does not check that a postcode
+    is allocated. The outward and inward codes may be separated by one space
+    or by nothing. Letters must be all uppercase or all lowercase, so
+    mixed-case tokens such as ``B4 2nd`` are rejected.
+
+    Args:
+        text: Candidate postcode surface.
+
+    Returns:
+        ``True`` when ``text`` is one complete, well-formed UK postcode.
+    """
+    if not text.replace("\u00a0", " ").isascii():
+        return False
+    letters = "".join(char for char in text if char.isalpha())
+    if not (letters.isupper() or letters.islower()):
+        return False
+    return _UK_POSTCODE_RE.fullmatch(text.upper()) is not None
+
+
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
     PIIPattern(
@@ -5238,6 +5300,40 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_uk_nino,
+        flags=re.IGNORECASE,
+    ),
+    # UK postcode. A full unit postcode covers about 15 addresses, so it is
+    # matched without context; address words only raise the score.
+    PIIPattern(
+        _UK_POSTCODE_START
+        + rf"(?:GIR{_UK_POSTCODE_SEPARATOR}0AA"
+        + rf"|{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}"
+        + rf"(?!{_UK_POSTCODE_LOOKALIKE_INWARD}){_UK_POSTCODE_INWARD})"
+        + _UK_POSTCODE_END,
+        "postcode",
+        priority=7,
+        base_score=0.6,
+        context_words=_UK_POSTCODE_CONTEXT,
+        context_boost=0.3,
+        validator=validate_uk_postcode,
+        reject_on_validation_failure=True,
+        flags=re.IGNORECASE,
+    ),
+    # Postcode-shaped tokens whose inward code reads as a data size or an
+    # ordinal (``S23 8GB``, ``B4 2ND``) need nearby address context.
+    PIIPattern(
+        _UK_POSTCODE_START
+        + rf"{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}"
+        + rf"(?={_UK_POSTCODE_LOOKALIKE_INWARD}){_UK_POSTCODE_INWARD}"
+        + _UK_POSTCODE_END,
+        "postcode",
+        priority=7,
+        base_score=0.6,
+        context_words=_UK_POSTCODE_CONTEXT,
+        context_boost=0.3,
+        requires_context=True,
+        validator=validate_uk_postcode,
+        reject_on_validation_failure=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -13201,10 +13297,23 @@ def _normalize_pattern_locale(locale: str) -> str:
     return locale.strip().replace("-", "_").casefold()
 
 
+# Country aliases that select the ``en_gb`` overlay for English text, matching
+# the ``gb``/``uk`` aliases the national-ID registry uses for NHS numbers and
+# NINOs. Bare ``uk`` is also the Ukrainian language code, so the aliases apply
+# only when the language is English.
+_ENGLISH_LOCALE_PATTERN_ALIASES: Dict[str, str] = {
+    "gb": "en_gb",
+    "uk": "en_gb",
+    "en_uk": "en_gb",
+}
+
+
 def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     keys: list[str] = [_normalize_pattern_locale(lang)]
     if locale:
         keys.insert(0, _normalize_pattern_locale(locale))
+    if _normalize_pattern_language(lang) == "en":
+        keys = [_ENGLISH_LOCALE_PATTERN_ALIASES.get(key, key) for key in keys]
 
     deduped: list[str] = []
     seen: set[str] = set()
@@ -13258,8 +13367,9 @@ def get_patterns_for_language(
     English patterns (email, URL, IP, etc.) are universal and always
     included. Language-specific patterns (dates, phones, national IDs,
     addresses) are added on top. Locale-specific overlays, such as
-    ``en_GB`` UK identifiers, are appended when ``locale`` is provided or
-    when ``lang`` includes a region code.
+    ``en_GB`` UK identifiers and postcodes, are appended when ``locale`` is
+    provided or when ``lang`` includes a region code. For English, the
+    ``gb`` and ``uk`` country aliases also select the ``en_GB`` overlay.
 
     Args:
         lang: ISO 639-1 language code, optionally with a region suffix for
