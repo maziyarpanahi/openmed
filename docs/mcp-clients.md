@@ -304,9 +304,11 @@ universal prompt-injection resistance or clinical validation.
 `openmed_decide` scores bounded caller-supplied options, preserves caller
 ordering, applies the selected calibration profile, and returns typed
 abstention, denial, conflict, unsupported, timeout, and failure states. It is a
-read-only, non-destructive, idempotent, closed-world tool. The result always
-requires human review and never authorizes a clinical action. Its request and
-result schemas are identical to the Python and REST contracts described in
+read-only, non-destructive, idempotent, closed-world tool. It also accepts a
+`question_set` of named questions over one input and reports each question's
+state separately. The result always requires human review and never authorizes
+a clinical action. Its request and result schemas are identical to the Python
+and REST contracts described in
 [Fixed-option decision API](api/fixed-option-decisions.md).
 
 ## Canonical clinical agent workflow

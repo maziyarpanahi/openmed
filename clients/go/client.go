@@ -150,6 +150,7 @@ const (
 	DecisionOrderedPreference DecisionMode = "ordered_preference"
 	DecisionScalarScore       DecisionMode = "scalar_score"
 	DecisionMultiLabel        DecisionMode = "multi_label"
+	DecisionQuestionSet       DecisionMode = "question_set"
 )
 
 // DecisionState reports whether a decision succeeded or stopped safely.
@@ -352,6 +353,8 @@ type PrivacyGatewayRequest struct {
 }
 
 // FixedOptionDecisionRequest is the request body for POST /v1/decisions.
+// The fields after CompatibilityPolicy are optional schema 1.1.0 fields;
+// Questions holds named question objects for DecisionQuestionSet requests.
 type FixedOptionDecisionRequest struct {
 	Mode                DecisionMode `json:"mode"`
 	InputText           string       `json:"input_text"`
@@ -362,6 +365,13 @@ type FixedOptionDecisionRequest struct {
 	TimeoutMS           int          `json:"timeout_ms,omitempty"`
 	SchemaVersion       string       `json:"schema_version,omitempty"`
 	CompatibilityPolicy string       `json:"compatibility_policy,omitempty"`
+	QuestionID          string       `json:"question_id,omitempty"`
+	Instructions        *string      `json:"instructions,omitempty"`
+	OptionDescriptions  []*string    `json:"option_descriptions,omitempty"`
+	Levels              []string     `json:"levels,omitempty"`
+	Questions           []JSONObject `json:"questions,omitempty"`
+	InputFormat         string       `json:"input_format,omitempty"`
+	MaxInputChars       int          `json:"max_input_chars,omitempty"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -594,29 +604,60 @@ type DecisionOptionScore struct {
 	Score  float64 `json:"score"`
 }
 
+// DecisionLevelScore preserves an ordered score level's position and score.
+type DecisionLevelScore struct {
+	Index int     `json:"index"`
+	Level string  `json:"level"`
+	Score float64 `json:"score"`
+}
+
+// DecisionQuestionResult is the calibrated outcome of one named question in a
+// question-set result. Each question carries its own state.
+type DecisionQuestionResult struct {
+	QuestionID    string                `json:"question_id"`
+	Mode          DecisionMode          `json:"mode"`
+	State         DecisionState         `json:"state"`
+	Code          *string               `json:"code"`
+	OptionScores  []DecisionOptionScore `json:"option_scores"`
+	Choice        *string               `json:"choice"`
+	Choices       []string              `json:"choices"`
+	Ranking       []string              `json:"ranking"`
+	ScalarScore   *float64              `json:"scalar_score"`
+	Confidence    *float64              `json:"confidence"`
+	Margin        *float64              `json:"margin"`
+	LevelScores   []DecisionLevelScore  `json:"level_scores"`
+	ExpectedLevel *float64              `json:"expected_level"`
+	Warnings      []string              `json:"warnings"`
+	Review        JSONObject            `json:"review"`
+}
+
 // FixedOptionDecisionResult is the calibrated, explicitly review-only result
-// returned by POST /v1/decisions.
+// returned by POST /v1/decisions. Schema 1.1.0 results also carry
+// LevelScores, ExpectedLevel and Questions.
 type FixedOptionDecisionResult struct {
-	Mode                DecisionMode          `json:"mode"`
-	State               DecisionState         `json:"state"`
-	Code                *string               `json:"code"`
-	OptionScores        []DecisionOptionScore `json:"option_scores"`
-	Choice              *string               `json:"choice"`
-	Choices             []string              `json:"choices"`
-	Ranking             []string              `json:"ranking"`
-	ScalarScore         *float64              `json:"scalar_score"`
-	Confidence          *float64              `json:"confidence"`
-	Margin              *float64              `json:"margin"`
-	Calibration         JSONObject            `json:"calibration"`
-	Backend             JSONObject            `json:"backend"`
-	Access              JSONObject            `json:"access"`
-	Warnings            []string              `json:"warnings"`
-	Review              JSONObject            `json:"review"`
-	Advisory            string                `json:"advisory"`
-	AutonomousAction    bool                  `json:"autonomous_action"`
-	SchemaVersion       string                `json:"schema_version"`
-	CompatibilityPolicy string                `json:"compatibility_policy"`
-	Extensions          JSONObject            `json:"extensions"`
+	Mode                DecisionMode             `json:"mode"`
+	State               DecisionState            `json:"state"`
+	Code                *string                  `json:"code"`
+	OptionScores        []DecisionOptionScore    `json:"option_scores"`
+	Choice              *string                  `json:"choice"`
+	Choices             []string                 `json:"choices"`
+	Ranking             []string                 `json:"ranking"`
+	ScalarScore         *float64                 `json:"scalar_score"`
+	Confidence          *float64                 `json:"confidence"`
+	Margin              *float64                 `json:"margin"`
+	LevelScores         []DecisionLevelScore     `json:"level_scores,omitempty"`
+	ExpectedLevel       *float64                 `json:"expected_level,omitempty"`
+	Questions           []DecisionQuestionResult `json:"questions,omitempty"`
+	Calibration         JSONObject               `json:"calibration"`
+	Backend             JSONObject               `json:"backend"`
+	Access              JSONObject               `json:"access"`
+	Warnings            []string                 `json:"warnings"`
+	Review              JSONObject               `json:"review"`
+	Advisory            string                   `json:"advisory"`
+	AutonomousAction    bool                     `json:"autonomous_action"`
+	SchemaVersion       string                   `json:"schema_version"`
+	CompatibilityPolicy string                   `json:"compatibility_policy"`
+	Extensions          JSONObject               `json:"extensions"`
 }
 
 // HealthResponse is returned by /health.
