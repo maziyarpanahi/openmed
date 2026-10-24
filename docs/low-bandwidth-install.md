@@ -170,3 +170,158 @@ If an online prefetch still fails, compare those fields with the institution's
 network configuration. For an offline cache miss, temporarily disable offline
 mode only during an approved network window, rerun the same prefetch command,
 and restore `OPENMED_OFFLINE=1`.
+
+## Install an offline clinical language bundle
+
+Sites without a dependable connection can move a whole clinical language as
+one signed directory, for example on removable media, instead of fetching the
+model, lexicons, policy, and evidence separately.
+`openmed.clinical.languages.offline_bundle` packages, verifies, and installs
+these bundles locally; no step opens a network connection.
+
+Each bundle carries one or more components of every kind:
+
+| Kind | Contents |
+|---|---|
+| `model` | Model files the runtime loads. |
+| `lexicon` | Public lexicons. |
+| `policy` | Policy metadata, such as the de-identification profile. |
+| `self_test` | Synthetic JSONL cases that the installer runs offline. |
+| `evidence` | Evaluation evidence for the packaged model. |
+
+`offline-bundle.json` declares the ISO 639-1 language, scripts, capability
+identifiers, minimum RAM and storage, and, for each component, its files, SPDX
+license, provenance identifier, and data classification. `manifest.json` uses
+the [skill bundle format](skills/bundle-integrity.md): it pins every file,
+including the descriptor, to a SHA-256 digest and must be signed with
+HMAC-SHA256 or Ed25519. Unsigned bundles are rejected.
+
+Self-test cases are synthetic and list the spans the packaged model must find:
+
+```json
+{"case_id": "sw-001", "synthetic": true, "text": "Mgonjwa Zawadi Kifaru alipimwa leo.", "expected": [{"start": 8, "end": 21, "label": "NAME"}]}
+```
+
+Package on the connected build machine. Equal inputs and keys produce
+byte-identical descriptors and manifests:
+
+```python
+from pathlib import Path
+
+from openmed.clinical.languages.offline_bundle import (
+    OfflineBundleComponent,
+    OfflineBundleDescriptor,
+    ResourceRequirements,
+    package_offline_bundle,
+)
+
+
+def component(component_id, kind, files, license, data_classification="public"):
+    return OfflineBundleComponent(
+        component_id=component_id,
+        kind=kind,
+        files=files,
+        license=license,
+        source=f"example:sw/{component_id}",
+        data_classification=data_classification,
+    )
+
+
+descriptor = OfflineBundleDescriptor(
+    bundle_id="org.example.lang.sw.deid",
+    bundle_version="1.0.0",
+    language="sw",
+    scripts=("Latin",),
+    capabilities=("pii_detection",),
+    resources=ResourceRequirements(
+        min_ram_bytes=2 * 1024**3,
+        min_storage_bytes=600 * 1024**2,
+    ),
+    components=(
+        component("model", "model", ("model/model.onnx",), "Apache-2.0"),
+        component("names", "lexicon", ("lexicons/names.tsv",), "CC0-1.0"),
+        component("policy", "policy", ("policy/policy.json",), "Apache-2.0"),
+        component(
+            "self-tests",
+            "self_test",
+            ("selftests/cases.jsonl",),
+            "CC0-1.0",
+            data_classification="synthetic",
+        ),
+        component("evidence", "evidence", ("evidence/eval.json",), "CC-BY-4.0"),
+    ),
+)
+build = Path("build/sw")
+packaged = package_offline_bundle(
+    descriptor,
+    {path: build / path for path in descriptor.payload_files},
+    "dist/sw-bundle",
+    ed25519_private_key=private_key_bytes,  # raw 32 bytes from your key store
+)
+print(packaged.to_dict())
+```
+
+Ed25519 signing and verification need the `openmed[integrity]` extra; pass
+`signature_key=` instead for an HMAC-SHA256 shared secret. Packaging refuses
+licenses outside the permissive allowlist, restricted dataset or terminology
+markers such as MIMIC, i2b2, n2c2, UMLS, SNOMED, or CPT, credential-like files
+such as `*.pem` or `credentials.json`, hidden or unsafe paths, non-synthetic
+self-tests, and a storage requirement smaller than the bundle itself.
+
+Install at the offline site. Pass host facts explicitly, or probe them with
+`HostResources.detect()`, and supply a runner that loads the packaged model
+from the staged bundle root and returns `(start, end, label)` spans:
+
+```python
+from openmed.clinical.languages.offline_bundle import (
+    HostResources,
+    install_offline_bundle,
+)
+
+installation = install_offline_bundle(
+    "/media/usb/sw-bundle",
+    "/opt/openmed/bundles",
+    host=HostResources.detect("/opt/openmed/bundles"),
+    signature_public_key=public_key_bytes,  # raw 32-byte Ed25519 public key
+    self_test_runner=run_packaged_model,  # (bundle_root, text) -> spans
+)
+print(installation.reason or "installed", installation.to_dict()["install_relpath"])
+```
+
+Verification runs these checks in order. Integrity failures stop early;
+policy failures are all reported together in `failures`:
+
+| Check | Failure codes |
+|---|---|
+| `integrity` | `signature_required`, `signature_invalid`, `hash_mismatch`, `file_undeclared`, `unsigned_bundle`, `manifest_fields_unsupported`, `symlink_present` |
+| `descriptor` | `descriptor_malformed`, `bundle_id_mismatch` |
+| `components` | `component_files_mismatch`, `component_missing` |
+| `licenses` | `license_not_permissive` |
+| `restricted_sources` | `restricted_source` |
+| `credentials` | `credential_like_file` |
+| `self_tests` | `self_test_malformed`, `self_test_not_synthetic` |
+| `storage` | `storage_requirement_understated`, `insufficient_storage` |
+| `ram` | `insufficient_ram` |
+
+`install_offline_bundle()` runs verification, copying, and self-tests inside
+OpenMed's socket guard, which also sets the Hugging Face offline flags for the
+process. It copies the bundle into a staging directory, re-checks every copied
+digest, and runs each self-test against the staged copy. A case passes when the
+runner returns every expected span exactly; extra spans are allowed. Any
+outbound connection attempt fails the install with `network_attempted`. Only
+then is the copy renamed to `<install_root>/<bundle_id>/<bundle_version>`. An
+existing installation is never replaced (`install_target_exists`). Pass
+`require_self_tests=False` only when the self-tests will run later through
+`run_offline_self_tests()`.
+
+`to_dict()` reports contain reason codes, counts, bundle-relative paths,
+digests, license records, capabilities, and resource requirements. They never
+contain self-test text, key material, or absolute paths. The
+`OfflineBundleVerification` result is the input for activating the language;
+installing a bundle does not register it with the
+[language-pack registry](language-packs.md).
+
+A bundle is a deployment artifact. Passing verification and self-tests shows
+that the files are intact and the packaged model runs offline. It is not a
+compliance certification or evidence of clinical accuracy, and it never
+triggers a clinical decision.
