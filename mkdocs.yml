@@ -355,6 +355,7 @@ nav:
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
