@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -518,7 +519,9 @@ def test_certificate_bundle_lock_uses_patched_release() -> None:
     ("package", "unsafe", "fixed"),
     [
         ("brotli", "1.2.0", "1.2.1"),
+        ("brotlicffi", "1.2.0.1", "1.2.1.0"),
         ("graphql-core", "3.2.11", "3.2.12"),
+        ("setuptools", "83.0.0", "84.1.0"),
         ("virtualenv", "21.14.5", "21.14.9"),
     ],
 )
@@ -537,6 +540,23 @@ def test_transitive_dependency_lock_uses_patched_release(
     )
     assert unsafe not in floor.specifier
     assert fixed in floor.specifier
+
+
+@pytest.mark.parametrize("path", ["Dockerfile", "deploy/docker/Dockerfile"])
+@pytest.mark.parametrize(
+    ("package", "fixed"), [("filelock", "4.2.1"), ("setuptools", "84.1.0")]
+)
+def test_service_images_bootstrap_patched_packages_before_torch_index(
+    path: str, package: str, fixed: str
+) -> None:
+    source = (ROOT / path).read_text(encoding="utf-8")
+    pins = re.findall(rf'"{re.escape(package)}==([^"]+)"', source)
+    assert len(pins) == 1
+    assert Version(pins[0]) >= Version(fixed)
+    # The PyTorch CPU index serves older copies of Torch's dependencies.
+    assert source.index(f'"{package}=={pins[0]}"') < source.index(
+        "download.pytorch.org/whl/cpu"
+    )
 
 
 def test_awq_dataset_floor_retains_linux_only_installation() -> None:
