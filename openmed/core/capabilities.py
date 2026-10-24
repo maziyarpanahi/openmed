@@ -148,6 +148,19 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
         description="GLiNER zero-shot entity recognition",
         install="gliner",
     ),
+    "gliner2": BackendSpec(
+        name="gliner2",
+        extra="gliner2",
+        modules=(
+            "gliner2",
+            "torch",
+            "transformers",
+            "safetensors",
+            "huggingface_hub",
+        ),
+        description="GLiNER2.5 entity, classification, relation and JSON extraction",
+        install="gliner2[local]",
+    ),
     "spacy": BackendSpec(
         name="spacy",
         extra="spacy",

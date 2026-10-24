@@ -7,10 +7,9 @@ name = "openmed"
 dynamic = ["version"]
 description = "Local-first SDK for clinical extraction and de-identification workflows on hardware you control."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -41,7 +40,6 @@ dependencies = [
   "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
   "jsonschema>=4.18,<5",
-  "tomli>=2.0; python_version < '3.11'",
 ]
 
 authors = [
@@ -62,8 +60,8 @@ dev = [
   "mcp>=1.30,<2",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
-  # Pillow 13 fixes the image-parser advisories but requires Python 3.11+.
-  "Pillow==13.0.0; python_version >= '3.11'",
+  # Pillow 13 fixes the image-parser advisories.
+  "Pillow==13.0.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "openpyxl>=3.1,<4",
@@ -85,7 +83,6 @@ dev = [
   "ruff==0.15.22",
   "strawberry-graphql[fastapi]>=0.327.2,<1",
   "sqlalchemy>=2.0,<3",
-  "tomli>=2.0; python_version < '3.11'",
   "nbclient>=0.8.0",
   "nbformat>=5.9.0",
   "ipykernel>=6.0",
@@ -432,6 +429,17 @@ gliner = [
   "torch>=2.13.0"
 ]
 
+# GLiNER2.5 checkpoints load through gliner2.AutoExtractor; the gliner package
+# above only provides the v1 span models.
+gliner2 = [
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliner2[local]>=2.1.0,<3",
+  "huggingface-hub>=0.30",
+  "safetensors>=0.4",
+  "torch>=2.13.0",
+]
+
 mlx = [
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -520,7 +528,7 @@ openmed-journey = "openmed.deploy.journey:main"
 [tool.uv]
 constraint-dependencies = [
   "certifi>=2026.10.19",
-  "Pillow>=13.0.0; python_version >= '3.11'",
+  "Pillow>=13.0.0",
   "tinytag>=2.3.0",
   "mako>=1.4.2",
   "multidict>=6.9.1",
@@ -540,10 +548,12 @@ constraint-dependencies = [
   "urllib3>=2.8.0",
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
+  "brotlicffi>=1.2.1.0",
+  "setuptools>=84.1.0",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
-  "betterproto==2.0.0b6; python_version >= '3.11'",
+  "betterproto==2.0.0b6",
   "pyjwt>=2.14.0",
 ]
 override-dependencies = [
@@ -551,11 +561,15 @@ override-dependencies = [
   # DirectRunner remains compatible with the secure versions.
   "cryptography>=50,<51",
   "httplib2>=0.32",
-  # Beam also caps Pillow below the patched release on Python 3.11+.
-  "Pillow>=13.0.0; python_version >= '3.11'",
+  # Beam also caps Pillow below the patched release.
+  "Pillow>=13.0.0",
   # Prefect 3.7 caps packaging below the release patched virtualenv needs, and
   # newer Prefect requires FastAPI releases that Airflow 3.3 excludes.
   "packaging>=26.3,<27",
+  # Snowflake Connector 4.x caps filelock below 4, and every Snowpark release
+  # excludes Connector 5. Its cache locks use only the FileLock API that
+  # filelock 4 keeps.
+  "filelock>=4.2.1",
 ]
 conflicts = [
   [
@@ -630,7 +644,7 @@ testpaths = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 extend-exclude = [
   "examples/notebooks",
@@ -666,7 +680,7 @@ line-ending = "lf"
 # marker; it is not a strict project-wide gate. The pinned development checker,
 # local Make target, regression test, and CI lint job all use this same scope.
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = [
   "openmed/core/audit.py",
   "openmed/core/pipeline.py",

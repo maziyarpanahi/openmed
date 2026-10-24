@@ -77,7 +77,6 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
         "pysbd",
         "pyyaml",
         "snowflake-snowpark-python",
-        "tomli",
     }
 
 

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from .families.base import ModelFamily
+from .families.gliner2 import GLiNER2CheckpointSpec, list_gliner2_checkpoints
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INDEX_PATH = PACKAGE_ROOT / "models" / "index.json"
@@ -78,7 +79,27 @@ GLINER_BIOMED_RECORD = ModelRecord(
 """Built-in metadata for the production biomedical zero-shot backbone."""
 
 
-BUILTIN_MODEL_RECORDS = (GLINER_BIOMED_RECORD,)
+def _gliner2_record(spec: GLiNER2CheckpointSpec) -> ModelRecord:
+    kind = "decision-tuned " if spec.decision_tuned else ""
+    return ModelRecord(
+        id=spec.model_id,
+        family=ModelFamily.GLINER2.value,
+        domains=("generic",),
+        languages=spec.languages,
+        notes=(
+            f"GLiNER2.5 {spec.size_label}-parameter {kind}checkpoint loaded "
+            "through gliner2.AutoExtractor; weights are not bundled and load "
+            "from the local Hugging Face cache when the optional gliner2 "
+            "dependency is enabled."
+        ),
+        license=spec.license_id,
+    )
+
+
+BUILTIN_MODEL_RECORDS = (
+    GLINER_BIOMED_RECORD,
+    *(_gliner2_record(spec) for spec in list_gliner2_checkpoints()),
+)
 
 
 @dataclass(frozen=True)
