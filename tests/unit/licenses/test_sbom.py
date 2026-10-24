@@ -147,8 +147,7 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
     )
 
     component_names = {component["name"] for component in document["components"]}
-    # The SBOM is a universal closure, including the conditional Python 3.10
-    # TOML backport even when this test runs on a newer interpreter.
+    # The SBOM is a universal closure across every supported interpreter.
     assert component_names == {
         "attrs",
         "faker",
@@ -159,7 +158,6 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
         "pyyaml",
         "referencing",
         "rpds-py",
-        "tomli",
         "typing-extensions",
         "tzdata",
     }
@@ -187,7 +185,6 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
         "jsonschema",
         "pysbd",
         "pyyaml",
-        "tomli",
     ]
     properties = {
         item["name"]: item["value"] for item in document["metadata"]["properties"]
