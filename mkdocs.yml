@@ -610,6 +610,7 @@ nav:
       - Dependency License Inventory: security/license-inventory.md
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Differential-Privacy Budget Migrations: security/budget-migrations.md
+      - Federated Distributed Noise: training/federated-distributed-noise.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md
       - Privacy Exception Budgets: security/exception-budgets.md
       - Export Filename Policy: security/export-naming.md

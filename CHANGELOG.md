@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add dropout-aware distributed discrete Gaussian noise shares for secure
+  aggregation, calibrated to the recovery threshold with exact CSPRNG sampling,
+  a below-quorum abort, a modulus wraparound check and a value-free mechanism
+  record (#3860).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and

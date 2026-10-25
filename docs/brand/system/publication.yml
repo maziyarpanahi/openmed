@@ -666,6 +666,7 @@ classification:
     - security/license-inventory.md
     - security/exception-taxonomy.md
     - security/budget-migrations.md
+    - training/federated-distributed-noise.md
     - security/policy-simulation.md
     - security/exception-budgets.md
     - security/export-naming.md
