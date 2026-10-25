@@ -1283,7 +1283,10 @@ def test_host_resources_detect_uses_local_probes(
 
     sysconf_values = {"SC_PHYS_PAGES": 4, "SC_PAGE_SIZE": 4096}
     monkeypatch.setattr(offline_bundle.shutil, "disk_usage", disk_usage)
-    monkeypatch.setattr(offline_bundle.os, "sysconf", sysconf_values.__getitem__)
+    # Windows has no os.sysconf; patch it in so the probe runs on every platform.
+    monkeypatch.setattr(
+        offline_bundle.os, "sysconf", sysconf_values.__getitem__, raising=False
+    )
 
     host = HostResources.detect(tmp_path / "not" / "created" / "yet")
 
@@ -1297,7 +1300,7 @@ def test_host_resources_detect_fails_closed_without_memory_facts(
     def unavailable(_name: str) -> int:
         raise ValueError("unsupported sysconf name")
 
-    monkeypatch.setattr(offline_bundle.os, "sysconf", unavailable)
+    monkeypatch.setattr(offline_bundle.os, "sysconf", unavailable, raising=False)
 
     with pytest.raises(OfflineBundleError) as raised:
         HostResources.detect(tmp_path)
