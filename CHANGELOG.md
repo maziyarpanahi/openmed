@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a federated weighting-sensitivity guard that derives exact client-level
+  sensitivity from clip norm, capped band weights and a fixed denominator,
+  rejects count-proportional weights, exact count inputs, floors above the cap,
+  realized-sum normalization and under-calibrated mechanisms with stable reason
+  codes, and emits a value-free receipt binding the weighting-policy, mechanism
+  and accountant digests. See
+  [federated weighting sensitivity](docs/training/federated-weighting-sensitivity.md).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
