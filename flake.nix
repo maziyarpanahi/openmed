@@ -93,15 +93,23 @@
               # cached builds carry no fsspec at runtime.
               inherit (pkgs.python312.pkgs) duckdb pyarrow;
               # dask imports fsspec at runtime and must be rebuilt against it.
-              dask = prev.dask.overridePythonAttrs (_: {
+              dask = prev.dask.overridePythonAttrs (old: {
                 doCheck = false;
+                # The import check loads dask.array and dask.dataframe, whose
+                # extras nixpkgs only supplies as test inputs.
+                nativeBuildInputs =
+                  (old.nativeBuildInputs or [ ])
+                  ++ prev.dask.optional-dependencies.dataframe;
               });
               # The Python 3.12 builds are not in cache.nixos.org. Skipping
               # sse-starlette's suite also drops tenacity from the build.
               coverage = prev.coverage.overridePythonAttrs (_: {
                 doCheck = false;
               });
-              sse-starlette = prev.sse-starlette.overridePythonAttrs (_: {
+              sse-starlette = prev.sse-starlette.overridePythonAttrs (old: {
+                # Upstream requires starlette at runtime, which nixpkgs only
+                # supplies through the fastapi test input dropped here.
+                dependencies = old.dependencies ++ [ final.starlette ];
                 doCheck = false;
               });
             };
