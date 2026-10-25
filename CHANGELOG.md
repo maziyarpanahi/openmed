@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add a fail-closed federated client round runner that verifies a round,
+  declines on manifest drift, capability, data-use or budget refusals before
+  training, binds each round to one sealed update digest, resends
+  byte-identical bytes on retry and refuses submission after hold, abort or
+  deadline. All ports are injected and status records are value-free. See
+  [federated client runner](docs/training/federated-client-runner.md)
+  (#3846).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
