@@ -21,6 +21,9 @@ LOOPBACK_BASE_URL = "http://127.0.0.1"
 # Bounds the wait for a model worker thread to start. A loaded runner can
 # stall thread scheduling for most of a second; passing runs return at once.
 _WORKER_START_WAIT_SECONDS = 5
+# One token per 100 s, so a slow runner cannot refill a one-token bucket
+# between back-to-back requests.
+_SLOW_REFILL_RATE_LIMIT_RPS = "0.01"
 
 _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_PRELOAD_MODELS",
@@ -125,7 +128,7 @@ def test_service_throttle_config_reads_env(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_rate_limit_returns_429_with_retry_after(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", _SLOW_REFILL_RATE_LIMIT_RPS)
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
     calls: list[str] = []
 
@@ -250,7 +253,7 @@ def test_batch_backpressure_returns_retry_after_before_model_work(
 
 
 def test_probe_paths_do_not_consume_rate_limit(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", _SLOW_REFILL_RATE_LIMIT_RPS)
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
 
     def fake_analyze(text: str, **_: Any) -> PredictionResult:
