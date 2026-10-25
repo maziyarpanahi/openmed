@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add patient-level DP-SGD for single-site adapter fine-tuning in
+  `openmed.training.patient_dp_sgd`. The framework-neutral step Poisson-samples
+  patients with an injected CSPRNG, clips each patient's mean note gradient,
+  adds Gaussian noise scaled to the clip norm and normalizes by the expected
+  batch size. It refuses fixed-size or shuffled batches under an amplification
+  claim, missing noise, reused or deterministic operational randomness, and a
+  note-level unit when patient keys exist. It binds an injected accountant
+  through its inputs and adds an optional lazy torch adapter. See
+  [Patient-level DP-SGD](docs/training/patient-dp-sgd.md).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
