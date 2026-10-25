@@ -647,8 +647,11 @@ def find_context_words(
 
 
 # Whitespace, label punctuation and bidi controls that may sit between a label
-# and its value, as in "NIN: 123", "کد ملی ⁦۱۲۳⁩" or "ቁጥር፡ 123".
-_LABEL_SEPARATORS_SUFFIX = re.compile(r"[\s:：፡#№=.\-–—‎‏‪-‮⁦-⁩]+$")
+# and its value, as in "NIN: 123", "ቁጥር፡ 123" or Persian digits wrapped in
+# U+2066/U+2069 isolates. Bidi controls are escaped so the source holds none.
+_LABEL_SEPARATORS_SUFFIX = re.compile(
+    r"[\s:：፡#№=.\-–—\u200e\u200f\u202a-\u202e\u2066-\u2069]+$"
+)
 _LABEL_WINDOW = 80
 
 
