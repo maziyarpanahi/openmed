@@ -10,6 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    write_canonical_manifest,
+)
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 INT8_ONNX_FILENAME = "model_int8.onnx"
@@ -122,8 +127,16 @@ def write_int8_recall_delta_report(
     cache_dir: str | None = None,
     parent_runner: QuantEvalRunner | None = None,
     candidate_runner: QuantEvalRunner | None = None,
+    source_context: SourceContext | None = None,
 ) -> dict[str, Any]:
-    """Run FP-parent versus INT8 ONNX recall and write PHI-safe evidence JSON."""
+    """Run FP-parent versus INT8 ONNX recall and write PHI-safe evidence JSON.
+
+    Provenance-enabled reports keep their deterministic recall projection inside
+    the artifact and complete observations in a sibling report. The return value
+    retains the complete report. Legacy artifacts retain their report format.
+    A custom parent runner without a real local load reference is responsible
+    for evaluating the source identity declared by the artifact.
+    """
 
     from openmed.eval.harness import load_fixtures, run_benchmark
     from openmed.eval.quant_delta import (
@@ -132,6 +145,21 @@ def write_int8_recall_delta_report(
     )
 
     artifact_dir = Path(artifact_dir)
+    manifest_path = artifact_dir / "openmed-onnx.json"
+    manifest = _read_json(manifest_path) if manifest_path.is_file() else {}
+    if source_context is None:
+        source_context = _manifest_source_context(
+            manifest, load_reference=source_model_id
+        )
+    load_reference = (
+        source_context.load_reference if source_context else source_model_id
+    )
+    if parent_runner is None and (
+        not load_reference or load_reference.startswith("local:")
+    ):
+        raise ValueError("source evaluation requires the original load reference")
+    if source_context is not None:
+        source_model_id = source_context.source_model_id
     eval_suite_path = Path(eval_suite_path)
     fp_model_path = (
         Path(fp_model_path) if fp_model_path else artifact_dir / "model.onnx"
@@ -144,12 +172,31 @@ def write_int8_recall_delta_report(
         if output_path is not None
         else artifact_dir / RECALL_DELTA_REPORT_FILENAME
     )
+    report_relpath = _artifact_relative_path(report_path, artifact_dir)
+    artifact_root = artifact_dir.resolve()
+    observation_path = artifact_root.parent / (
+        f"{artifact_root.name}_onnx_observations.json"
+    )
+    if source_context is not None:
+        _validate_report_projection(artifact_dir, report_relpath, manifest)
+        if report_path.resolve() == observation_path:
+            raise ValueError("report output collision with managed observations")
+    check_local_source = bool(
+        source_context is not None
+        and source_context.source_digest
+        and load_reference
+        and not load_reference.startswith("local:")
+    )
+    if check_local_source:
+        assert source_context is not None
+        assert_source_unchanged(source_context)
 
     generated_at = _utc_now()
     fixtures = load_fixtures(eval_suite_path)
     parent_runner = parent_runner or _hf_token_classification_runner(
-        source_model_id,
+        load_reference,
         cache_dir=cache_dir,
+        revision=source_context.revision if source_context else None,
     )
     candidate_runner = candidate_runner or _onnx_token_classification_runner(
         artifact_dir=artifact_dir,
@@ -169,7 +216,9 @@ def write_int8_recall_delta_report(
     candidate_report = run_benchmark(
         fixtures,
         suite=suite_name,
-        model_name=str(int8_model_path),
+        model_name=_artifact_relative_path(int8_model_path, artifact_dir)
+        if source_context is not None
+        else str(int8_model_path),
         device=ONNX_INT8_FORMAT,
         runner=candidate_runner,
         generated_at=generated_at,
@@ -179,6 +228,9 @@ def write_int8_recall_delta_report(
             "quantization": _base_quantization_metadata(),
         },
     )
+    if check_local_source:
+        assert source_context is not None
+        assert_source_unchanged(source_context)
 
     parent_recall = _per_label_recall(parent_report.metrics)
     candidate_recall = _per_label_recall(candidate_report.metrics)
@@ -189,7 +241,6 @@ def write_int8_recall_delta_report(
     )
     delta_payload = delta.to_dict()
     delta_payload["blocking_format"] = delta.blocking_format
-    report_relpath = _artifact_relative_path(report_path, artifact_dir)
     span_counts = _gold_span_counts_by_label(fixtures)
     char_counts = _gold_char_counts_by_label(fixtures)
 
@@ -225,9 +276,31 @@ def write_int8_recall_delta_report(
         "report_path": report_relpath,
     }
 
+    stored_payload = payload
+    if source_context is not None:
+        observations = (
+            _read_json(observation_path) if observation_path.is_file() else {}
+        )
+        observations["int8_recall"] = payload
+        observation_path.write_text(
+            json.dumps(observations, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        stable_payload = {
+            key: value for key, value in payload.items() if key != "generated_at"
+        }
+        if report_path.resolve().is_relative_to(artifact_dir.resolve()):
+            stored_payload = stable_payload
+        else:
+            stable_path = artifact_dir / report_relpath
+            stable_path.parent.mkdir(parents=True, exist_ok=True)
+            stable_path.write_text(
+                json.dumps(stable_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with report_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
+        json.dump(stored_payload, handle, indent=2, sort_keys=True)
         handle.write("\n")
 
     apply_int8_recall_certification(
@@ -236,6 +309,44 @@ def write_int8_recall_delta_report(
         report_relpath=report_relpath,
     )
     return payload
+
+
+def _validate_report_projection(
+    artifact_dir: Path, report_relpath: str, manifest: Mapping[str, Any]
+) -> None:
+    target = artifact_dir / report_relpath
+    error = "report projection would overwrite a runtime file (report collision)"
+    if report_relpath in {"config.json", "openmed-onnx.json"}:
+        raise ValueError(error)
+    if target.is_symlink() or not target.resolve().is_relative_to(
+        artifact_dir.resolve()
+    ):
+        raise ValueError(error)
+    if not target.exists():
+        return
+    certification = manifest.get("certification")
+    declared = manifest.get("recall_delta_path") == report_relpath or (
+        isinstance(certification, Mapping)
+        and certification.get("report_path") == report_relpath
+    )
+    if not declared or not target.is_file():
+        raise ValueError(error)
+    try:
+        report = _read_json(target)
+    except (OSError, UnicodeError, ValueError):
+        raise ValueError(error) from None
+    if not (
+        report.get("schema_version") == RECALL_DELTA_REPORT_VERSION
+        and report.get("format") == ONNX_INT8_FORMAT
+        and report.get("metric") == "character_recall"
+        and report.get("report_path") == report_relpath
+        and type(report.get("certified")) is bool
+        and all(
+            isinstance(report.get(name), Mapping)
+            for name in ("per_label", "delta", "quantization")
+        )
+    ):
+        raise ValueError(error)
 
 
 def apply_int8_recall_certification(
@@ -279,8 +390,12 @@ def _hf_token_classification_runner(
     model_id: str,
     *,
     cache_dir: str | None = None,
+    revision: str | None = None,
 ) -> QuantEvalRunner:
     pipeline_instance: Any | None = None
+    load_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+    if revision is not None:
+        load_kwargs["revision"] = revision
 
     def run_fixture(fixture: Any, model_name: str, device: str) -> Iterable[Any]:
         del model_name, device
@@ -301,11 +416,11 @@ def _hf_token_classification_runner(
             tokenizer = get_tokenizer_with_loader(
                 model_id,
                 AutoTokenizer.from_pretrained,
-                cache_dir=cache_dir,
+                **load_kwargs,
             )
             model = AutoModelForTokenClassification.from_pretrained(
                 model_id,
-                cache_dir=cache_dir,
+                **load_kwargs,
             )
             pipeline_instance = pipeline(
                 "token-classification",
@@ -578,9 +693,40 @@ def _update_manifest_int8_certification(
         metadata=int8_artifact_metadata(recall_report=payload),
     )
 
+    source = _manifest_source_context(manifest)
+    if source is not None:
+        manifest["source_model_id"] = source.source_model_id
+        write_canonical_manifest(
+            artifact_dir,
+            manifest_path.name,
+            manifest,
+            source=source,
+            backend="onnx",
+        )
+        return
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
         handle.write("\n")
+
+
+def _manifest_source_context(
+    manifest: Mapping[str, Any], *, load_reference: str = ""
+) -> SourceContext | None:
+    provenance = manifest.get("provenance")
+    if provenance is None:
+        return None
+    if not isinstance(provenance, Mapping) or not isinstance(
+        provenance.get("source"), Mapping
+    ):
+        raise ValueError("invalid export provenance source")
+    source = provenance["source"]
+    return SourceContext(
+        source_model_id=source["model_id"],
+        load_reference=load_reference,
+        revision=source.get("revision"),
+        source_digest=source.get("content_digest"),
+        license=source.get("license"),
+    )
 
 
 def _upsert_int8_artifact(
@@ -768,7 +914,7 @@ def _float_map(values: Mapping[str, Any]) -> dict[str, float]:
 
 def _artifact_relative_path(path: Path, artifact_dir: Path) -> str:
     try:
-        return path.relative_to(artifact_dir).as_posix()
+        return path.resolve().relative_to(artifact_dir.resolve()).as_posix()
     except ValueError:
         return path.name
 

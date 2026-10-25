@@ -6,11 +6,21 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from openmed.core.export_provenance import (
+    SourceContext,
+    context_from_metadata,
+    write_canonical_manifest,
+)
 from openmed.processing.tokenization import validate_segmenter_resources
 
 MANIFEST_FILENAME = "openmed-mlx.json"
 MANIFEST_FORMAT = "openmed-mlx"
 MANIFEST_VERSION = 2
+_EXPORT_MANIFEST_FILENAMES = (
+    MANIFEST_FILENAME,
+    "openmed-onnx.json",
+    "openmed-coreml.json",
+)
 
 _KNOWN_TOKENIZER_FILES = (
     "tokenizer.json",
@@ -31,12 +41,45 @@ _KNOWN_SEGMENTER_FILES = (
 )
 
 _NON_TOKENIZER_FILENAMES = {
-    MANIFEST_FILENAME,
+    *_EXPORT_MANIFEST_FILENAMES,
+    "recall_delta.json",
     "config.json",
     "id2label.json",
     "weights.safetensors",
     "weights.npz",
 }
+
+
+def _declared_report_files(model_dir: Path) -> set[str]:
+    """Read report references only from known root export manifests."""
+    report_files: set[str] = set()
+    for name in _EXPORT_MANIFEST_FILENAMES:
+        manifest_path = model_dir / name
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, UnicodeError):
+            continue
+        if not isinstance(manifest, Mapping):
+            continue
+        references = [manifest.get("recall_delta_path")]
+        certification = manifest.get("certification")
+        if isinstance(certification, Mapping):
+            references.append(certification.get("report_path"))
+        for reference in references:
+            if not isinstance(reference, str) or not reference or "\\" in reference:
+                continue
+            relative = Path(reference)
+            if (
+                relative.is_absolute()
+                or ".." in relative.parts
+                or not relative.parts
+                or relative.as_posix() != reference
+            ):
+                continue
+            report_files.add(reference)
+    return report_files
 
 
 def _dedupe_keep_order(items: list[str]) -> list[str]:
@@ -53,6 +96,7 @@ def find_tokenizer_files(model_dir: str | Path) -> list[str]:
     """Return tokenizer asset filenames present in *model_dir*."""
     model_dir = Path(model_dir)
     tokenizer_files: list[str] = []
+    excluded = _NON_TOKENIZER_FILENAMES | _declared_report_files(model_dir)
 
     for name in _KNOWN_TOKENIZER_FILES:
         if (model_dir / name).exists():
@@ -61,7 +105,7 @@ def find_tokenizer_files(model_dir: str | Path) -> list[str]:
     for path in sorted(model_dir.iterdir()):
         if not path.is_file():
             continue
-        if path.name in _NON_TOKENIZER_FILENAMES:
+        if path.name in excluded:
             continue
         if path.suffix.lower() not in {".json", ".txt", ".model", ".vocab", ".bpe"}:
             continue
@@ -167,9 +211,15 @@ def write_manifest(
     config: dict[str, Any],
     tokenizer_files: list[str] | None = None,
     segmenter: Mapping[str, Any] | None = None,
+    source: SourceContext | None = None,
 ) -> Path:
-    """Write ``openmed-mlx.json`` for a converted artifact."""
+    """Write ``openmed-mlx.json`` with provenance for a converted artifact.
+
+    Converter entry points supply their resolved source context. Direct writer
+    callers retain offline behavior and record only locally available metadata.
+    """
     model_dir = Path(model_dir)
+    source = source or context_from_metadata(source_model_id, config)
     preferred_format = config.get("_mlx_weights_format", "safetensors")
     preferred_weights = (
         "weights.safetensors" if preferred_format == "safetensors" else "weights.npz"
@@ -203,7 +253,7 @@ def write_manifest(
         "format_version": MANIFEST_VERSION,
         "task": task,
         "family": family,
-        "source_model_id": source_model_id,
+        "source_model_id": source.source_model_id,
         "config_path": "config.json",
         "label_map_path": "id2label.json"
         if (model_dir / "id2label.json").exists()
@@ -246,9 +296,13 @@ def write_manifest(
     if segmenter is not None:
         manifest["segmenter"] = dict(segmenter)
 
-    manifest_path = model_dir / MANIFEST_FILENAME
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
+    manifest_path = write_canonical_manifest(
+        model_dir,
+        MANIFEST_FILENAME,
+        manifest,
+        source=source,
+        backend="mlx",
+    )
     validate_mlx_bundle(model_dir)
     return manifest_path
 

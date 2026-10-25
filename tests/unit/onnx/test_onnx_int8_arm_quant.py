@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+from openmed.core.export_provenance import SourceContext
+
 
 def _quant_module():
     return importlib.import_module("openmed.onnx.quantize_int8")
@@ -208,11 +210,389 @@ def test_int8_report_marks_over_budget_delta_uncertified(tmp_path: Path) -> None
     assert manifest["quantization"]["certified"] is False
 
 
+def test_int8_certification_refreshes_existing_provenance(tmp_path: Path) -> None:
+    from openmed.core.export_provenance import (
+        SourceContext,
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    manifest_path = artifact / "openmed-onnx.json"
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    module.apply_int8_recall_certification(
+        artifact,
+        {
+            "limit": 0.005,
+            "certified": True,
+            "format": "onnx-int8",
+            "quant_recall_delta": 0.0,
+            "metric": "character_recall",
+        },
+        report_relpath="recall_delta.json",
+    )
+
+    provenance = verify_export_provenance(artifact, manifest_path.name)
+    assert provenance["source"]["revision"] == source.revision
+
+
+def test_int8_report_uses_private_reference_and_separates_observations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core.export_provenance import (
+        resolve_source_context,
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _quant_module()
+    checkpoint = tmp_path / "synthetic-user" / "checkpoint"
+    checkpoint.mkdir(parents=True)
+    (checkpoint / "config.json").write_text('{"model_type": "bert"}')
+    source = resolve_source_context(str(checkpoint))
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    manifest_path = artifact / "openmed-onnx.json"
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    observation_path = artifact.with_name("artifact_onnx_observations.json")
+    observation_path.write_text('{"validation": {"latency": {"p50": 1.25}}}')
+    loads = []
+    monkeypatch.setattr(
+        module,
+        "_hf_token_classification_runner",
+        lambda model_id, **kwargs: loads.append(model_id) or _perfect_runner,
+    )
+    outputs = []
+    for clock in ("2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z"):
+        monkeypatch.setattr(module, "_utc_now", lambda value=clock: value)
+        payload = module.write_int8_recall_delta_report(
+            source_model_id=source.source_model_id,
+            source_context=source,
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            candidate_runner=_perfect_runner,
+        )
+        assert payload["generated_at"] == clock
+        stable = json.loads((artifact / "recall_delta.json").read_text())
+        assert "generated_at" not in stable
+        assert stable["delta"] == payload["delta"]
+        assert stable["per_label"] == payload["per_label"]
+        assert str(checkpoint) not in json.dumps(stable)
+        observations = json.loads(observation_path.read_text())
+        assert observations["validation"]["latency"]["p50"] == 1.25
+        assert observations["int8_recall"]["generated_at"] == clock
+        verify_export_provenance(artifact, manifest_path.name)
+        outputs.append(
+            (manifest_path.read_bytes(), (artifact / "recall_delta.json").read_bytes())
+        )
+    assert loads == [source.load_reference, source.load_reference]
+    assert outputs[0] == outputs[1]
+
+
+def test_int8_report_requires_real_local_load_reference(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    monkeypatch.setattr(
+        module,
+        "_hf_token_classification_runner",
+        lambda *args, **kwargs: pytest.fail("local digest must never reach loader"),
+    )
+
+    with pytest.raises(ValueError, match="load reference"):
+        module.write_int8_recall_delta_report(
+            source_model_id="local:sha256:" + "a" * 64,
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            candidate_runner=_perfect_runner,
+        )
+
+
+def test_standalone_int8_report_pins_model_and_tokenizer_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core.export_provenance import write_canonical_manifest
+
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    source = SourceContext("OpenMed/synthetic", "OpenMed/synthetic", revision="a" * 40)
+    manifest_path = artifact / "openmed-onnx.json"
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    loads = []
+
+    def load_tokenizer(model_id, **kwargs):
+        loads.append(("tokenizer", model_id, kwargs))
+        return object()
+
+    def load_model(model_id, **kwargs):
+        loads.append(("model", model_id, kwargs))
+        return object()
+
+    transformers = types.ModuleType("transformers")
+    transformers.AutoTokenizer = types.SimpleNamespace(from_pretrained=load_tokenizer)
+    transformers.AutoModelForTokenClassification = types.SimpleNamespace(
+        from_pretrained=load_model
+    )
+    transformers.pipeline = lambda *args, **kwargs: (
+        lambda text: [{"entity_group": "PERSON", "start": 8, "end": 16, "score": 0.99}]
+    )
+    monkeypatch.setitem(sys.modules, "transformers", transformers)
+
+    report = module.write_int8_recall_delta_report(
+        source_model_id=source.source_model_id,
+        artifact_dir=artifact,
+        eval_suite_path=fixture_path,
+        candidate_runner=_perfect_runner,
+    )
+
+    assert report["certified"] is True
+    assert loads == [
+        (
+            "tokenizer",
+            source.source_model_id,
+            {"cache_dir": None, "revision": source.revision},
+        ),
+        (
+            "model",
+            source.source_model_id,
+            {"cache_dir": None, "revision": source.revision},
+        ),
+    ]
+
+
+@pytest.mark.parametrize("parent_component", [False, True])
+def test_int8_external_report_has_an_inventoried_stable_copy(
+    tmp_path: Path, parent_component: bool
+) -> None:
+    from openmed.core.export_provenance import (
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    manifest_path = artifact / "openmed-onnx.json"
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    external_path = (
+        artifact / ".." / "reports" / "custom-recall.json"
+        if parent_component
+        else tmp_path / "reports" / "custom-recall.json"
+    )
+
+    for runner in (_perfect_runner, _miss_runner):
+        report = module.write_int8_recall_delta_report(
+            source_model_id=source.source_model_id,
+            source_context=source,
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=external_path,
+            parent_runner=_perfect_runner,
+            candidate_runner=runner,
+        )
+
+        assert json.loads(external_path.read_text()) == report
+        stable_path = artifact / report["report_path"]
+        stable = json.loads(stable_path.read_text())
+        assert "generated_at" not in stable
+        assert stable["delta"] == report["delta"]
+        assert stable["certified"] is (runner is _perfect_runner)
+        manifest = json.loads(manifest_path.read_text())
+        assert manifest["recall_delta_path"] == stable_path.name
+        provenance = verify_export_provenance(artifact, manifest_path.name)
+        assert any(item["path"] == stable_path.name for item in provenance["files"])
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["config.json", "tokenizer.json", "openmed-onnx.json", "model_int8.onnx"],
+)
+def test_external_int8_report_rejects_runtime_file_collisions(
+    tmp_path: Path, filename: str
+) -> None:
+    from openmed.core.export_provenance import write_canonical_manifest
+
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    (artifact / "tokenizer.json").write_text('{"synthetic": true}')
+    manifest_path = artifact / "openmed-onnx.json"
+    manifest = json.loads(manifest_path.read_text())
+    # A stale or malformed report declaration must not turn a tokenizer into a
+    # certification report that can be overwritten.
+    manifest["recall_delta_path"] = "tokenizer.json"
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    write_canonical_manifest(
+        artifact, manifest_path.name, manifest, source=source, backend="onnx"
+    )
+    before = {path.name: path.read_bytes() for path in artifact.iterdir()}
+    external_path = tmp_path / "reports" / filename
+
+    with pytest.raises(ValueError, match="report.*(overwrite|collision)"):
+        module.write_int8_recall_delta_report(
+            source_model_id=source.source_model_id,
+            source_context=source,
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=external_path,
+            parent_runner=_perfect_runner,
+            candidate_runner=_perfect_runner,
+        )
+
+    assert {path.name: path.read_bytes() for path in artifact.iterdir()} == before
+    assert not external_path.exists()
+    assert not artifact.with_name("artifact_onnx_observations.json").exists()
+
+
+@pytest.mark.parametrize("change_when", ["before", "during"])
+def test_standalone_int8_report_rejects_changed_local_source(
+    tmp_path: Path, change_when: str
+) -> None:
+    from openmed.core.export_provenance import (
+        resolve_source_context,
+        write_canonical_manifest,
+    )
+
+    module = _quant_module()
+    checkpoint = tmp_path / "checkpoint"
+    checkpoint.mkdir()
+    config_path = checkpoint / "config.json"
+    config_path.write_text('{"model_type": "bert"}')
+    source = resolve_source_context(str(checkpoint))
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    manifest_path = artifact / "openmed-onnx.json"
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    if change_when == "before":
+        config_path.write_text('{"model_type": "changed"}')
+
+    def parent_runner(fixture, model_name, device):
+        if change_when == "during":
+            config_path.write_text('{"model_type": "changed"}')
+        return _perfect_runner(fixture, model_name, device)
+
+    before = manifest_path.read_bytes()
+    with pytest.raises(ValueError, match="local source changed"):
+        module.write_int8_recall_delta_report(
+            source_model_id=str(checkpoint),
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            parent_runner=parent_runner,
+            candidate_runner=_perfect_runner,
+        )
+
+    assert manifest_path.read_bytes() == before
+    assert not (artifact / "recall_delta.json").exists()
+    assert not artifact.with_name("artifact_onnx_observations.json").exists()
+
+
+def test_int8_report_supports_current_directory_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core.export_provenance import (
+        verify_export_provenance,
+        write_canonical_manifest,
+    )
+
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    manifest_path = artifact / "openmed-onnx.json"
+    write_canonical_manifest(
+        artifact,
+        manifest_path.name,
+        json.loads(manifest_path.read_text()),
+        source=source,
+        backend="onnx",
+    )
+    monkeypatch.chdir(artifact)
+
+    report = module.write_int8_recall_delta_report(
+        source_model_id=source.source_model_id,
+        source_context=source,
+        artifact_dir=".",
+        eval_suite_path=fixture_path,
+        parent_runner=_perfect_runner,
+        candidate_runner=_perfect_runner,
+    )
+
+    assert report["report_path"] == "recall_delta.json"
+    assert (tmp_path / "artifact_onnx_observations.json").is_file()
+    verify_export_provenance(".", manifest_path.name)
+
+
+def test_int8_report_cannot_overwrite_managed_observations(tmp_path: Path) -> None:
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    source = SourceContext("OpenMed/synthetic", "unused", revision="a" * 40)
+    observations = tmp_path / "artifact_onnx_observations.json"
+    original = '{"validation": {"latency": {"p50": 1.25}}}'
+    observations.write_text(original)
+    before = {path.name: path.read_bytes() for path in artifact.iterdir()}
+
+    with pytest.raises(ValueError, match="report.*collision"):
+        module.write_int8_recall_delta_report(
+            source_model_id=source.source_model_id,
+            source_context=source,
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=observations,
+            parent_runner=_perfect_runner,
+            candidate_runner=_perfect_runner,
+        )
+
+    assert observations.read_text() == original
+    assert {path.name: path.read_bytes() for path in artifact.iterdir()} == before
+
+
 def test_convert_android_profile_emits_int8_and_runs_certification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     fixture_path = _write_fixture(tmp_path / "fixtures.json")
     report_path = tmp_path / "reports" / "recall_delta.json"
     report_calls: list[dict[str, Any]] = []

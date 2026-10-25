@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Record resolved source identity, available source license, toolchain versions
+  and exact file inventories for MLX, ONNX and CoreML exports, with an explicit
+  offline provenance verifier.
+
+### Changed
+
+- Write independent CoreML package manifests using schema v2 while retaining
+  schema v1 conversion observations and sibling labels outside packages. Keep
+  v1/v2 segmenter validation compatible; move variable export observations out
+  of canonical artifact metadata. See [export provenance](docs/export-matrix.md#producer-provenance-and-offline-verification).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and

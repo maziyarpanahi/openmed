@@ -23,6 +23,13 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.capabilities import raise_missing_backend
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    context_from_metadata,
+    resolve_source_context,
+    write_canonical_manifest,
+)
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
 from openmed.mlx.artifact import find_tokenizer_files
@@ -371,6 +378,8 @@ def convert(
     profile = _normalize_profile(profile)
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
+    source = resolve_source_context(model_id, cache_dir=cache_dir)
+    load_reference = source.load_reference
     should_optimize_onnx = optimize_onnx and profile not in {
         ANDROID_PROFILE_NAME,
         OPENVINO_PROFILE_NAME,
@@ -381,7 +390,7 @@ def convert(
     operator_fallbacks: list[dict[str, Any]] = []
     if should_optimize_onnx:
         unoptimized_path = export_onnx(
-            model_id,
+            load_reference,
             output_dir / DEFAULT_UNOPTIMIZED_ONNX_FILENAME,
             max_seq_length=max_seq_length,
             opset=opset,
@@ -391,7 +400,7 @@ def convert(
         onnx_path = output_dir / DEFAULT_ONNX_FILENAME
     else:
         onnx_path = export_onnx(
-            model_id,
+            load_reference,
             output_dir / DEFAULT_ONNX_FILENAME,
             max_seq_length=max_seq_length,
             opset=opset,
@@ -405,12 +414,13 @@ def convert(
         }
 
     config, tokenizer_files = save_source_assets(
-        model_id,
+        load_reference,
         output_dir,
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
+        source_model_id=source.source_model_id,
     )
     segmenter = (
         package_segmenter_resources(output_dir, segmenter_id)
@@ -428,7 +438,7 @@ def convert(
         validation_manifest = validate_optimized_onnx_export(
             unoptimized_path,
             onnx_path,
-            model_id=model_id,
+            model_id=load_reference,
             cache_dir=cache_dir,
             config=config,
             shape_bucket_config=shape_bucket_config,
@@ -496,14 +506,15 @@ def convert(
             )
     elif profile == OPENVINO_PROFILE_NAME:
         config, tokenizer_files = save_source_assets(
-            model_id,
+            load_reference,
             output_dir,
             cache_dir=cache_dir,
             max_seq_length=max_seq_length,
             require_id2label=True,
+            source_model_id=source.source_model_id,
         )
         tokenizer = get_tokenizer_with_loader(
-            model_id,
+            load_reference,
             _transformers_tokenizer_loader(cache_dir=cache_dir),
             cache_dir=cache_dir,
         )
@@ -567,13 +578,14 @@ def convert(
         if int8_path is None:
             raise ValueError("eval_suite_path requires Android INT8 export.")
         recall_report = write_int8_recall_delta_report(
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             artifact_dir=output_dir,
             eval_suite_path=eval_suite_path,
             fp_model_path=onnx_path,
             int8_model_path=int8_path,
             output_path=recall_delta_report_path,
             cache_dir=cache_dir,
+            source_context=source,
         )
         artifacts = [
             (
@@ -592,9 +604,10 @@ def convert(
             for artifact in artifacts
         ]
 
+    assert_source_unchanged(source)
     manifest_path = write_export_manifest(
         output_dir,
-        source_model_id=model_id,
+        source_model_id=source.source_model_id,
         config=config,
         artifacts=artifacts,
         tokenizer_files=tokenizer_files,
@@ -604,12 +617,22 @@ def convert(
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
         segmenter=segmenter,
+        source_context=source,
     )
     if recall_report is not None:
         apply_int8_recall_certification(
             output_dir,
             recall_report,
             report_relpath=str(recall_report["report_path"]),
+        )
+        # Certification mutates the manifest after the base writer. Inventory
+        # the final files and metadata, rather than leaving stale provenance.
+        write_canonical_manifest(
+            output_dir,
+            MANIFEST_FILENAME,
+            json.loads(manifest_path.read_text(encoding="utf-8")),
+            source=source,
+            backend="onnx",
         )
     result = OnnxConversionResult(
         output_dir=output_dir,
@@ -620,7 +643,7 @@ def convert(
     if publish_to_hub:
         publish_result = publish_artifact(
             artifact_dir=output_dir,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             format_name=result.formats[0],
             formats=result.formats,
             repo_id=publish_repo_id,
@@ -647,6 +670,7 @@ def save_source_assets(
     max_seq_length: int = 512,
     require_id2label: bool = False,
     require_tokenizer_json: bool = False,
+    source_model_id: str | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Save config, labels, and tokenizer assets beside exported artifacts."""
 
@@ -657,6 +681,8 @@ def save_source_assets(
 
     output_dir = Path(output_dir)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir).to_dict()
+    if source_model_id is not None:
+        config["_name_or_path"] = source_model_id
     config["max_sequence_length"] = max_seq_length
     if require_id2label:
         config["id2label"] = _ensure_id2label(config)
@@ -679,6 +705,19 @@ def save_source_assets(
             cache_dir=cache_dir,
         )
         tokenizer.save_pretrained(output_dir)
+        tokenizer_config_path = output_dir / "tokenizer_config.json"
+        if source_model_id is not None and tokenizer_config_path.is_file():
+            tokenizer_config = json.loads(
+                tokenizer_config_path.read_text(encoding="utf-8")
+            )
+            if "name_or_path" in tokenizer_config:
+                tokenizer_config["name_or_path"] = source_model_id
+            if "_name_or_path" in tokenizer_config:
+                tokenizer_config["_name_or_path"] = source_model_id
+            tokenizer_config_path.write_text(
+                json.dumps(tokenizer_config, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
         if require_tokenizer_json:
@@ -713,10 +752,12 @@ def write_export_manifest(
     validation: Mapping[str, Any] | None = None,
     operator_fallbacks: Sequence[Mapping[str, Any]] | None = None,
     segmenter: Mapping[str, Any] | None = None,
+    source_context: SourceContext | None = None,
 ) -> Path:
     """Write an ONNX/WebGPU artifact manifest into *output_dir*."""
 
     output_dir = Path(output_dir)
+    source_context = source_context or context_from_metadata(source_model_id, config)
     formats = _dedupe_keep_order([artifact.format for artifact in artifacts])
     task = str(config.get("_mlx_task") or config.get("task") or "token-classification")
     family = str(
@@ -732,7 +773,7 @@ def write_export_manifest(
         "formats": formats,
         "task": task,
         "family": family,
-        "source_model_id": source_model_id,
+        "source_model_id": source_context.source_model_id,
         "config_path": "config.json",
         "label_map_path": "id2label.json"
         if (output_dir / "id2label.json").exists()
@@ -756,10 +797,27 @@ def write_export_manifest(
     }
     if segmenter is not None:
         manifest["segmenter"] = dict(segmenter)
-
-    manifest_path = output_dir / MANIFEST_FILENAME
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
+    # Measurements belong to a sibling observation report, outside the exact
+    # artifact inventory. Retain deterministic validation results in the bundle.
+    if "latency" in manifest["validation"]:
+        artifact_root = output_dir.resolve()
+        observation_path = artifact_root.with_name(
+            f"{artifact_root.name}_onnx_observations.json"
+        )
+        observations = (
+            json.loads(observation_path.read_text(encoding="utf-8"))
+            if observation_path.is_file()
+            else {}
+        )
+        observations["validation"] = dict(validation or {})
+        observation_path.write_text(
+            json.dumps(observations, indent=2, sort_keys=True, allow_nan=False) + "\n",
+            encoding="utf-8",
+        )
+        manifest["validation"].pop("latency")
+    manifest_path = write_canonical_manifest(
+        output_dir, MANIFEST_FILENAME, manifest, source=source_context, backend="onnx"
+    )
     validate_onnx_bundle(output_dir)
     return manifest_path
 

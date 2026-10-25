@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -10,6 +11,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Tuple
 
 from openmed.core.capabilities import raise_missing_backend
+from openmed.core.export_provenance import (
+    SourceContext,
+    assert_source_unchanged,
+    context_from_metadata,
+    resolve_source_context,
+    write_canonical_manifest,
+)
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
@@ -446,6 +454,8 @@ def save_mlx_model(
     cache_dir: str | None = None,
     quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
     segmenter_id: str | None = None,
+    *,
+    source: SourceContext | None = None,
 ) -> Path:
     """Save converted weights and config to *output_dir*."""
     try:
@@ -457,7 +467,10 @@ def save_mlx_model(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    config_to_save = dict(config)
+    source = source or (
+        context_from_metadata(source_model_id, config) if source_model_id else None
+    )
+    config_to_save = _public_source_config(config, source)
 
     mlx_weights = {k: mx.array(v) for k, v in weights.items()}
 
@@ -525,6 +538,7 @@ def save_mlx_model(
         config=config_to_save,
         cache_dir=cache_dir,
         segmenter_id=segmenter_id,
+        source=source,
     )
 
     logger.info("Saved MLX model to %s", output_dir)
@@ -538,13 +552,18 @@ def save_numpy_model(
     source_model_id: str | None = None,
     cache_dir: str | None = None,
     segmenter_id: str | None = None,
+    *,
+    source: SourceContext | None = None,
 ) -> Path:
     """Save converted weights without MLX, preferring ``.safetensors``."""
     import numpy as np
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    config_to_save = dict(config)
+    source = source or (
+        context_from_metadata(source_model_id, config) if source_model_id else None
+    )
+    config_to_save = _public_source_config(config, source)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
         for candidate in (
@@ -592,6 +611,7 @@ def save_numpy_model(
         config=config_to_save,
         cache_dir=cache_dir,
         segmenter_id=segmenter_id,
+        source=source,
     )
 
     logger.info(
@@ -614,8 +634,17 @@ def write_quant_recall_delta_report(
     cache_dir: str | None = None,
     parent_runner: QuantEvalRunner | None = None,
     candidate_runner: QuantEvalRunner | None = None,
+    source: SourceContext | None = None,
 ) -> dict[str, Any]:
-    """Run FP-parent versus quantized artifact recall and write evidence JSON."""
+    """Write stable recall certification and separate timestamped observations.
+
+    The bundled report identifies the fixture by content digest. Wall-clock
+    observations are saved beside the artifact as ``<name>_mlx_observations.json``
+    and returned to the caller. A provided source keeps parent evaluation pinned
+    to the same checkpoint used by the converter. Custom parent runners remain
+    responsible for evaluating that source. Without a usable local reference,
+    their report records ``local_source_verification="caller-managed"``.
+    """
     from openmed.eval.harness import load_fixtures, run_benchmark
     from openmed.eval.quant_delta import (
         evaluate_quant_recall_delta,
@@ -624,17 +653,43 @@ def write_quant_recall_delta_report(
 
     artifact_dir = Path(artifact_dir)
     eval_suite_path = Path(eval_suite_path)
+    manifest_path = artifact_dir / "openmed-mlx.json"
+    manifest = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists()
+        else {}
+    )
+    if source is None:
+        source = _manifest_source(manifest, source_model_id)
+    resolved_source = source
+    if source.source_digest is not None and (
+        not source.load_reference or source.load_reference.startswith("local:")
+    ):
+        if parent_runner is None:
+            raise ValueError(
+                "a local source reference is required for parent evaluation"
+            )
+        resolved_source = None
+    if resolved_source is not None:
+        assert_source_unchanged(resolved_source)
+    source_model_id = source.source_model_id
     report_path = (
         Path(output_path)
         if output_path is not None
         else artifact_dir / _RECALL_DELTA_REPORT_FILENAME
     )
+    report_relpath = _artifact_relative_path(report_path, artifact_dir)
+    bundled_report_path = artifact_dir / report_relpath
+    _guard_quant_report_destinations(
+        artifact_dir, report_path, bundled_report_path, manifest
+    )
     generated_at = _utc_now()
     fixtures = load_fixtures(eval_suite_path)
 
     parent_runner = parent_runner or _hf_token_classification_runner(
-        source_model_id,
+        source.load_reference or source_model_id,
         cache_dir=cache_dir,
+        revision=source.revision,
     )
     candidate_runner = candidate_runner or _mlx_artifact_runner(artifact_dir)
 
@@ -651,7 +706,7 @@ def write_quant_recall_delta_report(
     candidate_report = run_benchmark(
         fixtures,
         suite=suite_name,
-        model_name=str(artifact_dir),
+        model_name="mlx-artifact",
         device=format_name,
         runner=candidate_runner,
         generated_at=generated_at,
@@ -675,19 +730,28 @@ def write_quant_recall_delta_report(
     delta_payload = delta.to_dict()
     delta_payload["blocking_format"] = delta.blocking_format
     limit = limit_for_format(format_name)
-    report_relpath = _artifact_relative_path(report_path, artifact_dir)
+    if resolved_source is not None:
+        assert_source_unchanged(resolved_source)
 
     payload: dict[str, Any] = {
         "schema_version": _RECALL_DELTA_REPORT_VERSION,
         "generated_at": generated_at,
         "source_model_id": source_model_id,
-        "artifact_path": str(artifact_dir),
+        "local_source_verification": (
+            "not-applicable"
+            if source.source_digest is None
+            else "checked"
+            if resolved_source is not None
+            else "caller-managed"
+        ),
+        "artifact_path": ".",
         "format": format_name,
         "quantization": {
             "bits": quantize_bits,
             "group_size": quantize_group_size,
         },
-        "eval_suite_path": str(eval_suite_path),
+        "eval_suite_path": "sha256:"
+        + hashlib.sha256(eval_suite_path.read_bytes()).hexdigest(),
         "fixture_count": len(fixtures),
         "metric": "character_recall",
         "limit": limit,
@@ -705,10 +769,22 @@ def write_quant_recall_delta_report(
         "report_path": report_relpath,
     }
 
+    stable_payload = {
+        key: value for key, value in payload.items() if key != "generated_at"
+    }
+    report_bytes = json.dumps(stable_payload, indent=2, sort_keys=True) + "\n"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    with report_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+    report_path.write_text(report_bytes, encoding="utf-8")
+    if bundled_report_path.resolve() != report_path.resolve():
+        bundled_report_path.parent.mkdir(parents=True, exist_ok=True)
+        bundled_report_path.write_text(report_bytes, encoding="utf-8")
+    artifact_root = artifact_dir.resolve()
+    observations_path = (
+        artifact_root.parent / f"{artifact_root.name}_mlx_observations.json"
+    )
+    observations_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
     _apply_quant_recall_certification(
         artifact_dir,
@@ -722,6 +798,7 @@ def _hf_token_classification_runner(
     model_id: str,
     *,
     cache_dir: str | None = None,
+    revision: str | None = None,
 ) -> QuantEvalRunner:
     pipeline_instance: Any | None = None
 
@@ -746,10 +823,12 @@ def _hf_token_classification_runner(
                 model_id,
                 AutoTokenizer.from_pretrained,
                 cache_dir=cache_dir,
+                revision=revision,
             )
             model = AutoModelForTokenClassification.from_pretrained(
                 model_id,
                 cache_dir=cache_dir,
+                revision=revision,
             )
             pipeline_instance = pipeline(
                 "token-classification",
@@ -885,9 +964,115 @@ def _update_manifest_quant_certification(
         "report_path": report_relpath,
     }
 
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
-        handle.write("\n")
+    source = _manifest_source(manifest)
+    write_canonical_manifest(
+        artifact_dir,
+        MANIFEST_FILENAME,
+        manifest,
+        source=source,
+        backend="mlx",
+    )
+
+
+def _manifest_source(
+    manifest: Mapping[str, Any], source_model_id: str | None = None
+) -> SourceContext:
+    source_metadata = (manifest.get("provenance") or {}).get("source") or {}
+    return (
+        SourceContext(
+            source_model_id=source_metadata["model_id"],
+            load_reference=source_model_id or "",
+            revision=source_metadata.get("revision"),
+            source_digest=source_metadata.get("content_digest"),
+            license=source_metadata.get("license"),
+        )
+        if source_metadata.get("model_id")
+        else context_from_metadata(
+            str(source_model_id or manifest.get("source_model_id") or ""), config=None
+        )
+    )
+
+
+def _guard_quant_report_destinations(
+    artifact_dir: Path,
+    report_path: Path,
+    bundled_report_path: Path,
+    manifest: Mapping[str, Any],
+) -> None:
+    """Reject report writes over runtime files before changing any output."""
+    root = artifact_dir.resolve()
+    protected = {
+        root / name
+        for name in (
+            "openmed-mlx.json",
+            "openmed-onnx.json",
+            "openmed-coreml.json",
+            "config.json",
+            "id2label.json",
+            "weights.safetensors",
+            "weights.npz",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "vocab.txt",
+            "vocab.json",
+            "merges.txt",
+            "spm.model",
+            "sentencepiece.bpe.model",
+            "added_tokens.json",
+        )
+    }
+    for name in (manifest.get("config_path"), manifest.get("label_map_path")):
+        if isinstance(name, str):
+            protected.add((root / name).resolve())
+    weight_names = [manifest.get("preferred_weights")]
+    weight_names.extend(manifest.get("available_weights") or [])
+    weight_names.extend(manifest.get("fallback_weights") or [])
+    for name in weight_names:
+        if isinstance(name, str):
+            protected.add((root / name).resolve())
+    tokenizer = manifest.get("tokenizer") or {}
+    for name in tokenizer.get("files", []):
+        protected.add((root / tokenizer.get("path", ".") / name).resolve())
+    segmenter = manifest.get("segmenter") or {}
+    for resource in segmenter.get("resource_files", []):
+        if isinstance(resource, Mapping) and isinstance(resource.get("path"), str):
+            protected.add((root / resource["path"]).resolve())
+    report_ref = bundled_report_path.relative_to(artifact_dir).as_posix()
+    if root not in bundled_report_path.resolve().parents:
+        raise ValueError("report destination escapes the artifact")
+    for target in (report_path, bundled_report_path):
+        if target.is_symlink() or target.resolve() in protected:
+            raise ValueError("report destination collides with a runtime file")
+        if not target.exists():
+            continue
+        if not target.is_file():
+            raise ValueError("report destination is not a recall report")
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            raise ValueError("report destination is not a recall report") from None
+        if (
+            not isinstance(existing, dict)
+            or existing.get("schema_version") != _RECALL_DELTA_REPORT_VERSION
+            or existing.get("metric") != "character_recall"
+            or existing.get("report_path") != report_ref
+            or not isinstance(existing.get("source_model_id"), str)
+            or not isinstance(existing.get("format"), str)
+            or type(existing.get("fixture_count")) is not int
+            or not isinstance(existing.get("limit"), (int, float))
+            or not isinstance(existing.get("quant_recall_delta"), (int, float))
+            or not isinstance(existing.get("certified"), bool)
+            or not isinstance(existing.get("quantization"), dict)
+            or not isinstance(existing.get("delta"), dict)
+            or not isinstance(existing.get("per_label"), dict)
+            or not isinstance(existing.get("fp_parent_per_label_recall"), dict)
+            or not isinstance(existing.get("candidate_per_label_recall"), dict)
+            or not {"bits", "group_size"} <= existing["quantization"].keys()
+            or not {"format", "passed", "max_delta", "per_label_delta"}
+            <= existing["delta"].keys()
+        ):
+            raise ValueError("report destination is not a recall report")
 
 
 def _float_map(values: Mapping[str, Any]) -> dict[str, float]:
@@ -922,6 +1107,17 @@ def _dedupe_keep_order(items: Iterable[str]) -> list[str]:
     return result
 
 
+def _public_source_config(
+    config: Mapping[str, Any], source: SourceContext | None
+) -> dict[str, Any]:
+    config_to_save = dict(config)
+    if source is not None:
+        for key in ("_name_or_path", "name_or_path", "source_model_id"):
+            if key in config_to_save:
+                config_to_save[key] = source.source_model_id
+    return config_to_save
+
+
 def _finalize_artifact(
     output_dir: str | Path,
     *,
@@ -929,9 +1125,11 @@ def _finalize_artifact(
     config: dict[str, Any],
     cache_dir: str | None,
     segmenter_id: str | None,
+    source: SourceContext | None = None,
 ) -> None:
-    if source_model_id is None:
+    if source_model_id is None and source is None:
         return
+    source = source or context_from_metadata(source_model_id or "", config)
 
     output_dir = Path(output_dir)
     tokenizer_files: list[str] = []
@@ -940,16 +1138,26 @@ def _finalize_artifact(
         from transformers import AutoTokenizer
 
         tokenizer = get_tokenizer_with_loader(
-            source_model_id,
+            source.load_reference,
             AutoTokenizer.from_pretrained,
             cache_dir=cache_dir,
         )
         tokenizer.save_pretrained(output_dir)
+        tokenizer_config_path = output_dir / "tokenizer_config.json"
+        if tokenizer_config_path.is_file():
+            tokenizer_config = json.loads(
+                tokenizer_config_path.read_text(encoding="utf-8")
+            )
+            tokenizer_config = _public_source_config(tokenizer_config, source)
+            tokenizer_config_path.write_text(
+                json.dumps(tokenizer_config, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
         logger.warning(
             "Could not save tokenizer assets for %s into %s: %s",
-            source_model_id,
+            source.source_model_id,
             output_dir,
             exc,
         )
@@ -959,12 +1167,14 @@ def _finalize_artifact(
         if segmenter_id is not None
         else None
     )
+    assert_source_unchanged(source)
     write_manifest(
         output_dir,
-        source_model_id=source_model_id,
+        source_model_id=source.source_model_id,
         config=config,
         tokenizer_files=tokenizer_files,
         segmenter=segmenter,
+        source=source,
     )
 
 
@@ -987,7 +1197,9 @@ def convert(
     segmenter_id: str | None = None,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
-    weights, config = convert_weights(model_id, cache_dir=cache_dir)
+    source = resolve_source_context(model_id, cache_dir=cache_dir)
+    weights, config = convert_weights(source.load_reference, cache_dir=cache_dir)
+    config = _public_source_config(config, source)
     quantized = False
 
     try:
@@ -998,10 +1210,11 @@ def convert(
             config=config,
             output_dir=output_dir,
             quantize_bits=quantize_bits,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             cache_dir=cache_dir,
             quantize_group_size=quantize_group_size,
             segmenter_id=segmenter_id,
+            source=source,
         )
         quantized = quantize_bits is not None
     except ImportError:
@@ -1014,9 +1227,10 @@ def convert(
             weights,
             config,
             output_dir,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             cache_dir=cache_dir,
             segmenter_id=segmenter_id,
+            source=source,
         )
 
     if eval_suite_path is not None:
@@ -1027,7 +1241,7 @@ def convert(
                 "MLX is required to certify a quantized artifact with eval fixtures"
             )
         write_quant_recall_delta_report(
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             artifact_dir=output_path,
             eval_suite_path=eval_suite_path,
             format_name=_publish_format(quantize_bits),
@@ -1035,12 +1249,13 @@ def convert(
             quantize_group_size=quantize_group_size,
             output_path=recall_delta_report_path,
             cache_dir=cache_dir,
+            source=source,
         )
 
     if publish_to_hub:
         result = publish_artifact(
             artifact_dir=output_path,
-            source_model_id=model_id,
+            source_model_id=source.source_model_id,
             format_name=_publish_format(quantize_bits),
             repo_id=publish_repo_id,
             org=publish_org,

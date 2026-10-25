@@ -412,6 +412,9 @@ def _install_conversion_stubs(
         palettizer_config=None,
         palettizer_configs=[],
         tokenizer_loads=0,
+        config_references=[],
+        model_references=[],
+        tokenizer_references=[],
     )
 
     class FakeConfig:
@@ -439,15 +442,18 @@ def _install_conversion_stubs(
                 "attention_mask": "attention_mask",
             }
 
-    def load_config(*_args, **_kwargs):
+    def load_config(model_id, **_kwargs):
+        state.config_references.append(model_id)
         state.config_loads += 1
         return FakeConfig()
 
-    def load_tokenizer(*_args, **_kwargs):
+    def load_tokenizer(model_id, **_kwargs):
+        state.tokenizer_references.append(model_id)
         state.tokenizer_loads += 1
         return FakeTokenizer()
 
-    def load_model(*_args, **_kwargs):
+    def load_model(model_id, **_kwargs):
+        state.model_references.append(model_id)
         state.model_loads += 1
         return FakeModel()
 
@@ -477,6 +483,21 @@ def _install_conversion_stubs(
     monkeypatch.setitem(sys.modules, "torch", torch_module)
     monkeypatch.setitem(sys.modules, "transformers", transformers_module)
     monkeypatch.setitem(sys.modules, "coremltools", coremltools_module)
+    import importlib
+
+    converter = importlib.import_module("openmed.coreml.convert")
+    monkeypatch.setattr(
+        converter,
+        "resolve_source_context",
+        lambda model_id, **kwargs: types.SimpleNamespace(
+            source_model_id=model_id,
+            load_reference=model_id,
+            revision="a" * 40,
+            source_digest=None,
+            license=None,
+        ),
+        raising=False,
+    )
     return state
 
 

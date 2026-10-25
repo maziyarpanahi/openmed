@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.export_provenance import SourceContext
+
 
 def _android_module():
     return importlib.import_module("openmed.onnx.android_profile")
@@ -140,6 +142,11 @@ def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     export_calls = []
 
     def fake_export_onnx(model_id, output_path, **kwargs):

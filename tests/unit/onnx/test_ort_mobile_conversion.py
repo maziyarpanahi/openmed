@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.export_provenance import SourceContext
+
 
 def _convert_module():
     return importlib.import_module("openmed.onnx.convert")
@@ -92,6 +94,11 @@ def test_convert_android_profile_records_ort_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     ort_module = _ort_module()
 
     def fake_export_onnx(model_id, output_path, **kwargs):
@@ -184,6 +191,11 @@ def test_convert_android_profile_skips_ort_when_tooling_unavailable(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     module = _convert_module()
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: SourceContext(model_id, model_id, revision="a" * 40),
+    )
     ort_module = _ort_module()
 
     def fake_export_onnx(model_id, output_path, **kwargs):
@@ -232,7 +244,7 @@ def test_convert_android_profile_skips_ort_when_tooling_unavailable(
     caplog.set_level(logging.INFO, logger="openmed.onnx.ort_mobile")
 
     result = module.convert(
-        "Patient John Doe",
+        "Patient/John-Doe",
         tmp_path / "artifact",
         profile="android",
         include_int8=False,
