@@ -84,95 +84,61 @@ truth is the backend code, but the essentials are:
 
 ## Producer provenance and offline verification
 
-The existing MLX, ONNX and CoreML producers record a common versioned
-`provenance` object. It contains the source model ID, resolved revision (remote
-sources) or content digest (local directories), an available source license,
-explicit toolchain distribution versions, and a sorted list of relative POSIX
-file paths with `size_bytes` and SHA-256 digests. Missing license or distribution
-metadata is `null`; the package's own license does not imply the source license.
+MLX, ONNX and CoreML record versioned `provenance`: source ID, resolved remote
+revision or local content digest, available source license, toolchain versions,
+and sorted relative POSIX `{path, size_bytes, sha256}` records. Unknown license/version metadata
+is `null`; OpenMed's license does not imply the source license.
 
-A converter resolves the remote snapshot once and uses that same local snapshot
-for its model, config and tokenizer loaders. Local source identities are based
-on file contents rather than the directory name or a mutable branch. Input and
-output symlinks are rejected for local directories; normal Hugging Face cache
-symlinks remain valid remote snapshot inputs. Credentials, local loading paths
-and command-line/environment details are not producer metadata. Local input
-directories must remain unchanged throughout conversion; a content recheck
-before finalization rejects a changed source. Direct calls to
-low-level manifest writers cannot resolve an unavailable remote revision and
-record it as `null`; use the converter entry point for resolved provenance.
+Remote model, config and tokenizer loaders share one pinned snapshot. Local inputs
+must stay unchanged and are rechecked before finalization. Local input/output
+symlinks are rejected; normal remote HF-cache links are allowed. Private load
+paths, credentials and CLI/environment values are excluded. Direct writers
+record unavailable remote revisions as `null`; use converters for resolution.
 
-Verification is explicit and offline:
-
-```python
-from openmed.core.export_provenance import verify_export_provenance
-
-verify_export_provenance("converted-model", "openmed-onnx.json")
-verify_export_provenance("converted-model.mlpackage", "openmed-coreml.json")
-```
-
-For MLX use `openmed-mlx.json`. The verifier checks the exact file set, safe
-paths, sizes and digests, including nested files and ONNX external tensor
-sidecars. It rejects changed, missing or extra files and any symlink in the
-artifact tree. Only the named manifest at the artifact root is excluded from
-its own inventory; a nested file with the same name is not excluded. Existing
-optional-resource validators retain their segmenter checks. Older manifests
-remain readable, but an old manifest without provenance cannot establish
-integrity through this new explicit verifier. No loader is forced to run the
-new check. Unsigned provenance verifies consistency against a trusted manifest;
-it does not authenticate a publisher or prevent simultaneous replacement of
-both the manifest and its files. Signing and bundle schemas are separate work.
+Call `openmed.core.export_provenance.verify_export_provenance(root, name)`
+offline with `openmed-mlx.json`, `openmed-onnx.json` or `openmed-coreml.json`.
+It checks safe paths, exact membership, sizes and digests, including nested
+files and ONNX sidecars. It rejects symlinks and excludes only the root
+manifest, not nested namesakes. Verification is explicit, not loader-enforced. Legacy
+readers and segmenter checks remain; manifests without provenance cannot pass
+this check. Unsigned consistency requires a trusted manifest: it cannot
+authenticate publishers or prevent replacing manifest and files together.
+Signing and bundle schemas remain separate.
 
 ### CoreML package schema v2
 
-Each `.mlpackage/openmed-coreml.json` now has `schema_version: 2` and describes
-only that package. Its variant path is `.`; its `size_bytes` is the payload size
-excluding this root manifest. Inventory paths are relative to the package, so
-a package can be moved and verified without sibling variants. The existing
-`validate_coreml_bundle` reader accepts both v1 and v2 and still checks declared
-segmenter resources for both versions. Package v2 consumers must not assume
-that the package manifest equals the sibling conversion report or that it
-lists all conversion variants.
+Each `.mlpackage/openmed-coreml.json` uses `schema_version: 2` and describes
+only its own movable package: variant path `.`, `size_bytes` excluding the root
+manifest, and package-relative inventory paths. `validate_coreml_bundle` retains v1/v2 segmenter checks. Consumers
+must distinguish the package manifest from the all-variant v1 conversion report.
 
-The sibling `<model>_coreml_manifest.json` remains a schema v1 conversion report
-with timestamps, measured latency, residency and parity observations. Residency
-artifact paths are relative display paths. These observations are outside the
-canonical package and its inventory: retaining wall-clock or measured timings
-inside a file would prevent byte-for-byte reproducibility. Explicit observation
-paths must also be outside the packages. Sibling `<model>_id2label.json` files
-remain outside the packages and are neither copied inside nor covered by the
-package inventory. Consumers needing these reports or labels must retain them
-separately; publishing a single package does not publish all siblings.
+Sibling `<model>_coreml_manifest.json` remains v1 with timestamps, latency,
+residency and parity; residency display paths are relative. Observation paths,
+including custom paths, must stay outside every package. Sibling
+`<model>_id2label.json` files stay outside and unbound by package inventory.
+Retain/distribute these siblings separately; publishing one package omits them.
 
 ### MLX and ONNX observations
 
-The existing MLX and ONNX manifest layouts retain their runtime fields and gain
-provenance. ONNX optimization latency observations are retained in sibling
-`<output-directory>_onnx_observations.json`, rather than `validation.latency`
-inside the canonical artifact. Consumers of that timing field should read the
-observation report. Stable validation outcomes remain in the manifest.
-
-Recall-certification fields and relative report references remain available.
-For provenance-producing conversions, the in-artifact `recall_delta.json` is a
-stable certification projection; actual timestamps live in the sibling
+Runtime layouts and certification fields remain, except ONNX
+`validation.latency` moves to sibling `<output-directory>_onnx_observations.json`;
+stable validation stays canonical. Bundled `recall_delta.json` is a stable
+projection; timestamps live in sibling
 `<output-directory>_mlx_observations.json` or
-`<output-directory>_onnx_observations.json`. MLX's local artifact path becomes
-`.` and its evaluation suite is identified by a content digest. The report API
-continues returning observation metadata. Standalone certification rechecks an
-available original local source before and after evaluation; a custom runner
-without that reference is responsible for matching the declared source. A requested external report path is
-retained with an in-artifact projection at the referenced relative filename.
-Certification and Transformers.js updates refresh an existing provenance
-inventory after their final file changes. Custom certification report paths must
-not replace runtime files or control manifests; an existing complete certification report can
-be updated. With existing provenance and `update_manifest=True`, a standalone
-Transformers.js bundle must be a strict subdirectory of the source export root.
-Use `update_manifest=False` for a separate external bundle without adding it to
-the parent manifest. Legacy manifests retain their previous export behavior.
+`<output-directory>_onnx_observations.json`. The report API still returns
+observations. MLX artifact paths become `.` and evaluation suites become
+content digests.
 
-Reproducibility means identical source bytes, options, toolchain and generated
-payload bytes produce identical canonical manifests. This is not a promise that
-every numerical backend, runtime measurement or serializer is deterministic.
-The regression fixtures are tiny synthetic checkpoints and mocked converter
-backends; these checks do not establish real-model export parity or clinical
-performance.
+External reports retain an in-artifact projection at the referenced relative
+filename. Runtime/control-file collisions reject; complete certification reports
+can be updated. Standalone certification rechecks an available original local
+reference before/after evaluation; a custom runner without it owns source
+matching. Certification and Transformers.js updates refresh inventories. With
+provenance and `update_manifest=True`, JS bundles must be strict subdirectories
+of the source export root; `False` permits separate external bundles without
+changing the parent. Legacy exports retain prior behavior.
+
+Identical source bytes, options, toolchain and generated payload bytes yield
+identical canonical manifests; numerical backends/serializers need not be
+deterministic. Tiny synthetic/mock conversions exercise real writers, not
+real-model parity or clinical performance.
