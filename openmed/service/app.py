@@ -115,6 +115,7 @@ from .privacy_gateway import (
 )
 from .request_limits import BoundedRequestBodyMiddleware, request_limits_from_env
 from .resilience import CircuitBreakerOpenError, circuit_breaker_details
+from .response_headers import install_response_headers
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -930,6 +931,7 @@ def create_app(
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
     app.state.tracing = service_tracing_from_env()
+    install_response_headers(app)
     app.state.openhim_settings = openhim_settings
     app.state.openhim_deidentifier = None
     app.state.journey_resources = JourneyResourceCatalog()

@@ -462,6 +462,11 @@
     },
     {
       "classification": "operational",
+      "function": "ResponseHeadersMiddleware.__call__.send_with_headers",
+      "module": "openmed.service.response_headers"
+    },
+    {
+      "classification": "operational",
       "function": "ServiceRuntime.run_model_request",
       "module": "openmed.service.runtime"
     },

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Send `Cache-Control: no-store`, `Pragma: no-cache`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`
+  on every non-probe REST response, including NDJSON streams and error
+  envelopes for unhandled exceptions. Probe routes are unchanged, the
+  generated API documents declare `Cache-Control: no-cache`, and headers
+  already set, such as on `/graphql`, are never duplicated (#3912).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
