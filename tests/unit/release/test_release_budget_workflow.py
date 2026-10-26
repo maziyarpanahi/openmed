@@ -192,7 +192,7 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     jobs = _load_ci()["jobs"]
     lane = jobs["sdk-compatibility"]
     matrix = lane["strategy"]["matrix"]
-    versions = ["3.10", "3.11", "3.12", "3.13"]
+    versions = ["3.11", "3.12", "3.13"]
     assert matrix == {
         "os": ["ubuntu-latest", "windows-latest", "macos-latest"],
         "python-version": versions,
@@ -211,10 +211,9 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
         )
         == versions
     )
-    assert project["requires-python"] == ">=3.10"
-    # CLI imports dependency-report parsing even in a minimal installation.
-    # Development extras used to hide this missing Python 3.10 backport.
-    assert "tomli>=2.0; python_version < '3.11'" in project["dependencies"]
+    assert project["requires-python"] == ">=3.11"
+    # Every supported interpreter ships tomllib, so no TOML backport remains.
+    assert not any(value.startswith("tomli") for value in project["dependencies"])
     assert {
         "Operating System :: POSIX :: Linux",
         "Operating System :: Microsoft :: Windows",
@@ -222,7 +221,7 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     } <= set(project["classifiers"])
     docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
     assert all(version in docs for version in versions)
-    assert "12 jobs" in docs and "sdk-compatibility-gate" in docs
+    assert "9 jobs" in docs and "sdk-compatibility-gate" in docs
 
 
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
@@ -253,7 +252,7 @@ def _assert_full_suite_diagnostics(lane):
     assert lane.get("continue-on-error", "false") == "false"
     steps = lane["steps"]
     test_step = next(step for step in steps if step.get("name") == "Test with pytest")
-    assert test_step["timeout-minutes"] == "45"
+    assert test_step["timeout-minutes"] == "60"
     assert test_step.get("continue-on-error", "false") == "false"
     assert "if" not in test_step
     # Exact argv retains default full-suite discovery and rejects selection,
