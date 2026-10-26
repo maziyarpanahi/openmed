@@ -410,7 +410,7 @@ def test_metadata_is_immutable_and_carries_no_pixels() -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("mode", ["1", "L", "RGB", "RGBA"])
 def test_pillow_generated_tiff_end_to_end(tmp_path, size, mode) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.tif"
     Image.new(mode, size).save(path, format="TIFF")
@@ -428,7 +428,7 @@ def test_pillow_generated_tiff_end_to_end(tmp_path, size, mode) -> None:
 @pytest.mark.integration
 @pytest.mark.parametrize("compression", ["raw", "tiff_lzw", "tiff_adobe_deflate"])
 def test_pillow_compressed_tiff_headers(tmp_path, compression) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "compressed.tif"
     Image.new("RGB", (40, 24)).save(path, format="TIFF", compression=compression)
