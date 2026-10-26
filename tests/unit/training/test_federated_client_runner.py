@@ -1116,3 +1116,33 @@ def test_documented_example_runs_offline() -> None:
     for block in blocks:
         exec(compile(block, "federated-client-runner.md", "exec"), namespace)
     assert namespace["status"].state is C.SUBMITTED
+
+
+def test_sealed_retry_reverifies_signed_offer_terms_before_submission():
+    ports = Ports(submit_failures=1)
+    assert make_runner(ports).run_round(make_offer()).state is C.SEALED
+    ports.verified = False
+    status = make_runner(ports).run_round(make_offer())
+    assert status.state is C.ABORTED
+    assert status.reason_code is R.MANIFEST_UNVERIFIED
+    assert not ports.submitted
+    assert ports.calls.count("train") == 1
+
+
+@pytest.mark.parametrize("stop", ("deadline", "cancel"))
+def test_submission_rechecks_conditions_after_coordinator_call(stop):
+    ports = Ports(submit_failures=1)
+    assert make_runner(ports).run_round(make_offer()).state is C.SEALED
+    original = ports.get_round_state
+
+    def slow_state(offer):
+        if stop == "deadline":
+            ports.now = SCHEDULE.aggregation_starts_at
+        else:
+            ports.cancellation = FederatedCancellationMode.ABORT
+        return original(offer)
+
+    ports.get_round_state = slow_state
+    status = make_runner(ports).run_round(make_offer())
+    assert status.state is (C.EXPIRED if stop == "deadline" else C.ABORTED)
+    assert not ports.submitted

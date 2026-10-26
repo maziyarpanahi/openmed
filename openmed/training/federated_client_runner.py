@@ -167,6 +167,7 @@ _STATE_REASONS: Final[Mapping[FederatedClientRoundState, frozenset[Any]]] = (
             _S.ABORTED: frozenset(
                 {
                     _R.MANIFEST_DIGEST_DRIFT,
+                    _R.MANIFEST_UNVERIFIED,
                     _R.ROUND_HELD,
                     _R.ROUND_ABORTED,
                     _R.CANCELLED,
@@ -928,6 +929,8 @@ class FederatedClientRunner:
             target = _S.ABORTED if record.state is _S.SEALED else _S.DECLINED
             return self._move(offer, record, target, _R.MANIFEST_DIGEST_DRIFT).status()
         if record.state is _S.SEALED:
+            if not _accepted(self._verifier.verify, offer):
+                return self._abort(offer, record, _R.MANIFEST_UNVERIFIED)
             return self._submit(offer, record, started)
         return self._participate(offer, record, started)
 
@@ -1047,6 +1050,11 @@ class FederatedClientRunner:
         target, reason = self._coordinator(offer, submitting=True)
         if reason is not None:
             return self._move(offer, record, target or record.state, reason).status()
+        # The coordinator port may block while the deadline or cancellation
+        # changes. Recheck local conditions immediately before transmission.
+        reason, _ = self._conditions(offer, started)
+        if reason is not None:
+            return self._stop(offer, record, reason)
         failed = False
         try:
             self._submitter.submit(offer, record.payload, record.update_digest)

@@ -63,6 +63,8 @@ refusal. Steps 1 and 4 to 8 end in `declined`.
 - The sealed payload and its `sha256:` digest are written to the checkpoint
   store before any submission attempt. If that write fails, the runner raises
   `checkpoint_store_failed` and submits nothing.
+- A sealed retry re-verifies the signed manifest binding before using the
+  supplied schedule or policy. A refusal aborts with `manifest_unverified`.
 - A retry after a crash or a failed submission resends the stored,
   byte-identical payload. The training port is not called again, so fresh
   noise is never drawn for an already sealed round.
@@ -256,7 +258,10 @@ Running the round again returns the stored status without calling any port.
 ## Boundaries
 
 The checkpoint store must replace values atomically; the runner assumes one
-runner instance per store. The structured offer terms (schedule, update
+runner instance per store with serialized calls. The submission port must
+atomically enforce coordinator state and deadlines at acceptance; the runner
+rechecks local conditions after querying coordinator state, but cannot prevent
+a remote state change during transport. The structured offer terms (schedule, update
 policy, step count and memory class) are trusted only after the manifest
 verification port has bound them to the signed manifest. Operator command-line
 bindings are out of scope for this module. Minimum-group suppression,
