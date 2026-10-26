@@ -32,6 +32,34 @@ VALID_RECORDS = (
     (AbstentionStage.POST_PROCESS, AbstentionReason.TEMPORAL_INSTABILITY),
 )
 
+V1_RECORDS = VALID_RECORDS
+NEW_CODE_STAGES = {
+    AbstentionReason.CONSENT_UNAVAILABLE: (AbstentionStage.PREFLIGHT,),
+    AbstentionReason.CONSENT_WITHDRAWN: tuple(AbstentionStage),
+    AbstentionReason.CAPTURE_INTERRUPTED: (
+        AbstentionStage.DECODE,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.LANGUAGE_UNSUPPORTED: (
+        AbstentionStage.PREFLIGHT,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.LANGUAGE_UNCERTAIN: (
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+    AbstentionReason.POLICY_REFUSED: (
+        AbstentionStage.PREFLIGHT,
+        AbstentionStage.INFERENCE,
+        AbstentionStage.POST_PROCESS,
+    ),
+}
+VALID_RECORDS += tuple(
+    (stage, reason) for reason, stages in NEW_CODE_STAGES.items() for stage in stages
+)
+
 INVALID_RECORDS = tuple(
     (stage, reason)
     for stage in AbstentionStage
@@ -55,7 +83,7 @@ def test_abstention_contract_is_available_from_public_multimodal_api() -> None:
         AbstentionStage as PublicStage,
     )
 
-    assert ABSTENTION_SCHEMA_VERSION == 1
+    assert ABSTENTION_SCHEMA_VERSION == 2
     assert PublicReason is AbstentionReason
     assert PublicRecord is AbstentionRecord
     assert PublicStage is AbstentionStage
@@ -147,3 +175,44 @@ def test_invalid_payloads_do_not_echo_submitted_content(payload: object) -> None
 def test_malformed_or_incomplete_payloads_fail_closed(payload: str) -> None:
     with pytest.raises(ValueError):
         AbstentionRecord.from_json(payload)
+
+
+@pytest.mark.parametrize(("stage", "reason"), V1_RECORDS)
+def test_all_legacy_records_are_byte_identical(stage, reason) -> None:
+    golden = (
+        '{"schema_version":1,"stage":"'
+        + stage.value
+        + '","reason":"'
+        + reason.value
+        + '"}'
+    )
+    assert AbstentionRecord(stage, reason).to_json().encode() == golden.encode()
+    assert AbstentionRecord.from_json(golden).to_json() == golden
+
+
+@pytest.mark.parametrize("reason", NEW_CODE_STAGES)
+def test_new_codes_use_v2_and_have_no_content_fields(reason) -> None:
+    record = AbstentionRecord(NEW_CODE_STAGES[reason][0], reason)
+    assert record.schema_version == 2
+    assert record.to_dict() == {
+        "schema_version": 2,
+        "stage": record.stage.value,
+        "reason": reason.value,
+    }
+    for field in ("message", "transcript", "language", "consent", "path"):
+        payload = record.to_dict() | {field: "SYNTHETIC_PRIVATE_SENTINEL"}
+        with pytest.raises(ValueError) as caught:
+            AbstentionRecord.from_dict(payload)
+        assert "SYNTHETIC_PRIVATE_SENTINEL" not in str(caught.value)
+
+
+@pytest.mark.parametrize(("stage", "reason"), VALID_RECORDS)
+@pytest.mark.parametrize("version", [None, True, 0, 1, 2, 3, "2"])
+def test_wire_versions_must_match_reason(stage, reason, version) -> None:
+    payload = {"stage": stage.value, "reason": reason.value, "schema_version": version}
+    required = 2 if reason in NEW_CODE_STAGES else 1
+    if type(version) is int and version == required:
+        assert AbstentionRecord.from_dict(payload).schema_version == required
+    else:
+        with pytest.raises(ValueError, match="schema_version is unsupported"):
+            AbstentionRecord.from_dict(payload)

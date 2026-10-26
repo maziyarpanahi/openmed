@@ -192,6 +192,10 @@ clinical efficacy. Package publication remains a separate release action.
   recovery reports and versioned replay, reference-server and clinician-agreement
   inputs, with canonical source digests and fail-closed coverage checks (#3775).
 
+- Shared consent, capture interruption, language and policy abstention codes with
+  strict stage gates and code-specific v2 wire versions. Legacy abstention and
+  provider-result records retain byte-identical v1 serialization (#3834).
+
 - Added an offline DQD 2.9.0 results normalizer and subprocess-compatible command
   for the OMOP quality bridge, with value-free diagnostics, strict version and
   table allowlists, and synthetic leakage and status regression fixtures (#3799).
