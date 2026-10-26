@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from email import encoders
 from email import policy as email_policy
-from email.errors import HeaderParseError
+from email.errors import HeaderParseError, MessageError
 from email.header import decode_header
 from email.message import Message
 from email.parser import BytesParser
@@ -441,7 +441,7 @@ def redact_email(
     body_redactions = _redact_body_parts(message, processor, cid_map=cid_map)
     _sanitize_mime_metadata(message)
 
-    email_bytes = message.as_bytes(policy=email_policy.SMTP)
+    email_bytes = _serialize_message(message)
     resolved_output = _write_email_output(output_path, email_bytes)
     redacted_message = _parse_eml(email_bytes)
     document = _document_from_message(
@@ -499,6 +499,16 @@ def _safe_stream_name(stream: Any) -> str | None:
 
 def _parse_eml(payload: bytes) -> Message:
     return BytesParser(policy=email_policy.default).parsebytes(payload)
+
+
+def _serialize_message(message: Message) -> bytes:
+    try:
+        return message.as_bytes(policy=email_policy.SMTP)
+    except MessageError:
+        # The stdlib error embeds raw header bytes, so do not chain it.
+        raise UnsupportedDocumentError(
+            "This email has headers that cannot be serialized as clean MIME."
+        ) from None
 
 
 def _raw_header_values(message: Message, header_name: str) -> tuple[Any, ...]:
@@ -930,7 +940,7 @@ def _attachment_payload(part: Message) -> bytes | None:
     if part.get_content_type().lower() == "message/rfc822":
         nested = part.get_payload()
         if isinstance(nested, list) and nested and isinstance(nested[0], Message):
-            return nested[0].as_bytes(policy=email_policy.SMTP)
+            return _serialize_message(nested[0])
     return None
 
 

@@ -1599,9 +1599,9 @@ def validate_nepali_numeric_date(text: str) -> bool:
     parts = re.split(r"[-/.]", normalize_devanagari_digits(text.strip()))
     if len(parts) != 3 or not all(part.isascii() and part.isdigit() for part in parts):
         return False
-    if len(parts[0]) == 4:
+    if len(parts[0]) == 4 and all(1 <= len(part) <= 2 for part in parts[1:]):
         year, month, day = (int(part) for part in parts)
-    elif len(parts[2]) == 4:
+    elif len(parts[2]) == 4 and all(1 <= len(part) <= 2 for part in parts[:2]):
         day, month, year = (int(part) for part in parts)
     else:
         return False

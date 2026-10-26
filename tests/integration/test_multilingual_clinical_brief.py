@@ -82,8 +82,8 @@ def test_fixed_local_provider_full_pipeline_surface_parity(
         0 if scenario == "preserved" else 1
     )
     cli = {
-        **json.loads(args.review_output.read_text()),
-        "summary": args.summary_output.read_text(),
+        **json.loads(args.review_output.read_text(encoding="utf-8")),
+        "summary": args.summary_output.read_text(encoding="utf-8"),
     }
     responses = {
         "composer": expected,

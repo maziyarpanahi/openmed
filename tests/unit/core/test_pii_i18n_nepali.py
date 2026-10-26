@@ -27,6 +27,7 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
     get_patterns_for_language,
+    validate_nepali_numeric_date,
 )
 from openmed.core.pipeline import Pipeline
 from openmed.core.safety_sweep import safety_sweep
@@ -314,3 +315,16 @@ def test_nepali_fixture_is_leak_free_with_an_empty_detector(
                 assert value not in output, (row["id"], span["label"])
 
     assert all(digit_forms.values()), digit_forms
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "2001/" + "0" * 5000 + "1/01",
+        "2001/01/" + "0" * 5000 + "1",
+        "2001/001/01",
+        "2001/01/001",
+    ),
+)
+def test_nepali_date_validator_rejects_unbounded_components(text):
+    assert not validate_nepali_numeric_date(text)

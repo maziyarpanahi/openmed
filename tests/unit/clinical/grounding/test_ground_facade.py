@@ -44,7 +44,7 @@ def _loader(tmp_path: Path) -> VocabLoader:
     registry: dict[str, VocabSource] = {}
     for system, row in rows.items():
         path = tmp_path / f"{system}.jsonl"
-        path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+        path.write_bytes((json.dumps(row) + "\n").encode("utf-8"))
         registry[system] = VocabSource(
             system=system,
             path=path,

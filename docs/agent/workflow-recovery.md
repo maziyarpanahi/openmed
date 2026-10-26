@@ -114,13 +114,12 @@ openmed agents workflow cancel --request request.json
 openmed agents workflow resume --request request.json --receipt receipt.json
 ```
 
-Inputs are caller-owned local regular files. On POSIX they must belong to the
-current user and have no group/other permissions, such as mode `0600`. Final
-symlinks and FIFOs are refused, reads are bounded to 64 KiB, and changing files,
-duplicate JSON keys, non-finite values, deep documents and unknown fields are
-refused. Platforms without `O_NOFOLLOW` return a controlled protection failure.
-Do not pass tokens, credentials, identities or clinical payloads as command-line
-arguments. Global configuration overrides are not accepted on this surface.
+Inputs must be local regular files owned by the caller, with no POSIX group/other
+permissions (for example, mode `0600`). Reads are bounded to 64 KiB. Final symlinks,
+FIFOs, changing files, duplicate JSON keys, non-finite values, deep documents and
+unknown fields are refused. Platforms without `O_NOFOLLOW` fail protection checks.
+Never pass tokens, credentials, identities or clinical payloads as command-line
+arguments. Global configuration overrides are refused.
 
 A request has exactly these fields:
 
@@ -191,8 +190,9 @@ The protocol is `WorkflowCLIGovernanceService`; the clock is an injected Unix
 second function, never a command-line override. No service is dynamically loaded
 from request JSON or environment variables.
 
-This synthetic example creates a private temporary metadata request and invokes
-the actual CLI boundary offline. The preview service executes no effects:
+This offline example writes synthetic request metadata with mode `0600`.
+The file-based CLI requires POSIX and refuses Windows inputs with
+`input_unprotected`. The preview service executes no effects:
 
 ```python
 from openmed.agent.action_phases import ActionPhase
@@ -202,6 +202,8 @@ import json
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from contextlib import redirect_stdout
+from io import StringIO
 from openmed.cli.governed_workflows import (
     WorkflowCLIRequest, WorkflowCLIStatus, WorkflowCLIView,
     run_governed_workflow_cli,
@@ -231,16 +233,24 @@ with TemporaryDirectory() as directory:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as stream:
         json.dump(request.to_dict(), stream)
-    assert run_governed_workflow_cli(
-        ["workflow", "preview", "--request", str(path)],
-        service=PreviewOnly(),
-    ) == 0
+    output = StringIO()
+    with redirect_stdout(output):
+        code = run_governed_workflow_cli(
+            ["workflow", "preview", "--request", str(path)],
+            service=PreviewOnly(),
+        )
+    response = json.loads(output.getvalue())
+    if os.name == "posix":
+        assert code == 0 and response["ok"]
+    else:
+        assert code == 2 and not response["ok"]
+        assert response["error"]["code"] == "input_unprotected"
 ```
 
-With protected request files, the same adapter can be supplied to the console
-entry for preview. Its unsupported operations return exit `7`; the example
-does not provide approval, execution or recovery capabilities. Without injection,
-valid operational CLI requests also return `adapter_unavailable` with exit `7`.
+The console preview accepts the same adapter with protected request files.
+Unsupported operations exit `7`; this adapter provides no approval, execution
+or recovery. Without injection, valid operational requests return
+`adapter_unavailable` and exit `7`.
 
 ## Open integration dependencies
 

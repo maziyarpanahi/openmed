@@ -21,7 +21,31 @@ an active ignore fail CI so exceptions stay visible. Each ignore must include:
 Expired ignores fail CI. Remove an ignore as soon as the dependency can be
 upgraded.
 
+## Image dependencies and Python compatibility
+
+The `agents`, `beam`, `llamaindex`, `mlx`, `multimodal`, and `ocr-paddle` extras
+require Pillow 13 and Python 3.11+ in both wheel metadata and the frozen lock.
+[Pillow 13 drops Python 3.10](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10).
+Core Python 3.10 remains Pillow-free. Upgrade legacy image environments before
+processing untrusted input; vulnerable Pillow is unsupported. The lock also
+requires Certifi 2026.10.19. No audit exception is added.
+
+Pillow tests run on Python 3.11+; core, image-header and homepage analytics checks
+still run on 3.10. Beam needs the explicit, DirectRunner-tested
+[installation overrides](../integrations/beam.md); pip does not inherit uv
+project overrides. Other runners and image transforms need separate validation.
+Brand checks retain generator-version provenance, master bytes, derivative
+pixels and committed hashes; upgrades do not authorize image drift.
+
 ## Optional storage dependencies
+
+The v3.1 release review raises the existing optional dependency closures to
+`aiohttp>=3.14.4`, `banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and
+`tinytag>=2.3.0` for the fixes reported by the October 20 lockfile scan.
+Each affected extra publishes its minimum version, and the universal lock
+uses the same floors. No package is added to the core install; AWQ retains
+its Linux-only markers. The unpatched NLTK finding is evaluated separately
+under the [time-limited dependency review](dependency-risk.md).
 
 Every optional profile that resolves `fsspec` requires `fsspec>=2026.6.0` in
 published package metadata as well as the frozen dependency graph. The same

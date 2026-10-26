@@ -164,11 +164,10 @@ def test_production_entry_point_stop_resume_and_invalid_metadata(
     assert json.loads(capsys.readouterr().out)["generation"] == 4
 
 
-def test_actual_console_script_supports_agents_status() -> None:
+def test_actual_console_script_supports_agents_status(openmed_console_script) -> None:
     import subprocess
-    import sys
 
-    console = Path(sys.executable).parent / "openmed"
+    console = openmed_console_script
     result = subprocess.run(
         [str(console), "agents", "status"], capture_output=True, text=True, check=False
     )
