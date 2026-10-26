@@ -676,3 +676,32 @@ def test_redacted_output_stays_parseable_and_redaction_is_unmodified(
         redacted = redact_cda(doc.xml, date_shift_days=30)
         assert is_cda_document(redacted)
         _parse_without_dtd(redacted.encode("utf-8"))
+
+
+@pytest.mark.parametrize("encoding", ("utf-16", "utf-16-le", "utf-16-be"))
+def test_locator_rejects_encoded_doctype_before_entity_expansion(documents, encoding):
+    from dataclasses import replace
+
+    truth = replace(
+        documents[0].truth[0],
+        path="/ClinicalDocument/title[1]",
+        node="text",
+        attribute=None,
+    )
+    xml = (
+        '<!DOCTYPE ClinicalDocument [<!ENTITY sample "synthetic entity">]>'
+        '<ClinicalDocument xmlns="urn:hl7-org:v3"><title>&sample;</title>'
+        "</ClinicalDocument>"
+    )
+    with pytest.raises(ValueError, match="DOCTYPE"):
+        resolve_cda_locator(xml.encode(encoding), truth)
+
+
+def test_harness_bounds_input_consumption_before_materializing_batch():
+    def oversized():
+        for _ in range(MAX_CDA_DOCUMENTS + 1):
+            yield None
+        raise AssertionError("consumed beyond the batch limit")
+
+    with pytest.raises(CdaLeakageError, match="count_out_of_bounds"):
+        evaluate_cda_leakage(oversized())

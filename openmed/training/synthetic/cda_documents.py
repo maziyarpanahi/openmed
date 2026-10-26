@@ -30,6 +30,7 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
+from itertools import islice
 from typing import Any, Final
 from xml.etree import ElementTree as ET
 
@@ -1648,7 +1649,7 @@ def evaluate_cda_leakage(
             controlled code and document index only.
     """
 
-    items = tuple(documents)
+    items = tuple(islice(documents, MAX_CDA_DOCUMENTS + 1))
     if not 1 <= len(items) <= MAX_CDA_DOCUMENTS:
         raise CdaLeakageError("count_out_of_bounds")
     counts: dict[tuple[str, str], list[int]] = {}
@@ -1729,6 +1730,13 @@ def _contains_token(haystack: str, needle: str) -> bool:
 # Helpers ----------------------------------------------------------------------
 
 
+class _DtdRejectingTreeBuilder(ET.TreeBuilder):
+    def doctype(self, name: str, pubid: str | None, system: str | None) -> None:
+        # The parser decodes XML before this callback, covering UTF-16 as well
+        # as UTF-8 without inspecting or expanding any entity content.
+        raise ValueError("XML with DOCTYPE or ENTITY declarations is unsupported")
+
+
 def _safe_parse(document: str | bytes) -> ET.Element:
     """Parse XML after refusing DTD and entity declarations, like ``cda.py``."""
 
@@ -1736,7 +1744,9 @@ def _safe_parse(document: str | bytes) -> ET.Element:
     if _UNSAFE_XML_DECLARATION.search(data):
         raise ValueError("XML with DOCTYPE or ENTITY declarations is unsupported")
     try:
-        return ET.fromstring(data)
+        return ET.fromstring(
+            data, parser=ET.XMLParser(target=_DtdRejectingTreeBuilder())
+        )
     except ET.ParseError:
         raise ValueError("XML is not well-formed") from None
 

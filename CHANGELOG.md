@@ -388,6 +388,14 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
+  `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
+  patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A
+  lock-only packaging override lifts Prefect 3.7's
+  `packaging<26.3` cap so the lock keeps Airflow on patched 3.3.2; the base
+  SDK's dependency set is unchanged.
+- Refresh the service image's exact Debian forky pins for ca-certificates,
+  liblzma5 and tzdata after the archive retired the previous versions.
 - Renew the maintainer-reviewed exception for unpatched NLTK
   `CVE-2026-81726` in the universal lockfile through 2026-11-03. NLTK remains
   optional and absent from the core closure and service image. The exception
@@ -432,6 +440,9 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Fixed
 
+- Reject emails whose redacted headers cannot be serialized as clean MIME
+  with `UnsupportedDocumentError` instead of an unhandled stdlib error. The
+  rejection omits the stdlib error, which embeds raw header bytes.
 - Handle decoding failures through both batch readers' per-file error paths,
   continue later files in permissive mode, and retain strict propagation
   without including decoder details in error reports (#4201).

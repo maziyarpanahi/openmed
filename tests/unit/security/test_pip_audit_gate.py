@@ -407,6 +407,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
         ("banks", "2.5.0", "2.5.1", ("agents", "llamaindex")),
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
+        ("gitpython", "3.1.62", "3.2.1", ("docs",)),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
         ("mcp", "1.29.1", "1.30.0", ("dev", "mcp")),
@@ -418,6 +419,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
             ("agents", "awq", "beam", "cloud", "gptq", "llamaindex", "operator"),
         ),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
+        ("opentelemetry-api", "1.43.0", "1.45.1", ("dev", "otel", "service")),
         ("pymongo", "4.18.1", "4.18.2", ("beam",)),
         ("tinytag", "2.2.1", "2.3.0", ("agents", "llamaindex")),
     ],
@@ -510,6 +512,31 @@ def test_certificate_bundle_lock_uses_patched_release() -> None:
     )
     assert "2025.10.5" not in floor.specifier
     assert "2026.10.19" in floor.specifier
+
+
+@pytest.mark.parametrize(
+    ("package", "unsafe", "fixed"),
+    [
+        ("brotli", "1.2.0", "1.2.1"),
+        ("graphql-core", "3.2.11", "3.2.12"),
+        ("virtualenv", "21.14.5", "21.14.9"),
+    ],
+)
+def test_transitive_dependency_lock_uses_patched_release(
+    package: str, unsafe: str, fixed: str
+) -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == package]
+    assert resolved
+    assert all(Version(item["version"]) >= Version(fixed) for item in resolved)
+    floor = next(
+        requirement
+        for value in project["tool"]["uv"]["constraint-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == package
+    )
+    assert unsafe not in floor.specifier
+    assert fixed in floor.specifier
 
 
 def test_awq_dataset_floor_retains_linux_only_installation() -> None:
