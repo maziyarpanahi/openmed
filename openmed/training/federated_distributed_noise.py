@@ -92,9 +92,9 @@ _LN_2_UPPER: Final = Fraction(6932, 10000)
 
 _REFERENCES: Final = (
     "CKS20 arXiv:2004.00010 Algorithms 1-3",
-    "KLS21 arXiv:2102.06387 Theorem 1 eq. (2)-(3)",
-    "KLS21 arXiv:2102.06387 Proposition 14 eq. (17)",
-    "KLS21 arXiv:2102.06387 Lemma 15",
+    "KLS21 arXiv:2102.06387v4 Theorem 1 eq. (2)-(3)",
+    "KLS21 arXiv:2102.06387v4 Proposition 14 eq. (19)",
+    "KLS21 arXiv:2102.06387v4 Lemma 15",
 )
 
 
@@ -360,12 +360,14 @@ class DistributedNoiseCalibration:
       eq. (2), probability-one branch with ``gamma = 1``). Client signals are
       refused unless they satisfy this bound and ``|x_j| <= ceil(c)``.
     * Sum of shares: ``tau_n = 10 * sum_{k=1}^{n-1} exp(-2 pi^2 sigma^2 k /
-      (k + 1))`` (Theorem 1, eq. (3)). By Proposition 14, eq. (17), adding
+      (k + 1))`` (Theorem 1, eq. (3)). By Proposition 14, eq. (19), adding
       the sum of ``s`` shares gives ``eps**2 / 2``-zCDP with ``eps**2 <=
       Delta_2**2 / (s sigma**2) + 2 tau_s d``; since ``tau_s <= tau_n``, every
       ``t <= s <= n`` satisfies ``rho <= (Delta_2**2 / (t sigma**2) +
       2 tau_n d) / 2``, reported as ``zcdp_rho_bound`` under the stated trust
       boundary (honest-but-curious coordinator, non-colluding clients).
+      Adjacency zeroes one client signal while retaining its noise share;
+      the survivor set is fixed and dropout is data-independent.
     * Modular clipping: each coordinate of the sum of at most ``n`` shares is
       subgaussian with variance proxy ``n sigma**2`` (Lemma 15), so
       ``P(max_j |Z_j| > k) <= 2 d exp(-k**2 / (2 n sigma**2)) <= 2**-b`` for
@@ -508,6 +510,9 @@ class DistributedNoiseCalibration:
             "trust_boundary": "coordinator_untrusted",
             "threat_model": "honest_but_curious_coordinator_non_colluding_clients",
             "noise_placement": "client_shares",
+            "adjacency": "zero_one_client_update",
+            "participation": "fixed_survivor_set",
+            "dropout_model": "data_independent",
             "calibration_basis": "recovery_threshold",
             "survivor_rule": "abort_below_recovery_threshold",
             "wraparound_rule": "reject_modulus_below_tail_bound",

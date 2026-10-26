@@ -24,6 +24,14 @@ Noise lives in the client shares. The record declares this as
 If clients collude with the coordinator, the shares those clients know stop
 protecting the sum, and the bounds below do not cover that case.
 
+The reported bound uses `zero_one_client_update` adjacency: replace one
+client signal with zero while retaining that client's independent noise
+share. It conditions on a fixed survivor set and data-independent dropout.
+It does not hide participation, cover dropout chosen from private updates, or
+cover replacing one arbitrary clipped update with another. The latter can
+double the signal sensitivity and needs a separate calibration. These
+assumptions are included in the mechanism record.
+
 ## Calibrating to the recovery threshold
 
 For `n` enrolled clients and recovery threshold `t`, any unmaskable survivor
@@ -64,7 +72,7 @@ exception text.
 
 The bounds follow Kairouz, Liu and Steinke, "The Distributed Discrete Gaussian
 Mechanism for Federated Learning with Secure Aggregation" (KLS21,
-arXiv:2102.06387). All quantities are in integer grid units of the fixed-point
+arXiv:2102.06387v4). All quantities are in integer grid units of the fixed-point
 codec.
 
 - **Rounding.** Randomized rounding can make the norm larger than the clip
@@ -77,7 +85,7 @@ codec.
   `tau_n = 10 * sum_{k=1}^{n-1} exp(-2 pi^2 sigma^2 k / (k + 1))` from
   Theorem 1, eq. (3). It then reports
   `zcdp_rho_bound = (Delta_2**2 / (t sigma**2) + 2 tau_n d) / 2` from
-  Proposition 14, eq. (17). The bound holds for every `t <= s <= n` because
+  Proposition 14, eq. (19). The bound holds for every `t <= s <= n` because
   `tau_s <= tau_n`. Accountant binding stays with the central mechanism work.
 - **Modular clipping.** The sum of at most `n` shares is subgaussian with
   variance proxy `n sigma**2` (Lemma 15). Its noise tail bound is the smallest

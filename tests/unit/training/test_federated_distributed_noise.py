@@ -484,6 +484,9 @@ def test_mechanism_record_declares_boundary_and_is_value_free():
     assert payload["schema_version"] == FEDERATED_DISTRIBUTED_NOISE_SCHEMA_VERSION
     assert payload["trust_boundary"] == "coordinator_untrusted"
     assert payload["noise_placement"] == "client_shares"
+    assert payload["adjacency"] == "zero_one_client_update"
+    assert payload["participation"] == "fixed_survivor_set"
+    assert payload["dropout_model"] == "data_independent"
     assert payload["calibration_basis"] == "recovery_threshold"
     assert payload["survivor_rule"] == "abort_below_recovery_threshold"
     assert payload["sampler"] == "cks20_exact_discrete_gaussian"
