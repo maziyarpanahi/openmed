@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 5038094
+    "json": 5060923
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 5038094
+    "docs/search/search_index.json": 5060923
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 5817753,
-    "/docs/model-tokenizer-script-coverage/": 7992837
+    "/docs/": 6536307,
+    "/docs/model-tokenizer-script-coverage/": 8632959
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -31,6 +31,11 @@
     "representative_interaction_latency_ms": 200
   },
   "notes": [
+    "The v3.1 image-upgrade documentation with refreshed synthetic status measures 5056584 search-index bytes, including 476 bytes absent from the former PR build. PRs now render the same status content before staging. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. All other artifact, payload and page-metric limits are unchanged.",
+    "The v3.1 release, privacy migration and dependency-security documentation measures 5054563 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; docs route totals retain their fixed-asset ceilings. Other artifact, image, runtime and page-metric limits are unchanged.",
+    "The reviewed governance API deprecation policy and major privacy-boundary announcement measure 5046074 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance. Docs route totals add only this governed search ceiling to unchanged fixed-asset ceilings; aggregate, non-JSON, duplicate, source-map and page-metric limits remain unchanged.",
+    "The tokenizer docs route applies the same component checks: its fixed-asset ceiling is 3572036 bytes, retaining the prior 7992837-byte route ceiling minus the 4420801-byte search ceiling at revision 429403b7f687fa6c94f3446917be050069afeef5. The current total adds only the independently reviewed search ceiling; fixed assets receive no extra allowance.",
+    "The docs route now budgets fixed assets separately from its independently reviewed search index. The fixed-asset ceiling remains 1475384 bytes: the prior 5817753-byte route ceiling minus its recorded 4342369-byte index. The total is the same fixed ceiling plus the current governed search ceiling. Browser checks enforce both components, so index growth cannot grant extra room to other assets. No other route or artifact limits change.",
     "The reviewed pinned summarizer provisioning and typed-error guides measure 4677157 search bytes, an increase of 6801 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
     "The reviewed clinical budget and typed-error guides measure 4670356 search bytes, an increase of 5468 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
     "The reviewed Swift MLX path-confinement guide updates measure 4664888 search bytes, an increase of 1625 bytes over current master. JSON and search ceilings retain the existing 1686-byte allowance; all other ceilings are unchanged.",
@@ -163,6 +168,12 @@
     "The reviewed PR #4036 documentation measures 4994840 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed PR #4019 documentation measures 5000084 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed governed-agent overview and migration documentation batch measures 5031494 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
-    "The reviewed PR #4070 documentation measures 5036408 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged."
-  ]
+    "The reviewed PR #4070 documentation measures 5036408 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed PR #4038 documentation measures 5042244 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The reviewed Arabic and Amharic surrogate documentation measures 5059237 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; other artifact, fixed-transfer and page-metric limits are unchanged."
+  ],
+  "route_fixed_transfer_bytes": {
+    "/docs/": 1475384,
+    "/docs/model-tokenizer-script-coverage/": 3572036
+  }
 }

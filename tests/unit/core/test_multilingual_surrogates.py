@@ -434,3 +434,35 @@ def test_arabic_and_amharic_national_id_surrogates_still_validate(
         )
         assert surrogate != original
         assert validator(surrogate)
+
+
+@pytest.mark.parametrize(
+    ("lang", "key", "label", "script"),
+    (
+        ("am", "FIRST_NAME", "FIRST_NAME", "Ethiopic"),
+        ("am", "LAST_NAME", "LAST_NAME", "Ethiopic"),
+        ("am", "LOCATION", "CITY", "Ethiopic"),
+    ),
+)
+def test_exhausted_curated_inventory_does_not_reuse_source_tokens(
+    lang, key, label, script
+):
+    from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
+    original = " ".join(LANGUAGE_FAKE_DATA[lang][key])
+    first = Anonymizer(lang=lang, consistent=True, seed=7).surrogate(original, label)
+    second = Anonymizer(lang=lang, consistent=True, seed=7).surrogate(original, label)
+    assert first == second
+    assert _in_script(first, script)
+    assert set(first.split()).isdisjoint(original.split())
+
+
+def test_exhausted_address_number_inventory_fails_without_source_values():
+    from faker import Faker
+
+    from openmed.core.anonymizer.providers.script_places import _draw_number
+
+    with pytest.raises(
+        ValueError, match="^synthetic address number inventory exhausted$"
+    ):
+        _draw_number(Faker(), "1 2 3", bounds=(1, 3))

@@ -256,7 +256,9 @@ def test_ambiguous_journal_is_never_modified(tmp_path: Path, problem: str) -> No
     elif problem == "tamper":
         first.write_text('{"checkpoint_digest":"synthetic protected payload"}')
     elif problem == "unknown":
-        (directory / "private-input.txt").write_text("Synthetic patient 王小明")
+        (directory / "private-input.txt").write_text(
+            "Synthetic patient 王小明", encoding="utf-8"
+        )
     else:
         target = tmp_path / "private-input.txt"
         target.write_bytes(first.read_bytes())

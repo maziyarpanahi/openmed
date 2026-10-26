@@ -181,6 +181,10 @@ that script, and a Latin span in the same note keeps the Latin Faker fallback.
 Phone and national-ID surrogates for both languages are unchanged and keep
 their existing format and validator checks.
 
+When a source exhausts a curated name or place inventory, a deterministic
+same-script synthetic letter sequence replaces it without reusing source
+tokens. Exhausting an address-number range raises a value-free error.
+
 The optional Indic NER adapter never downloads a checkpoint automatically.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
 pass an explicit model. When it is unset, registry lookup returns no optional

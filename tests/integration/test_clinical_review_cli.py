@@ -84,7 +84,7 @@ class Backend:
         os.write(1, canary.encode())
         os.write(2, canary.encode())
         logging.error(canary)
-        ctypes.CDLL(None).printf(canary.encode())
+        assert ctypes.CDLL("ucrtbase" if os.name == "nt" else None).puts(canary.encode()) >= 0
         return {"label": kind, "score": 0.8}
 
 sys.modules["synthetic_cli_backend"] = SimpleNamespace(create=Backend)
@@ -163,7 +163,9 @@ def nli_argv(files, *extra):
     ]
 
 
-def test_summary_subprocess_writes_guarded_text_and_only_value_free_metadata(files):
+def test_summary_subprocess_writes_guarded_text_and_only_value_free_metadata(
+    files, assert_private_file
+):
     result, envelope = run_cli(summary_argv(files), cwd=files[0].parent)
     assert result.returncode == 0 and envelope["ok"] is True
     assert envelope["command"] == "summarize"
@@ -174,7 +176,7 @@ def test_summary_subprocess_writes_guarded_text_and_only_value_free_metadata(fil
     assert envelope["data"]["leakage_check"]["passed"] is True
     assert envelope["data"]["human_review_required"] is True
     for path in files[2:]:
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert_private_file(path)
     assert files[2].read_text() not in result.stdout + files[3].read_text()
 
 

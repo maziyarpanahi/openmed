@@ -91,6 +91,8 @@ def _draw_number(faker, original: str, *, bounds: tuple[int, int]) -> int:
     excluded = _source_numbers(original)
     low, high = bounds
     candidates = [number for number in range(low, high + 1) if number not in excluded]
+    if not candidates:
+        raise ValueError("synthetic address number inventory exhausted")
     return faker.random.choice(candidates)
 
 

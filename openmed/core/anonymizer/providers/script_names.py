@@ -380,19 +380,26 @@ def _draw_unshared_value(
 ) -> str:
     """Draw a value sharing no token with ``original`` or ``exclude``.
 
-    Falls back to any value that differs from ``original`` when every value
-    shares a token, so the result never equals the source surface while the
-    inventory has at least two entries.
+    If the curated inventory is exhausted, use synthetic letters in the same
+    script rather than returning a source token.
     """
 
     forbidden = _surface_tokens(original) | exclude
-    folded_original = _fold_surface(original)
-    eligible = (
-        tuple(value for value in values if _surface_tokens(value).isdisjoint(forbidden))
-        or tuple(value for value in values if _fold_surface(value) != folded_original)
-        or tuple(values)
+    eligible = tuple(
+        value for value in values if _surface_tokens(value).isdisjoint(forbidden)
     )
-    return str(faker.random.choice(eligible))
+    if eligible:
+        return str(faker.random.choice(eligible))
+    if values and _is_script_text(values[0], _ARABIC_SCRIPT_RANGES):
+        alphabet = _unicode_letters(0x0621, 0x064A, "ARABIC LETTER")
+    else:
+        alphabet = _unicode_letters(0x1200, 0x135A, "ETHIOPIC SYLLABLE")
+    return _draw_disjoint_name(
+        faker,
+        " ".join((original, *sorted(forbidden))),
+        alphabet=alphabet,
+        length=4,
+    )
 
 
 @lru_cache(maxsize=1)

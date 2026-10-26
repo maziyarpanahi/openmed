@@ -276,8 +276,44 @@ jobs:
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
+    - name: Verify secure image dependency selection
+      run: >-
+        uv run --frozen python -c
+        "import importlib.util, sys; from importlib.metadata import version;
+        assert (int(version('Pillow').split('.')[0]) >= 13
+        if sys.version_info >= (3, 11)
+        else importlib.util.find_spec('PIL') is None)"
+
+    - name: Windows portability regression checks
+      if: runner.os == 'Windows'
+      timeout-minutes: 10
+      run: >-
+        uv run --frozen pytest -q --tb=short --show-capture=no
+        tests/unit/test_utils.py
+        tests/unit/structured/registry/test_naaccr.py
+        tests/unit/release/test_agent_release_candidate.py
+        tests/unit/service/test_workflow_routes.py
+        tests/unit/test_doctests.py
+        tests/unit/cli/test_clinical_cli.py
+        tests/unit/cli/test_clinical_review_cli.py
+        tests/unit/clinical/test_multilingual_brief.py
+        tests/unit/clinical/test_summarize_backends.py
+        tests/unit/clinical/test_brief_parity.py
+        tests/unit/clinical/grounding/test_ground_facade.py
+        tests/unit/agent/permissions/test_access_events.py
+        tests/unit/agent/workflows/test_journal_retirement.py
+        tests/integration/test_clinical_cli_offline.py
+        tests/integration/test_clinical_workflow_examples.py
+        tests/integration/test_clinical_review_cli.py
+        tests/integration/test_multilingual_clinical_brief.py
+        tests/integration/test_governed_mcp_offline.py
+        tests/integration/test_dqd_adapter.py
+        tests/integration/agent/test_access_event_log.py
+        tests/fuzz/test_format_parsers_fuzz.py
+
     - name: Test with pytest
-      timeout-minutes: 45
+      # Leave bounded completion time for the full Windows suite and coverage.
+      timeout-minutes: 60
       run: >-
         uv run --frozen python -c
         "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
