@@ -212,6 +212,10 @@ clinical efficacy. Package publication remains a separate release action.
   grant, schema, minimum-data, review-stop and hostile-result scenarios, with
   counts-only reports and non-compensable critical gates (#3790).
 
+- Local, metadata-only ambient correction ledgers in Python and OpenMedKit,
+  with revision-bound authority, dependent claim invalidation, deterministic
+  replay, and explicit review guards on current exports (#3682).
+
 - Added local revisioned agent-handoff storage with bounded review leases,
   atomic competing-decision refusals, exact action/evidence commitments and
   append-only opaque decision receipts preserved across restart (#3666).
