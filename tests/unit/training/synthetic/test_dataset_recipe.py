@@ -50,6 +50,13 @@ def stub(callback=None, validator=None):
     }
 
 
+def python_path():
+    # Keep inherited entries: Nix dev shells provide dependencies on PYTHONPATH.
+    return os.pathsep.join(
+        filter(None, (str(Path.cwd()), os.environ.get("PYTHONPATH")))
+    )
+
+
 def test_actual_multimodal_builtin_recipe_reproduces_all_artifact_identities(tmp_path):
     value = recipe([node(), node("images", "burned_in", ["notes"])])
     first = run_dataset_recipe(value, tmp_path / "first")
@@ -197,7 +204,7 @@ def test_actual_top_level_cli_generates_dataset_and_reports_only_counts(tmp_path
         text=True,
         env={
             **os.environ,
-            "PYTHONPATH": str(Path.cwd()),
+            "PYTHONPATH": python_path(),
             "HOME": str(tmp_path),
             "OPENMED_OFFLINE": "1",
         },
@@ -227,7 +234,7 @@ def test_cli_invalid_recipe_returns_controlled_failure_and_no_output(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env={**os.environ, "PYTHONPATH": str(Path.cwd()), "HOME": str(tmp_path)},
+        env={**os.environ, "PYTHONPATH": python_path(), "HOME": str(tmp_path)},
     )
     assert result.returncode != 0
     assert "DO_NOT_ECHO" not in result.stdout + result.stderr
@@ -275,7 +282,7 @@ def test_cli_rejects_ambiguous_duplicate_recipe_fields(tmp_path):
         ],
         capture_output=True,
         text=True,
-        env={**os.environ, "PYTHONPATH": str(Path.cwd()), "HOME": str(tmp_path)},
+        env={**os.environ, "PYTHONPATH": python_path(), "HOME": str(tmp_path)},
     )
     assert result.returncode != 0
     assert not (tmp_path / "out").exists()
