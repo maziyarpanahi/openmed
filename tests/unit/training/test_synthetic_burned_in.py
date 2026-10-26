@@ -6,10 +6,12 @@ import sys
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageChops
 
 from openmed.core.labels import DATE, ID_NUM, ID_SUBTYPE_MRN, PERSON
 from openmed.training.synthetic import BurnedInGenerator, generate_burned_in_example
+
+Image = pytest.importorskip("PIL.Image")
+ImageChops = pytest.importorskip("PIL.ImageChops")
 
 
 def test_rendered_case_has_aligned_canonical_spans_and_controlled_boxes():

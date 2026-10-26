@@ -101,7 +101,7 @@ def test_header_limit_checked_before_palette_read() -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("mode", ["1", "L", "RGB"])
 def test_pillow_generated_file_end_to_end(tmp_path, size, mode) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.gif"
     Image.new(mode, size).save(path, format="GIF")
@@ -264,7 +264,7 @@ def test_real_file_read_preserves_position_and_ownership(tmp_path) -> None:
 
 @pytest.mark.integration
 def test_real_gif_with_local_but_no_global_color_table(tmp_path) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     # A complete 1x1 GIF89a with a two-entry local palette, not a global one.
     payload = bytes.fromhex(
