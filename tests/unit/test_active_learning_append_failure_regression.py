@@ -26,6 +26,9 @@ def test_failed_add_does_not_poison_retry_or_persistence(tmp_path, monkeypatch):
             queue.add(item)
     assert queue.pending == ()
     assert queue.labeled_hashes == frozenset()
+    restored_after_failure = ActiveLearningQueue(path)
+    assert restored_after_failure.pending == ()
+    assert restored_after_failure.labeled_hashes == frozenset()
     assert queue.add(item) is True
     assert ActiveLearningQueue(path).pending == (item,)
 
