@@ -1052,6 +1052,7 @@ constraints = [
     { name = "brotlicffi", specifier = ">=1.2.1.0" },
     { name = "certifi", specifier = ">=2026.10.19" },
     { name = "datasets", specifier = ">=5.0.1" },
+    { name = "filelock", specifier = ">=4.2.1" },
     { name = "fsspec", specifier = ">=2026.6.0" },
     { name = "gitpython", specifier = ">=3.2.1" },
     { name = "graphql-core", specifier = ">=3.2.12" },
@@ -10772,6 +10773,7 @@ agents = [
     { name = "llama-index-core" },
     { name = "multidict" },
     { name = "pillow" },
+    { name = "setuptools" },
     { name = "tinytag" },
 ]
 airflow = [
@@ -10784,9 +10786,11 @@ awq = [
     { name = "aiohttp", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "autoawq", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "datasets", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "filelock" },
     { name = "fsspec", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "jinja2", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "multidict", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "setuptools", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "torch", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "transformers", marker = "sys_platform == 'linux' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
@@ -10796,6 +10800,7 @@ beam = [
     { name = "multidict" },
     { name = "pillow" },
     { name = "pymongo" },
+    { name = "setuptools" },
 ]
 cli = [
     { name = "rich" },
@@ -10816,14 +10821,17 @@ columnar = [
 ]
 coreml = [
     { name = "coremltools" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
+    { name = "setuptools" },
     { name = "torch" },
     { name = "transformers" },
 ]
 dagster = [
     { name = "dagster" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "mako" },
@@ -10838,6 +10846,7 @@ dev = [
     { name = "dask", extra = ["dataframe"] },
     { name = "duckdb" },
     { name = "fastapi" },
+    { name = "filelock" },
     { name = "fonttools", extra = ["woff"] },
     { name = "fsspec" },
     { name = "grpcio" },
@@ -10869,6 +10878,7 @@ dev = [
     { name = "python-dateutil" },
     { name = "rich" },
     { name = "ruff" },
+    { name = "setuptools" },
     { name = "sqlalchemy" },
     { name = "strawberry-graphql", extra = ["fastapi"] },
     { name = "typer" },
@@ -10891,6 +10901,7 @@ duckdb = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'extra-7-openmed-gliclass' or extra == 'extra-7-openmed-multimodal' or (extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (extra != 'extra-7-openmed-ocr-paddle' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-ocr-paddle') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-ocr-paddle')" },
 ]
 edge-sbc = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "numpy", version = "1.26.4", source = { registry = "https://pypi.org/simple" }, marker = "(extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-ocr-paddle') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-scispacy')" },
@@ -10905,27 +10916,33 @@ fhir = [
     { name = "httpx" },
 ]
 gliclass = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "gliclass" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
     { name = "scikit-learn" },
+    { name = "setuptools" },
     { name = "torch" },
     { name = "transformers" },
 ]
 gliner = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "gliner", extra = ["tokenizers"], marker = "extra == 'extra-7-openmed-gliner' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "jinja2" },
+    { name = "setuptools" },
     { name = "torch" },
 ]
 gptq = [
     { name = "aiohttp" },
     { name = "auto-gptq" },
     { name = "datasets" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "multidict" },
+    { name = "setuptools" },
     { name = "torch" },
 ]
 grounding = [
@@ -10939,9 +10956,11 @@ haystack = [
 ]
 hf = [
     { name = "accelerate" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
+    { name = "setuptools" },
     { name = "tokenizers" },
     { name = "torch" },
     { name = "transformers" },
@@ -10978,6 +10997,7 @@ llamaindex = [
     { name = "llama-index-core" },
     { name = "multidict" },
     { name = "pillow" },
+    { name = "setuptools" },
     { name = "tinytag" },
 ]
 mcp = [
@@ -10985,8 +11005,10 @@ mcp = [
 ]
 medspacy = [
     { name = "medspacy", marker = "python_full_version >= '3.12' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "setuptools", marker = "python_full_version >= '3.12' or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
 ]
 mlx = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
@@ -11000,6 +11022,7 @@ mlx = [
 ]
 multimodal = [
     { name = "easyocr" },
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "markdown-it-py" },
@@ -11015,6 +11038,7 @@ multimodal = [
     { name = "python-doctr" },
     { name = "python-docx" },
     { name = "python-pptx" },
+    { name = "setuptools" },
     { name = "torch" },
 ]
 notebook = [
@@ -11025,16 +11049,19 @@ ocr-paddle = [
     { name = "pillow" },
 ]
 onnx = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "onnx" },
     { name = "onnxruntime" },
     { name = "onnxscript", version = "0.5.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version >= '3.13' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version < '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra == 'extra-7-openmed-awq' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
     { name = "onnxscript", version = "0.7.0", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.13' and extra != 'extra-7-openmed-awq' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-onnx') or (python_full_version < '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-scispacy') or (python_full_version < '3.13' and extra == 'extra-7-openmed-awq' and extra != 'extra-7-openmed-gliner' and extra != 'extra-7-openmed-ocr-paddle' and extra == 'extra-7-openmed-onnx') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-gliner' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliclass' and extra == 'extra-7-openmed-scispacy') or (python_full_version >= '3.13' and extra != 'extra-7-openmed-airflow' and extra != 'extra-7-openmed-awq' and extra == 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-airflow' and extra == 'extra-7-openmed-ocr-paddle') or (extra == 'extra-7-openmed-awq' and extra == 'extra-7-openmed-gliner') or (extra == 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra == 'extra-7-openmed-multimodal' and extra != 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy') or (extra != 'extra-7-openmed-gliclass' and extra != 'extra-7-openmed-multimodal' and extra == 'extra-7-openmed-onnx' and extra == 'extra-7-openmed-scispacy')" },
+    { name = "setuptools" },
     { name = "torch" },
     { name = "transformers" },
 ]
 onnx-runtime = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "huggingface-hub" },
     { name = "jinja2" },
@@ -11047,6 +11074,7 @@ openmrs = [
     { name = "httpx" },
 ]
 openvino = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "nncf" },
@@ -11081,21 +11109,26 @@ prefect = [
     { name = "prefect" },
 ]
 presidio = [
+    { name = "filelock" },
     { name = "presidio-analyzer" },
+    { name = "setuptools" },
 ]
 pydeid = [
     { name = "pydeid" },
 ]
 quickumls = [
     { name = "quickumls" },
+    { name = "setuptools" },
 ]
 ray = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "ray", extra = ["data"] },
 ]
 scispacy = [
     { name = "scispacy" },
+    { name = "setuptools" },
 ]
 scrubadub = [
     { name = "scrubadub" },
@@ -11113,10 +11146,13 @@ service = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 snowflake = [
+    { name = "filelock" },
+    { name = "setuptools" },
     { name = "snowflake-snowpark-python" },
 ]
 spacy = [
     { name = "click" },
+    { name = "setuptools" },
     { name = "spacy" },
 ]
 spark = [
@@ -11128,6 +11164,7 @@ sqlalchemy = [
     { name = "sqlalchemy" },
 ]
 triton = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "grpcio" },
     { name = "httpx" },
@@ -11146,9 +11183,11 @@ zh = [
     { name = "pypinyin" },
 ]
 zh-hanlp = [
+    { name = "filelock" },
     { name = "fsspec" },
     { name = "hanlp" },
     { name = "jinja2" },
+    { name = "setuptools" },
     { name = "torch" },
 ]
 zh-pkuseg = [
@@ -11189,6 +11228,25 @@ requires-dist = [
     { name = "faker", specifier = ">=22.0" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110" },
     { name = "fastapi", marker = "extra == 'service'", specifier = ">=0.110" },
+    { name = "filelock", marker = "sys_platform == 'linux' and extra == 'awq'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'coreml'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'dagster'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'dev'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'edge-sbc'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'gliclass'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'gliner'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'gptq'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'hf'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'mlx'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'multimodal'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'onnx'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'onnx-runtime'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'openvino'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'presidio'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'ray'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'snowflake'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'triton'", specifier = ">=4.2.1" },
+    { name = "filelock", marker = "extra == 'zh-hanlp'", specifier = ">=4.2.1" },
     { name = "fonttools", extras = ["woff"], marker = "extra == 'dev'", specifier = "==4.61.1" },
     { name = "fsspec", marker = "sys_platform == 'linux' and extra == 'awq'", specifier = ">=2026.6.0" },
     { name = "fsspec", marker = "extra == 'agents'", specifier = ">=2026.6.0" },
@@ -11390,6 +11448,25 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'gliclass'", specifier = ">=1.0" },
     { name = "scispacy", marker = "extra == 'scispacy'", specifier = ">=0.5.4,<1" },
     { name = "scrubadub", marker = "extra == 'scrubadub'", specifier = ">=2.0,<3" },
+    { name = "setuptools", marker = "python_full_version >= '3.12' and extra == 'medspacy'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "sys_platform == 'linux' and extra == 'awq'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'agents'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'beam'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'coreml'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'dev'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'gliclass'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'gliner'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'gptq'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'hf'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'llamaindex'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'multimodal'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'onnx'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'presidio'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'quickumls'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'scispacy'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'snowflake'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'spacy'", specifier = ">=84.1.0" },
+    { name = "setuptools", marker = "extra == 'zh-hanlp'", specifier = ">=84.1.0" },
     { name = "snowflake-snowpark-python", marker = "extra == 'snowflake'", specifier = ">=1.0,<2" },
     { name = "spacy", marker = "extra == 'spacy'", specifier = ">=3.8.9" },
     { name = "sqlalchemy", marker = "extra == 'dev'", specifier = ">=2.0,<3" },
