@@ -48,7 +48,7 @@ COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/
 # Install the patched PyPI release first so Torch's requirement is satisfied.
 RUN python -m pip install --no-cache-dir --upgrade \
         "pip==26.2.0" \
-        "setuptools==84.2.1" \
+        "setuptools==84.1.0" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
         "filelock==4.2.4" \
