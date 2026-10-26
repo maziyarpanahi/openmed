@@ -5,19 +5,15 @@ Snowflake warehouse. The handler is a plain Python callable, while Snowpark is
 an optional dependency: importing `openmed` or `openmed.interop` does not
 import Snowpark.
 
-Install the optional extra in the environment that creates the registration:
+From the current OpenMed checkout, install the frozen registration environment:
 
 ```bash
-pip install "openmed[snowflake]"
-pip install "filelock>=4.2.1"
+uv sync --frozen --extra snowflake --python 3.11
 ```
 
-The second command replaces the vulnerable filelock 3.x release that pip
-selects for the Snowflake connector, which caps `filelock` below 4. pip then
-reports that declared cap as a conflict; the connector's cache locks use only the
-`FileLock` API that filelock 4 keeps. OpenMed's frozen uv lock applies the same
-override. See the [dependency policy](security/dependency-policy.md) for the
-review behind it.
+Snowflake's filelock cap needs the repository's tested security override.
+Ordinary pip cannot resolve this extra on Python 3.11+; see the
+[dependency policy](security/dependency-policy.md#optional-storage-and-locking-dependencies).
 
 ## Register with Snowpark
 
