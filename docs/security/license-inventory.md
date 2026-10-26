@@ -50,6 +50,7 @@ a dependency also declared in another extra.
 | `extract-msg` | `email-msg-gpl` | `GPL-3.0-only` |
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
+| `filelock` | Optional locking profiles; 3.20.3 uses Unlicense, 4.x MIT | `MIT OR Unlicense` |
 | `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
 | `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
 | `langgraph-sdk` | `agents, langgraph` | `MIT` |
@@ -131,6 +132,7 @@ a dependency also declared in another extra.
 | `safetensors` | `mlx` | `Apache-2.0` |
 | `scispacy` | `scispacy` | `Apache-2.0` |
 | `scrubadub` | `scrubadub` | `Apache-2.0` |
+| `setuptools` | Optional integration tooling; not core | `MIT` |
 | `snowflake-snowpark-python` | `snowflake` | `Apache-2.0` |
 | `spacy` | `spacy` | `MIT` |
 | `sqlalchemy` | `sqlalchemy` | `MIT` |
