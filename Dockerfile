@@ -40,7 +40,7 @@ COPY eval/redteam/corpus/adversarial_phi.jsonl /app/eval/redteam/corpus/
 
 RUN python -m pip install --no-cache-dir --upgrade \
         "pip==26.2.0" \
-        "setuptools==83.0.0" \
+        "setuptools==84.1.0" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.13.0,<3" \

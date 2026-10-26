@@ -37,33 +37,30 @@ project overrides. Other runners and image transforms need separate validation.
 Brand checks retain generator-version provenance, master bytes, derivative
 pixels and committed hashes; upgrades do not authorize image drift.
 
-## Optional storage dependencies
+## Optional storage and locking dependencies
 
-The v3.1 release review raises the existing optional dependency closures to
-`aiohttp>=3.14.4`, `banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and
-`tinytag>=2.3.0` for the fixes reported by the October 20 lockfile scan.
-Each affected extra publishes its minimum version, and the universal lock
-uses the same floors. No package is added to the core install; AWQ retains
-its Linux-only markers. The unpatched NLTK finding is evaluated separately
-under the [time-limited dependency review](dependency-risk.md).
+Affected extras publish the October 20 security floors: `aiohttp>=3.14.4`,
+`banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and `tinytag>=2.3.0`.
+The frozen lock agrees; core dependencies and AWQ's Linux-only boundary remain
+unchanged. NLTK has a separate [time-limited review](dependency-risk.md).
 
-Every optional profile that resolves `fsspec` requires `fsspec>=2026.6.0` in
-published package metadata as well as the frozen dependency graph. The same
-profiles require `jinja2>=3.1.6`, since an older sandbox can still admit
-[private traversal through the attr/format filter](https://github.com/pallets/jinja/security/advisories/GHSA-cpwx-vrp4-4pq7).
-This includes
-model and orchestration profiles that reach filesystem support transitively;
-the base SDK still does not install it. The AWQ floor retains its Linux-only
-marker. The frozen cloud profile pairs fsspec 2026.6.0 with s3fs 2026.6.0 to
-respect the datasets and S3 adapter version bounds.
+Filesystem profiles require `fsspec>=2026.6.0` and `jinja2>=3.1.6` for
+[reference-template execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc)
+and [attr/format traversal](https://github.com/pallets/jinja/security/advisories/GHSA-cpwx-vrp4-4pq7).
+Tests reject both traversal forms across all three template paths while retaining
+variable interpolation. Downstream protocol checks occur too late to replace
+these fixes. The cloud lock pairs fsspec and s3fs 2026.6.0.
 
-The floor addresses
-[reference-template code execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc).
-Synthetic regressions cover all three reference-template paths, rejecting
-private attribute traversal and indirect format access while retaining ordinary
-variable interpolation.
-Filesystem initialization happens before downstream protocol checks, so those
-checks are not a substitute for installing the patched dependency.
+Locking profiles use `filelock>=4.2.1` on Python 3.11+ and exactly 3.20.3 on
+Python 3.10, before the vulnerable code was introduced. Pre-commit runs on
+3.11+; core and Hub tests still run on 3.10. Setuptools-backed profiles and
+container recipes require 84.1.0 for the namespace-file path fix.
+
+Snowflake 4.x still caps filelock below 4. The repository overrides that cap;
+its cache persistence, lock contention and local Snowpark UDF tests validate the
+combination. Use `uv sync --frozen --extra snowflake` from this checkout.
+Ordinary pip cannot resolve the secure Snowflake extra on Python 3.11+ until
+upstream lifts its cap. Live Snowflake sessions require separate validation.
 
 ## Optional graph and Beam dependencies
 
