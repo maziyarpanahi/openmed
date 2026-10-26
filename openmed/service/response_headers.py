@@ -37,12 +37,12 @@ from .throttle import PROBE_PATHS
 NO_STORE_CACHE_CONTROL = "no-store"
 NO_CACHE_PRAGMA = "no-cache"
 STATIC_DOCUMENT_CACHE_CONTROL = "no-cache"
-ENFORCED_HEADERS = (("x-content-type-options", "nosniff"),)
-DEFAULT_HEADERS = (
+ENFORCED_HEADERS = (
+    ("x-content-type-options", "nosniff"),
     ("referrer-policy", "no-referrer"),
     ("x-frame-options", "DENY"),
-    ("content-security-policy", "frame-ancestors 'none'"),
 )
+FRAMING_POLICY = "frame-ancestors 'none'"
 
 
 def _frozen_mapping(values: Mapping[str, str]) -> Mapping[str, str]:
@@ -125,7 +125,7 @@ def policy_for_app(app: Any) -> ResponseHeaderPolicy:
 def _has_no_store(values: list[str]) -> bool:
     for value in values:
         for directive in value.split(","):
-            if directive.split("=", 1)[0].strip().lower() == NO_STORE_CACHE_CONTROL:
+            if directive.strip().lower() == NO_STORE_CACHE_CONTROL:
                 return True
     return False
 
@@ -140,8 +140,8 @@ def apply_response_headers(
     A ``Cache-Control`` value that already contains ``no-store`` is kept;
     any other value is replaced, as is any ``Pragma`` other than
     ``no-cache``. ``X-Content-Type-Options`` is always exactly ``nosniff``,
-    its only defined value. Referrer and framing headers a handler set
-    deliberately are kept; missing ones are added.
+    its only defined value. Referrer and legacy framing headers are enforced.
+    Existing CSP policies remain in force alongside a no-framing policy.
 
     Args:
         headers: Mutable view over the response-start headers.
@@ -150,8 +150,12 @@ def apply_response_headers(
             ``Cache-Control``, and ``Pragma`` is left alone.
     """
     if static_cache_control is None:
-        if not _has_no_store(headers.getlist("cache-control")):
-            headers["cache-control"] = NO_STORE_CACHE_CONTROL
+        cache_values = headers.getlist("cache-control")
+        headers["cache-control"] = (
+            ", ".join(cache_values)
+            if _has_no_store(cache_values)
+            else NO_STORE_CACHE_CONTROL
+        )
         if headers.getlist("pragma") != [NO_CACHE_PRAGMA]:
             headers["pragma"] = NO_CACHE_PRAGMA
     else:
@@ -159,8 +163,16 @@ def apply_response_headers(
     for name, value in ENFORCED_HEADERS:
         if headers.getlist(name) != [value]:
             headers[name] = value
-    for name, value in DEFAULT_HEADERS:
-        headers.setdefault(name, value)
+    policies = headers.getlist("content-security-policy")
+    if not any(
+        policy.strip() == FRAMING_POLICY
+        for value in policies
+        for policy in value.split(",")
+    ):
+        policies.append(FRAMING_POLICY)
+    # CSP lists enforce every policy independently; keeping their boundaries
+    # preserves existing script, connection and other restrictions.
+    headers["content-security-policy"] = ", ".join(policies)
 
 
 def _route_path(scope: Scope) -> str:

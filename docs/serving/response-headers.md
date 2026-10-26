@@ -54,8 +54,11 @@ middleware already set one:
 - a `Pragma` value other than `no-cache` is replaced;
 - `X-Content-Type-Options` is always exactly `nosniff`, its only defined
   value;
-- `Referrer-Policy`, `X-Frame-Options` and `Content-Security-Policy` values
-  set deliberately by a handler are kept.
+- `Referrer-Policy` and `X-Frame-Options` are enforced as `no-referrer` and
+  `DENY`, including when a handler supplies weaker values;
+- existing `Content-Security-Policy` restrictions remain in force alongside
+  a separate `frame-ancestors 'none'` policy. Policies are combined in one
+  header as a comma-separated list, preserving each policy boundary.
 
 ## Exemptions
 

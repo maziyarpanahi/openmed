@@ -404,7 +404,7 @@ def test_graphql_headers_stay_single_with_transport_middleware() -> None:
     _assert_phi_headers(rest, "rest_with_transport_middleware")
 
 
-def test_handler_headers_are_kept_unless_they_weaken_no_store(
+def test_handler_headers_keep_stricter_cache_but_enforce_privacy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _declare_synthetic_routes(
@@ -441,8 +441,8 @@ def test_handler_headers_are_kept_unless_they_weaken_no_store(
     _assert_phi_headers(weak, "weak_cache")
     assert strict.headers.get_list("cache-control") == ["no-store, max-age=0"]
     assert strict.headers.get_list("pragma") == ["no-cache"]
-    assert strict.headers.get_list("referrer-policy") == ["same-origin"]
-    assert strict.headers.get_list("x-frame-options") == ["SAMEORIGIN"]
+    assert strict.headers.get_list("referrer-policy") == ["no-referrer"]
+    assert strict.headers.get_list("x-frame-options") == ["DENY"]
     assert strict.headers.get_list("x-content-type-options") == ["nosniff"]
 
 
@@ -497,3 +497,30 @@ def test_route_enumeration_flags_a_route_without_headers() -> None:
 
     assert ("GET", "/synthetic-unprotected") in checked
     assert any("/synthetic-unprotected" in failure for failure in failures)
+
+
+def test_existing_headers_cannot_relax_referrer_or_framing_policy():
+    from openmed.service.response_headers import apply_response_headers
+
+    headers = MutableHeaders(
+        raw=[
+            (b"referrer-policy", b"unsafe-url"),
+            (b"x-frame-options", b"ALLOWALL"),
+            (b"content-security-policy", b"script-src 'self'; frame-ancestors *"),
+            (b"content-security-policy", b"object-src 'none'"),
+        ]
+    )
+    apply_response_headers(headers)
+    assert headers.getlist("referrer-policy") == ["no-referrer"]
+    assert headers.getlist("x-frame-options") == ["DENY"]
+    assert headers.getlist("content-security-policy") == [
+        "script-src 'self'; frame-ancestors *, object-src 'none', frame-ancestors 'none'"
+    ]
+
+
+def test_malformed_no_store_directive_does_not_bypass_policy():
+    from openmed.service.response_headers import apply_response_headers
+
+    headers = MutableHeaders({"cache-control": "public, no-store=false"})
+    apply_response_headers(headers)
+    assert headers["cache-control"] == "no-store"
