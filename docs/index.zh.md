@@ -2,7 +2,7 @@
 
 OpenMed 集成了精选的生物医学模型、高级去标识化、多模态输入、结构化健康数据工具以及单次调用编排，帮助你无需处理繁杂的基础设施即可交付临床自然语言处理工作流。本文档让可复制的代码片段和工作流触手可及：所有章节均以 Markdown 为基础，支持搜索，并针对快速浏览以及复制到笔记本进行了优化。
 
-OpenMed `3.0.0` 候选版本新增版本化的纵向患者 Journey 契约和受保护的本地临床接口，并提供 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署文档。功能覆盖因平台而异；升级前请阅读 [2.5 到 3.0 迁移指南](/docs/migration/2.5-to-3.0/)。新模型训练和检查点发布属于可选研究，不是功能或软件库发布的前提。候选版本整合策略感知的去标识化、临床与结构化数据工作流、多语言 PII 支持以及失败即关闭的发布证据：
+OpenMed `3.1.0` 候选版本在纵向患者 Journey 和本地临床接口之上增加受治理的审批、恢复和经审核的证据工作流，并提供 Python、Swift、Kotlin/Android、JavaScript、REST 和本地部署文档。功能覆盖因平台而异；升级前请阅读 [3.0 到 3.1 迁移指南](/docs/migration/3.0-to-3.1/)。新模型训练和检查点发布属于可选研究，不是功能或软件库发布的前提。候选版本整合策略感知的去标识化、临床与结构化数据工作流、多语言 PII 支持以及失败即关闭的发布证据：
 
 - **策略感知的去标识化**：提供签名审计报告、可复现性哈希、审查包、脱敏预览和发布门禁。
 - **多模态与结构化输入**：覆盖 OCR、图像、PDF、DOCX、EPUB、vCard/iCalendar、DICOM、CSV/TSV、JSONL 聊天记录、HL7 v2、CDA/C-CDA、FHIR 操作以及 FHIR Bulk NDJSON。
@@ -51,7 +51,7 @@ uv run python examples/pii_model_comparison.py
 
 ## 最新版本亮点
 
-- [OpenMed 3.0.0 迁移指南](/docs/migration/2.5-to-3.0/) — 发布后预期的安装坐标、兼容性指南和验证要求；并非已经发布的声明。平台覆盖范围请参阅[功能地图](/docs/feature-map/)。
+- [OpenMed 3.1.0 迁移指南](/docs/migration/3.0-to-3.1/) — 发布后预期的安装坐标、兼容性指南和验证要求；并非已经发布的声明。平台覆盖范围请参阅[功能地图](/docs/feature-map/)。
 - [OpenMed 2.5.0 发布说明](/docs/release/v2.5.0/) — 上一个稳定版本的历史覆盖范围和安装坐标。
 - [OpenMed 1.9.1 发布说明](/docs/release/v1.9.1/) — 最后一个 1.9 补丁版本的历史 Swift 打包、Android 发布强化和依赖安全修复。
 - [OpenMed 1.8.0 发布说明](/docs/release/v1.8.0/) — 历史跨平台运行时与服务版本清单。
@@ -66,7 +66,7 @@ uv run python examples/pii_model_comparison.py
 
 1. [快速开始](/docs/zh/getting-started/) — 最快建立可用环境并运行可复制脚本的路径。
 2. [功能地图](/docs/feature-map/) — 查看每项能力如何映射到代码。
-3. [OpenMed 3.0.0 迁移指南](/docs/migration/2.5-to-3.0/) — 升级前查看契约变更和验证要求。
+3. [OpenMed 3.1.0 迁移指南](/docs/migration/3.0-to-3.1/) — 升级前查看契约变更和验证要求。
 4. 核心指南：
     - [文本分析辅助函数](/docs/analyze-text/)：单次调用推理。
     - [REST 服务（MVP）](/docs/rest-service/)：容器化 HTTP 端点。
