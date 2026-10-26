@@ -1051,6 +1051,10 @@ class BatchProcessor:
 
         Returns:
             BatchResult with all processing results.
+
+        Filesystem and decoding failures become failed items when
+        ``continue_on_error`` is enabled; strict mode propagates the exception.
+        Decoding-error reports contain only the exception type.
         """
         items = []
         for path in file_paths:
@@ -1064,7 +1068,7 @@ class BatchProcessor:
                         source=str(path),
                     )
                 )
-            except (OSError, IOError) as e:
+            except (OSError, UnicodeDecodeError) as e:
                 logger.warning(
                     "Failed to read batch input file: error_type=%s",
                     type(e).__name__,
@@ -1076,7 +1080,13 @@ class BatchProcessor:
                         id=path.name,
                         text="",
                         source=str(path),
-                        metadata={"read_error": str(e)},
+                        metadata={
+                            "read_error": (
+                                type(e).__name__
+                                if isinstance(e, UnicodeDecodeError)
+                                else str(e)
+                            )
+                        },
                     )
                 )
         return self._process_items(
@@ -1221,6 +1231,9 @@ class BatchProcessor:
         Output paths preserve each input's location relative to ``input_root``.
         Committed files are hashed in the PHI-free checkpoint and verified
         before a resumed run skips them.
+
+        Filesystem and decoding failures use the same per-file policy as
+        ``process_files``. Decoding-error reports omit native decoder details.
         """
         if self.operation != "deidentify":
             raise ValueError(
@@ -1242,7 +1255,7 @@ class BatchProcessor:
                 items.append(
                     BatchItem(id=str(relative_path), text=text, source=str(path))
                 )
-            except (OSError, IOError) as exc:
+            except (OSError, UnicodeDecodeError) as exc:
                 logger.warning(
                     "Failed to read batch input file: error_type=%s",
                     type(exc).__name__,
@@ -1254,7 +1267,13 @@ class BatchProcessor:
                         id=str(relative_path),
                         text="",
                         source=str(path),
-                        metadata={"read_error": str(exc)},
+                        metadata={
+                            "read_error": (
+                                type(exc).__name__
+                                if isinstance(exc, UnicodeDecodeError)
+                                else str(exc)
+                            )
+                        },
                     )
                 )
 
