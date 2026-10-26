@@ -512,6 +512,106 @@ def test_certificate_bundle_lock_uses_patched_release() -> None:
     assert "2026.10.19" in floor.specifier
 
 
+@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13"])
+def test_filelock_closure_excludes_affected_versions(python_version: str) -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "filelock"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("4.2.1") for item in resolved)
+    # Every supported interpreter uses the patched implementation, never 3.29.4.
+    fixed = "4.2.1"
+    for extra in _dependency_extras(lock, "filelock"):
+        active = [
+            req
+            for value in project["project"]["optional-dependencies"][extra]
+            for req in [Requirement(value)]
+            if req.name == "filelock"
+            and (
+                req.marker is None
+                or req.marker.evaluate(
+                    {"python_version": python_version, "sys_platform": "linux"}
+                )
+            )
+        ]
+        assert len(active) == 1, extra
+        assert fixed in active[0].specifier, extra
+        for affected in ("3.20.4", "3.29.4", "3.32.7", "4.0.0", "4.2.0"):
+            assert affected not in active[0].specifier, (extra, affected)
+        if extra == "awq":
+            assert active[0].marker is not None
+            assert not active[0].marker.evaluate(
+                {"python_version": python_version, "sys_platform": "darwin"}
+            )
+    dev = [
+        Requirement(value)
+        for value in project["project"]["optional-dependencies"]["dev"]
+    ]
+    pre_commit = next(req for req in dev if req.name == "pre-commit")
+    assert pre_commit.marker is None
+    assert project["project"]["requires-python"] == ">=3.11"
+    assert not any(
+        Requirement(value).name == "filelock"
+        for value in project["project"]["dependencies"]
+    )
+
+
+def test_setuptools_closure_requires_the_namespace_path_fix() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "setuptools"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("84.1.0") for item in resolved)
+    for extra in _dependency_extras(lock, "setuptools"):
+        floor = next(
+            req
+            for value in project["project"]["optional-dependencies"][extra]
+            for req in [Requirement(value)]
+            if req.name == "setuptools"
+        )
+        assert "83.0.0" not in floor.specifier, extra
+        assert "84.1.0" in floor.specifier, extra
+    assert not any(
+        Requirement(value).name == "setuptools"
+        for value in project["project"]["dependencies"]
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Dockerfile",
+        "Dockerfile.mcp",
+        "deploy/docker/Dockerfile",
+        "examples/openhim-mediator/Dockerfile",
+        "examples/warehouse-remote-function/Dockerfile",
+    ],
+)
+def test_container_setuptools_pins_include_namespace_path_fix(path: str) -> None:
+    source = (ROOT / path).read_text(encoding="utf-8")
+    assert "setuptools==84.1.0" in source
+    assert "setuptools==83.0.0" not in source
+
+
+@pytest.mark.parametrize("lock_type", ["FileLock", "SoftFileLock", "ReadWriteLock"])
+def test_filelock_refuses_symlink_without_modifying_target(
+    tmp_path: Path, lock_type: str
+) -> None:
+    filelock = pytest.importorskip("filelock")
+    lock_class = getattr(filelock, lock_type, None)
+    if lock_class is None:
+        pytest.skip("This lock implementation is absent from the Python 3.10 pin")
+    target = tmp_path / "synthetic-victim"
+    target.write_text("must remain intact", encoding="utf-8")
+    link = tmp_path / "lock-link"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Creating symlinks requires privileges on this platform")
+    with pytest.raises((OSError, filelock.Timeout)):
+        with lock_class(str(link), timeout=0):
+            pytest.fail("An attacker-controlled symlink must not grant a lock")
+    assert target.read_text(encoding="utf-8") == "must remain intact"
+
+
 @pytest.mark.parametrize(
     ("package", "unsafe", "fixed"),
     [
