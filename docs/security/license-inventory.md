@@ -33,6 +33,10 @@ a dependency also declared in another extra.
 | `apache-beam` | `beam` | `Apache-2.0` |
 | `auto-gptq` | `gptq` | `MIT` |
 | `autoawq` | `awq` | `MIT` |
+| `aiohttp` | `agents, awq, cloud, gptq, llamaindex, operator` | `Apache-2.0 AND MIT` |
+| `multidict` | `agents, awq, beam, cloud, gptq, llamaindex, operator` | `Apache-2.0` |
+| `mako` | `airflow, dagster, prefect` | `MIT` |
+| `tinytag` | `agents, llamaindex` | `MIT` |
 | `banks` | `agents, llamaindex` | `MIT` |
 | `click` | `spacy` | `BSD-3-Clause` |
 | `confluent-kafka` | `kafka` | `Apache-2.0` |
@@ -133,7 +137,6 @@ a dependency also declared in another extra.
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `tomli` | `default (Python < 3.11)` | `MIT` |
 | `torch` | `awq, coreml, gliner, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
