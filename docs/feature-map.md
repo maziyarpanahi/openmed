@@ -3,7 +3,7 @@
 This page inventories the main surfaced capabilities in OpenMed and maps them
 back to source modules, docs, and runnable examples. For release-specific
 coverage, see
-[OpenMed v3.0.0 migration](migration/2.5-to-3.0.md) and the
+[OpenMed v3.1.0 migration](migration/3.0-to-3.1.md) and the
 [changelog](https://github.com/maziyarpanahi/openmed/blob/master/CHANGELOG.md), the historical
 [OpenMed v2.5.0 Release Notes](./release/v2.5.0.md), the
 [OpenMed v1.9.1 Release Notes](./release/v1.9.1.md), the
@@ -137,7 +137,7 @@ model-quality or clinical readiness claim.
 ## Suggested Reading Order
 
 1. [Quick Start](./getting-started.md) - install plus first inference.
-2. [OpenMed 3.0.0 migration](migration/2.5-to-3.0.md) - review intentional API changes and validation requirements.
+2. [OpenMed 3.1.0 migration](migration/3.0-to-3.1.md) - review intentional API changes and validation requirements.
 3. [Examples](./examples.md) - runnable notebooks and scripts.
 4. [PII Anonymization](./anonymization.md) - de-identification methods and policy workflows.
 5. [REST Service](./rest-service.md), [Swift Package](./swift-openmedkit.md), and [Transformers.js Export](./export-transformersjs.md) - deployment surfaces.
