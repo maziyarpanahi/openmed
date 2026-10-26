@@ -93,6 +93,8 @@ REVIEWED_LICENSES = {
     "extract-msg": "GPL-3.0-only",
     "faker": "MIT",
     "fastapi": "MIT",
+    # 3.20.3 uses Unlicense; the patched 4.x line uses MIT.
+    "filelock": "MIT OR Unlicense",
     "fsspec": "BSD-3-Clause",
     "gcsfs": "BSD-3-Clause",
     "gitpython": "BSD-3-Clause",
@@ -177,6 +179,7 @@ REVIEWED_LICENSES = {
     "safetensors": "Apache-2.0",
     "scrubadub": "Apache-2.0",
     "scispacy": "Apache-2.0",
+    "setuptools": "MIT",
     "snowflake-snowpark-python": "Apache-2.0",
     "spacy": "MIT",
     "sqlalchemy": "MIT",
