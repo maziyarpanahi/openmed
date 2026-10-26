@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -295,6 +298,117 @@ def test_breaking_api_is_not_waived_for_minor_patch_or_invalid_version(
     root = _make_repo_root(tmp_path)
     _document_breaking_api(root)
     assert _evaluate(root, version=version).decision == NOT_READY
+
+
+def _document_v31_security_removals(root: Path) -> dict:
+    symbols = [
+        f"{namespace}.{field}"
+        for namespaces, fields in (
+            (
+                (
+                    "openmed.agent.approvals.ApprovalReceipt",
+                    "openmed.agent.approvals.tokens.ApprovalReceipt",
+                ),
+                ("reviewer_role", "consumed_at", "expires_at"),
+            ),
+            (
+                (
+                    "openmed.risk.AggregateDPRelease",
+                    "openmed.risk.aggregate_dp.AggregateDPRelease",
+                ),
+                ("noise", "seed_digest"),
+            ),
+        )
+        for namespace in namespaces
+        for field in fields
+    ]
+    payload = {
+        "schema_version": 1,
+        "before_ref": "v3.0.0",
+        "after_ref": "HEAD",
+        "summary": {"breaking": len(symbols)},
+        "breaking": [
+            {
+                "symbol": symbol,
+                "change": "removed",
+                "before": {"kind": "attribute", "name": symbol},
+            }
+            for symbol in symbols
+        ],
+    }
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    (root / "docs/migration/2.5-to-3.0.md").write_text("\n".join(symbols))
+    return payload
+
+
+def test_v31_security_exception_retains_breaks_and_signed_migration_evidence(tmp_path):
+    root = _make_repo_root(tmp_path)
+    _document_v31_security_removals(root)
+    report = _evaluate(root, version="3.1.0")
+    assert report.decision == READY
+    check = next(item for item in report.checks if item.gate == "api_compat")
+    assert check.details["breaking"] == 10
+    assert check.details["reviewed_major_migrations"] == []
+    assert len(check.details["reviewed_security_remediations"]) == 10
+    assert check.details["security_exception"] == "v3.1.0-privacy-remediations"
+    assert check.details["migration_hash"]
+    assert report.verify(READINESS_KEY)
+    check.details["reviewed_security_remediations"].clear()
+    assert not report.verify(READINESS_KEY)
+
+
+@pytest.mark.parametrize("version", ["3.0.1", "3.1.1", "3.2.0", "3.1.0rc1"])
+def test_v31_security_exception_does_not_apply_to_other_releases(tmp_path, version):
+    root = _make_repo_root(tmp_path)
+    _document_v31_security_removals(root)
+    assert _evaluate(root, version=version).decision == NOT_READY
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "extra_break",
+        "duplicate",
+        "wrong_baseline",
+        "changed_kind",
+        "changed_signature",
+        "after_present",
+        "missing_guide_symbol",
+        "missing_before",
+        "wrong_before_name",
+        "missing_removal",
+    ],
+)
+def test_v31_security_exception_refuses_any_unreviewed_change(tmp_path, mutation):
+    root = _make_repo_root(tmp_path)
+    payload = _document_v31_security_removals(root)
+    entry = payload["breaking"][0]
+    if mutation == "extra_break":
+        payload["breaking"].append(
+            {"symbol": "openmed.clinical.ground", "change": "removed"}
+        )
+        payload["summary"]["breaking"] += 1
+    elif mutation == "duplicate":
+        payload["breaking"][-1] = entry
+    elif mutation == "wrong_baseline":
+        payload["before_ref"] = "v3.0.1"
+    elif mutation == "changed_kind":
+        entry["before"]["kind"] = "function"
+    elif mutation == "changed_signature":
+        entry["change"] = "signature_changed"
+    elif mutation == "after_present":
+        entry["after"] = entry["before"]
+    elif mutation == "missing_guide_symbol":
+        (root / "docs/migration/2.5-to-3.0.md").write_text("# Incomplete migration")
+    elif mutation == "missing_before":
+        del entry["before"]
+    elif mutation == "wrong_before_name":
+        entry["before"]["name"] = "openmed.unrelated"
+    elif mutation == "missing_removal":
+        payload["breaking"].pop()
+        payload["summary"]["breaking"] -= 1
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    assert _evaluate(root, version="3.1.0").decision == NOT_READY
 
 
 @pytest.mark.parametrize(
@@ -668,3 +782,160 @@ def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
         report = evaluate_readiness(repo_root=root, sdk_baseline="v1.0.0")
         assert report.decision == NOT_READY
         assert not report.checks[0].passed
+
+
+@pytest.mark.parametrize(
+    "event,declared,expected,expected_base,expected_guide",
+    [
+        ("pull_request", "3.0.0", False, "v3.0.0", ""),
+        ("pull_request", "3.1.0", True, "v3.0.0", "docs/migration/3.0-to-3.1.md"),
+        ("pull_request", "4.0.0", True, "v3.0.0", "docs/migration/3.0-to-4.0.md"),
+        ("pull_request", "3.0.1", True, "v3.0.0", "docs/migration/2.5-to-3.0.md"),
+        ("workflow_dispatch", "3.0.0", True, "v2.5.0", "docs/migration/2.5-to-3.0.md"),
+    ],
+)
+def test_sdk_workflow_classifies_real_version_boundaries(
+    tmp_path, event, declared, expected, expected_base, expected_guide
+):
+    """Ordinary PRs never claim READY; explicit dispatch never bypasses gates."""
+    root = tmp_path / "repository"
+    (root / "openmed").mkdir(parents=True)
+    about = root / "openmed/__about__.py"
+    about.write_text('__version__ = "3.0.0"\n')
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "SDK baseline",
+        ],
+        cwd=root,
+        check=True,
+    )
+    base = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    about.write_text(f'__version__ = "{declared}"\n')
+    (root / "docs/migration").mkdir(parents=True)
+    (root / "docs/migration/2.5-to-3.0.md").write_text("Reviewed prior boundary")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "SDK head",
+        ],
+        cwd=root,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    # Input resolution must use the immutable commit, not a modified checkout.
+    about.write_text('__version__ = "99.0.0"\n')
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github/workflows/sdk-release-candidate.yml"
+    )
+    workflow = yaml.safe_load(workflow_path.read_text())
+    steps = workflow["jobs"]["readiness"]["steps"]
+    resolver = next(step for step in steps if step.get("id") == "candidate")
+    script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    output = tmp_path / "outputs"
+    env = os.environ.copy()
+    env.update(
+        GITHUB_EVENT_NAME=event,
+        PR_BASE_SHA=base,
+        CANDIDATE_SHA=head,
+        GITHUB_OUTPUT=str(output),
+        REQUESTED_VERSION="3.0.0",
+        REQUESTED_API_BASE="v2.5.0",
+        REQUESTED_MIGRATION="docs/migration/2.5-to-3.0.md",
+    )
+    subprocess.run([sys.executable, "-c", script], cwd=root, env=env, check=True)
+    values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert values["evaluate"] == str(expected).lower()
+    assert values["version"] == declared
+    assert values["api_base"] == expected_base
+    assert values["migration"] == expected_guide
+    evidence = json.loads((root / "artifacts/sdk-readiness/scope.json").read_text())
+    assert evidence["classification"] == (
+        "CANDIDATE" if expected else "NOT_A_CANDIDATE"
+    )
+    assert evidence["release_readiness_required"] is expected
+    assert not (root / "artifacts/sdk-readiness/readiness.json").exists()
+    required = {
+        "Check version and API compatibility",
+        "Run end-to-end golden suite",
+        "Verify SDK readiness without model promotion",
+    }
+    guarded = [step for step in steps if step.get("name") in required]
+    assert len(guarded) == len(required)
+    assert all(
+        step["if"] == "steps.candidate.outputs.evaluate == 'true'" for step in guarded
+    )
+
+
+def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
+    """Malformed metadata cannot turn a real candidate into an ordinary PR."""
+    root = tmp_path / "repository"
+    (root / "openmed").mkdir(parents=True)
+    (root / "openmed/__about__.py").write_text('__version__ = "unknown"\n')
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Maziyar Panahi",
+            "-c",
+            "user.email=maziyar@live.co.uk",
+            "commit",
+            "-qm",
+            "Invalid SDK metadata",
+        ],
+        cwd=root,
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    workflow_path = (
+        Path(__file__).resolve().parents[3]
+        / ".github/workflows/sdk-release-candidate.yml"
+    )
+    workflow = yaml.safe_load(workflow_path.read_text())
+    resolver = next(
+        step
+        for step in workflow["jobs"]["readiness"]["steps"]
+        if step.get("id") == "candidate"
+    )
+    script = resolver["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    env = os.environ.copy()
+    env.update(
+        GITHUB_EVENT_NAME="pull_request",
+        CANDIDATE_SHA=head,
+        GITHUB_OUTPUT=str(tmp_path / "outputs"),
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "stable SDK version" in result.stderr
+    assert not (tmp_path / "outputs").exists()
+    assert not (root / "artifacts/sdk-readiness/scope.json").exists()
