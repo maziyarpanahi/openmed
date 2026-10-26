@@ -30,6 +30,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
+from itertools import islice
 from numbers import Real
 from typing import Any, Final, Union
 
@@ -85,7 +86,7 @@ HL7V2_SURROGATE_PROVIDERS: Final[frozenset[str]] = frozenset(
 )
 
 _SEGMENT_SEPARATOR: Final = "\r"
-_TIMEZONE_RE: Final = re.compile(r"^[+-](?:0\d|1[0-4])[0-5]\d$")
+_TIMEZONE_RE: Final = re.compile(r"[+-](?:(?:0[0-9]|1[0-3])[0-5][0-9]|1400)")
 _ISO_DATE_RE: Final = re.compile(r"(\d{4})\D?(\d{2})\D?(\d{2})")
 _STATES: Final[tuple[str, ...]] = ("CA", "MA", "NY", "TX", "WA")
 _LAB_TESTS: Final[tuple[tuple[str, str, str], ...]] = (
@@ -237,7 +238,7 @@ class HL7V2SynthesisConfig:
             self.timezone_offsets, "invalid_timezone_offset", "offsets"
         )
         if not offsets or any(
-            offset and not _TIMEZONE_RE.match(offset) for offset in offsets
+            offset and not _TIMEZONE_RE.fullmatch(offset) for offset in offsets
         ):
             raise HL7V2SynthesisError(
                 "invalid_timezone_offset",
@@ -1211,7 +1212,7 @@ def evaluate_hl7v2_leakage(
             code and message index only.
     """
 
-    items = tuple(messages)
+    items = tuple(islice(messages, MAX_HL7V2_MESSAGES + 1))
     if not 1 <= len(items) <= MAX_HL7V2_MESSAGES:
         raise HL7V2LeakageError("count_out_of_bounds")
     counts: dict[tuple[str, int, int, int, int, str, bool], list[int]] = {}

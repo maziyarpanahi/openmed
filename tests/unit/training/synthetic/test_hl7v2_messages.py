@@ -432,3 +432,18 @@ def test_free_text_residuals_follow_the_injected_deidentifier():
     # Values glued to other characters are no longer whole tokens.
     assert not free_text(glued)
     assert not free_text(masked)
+
+
+@pytest.mark.parametrize("offset", ("+1401", "-1459", "+0000\n"))
+def test_timezone_offsets_reject_out_of_range_or_trailing_data(offset):
+    assert _config_error(timezone_offsets=(offset,)).code == "invalid_timezone_offset"
+
+
+def test_harness_bounds_input_consumption_before_materializing_batch():
+    def oversized():
+        for _ in range(MAX_HL7V2_MESSAGES + 1):
+            yield None
+        raise AssertionError("consumed beyond the batch limit")
+
+    with pytest.raises(HL7V2LeakageError, match="count_out_of_bounds"):
+        evaluate_hl7v2_leakage(oversized())
