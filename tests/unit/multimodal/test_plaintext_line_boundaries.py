@@ -66,3 +66,18 @@ def test_empty_and_unterminated_controls(tmp_path, text, count):
         extract_text(write(tmp_path / "source.txt", text)).metadata["line_count"]
         == count
     )
+
+
+def test_pdf_page_breaks_and_mixed_endings_survive_valid_replacements(tmp_path):
+    text = "Page 1\r\nAda\fPage 2\u2028Ben\r\n"
+    source = write(tmp_path / "extracted.txt", text)
+    document = extract_text(source)
+    lines = document.metadata["lines"]
+    assert [line["newline"] for line in lines] == ["\r\n", "\f", "\u2028", "\r\n"]
+    assert [line["columns"] for line in lines] == [6, 3, 6, 3]
+    assert [line["start"] for line in lines] == [0, 8, 12, 19]
+    output = write_redacted_text(
+        source, tmp_path / "out.txt", [(8, 11, "X"), (19, 22, "Y")]
+    )
+    assert output.read_bytes() == "Page 1\r\nX  \fPage 2\u2028Y  \r\n".encode("utf-8")
+    assert source.read_bytes() == text.encode("utf-8")
