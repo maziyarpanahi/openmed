@@ -331,7 +331,13 @@ def run_dataset_recipe(
         (stage / "complete.json").write_bytes(
             _canonical({"manifest_sha256": hashlib.sha256(encoded).hexdigest()})
         )
-        os.replace(stage, destination)
+        try:
+            os.replace(stage, destination)
+        except OSError:
+            # Windows cannot rename a directory onto an existing one, even the
+            # empty reservation; release it (rmdir fails unless it is empty).
+            destination.rmdir()
+            os.replace(stage, destination)
         return {
             "recipe_digest": recipe_digest,
             "artifact_count": len(artifact_rows),

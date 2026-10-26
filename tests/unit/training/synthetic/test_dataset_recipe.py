@@ -159,13 +159,34 @@ def test_existing_destination_and_files_are_preserved(tmp_path):
     assert (output / "keep.txt").read_text() == "existing"
 
 
+def test_completion_releases_reservation_when_rename_cannot_replace(
+    tmp_path, monkeypatch
+):
+    replace = os.replace
+
+    def replace_without_overwrite(source, target):
+        # Windows refuses to rename a directory onto an existing directory.
+        if Path(target).exists():
+            raise PermissionError("target exists")
+        replace(source, target)
+
+    monkeypatch.setattr(os, "replace", replace_without_overwrite)
+    result = run_dataset_recipe(
+        recipe([node(generator="stub")]), tmp_path / "out", registry=stub()
+    )
+    assert result["complete"] is True
+    assert (tmp_path / "out/complete.json").exists()
+    assert not list(tmp_path.glob(".openmed-synthetic-*"))
+
+
 def test_actual_top_level_cli_generates_dataset_and_reports_only_counts(tmp_path):
     recipe_file = tmp_path / "recipe.json"
     recipe_file.write_text(json.dumps(recipe()))
-    cli = Path(sys.executable).with_name("openmed")
     result = subprocess.run(
         [
-            str(cli),
+            sys.executable,
+            "-m",
+            "openmed.cli.main",
             "synthetic",
             "build",
             str(recipe_file),
@@ -193,10 +214,11 @@ def test_actual_top_level_cli_generates_dataset_and_reports_only_counts(tmp_path
 def test_cli_invalid_recipe_returns_controlled_failure_and_no_output(tmp_path):
     recipe_file = tmp_path / "recipe.json"
     recipe_file.write_text('{"submitted_value":"DO_NOT_ECHO"}')
-    cli = Path(sys.executable).with_name("openmed")
     result = subprocess.run(
         [
-            str(cli),
+            sys.executable,
+            "-m",
+            "openmed.cli.main",
             "synthetic",
             "build",
             str(recipe_file),
@@ -240,10 +262,11 @@ def test_cli_rejects_ambiguous_duplicate_recipe_fields(tmp_path):
     recipe_file = tmp_path / "recipe.json"
     encoded = json.dumps(recipe())
     recipe_file.write_text('{"schema_version": 99, ' + encoded[1:])
-    cli = Path(sys.executable).with_name("openmed")
     result = subprocess.run(
         [
-            str(cli),
+            sys.executable,
+            "-m",
+            "openmed.cli.main",
             "synthetic",
             "build",
             str(recipe_file),
