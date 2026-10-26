@@ -208,6 +208,10 @@ clinical efficacy. Package publication remains a separate release action.
   pinned definition, value-set and engine custody, time-boundary conversion,
   and explicit drift-comparator parity and differences (#3789).
 
+- Add bounded, entity-safe HL7 aECG readers in Python and OpenMedKit with
+  separate rhythm and representative-beat signals, withheld identifying
+  metadata, controlled rejection codes and mandatory review notices.
+
 - Add offline qualification of caller-supplied local planners against synthetic
   grant, schema, minimum-data, review-stop and hostile-result scenarios, with
   counts-only reports and non-compensable critical gates (#3790).
