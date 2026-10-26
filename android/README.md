@@ -12,7 +12,7 @@ This directory contains the Gradle build for the `:openmedkit` Android library.
   preview mode and accepts a pinned, checksummed ONNX Runtime Mobile bundle for
   real on-device generation.
 
-## Install OpenMedKit 3.0.0
+## Install OpenMedKit 3.1.0
 
 OpenMedKit Android is published from immutable OpenMed release tags through JitPack.
 Add the repository in the consumer application's `settings.gradle.kts`:
@@ -30,16 +30,16 @@ dependencyResolutionManagement {
 }
 ```
 
-After v3.0.0 is published, add the `v3.0.0` coordinate. This candidate does not
+After v3.1.0 is published, add the `v3.1.0` coordinate. This candidate does not
 yet have a published release tag:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.1.0")
 }
 ```
 
-After tag publication, JitPack resolves the immutable `v3.0.0` tag and builds the `openmedkit`
+After tag publication, JitPack resolves the immutable `v3.1.0` tag and builds the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
 credentials. Use a commit coordinate only when intentionally testing an
 unreleased build.

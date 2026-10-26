@@ -300,6 +300,117 @@ def test_breaking_api_is_not_waived_for_minor_patch_or_invalid_version(
     assert _evaluate(root, version=version).decision == NOT_READY
 
 
+def _document_v31_security_removals(root: Path) -> dict:
+    symbols = [
+        f"{namespace}.{field}"
+        for namespaces, fields in (
+            (
+                (
+                    "openmed.agent.approvals.ApprovalReceipt",
+                    "openmed.agent.approvals.tokens.ApprovalReceipt",
+                ),
+                ("reviewer_role", "consumed_at", "expires_at"),
+            ),
+            (
+                (
+                    "openmed.risk.AggregateDPRelease",
+                    "openmed.risk.aggregate_dp.AggregateDPRelease",
+                ),
+                ("noise", "seed_digest"),
+            ),
+        )
+        for namespace in namespaces
+        for field in fields
+    ]
+    payload = {
+        "schema_version": 1,
+        "before_ref": "v3.0.0",
+        "after_ref": "HEAD",
+        "summary": {"breaking": len(symbols)},
+        "breaking": [
+            {
+                "symbol": symbol,
+                "change": "removed",
+                "before": {"kind": "attribute", "name": symbol},
+            }
+            for symbol in symbols
+        ],
+    }
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    (root / "docs/migration/2.5-to-3.0.md").write_text("\n".join(symbols))
+    return payload
+
+
+def test_v31_security_exception_retains_breaks_and_signed_migration_evidence(tmp_path):
+    root = _make_repo_root(tmp_path)
+    _document_v31_security_removals(root)
+    report = _evaluate(root, version="3.1.0")
+    assert report.decision == READY
+    check = next(item for item in report.checks if item.gate == "api_compat")
+    assert check.details["breaking"] == 10
+    assert check.details["reviewed_major_migrations"] == []
+    assert len(check.details["reviewed_security_remediations"]) == 10
+    assert check.details["security_exception"] == "v3.1.0-privacy-remediations"
+    assert check.details["migration_hash"]
+    assert report.verify(READINESS_KEY)
+    check.details["reviewed_security_remediations"].clear()
+    assert not report.verify(READINESS_KEY)
+
+
+@pytest.mark.parametrize("version", ["3.0.1", "3.1.1", "3.2.0", "3.1.0rc1"])
+def test_v31_security_exception_does_not_apply_to_other_releases(tmp_path, version):
+    root = _make_repo_root(tmp_path)
+    _document_v31_security_removals(root)
+    assert _evaluate(root, version=version).decision == NOT_READY
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "extra_break",
+        "duplicate",
+        "wrong_baseline",
+        "changed_kind",
+        "changed_signature",
+        "after_present",
+        "missing_guide_symbol",
+        "missing_before",
+        "wrong_before_name",
+        "missing_removal",
+    ],
+)
+def test_v31_security_exception_refuses_any_unreviewed_change(tmp_path, mutation):
+    root = _make_repo_root(tmp_path)
+    payload = _document_v31_security_removals(root)
+    entry = payload["breaking"][0]
+    if mutation == "extra_break":
+        payload["breaking"].append(
+            {"symbol": "openmed.clinical.ground", "change": "removed"}
+        )
+        payload["summary"]["breaking"] += 1
+    elif mutation == "duplicate":
+        payload["breaking"][-1] = entry
+    elif mutation == "wrong_baseline":
+        payload["before_ref"] = "v3.0.1"
+    elif mutation == "changed_kind":
+        entry["before"]["kind"] = "function"
+    elif mutation == "changed_signature":
+        entry["change"] = "signature_changed"
+    elif mutation == "after_present":
+        entry["after"] = entry["before"]
+    elif mutation == "missing_guide_symbol":
+        (root / "docs/migration/2.5-to-3.0.md").write_text("# Incomplete migration")
+    elif mutation == "missing_before":
+        del entry["before"]
+    elif mutation == "wrong_before_name":
+        entry["before"]["name"] = "openmed.unrelated"
+    elif mutation == "missing_removal":
+        payload["breaking"].pop()
+        payload["summary"]["breaking"] -= 1
+    (root / "gates/api_compat_report.json").write_text(json.dumps(payload))
+    assert _evaluate(root, version="3.1.0").decision == NOT_READY
+
+
 @pytest.mark.parametrize(
     "entries",
     [
@@ -677,6 +788,7 @@ def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
     "event,declared,expected,expected_base,expected_guide",
     [
         ("pull_request", "3.0.0", False, "v3.0.0", ""),
+        ("pull_request", "3.1.0", True, "v3.0.0", "docs/migration/3.0-to-3.1.md"),
         ("pull_request", "4.0.0", True, "v3.0.0", "docs/migration/3.0-to-4.0.md"),
         ("pull_request", "3.0.1", True, "v3.0.0", "docs/migration/2.5-to-3.0.md"),
         ("workflow_dispatch", "3.0.0", True, "v2.5.0", "docs/migration/2.5-to-3.0.md"),

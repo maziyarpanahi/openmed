@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -354,7 +355,7 @@ def test_frozen_torch_resolution_and_core_boundaries() -> None:
     resolved = [item for item in lock["package"] if item["name"] == "torch"]
     assert resolved
     assert all(Version(item["version"]) >= Version("2.13.0") for item in resolved)
-    assert project["project"]["requires-python"] == ">=3.10"
+    assert project["project"]["requires-python"] == ">=3.11"
     assert all(
         Requirement(value).name != "torch"
         for value in project["project"]["dependencies"]
@@ -398,14 +399,30 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
 @pytest.mark.parametrize(
     ("package", "unsafe", "fixed", "extras"),
     [
-        ("banks", "2.4.4", "2.4.5", ("agents", "llamaindex")),
+        (
+            "aiohttp",
+            "3.14.3",
+            "3.14.4",
+            ("agents", "awq", "cloud", "gptq", "llamaindex", "operator"),
+        ),
+        ("banks", "2.5.0", "2.5.1", ("agents", "llamaindex")),
         ("datasets", "5.0.0", "5.0.1", ("awq", "gptq")),
         ("fsspec", "2026.4.0", "2026.6.0", ("dev", "cloud", "journey")),
+        ("gitpython", "3.1.62", "3.2.1", ("docs",)),
         ("h2", "4.3.0", "4.4.1", ("beam", "prefect")),
         ("langgraph-sdk", "0.4.3", "0.4.4", ("agents", "langgraph")),
         ("mcp", "1.29.1", "1.30.0", ("dev", "mcp")),
+        ("mako", "1.4.1", "1.4.2", ("airflow", "dagster", "prefect")),
+        (
+            "multidict",
+            "6.9.0",
+            "6.9.1",
+            ("agents", "awq", "beam", "cloud", "gptq", "llamaindex", "operator"),
+        ),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
+        ("opentelemetry-api", "1.43.0", "1.45.1", ("dev", "otel", "service")),
         ("pymongo", "4.18.1", "4.18.2", ("beam",)),
+        ("tinytag", "2.2.1", "2.3.0", ("agents", "llamaindex")),
     ],
 )
 def test_fixable_optional_dependency_floors_are_published_and_locked(
@@ -432,6 +449,129 @@ def test_fixable_optional_dependency_floors_are_published_and_locked(
     assert package not in {
         Requirement(value).name for value in project["project"]["dependencies"]
     }
+
+
+@pytest.mark.parametrize(
+    "extra", ["dev", "multimodal", "mlx", "agents", "beam", "llamaindex", "ocr-paddle"]
+)
+@pytest.mark.parametrize("python_version", ["3.11", "3.12", "3.13"])
+def test_pillow_security_floor_preserves_interpreter_compatibility(
+    extra: str, python_version: str
+) -> None:
+    project, _ = _model_dependency_metadata()
+    requirements = [
+        Requirement(value)
+        for value in project["project"]["optional-dependencies"][extra]
+    ]
+    active = [
+        requirement
+        for requirement in requirements
+        if requirement.name.lower() == "pillow"
+        and (
+            requirement.marker is None
+            or requirement.marker.evaluate({"python_version": python_version})
+        )
+    ]
+    assert len(active) == 1
+    assert "12.3.0" not in active[0].specifier
+    assert "13.0.0" in active[0].specifier
+    assert not any(
+        Requirement(value).name.lower() == "pillow"
+        for value in project["project"]["dependencies"]
+    )
+
+
+def test_image_lock_never_retains_an_unsafe_legacy_release() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "pillow"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("13.0.0") for item in resolved)
+    for extra in _dependency_extras(lock, "pillow"):
+        requirement = next(
+            Requirement(value)
+            for value in project["project"]["optional-dependencies"][extra]
+            if Requirement(value).name.lower() == "pillow"
+        )
+        assert requirement.marker is None
+        assert "12.3.0" not in requirement.specifier
+        assert "13.0.0" in requirement.specifier
+
+
+def test_certificate_bundle_lock_uses_patched_release() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "certifi"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("2026.10.19") for item in resolved)
+    floor = next(
+        requirement
+        for value in project["tool"]["uv"]["constraint-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == "certifi"
+    )
+    assert "2025.10.5" not in floor.specifier
+    assert "2026.10.19" in floor.specifier
+
+
+@pytest.mark.parametrize(
+    ("package", "unsafe", "fixed"),
+    [
+        ("brotli", "1.2.0", "1.2.1"),
+        ("brotlicffi", "1.2.0.1", "1.2.1.0"),
+        ("graphql-core", "3.2.11", "3.2.12"),
+        ("setuptools", "83.0.0", "84.1.0"),
+        ("virtualenv", "21.14.5", "21.14.9"),
+    ],
+)
+def test_transitive_dependency_lock_uses_patched_release(
+    package: str, unsafe: str, fixed: str
+) -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == package]
+    assert resolved
+    assert all(Version(item["version"]) >= Version(fixed) for item in resolved)
+    floor = next(
+        requirement
+        for value in project["tool"]["uv"]["constraint-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == package
+    )
+    assert unsafe not in floor.specifier
+    assert fixed in floor.specifier
+
+
+@pytest.mark.parametrize("path", ["Dockerfile", "deploy/docker/Dockerfile"])
+@pytest.mark.parametrize(
+    ("package", "fixed"), [("filelock", "4.2.1"), ("setuptools", "84.1.0")]
+)
+def test_service_images_bootstrap_patched_packages_before_torch_index(
+    path: str, package: str, fixed: str
+) -> None:
+    source = (ROOT / path).read_text(encoding="utf-8")
+    pins = re.findall(rf'"{re.escape(package)}==([^"]+)"', source)
+    assert len(pins) == 1
+    assert Version(pins[0]) >= Version(fixed)
+    # The PyTorch CPU index serves older copies of Torch's dependencies.
+    assert source.index(f'"{package}=={pins[0]}"') < source.index(
+        "download.pytorch.org/whl/cpu"
+    )
+
+
+def test_universal_lock_overrides_snowflake_connector_filelock_cap() -> None:
+    project, lock = _model_dependency_metadata()
+    resolved = [item for item in lock["package"] if item["name"] == "filelock"]
+    assert resolved
+    assert all(Version(item["version"]) >= Version("4.2.1") for item in resolved)
+    # Snowflake Connector 4.x caps filelock below 4; only the uv override lifts it.
+    override = next(
+        requirement
+        for value in project["tool"]["uv"]["override-dependencies"]
+        for requirement in [Requirement(value)]
+        if requirement.name == "filelock"
+    )
+    assert override.marker is None
+    assert "4.2.0" not in override.specifier
+    assert "4.2.1" in override.specifier
+    assert project["project"]["requires-python"] == ">=3.11"
 
 
 def test_awq_dataset_floor_retains_linux_only_installation() -> None:

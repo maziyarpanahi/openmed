@@ -239,13 +239,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-        exclude:
-          # Exclude some combinations to reduce CI time
-          - os: windows-latest
-            python-version: "3.10"
-          - os: macos-latest
-            python-version: "3.10"
+        python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -276,6 +270,12 @@ jobs:
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
+    - name: Verify secure image dependency selection
+      run: >-
+        uv run --frozen python -c
+        "from importlib.metadata import version;
+        assert int(version('Pillow').split('.')[0]) >= 13"
+
     - name: Windows portability regression checks
       if: runner.os == 'Windows'
       timeout-minutes: 10
@@ -295,11 +295,13 @@ jobs:
         tests/unit/agent/permissions/test_access_events.py
         tests/unit/agent/workflows/test_journal_retirement.py
         tests/integration/test_clinical_cli_offline.py
+        tests/integration/test_clinical_workflow_examples.py
         tests/integration/test_clinical_review_cli.py
         tests/integration/test_multilingual_clinical_brief.py
         tests/integration/test_governed_mcp_offline.py
         tests/integration/test_dqd_adapter.py
         tests/integration/agent/test_access_event_log.py
+        tests/fuzz/test_format_parsers_fuzz.py
 
     - name: Test with pytest
       # Leave bounded completion time for the full Windows suite and coverage.
@@ -339,7 +341,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -544,7 +546,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.11", "3.12"]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
