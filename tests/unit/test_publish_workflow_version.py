@@ -297,11 +297,6 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
         for step in npm_publish["steps"]
         if step.get("name") == "Check for an existing matching npm release"
     )
-    credential_step = next(
-        step
-        for step in npm_publish["steps"]
-        if step.get("name") == "Verify npm credentials"
-    )
 
     assert npm_verify["permissions"] == {"contents": "read"}
     assert npm_verify["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
@@ -322,6 +317,9 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
         "contents": "read",
         "id-token": "write",
     }
+    assert npm_publish["runs-on"] == "ubuntu-latest"
+    assert "NPM_ACCESS_TOKEN" not in content
+    assert "NODE_AUTH_TOKEN" not in content
     assert publish_step["run"] == (
         "npm publish --ignore-scripts --access public --provenance"
     )
@@ -331,9 +329,8 @@ def test_publish_workflow_verifies_and_publishes_npm_package():
     assert "registry_content_digest" in existing_release_step["run"]
     assert "diff --recursive --brief --no-dereference" in existing_release_step["run"]
     assert 'echo "exists=true" >> "$GITHUB_OUTPUT"' in existing_release_step["run"]
-    assert credential_step["if"] == "steps.npm-release.outputs.exists != 'true'"
     assert publish_step["if"] == "steps.npm-release.outputs.exists != 'true'"
-    assert publish_step["env"]["NODE_AUTH_TOKEN"] == ("${{ secrets.NPM_ACCESS_TOKEN }}")
+    assert "env" not in publish_step
     assert npm_publish["steps"][0]["with"]["ref"] == ("${{ inputs.tag || github.ref }}")
     assert sbom["needs"] == ["publish", "npm-publish"]
 
