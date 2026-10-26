@@ -99,7 +99,10 @@ def _is_real(value: Any) -> bool:
 def _positive_finite(value: Any) -> float:
     if not _is_real(value):
         raise _fail("dp_config_invalid")
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        raise _fail("dp_config_invalid") from None
     if not math.isfinite(number) or number <= 0.0:
         raise _fail("dp_config_invalid")
     return number
@@ -110,7 +113,10 @@ def _noise_multiplier(value: Any) -> float:
         raise _fail("dp_noise_missing")
     if not _is_real(value):
         raise _fail("dp_config_invalid")
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        raise _fail("dp_config_invalid") from None
     if number == 0.0:
         raise _fail("dp_noise_missing")
     if not math.isfinite(number) or number < 0.0:
@@ -223,6 +229,8 @@ class PatientDPSGDDeclaration:
             raise _fail("dp_config_invalid")
         batch = _positive_finite(self.expected_batch_size)
         clip = _positive_finite(self.clip_norm)
+        if not math.isfinite(noise * clip) or noise * clip <= 0.0:
+            raise _fail("dp_config_invalid")
         _step_count(self.max_steps, minimum=1, maximum=_MAX_STEPS)
         if (
             type(self.batch_sampling) is not str
@@ -542,6 +550,9 @@ class PatientDPSGD:
         except PatientDPSGDError:
             self._closed = True
             raise
+        except Exception:
+            self._closed = True
+            raise _fail("dp_gradient_invalid") from None
         record = PatientDPSGDStepRecord(
             step=self._steps,
             declaration_digest=self._digest,
@@ -653,10 +664,13 @@ class PatientDPSGD:
                     column.append(value)
         stddev = declaration.noise_stddev
         batch = declaration.expected_batch_size
-        return tuple(
+        update = tuple(
             (math.fsum(column) + self._draw_gaussian(stddev)) / batch
             for column in columns
         )
+        if not all(math.isfinite(value) for value in update):
+            raise _fail("dp_gradient_invalid")
+        return update
 
     def _draw_uniform(self) -> float:
         try:

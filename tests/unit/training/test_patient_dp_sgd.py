@@ -863,3 +863,30 @@ def test_torch_adapter_reports_unavailable_framework(monkeypatch):
     with pytest.raises(PatientDPSGDError) as excinfo:
         flatten_torch_per_example_gradients([])
     assert _code(excinfo) == "dp_adapter_unavailable"
+
+
+@pytest.mark.parametrize("clip,noise", ((1e-300, 1e-300), (1e300, 1e300)))
+def test_unrepresentable_noise_scale_is_refused(clip, noise):
+    with pytest.raises(PatientDPSGDError, match="dp_config_invalid"):
+        _declaration(clip_norm=clip, noise_multiplier=noise)
+
+
+@pytest.mark.parametrize("batch,keys", ((1e-308, ["a"]), (1.0, ["a", "b"])))
+def test_nonfinite_aggregate_fails_closed(batch, keys):
+    session = _test_session(
+        _full_batch(
+            clip_norm=1e308, noise_multiplier=1e-300, expected_batch_size=batch
+        ),
+        dimension=1,
+    )
+    with pytest.raises(PatientDPSGDError, match="dp_gradient_invalid"):
+        session.step(keys, _provider([[1e308] for _ in keys]))
+    assert session.closed
+    assert session.steps_taken == 1
+
+
+def test_huge_integer_gradient_has_value_free_error_and_closes_session():
+    session = _test_session(_full_batch(), dimension=1)
+    with pytest.raises(PatientDPSGDError, match="dp_gradient_invalid"):
+        session.step(["a"], _provider([[10**1000]]))
+    assert session.closed
