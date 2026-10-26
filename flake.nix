@@ -78,10 +78,20 @@
                   hash = "sha256-Ir9N9QJDvHsfck5q3zgx9vfHky6XXpgsAJA6uhoHrgE=";
                 };
                 nativeCheckInputs = old.nativeCheckInputs ++ [ final.jinja2 ];
+                # Compares cached bytes across rapid rewrites with timestamp
+                # checks; it intermittently reads stale data on loaded runners.
+                disabledTests = old.disabledTests ++ [ "test_filecache_with_checks" ];
                 meta = old.meta // {
                   changelog = "https://github.com/fsspec/filesystem_spec/blob/2026.6.0/docs/source/changelog.rst";
                 };
               });
+              # These rebuild from source only because fsspec changed. Their
+              # upstream suites do not exercise OpenMed, take most of the shell
+              # build, and include timing- and memory-sensitive tests that fail
+              # intermittently on CI runners, as Strawberry's suite did.
+              dask = prev.dask.overridePythonAttrs (_: { doCheck = false; });
+              duckdb = prev.duckdb.overridePythonAttrs (_: { doCheck = false; });
+              pyarrow = prev.pyarrow.overridePythonAttrs (_: { doCheck = false; });
             };
           };
           openmed = self.packages.${system}.openmed;
@@ -113,7 +123,7 @@
           # Keep Nix's development shell inside the version bounds declared
           # by the canonical dev extra. The pinned nixpkgs revision trails
           # both packages, while the tests exercise their current APIs.
-          mcp = python.pkgs.mcp.overridePythonAttrs (_: {
+          mcp = python.pkgs.mcp.overridePythonAttrs (old: {
             version = "1.27.1";
             src = pkgs.fetchFromGitHub {
               owner = "modelcontextprotocol";
@@ -121,6 +131,10 @@
               tag = "v1.27.1";
               hash = "sha256-LhoLcFC5+7xOCfud23sbHyTMxKYmdeZh0c+UtGdvzCs=";
             };
+            # Fails intermittently on unraisable warnings from server teardown.
+            disabledTests = old.disabledTests ++ [
+              "test_sse_client_basic_connection_mounted_app"
+            ];
           });
           crossWeb = python.pkgs.cross-web.overridePythonAttrs (_: {
             version = "0.7.0";

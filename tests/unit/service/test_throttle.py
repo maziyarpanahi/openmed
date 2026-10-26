@@ -122,7 +122,8 @@ def test_service_throttle_config_reads_env(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_rate_limit_returns_429_with_retry_after(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    # A slow refill keeps a slow first request from earning the second a token.
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "0.01")
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
     calls: list[str] = []
 
@@ -245,7 +246,7 @@ def test_batch_backpressure_returns_retry_after_before_model_work(
 
 
 def test_probe_paths_do_not_consume_rate_limit(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_RPS", "0.01")
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_BURST", "1")
 
     def fake_analyze(text: str, **_: Any) -> PredictionResult:
@@ -364,7 +365,9 @@ def test_timeout_retains_capacity_until_model_work_finishes(
 
     async def scenario():
         async with app.router.lifespan_context(app):
-            app.state.runtime.config.timeout = 0.1
+            # The model blocks until release, so the timeout still fires; one
+            # second lets a loaded worker start the model before it does.
+            app.state.runtime.config.timeout = 1
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport, base_url=LOOPBACK_BASE_URL
@@ -381,7 +384,7 @@ def test_timeout_retains_capacity_until_model_work_finishes(
                         )
                     else:
                         payload = _assert_error_payload(first, 504, "timeout")
-                        assert payload["error"]["details"] == {"timeout_seconds": 0.1}
+                        assert payload["error"]["details"] == {"timeout_seconds": 1}
                     assert "SYNTHETIC_PRIVATE_INPUT" not in first.text
                     assert _orphaned_work(app) == 1
                     assert app.state.inflight == 1
@@ -587,7 +590,9 @@ def test_parallel_graphql_fields_reuse_capacity_after_worker_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", "1")
-    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "1")
+    # The second field waits for the first worker to finish; a loaded runner
+    # can take longer than a second to schedule that worker thread.
+    monkeypatch.setenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", "10")
     lock = threading.Lock()
     state = {"active": 0, "peak": 0, "calls": 0}
 
