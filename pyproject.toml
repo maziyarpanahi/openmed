@@ -48,6 +48,8 @@ authors = [
 
 [project.optional-dependencies]
 dev = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "pre-commit>=4.0",
   "cryptography>=50,<51",
   "rich>=13.0",
@@ -114,10 +116,13 @@ fhir = [
 ]
 
 presidio = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "presidio-analyzer>=2.2.354,<3",
 ]
 
 medspacy = [
+  "setuptools>=84.1.0; python_version >= '3.12'",
   # Older Python versions require spaCy below the supported security floor.
   "medspacy>=1.3.1,<2; python_version >= '3.12'",
 ]
@@ -153,6 +158,7 @@ dask = [
 ]
 
 dagster = [
+  "filelock>=4.2.1",
   "mako>=1.4.2",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -164,6 +170,7 @@ sqlalchemy = [
 ]
 
 spacy = [
+  "setuptools>=84.1.0",
   "click>=8.0",
   "spacy>=3.8.9",
 ]
@@ -179,10 +186,12 @@ indic = [
 ]
 
 scispacy = [
+  "setuptools>=84.1.0",
   "scispacy>=0.5.4,<1",
 ]
 
 quickumls = [
+  "setuptools>=84.1.0",
   "quickumls>=1.4,<2",
 ]
 
@@ -203,6 +212,8 @@ email-msg-gpl = [
 ]
 
 multimodal = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "torch>=2.13.0",
@@ -238,6 +249,8 @@ zh-pkuseg = [
 ]
 
 zh-hanlp = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "hanlp>=2.1,<3",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -245,6 +258,8 @@ zh-hanlp = [
 ]
 
 awq = [
+  "filelock>=4.2.1; sys_platform == 'linux'",
+  "setuptools>=84.1.0; sys_platform == 'linux'",
   "multidict>=6.9.1; sys_platform == 'linux'",
   "aiohttp>=3.14.4; sys_platform == 'linux'",
   "fsspec>=2026.6.0; sys_platform == 'linux'",
@@ -256,6 +271,8 @@ awq = [
 ]
 
 gptq = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "multidict>=6.9.1",
   "aiohttp>=3.14.4",
   "fsspec>=2026.6.0",
@@ -285,6 +302,7 @@ haystack = [
 ]
 
 llamaindex = [
+  "setuptools>=84.1.0",
   "Pillow>=13.0.0",
   "tinytag>=2.3.0",
   "multidict>=6.9.1",
@@ -296,6 +314,7 @@ llamaindex = [
 ]
 
 agents = [
+  "setuptools>=84.1.0",
   "Pillow>=13.0.0",
   "tinytag>=2.3.0",
   "multidict>=6.9.1",
@@ -310,6 +329,7 @@ agents = [
 ]
 
 beam = [
+  "setuptools>=84.1.0",
   "Pillow>=13.0.0",
   "multidict>=6.9.1",
   "apache-beam>=2.73,<3",
@@ -360,6 +380,7 @@ journey = [
 ]
 
 ray = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "ray[data]>=2.30,<3",
@@ -372,10 +393,14 @@ spark = [
 ]
 
 snowflake = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "snowflake-snowpark-python>=1.0,<2",
 ]
 
 hf = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "torch>=2.13.0",
@@ -407,6 +432,7 @@ service = [
 
 # Client libraries only. OpenMed never installs Triton or KServe servers.
 triton = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "grpcio>=1.64",
@@ -423,6 +449,8 @@ operator = [
 ]
 
 gliner = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "gliner[tokenizers]>=0.2.0",
@@ -430,6 +458,7 @@ gliner = [
 ]
 
 mlx = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "mlx>=0.22",
@@ -443,6 +472,8 @@ mlx = [
 ]
 
 coreml = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "coremltools>=8.0",
@@ -452,6 +483,8 @@ coreml = [
 ]
 
 onnx = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "onnx>=1.21",
@@ -462,6 +495,7 @@ onnx = [
 ]
 
 onnx-runtime = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "huggingface-hub>=0.30",
@@ -474,6 +508,7 @@ onnx-runtime = [
 # graph-building, Torch, and Transformers dependencies; use onnx-runtime when
 # the application also needs OpenMed's Hub download path.
 edge-sbc = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "numpy>=1.26",
@@ -482,6 +517,7 @@ edge-sbc = [
 ]
 
 openvino = [
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "openvino>=2024.0",
@@ -516,6 +552,8 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
   "certifi>=2026.10.19",
   "Pillow>=13.0.0",
   "tinytag>=2.3.0",
@@ -538,7 +576,6 @@ constraint-dependencies = [
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
   "brotlicffi>=1.2.1.0",
-  "setuptools>=84.1.0",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
