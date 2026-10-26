@@ -167,7 +167,8 @@ def test_extended_canvas_product_limit_cannot_be_disabled() -> None:
 @pytest.mark.parametrize("lossless", [False, True])
 @pytest.mark.parametrize("mode", ["RGB", "RGBA"])
 def test_pillow_generated_file_end_to_end(tmp_path, size, lossless, mode) -> None:
-    from PIL import Image, features
+    Image = pytest.importorskip("PIL.Image")
+    features = pytest.importorskip("PIL.features")
 
     assert features.check("webp"), "Pillow must include WebP for this integration test"
     path = tmp_path / "synthetic.webp"
@@ -183,7 +184,7 @@ def test_pillow_generated_file_end_to_end(tmp_path, size, lossless, mode) -> Non
 
 @pytest.mark.integration
 def test_real_animated_webp_uses_canvas_not_frame_payloads(tmp_path) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic-animated.webp"
     first = Image.new("RGB", (19, 13), (0, 0, 0))

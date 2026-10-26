@@ -1,12 +1,21 @@
 # Apache Beam Redaction Transform
 
-OpenMed provides a small Apache Beam-compatible redaction contract for bounded
-batch pipelines. The Beam SDK remains optional; the direct synthetic harness
-can validate serialization and retry behavior without installing Beam.
+OpenMed supports bounded Beam redaction pipelines and a Beam-free synthetic
+harness. For v3.1, use Python 3.11+ and the tested versions below. Plain pip
+cannot resolve Beam's Pillow cap. Its cryptography and httplib2 caps also need
+these security overrides; never downgrade or disable dependency installation.
 
 ```bash
-pip install "openmed[beam]"
+uv venv --python 3.11 .venv
+printf '%s\n' 'Pillow==13.0.0' 'cryptography==50.0.0' 'httplib2==0.32.0' \
+  > beam-security-overrides.txt
+uv pip install --no-config --override beam-security-overrides.txt \
+  "openmed[beam]==3.1.0" "apache-beam==2.75.0"
 ```
+
+DirectRunner tests pass with these versions. `pip check` still reports Beam's
+three upstream bounds; investigate any other conflict. See the
+[dependency policy](../security/dependency-policy.md#image-dependencies-and-python-compatibility).
 
 ## Contract
 
