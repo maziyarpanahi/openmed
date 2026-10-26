@@ -146,7 +146,7 @@ def test_uint32_pixel_extent_cannot_overflow() -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("mode", ["1", "L", "RGB", "RGBA"])
 def test_pillow_generated_file_end_to_end(tmp_path, size, mode) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.bmp"
     Image.new(mode, size).save(path, format="BMP")
@@ -313,7 +313,7 @@ def test_real_file_read_preserves_position_and_ownership(tmp_path) -> None:
     [(True, 1, 5), (True, 8, 5), (True, 24, 5), (False, 24, -5)],
 )
 def test_core_and_top_down_files_against_pillow(tmp_path, core, depth, height) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     header = bmp(core=core, depth=depth, height=height)
     declared_size = struct.unpack_from("<I", header, 2)[0]
