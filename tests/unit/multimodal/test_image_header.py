@@ -398,7 +398,7 @@ def test_headers_are_immutable_and_carry_no_pixels() -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("mode", ["L", "RGB", "RGBA", "P"])
 def test_pillow_generated_png_end_to_end(tmp_path, size, mode) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.png"
     Image.new(mode, size).save(path, format="PNG")
@@ -416,7 +416,7 @@ def test_pillow_generated_png_end_to_end(tmp_path, size, mode) -> None:
 @pytest.mark.parametrize("size", [(1, 1), (7, 5), (257, 129)])
 @pytest.mark.parametrize("progressive", [False, True])
 def test_pillow_generated_jpeg_end_to_end(tmp_path, size, progressive) -> None:
-    from PIL import Image
+    Image = pytest.importorskip("PIL.Image")
 
     path = tmp_path / "synthetic.jpg"
     Image.new("RGB", size).save(path, format="JPEG", progressive=progressive)
