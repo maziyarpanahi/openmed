@@ -100,6 +100,8 @@ REVIEWED_LICENSES = {
     "gitpython": "BSD-3-Clause",
     "gliclass": "Apache-2.0",
     "gliner": "Apache-2.0",
+    "gliformer": "Apache-2.0",
+    "gliner2": "Apache-2.0",
     "grpcio": "Apache-2.0",
     "griffe": "ISC",
     "h2": "MIT",

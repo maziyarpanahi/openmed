@@ -58,7 +58,9 @@ a dependency also declared in another extra.
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
 | `gitpython` | `docs` | `BSD-3-Clause` |
 | `gliclass` | `gliclass` | `Apache-2.0` |
-| `gliner` | `gliner` | `Apache-2.0` |
+| `gliner` | `gliner`, `gliformer` | `Apache-2.0` |
+| `gliformer` | `gliformer`; reviewed wheel LICENSE (0.1.3) | `Apache-2.0` |
+| `gliner2` | `gliner2`; reviewed wheel LICENSE (2.1.0) | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
 | `h2` | `beam, prefect` | `MIT` |
@@ -106,7 +108,7 @@ a dependency also declared in another extra.
 | `philter-ucsf` | `philter` | `BSD-3-Clause` |
 | `piexif` | `multimodal` | `MIT` |
 | `pikepdf` | `multimodal` | `MPL-2.0` |
-| `pillow` | `multimodal` | `HPND` |
+| `pillow` | `multimodal`, `gliformer` | `HPND` |
 | `pkuseg` | `zh-pkuseg` | `MIT` |
 | `polars` | `polars` | `MIT` |
 | `prefect` | `prefect` | `Apache-2.0` |
@@ -141,7 +143,7 @@ a dependency also declared in another extra.
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `torch` | `awq, coreml, gliclass, gliner, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
+| `torch` | `awq, coreml, gliclass, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, gliclass, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |
