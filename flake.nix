@@ -89,7 +89,17 @@
               # upstream suites do not exercise OpenMed, take most of the shell
               # build, and include timing- and memory-sensitive tests that fail
               # intermittently on CI runners, as Strawberry's suite did.
-              dask = prev.dask.overridePythonAttrs (_: { doCheck = false; });
+              dask = prev.dask.overridePythonAttrs (_: {
+                doCheck = false;
+                # Upstream also imports dask.array and dask.dataframe, whose
+                # optional numpy and pandas dependencies come only with checks.
+                pythonImportsCheck = [
+                  "dask"
+                  "dask.bag"
+                  "dask.bytes"
+                  "dask.diagnostics"
+                ];
+              });
               duckdb = prev.duckdb.overridePythonAttrs (_: { doCheck = false; });
               pyarrow = prev.pyarrow.overridePythonAttrs (_: { doCheck = false; });
             };
