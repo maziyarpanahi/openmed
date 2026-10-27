@@ -347,6 +347,7 @@ nav:
       - Document Adapter Provenance: document-adapter-provenance.md
       - Chat Message Schema: reference/chat-schema.md
       - Training Schema Registry: reference/training-schemas.md
+      - Federated Weighting Sensitivity: training/federated-weighting-sensitivity.md
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Federated Aggregate Metrics: training/federated-metrics.md
       - Federated Round Status: training/federated-round-status.md

@@ -406,6 +406,7 @@ classification:
     - document-adapter-provenance.md
     - reference/chat-schema.md
     - reference/training-schemas.md
+    - training/federated-weighting-sensitivity.md
     - training/federated-round-lifecycle.md
     - training/federated-metrics.md
     - training/federated-round-status.md
