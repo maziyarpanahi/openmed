@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through its inputs and adds an optional lazy torch adapter. See
   [Patient-level DP-SGD](docs/training/patient-dp-sgd.md).
 
+- Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
+  `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
+  optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
+  device-isolated caches, offline loading, exact spans, and disease-label
+  defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
+
+### Fixed
+
+- Load GLiNER2 checkpoints with the `gliner2[local]` package's architecture-aware
+  extractor and retain native span offsets and confidence scores instead of
+  attempting to use older `gliner` classes (#4329).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
