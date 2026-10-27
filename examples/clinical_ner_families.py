@@ -3,13 +3,14 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from openmed import analyze_text
+from openmed import OpenMedConfig, analyze_text
 from openmed.core.model_registry import (
     ModelInfo,
     get_models_by_category,
@@ -165,7 +166,32 @@ def run_family_extraction(
 
 
 def main() -> None:
-    run_family_extraction()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--model-id", help="Run one native span checkpoint instead of registry families"
+    )
+    parser.add_argument("--family", choices=("gliner", "gliner2", "gliformer"))
+    parser.add_argument(
+        "--labels", nargs="+", help="Native entity labels, such as disease"
+    )
+    parser.add_argument("--threshold", type=float, default=0.7)
+    args = parser.parse_args()
+    if args.model_id:
+        with offline_model_loading():
+            result = analyze_text(
+                SYNTHETIC_CLINICAL_TEXT,
+                model_id=args.model_id,
+                family=args.family,
+                labels=args.labels,
+                threshold=args.threshold,
+                config=OpenMedConfig(
+                    device="cpu", local_only=os.getenv(ALLOW_DOWNLOAD_ENV) != "1"
+                ),
+                assert_context=True,
+            )
+        print_entities(args.model_id, result.entities)
+    else:
+        run_family_extraction()
 
 
 if __name__ == "__main__":
