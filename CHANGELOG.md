@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Require the patched Brotli CFFI decoder in the frozen development dependency
+  graph and bootstrap patched file locking before installing the service
+  containers' Torch dependencies. Python 3.10 SDK support is retained (#4282).
+
 ## [3.1.0] - 2026-10-20
 
 Governed clinical workflows, reviewed clinical evidence, interoperability and
