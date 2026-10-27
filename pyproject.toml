@@ -474,6 +474,29 @@ gliner = [
   "torch>=2.13.0"
 ]
 
+gliformer = [
+  "filelock==3.20.3; python_version < '3.11'",
+  "filelock>=4.2.1; python_version >= '3.11'",
+  "setuptools>=84.1.0",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliformer>=0.1.3,<0.2",
+  "Pillow>=13.0.0",
+  # GLiFormer imports the current GLiNER packing API at module import time.
+  "gliner>=0.2.29",
+  "torch>=2.13.0",
+]
+
+gliner2 = [
+  "filelock==3.20.3; python_version < '3.11'",
+  "filelock>=4.2.1; python_version >= '3.11'",
+  "setuptools>=84.1.0",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliner2[local]>=2.1.0,<3",
+  "torch>=2.13.0",
+]
+
 mlx = [
   "filelock==3.20.3; python_version < '3.11'",
   "filelock>=4.2.1; python_version >= '3.11'",
@@ -599,6 +622,7 @@ constraint-dependencies = [
   "urllib3>=2.8.0",
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
+  "brotlicffi>=1.2.1.0",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
@@ -627,6 +651,10 @@ conflicts = [
   [
     { extra = "awq" },
     { extra = "gliner" },
+  ],
+  [
+    { extra = "awq" },
+    { extra = "gliformer" },
   ],
   [
     { extra = "onnx" },

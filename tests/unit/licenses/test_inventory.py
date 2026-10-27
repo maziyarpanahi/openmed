@@ -48,7 +48,7 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 118
+    assert len(entries) == 120
     assert len(records) == len(entries)
     assert {
         record.name
@@ -72,6 +72,8 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     }
     assert {record.name for record in records} >= {
         "faker",
+        "gliformer",
+        "gliner2",
         "filelock",
         "jieba",
         "medspacy",

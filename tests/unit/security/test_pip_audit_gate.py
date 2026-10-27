@@ -625,6 +625,7 @@ def test_filelock_refuses_symlink_without_modifying_target(
     ("package", "unsafe", "fixed"),
     [
         ("brotli", "1.2.0", "1.2.1"),
+        ("brotlicffi", "1.2.0.1", "1.2.1.0"),
         ("graphql-core", "3.2.11", "3.2.12"),
         ("virtualenv", "21.14.5", "21.14.9"),
     ],
