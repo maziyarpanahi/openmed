@@ -697,6 +697,9 @@ def _governance_json_inputs(draw: st.DrawFn) -> str | bytes:
 
 
 @pytest.mark.parametrize("module_name,class_name", _GOVERNANCE_JSON_TARGETS)
+# Payloads reach 1 MiB or 100,000 nesting levels, which take hundreds of
+# milliseconds to parse on a loaded runner. Five seconds still catches a hang.
+@settings(deadline=5000)
 @given(payload=_governance_json_inputs())
 def test_public_governance_parsers_return_only_typed_errors(
     module_name: str, class_name: str, payload: str | bytes
