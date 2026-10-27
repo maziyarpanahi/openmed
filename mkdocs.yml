@@ -146,6 +146,7 @@ nav:
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
       - GraphQL Service: serving/graphql.md
+      - REST Response Headers: serving/response-headers.md
       - REST Authentication: serving/authentication.md
       - Service Load Testing & Latency SLOs: serving/load-testing.md
       - Mutual TLS Authentication: serving/mtls.md
