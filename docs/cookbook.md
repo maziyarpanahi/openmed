@@ -74,6 +74,7 @@ successful case and a rejected case with its stable reason code.
 | Use when you want to... | Script |
 | --- | --- |
 | Run MLX token classification | [`examples/mlx_token_classification_ner.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/mlx_token_classification_ner.py) |
+| Walk through an offline metadata-only federated round | [`examples/federated_round_walkthrough.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/federated_round_walkthrough.py) |
 | Run MLX GLiNER zero-shot NER | [`examples/mlx_gliner_zero_shot_ner.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/mlx_gliner_zero_shot_ner.py) |
 | Render registry tools for agent frameworks | [`examples/agent_tools_quickstart.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/agent_tools_quickstart.py) |
 | Inspect synthetic human-approval failure receipts | [`examples/agent_approval_failures.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/agent_approval_failures.py) |
