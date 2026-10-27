@@ -1377,7 +1377,9 @@ test("docs deep links, admonitions, tabs, and tables are explicit", async ({
   );
   expect(apiResponse?.status()).toBe(200);
   await expect(page.locator("#openmed\\.PIIEntity")).toBeAttached();
-  await expect(page).toHaveURL(/#openmed\.PIIEntity$/);
+  await expect(page.locator("#piientity")).toBeInViewport();
+  // Material's navigation.tracking may normalize the API alias to its heading.
+  await expect(page).toHaveURL(/#(?:openmed\.PIIEntity|piientity)$/);
 
   await page.goto("/docs/onboarding-india/", {
     waitUntil: "networkidle",
