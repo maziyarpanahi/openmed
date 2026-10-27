@@ -350,6 +350,7 @@ nav:
       - Federated Round Lifecycle: training/federated-round-lifecycle.md
       - Federated Aggregate Metrics: training/federated-metrics.md
       - Federated Round Status: training/federated-round-status.md
+      - Federated Client Round Runner: training/federated-client-runner.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
       - Private-Training JSON Schemas: training/private-training-schemas.md

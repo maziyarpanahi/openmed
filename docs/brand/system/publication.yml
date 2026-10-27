@@ -409,6 +409,7 @@ classification:
     - training/federated-round-lifecycle.md
     - training/federated-metrics.md
     - training/federated-round-status.md
+    - training/federated-client-runner.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
     - training/private-training-schemas.md
