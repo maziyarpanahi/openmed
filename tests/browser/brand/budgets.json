@@ -12,18 +12,18 @@
     "html": 2359296,
     "image": 262144,
     "javascript": 716800,
-    "json": 5066635
+    "json": 5074124
   },
   "governed_payload_bytes": {
     "docs/assets/javascripts/lunr/wordcut.js": 716800,
     "docs/model-tokenizer-script-coverage/index.html": 2359296,
     "docs/model-tokenizer-script-coverage.json": 1572864,
-    "docs/search/search_index.json": 5066635
+    "docs/search/search_index.json": 5074124
   },
   "route_transfer_bytes": {
     "/": 3145728,
-    "/docs/": 6542019,
-    "/docs/model-tokenizer-script-coverage/": 8638671
+    "/docs/": 6549508,
+    "/docs/model-tokenizer-script-coverage/": 8646160
   },
   "page_metrics": {
     "cumulative_layout_shift": 0.1,
@@ -170,7 +170,8 @@
     "The reviewed PR #4019 documentation measures 5000084 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed governed-agent overview and migration documentation batch measures 5031494 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
     "The reviewed PR #4070 documentation measures 5036408 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
-    "The reviewed PR #4038 documentation measures 5042244 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged."
+    "The reviewed PR #4038 documentation measures 5042244 search bytes. JSON and search ceilings retain the existing 1686-byte allowance; all other artifact, payload, route and page-metric limits are unchanged.",
+    "The refreshed dependency baseline and PR #4322 documentation measure 5072438 search-index bytes. The search and JSON ceilings retain the established 1686-byte allowance; fixed-asset, analytics, and other artifact limits are unchanged."
   ],
   "route_fixed_transfer_bytes": {
     "/docs/": 1475384,
