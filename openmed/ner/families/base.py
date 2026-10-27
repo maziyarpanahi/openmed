@@ -12,6 +12,7 @@ class ModelFamily(str, Enum):
 
     GLINER = "gliner"
     GLINER2 = "gliner2"
+    GLIFORMER = "gliformer"
     INDIC_NER = "indic_ner"
     MURIL = "muril"
     INDICBERT = "indicbert"
