@@ -15,8 +15,10 @@ from .families import (
     IndicEncoderSpec,
     ModelFamily,
     SupportsEncoding,
+    ensure_gliformer_available,
     ensure_gliner2_available,
     ensure_gliner_available,
+    is_gliformer_available,
     is_gliner2_available,
     is_gliner_available,
     is_indic_encoder_available,
@@ -24,6 +26,8 @@ from .families import (
 )
 from .indexing import (
     BUILTIN_MODEL_RECORDS,
+    GLIFORMER_DISEASE_MODEL_ID,
+    GLIFORMER_DISEASE_RECORD,
     GLINER_BIOMED_MODEL_ID,
     GLINER_BIOMED_RECORD,
     ModelIndex,
@@ -31,6 +35,7 @@ from .indexing import (
     build_index,
     discover_models,
     load_index,
+    resolve_model_record,
     write_index,
 )
 from .infer import Entity, NerRequest, NerResponse, infer, infer_biomedical
@@ -47,6 +52,9 @@ __all__ = [
     "GLINER_BIOMED_MODEL_ID",
     "GLINER_BIOMED_RECORD",
     "BUILTIN_MODEL_RECORDS",
+    "GLIFORMER_DISEASE_MODEL_ID",
+    "GLIFORMER_DISEASE_RECORD",
+    "resolve_model_record",
     "build_index",
     "discover_models",
     "write_index",
@@ -64,6 +72,8 @@ __all__ = [
     "is_gliner_available",
     "ensure_gliner2_available",
     "is_gliner2_available",
+    "ensure_gliformer_available",
+    "is_gliformer_available",
     "load_default_label_map",
     "reload_default_label_map",
     "get_default_labels",
