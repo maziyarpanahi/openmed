@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add dropout-aware distributed discrete Gaussian noise shares for secure
+  aggregation, calibrated to the recovery threshold with exact CSPRNG sampling,
+  a below-quorum abort, a modulus wraparound check and a value-free mechanism
+  record (#3860).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
