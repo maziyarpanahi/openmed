@@ -407,6 +407,9 @@ def analyze_text(
     model_name: str = "disease_detection_superclinical",
     *,
     model_id: Optional[str] = None,
+    family: Optional[str] = None,
+    labels: Optional[List[str]] = None,
+    threshold: Optional[float] = None,
     config: Optional[OpenMedConfig] = None,
     loader: Optional[ModelLoader] = None,
     aggregation_strategy: Optional[str] = "simple",
@@ -427,7 +430,7 @@ def analyze_text(
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
 ) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
-    """Run a token-classification model on ``text`` and format the predictions.
+    """Run token-classification or native span NER and format the predictions.
 
     Args:
         text: Clinical or biomedical text to analyse.
@@ -435,6 +438,13 @@ def analyze_text(
             local model path.
         model_id: Alias for ``model_name``. Useful for APIs and examples that
             name model identifiers as ``model_id``.
+        family: Explicit ``gliner``, ``gliner2``, or ``gliformer`` family for an
+            ambiguously named checkpoint. Recognized IDs and local configs
+            select their family automatically.
+        labels: Entity types for a native span model; the registered disease
+            checkpoint defaults to ``["disease"]``.
+        threshold: Native extraction threshold, defaulting to 0.5. The final
+            ``confidence_threshold`` filter applies independently afterwards.
         config: Optional :class:`~openmed.core.config.OpenMedConfig` instance.
         loader: Reuse an existing :class:`~openmed.core.models.ModelLoader`.
         aggregation_strategy: Hugging Face aggregation strategy (``"simple"`` by
@@ -527,7 +537,23 @@ def analyze_text(
         if final_result is not None:
             return final_result
 
-    loader = loader or model_loader(config)
+    if loader is None:
+        from .ner.indexing import resolve_model_record
+        from .ner.infer import (
+            ensure_gliformer_available,
+            ensure_gliner2_available,
+            ensure_gliner_available,
+        )
+
+        native_record = resolve_model_record(validated_model, family=family)
+        if native_record is not None:
+            dependency_checks = {
+                "gliformer": ensure_gliformer_available,
+                "gliner2": ensure_gliner2_available,
+                "gliner": ensure_gliner_available,
+            }
+            dependency_checks[native_record.family]()
+        loader = model_loader(config)
     runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
@@ -535,6 +561,12 @@ def analyze_text(
         aggregation_strategy=aggregation_strategy,
         use_fast_tokenizer=use_fast_tokenizer,
     )
+    if family is not None:
+        pipeline_args["family"] = family
+    if labels is not None:
+        pipeline_args["labels"] = labels
+    if threshold is not None:
+        pipeline_args["threshold"] = validate_confidence_threshold(threshold)
 
     provided_max_length = pipeline_kwargs.pop("max_length", None)
     truncate_inputs = pipeline_kwargs.pop("truncation", True)
@@ -552,11 +584,15 @@ def analyze_text(
     if truncate_inputs and provided_max_length is not None:
         effective_max_length = provided_max_length
     elif truncate_inputs:
-        with network_blocked_if_offline(runtime_config):
-            effective_max_length = loader.get_max_sequence_length(
-                validated_model,
-                tokenizer=getattr(ner_pipeline, "tokenizer", None),
-            )
+        native_max_length = getattr(ner_pipeline, "openmed_max_length", None)
+        if type(native_max_length) is int:
+            effective_max_length = native_max_length
+        else:
+            with network_blocked_if_offline(runtime_config):
+                effective_max_length = loader.get_max_sequence_length(
+                    validated_model,
+                    tokenizer=getattr(ner_pipeline, "tokenizer", None),
+                )
 
     desired_max_length = (
         provided_max_length if provided_max_length is not None else effective_max_length
