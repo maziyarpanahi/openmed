@@ -1,6 +1,6 @@
 # Zero-shot NER Toolkit
 
-The zero-shot NER toolkit extends OpenMed with GLiNER-powered models, domain-aware
+The zero-shot NER toolkit extends OpenMed with GLiNER, GLiFormer, and GLiNER2 models, domain-aware
 label defaults, and inference helpers that complement the existing
 token-classification stack.
 
@@ -13,17 +13,17 @@ Install the GLiNER optional dependencies:
 
 ```bash
 uv pip install ".[gliner]"
+uv pip install ".[gliformer]"  # GLiFormer 0.1.3+
+uv pip install ".[gliner2]"    # Local GLiNER2 / GLiNER2.5, gliner2[local] 2.1+
 ```
 
-GLiNER2.5 checkpoints use a separate extra, because they ship in the
-Apache-2.0 `gliner2` package rather than in `gliner`:
+Install only the extra for the model family you use. Dependencies are imported
+when loading a model. GLiNER2 uses its local `AutoExtractor` API to select span
+or boundary checkpoints; it never uses the hosted extraction API.
 
-```bash
-uv pip install ".[gliner2]"
-```
-
-If you plan to run smoke tests or inference, ensure the GLiNER checkpoints are
-available locally (by default the toolkit looks for `models/index.json`).
+Recognized Hugging Face IDs and local checkpoint configurations work without
+`models/index.json`. An optional index supplies aliases, domains, and per-model
+label defaults. Ambiguous unindexed IDs require an explicit `family`.
 
 ## Model indexing (Python API)
 
@@ -130,15 +130,15 @@ records = handle.extract_json(text, {"prescription": ["drug::str", "dose::str"]}
   `extract_json` returns schema-driven records whose extractive fields are
   spans and whose fixed-choice fields are label scores.
 
-Loading is local-first. The handle resolves the checkpoint to a local snapshot
-before loading it: a cached snapshot is reused without a network call, a
-download happens only when the snapshot is missing and offline mode is off, and
-`OPENMED_OFFLINE=1` or `local_files_only=True` turns a cache miss into an
-`OfflineModeError`. Inference makes no network calls; the `gliner2` cloud API
-client is refused. Checkpoints that request remote code (`auto_map`) or ship no
-`model.safetensors` are refused. The handle records the model id, the resolved
-revision (the snapshot commit hash) and the license, and nothing in the family
-logs or caches request text.
+Loading follows the same path as the other native families:
+`load_gliner2_handle` resolves a Hub id to one local snapshot and loads it with
+`AutoExtractor`, and `local_files_only=True` uses the cache only. `infer()` and
+`analyze_text` apply `OPENMED_OFFLINE` before loading, and
+`GLiNER2DecisionBackend.from_pretrained` follows it when `local_files_only` is
+not given. The typed helpers run with the network blocked in offline mode, and
+the `gliner2` cloud API client is refused. The handle records the model id, the
+resolved revision (the snapshot commit hash) and the license, and nothing in
+the family logs or caches request text.
 
 ### GLiNER2.5 decision backend
 
@@ -200,8 +200,61 @@ Label resolution precedence is:
 
 1. Explicit `request.labels`
 2. `request.domain` defaults
-3. Domain inferred from the index entry
-4. Generic fallback label set
+3. Model-specific `default_labels` (the disease checkpoint uses `disease`)
+4. Domain inferred from the index entry
+5. Generic fallback label set
+
+## GLiFormer disease extraction (v3.2)
+
+```python
+from openmed import OpenMedConfig
+from openmed.ner import GLIFORMER_DISEASE_MODEL_ID, NerRequest, infer
+
+text = "A synthetic note mentions asthma and diabetes."
+response = infer(
+    NerRequest(model_id=GLIFORMER_DISEASE_MODEL_ID, text=text, threshold=0.7),
+    config=OpenMedConfig(device="cpu"),
+)
+for entity in response.entities:
+    assert text[entity.start:entity.end] == entity.text
+    print(entity.label, entity.text, entity.score)
+```
+
+`GLIFORMER_DISEASE_MODEL_ID` is
+`OpenMed/GLiFormer-BioNER-Disease-Base-v1`. Its built-in record declares the
+`gliformer` family, English, Apache-2.0, and `default_labels=("disease",)`.
+Weights remain separate from the SDK. Authentication and cache configuration
+are honored for restricted checkpoints.
+
+General checkpoints such as `fastino/gliner2.5-base-v1` accept explicit labels:
+
+```python
+response = infer(NerRequest(
+    model_id="fastino/gliner2.5-base-v1",
+    text="A synthetic note mentions asthma.",
+    labels=["disease"],
+    threshold=0.7,
+))
+```
+
+For an ambiguous identifier, set `NerRequest(..., family="gliformer")` or
+`family="gliner2"`. A local checkpoint directory is accepted as `model_id`,
+with its family read from saved configuration. A record's `path` takes
+precedence over its index alias when loading. `flat_ner=False` retains
+overlapping spans. All occurrences retain the runtime's half-open character
+offsets and confidence; missing offsets or scores are rejected instead of
+reconstructed by substring search.
+
+For the same models with sentence chunking, JSON/HTML/CSV rendering, and
+assertion metadata, use [`analyze_text`](analyze-text.md). Local-only settings
+restrict loading to cached assets and block networking during inference.
+
+Run the existing Python example with a chosen native model:
+
+```bash
+OPENMED_EXAMPLE_ALLOW_DOWNLOAD=1 python examples/clinical_ner_families.py \
+  --model-id OpenMed/GLiFormer-BioNER-Disease-Base-v1 --labels disease --threshold 0.7
+```
 
 ## Token classification adapter
 

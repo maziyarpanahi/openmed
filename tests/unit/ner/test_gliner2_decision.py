@@ -290,6 +290,25 @@ def test_from_pretrained_loads_through_the_family_loader(monkeypatch) -> None:
     assert backend.identity.model_id == "fastino/GLiNER2.5-Decide"
 
 
+def test_from_pretrained_follows_offline_mode_when_unspecified(monkeypatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_loader(model_id: str, **kwargs: Any) -> GLiNER2Handle:
+        seen.update(kwargs)
+        return GLiNER2Handle(
+            model_id=model_id, model=FakeClassifier({}), license_id="Apache-2.0"
+        )
+
+    monkeypatch.setattr(decision_module, "load_gliner2_handle", fake_loader)
+    monkeypatch.setenv("OPENMED_OFFLINE", "1")
+    GLiNER2DecisionBackend.from_pretrained("fastino/GLiNER2.5-Decide")
+    assert seen["local_files_only"] is True
+
+    monkeypatch.delenv("OPENMED_OFFLINE")
+    GLiNER2DecisionBackend.from_pretrained("fastino/GLiNER2.5-Decide")
+    assert seen["local_files_only"] is False
+
+
 def test_decision_results_do_not_carry_input_text() -> None:
     marker = "Synthetic Orlaith Vantablack"
     backend, _ = _backend({"urgent": 0.9, "routine": 0.1})

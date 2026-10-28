@@ -333,7 +333,7 @@ beam = [
   "Pillow>=13.0.0",
   "multidict>=6.9.1",
   "apache-beam>=2.73,<3",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "h2>=4.4.1",
 ]
 
@@ -457,16 +457,24 @@ gliner = [
   "torch>=2.13.0"
 ]
 
-# GLiNER2.5 checkpoints load through gliner2.AutoExtractor; the gliner package
-# above only provides the v1 span models.
+gliformer = [
+  "filelock>=4.2.1",
+  "setuptools>=84.1.0",
+  "fsspec>=2026.6.0",
+  "jinja2>=3.1.6",
+  "gliformer>=0.1.3,<0.2",
+  "Pillow>=13.0.0",
+  # GLiFormer imports the current GLiNER packing API at module import time.
+  "gliner>=0.2.29",
+  "torch>=2.13.0",
+]
+
 gliner2 = [
   "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "gliner2[local]>=2.1.0,<3",
-  "huggingface-hub>=0.30",
-  "safetensors>=0.4",
   "torch>=2.13.0",
 ]
 
@@ -578,7 +586,7 @@ constraint-dependencies = [
   "jinja2>=3.1.6",
   "banks>=2.5.1",
   "langgraph-sdk>=0.4.4",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "datasets>=5.0.1",
   "h2>=4.4.1",
   "oauthlib>=4.0.0",
@@ -589,6 +597,9 @@ constraint-dependencies = [
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
   "brotlicffi>=1.2.1.0",
+  "dnspython>=2.9.0",
+  "msgpack>=1.2.3",
+  "nltk>=3.10.4",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
@@ -618,6 +629,10 @@ conflicts = [
   [
     { extra = "awq" },
     { extra = "gliner" },
+  ],
+  [
+    { extra = "awq" },
+    { extra = "gliformer" },
   ],
   [
     { extra = "onnx" },

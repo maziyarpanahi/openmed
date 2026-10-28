@@ -1,63 +1,52 @@
-"""GLiNER2.5 multi-task checkpoints loaded through ``gliner2.AutoExtractor``.
+"""Local GLiNER2 / GLiNER2.5 loading, native extraction and typed task helpers.
 
-GLiNER2.5 checkpoints ship in the separate Apache-2.0 ``gliner2`` package
-(``pip install openmed[gliner2]``). Its ``AutoExtractor`` reads the architecture
-saved with each checkpoint (``span`` or ``boundary``) and returns the matching
-extractor; ``GLiNER2.from_pretrained`` is the legacy span-only loader and cannot
-load the boundary checkpoints.
+``load_gliner2_handle`` loads a checkpoint through ``gliner2.AutoExtractor``,
+which selects the span or boundary architecture saved with the checkpoint and
+never constructs the package's hosted API client. The returned handle serves
+two layers:
 
-The integration keeps OpenMed's local-first defaults:
+* :meth:`GLiNER2Handle.predict_entities` is the span-list contract used by
+  OpenMed inference and ``analyze_text``.
+* The typed helpers (:meth:`~GLiNER2Handle.extract_entities`,
+  :meth:`~GLiNER2Handle.classify_text`,
+  :meth:`~GLiNER2Handle.extract_relations` and
+  :meth:`~GLiNER2Handle.extract_json`) return OpenMed entities,
+  classifications, relations and schema-driven records with absolute offsets.
+  The GLiNER2.5 decision backend builds on ``classify_text``.
 
-* ``import openmed`` never imports ``gliner2``. Availability is probed with
-  :func:`importlib.util.find_spec` through the shared capability registry.
-* A checkpoint is resolved to a local snapshot before it is loaded. A cached
-  snapshot is reused without a network call, downloads happen only when the
-  snapshot is missing and offline mode is off, and inference never uses the
-  network. The ``gliner2`` cloud API client is refused.
-* Checkpoints that request remote code or ship only pickle weights are refused.
-* Results carry labels, offsets and scores. Error messages never echo request
-  text, and nothing in this module logs or caches request text.
+``import openmed`` never imports ``gliner2``; availability is probed through
+the shared capability registry. Typed helpers run with the network blocked in
+offline mode, results carry labels, offsets and scores, and error messages
+never echo request text.
 """
 
 from __future__ import annotations
 
-import hashlib
 import importlib
-import json
 import math
 import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Union
 
-from openmed.core.capabilities import backend_status, is_backend_available
-from openmed.core.errors import ModelLoadError
-from openmed.core.offline import (
-    OfflineModeError,
-    is_local_only,
-    network_blocked_if_offline,
-)
+from openmed.core.capabilities import is_backend_available
+from openmed.core.offline import network_blocked_if_offline
 
 from ..exceptions import MissingDependencyError
+from .gliner import _resolve_native_device
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..infer import Entity
 
 _PRIMARY_IMPORT = "gliner2"
-_BACKEND_NAME = "gliner2"
 _GLINER2_HINT = (
-    "Install with `pip install openmed[gliner2]` (or `pip install "
-    '"gliner2[local]"`) to load GLiNER2.5 checkpoints through '
-    "gliner2.AutoExtractor."
+    "Install with `pip install openmed[gliner2]` "
+    "(requires gliner2[local]>=2.1.0 for local span and boundary checkpoints)."
 )
-_SNAPSHOT_PATTERNS = ("*.json", "*.safetensors", "*.model", "*.txt")
-_CONFIG_FILES = ("config.json", "encoder_config/config.json")
-_TOKENIZER_FILES = ("tokenizer.json", "tokenizer_config.json")
-_WEIGHTS_FILE = "model.safetensors"
-_REMOTE_CODE_FILES = (*_CONFIG_FILES, "tokenizer_config.json")
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 _WORD_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 _CLOUD_CLIENT_MODULE = "gliner2.api_client"
@@ -72,8 +61,6 @@ DEFAULT_CHUNK_OVERLAP = 64
 GLINER2_TASKS = ("entities", "classification", "relations", "json_extraction")
 """Tasks every GLiNER2.5 checkpoint exposes through ``AutoExtractor``."""
 
-_availability_cache: Optional[bool] = None
-
 LabelSpec = Union[Sequence[str], Mapping[str, str]]
 
 
@@ -85,56 +72,21 @@ class GLiNER2OutputError(ValueError):
     """
 
 
-# ---------------------------------------------------------------------------
-# Availability
-# ---------------------------------------------------------------------------
-
-
 def is_gliner2_available(force_refresh: bool = False) -> bool:
-    """Return True when ``gliner2[local]`` and its runtime are importable.
+    """Return whether the GLiNER2 local inference stack is installed."""
 
-    The probe uses :func:`importlib.util.find_spec` through the shared
-    capability registry, so it never imports ``gliner2``, ``torch`` or
-    ``transformers``.
-
-    Args:
-        force_refresh: Re-probe instead of returning the cached answer.
-
-    Returns:
-        True when ``gliner2``, ``torch``, ``transformers``, ``safetensors``
-        and ``huggingface_hub`` can all be imported.
-    """
-
-    global _availability_cache
-    if force_refresh or _availability_cache is None:
-        _availability_cache = is_backend_available(_BACKEND_NAME)
-    return bool(_availability_cache)
+    return is_backend_available("gliner2")
 
 
 def ensure_gliner2_available() -> None:
-    """Raise :class:`MissingDependencyError` unless ``gliner2[local]`` is usable.
-
-    Raises:
-        MissingDependencyError: Naming the first missing module and the
-            ``openmed[gliner2]`` install hint.
-    """
+    """Require GLiNER2's local runtime, including its optional ML stack."""
 
     if is_gliner2_available(force_refresh=False):
         return
 
-    missing = _missing_dependency()
-    dependency = missing or _PRIMARY_IMPORT
-    raise MissingDependencyError(dependency=dependency, instruction=_GLINER2_HINT)
-
-
-def _missing_dependency() -> Optional[str]:
-    missing = backend_status(_BACKEND_NAME).missing
-    return missing[0] if missing else None
-
-
-# ---------------------------------------------------------------------------
-# Checkpoint capability metadata
-# ---------------------------------------------------------------------------
+    raise MissingDependencyError(
+        dependency="gliner2[local]>=2.1.0", instruction=_GLINER2_HINT
+    )
 
 
 @dataclass(frozen=True)
@@ -402,20 +354,15 @@ class GLiNER2Record:
         }
 
 
-# ---------------------------------------------------------------------------
-# Handle
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class GLiNER2Handle:
-    """Local GLiNER2.5 extractor with OpenMed-typed multi-task helpers.
+    """Local GLiNER2 extractor with native spans and typed multi-task helpers.
 
     Attributes:
         model_id: Repository id or local directory supplied by the caller.
         model: The ``gliner2`` extractor returned by ``AutoExtractor``.
-        revision: Resolved checkpoint revision (a commit hash for Hub
-            snapshots, a config digest for unversioned local directories).
+        revision: Resolved checkpoint revision: the snapshot commit for Hub
+            checkpoints, otherwise the requested revision when one was given.
         license_id: SPDX license of the weights, when known.
         architecture: Architecture reported by the loaded extractor.
         source: ``"hub"`` for repository ids, ``"local"`` for directories.
@@ -463,6 +410,43 @@ class GLiNER2Handle:
         }
 
     # -- entities ---------------------------------------------------------
+
+    def predict_entities(
+        self,
+        text: str,
+        labels: Optional[Sequence[str]] = None,
+        *,
+        threshold: float = 0.5,
+        flat_ner: bool = True,
+        **kwargs: Any,
+    ) -> Any:
+        """Extract all occurrences with native offsets and confidence scores."""
+
+        result = self.model.extract_entities(
+            text,
+            list(labels) if labels else [],
+            threshold=threshold,
+            include_spans=True,
+            include_confidence=True,
+            overlap_policy="disallow" if flat_ner else "allow",
+            **kwargs,
+        )
+        if not isinstance(result, dict) or not isinstance(result.get("entities"), dict):
+            raise ValueError("GLiNER2 returned an invalid entities mapping")
+        entities = []
+        for label, spans in result["entities"].items():
+            if not isinstance(spans, list):
+                raise ValueError("GLiNER2 returned an invalid span list")
+            for span in spans:
+                if not isinstance(span, dict) or not {
+                    "text",
+                    "start",
+                    "end",
+                    "confidence",
+                }.issubset(span):
+                    raise ValueError("GLiNER2 must return spans with confidence")
+                entities.append({**span, "label": label, "score": span["confidence"]})
+        return sorted(entities, key=lambda item: (item["start"], item["end"]))
 
     def extract_entities(
         self,
@@ -512,40 +496,6 @@ class GLiNER2Handle:
             overlap_policy=overlap_policy,
         )
         return _convert_entities(source, payload, requested)
-
-    def predict_entities(
-        self,
-        text: str,
-        labels: Optional[Sequence[str]] = None,
-        *,
-        threshold: float = 0.5,
-        flat_ner: bool = True,
-        **kwargs: Any,
-    ) -> list[dict[str, Any]]:
-        """Return GLiNER v1-style entity dictionaries.
-
-        Kept for callers of the earlier handle. ``flat_ner=False`` maps to the
-        ``nested`` overlap policy. Extra keyword arguments are forwarded to
-        :meth:`extract_entities`.
-        """
-
-        ensure_gliner2_available()
-        options = dict(kwargs)
-        if not flat_ner:
-            options.setdefault("overlap_policy", "nested")
-        entities = self.extract_entities(
-            text, list(labels or ()), threshold=threshold, **options
-        )
-        return [
-            {
-                "text": entity.text,
-                "start": entity.start,
-                "end": entity.end,
-                "label": entity.label,
-                "score": entity.score,
-            }
-            for entity in entities
-        ]
 
     # -- classification ---------------------------------------------------
 
@@ -601,6 +551,24 @@ class GLiNER2Handle:
 
     # -- relations --------------------------------------------------------
 
+    def predict_relations(
+        self,
+        text: str,
+        labels: Optional[Sequence[str]] = None,
+        *,
+        threshold: float = 0.5,
+        **kwargs: Any,
+    ) -> Any:
+        """Optional relation extraction hook if the model provides it."""
+        ensure_gliner2_available()
+        if hasattr(self.model, "extract_relations"):
+            predict_kwargs = dict(kwargs)
+            predict_kwargs.setdefault("threshold", threshold)
+            return self.model.extract_relations(
+                text, list(labels or []), **predict_kwargs
+            )
+        raise AttributeError("GLiNER2 checkpoint does not support relation extraction")
+
     def extract_relations(
         self,
         text: str,
@@ -641,22 +609,6 @@ class GLiNER2Handle:
             chunk_overlap=chunk_overlap,
         )
         return _convert_relations(source, payload, requested)
-
-    def predict_relations(
-        self,
-        text: str,
-        labels: Optional[Sequence[str]] = None,
-        *,
-        threshold: float = 0.5,
-        **kwargs: Any,
-    ) -> list[dict[str, Any]]:
-        """Return relation dictionaries; kept for callers of the earlier handle."""
-
-        ensure_gliner2_available()
-        relations = self.extract_relations(
-            text, list(labels or ()), threshold=threshold, **kwargs
-        )
-        return [relation.to_dict() for relation in relations]
 
     # -- schema-driven JSON extraction -------------------------------------
 
@@ -757,16 +709,9 @@ class GLiNER2Handle:
         return long_document
 
 
-# ---------------------------------------------------------------------------
-# Loading
-# ---------------------------------------------------------------------------
-
-
 class _LoadedCheckpoint(NamedTuple):
     model: Any
-    revision: str
-    architecture: Optional[str]
-    source: str
+    reference: str
 
 
 def load_gliner2_handle(
@@ -775,68 +720,53 @@ def load_gliner2_handle(
     cache_dir: Optional[str] = None,
     token: Optional[str] = None,
     device: Optional[str] = None,
+    local_files_only: bool = False,
     revision: Optional[str] = None,
-    local_files_only: Optional[bool] = None,
     license_id: Optional[str] = None,
 ) -> GLiNER2Handle:
-    """Load a GLiNER2.5 checkpoint through ``gliner2.AutoExtractor``.
+    """Load a local GLiNER2 extractor with cache, authentication and device options.
 
-    The checkpoint is resolved to a local directory first: an existing
-    directory is used as is, and a repository id is looked up in the Hugging
-    Face cache before any download. Loaded models are cached per argument set;
-    use :func:`clear_gliner2_cache` to release them.
+    ``AutoExtractor`` selects the span or boundary architecture from checkpoint
+    configuration; it never constructs the package's hosted API client.
 
     Args:
         model_id: Hugging Face repository id or local checkpoint directory.
         cache_dir: Optional Hugging Face cache directory.
         token: Optional Hub token for gated or private repositories.
         device: Optional torch device such as ``"cpu"`` or ``"cuda"``.
+        local_files_only: Never download; use the local cache only.
         revision: Optional branch, tag or commit to pin.
-        local_files_only: Never download. ``None`` follows
-            ``OPENMED_OFFLINE``.
         license_id: SPDX license to record when the checkpoint is not in
             :data:`GLINER2_CHECKPOINTS`.
 
     Returns:
         A :class:`GLiNER2Handle` recording the model id, resolved revision,
         license and architecture.
-
-    Raises:
-        MissingDependencyError: If ``gliner2[local]`` is not installed.
-        OfflineModeError: If the snapshot is not cached and downloads are
-            disabled.
-        ModelLoadError: If the checkpoint is incomplete, requests remote code,
-            or ships no safetensors weights.
     """
 
     ensure_gliner2_available()
-    if not isinstance(model_id, str) or not model_id.strip():
-        raise ValueError("model_id must be a non-empty string")
-    if local_files_only is not None and not isinstance(local_files_only, bool):
-        raise TypeError("local_files_only must be a boolean or None")
-    local_only = is_local_only() if local_files_only is None else local_files_only
-    resolved_device = None if device in (None, "", "auto") else device
     loaded = _load_model(
         model_id,
         cache_dir or None,
         token or None,
-        resolved_device,
-        revision or None,
-        local_only,
+        _resolve_native_device(device),
+        local_files_only,
+        revision,
     )
     spec = get_gliner2_checkpoint(model_id)
+    architecture = getattr(loaded.model, "architecture", None)
     return GLiNER2Handle(
         model_id=model_id,
         model=loaded.model,
-        revision=loaded.revision,
+        revision=_snapshot_revision(loaded.reference) or revision,
         license_id=license_id or (spec.license_id if spec is not None else None),
-        architecture=loaded.architecture,
-        source=loaded.source,
+        architecture=architecture if isinstance(architecture, str) else None,
+        source="local" if Path(model_id).is_dir() else "hub",
     )
 
 
 def clear_gliner2_cache() -> None:
-    """Clear cached GLiNER2 model instances."""
+    """Clear cached GLiNER v2 model instances."""
 
     _load_model.cache_clear()  # type: ignore[attr-defined]
 
@@ -847,185 +777,54 @@ def _load_model(
     cache_dir: Optional[str],
     token: Optional[str],
     device: Optional[str],
+    local_files_only: bool,
     revision: Optional[str],
-    local_only: bool,
 ) -> _LoadedCheckpoint:
     ensure_gliner2_available()
-    if os.path.isdir(model_id):
-        directory = model_id
-        resolved_revision = revision or _local_revision(directory)
-        source = "local"
-    else:
-        directory = _resolve_snapshot(
-            model_id,
+    module = importlib.import_module(_PRIMARY_IMPORT)
+
+    loader = getattr(module, "AutoExtractor", None)
+    if loader is None:
+        raise MissingDependencyError(
+            dependency="gliner2[local]>=2.1.0",
+            instruction=_GLINER2_HINT,
+        )
+
+    reference = model_id
+    if not Path(reference).is_dir():
+        hub = importlib.import_module("huggingface_hub")
+        # AutoExtractor 2.1 consumes Hub options while resolving config but
+        # does not forward them to the weight loader. Resolve one snapshot so
+        # authentication, cache, offline mode and revision bind both stages.
+        reference = hub.snapshot_download(
+            repo_id=model_id,
+            repo_type="model",
             cache_dir=cache_dir,
             token=token,
+            local_files_only=local_files_only,
             revision=revision,
-            local_only=local_only,
+            allow_patterns=[
+                "*.json",
+                "*.safetensors",
+                "*.bin",
+                "*.model",
+                "*.txt",
+                "*.vocab",
+                "*.merges",
+            ],
         )
-        resolved_revision = _snapshot_revision(directory) or revision or "unknown"
-        source = "hub"
-    _verify_checkpoint(directory, model_id)
-
-    module = importlib.import_module(_PRIMARY_IMPORT)
-    extractor = getattr(module, "AutoExtractor", None)
-    if extractor is None or not hasattr(extractor, "from_pretrained"):
-        raise MissingDependencyError(
-            dependency="gliner2>=2.1", instruction=_GLINER2_HINT
-        )
-    load_kwargs: dict[str, Any] = {}
+    model = loader.from_pretrained(reference, local_files_only=True)
     if device:
-        load_kwargs["map_location"] = device
-    model = extractor.from_pretrained(directory, **load_kwargs)
-    if callable(getattr(model, "eval", None)):
-        model.eval()
-    architecture = getattr(model, "architecture", None)
-    return _LoadedCheckpoint(
-        model=model,
-        revision=resolved_revision,
-        architecture=architecture if isinstance(architecture, str) else None,
-        source=source,
-    )
-
-
-def _resolve_snapshot(
-    model_id: str,
-    *,
-    cache_dir: Optional[str],
-    token: Optional[str],
-    revision: Optional[str],
-    local_only: bool,
-) -> str:
-    hub = importlib.import_module("huggingface_hub")
-    snapshot_download = hub.snapshot_download
-    not_cached = _local_entry_errors()
-    options: dict[str, Any] = {
-        "repo_id": model_id,
-        "repo_type": "model",
-        "revision": revision,
-        "allow_patterns": list(_SNAPSHOT_PATTERNS),
-    }
-    if cache_dir:
-        options["cache_dir"] = cache_dir
-    if token:
-        options["token"] = token
-
-    try:
-        cached = snapshot_download(local_files_only=True, **options)
-    except not_cached:
-        cached = None
-    if cached and _snapshot_complete(cached):
-        return str(cached)
-    if local_only:
-        raise OfflineModeError(
-            f"{model_id} is not fully cached and offline mode blocks the download. "
-            "Pre-fetch it once with offline mode disabled, or pass a local "
-            "checkpoint directory."
-        )
-    return str(snapshot_download(local_files_only=False, **options))
-
-
-def _local_entry_errors() -> tuple[type[BaseException], ...]:
-    errors: list[type[BaseException]] = [FileNotFoundError]
-    try:
-        hub_errors = importlib.import_module("huggingface_hub.errors")
-    except ImportError:  # pragma: no cover - older huggingface_hub layouts
-        hub_errors = None
-    candidate = getattr(hub_errors, "LocalEntryNotFoundError", None)
-    if isinstance(candidate, type) and issubclass(candidate, BaseException):
-        errors.append(candidate)
-    return tuple(errors)
-
-
-def _snapshot_complete(directory: str) -> bool:
-    return (
-        all(os.path.isfile(os.path.join(directory, name)) for name in _CONFIG_FILES)
-        and os.path.isfile(os.path.join(directory, _WEIGHTS_FILE))
-        and any(
-            os.path.isfile(os.path.join(directory, name)) for name in _TOKENIZER_FILES
-        )
-    )
-
-
-def _verify_checkpoint(directory: str, model_id: str) -> None:
-    name = _public_name(model_id)
-    missing = [
-        file_name
-        for file_name in _CONFIG_FILES
-        if not os.path.isfile(os.path.join(directory, file_name))
-    ]
-    if not any(
-        os.path.isfile(os.path.join(directory, file_name))
-        for file_name in _TOKENIZER_FILES
-    ):
-        missing.append("tokenizer.json")
-    if missing:
-        raise ModelLoadError(
-            "GLiNER2 checkpoint is missing required files: " + ", ".join(missing),
-            model_name=name,
-        )
-    if not os.path.isfile(os.path.join(directory, _WEIGHTS_FILE)):
-        raise ModelLoadError(
-            "GLiNER2 checkpoints must ship model.safetensors; pickle-only "
-            "weights are refused",
-            model_name=name,
-        )
-    for file_name in _REMOTE_CODE_FILES:
-        path = os.path.join(directory, file_name)
-        if not os.path.isfile(path):
-            continue
-        try:
-            with open(path, encoding="utf-8") as handle:
-                payload = json.load(handle)
-        except (OSError, ValueError):
-            raise ModelLoadError(
-                f"GLiNER2 checkpoint file {file_name} is not valid JSON",
-                model_name=name,
-            ) from None
-        if _requests_remote_code(payload):
-            raise ModelLoadError(
-                f"GLiNER2 checkpoint file {file_name} requests remote code "
-                "(auto_map); OpenMed does not execute checkpoint code",
-                model_name=name,
-            )
-
-
-def _requests_remote_code(payload: Any) -> bool:
-    if isinstance(payload, Mapping):
-        if "auto_map" in payload:
-            return True
-        return any(_requests_remote_code(value) for value in payload.values())
-    if isinstance(payload, list):
-        return any(_requests_remote_code(value) for value in payload)
-    return False
+        model = model.to(device)
+    model.eval()
+    return _LoadedCheckpoint(model=model, reference=str(reference))
 
 
 def _snapshot_revision(directory: str) -> Optional[str]:
+    """Return the commit hash of a Hugging Face snapshot directory, if any."""
+
     name = os.path.basename(os.path.normpath(directory))
     return name if _COMMIT_RE.fullmatch(name) else None
-
-
-def _local_revision(directory: str) -> str:
-    commit = _snapshot_revision(directory)
-    if commit is not None and (
-        os.path.basename(os.path.dirname(os.path.normpath(directory))) == "snapshots"
-    ):
-        return commit
-    digest = hashlib.sha256()
-    for file_name in _CONFIG_FILES:
-        path = os.path.join(directory, file_name)
-        if os.path.isfile(path):
-            with open(path, "rb") as handle:
-                digest.update(file_name.encode("utf-8"))
-                digest.update(b"\0")
-                digest.update(handle.read())
-    return f"local-config-sha256:{digest.hexdigest()}"
-
-
-def _public_name(model_id: str) -> str:
-    if os.path.isdir(model_id):
-        return "local/" + (os.path.basename(os.path.normpath(model_id)) or "checkpoint")
-    return model_id
 
 
 # ---------------------------------------------------------------------------
