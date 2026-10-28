@@ -1075,6 +1075,8 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     if entity.get("india_clinical_merge"):
         metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    if entity.get("adjacent_span_merge"):
+        metadata["adjacent_span_merge"] = dict(entity["adjacent_span_merge"])
     return metadata or None
 
 

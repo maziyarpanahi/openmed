@@ -834,6 +834,7 @@ def merge_entities_with_semantic_units(
     allow_semantic_only_matches: bool = True,
     allow_label_expansion: bool = True,
     india_clinical: bool = False,
+    merge_adjacent_spans: bool = True,
 ) -> List[Dict[str, Any]]:
     """Merge entity predictions using semantic unit patterns.
 
@@ -851,6 +852,9 @@ def merge_entities_with_semantic_units(
         india_clinical: Normalize Indian-English clinical abbreviations before
             merging and bridge eligible PERSON/LOCATION spans across Latin and
             Indic script boundaries.
+        merge_adjacent_spans: Union adjacent same-family identifier fragments
+            (``first_name`` + ``last_name``, ``city`` + ``state`` + ``postcode``)
+            into one span; see :func:`merge_adjacent_identifier_spans`.
 
     Returns:
         List of merged entity dicts
@@ -877,22 +881,23 @@ def merge_entities_with_semantic_units(
     # selected label or final span list.
     entities = sorted(entities, key=_entity_sort_key)
 
+    def _finalize(result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if india_clinical:
+            result = merge_india_code_mixed_spans(result, text)
+        if merge_adjacent_spans:
+            result = merge_adjacent_identifier_spans(result, text)
+        return result
+
     if not use_semantic_patterns:
         # Just return entities as-is if not using patterns
-        ordered = list(entities)
-        return (
-            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
-        )
+        return _finalize(list(entities))
 
     # Find semantic units
     semantic_units = find_semantic_units(text, patterns)
 
     if not semantic_units:
         # No semantic units found, return original entities
-        ordered = list(entities)
-        return (
-            merge_india_code_mixed_spans(ordered, text) if india_clinical else ordered
-        )
+        return _finalize(list(entities))
 
     merged = []
     used_entities = set()
@@ -1025,10 +1030,7 @@ def merge_entities_with_semantic_units(
         if i not in used_entities:
             merged.append(entity)
 
-    coalesced = _coalesce_overlapping_merged_entities(merged, text)
-    if india_clinical:
-        return merge_india_code_mixed_spans(coalesced, text)
-    return coalesced
+    return _finalize(_coalesce_overlapping_merged_entities(merged, text))
 
 
 def _coalesce_overlapping_merged_entities(
@@ -1248,6 +1250,171 @@ def _bridge_india_spans(
             "transliteration_pair": True,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Adjacent identifier fragment merging
+# ---------------------------------------------------------------------------
+
+# Canonical labels that form one identifier when they sit next to each other.
+# Every family is confined to a single policy class, and every bundled policy
+# profile assigns the same action to all labels of a family, so merging never
+# changes which action a fragment receives. ORDINAL_DIRECTION is left out on
+# purpose: ``clinical_preserve`` keeps it while masking LOCATION.
+ADJACENT_SPAN_FAMILIES: Dict[str, frozenset] = {
+    "name": frozenset({"PERSON", "FIRST_NAME", "LAST_NAME", "MIDDLE_NAME", "PREFIX"}),
+    "street_address": frozenset({"STREET_ADDRESS", "BUILDING_NUMBER"}),
+    "geographic_subdivision": frozenset({"LOCATION", "ZIPCODE"}),
+}
+_ADJACENT_SPAN_FAMILY_BY_LABEL: Dict[str, str] = {
+    label: family
+    for family, labels in ADJACENT_SPAN_FAMILIES.items()
+    for label in labels
+}
+# Whitespace (including a line break) around at most one connective character.
+_ADJACENT_SPAN_GAP_RE = re.compile(r"\s*(?:[,.\-/]\s*)?")
+# A single capitalised middle initial between two name fragments: "Maria J. Ruiz".
+_ADJACENT_NAME_INITIAL_GAP_RE = re.compile(r"\s+[A-Z]\.?\s+")
+ADJACENT_SPAN_MAX_GAP = 4
+
+
+def adjacent_span_family(label: str) -> str | None:
+    """Return the adjacent-merge family for a raw or canonical label, if any."""
+
+    from .labels import normalize_label as canonical_label
+
+    try:
+        canonical = canonical_label(str(label))
+    except Exception:  # pragma: no cover - defensive: unknown label payloads
+        return None
+    return _ADJACENT_SPAN_FAMILY_BY_LABEL.get(canonical)
+
+
+def merge_adjacent_identifier_spans(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Union adjacent same-family identifier fragments into one span.
+
+    Token classifiers emit ``first_name``/``last_name`` and ``street_address``/
+    ``city``/``state``/``postcode`` as separate spans. Each piece is protected
+    on its own, but the identifier is only de-identified as a whole: a middle
+    initial or an untagged connective sits unmasked between two masked
+    fragments, surrogates are drawn per piece, and span-level evaluation counts
+    every piece as a miss.
+
+    The rule is deliberately narrow. Two consecutive spans are merged when:
+
+    - both labels belong to the same :data:`ADJACENT_SPAN_FAMILIES` family,
+      so a street address is never widened into an adjacent city and a
+      provider title is never widened into a name;
+    - the text between them is at most :data:`ADJACENT_SPAN_MAX_GAP`
+      characters of whitespace around at most one of ``, . - /``, or, for the
+      name family only, a single capitalised initial such as ``" J. "``.
+
+    Spans never shrink. The merged entity keeps the label of the highest
+    scoring fragment, mirroring :func:`merge_india_code_mixed_spans`, and
+    records the family and fragment count under ``adjacent_span_merge``.
+    """
+
+    if len(entities) < 2:
+        return list(entities)
+
+    ordered = sorted((dict(entity) for entity in entities), key=_entity_sort_key)
+    merged: List[Dict[str, Any]] = []
+    current = ordered[0]
+    for candidate in ordered[1:]:
+        family = _adjacent_span_family_for_pair(current, candidate, text)
+        if family is None:
+            merged.append(current)
+            current = candidate
+            continue
+        current = _union_adjacent_spans(current, candidate, text, family)
+    merged.append(current)
+    return merged
+
+
+def _adjacent_span_family_for_pair(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+) -> str | None:
+    left_family = adjacent_span_family(str(left.get("entity_type", "")))
+    if left_family is None:
+        return None
+    right_family = adjacent_span_family(str(right.get("entity_type", "")))
+    if right_family != left_family:
+        return None
+
+    left_end = int(left["end"])
+    right_start = int(right["start"])
+    if right_start < left_end:
+        return None
+    gap = text[left_end:right_start]
+    if len(gap) <= ADJACENT_SPAN_MAX_GAP and _ADJACENT_SPAN_GAP_RE.fullmatch(gap):
+        return left_family
+    if left_family == "name" and _ADJACENT_NAME_INITIAL_GAP_RE.fullmatch(gap):
+        return left_family
+    return None
+
+
+def _union_adjacent_spans(
+    left: Dict[str, Any],
+    right: Dict[str, Any],
+    text: str,
+    family: str,
+) -> Dict[str, Any]:
+    start = int(left["start"])
+    end = int(right["end"])
+    winner = max(
+        (left, right),
+        key=lambda entity: (
+            float(entity.get("score", 0.0)),
+            int(entity["end"]) - int(entity["start"]),
+        ),
+    )
+    source_labels = sorted(
+        {
+            str(label)
+            for entity in (left, right)
+            for label in entity.get(
+                "source_labels",
+                [entity.get("entity_type", "")],
+            )
+            if label
+        }
+    )
+    detector_sources = sorted(
+        {
+            str(source)
+            for entity in (left, right)
+            for source in entity.get("detector_sources", ["ml"])
+            if source
+        }
+    )
+    fragments = sum(
+        int((entity.get("adjacent_span_merge") or {}).get("fragments", 1))
+        for entity in (left, right)
+    )
+    union: Dict[str, Any] = {
+        "entity_type": winner["entity_type"],
+        "score": max(float(left.get("score", 0.0)), float(right.get("score", 0.0))),
+        "start": start,
+        "end": end,
+        "word": text[start:end],
+        "merged_from": max(int(left.get("merged_from", 1)), 1)
+        + max(int(right.get("merged_from", 1)), 1),
+        "source_labels": source_labels,
+        "mixed_label_union": len({normalize_label(label) for label in source_labels})
+        > 1,
+        "detector_sources": detector_sources,
+        "adjacent_span_merge": {"family": family, "fragments": fragments},
+    }
+    for key in ("india_clinical_merge", "clinical_normalization"):
+        for entity in (left, right):
+            if entity.get(key):
+                union[key] = entity[key]
+    return union
 
 
 def normalize_label(label: str) -> str:
