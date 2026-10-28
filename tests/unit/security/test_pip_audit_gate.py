@@ -622,6 +622,7 @@ def test_filelock_refuses_symlink_without_modifying_target(
         ("msgpack", "1.2.1", "1.2.3"),
         ("nltk", "3.10.3", "3.10.4"),
         ("setuptools", "83.0.0", "84.1.0"),
+        ("tornado", "6.5.10", "6.6"),
         ("virtualenv", "21.14.5", "21.14.9"),
     ],
 )
