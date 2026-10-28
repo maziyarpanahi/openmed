@@ -43,7 +43,7 @@ pixels and committed hashes; upgrades do not authorize image drift.
 Affected extras publish the October 20 security floors: `aiohttp>=3.14.4`,
 `banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and `tinytag>=2.3.0`.
 The frozen lock agrees; core dependencies and AWQ's Linux-only boundary remain
-unchanged. NLTK has a separate [time-limited review](dependency-risk.md).
+unchanged. NLTK's former time-limited exception is [retired](dependency-risk.md).
 
 Filesystem profiles require `fsspec>=2026.6.0` and `jinja2>=3.1.6` for
 [reference-template execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc)
