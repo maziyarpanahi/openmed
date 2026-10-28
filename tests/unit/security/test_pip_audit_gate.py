@@ -421,7 +421,7 @@ def test_awq_torch_floor_keeps_the_existing_linux_only_boundary() -> None:
         ),
         ("oauthlib", "3.3.1", "4.0.0", ("cloud", "prefect")),
         ("opentelemetry-api", "1.43.0", "1.45.1", ("dev", "otel", "service")),
-        ("pymongo", "4.18.1", "4.18.2", ("beam",)),
+        ("pymongo", "4.18.2", "4.18.3", ("beam",)),
         ("tinytag", "2.2.1", "2.3.0", ("agents", "llamaindex")),
     ],
 )
@@ -617,7 +617,10 @@ def test_filelock_refuses_symlink_without_modifying_target(
     [
         ("brotli", "1.2.0", "1.2.1"),
         ("brotlicffi", "1.2.0.1", "1.2.1.0"),
+        ("dnspython", "2.8.0", "2.9.0"),
         ("graphql-core", "3.2.11", "3.2.12"),
+        ("msgpack", "1.2.1", "1.2.3"),
+        ("nltk", "3.10.3", "3.10.4"),
         ("setuptools", "83.0.0", "84.1.0"),
         ("virtualenv", "21.14.5", "21.14.9"),
     ],
@@ -689,7 +692,7 @@ def test_awq_dataset_floor_retains_linux_only_installation() -> None:
 
 @pytest.mark.parametrize(
     ("package", "unsafe", "fixed"),
-    [("langgraph-sdk", "0.4.3", "0.4.4"), ("pymongo", "4.18.1", "4.18.2")],
+    [("langgraph-sdk", "0.4.3", "0.4.4"), ("pymongo", "4.18.2", "4.18.3")],
 )
 def test_optional_auth_and_database_closures_require_patched_versions(
     package: str, unsafe: str, fixed: str
