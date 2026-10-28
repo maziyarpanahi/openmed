@@ -74,8 +74,10 @@ bounds. Neither package is added to the base or development-only environment.
 
 The frozen resolver also requires the patched transitive releases
 `dnspython>=2.9.0` (CVE-2026-114605, through `airflow` and `beam`),
-`msgpack>=1.2.3` (CVE-2026-114613, through `ray`) and `nltk>=3.10.4`
-(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras).
+`msgpack>=1.2.3` (CVE-2026-114613, through `ray`), `nltk>=3.10.4`
+(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras) and
+`tornado>=6.6` (CVE-2026-115927, CVE-2026-116577 and CVE-2026-116578,
+through the notebook and development tooling).
 
 PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
 storage API, but callers using upstream Beam MongoDB IO must account for that
