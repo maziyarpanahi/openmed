@@ -148,17 +148,18 @@ _BACKENDS: Final[dict[str, BackendSpec]] = {
         description="GLiNER zero-shot entity recognition",
         install="gliner",
     ),
+    "gliformer": BackendSpec(
+        name="gliformer",
+        extra="gliformer",
+        modules=("gliformer", "torch", "transformers"),
+        description="Local GLiFormer span extraction",
+        install="gliformer",
+    ),
     "gliner2": BackendSpec(
         name="gliner2",
         extra="gliner2",
-        modules=(
-            "gliner2",
-            "torch",
-            "transformers",
-            "safetensors",
-            "huggingface_hub",
-        ),
-        description="GLiNER2.5 entity, classification, relation and JSON extraction",
+        modules=("gliner2", "torch", "transformers", "peft"),
+        description="Local GLiNER2 and GLiNER2.5 span extraction",
         install="gliner2[local]",
     ),
     "spacy": BackendSpec(

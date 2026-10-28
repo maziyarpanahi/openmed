@@ -1298,6 +1298,10 @@ def run_gliner2_language_decision_eval(
         from openmed.ner.families.gliner2 import load_gliner2_handle
 
         loader = load_gliner2_handle
+    if local_files_only is None:
+        from openmed.core.offline import is_local_only
+
+        local_files_only = is_local_only()
     handle = loader(
         model_id,
         revision=revision,

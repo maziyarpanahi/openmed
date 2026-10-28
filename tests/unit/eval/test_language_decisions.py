@@ -507,7 +507,7 @@ def test_report_differences_tolerate_model_drift_only(committed_summary) -> None
     ]
 
 
-def test_run_loads_the_pinned_revision_and_reports_offline() -> None:
+def test_run_loads_the_pinned_revision_and_reports_offline(monkeypatch) -> None:
     calls: list[dict[str, Any]] = []
 
     class FakeClassifier:
@@ -530,6 +530,7 @@ def test_run_loads_the_pinned_revision_and_reports_offline() -> None:
             architecture="boundary",
         )
 
+    monkeypatch.delenv("OPENMED_OFFLINE", raising=False)
     report = ld.run_gliner2_language_decision_eval(loader=loader)
 
     assert calls == [
@@ -538,7 +539,7 @@ def test_run_loads_the_pinned_revision_and_reports_offline() -> None:
             "revision": ld.GLINER2_LANGUAGE_DECISION_REVISION,
             "device": "cpu",
             "cache_dir": None,
-            "local_files_only": None,
+            "local_files_only": False,
         }
     ]
     assert report["tasks"] == dict(ld.DECISION_TASKS)

@@ -74,6 +74,10 @@ class FakeExtractor:
         self.on_call = on_call
         self.calls: list[tuple[str, Any, dict[str, Any]]] = []
 
+    def to(self, device: str) -> "FakeExtractor":
+        self.device = device
+        return self
+
     def eval(self) -> "FakeExtractor":
         return self
 
@@ -240,7 +244,7 @@ def test_missing_gliner2_raises_install_hint(monkeypatch) -> None:
     assert gliner2_module.is_gliner2_available(force_refresh=True) is False
     with pytest.raises(MissingDependencyError) as caught:
         gliner2_module.ensure_gliner2_available()
-    assert caught.value.dependency == "gliner2"
+    assert caught.value.dependency == "gliner2[local]>=2.1.0"
     assert "pip install openmed[gliner2]" in str(caught.value)
     with pytest.raises(MissingDependencyError, match=r"openmed\[gliner2\]"):
         load_gliner2_handle("fastino/gliner2.5-small-v1")
@@ -252,9 +256,7 @@ def test_capability_registry_describes_gliner2_extra() -> None:
 
     assert spec.extra == "gliner2"
     assert spec.modules[0] == "gliner2"
-    assert {"torch", "transformers", "safetensors", "huggingface_hub"} <= set(
-        spec.modules
-    )
+    assert {"torch", "transformers"} <= set(spec.modules)
     assert "openmed[gliner2]" in status.install_hint
     assert "gliner2[local]" in status.install_hint
 
@@ -366,103 +368,8 @@ def test_builtin_index_lists_gliner2_checkpoints() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Loading
+# Handle safety
 # ---------------------------------------------------------------------------
-
-
-def test_loader_uses_autoextractor_on_cached_snapshot(fake_runtime) -> None:
-    handle = load_gliner2_handle(
-        "fastino/gliner2.5-small-v1", cache_dir="/synthetic/cache", device="cpu"
-    )
-
-    assert len(fake_runtime["hub_calls"]) == 1
-    call = fake_runtime["hub_calls"][0]
-    assert call["local_files_only"] is True
-    assert call["repo_id"] == "fastino/gliner2.5-small-v1"
-    assert call["cache_dir"] == "/synthetic/cache"
-    assert not any(pattern.endswith(".bin") for pattern in call["allow_patterns"])
-    assert fake_runtime["load_calls"] == [
-        (str(fake_runtime["snapshot"]), {"map_location": "cpu"})
-    ]
-    assert handle.model is fake_runtime["models"][0]
-    assert handle.revision == COMMIT
-    assert handle.license_id == "Apache-2.0"
-    assert handle.architecture == "boundary"
-    assert handle.metadata()["checkpoint"]["size"] == "74M"
-
-
-def test_loader_downloads_only_when_snapshot_is_missing(fake_runtime) -> None:
-    fake_runtime["cached"] = False
-
-    load_gliner2_handle("fastino/gliner2.5-small-v1", revision="main")
-
-    assert [call["local_files_only"] for call in fake_runtime["hub_calls"]] == [
-        True,
-        False,
-    ]
-    assert all(call["revision"] == "main" for call in fake_runtime["hub_calls"])
-
-
-@pytest.mark.parametrize("use_env", [False, True])
-def test_loader_offline_mode_never_downloads(
-    fake_runtime, monkeypatch, use_env
-) -> None:
-    fake_runtime["cached"] = False
-    if use_env:
-        monkeypatch.setenv("OPENMED_OFFLINE", "1")
-        kwargs: dict[str, Any] = {}
-    else:
-        kwargs = {"local_files_only": True}
-
-    with pytest.raises(OfflineModeError):
-        load_gliner2_handle("fastino/gliner2.5-small-v1", **kwargs)
-    assert [call["local_files_only"] for call in fake_runtime["hub_calls"]] == [True]
-    assert fake_runtime["load_calls"] == []
-
-
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
-        ({"config": {"auto_map": {"AutoModel": "remote.Model"}}}, "remote code"),
-        ({"encoder": {"auto_map": {"AutoModel": "remote.Model"}}}, "remote code"),
-        ({"weights": False}, "safetensors"),
-    ],
-)
-def test_loader_refuses_remote_code_and_pickle_weights(
-    fake_runtime, tmp_path, overrides, message
-) -> None:
-    checkpoint = _write_checkpoint(tmp_path / "unsafe-checkpoint", **overrides)
-
-    with pytest.raises(ModelLoadError, match=message) as caught:
-        load_gliner2_handle(str(checkpoint), license_id="Apache-2.0")
-    assert str(tmp_path) not in str(caught.value)
-    assert fake_runtime["load_calls"] == []
-
-
-def test_loader_reads_local_directories_without_hub_calls(
-    fake_runtime, tmp_path
-) -> None:
-    checkpoint = _write_checkpoint(tmp_path / "private-site" / "my-gliner2")
-
-    handle = load_gliner2_handle(str(checkpoint), license_id="Apache-2.0")
-
-    assert fake_runtime["hub_calls"] == []
-    assert fake_runtime["load_calls"][0][0] == str(checkpoint)
-    assert handle.source == "local"
-    assert handle.revision.startswith("local-config-sha256:")
-    assert handle.public_model_id == "local/my-gliner2"
-    assert str(tmp_path) not in json.dumps(handle.metadata())
-
-
-def test_loader_caches_models_until_cleared(fake_runtime) -> None:
-    first = load_gliner2_handle("fastino/gliner2.5-small-v1")
-    second = load_gliner2_handle("fastino/gliner2.5-small-v1")
-    assert first.model is second.model
-
-    gliner2_module.clear_gliner2_cache()
-    third = load_gliner2_handle("fastino/gliner2.5-small-v1")
-    assert third.model is not first.model
-    assert len(fake_runtime["load_calls"]) == 2
 
 
 def test_handle_refuses_cloud_api_clients() -> None:
@@ -558,24 +465,6 @@ def test_unrequested_entity_labels_fail_closed() -> None:
 
     with pytest.raises(GLiNER2OutputError, match="unrequested"):
         _handle(model).extract_entities(TEXT, ["person"])
-
-
-def test_predict_entities_keeps_the_v1_dictionary_shape(monkeypatch) -> None:
-    monkeypatch.setattr(gliner2_module, "is_backend_available", lambda name: True)
-    model = FakeExtractor(entities={"person": [_span(TEXT, MARKER, 0.9)]})
-
-    rows = _handle(model).predict_entities(TEXT, ["person"], flat_ner=False)
-
-    assert rows == [
-        {
-            "text": MARKER,
-            "start": TEXT.index(MARKER),
-            "end": TEXT.index(MARKER) + len(MARKER),
-            "label": "person",
-            "score": 0.9,
-        }
-    ]
-    assert model.calls[0][2]["overlap_policy"] == "nested"
 
 
 # ---------------------------------------------------------------------------

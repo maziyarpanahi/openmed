@@ -29,6 +29,7 @@ import unicodedata
 from collections.abc import Mapping
 from typing import Any, Optional
 
+from openmed.core.offline import is_local_only
 from openmed.structured.decision import (
     DecisionConflictError,
     DecisionError,
@@ -160,7 +161,9 @@ class GLiNER2DecisionBackend(EncoderDecisionBackend):
             token=token,
             device=device,
             revision=revision,
-            local_files_only=local_files_only,
+            local_files_only=(
+                is_local_only() if local_files_only is None else local_files_only
+            ),
             license_id=license_id,
         )
         return cls(
