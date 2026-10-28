@@ -43,7 +43,7 @@ pixels and committed hashes; upgrades do not authorize image drift.
 Affected extras publish the October 20 security floors: `aiohttp>=3.14.4`,
 `banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and `tinytag>=2.3.0`.
 The frozen lock agrees; core dependencies and AWQ's Linux-only boundary remain
-unchanged. NLTK has a separate [time-limited review](dependency-risk.md).
+unchanged. NLTK's former time-limited exception is [retired](dependency-risk.md).
 
 Filesystem profiles require `fsspec>=2026.6.0` and `jinja2>=3.1.6` for
 [reference-template execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc)
@@ -74,8 +74,10 @@ bounds. Neither package is added to the base or development-only environment.
 
 The frozen resolver also requires the patched transitive releases
 `dnspython>=2.9.0` (CVE-2026-114605, through `airflow` and `beam`),
-`msgpack>=1.2.3` (CVE-2026-114613, through `ray`) and `nltk>=3.10.4`
-(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras).
+`msgpack>=1.2.3` (CVE-2026-114613, through `ray`), `nltk>=3.10.4`
+(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras) and
+`tornado>=6.6` (CVE-2026-115927, CVE-2026-116577 and CVE-2026-116578,
+through the notebook and development tooling).
 
 PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
 storage API, but callers using upstream Beam MongoDB IO must account for that
