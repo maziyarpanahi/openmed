@@ -265,6 +265,8 @@ def _assert_full_suite_diagnostics(lane):
         "python",
         "-c",
         PYTEST_DIAGNOSTIC_WRAPPER,
+        "-n",
+        "auto",
         "--cov=openmed",
         "--cov-report=xml",
         "--cov-report=term-missing",
