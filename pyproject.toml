@@ -607,7 +607,7 @@ constraint-dependencies = [
   "oauthlib>=4.0.0",
   # Keep transitive optional model backends above the checkpoint/native-op fixes.
   "torch>=2.13.0",
-  "tornado>=6.5.9",
+  "tornado>=6.6",
   "urllib3>=2.8.0",
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
