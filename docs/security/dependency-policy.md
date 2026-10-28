@@ -67,10 +67,15 @@ upstream lifts its cap. Live Snowflake sessions require separate validation.
 
 The `langgraph` and `agents` profiles require `langgraph-sdk>=0.4.4` to address
 [resource-scoped authorization action handling](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-fvww-7h3r-vfhp).
-The `beam` profile requires `pymongo>=4.18.2` for the upstream URI host-parsing
-and BSON buffer-size fixes. Both floors are published and mirrored in the frozen
-resolver constraints without overriding parent dependency bounds. Neither
-package is added to the base or development-only environment.
+The `beam` profile requires `pymongo>=4.18.3` for the upstream URI host-parsing
+and BSON buffer-size fixes and CVE-2026-106435. Both floors are published and
+mirrored in the frozen resolver constraints without overriding parent dependency
+bounds. Neither package is added to the base or development-only environment.
+
+The frozen resolver also requires the patched transitive releases
+`dnspython>=2.9.0` (CVE-2026-114605, through `airflow` and `beam`),
+`msgpack>=1.2.3` (CVE-2026-114613, through `ray`) and `nltk>=3.10.4`
+(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras).
 
 PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
 storage API, but callers using upstream Beam MongoDB IO must account for that
