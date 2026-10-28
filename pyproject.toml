@@ -333,7 +333,7 @@ beam = [
   "Pillow>=13.0.0",
   "multidict>=6.9.1",
   "apache-beam>=2.73,<3",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "h2>=4.4.1",
 ]
 
@@ -586,7 +586,7 @@ constraint-dependencies = [
   "jinja2>=3.1.6",
   "banks>=2.5.1",
   "langgraph-sdk>=0.4.4",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "datasets>=5.0.1",
   "h2>=4.4.1",
   "oauthlib>=4.0.0",
@@ -597,6 +597,9 @@ constraint-dependencies = [
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
   "brotlicffi>=1.2.1.0",
+  "dnspython>=2.9.0",
+  "msgpack>=1.2.3",
+  "nltk>=3.10.4",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
