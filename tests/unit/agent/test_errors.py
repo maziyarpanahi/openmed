@@ -207,7 +207,11 @@ def test_correlation_identifiers_are_optional_and_validated() -> None:
     assert (bare.run_id, bare.action_id) == (None, None)
 
 
-@pytest.mark.parametrize("value", ["", "run_x", ACTION_ID, 7, SENTINEL])
+@pytest.mark.parametrize(
+    "value",
+    ["", "run_x", ACTION_ID, 7, SENTINEL],
+    ids=["empty", "malformed", "action-id", "integer", "sentinel"],
+)
 def test_invalid_run_identifiers_fail_closed(value) -> None:
     with pytest.raises(ErrorEnvelopeError) as excinfo:
         ErrorEnvelope.for_code(
@@ -220,7 +224,9 @@ def test_invalid_run_identifiers_fail_closed(value) -> None:
     assert SENTINEL not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("value", ["", "act_x", RUN_ID, 7])
+@pytest.mark.parametrize(
+    "value", ["", "act_x", RUN_ID, 7], ids=["empty", "malformed", "run-id", "integer"]
+)
 def test_invalid_action_identifiers_fail_closed(value) -> None:
     with pytest.raises(ErrorEnvelopeError, match="^action_id: invalid_identifier$"):
         ErrorEnvelope.for_code(

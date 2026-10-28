@@ -10,19 +10,27 @@ on:
       - "openmed/**"
       - "pyproject.toml"
       - "tests/**"
+  # Pull requests rebuild the shell only when its inputs change. Pushes to
+  # master that touch the package or tests still build it and run the full
+  # suite inside it.
   pull_request:
     branches: [main, master, develop]
     paths:
       - ".github/workflows/nix.yml"
       - "flake.lock"
       - "flake.nix"
-      - "openmed/**"
       - "pyproject.toml"
-      - "tests/**"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# Cancel superseded runs of the same pull request. Pushes, tags and scheduled
+# runs each get their own group, so they always run to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   flake-check:

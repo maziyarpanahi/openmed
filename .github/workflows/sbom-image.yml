@@ -17,6 +17,12 @@ env:
   IMAGE_SBOM_FILE: image-sbom.cdx.json
   IMAGE_SBOM_DIGEST_FILE: image-sbom.cdx.json.sha256
 
+# Cancel superseded runs of the same pull request. Pushes, tags and scheduled
+# runs each get their own group, so they always run to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   image-sbom:
     runs-on: ubuntu-latest

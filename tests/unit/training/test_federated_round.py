@@ -74,7 +74,7 @@ def test_held_round_must_return_through_evaluation_before_promotion() -> None:
     assert promoted.is_terminal is True
 
 
-@pytest.mark.parametrize("terminal", FEDERATED_ROUND_TERMINAL_STATES)
+@pytest.mark.parametrize("terminal", sorted(FEDERATED_ROUND_TERMINAL_STATES))
 def test_promoted_and_aborted_rounds_are_terminal(
     terminal: FederatedRoundState,
 ) -> None:

@@ -18,6 +18,12 @@ on:
       - "pyproject.toml"
   workflow_dispatch:
 
+# Cancel superseded runs of the same pull request. Pushes, tags and scheduled
+# runs each get their own group, so they always run to completion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Parse uv.lock and assert that every resolved package carries:
   #   - an exact pinned version
