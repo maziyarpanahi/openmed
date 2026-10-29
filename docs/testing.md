@@ -22,6 +22,9 @@ backport is a conditional core dependency, not an accidental development extra.
 | `test` full regression | Pushes and `full-ci` pull requests: Linux 3.10–3.12; Windows/macOS 3.11–3.12 | The complete Python regression suite, including the `slow` and `fuzz` tiers |
 | `test` pull-request tier | Linux 3.10 and 3.12 (fast tier); Windows and macOS 3.12 (portability checks) | Every test except `slow` and `fuzz` on Linux, plus the platform-sensitive portability list on Windows and macOS |
 
+Adding the `full-ci` label starts a new full CI run. Other label additions do
+not start CI jobs.
+
 The stable `sdk-compatibility-gate` requires every compatibility job in the run to succeed
 and is a dependency of the existing `build` gate. Failed, skipped or cancelled
 matrix execution cannot count as passing. Jobs run independently (`fail-fast:

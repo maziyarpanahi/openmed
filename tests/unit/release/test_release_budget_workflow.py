@@ -37,6 +37,9 @@ FULL_CI_CONDITION = (
     "github.event_name != 'pull_request' || "
     "contains(github.event.pull_request.labels.*.name, 'full-ci')"
 )
+LABEL_RUN_CONDITION = (
+    "github.event.action != 'labeled' || github.event.label.name == 'full-ci'"
+)
 
 
 def _tiered_matrices(lane) -> tuple[list[dict], list[dict]]:
@@ -224,7 +227,13 @@ def test_budget_refresh_rejects_missing_or_ambiguous_wheels(subtests, tmp_path):
 
 
 def test_sdk_compatibility_matches_advertised_python_and_os_support():
-    jobs = _load_ci()["jobs"]
+    workflow = _load_ci()
+    assert {"opened", "synchronize", "reopened", "labeled"} <= set(
+        workflow["on"]["pull_request"]["types"]
+    )
+    jobs = workflow["jobs"]
+    assert jobs["repo-policy"]["if"] == LABEL_RUN_CONDITION
+    assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
     lane = jobs["sdk-compatibility"]
     full, pull_request = _tiered_matrices(lane)
     versions = ["3.10", "3.11", "3.12", "3.13"]
@@ -283,7 +292,8 @@ def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
     assert "sdk-compatibility-gate" in jobs["build"]["needs"]
     assert "needs.sdk-compatibility-gate.result == 'success'" in jobs["build"]["if"]
     gate = jobs["sdk-compatibility-gate"]
-    assert gate["needs"] == "sdk-compatibility" and gate["if"] == "always()"
+    assert gate["needs"] == "sdk-compatibility"
+    assert gate["if"] == f"always() && ({LABEL_RUN_CONDITION})"
     assert 'test "$MATRIX_RESULT" = success' in gate["steps"][0]["run"]
 
 
