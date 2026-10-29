@@ -472,11 +472,27 @@ def test_language_kd_loss_refuses_foreign_or_missing_teachers() -> None:
         )
 
 
-def test_ensemble_soft_labels_validate_shapes_and_weights() -> None:
-    narrow = {"a": [[[1.0, 0.0]]], "b": [[[1.0, 0.0, 0.0]]]}
-    with pytest.raises(AdapterDistillationError, match="shape"):
-        ensemble_teacher_soft_labels(narrow, weights={"a": 1, "b": 1}, temperature=1)
-    same = {"a": [[[1.0, 0.0]]], "b": [[[0.0, 1.0]]]}
+@pytest.mark.parametrize("array_kind", ["python", "tensor"])
+def test_ensemble_soft_labels_validate_shapes_and_weights(array_kind) -> None:
+    as_array = lambda value: value
+    if array_kind == "tensor":
+        as_array = pytest.importorskip("torch").tensor
+    # Each mismatch can broadcast silently in a tensor backend: labels,
+    # sequence length, or batch size. Every axis must agree exactly.
+    for narrow in (
+        {"a": [[[1.0, 0.0]]], "b": [[[1.0]]]},
+        {"a": [[[1.0, 0.0], [0.0, 1.0]]], "b": [[[1.0, 0.0]]]},
+        {"a": [[[1.0, 0.0]], [[0.0, 1.0]]], "b": [[[1.0, 0.0]]]},
+    ):
+        values = {key: as_array(value) for key, value in narrow.items()}
+        with pytest.raises(AdapterDistillationError, match="shape"):
+            ensemble_teacher_soft_labels(
+                values, weights={"a": 1, "b": 1}, temperature=1
+            )
+    same = {
+        key: as_array(value)
+        for key, value in {"a": [[[1.0, 0.0]]], "b": [[[0.0, 1.0]]]}.items()
+    }
     with pytest.raises(AdapterDistillationError, match="cover exactly"):
         ensemble_teacher_soft_labels(same, weights={"a": 1}, temperature=1)
     with pytest.raises(AdapterDistillationError, match="all be zero"):

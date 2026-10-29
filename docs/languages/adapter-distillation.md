@@ -86,7 +86,8 @@ teachers' temperature-scaled distributions with `ensemble_teacher_soft_labels`.
 It then calls `openmed.training.distill.compute_kd_loss` with the plan's
 temperature, alpha and critical-label weights. The function refuses teacher
 outputs from any adapter not planned for that language, so one language's
-adapter never silently supervises another language.
+adapter never silently supervises another language. Teacher batch, sequence,
+and label dimensions must match exactly; tensor broadcasting is refused.
 
 ## Promotion gate
 

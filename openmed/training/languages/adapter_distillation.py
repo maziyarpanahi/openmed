@@ -1160,6 +1160,10 @@ def ensemble_teacher_soft_labels(
         for teacher in order
     ]
     if all(_is_tensor(distribution) for distribution, _ in distributions):
+        if len({tuple(distribution.shape) for distribution, _ in distributions}) != 1:
+            raise AdapterDistillationError(
+                "teacher outputs must share the student label space and shape"
+            )
         return sum(  # pragma: no cover - optional torch path
             (distribution * weight for distribution, weight in distributions[1:]),
             distributions[0][0] * distributions[0][1],
