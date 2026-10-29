@@ -568,6 +568,22 @@ async function expectNoRunningAnimations(page: Page): Promise<void> {
   expect(running, "reduced motion left active animations").toEqual([]);
 }
 
+async function waitForSearchReady(page: Page): Promise<void> {
+  // The search worker loads the page's lunr language packs after network idle.
+  // Wait for its localized ready placeholder so a test never ends, or audits
+  // the console, while that request is still in flight.
+  const placeholder = await page.evaluate(
+    () =>
+      JSON.parse(document.getElementById("__config")?.textContent ?? "{}")
+        .translations?.["search.result.placeholder"] as string | undefined,
+  );
+  expect(placeholder, "search ready placeholder").toBeTruthy();
+  await expect(page.locator(".md-search-result__meta")).toHaveText(
+    placeholder as string,
+    { timeout: 20_000 },
+  );
+}
+
 function expectCleanAudit(audit: Audit): void {
   expect(audit.consoleErrors, "browser console errors").toEqual([]);
   expect(audit.pageErrors, "uncaught page errors").toEqual([]);
@@ -1359,8 +1375,10 @@ test("docs search, locale, theme, and code copy controls operate", async ({
 
   await page.goto("/docs/zh/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "zh");
+  await waitForSearchReady(page);
   await page.goto("/docs/hi/", { waitUntil: "networkidle" });
   await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await waitForSearchReady(page);
   expectCleanAudit(audit);
 });
 
