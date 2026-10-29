@@ -179,9 +179,8 @@ def test_matches_hand_built_context_and_brief():
     assert "dehydration" not in repr(outcome)
 
 
-@pytest.mark.parametrize(
-    "change,code",
-    [
+def test_negative_mapping_controls_never_reach_verifier(subtests):
+    for change, code in [
         ("empty", "missing_facts"),
         ("mapping", "missing_mapping"),
         ("extra_mapping", "missing_mapping"),
@@ -204,116 +203,124 @@ def test_matches_hand_built_context_and_brief():
         ("overlap", "ambiguous_source"),
         ("mixed_subject", "ambiguous_source"),
         ("demographic", "unsupported_mapping"),
-    ],
-)
-def test_negative_mapping_controls_never_reach_verifier(change, code):
-    extraction, _, provider, resolver, verifier = adapter_fixture()
-    first = extraction.facts[0]
-    attrs = dict(first.attributes)
-    if change == "empty":
-        extraction = replace(extraction, facts=())
-    elif change == "mapping":
-        extraction = replace(extraction, mappings=extraction.mappings[1:])
-    elif change == "extra_mapping":
-        extraction = replace(
-            extraction,
-            mappings=(
-                *extraction.mappings,
-                BriefFactMapping("extra", FIELDS[0], "recent"),
-            ),
-        )
-    elif change == "duplicate_fact":
-        extraction = replace(extraction, facts=(*extraction.facts, first))
-    elif change == "duplicate_locator":
-        extraction = replace(
-            extraction, locators=(*extraction.locators, extraction.locators[0])
-        )
-    elif change == "conflict":
-        extraction = replace(
-            extraction,
-            conflicts=(
-                ConflictSet(
-                    "conflict_0000000000000001",
-                    "subject_0000000000000001",
-                    "contradiction",
-                    ("fact_0000000000000000", "fact_0000000000000001"),
-                    "open",
-                    "synthetic",
-                    "sha256:" + "c" * 64,
-                ),
-            ),
-        )
-    elif change in {
-        "unknown",
-        "missing_axis",
-        "unsupported_axis",
-        "unknown_state",
-        "demographic",
-    }:
-        if change == "missing_axis":
-            attrs.pop("assertion")
-        elif change == "unknown_state":
-            attrs["field_states"] = {"value": "unknown"}
-        elif change == "demographic":
-            attrs["demographic_class"] = "name"
-        else:
-            attrs["assertion"] = "unknown" if change == "unknown" else "conditional"
-        extraction = replace(
-            extraction, facts=(replace(first, attributes=attrs), *extraction.facts[1:])
-        )
-    elif change == "unknown_status":
-        extraction = replace(
-            extraction, facts=(replace(first, status="unknown"), *extraction.facts[1:])
-        )
-    elif change in {"field", "temporal"}:
-        m = extraction.mappings[0]
-        m = (
-            replace(m, profile_field="invented")
-            if change == "field"
-            else replace(m, temporality="unknown")
-        )
-        extraction = replace(extraction, mappings=(m, *extraction.mappings[1:]))
-    elif change in {"missing_locator", "multiple", "mixed_subject"}:
-        changes = {
-            "missing_locator": {"evidence_ids": ("locator_9999999999999999",)},
-            "multiple": {
-                "evidence_ids": ("locator_0000000000000000", "locator_0000000000000001")
-            },
-            "mixed_subject": {"subject_id": "subject_0000000000000002"},
-        }[change]
-        extraction = replace(
-            extraction, facts=(replace(first, **changes), *extraction.facts[1:])
-        )
-    else:
-        loc = extraction.locators[0]
-        changes = {
-            "artifact": {"artifact_id": "artifact_0000000000000002"},
-            "nontext": {
-                "location_type": "json_pointer",
-                "location": {"pointer": "/field"},
-            },
-            "transform": {"transform": {"kind": "ocr"}},
-            "overflow": {"location": {"start": 0, "end": 20000}},
-            "overlap": {
-                "location": {
-                    "start": 0,
-                    "end": len(extraction.artifact.deidentified_text),
-                }
-            },
-        }[change]
-        extraction = replace(
-            extraction, locators=(replace(loc, **changes), *extraction.locators[1:])
-        )
-    resolver.resolve = lambda *args: extraction
-    verifier.verify = lambda *args: pytest.fail("invalid extraction reached reviewer")
-    outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
-    assert outcome.code.value == code
-    assert outcome.context is None
+    ]:
+        with subtests.test(change=change, code=code):
+            extraction, _, provider, resolver, verifier = adapter_fixture()
+            first = extraction.facts[0]
+            attrs = dict(first.attributes)
+            if change == "empty":
+                extraction = replace(extraction, facts=())
+            elif change == "mapping":
+                extraction = replace(extraction, mappings=extraction.mappings[1:])
+            elif change == "extra_mapping":
+                extraction = replace(
+                    extraction,
+                    mappings=(
+                        *extraction.mappings,
+                        BriefFactMapping("extra", FIELDS[0], "recent"),
+                    ),
+                )
+            elif change == "duplicate_fact":
+                extraction = replace(extraction, facts=(*extraction.facts, first))
+            elif change == "duplicate_locator":
+                extraction = replace(
+                    extraction, locators=(*extraction.locators, extraction.locators[0])
+                )
+            elif change == "conflict":
+                extraction = replace(
+                    extraction,
+                    conflicts=(
+                        ConflictSet(
+                            "conflict_0000000000000001",
+                            "subject_0000000000000001",
+                            "contradiction",
+                            ("fact_0000000000000000", "fact_0000000000000001"),
+                            "open",
+                            "synthetic",
+                            "sha256:" + "c" * 64,
+                        ),
+                    ),
+                )
+            elif change in {
+                "unknown",
+                "missing_axis",
+                "unsupported_axis",
+                "unknown_state",
+                "demographic",
+            }:
+                if change == "missing_axis":
+                    attrs.pop("assertion")
+                elif change == "unknown_state":
+                    attrs["field_states"] = {"value": "unknown"}
+                elif change == "demographic":
+                    attrs["demographic_class"] = "name"
+                else:
+                    attrs["assertion"] = (
+                        "unknown" if change == "unknown" else "conditional"
+                    )
+                extraction = replace(
+                    extraction,
+                    facts=(replace(first, attributes=attrs), *extraction.facts[1:]),
+                )
+            elif change == "unknown_status":
+                extraction = replace(
+                    extraction,
+                    facts=(replace(first, status="unknown"), *extraction.facts[1:]),
+                )
+            elif change in {"field", "temporal"}:
+                m = extraction.mappings[0]
+                m = (
+                    replace(m, profile_field="invented")
+                    if change == "field"
+                    else replace(m, temporality="unknown")
+                )
+                extraction = replace(extraction, mappings=(m, *extraction.mappings[1:]))
+            elif change in {"missing_locator", "multiple", "mixed_subject"}:
+                changes = {
+                    "missing_locator": {"evidence_ids": ("locator_9999999999999999",)},
+                    "multiple": {
+                        "evidence_ids": (
+                            "locator_0000000000000000",
+                            "locator_0000000000000001",
+                        )
+                    },
+                    "mixed_subject": {"subject_id": "subject_0000000000000002"},
+                }[change]
+                extraction = replace(
+                    extraction, facts=(replace(first, **changes), *extraction.facts[1:])
+                )
+            else:
+                loc = extraction.locators[0]
+                changes = {
+                    "artifact": {"artifact_id": "artifact_0000000000000002"},
+                    "nontext": {
+                        "location_type": "json_pointer",
+                        "location": {"pointer": "/field"},
+                    },
+                    "transform": {"transform": {"kind": "ocr"}},
+                    "overflow": {"location": {"start": 0, "end": 20000}},
+                    "overlap": {
+                        "location": {
+                            "start": 0,
+                            "end": len(extraction.artifact.deidentified_text),
+                        }
+                    },
+                }[change]
+                extraction = replace(
+                    extraction,
+                    locators=(replace(loc, **changes), *extraction.locators[1:]),
+                )
+            resolver.resolve = lambda *args: extraction
+            verifier.verify = lambda *args: pytest.fail(
+                "invalid extraction reached reviewer"
+            )
+            outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
+            assert outcome.code.value == code
+            assert outcome.context is None
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_changed_evidence_or_policy_requires_new_review(subtests):
+    for change in [
         "text",
         "fact_value",
         "fact_axis",
@@ -324,60 +331,59 @@ def test_negative_mapping_controls_never_reach_verifier(change, code):
         "calibration",
         "profile",
         "original",
-    ],
-)
-def test_changed_evidence_or_policy_requires_new_review(change):
-    extraction, manual, provider, resolver, _ = adapter_fixture()
-    if change == "text":
-        extraction.artifact.deidentified_text += " Changed."
-    elif change in {"fact_value", "fact_axis"}:
-        first = extraction.facts[0]
-        changes = (
-            {"value": "PRIVATE_CANARY"}
-            if change == "fact_value"
-            else {"attributes": {**first.attributes, "assertion": "negated"}}
-        )
-        extraction = replace(
-            extraction, facts=(replace(first, **changes), *extraction.facts[1:])
-        )
-    elif change == "locator":
-        loc = extraction.locators[0]
-        extraction = replace(
-            extraction,
-            locators=(
-                replace(loc, location={"start": 1, "end": loc.location["end"]}),
-                *extraction.locators[1:],
-            ),
-        )
-    elif change == "profile_field":
-        extraction = replace(
-            extraction,
-            mappings=(
-                replace(extraction.mappings[0], profile_field=FIELDS[2]),
-                *extraction.mappings[1:],
-            ),
-        )
-    elif change == "source_id":
-        extraction = replace(extraction, source_id="artifact_0000000000000002")
-    elif change == "artifact_id":
-        extraction = replace(
-            extraction,
-            artifact_id="artifact_0000000000000002",
-            locators=tuple(
-                replace(l, artifact_id="artifact_0000000000000002")
-                for l in extraction.locators
-            ),
-        )
-    elif change == "calibration":
-        provider._thresholds = replace(manual.thresholds, margin=0.07)
-    elif change == "profile":
-        provider._profile = "discharge_summary"
-    else:
-        extraction.artifact.original_text += " PRIVATE_CANARY"
-    resolver.resolve = lambda *args: extraction
-    outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
-    assert outcome.code is BriefContextCode.EVIDENCE_CHANGED
-    assert "PRIVATE_CANARY" not in json.dumps(outcome.to_dict())
+    ]:
+        with subtests.test(change=change):
+            extraction, manual, provider, resolver, _ = adapter_fixture()
+            if change == "text":
+                extraction.artifact.deidentified_text += " Changed."
+            elif change in {"fact_value", "fact_axis"}:
+                first = extraction.facts[0]
+                changes = (
+                    {"value": "PRIVATE_CANARY"}
+                    if change == "fact_value"
+                    else {"attributes": {**first.attributes, "assertion": "negated"}}
+                )
+                extraction = replace(
+                    extraction, facts=(replace(first, **changes), *extraction.facts[1:])
+                )
+            elif change == "locator":
+                loc = extraction.locators[0]
+                extraction = replace(
+                    extraction,
+                    locators=(
+                        replace(loc, location={"start": 1, "end": loc.location["end"]}),
+                        *extraction.locators[1:],
+                    ),
+                )
+            elif change == "profile_field":
+                extraction = replace(
+                    extraction,
+                    mappings=(
+                        replace(extraction.mappings[0], profile_field=FIELDS[2]),
+                        *extraction.mappings[1:],
+                    ),
+                )
+            elif change == "source_id":
+                extraction = replace(extraction, source_id="artifact_0000000000000002")
+            elif change == "artifact_id":
+                extraction = replace(
+                    extraction,
+                    artifact_id="artifact_0000000000000002",
+                    locators=tuple(
+                        replace(l, artifact_id="artifact_0000000000000002")
+                        for l in extraction.locators
+                    ),
+                )
+            elif change == "calibration":
+                provider._thresholds = replace(manual.thresholds, margin=0.07)
+            elif change == "profile":
+                provider._profile = "discharge_summary"
+            else:
+                extraction.artifact.original_text += " PRIVATE_CANARY"
+            resolver.resolve = lambda *args: extraction
+            outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
+            assert outcome.code is BriefContextCode.EVIDENCE_CHANGED
+            assert "PRIVATE_CANARY" not in json.dumps(outcome.to_dict())
 
 
 def test_unreviewed_revoked_wrong_packet_and_failed_providers():
@@ -446,22 +452,35 @@ def test_non_synthetic_input_is_not_relabelled_or_approved():
     )
 
 
-@pytest.mark.parametrize(
-    "private",
-    ["PRIVATE_CANARY", "患者識別子１２３", "/private/patient/chart", "1980-01-02"],
-)
-def test_private_source_mapping_values_never_enter_plan_or_diagnostics(private):
-    extraction, manual, provider, _, _ = adapter_fixture()
-    extraction.artifact.mapping = {"[PERSON]": private}
-    extraction.artifact.pii_entities = [
-        PIIEntity(text=private, label="NAME", start=0, end=len(private), confidence=1.0)
-    ]
-    plan = plan_brief_context(extraction, profile="bhc", thresholds=manual.thresholds)
-    safe = json.dumps(asdict(plan.binding)) + repr(plan.spans) + repr(extraction)
-    assert private not in safe
-    outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
-    assert outcome.code is BriefContextCode.EVIDENCE_CHANGED
-    assert private not in json.dumps(outcome.to_dict())
+def test_private_source_mapping_values_never_enter_plan_or_diagnostics(subtests):
+    for private in [
+        "PRIVATE_CANARY",
+        "患者識別子１２３",
+        "/private/patient/chart",
+        "1980-01-02",
+    ]:
+        with subtests.test(private=private):
+            extraction, manual, provider, _, _ = adapter_fixture()
+            extraction.artifact.mapping = {"[PERSON]": private}
+            extraction.artifact.pii_entities = [
+                PIIEntity(
+                    text=private,
+                    label="NAME",
+                    start=0,
+                    end=len(private),
+                    confidence=1.0,
+                )
+            ]
+            plan = plan_brief_context(
+                extraction, profile="bhc", thresholds=manual.thresholds
+            )
+            safe = (
+                json.dumps(asdict(plan.binding)) + repr(plan.spans) + repr(extraction)
+            )
+            assert private not in safe
+            outcome = provider.build(extraction.artifact.original_text, REVIEW_ID)
+            assert outcome.code is BriefContextCode.EVIDENCE_CHANGED
+            assert private not in json.dumps(outcome.to_dict())
 
 
 def test_changed_evidence_during_verification_refuses():
@@ -509,32 +528,40 @@ def test_local_protocol_socket_attempt_is_refused_without_content():
     )
 
 
-@pytest.mark.parametrize("invalid", [None, 0, "", "PRIVATE_CANARY", "A" * 64])
-def test_invalid_review_reference_never_calls_resolver(invalid):
-    extraction, _, provider, resolver, _ = adapter_fixture()
-    resolver.resolve = lambda *args: pytest.fail(
-        "invalid review reference reached resolver"
-    )
-    assert (
-        provider.build(extraction.artifact.original_text, invalid).code
-        is BriefContextCode.INVALID_EVIDENCE
-    )
+def test_invalid_review_reference_never_calls_resolver(subtests):
+    for invalid in [None, 0, "", "PRIVATE_CANARY", "A" * 64]:
+        with subtests.test(invalid=invalid):
+            extraction, _, provider, resolver, _ = adapter_fixture()
+            resolver.resolve = lambda *args: pytest.fail(
+                "invalid review reference reached resolver"
+            )
+            assert (
+                provider.build(extraction.artifact.original_text, invalid).code
+                is BriefContextCode.INVALID_EVIDENCE
+            )
 
 
-@pytest.mark.parametrize("change", ["null_value", "missing_source_identity"])
-def test_missing_values_and_identities_refuse(change):
-    extraction, _, provider, resolver, _ = adapter_fixture()
-    if change == "null_value":
-        extraction = replace(
-            extraction,
-            facts=(replace(extraction.facts[0], value=None), *extraction.facts[1:]),
-        )
-        expected = BriefContextCode.UNKNOWN_FACT
-    else:
-        extraction = replace(extraction, source_id="")
-        expected = BriefContextCode.MISSING_SOURCE
-    resolver.resolve = lambda *args: extraction
-    assert provider.build(extraction.artifact.original_text, REVIEW_ID).code is expected
+def test_missing_values_and_identities_refuse(subtests):
+    for change in ["null_value", "missing_source_identity"]:
+        with subtests.test(change=change):
+            extraction, _, provider, resolver, _ = adapter_fixture()
+            if change == "null_value":
+                extraction = replace(
+                    extraction,
+                    facts=(
+                        replace(extraction.facts[0], value=None),
+                        *extraction.facts[1:],
+                    ),
+                )
+                expected = BriefContextCode.UNKNOWN_FACT
+            else:
+                extraction = replace(extraction, source_id="")
+                expected = BriefContextCode.MISSING_SOURCE
+            resolver.resolve = lambda *args: extraction
+            assert (
+                provider.build(extraction.artifact.original_text, REVIEW_ID).code
+                is expected
+            )
 
 
 def test_unicode_character_offsets_and_section_crossing():

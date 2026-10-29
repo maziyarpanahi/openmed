@@ -137,22 +137,24 @@ def test_suite_registered_and_synthetic_report_reproducible(monkeypatch):
         assert case.text not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    "text,category,predicted,correct",
-    (
+def test_known_misses_stay_in_denominators(subtests):
+    for text, category, predicted, correct in (
         ("Smokes 1 pack per day.", "tobacco", 0, 0),
         ("Uses marijuana occasionally.", "drug", 0, 0),
         ("He smokes cigarettes daily.", "tobacco", 1, 0),
-    ),
-)
-def test_known_misses_stay_in_denominators(text, category, predicted, correct):
-    case = next(x for x in load_sdoh_extraction_fixtures() if x.text == text)
-    counts = run_sdoh_extraction_benchmark([case]).metrics["by_determinant"][category]
-    assert counts["gold_count"] == 1
-    assert counts["prediction_count"] == predicted
-    assert counts["status_matches"] == correct
-    assert counts["status_accuracy"] == 0
-    assert counts["recall"] == predicted
+    ):
+        with subtests.test(
+            text=text, category=category, predicted=predicted, correct=correct
+        ):
+            case = next(x for x in load_sdoh_extraction_fixtures() if x.text == text)
+            counts = run_sdoh_extraction_benchmark([case]).metrics["by_determinant"][
+                category
+            ]
+            assert counts["gold_count"] == 1
+            assert counts["prediction_count"] == predicted
+            assert counts["status_matches"] == correct
+            assert counts["status_accuracy"] == 0
+            assert counts["recall"] == predicted
 
 
 def test_one_to_one_overlap_matching_finds_maximum_not_greedy():
@@ -179,20 +181,19 @@ def test_duplicate_predictions_are_false_positives_and_wrong_status_is_failure()
     assert status["current"]["false_positives"] == 1
 
 
-@pytest.mark.parametrize(
-    "prediction", (_finding(start=4, end=6), _finding(category="drug"))
-)
-def test_touching_offsets_and_wrong_categories_do_not_match(prediction):
-    result = _metrics(_case(SDOHGoldFinding("tobacco", "current", 0, 4)), [prediction])[
-        "overall"
-    ]
-    assert (
-        result["overlap_matches"]
-        == result["exact_matches"]
-        == result["status_matches"]
-        == 0
-    )
-    assert result["false_negatives"] == result["false_positives"] == 1
+def test_touching_offsets_and_wrong_categories_do_not_match(subtests):
+    for prediction in (_finding(start=4, end=6), _finding(category="drug")):
+        with subtests.test(prediction=prediction):
+            result = _metrics(
+                _case(SDOHGoldFinding("tobacco", "current", 0, 4)), [prediction]
+            )["overall"]
+            assert (
+                result["overlap_matches"]
+                == result["exact_matches"]
+                == result["status_matches"]
+                == 0
+            )
+            assert result["false_negatives"] == result["false_positives"] == 1
 
 
 def test_zero_denominators_are_unobserved_and_empty_inputs_refused():
@@ -260,9 +261,9 @@ def test_extractor_failures_refuse_without_context_or_partial_report(failure):
     assert "RuntimeError" not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize(
-    "change",
-    (
+def test_malformed_gold_is_refused_without_source_or_path(subtests, tmp_path):
+    case_root = tmp_path
+    for change in (
         "restricted",
         "version",
         "float",
@@ -272,34 +273,35 @@ def test_extractor_failures_refuse_without_context_or_partial_report(failure):
         "status",
         "extra",
         "empty",
-    ),
-)
-def test_malformed_gold_is_refused_without_source_or_path(change, tmp_path):
-    payload = json.loads(SDOH_GOLD_PATH.read_text())
-    payload["cases"][0]["text"] += " PRIVATE_NOTE"
-    item = payload["cases"][0]["gold"][0]
-    if change == "restricted":
-        payload["synthetic"] = False
-    elif change == "version":
-        payload["schema_version"] = 2
-    elif change in {"float", "bool", "outside"}:
-        item["end"] = {"float": 2.1, "bool": True, "outside": 1000}[change]
-    elif change == "category":
-        item["category"] = "PRIVATE_CATEGORY"
-    elif change == "status":
-        item["status"] = "PRIVATE_STATUS"
-    elif change == "extra":
-        item["text"] = "PRIVATE_NOTE"
-    else:
-        payload["cases"] = []
-    path = tmp_path / "PRIVATE_FILE.json"
-    path.write_text(json.dumps(payload))
-    with pytest.raises(
-        SDOHBenchmarkError, match="sdoh_synthetic_gold_invalid"
-    ) as caught:
-        load_sdoh_extraction_fixtures(path)
-    assert caught.value.__context__ is None
-    assert "PRIVATE" not in str(caught.value)
+    ):
+        with subtests.test(change=change):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = json.loads(SDOH_GOLD_PATH.read_text())
+            payload["cases"][0]["text"] += " PRIVATE_NOTE"
+            item = payload["cases"][0]["gold"][0]
+            if change == "restricted":
+                payload["synthetic"] = False
+            elif change == "version":
+                payload["schema_version"] = 2
+            elif change in {"float", "bool", "outside"}:
+                item["end"] = {"float": 2.1, "bool": True, "outside": 1000}[change]
+            elif change == "category":
+                item["category"] = "PRIVATE_CATEGORY"
+            elif change == "status":
+                item["status"] = "PRIVATE_STATUS"
+            elif change == "extra":
+                item["text"] = "PRIVATE_NOTE"
+            else:
+                payload["cases"] = []
+            path = tmp_path / "PRIVATE_FILE.json"
+            path.write_text(json.dumps(payload))
+            with pytest.raises(
+                SDOHBenchmarkError, match="sdoh_synthetic_gold_invalid"
+            ) as caught:
+                load_sdoh_extraction_fixtures(path)
+            assert caught.value.__context__ is None
+            assert "PRIVATE" not in str(caught.value)
 
 
 def test_shac_unconfigured_and_absent_paths_are_typed_unavailable(
@@ -316,51 +318,57 @@ def test_shac_unconfigured_and_absent_paths_are_typed_unavailable(
     assert run_shac_sdoh_benchmark() == result
 
 
-@pytest.mark.parametrize("mode", ("json", "brat"))
-@pytest.mark.parametrize(
-    "category,native,status",
-    (
-        ("Tobacco", "past", "past"),
-        ("Alcohol", "current", "current"),
-        ("Drug", "none", "none"),
-        ("Employment", "retired", "retired"),
-        ("Employment", "on_disability", "disabled"),
-        ("Employment", "homemaker", "homemaker"),
-        ("LivingStatus", "current", "lives_alone"),
-        ("LivingStatus", "past", "former"),
-        ("LivingStatus", "future", "future"),
-    ),
-)
-def test_native_json_and_brat_explicit_status_gold(
-    mode, category, native, status, tmp_path
-):
-    row = _native_row(category, native)
-    path = _write_shac(tmp_path / "corpus", row, mode)
-    trigger = row["entities"][0]
-    key = "living_status" if category == "LivingStatus" else category.lower()
-    report = run_shac_sdoh_benchmark(
-        path,
-        extractor=lambda text: [
-            _finding(key, status, trigger["start"], trigger["end"])
-        ],
-    )
-    assert isinstance(report, BenchmarkReport)
-    assert (
-        report.metrics["overall"]["gold_count"]
-        == report.metrics["overall"]["status_matches"]
-        == 1
-    )
-    assert (
-        report.metrics["overall"]["recall"]
-        == report.metrics["overall"]["exact_offset_match"]
-        == 1
-    )
-    assert report.metrics["by_determinant"]["food_insecurity"]["recall"] is None
+def test_native_json_and_brat_explicit_status_gold(subtests, tmp_path):
+    case_root = tmp_path
+    for mode in ("json", "brat"):
+        for category, native, status in (
+            ("Tobacco", "past", "past"),
+            ("Alcohol", "current", "current"),
+            ("Drug", "none", "none"),
+            ("Employment", "retired", "retired"),
+            ("Employment", "on_disability", "disabled"),
+            ("Employment", "homemaker", "homemaker"),
+            ("LivingStatus", "current", "lives_alone"),
+            ("LivingStatus", "past", "former"),
+            ("LivingStatus", "future", "future"),
+        ):
+            with subtests.test(
+                mode=mode, category=category, native=native, status=status
+            ):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                row = _native_row(category, native)
+                path = _write_shac(tmp_path / "corpus", row, mode)
+                trigger = row["entities"][0]
+                key = (
+                    "living_status" if category == "LivingStatus" else category.lower()
+                )
+                report = run_shac_sdoh_benchmark(
+                    path,
+                    extractor=lambda text: [
+                        _finding(key, status, trigger["start"], trigger["end"])
+                    ],
+                )
+                assert isinstance(report, BenchmarkReport)
+                assert (
+                    report.metrics["overall"]["gold_count"]
+                    == report.metrics["overall"]["status_matches"]
+                    == 1
+                )
+                assert (
+                    report.metrics["overall"]["recall"]
+                    == report.metrics["overall"]["exact_offset_match"]
+                    == 1
+                )
+                assert (
+                    report.metrics["by_determinant"]["food_insecurity"]["recall"]
+                    is None
+                )
 
 
-@pytest.mark.parametrize(
-    "change",
-    (
+def test_native_gold_is_never_guessed_or_silently_dropped(subtests, tmp_path):
+    case_root = tmp_path
+    for change in (
         "missing",
         "conflict",
         "wrong-target",
@@ -371,40 +379,41 @@ def test_native_json_and_brat_explicit_status_gold(
         "ambiguous",
         "float",
         "private-subtype",
-    ),
-)
-def test_native_gold_is_never_guessed_or_silently_dropped(change, tmp_path):
-    row = _native_row()
-    if change == "missing":
-        row["attributes"] = []
-    elif change == "conflict":
-        row["attributes"].append(
-            dict(name="StatusTimeVal", target="T2", value="current")
-        )
-    elif change == "wrong-target":
-        row["attributes"][0]["target"] = "T1"
-    elif change == "unknown-label":
-        row["entities"][1]["label"] = "Status"
-    elif change == "missing-event":
-        row["events"] = []
-    elif change == "discontinuous":
-        row["entities"][0]["discontinuous"] = True
-    elif change == "bad-role":
-        row["events"][0]["arguments"][0]["role"] = "History"
-    elif change == "ambiguous":
-        row["events"][0]["arguments"] *= 2
-    elif change == "float":
-        row["entities"][0]["start"] += 0.5
-    else:
-        row["attributes"][0]["value"] = "PRIVATE_SUBTYPE"
-    path = _write_shac(tmp_path / "corpus", row)
-    result = run_shac_sdoh_benchmark(path)
-    assert isinstance(result, SDOHBenchmarkUnavailable)
-    assert result.reason in {
-        SDOHUnavailableReason.GOLD_INVALID,
-        SDOHUnavailableReason.GOLD_UNSUPPORTED,
-    }
-    assert "PRIVATE" not in json.dumps(result.to_dict())
+    ):
+        with subtests.test(change=change):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            row = _native_row()
+            if change == "missing":
+                row["attributes"] = []
+            elif change == "conflict":
+                row["attributes"].append(
+                    dict(name="StatusTimeVal", target="T2", value="current")
+                )
+            elif change == "wrong-target":
+                row["attributes"][0]["target"] = "T1"
+            elif change == "unknown-label":
+                row["entities"][1]["label"] = "Status"
+            elif change == "missing-event":
+                row["events"] = []
+            elif change == "discontinuous":
+                row["entities"][0]["discontinuous"] = True
+            elif change == "bad-role":
+                row["events"][0]["arguments"][0]["role"] = "History"
+            elif change == "ambiguous":
+                row["events"][0]["arguments"] *= 2
+            elif change == "float":
+                row["entities"][0]["start"] += 0.5
+            else:
+                row["attributes"][0]["value"] = "PRIVATE_SUBTYPE"
+            path = _write_shac(tmp_path / "corpus", row)
+            result = run_shac_sdoh_benchmark(path)
+            assert isinstance(result, SDOHBenchmarkUnavailable)
+            assert result.reason in {
+                SDOHUnavailableReason.GOLD_INVALID,
+                SDOHUnavailableReason.GOLD_UNSUPPORTED,
+            }
+            assert "PRIVATE" not in json.dumps(result.to_dict())
 
 
 def test_shared_native_trigger_keeps_two_event_denominators(tmp_path):
@@ -459,28 +468,32 @@ def test_gold_duplicate_keys_and_boolean_version_are_invalid(tmp_path):
             load_sdoh_extraction_fixtures(path)
 
 
-@pytest.mark.parametrize(
-    "native,status",
-    (
+def test_native_living_type_labels_are_retained(subtests, tmp_path):
+    case_root = tmp_path
+    for native, status in (
         ("alone", "lives_alone"),
         ("with_family", "lives_with_family"),
         ("with_others", "lives_with_others"),
         ("homeless", "homeless"),
-    ),
-)
-def test_native_living_type_labels_are_retained(native, status, tmp_path):
-    row = _native_row("LivingStatus", "current")
-    row["attributes"][1]["value"] = native
-    trigger = row["entities"][0]
-    path = _write_shac(tmp_path / "corpus", row)
-    report = run_shac_sdoh_benchmark(
-        path,
-        extractor=lambda text: [
-            _finding("living_status", status, trigger["start"], trigger["end"])
-        ],
-    )
-    assert isinstance(report, BenchmarkReport)
-    assert report.metrics["by_status"]["living_status"][status]["status_matches"] == 1
+    ):
+        with subtests.test(native=native, status=status):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            row = _native_row("LivingStatus", "current")
+            row["attributes"][1]["value"] = native
+            trigger = row["entities"][0]
+            path = _write_shac(tmp_path / "corpus", row)
+            report = run_shac_sdoh_benchmark(
+                path,
+                extractor=lambda text: [
+                    _finding("living_status", status, trigger["start"], trigger["end"])
+                ],
+            )
+            assert isinstance(report, BenchmarkReport)
+            assert (
+                report.metrics["by_status"]["living_status"][status]["status_matches"]
+                == 1
+            )
 
 
 def test_shac_digest_is_independent_of_private_path_and_record_id(tmp_path):
@@ -522,16 +535,22 @@ def test_non_english_native_records_refuse_instead_of_dropping(tmp_path):
     assert result == SDOHBenchmarkUnavailable(SDOHUnavailableReason.GOLD_UNSUPPORTED)
 
 
-@pytest.mark.parametrize("suffix", ("json", "jsonl"))
-def test_native_duplicate_json_labels_are_refused(tmp_path, suffix):
-    row = _native_row()
-    encoded = json.dumps(row).replace(
-        '"value": "past"', '"value": "current", "value": "past"'
-    )
-    path = tmp_path / ("corpus." + suffix)
-    path.write_text(encoded + "\n")
-    result = run_shac_sdoh_benchmark(path)
-    assert result == SDOHBenchmarkUnavailable(SDOHUnavailableReason.GOLD_INVALID)
+def test_native_duplicate_json_labels_are_refused(subtests, tmp_path):
+    case_root = tmp_path
+    for suffix in ("json", "jsonl"):
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            row = _native_row()
+            encoded = json.dumps(row).replace(
+                '"value": "past"', '"value": "current", "value": "past"'
+            )
+            path = tmp_path / ("corpus." + suffix)
+            path.write_text(encoded + "\n")
+            result = run_shac_sdoh_benchmark(path)
+            assert result == SDOHBenchmarkUnavailable(
+                SDOHUnavailableReason.GOLD_INVALID
+            )
 
 
 def test_native_duplicate_event_and_brat_annotation_ids_refuse(tmp_path):
@@ -606,10 +625,11 @@ def test_private_unicode_source_is_refused_before_digest_failure():
     assert "PRIVATE" not in str(caught.value)
 
 
-@pytest.mark.parametrize("boundary", ["gold", "prediction"])
-def test_excessive_window_findings_refuse_without_partial_scores(boundary):
-    with pytest.raises(SDOHBenchmarkError):
-        if boundary == "gold":
-            _case(*([SDOHGoldFinding("tobacco", "current", 0, 4)] * 257))
-        else:
-            _metrics(_case(), [_finding()] * 257)
+def test_excessive_window_findings_refuse_without_partial_scores(subtests):
+    for boundary in ["gold", "prediction"]:
+        with subtests.test(boundary=boundary):
+            with pytest.raises(SDOHBenchmarkError):
+                if boundary == "gold":
+                    _case(*([SDOHGoldFinding("tobacco", "current", 0, 4)] * 257))
+                else:
+                    _metrics(_case(), [_finding()] * 257)
