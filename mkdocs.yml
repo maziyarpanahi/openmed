@@ -405,6 +405,7 @@ nav:
       - Script Tokenization Audit: evaluation/script-tokenization.md
       - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
       - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
@@ -470,6 +471,9 @@ nav:
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
       - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
+      - Code-switch Span Projection: languages/code-switch-projection.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
