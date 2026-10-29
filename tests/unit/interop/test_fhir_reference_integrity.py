@@ -41,21 +41,24 @@ def _valid_bundle() -> dict:
     }
 
 
-@pytest.mark.parametrize("version", ["R4", "R5"])
-def test_valid_r4_and_r5_bundle_is_deterministic(version: str) -> None:
-    bundle = _valid_bundle()
+def test_valid_r4_and_r5_bundle_is_deterministic(subtests) -> None:
+    for version in ["R4", "R5"]:
+        with subtests.test(version=version):
+            bundle = _valid_bundle()
 
-    first = reference_integrity_report(bundle, fhir_version=version)
-    second = reference_integrity_report(copy.deepcopy(bundle), fhir_version=version)
+            first = reference_integrity_report(bundle, fhir_version=version)
+            second = reference_integrity_report(
+                copy.deepcopy(bundle), fhir_version=version
+            )
 
-    assert first == second
-    assert first.valid is True
-    assert first.entry_count == 2
-    assert first.resource_count == 2
-    assert first.contained_resource_count == 1
-    assert first.full_url_count == 2
-    assert first.reference_count == 2
-    assert first.findings == ()
+            assert first == second
+            assert first.valid is True
+            assert first.entry_count == 2
+            assert first.resource_count == 2
+            assert first.contained_resource_count == 1
+            assert first.full_url_count == 2
+            assert first.reference_count == 2
+            assert first.findings == ()
 
 
 def test_report_counts_duplicate_and_dangling_references_without_values() -> None:

@@ -37,7 +37,7 @@ SUPPORTED_ARCHS = frozenset(
     }
 )
 
-MIN_PYTHON_VERSION = (3, 10)
+MIN_PYTHON_VERSION = (3, 11)
 LOW_RESOURCE_MIN_RAM_BYTES = 4 * 1024**3
 LOW_RESOURCE_SUGGEST_RAM_BYTES = 8 * 1024**3
 DEFAULT_HF_ENDPOINT = "https://huggingface.co"
@@ -76,7 +76,7 @@ def run_diagnostics() -> list[dict[str, Any]]:
             "python_version",
             "PASS" if python_supported else "FAIL",
             python_version,
-            None if python_supported else "Use Python 3.10 or newer.",
+            None if python_supported else "Use Python 3.11 or newer.",
         )
     )
 

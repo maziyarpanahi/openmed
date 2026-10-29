@@ -143,23 +143,27 @@ def test_public_report_payload_contains_no_mapping_metadata() -> None:
     assert "RAW-PATIENT-DESCRIPTION" not in json.dumps(payload)
 
 
-@pytest.mark.parametrize("error_type", [RuntimeError, TypeError, MemoryError])
-def test_iterator_errors_are_value_free_and_unchained(error_type: type[Exception]):
-    secret = "RAW-SYNTHETIC-PATIENT"
+def test_iterator_errors_are_value_free_and_unchained(subtests):
+    for error_type in [RuntimeError, TypeError, MemoryError]:
+        with subtests.test(error_type=error_type):
+            secret = "RAW-SYNTHETIC-PATIENT"
 
-    class ExplodingFields:
-        def __iter__(self):
-            raise error_type(secret)
+            class ExplodingFields:
+                def __iter__(self):
+                    raise error_type(secret)
 
-    with pytest.raises(AccessReviewValidationError) as exc_info:
-        review_structured_access(
-            {"triage": ExplodingFields()},
-            ["patient_id"],
-        )
+            with pytest.raises(AccessReviewValidationError) as exc_info:
+                review_structured_access(
+                    {"triage": ExplodingFields()},
+                    ["patient_id"],
+                )
 
-    assert str(exc_info.value) == "structured access review declarations are invalid"
-    assert exc_info.value.__cause__ is None
-    assert secret not in str(exc_info.value)
+            assert (
+                str(exc_info.value)
+                == "structured access review declarations are invalid"
+            )
+            assert exc_info.value.__cause__ is None
+            assert secret not in str(exc_info.value)
 
 
 def test_schema_attribute_errors_are_value_free_and_unchained():
@@ -193,9 +197,8 @@ def test_field_and_workflow_iterables_are_bounded():
         )
 
 
-@pytest.mark.parametrize(
-    ("workflows", "denied_fields"),
-    [
+def test_ambiguous_or_unknown_policy_fields_are_rejected(subtests):
+    for workflows, denied_fields in [
         (
             {"read": ["patient_id"], "read_fields": ["diagnosis"]},
             (),
@@ -208,15 +211,14 @@ def test_field_and_workflow_iterables_are_bounded():
             {"triage": {"read": ["patient_id"]}},
             {"read": ["diagnosis"], "unexpected": ["patient_id"]},
         ),
-    ],
-)
-def test_ambiguous_or_unknown_policy_fields_are_rejected(workflows, denied_fields):
-    with pytest.raises(AccessReviewValidationError):
-        review_structured_access(
-            workflows,
-            ["patient_id", "diagnosis"],
-            denied_fields=denied_fields,
-        )
+    ]:
+        with subtests.test(workflows=workflows, denied_fields=denied_fields):
+            with pytest.raises(AccessReviewValidationError):
+                review_structured_access(
+                    workflows,
+                    ["patient_id", "diagnosis"],
+                    denied_fields=denied_fields,
+                )
 
 
 def test_public_report_types_reject_contradictory_findings():
