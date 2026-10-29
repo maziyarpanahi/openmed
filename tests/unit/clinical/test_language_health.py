@@ -209,22 +209,26 @@ def test_fixture_language_metadata_does_not_echo_arbitrary_values(
     assert marker.casefold() not in json.dumps(report).casefold()
 
 
-@pytest.mark.parametrize("marker_value", ["false", 0, None])
-def test_nonboolean_fixture_safety_flags_never_certify_data(tmp_path, marker_value):
-    root = _fixture_root(
-        tmp_path,
-        {
-            "language": "en",
-            "metadata": {"synthetic": True, "contains_phi": marker_value},
-        },
-    )
-    report = build_language_health_matrix(
-        registry=_registry(),
-        manifest_rows=_manifest(),
-        fixture_roots=(root,),
-        languages=("en",),
-    )
-    assert report["languages"][0]["fixture"]["status"] == "contradictory"
+def test_nonboolean_fixture_safety_flags_never_certify_data(subtests, tmp_path):
+    case_root = tmp_path
+    for marker_value in ["false", 0, None]:
+        with subtests.test(marker_value=marker_value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root = _fixture_root(
+                tmp_path,
+                {
+                    "language": "en",
+                    "metadata": {"synthetic": True, "contains_phi": marker_value},
+                },
+            )
+            report = build_language_health_matrix(
+                registry=_registry(),
+                manifest_rows=_manifest(),
+                fixture_roots=(root,),
+                languages=("en",),
+            )
+            assert report["languages"][0]["fixture"]["status"] == "contradictory"
 
 
 def test_nested_span_marker_cannot_certify_an_entire_record(tmp_path):

@@ -245,31 +245,30 @@ def test_native_predictor_forwards_labels_threshold_and_overlap(native_loader):
         ]
 
 
-@pytest.mark.parametrize(
-    "module,family",
-    [
+def test_native_missing_dependencies_explain_exact_extra(subtests):
+    for module, family in [
         (gliner_module, "gliformer"),
         (gliner2_module, "gliner2"),
-    ],
-)
-def test_native_missing_dependencies_explain_exact_extra(monkeypatch, module, family):
-    monkeypatch.setattr(module, "is_backend_available", lambda _name: False)
-    with pytest.raises(MissingDependencyError, match=rf"openmed\[{family}\]"):
-        getattr(module, f"ensure_{family}_available")()
+    ]:
+        with subtests.test(module=module, family=family):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(module, "is_backend_available", lambda _name: False)
+                with pytest.raises(
+                    MissingDependencyError, match=rf"openmed\[{family}\]"
+                ):
+                    getattr(module, f"ensure_{family}_available")()
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_gliner2_never_guesses_missing_spans_or_confidence(subtests):
+    for payload in [
         {"entities": {"disease": ["asthma"]}},
         {"entities": {"disease": [{"text": "asthma", "start": 0, "end": 6}]}},
         {"entities": []},
-    ],
-)
-def test_gliner2_never_guesses_missing_spans_or_confidence(payload):
-    handle = gliner2_module.GLiNER2Handle(
-        model_id="synthetic/checkpoint",
-        model=SimpleNamespace(extract_entities=lambda *_a, **_k: payload),
-    )
-    with pytest.raises(ValueError, match="GLiNER2"):
-        handle.predict_entities("asthma; asthma", ["disease"])
+    ]:
+        with subtests.test(payload=payload):
+            handle = gliner2_module.GLiNER2Handle(
+                model_id="synthetic/checkpoint",
+                model=SimpleNamespace(extract_entities=lambda *_a, **_k: payload),
+            )
+            with pytest.raises(ValueError, match="GLiNER2"):
+                handle.predict_entities("asthma; asthma", ["disease"])
