@@ -464,6 +464,7 @@ classification:
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
     - evaluation/cross-lingual-regressions.md
+    - languages/scarce-label-review.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md

@@ -405,6 +405,7 @@ nav:
       - Script Tokenization Audit: evaluation/script-tokenization.md
       - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
