@@ -14,7 +14,8 @@ causality and fictional event codes come from the declared synthetic recipe.
 
 `generate_trajectory(events, seed=..., start_date=..., date_shift_days=...)` produces
 a stable patient identity, runtime contract objects, exact note evidence spans,
-content hashes and synthetic provenance. Uniform date shifting retains patient /
+content hashes and synthetic provenance. Event evidence binds to the rendered
+value after its field label, including codes that also occur inside the label. Uniform date shifting retains patient /
 fact identities and parent relationships while moving dates, preserving intervals.
 Only 1,000 events and 128 parents per event are accepted. No model/network/file
 write is implicit. `validate_trajectory` independently checks the runtime graph,

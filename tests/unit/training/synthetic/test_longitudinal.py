@@ -33,6 +33,15 @@ def test_reproducible_identity_runtime_contract_graph_and_observable_documents()
     assert sample.effective_time["date"] == "2000-01-02"
     assert sample.attributes["observed_at"] == "2000-01-04T00:00:00Z"
     assert "NOTE" not in str(t.report())
+    for code in ("vent", "ent", "t"):
+        example = generate_trajectory((TrajectoryEvent(code, "encounter", 0, 0, code),))
+        text = example.documents[0].text
+        start = text.index("\nEvent: ") + len("\nEvent: ")
+        assert example.evidence[0].location == {
+            "start": start,
+            "end": start + len(code),
+        }
+        assert text[start : start + len(code)] == code
 
 
 def test_uniform_date_shift_preserves_identity_parents_and_intervals():

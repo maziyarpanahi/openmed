@@ -173,7 +173,7 @@ def generate_trajectory(
             "artifact", subject, event.code, date_shift_days
         )
         locator_id = derived_opaque_id("evidence", artifact_id, event.code)
-        span_start = text.index(event.code)
+        span_start = text.index("\nEvent: ") + len("\nEvent: ")
         encounter_id = encounter_ids[event.encounter_code]
         artifact = ClinicalArtifact(
             artifact_id,
