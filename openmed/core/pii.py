@@ -3397,8 +3397,9 @@ def _shift_date(
     - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
     - Month DD, YYYY / DD Month YYYY (with localized month names)
-    - Solar Hijri, Ethiopian and Thai Buddhist-era dates, shifted within
-      their own calendar (see :mod:`openmed.core.calendar_dates`)
+    - Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and
+      Bikram Sambat dates, shifted within their own calendar (see
+      :mod:`openmed.core.calendar_dates`)
 
     Args:
         date_str: Date string to shift
@@ -3409,7 +3410,7 @@ def _shift_date(
             python-dateutil is unavailable. When false, fall back to the basic
             regex shifter.
         calendar: Optional detection-stage calendar code for the span, such
-            as ``"solar_hijri"``.
+            as ``"solar_hijri"``, ``"hijri"`` or ``"bikram_sambat"``.
 
     Returns:
         Shifted date string in the same format as input

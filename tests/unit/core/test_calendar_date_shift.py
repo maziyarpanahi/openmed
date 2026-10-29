@@ -27,8 +27,10 @@ from openmed.core.calendar_dates import (
     shift_calendar_date,
 )
 from openmed.core.calendars import (
+    BIKRAM_SAMBAT,
     ETHIOPIAN,
     GREGORIAN,
+    LUNAR_HIJRI,
     SOLAR_HIJRI,
     THAI_BUDDHIST,
     get_calendar,
@@ -165,8 +167,8 @@ def test_explicit_gregorian_markers_override_the_pack_calendar(value, lang, expe
         ("28/02/67", "th", AMBIGUOUS, None),
         ("28 ก.พ. 67", "th", AMBIGUOUS, None),
         ("04/07/30", "fa", AMBIGUOUS, None),
-        # Calendars without a registered converter.
-        ("15/09/1447 هـ", "ar", UNSUPPORTED_CALENDAR, None),
+        # Calendars or variants without a registered converter.
+        ("15/09/1447", "ar", UNSUPPORTED_CALENDAR, "hijri_diyanet"),
         ("1404/07/30", "en", UNSUPPORTED_CALENDAR, "hebrew"),
         ("1404/07/30", "en", UNSUPPORTED_CALENDAR, "Solar Hijri"),
         ("1404/07/30", "en", UNSUPPORTED_CALENDAR, 7),
@@ -437,7 +439,6 @@ def test_surrogates_ignore_plain_gregorian_and_unknown_calendars():
 
     assert calendar_date_surrogate("11/10/2026", lang="en", rng=rng) is None
     assert calendar_date_surrogate("2025/03/21", lang="fa", rng=rng) is None
-    assert calendar_date_surrogate("15/09/1447 هـ", lang="ar", rng=rng) is None
     assert calendar_date_surrogate("28/02/67", lang="th", rng=rng) is None
 
 
@@ -465,7 +466,8 @@ def test_month_tables_match_the_language_pack_month_names():
         SOLAR_HIJRI,
         ETHIOPIAN,
         THAI_BUDDHIST,
-        "islamic",
+        LUNAR_HIJRI,
+        BIKRAM_SAMBAT,
     }
 
 
