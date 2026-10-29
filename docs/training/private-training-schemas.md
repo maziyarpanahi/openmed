@@ -3,7 +3,8 @@
 External coordinators and air-gapped clients can validate the structure of
 private-training metadata against versioned Draft 2020-12 JSON Schemas.
 OpenMed exports one self-contained catalog covering round lifecycle, round
-scheduling, round status, dense update metadata, and aggregate metric envelopes.
+scheduling, round status, dense update metadata, aggregate metric envelopes,
+and contribution floor contracts and band-only contribution declarations.
 
 The catalog is import-light and deterministic. Each schema:
 
@@ -18,6 +19,9 @@ tensors, gradients, client identifiers, or local metrics. Metric schemas reject
 released values in suppressed participant bands, enforce uncertainty presence,
 exclude confidence endpoints, and constrain count and rate fields. Status
 schemas enforce state-specific reason codes and suppressed participant counts.
+Contribution floor schemas require the explicit override field for any floor
+below the default of the declared privacy mechanism, and contribution
+declarations accept bands only, never exact local counts.
 
 ## Catalog
 
@@ -32,7 +36,8 @@ from openmed.training.private_training_schemas import (
 catalog = build_private_training_schemas()
 # keys: federated_round_lifecycle, federated_round_schedule,
 #       federated_round_status, federated_update_metadata,
-#       federated_aggregate_metric
+#       federated_aggregate_metric, federated_contribution_floor_policy,
+#       federated_contribution_declaration
 lifecycle = build_schema("federated_round_lifecycle")
 stable = render_private_training_schemas()
 ```
@@ -88,13 +93,19 @@ Schema validation is the first gate. Draft 2020-12 cannot express arbitrary
 comparisons or arithmetic between fields. Python constructors and validators
 remain required for schedule ordering and phase durations, count thresholds
 and completion bands, sorted digest references, clipping and interval ordering,
-shape products, total element counts, unique parameter names and update-policy
-compatibility. JSON Schema also treats integral numbers such as `1.0` as
-integers, while some Python contracts require actual `int` values.
+shape products, total element counts, unique parameter names, update-policy
+compatibility, the contribution batch floor not exceeding the example floor,
+and contract and update digest bindings. JSON Schema also treats integral
+numbers such as `1.0` as integers, while some Python contracts require actual
+`int` values.
 
 For aggregate metrics, pass the structurally validated mapping to
 `FederatedMetricEnvelope.from_dict(payload)`. For updates, use
 `FederatedUpdateMetadata.from_dict(payload, policy=policy)` with the caller's
-local `FederatedUpdatePolicy`. For lifecycle, scheduling and round status,
-construct them through the existing Python APIs from validated aggregate
-inputs. All these checks run locally; no schema registry or network is needed.
+local `FederatedUpdatePolicy`. For contributions, parse with
+`FederatedContributionDeclaration.from_dict(payload)` and decide with
+`check_federated_contribution()` against the coordinator's own
+`FederatedContributionFloorPolicy`. For lifecycle, scheduling and round
+status, construct them through the existing Python APIs from validated
+aggregate inputs. All these checks run locally; no schema registry or network
+is needed.

@@ -12,6 +12,13 @@ import pytest
 from jsonschema import Draft202012Validator, ValidationError
 from referencing import Registry
 
+from openmed.training.federated_contribution_floors import (
+    FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION,
+    FEDERATED_CONTRIBUTION_SCHEMA_VERSION,
+    FederatedContributionBand,
+    FederatedContributionFloorPolicy,
+    seal_federated_contribution,
+)
 from openmed.training.federated_metrics import (
     FEDERATED_METRIC_SCHEMA_VERSION,
     FederatedMetricEnvelope,
@@ -120,12 +127,28 @@ def _metric_payload() -> dict[str, Any]:
     ).to_dict()
 
 
+def _contribution_policy_payload() -> dict[str, Any]:
+    return FederatedContributionFloorPolicy().to_dict()
+
+
+def _contribution_payload() -> dict[str, Any]:
+    return seal_federated_contribution(
+        FederatedContributionFloorPolicy(),
+        update_digest=UPDATE,
+        local_examples=300,
+        local_steps=10,
+        effective_batch_size=40,
+    ).to_dict()
+
+
 _VALID_PAYLOADS: dict[str, Callable[[], dict[str, Any]]] = {
     "federated_round_lifecycle": _lifecycle_payload,
     "federated_round_schedule": _schedule_payload,
     "federated_round_status": _status_payload,
     "federated_update_metadata": _update_payload,
     "federated_aggregate_metric": _metric_payload,
+    "federated_contribution_floor_policy": _contribution_policy_payload,
+    "federated_contribution_declaration": _contribution_payload,
 }
 
 
@@ -202,6 +225,38 @@ def test_catalog_schemas_are_valid_draft_2020_12_and_accept_payloads(
             "federated_aggregate_metric",
             lambda p: p.update({"privacy_mechanism_version": "latest"}),
         ),
+        (
+            "federated_contribution_floor_policy",
+            lambda p: p.update({"min_local_steps": 1}),
+        ),
+        (
+            "federated_contribution_floor_policy",
+            lambda p: p.update({"min_local_examples": 300}),
+        ),
+        (
+            "federated_contribution_floor_policy",
+            lambda p: p.update({"min_effective_batch_size": 1 << 17}),
+        ),
+        (
+            "federated_contribution_floor_policy",
+            lambda p: p.update({"allow_floors_below_default": True}),
+        ),
+        (
+            "federated_contribution_floor_policy",
+            lambda p: p.update({"privacy_mechanism": "none"}),
+        ),
+        (
+            "federated_contribution_declaration",
+            lambda p: p.update({"local_examples": 300}),
+        ),
+        (
+            "federated_contribution_declaration",
+            lambda p: p.update({"local_step_band": "10"}),
+        ),
+        (
+            "federated_contribution_declaration",
+            lambda p: p.update({"contract_digest": "sha256:" + "A" * 64}),
+        ),
     ],
 )
 def test_malformed_or_content_bearing_payloads_fail(
@@ -224,6 +279,8 @@ def test_catalog_exposes_every_schema_name_exactly_once() -> None:
         "federated_round_status",
         "federated_update_metadata",
         "federated_aggregate_metric",
+        "federated_contribution_floor_policy",
+        "federated_contribution_declaration",
     }
     for name in catalog:
         assert catalog[name]["$schema"] == PRIVATE_TRAINING_SCHEMA_DIALECT
@@ -301,6 +358,28 @@ def test_schema_fields_enums_and_versions_track_python_sources() -> None:
     assert metric["properties"]["uncertainty_method"]["enum"] == [
         item.value for item in FederatedUncertaintyMethod
     ]
+    floors = build_schema("federated_contribution_floor_policy")
+    contribution = build_schema("federated_contribution_declaration")
+    assert floors["properties"]["schema_version"]["const"] == (
+        FEDERATED_CONTRIBUTION_FLOOR_POLICY_SCHEMA_VERSION
+    )
+    assert floors["properties"]["privacy_mechanism"]["enum"] == [
+        item.value for item in FederatedPrivacyMechanism
+    ]
+    assert floors["properties"]["min_local_steps"]["enum"] == [
+        item.lower_bound for item in FederatedContributionBand
+    ]
+    assert contribution["properties"]["schema_version"]["const"] == (
+        FEDERATED_CONTRIBUTION_SCHEMA_VERSION
+    )
+    for field in (
+        "local_example_band",
+        "local_step_band",
+        "effective_batch_size_band",
+    ):
+        assert contribution["properties"][field]["enum"] == [
+            item.value for item in FederatedContributionBand
+        ]
 
 
 def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
@@ -312,7 +391,7 @@ def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
     assert build_private_training_schemas()["federated_round_lifecycle"]["properties"]
     assert encoded == render_private_training_schemas()
     assert hashlib.sha256(encoded.encode("ascii")).hexdigest() == (
-        "39baf45336aa417a4d17576cf7f61eaa24cccd4051e604bef76a0984815c2be8"
+        "dc028cd63442814bb73182242daeedef27cbe4a24e463bb9b85ee8a777f43f19"
     )
 
 
@@ -429,6 +508,49 @@ def test_schema_rejects_out_of_range_dimensions_and_newline_digest():
     payload["model_digest"] += "\n"
     with pytest.raises(ValidationError):
         _validator("federated_update_metadata").validate(payload)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"min_local_examples": 64, "allow_floors_below_default": True},
+        {"min_local_steps": 1, "allow_floors_below_default": True},
+        {"min_effective_batch_size": 8, "allow_floors_below_default": True},
+        {"privacy_mechanism": "gaussian", "min_local_examples": 64},
+        {"privacy_mechanism": "laplace", "min_local_steps": 1},
+        {
+            "privacy_mechanism": "gaussian",
+            "min_effective_batch_size": 4,
+            "allow_floors_below_default": True,
+        },
+    ],
+)
+def test_floor_policy_schema_accepts_runtime_overrides(changes):
+    payload = {**_contribution_policy_payload(), **changes}
+
+    FederatedContributionFloorPolicy.from_dict(payload)
+    _validator("federated_contribution_floor_policy").validate(payload)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"min_local_examples": 64},
+        {"min_local_steps": 4},
+        {"min_effective_batch_size": 16},
+        {"privacy_mechanism": "gaussian", "min_local_examples": 32},
+        {"privacy_mechanism": "gaussian", "allow_floors_below_default": True},
+        {"min_local_steps": 0, "allow_floors_below_default": True},
+        {"min_local_steps": 3, "allow_floors_below_default": True},
+    ],
+)
+def test_floor_policy_schema_rejects_unauthorized_lowering(changes):
+    payload = {**_contribution_policy_payload(), **changes}
+
+    with pytest.raises(ValueError):
+        FederatedContributionFloorPolicy.from_dict(payload)
+    with pytest.raises(ValidationError):
+        _validator("federated_contribution_floor_policy").validate(payload)
 
 
 def test_schema_ids_are_unique_and_fragment_definitions_resolve_offline():
