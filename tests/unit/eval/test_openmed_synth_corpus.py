@@ -150,10 +150,11 @@ def test_injected_runner_is_not_mislabeled_as_reference():
     assert report.metadata["evaluation_kind"] == "caller_supplied_runner"
 
 
-@pytest.mark.parametrize("size,seed", [(10001, 1), (1, 2**64)])
-def test_generation_has_explicit_resource_bounds(size, seed):
-    with pytest.raises(ValueError):
-        generate_corpus(size=size, seed=seed)
+def test_generation_has_explicit_resource_bounds(subtests):
+    for size, seed in [(10001, 1), (1, 2**64)]:
+        with subtests.test(size=size, seed=seed):
+            with pytest.raises(ValueError):
+                generate_corpus(size=size, seed=seed)
 
 
 def test_cli_reference_alias_is_offline_even_when_explicit(capsys):
