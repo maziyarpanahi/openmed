@@ -144,24 +144,18 @@ def test_policy_rule_failure_does_not_retain_sensitive_exception() -> None:
     assert machine.history == ()
 
 
-@pytest.mark.parametrize(
-    ("event_id", "fingerprint", "code"),
-    [
+def test_transition_requires_opaque_event_and_provenance_fingerprint(subtests) -> None:
+    for event_id, fingerprint, code in [
         ("reviewer-name", "sha256:" + "a" * 64, "opaque_event_id_required"),
         (_event(1), "not-a-fingerprint", "provenance_fingerprint_required"),
-    ],
-)
-def test_transition_requires_opaque_event_and_provenance_fingerprint(
-    event_id: str,
-    fingerprint: str,
-    code: str,
-) -> None:
-    machine = ReviewStateMachine()
-    with pytest.raises(ReviewTransitionValidationError) as caught:
-        machine.transition(ReviewState.IN_REVIEW, event_id, fingerprint)
+    ]:
+        with subtests.test(event_id=event_id, fingerprint=fingerprint, code=code):
+            machine = ReviewStateMachine()
+            with pytest.raises(ReviewTransitionValidationError) as caught:
+                machine.transition(ReviewState.IN_REVIEW, event_id, fingerprint)
 
-    assert caught.value.code == code
-    assert machine.history == ()
+            assert caught.value.code == code
+            assert machine.history == ()
 
 
 def test_duplicate_event_ids_are_rejected_without_mutating_state() -> None:

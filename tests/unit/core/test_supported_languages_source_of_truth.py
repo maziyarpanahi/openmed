@@ -68,35 +68,31 @@ def _assert_supported_language_claim_matches(name: str, text: str) -> None:
         assert codes == EXPECTED_LANGUAGE_CODES
 
 
-@pytest.mark.parametrize("relative_path", LANGUAGE_CLAIM_PATHS)
-def test_documented_pii_language_claim_matches_supported_languages(
-    relative_path: str,
-) -> None:
-    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-    _assert_supported_language_claim_matches(relative_path, text)
+def test_documented_pii_language_claim_matches_supported_languages(subtests) -> None:
+    for relative_path in LANGUAGE_CLAIM_PATHS:
+        with subtests.test(relative_path=relative_path):
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            _assert_supported_language_claim_matches(relative_path, text)
 
 
-@pytest.mark.parametrize("relative_path", STALE_LANGUAGE_COUNT_PATHS)
-def test_user_facing_docs_do_not_reintroduce_pre_17_language_claims(
-    relative_path: str,
-) -> None:
-    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-    assert not STALE_PII_LANGUAGE_COUNT_PATTERN.search(text)
+def test_user_facing_docs_do_not_reintroduce_pre_17_language_claims(subtests) -> None:
+    for relative_path in STALE_LANGUAGE_COUNT_PATHS:
+        with subtests.test(relative_path=relative_path):
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            assert not STALE_PII_LANGUAGE_COUNT_PATTERN.search(text)
 
 
-@pytest.mark.parametrize(
-    "claim",
-    (
+def test_stale_language_count_guard_catches_pre_17_claims(subtests) -> None:
+    for claim in (
         "15 languages",
         "fifteen supported PII languages",
         "16 model-backed PII languages",
         "sixteen supported languages",
         "Model-backed PII languages | 16",
         "15-pii-languages",
-    ),
-)
-def test_stale_language_count_guard_catches_pre_17_claims(claim: str) -> None:
-    assert STALE_PII_LANGUAGE_COUNT_PATTERN.search(claim)
+    ):
+        with subtests.test(claim=claim):
+            assert STALE_PII_LANGUAGE_COUNT_PATTERN.search(claim)
 
 
 @pytest.mark.parametrize(
