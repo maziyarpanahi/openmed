@@ -102,43 +102,50 @@ def test_loader_needs_no_network_clock_models_or_credentials(monkeypatch):
     assert len(load_agent_run_summary_fixtures()) == 7
 
 
-@pytest.mark.parametrize(
-    "version",
-    [
+def test_each_version_mutation_fails_independently(subtests, tmp_path):
+    case_root = tmp_path
+    for version in [
         "schema_version",
         "run_summary_schema_version",
         "outcome_schema_version",
         "commitment_version",
-    ],
-)
-def test_each_version_mutation_fails_independently(tmp_path, version):
-    payload = _payload()
-    payload[version] = "unsupported"
-    with pytest.raises(AgentRunSummaryFixtureError, match="^unsupported_version$"):
-        _load(tmp_path, payload)
+    ]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload[version] = "unsupported"
+            with pytest.raises(
+                AgentRunSummaryFixtureError, match="^unsupported_version$"
+            ):
+                _load(tmp_path, payload)
 
 
-@pytest.mark.parametrize("location", ["root", "case", "event", "outcome"])
-def test_unknown_fields_never_echo_rejected_content(tmp_path, location):
-    payload = _payload()
-    objects = {
-        "root": payload,
-        "case": payload["cases"][1],
-        "event": payload["cases"][1]["events"][0],
-        "outcome": payload["cases"][1]["events"][0]["outcome"],
-    }
-    sentinel = "PRIVATE_SENTINEL chart text /private/path Bearer credential"
-    objects[location][sentinel] = sentinel
-    with pytest.raises(AgentRunSummaryFixtureError) as caught:
-        _load(tmp_path, payload)
-    assert str(caught.value) == "unknown_field"
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
-    assert caught.value.__context__ is None
+def test_unknown_fields_never_echo_rejected_content(subtests, tmp_path):
+    case_root = tmp_path
+    for location in ["root", "case", "event", "outcome"]:
+        with subtests.test(location=location):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            objects = {
+                "root": payload,
+                "case": payload["cases"][1],
+                "event": payload["cases"][1]["events"][0],
+                "outcome": payload["cases"][1]["events"][0]["outcome"],
+            }
+            sentinel = "PRIVATE_SENTINEL chart text /private/path Bearer credential"
+            objects[location][sentinel] = sentinel
+            with pytest.raises(AgentRunSummaryFixtureError) as caught:
+                _load(tmp_path, payload)
+            assert str(caught.value) == "unknown_field"
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
+            assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_invalid_event_mutations_fail_closed(subtests, tmp_path):
+    case_root = tmp_path
+    for field, value in [
         ("workflow_id", "A Synthetic Name"),
         ("workflow_id", "/private/sensitive"),
         ("workflow_id", "Bearer-synthetic-token"),
@@ -148,19 +155,20 @@ def test_unknown_fields_never_echo_rejected_content(tmp_path, location):
         ("duration_seconds", True),
         ("artifact_digests", ["not-a-digest"]),
         ("artifact_digests", "sha256:" + "1" * 64),
-    ],
-)
-def test_invalid_event_mutations_fail_closed(tmp_path, field, value):
-    payload = _payload()
-    payload["cases"][1]["events"][0][field] = value
-    with pytest.raises(AgentRunSummaryFixtureError) as caught:
-        _load(tmp_path, payload)
-    assert str(caught.value) in {
-        "invalid_workflow_id",
-        "invalid_event",
-        "invalid_artifact_digests",
-    }
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["cases"][1]["events"][0][field] = value
+            with pytest.raises(AgentRunSummaryFixtureError) as caught:
+                _load(tmp_path, payload)
+            assert str(caught.value) in {
+                "invalid_workflow_id",
+                "invalid_event",
+                "invalid_artifact_digests",
+            }
+            assert caught.value.__context__ is None
 
 
 def test_unknown_outcome_and_duplicate_case_ids_fail_independently(tmp_path):
@@ -174,21 +182,22 @@ def test_unknown_outcome_and_duplicate_case_ids_fail_independently(tmp_path):
         _load(tmp_path, payload)
 
 
-@pytest.mark.parametrize(
-    "field,code",
-    [
+def test_stale_output_mutations_are_independent(subtests, tmp_path):
+    case_root = tmp_path
+    for field, code in [
         ("expected_json", "stale_json"),
         ("expected_markdown_digest", "stale_markdown"),
         ("expected_commitment", "stale_commitment"),
-    ],
-)
-def test_stale_output_mutations_are_independent(tmp_path, field, code):
-    payload = _payload()
-    payload["cases"][1][field] = (
-        "{}" if field == "expected_json" else "sha256:" + "0" * 64
-    )
-    with pytest.raises(AgentRunSummaryFixtureError, match=f"^{code}$"):
-        _load(tmp_path, payload)
+    ]:
+        with subtests.test(field=field, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["cases"][1][field] = (
+                "{}" if field == "expected_json" else "sha256:" + "0" * 64
+            )
+            with pytest.raises(AgentRunSummaryFixtureError, match=f"^{code}$"):
+                _load(tmp_path, payload)
 
 
 def test_event_mutation_is_not_silently_regenerated(tmp_path):
@@ -198,12 +207,16 @@ def test_event_mutation_is_not_silently_regenerated(tmp_path):
         _load(tmp_path, payload)
 
 
-@pytest.mark.parametrize("field", ["expected_markdown_digest", "expected_commitment"])
-def test_malformed_expected_digests_fail_closed(tmp_path, field):
-    payload = _payload()
-    payload["cases"][0][field] = "not-a-digest"
-    with pytest.raises(AgentRunSummaryFixtureError, match="^invalid_digest$"):
-        _load(tmp_path, payload)
+def test_malformed_expected_digests_fail_closed(subtests, tmp_path):
+    case_root = tmp_path
+    for field in ["expected_markdown_digest", "expected_commitment"]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["cases"][0][field] = "not-a-digest"
+            with pytest.raises(AgentRunSummaryFixtureError, match="^invalid_digest$"):
+                _load(tmp_path, payload)
 
 
 def test_typed_fixture_constructor_also_enforces_expectations():
@@ -212,22 +225,25 @@ def test_typed_fixture_constructor_also_enforces_expectations():
         replace(case, expected_commitment="sha256:" + "0" * 64)
 
 
-@pytest.mark.parametrize(
-    "content,code",
-    [
+def test_malformed_json_is_value_free(subtests, tmp_path):
+    case_root = tmp_path
+    for content, code in [
         ('{"cases":[],"cases":[]}', "duplicate_field"),
         ('{"schema_version":NaN}', "non_finite_number"),
         ('{"schema_version":Infinity}', "non_finite_number"),
         ("[]", "invalid_object"),
         ("{", "invalid_json"),
-    ],
-)
-def test_malformed_json_is_value_free(tmp_path, content, code):
-    path = tmp_path / "vectors.json"
-    path.write_text(content)
-    with pytest.raises(AgentRunSummaryFixtureError, match=f"^{code}$") as caught:
-        load_agent_run_summary_fixtures(path)
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(content=content, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "vectors.json"
+            path.write_text(content)
+            with pytest.raises(
+                AgentRunSummaryFixtureError, match=f"^{code}$"
+            ) as caught:
+                load_agent_run_summary_fixtures(path)
+            assert caught.value.__context__ is None
 
 
 def test_missing_oversized_and_invalid_paths_are_value_free(tmp_path):
@@ -248,9 +264,9 @@ def test_missing_oversized_and_invalid_paths_are_value_free(tmp_path):
         load_agent_run_summary_fixtures(object())
 
 
-@pytest.mark.parametrize(
-    "change,code",
-    [
+def test_missing_fields_and_case_bounds(subtests, tmp_path):
+    case_root = tmp_path
+    for change, code in [
         (lambda p: p.pop("commitment_version"), "missing_field"),
         (lambda p: p.update(cases=[]), "invalid_cases"),
         (lambda p: p["cases"][0].update(case_id="undeclared_case"), "invalid_case_id"),
@@ -260,10 +276,11 @@ def test_missing_oversized_and_invalid_paths_are_value_free(tmp_path):
             "missing_field",
         ),
         (lambda p: p["cases"][0].update(events=[{}] * 129), "invalid_events"),
-    ],
-)
-def test_missing_fields_and_case_bounds(tmp_path, change, code):
-    payload = _payload()
-    change(payload)
-    with pytest.raises(AgentRunSummaryFixtureError, match=f"^{code}$"):
-        _load(tmp_path, payload)
+    ]:
+        with subtests.test(change=change, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            change(payload)
+            with pytest.raises(AgentRunSummaryFixtureError, match=f"^{code}$"):
+                _load(tmp_path, payload)

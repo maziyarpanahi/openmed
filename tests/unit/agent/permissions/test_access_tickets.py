@@ -192,9 +192,10 @@ def test_ticket_cannot_be_repurposed() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("request_overrides", "error_type", "code"),
-    [
+def test_projection_selector_and_tool_action_fail_closed_outside_ticket(
+    subtests,
+) -> None:
+    for request_overrides, error_type, code in [
         (
             {"projection": (OTHER_DATA_CLASS,)},
             AccessTicketProjectionError,
@@ -210,20 +211,17 @@ def test_ticket_cannot_be_repurposed() -> None:
             AccessTicketToolActionError,
             "tool_action_denied",
         ),
-    ],
-)
-def test_projection_selector_and_tool_action_fail_closed_outside_ticket(
-    request_overrides: dict[str, Any],
-    error_type: type[Exception],
-    code: str,
-) -> None:
-    error = _assert_not_dispatched(
-        _ticket(),
-        _request(**request_overrides),
-        error_type,
-    )
+    ]:
+        with subtests.test(
+            request_overrides=request_overrides, error_type=error_type, code=code
+        ):
+            error = _assert_not_dispatched(
+                _ticket(),
+                _request(**request_overrides),
+                error_type,
+            )
 
-    assert getattr(error, "code") == code
+            assert getattr(error, "code") == code
 
 
 def test_record_selectors_are_keyed_deterministic_and_opaque() -> None:
@@ -287,9 +285,8 @@ def test_ticket_and_request_reprs_do_not_expose_scope() -> None:
         assert value not in repr(request)
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
+def test_malformed_ticket_metadata_fails_closed(subtests) -> None:
+    for factory in [
         lambda: _ticket(run_id="run_invalid"),
         lambda: _ticket(purpose="free-text-purpose"),
         lambda: _ticket(permitted_data_classes=()),
@@ -306,13 +303,10 @@ def test_ticket_and_request_reprs_do_not_expose_scope() -> None:
             value="synthetic-record-001",
             key=b"too-short",
         ),
-    ],
-)
-def test_malformed_ticket_metadata_fails_closed(
-    factory: Callable[[], object],
-) -> None:
-    with pytest.raises(AccessTicketValidationError):
-        factory()
+    ]:
+        with subtests.test(factory=factory):
+            with pytest.raises(AccessTicketValidationError):
+                factory()
 
 
 def test_invalid_dispatch_is_rejected_without_invocation() -> None:

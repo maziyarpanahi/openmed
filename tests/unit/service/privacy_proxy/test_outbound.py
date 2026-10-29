@@ -298,15 +298,16 @@ def test_missing_redactor_is_rejected_before_request_processing() -> None:
         OutboundRequestPrivacyFilter()
 
 
-@pytest.mark.parametrize("body", [b'{"messages": []}', {"messages": []}])
-def test_empty_message_request_is_safe_and_preserves_encoding(body: Any) -> None:
-    privacy_filter = OutboundRequestPrivacyFilter(synthetic_redactor)
+def test_empty_message_request_is_safe_and_preserves_encoding(subtests) -> None:
+    for body in [b'{"messages": []}', {"messages": []}]:
+        with subtests.test(body=body):
+            privacy_filter = OutboundRequestPrivacyFilter(synthetic_redactor)
 
-    prepared = privacy_filter.transform(body, request_id="empty-request")
+            prepared = privacy_filter.transform(body, request_id="empty-request")
 
-    if isinstance(body, bytes):
-        assert isinstance(prepared.body, bytes)
-        assert json.loads(prepared.body) == {"messages": []}
-    else:
-        assert prepared.body == {"messages": []}
-    assert prepared.state.to_metadata()["replacement_count"] == 0
+            if isinstance(body, bytes):
+                assert isinstance(prepared.body, bytes)
+                assert json.loads(prepared.body) == {"messages": []}
+            else:
+                assert prepared.body == {"messages": []}
+            assert prepared.state.to_metadata()["replacement_count"] == 0

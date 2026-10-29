@@ -55,38 +55,41 @@ def _invoke(fixture, adapter, binding, callback):
     )
 
 
-@pytest.mark.parametrize(
-    "adapter,index", [("grant", 0), ("ticket", 1), ("delegation", 2)]
-)
-def test_revocation_between_preview_and_execution_prevents_callback(adapter, index):
-    fixture = SyntheticAuthority()
-    binding = fixture.runtime.bind(fixture.contracts)
-    calls = []
-    assert _invoke(fixture, adapter, binding, lambda: calls.append("control") or 7) == 7
-    fixture.provider.revoke(fixture.contracts[index])
-    # Signature, expiry and static scope are still valid after revocation.
-    fixture.grant_verifier.verify(fixture.grant, fixture.grant_request)
-    fixture.ticket_verifier.verify(fixture.ticket, fixture.ticket_request)
-    fixture.delegation_verifier.verify_chain(fixture.chain)
-    with pytest.raises(AuthorityDeniedError, match="authority_revoked"):
-        _invoke(fixture, adapter, binding, lambda: calls.append("forbidden"))
-    assert calls == ["control"]
+def test_revocation_between_preview_and_execution_prevents_callback(subtests):
+    for adapter, index in [("grant", 0), ("ticket", 1), ("delegation", 2)]:
+        with subtests.test(adapter=adapter, index=index):
+            fixture = SyntheticAuthority()
+            binding = fixture.runtime.bind(fixture.contracts)
+            calls = []
+            assert (
+                _invoke(fixture, adapter, binding, lambda: calls.append("control") or 7)
+                == 7
+            )
+            fixture.provider.revoke(fixture.contracts[index])
+            # Signature, expiry and static scope are still valid after revocation.
+            fixture.grant_verifier.verify(fixture.grant, fixture.grant_request)
+            fixture.ticket_verifier.verify(fixture.ticket, fixture.ticket_request)
+            fixture.delegation_verifier.verify_chain(fixture.chain)
+            with pytest.raises(AuthorityDeniedError, match="authority_revoked"):
+                _invoke(fixture, adapter, binding, lambda: calls.append("forbidden"))
+            assert calls == ["control"]
 
 
-@pytest.mark.parametrize("ancestor", [0, 1, 2])
-def test_revoked_parent_child_or_leaf_invalidates_descendant(ancestor):
-    fixture = SyntheticAuthority()
-    contracts = delegation_authorities(fixture.chain)
-    binding = fixture.runtime.bind(contracts)
-    fixture.provider.revoke(contracts[ancestor])
-    with pytest.raises(AuthorityDeniedError, match="authority_revoked"):
-        dispatch_with_revocable_delegation(
-            fixture.chain,
-            fixture.delegation_verifier,
-            lambda: pytest.fail("revoked descendant dispatched"),
-            runtime=fixture.runtime,
-            binding=binding,
-        )
+def test_revoked_parent_child_or_leaf_invalidates_descendant(subtests):
+    for ancestor in [0, 1, 2]:
+        with subtests.test(ancestor=ancestor):
+            fixture = SyntheticAuthority()
+            contracts = delegation_authorities(fixture.chain)
+            binding = fixture.runtime.bind(contracts)
+            fixture.provider.revoke(contracts[ancestor])
+            with pytest.raises(AuthorityDeniedError, match="authority_revoked"):
+                dispatch_with_revocable_delegation(
+                    fixture.chain,
+                    fixture.delegation_verifier,
+                    lambda: pytest.fail("revoked descendant dispatched"),
+                    runtime=fixture.runtime,
+                    binding=binding,
+                )
 
 
 def test_leaf_only_chain_cannot_hide_revoked_ancestry():
@@ -95,42 +98,48 @@ def test_leaf_only_chain_cannot_hide_revoked_ancestry():
         delegation_authorities((fixture.chain[-1],))
 
 
-@pytest.mark.parametrize("adapter", ["grant", "ticket", "delegation"])
-def test_adapter_rejects_binding_from_other_artifact_or_omitted_parent(adapter):
-    fixture = SyntheticAuthority()
-    binding = fixture.runtime.bind((fixture.contracts[-1],))
-    with pytest.raises(AuthorityDeniedError, match="authority_contract_mismatch"):
-        _invoke(fixture, adapter, binding, lambda: pytest.fail("unbound callback"))
+def test_adapter_rejects_binding_from_other_artifact_or_omitted_parent(subtests):
+    for adapter in ["grant", "ticket", "delegation"]:
+        with subtests.test(adapter=adapter):
+            fixture = SyntheticAuthority()
+            binding = fixture.runtime.bind((fixture.contracts[-1],))
+            with pytest.raises(
+                AuthorityDeniedError, match="authority_contract_mismatch"
+            ):
+                _invoke(
+                    fixture, adapter, binding, lambda: pytest.fail("unbound callback")
+                )
 
 
-@pytest.mark.parametrize("adapter", ["grant", "ticket", "delegation"])
-def test_static_authority_is_not_replaced_by_active_status(adapter):
-    fixture = SyntheticAuthority()
-    if adapter == "grant":
-        fixture.grant_request = replace(
-            fixture.grant_request, action="action:org.example/write@1.0.0"
-        )
-        error = CapabilityGrantScopeError
-    elif adapter == "ticket":
-        fixture.ticket_request = replace(
-            fixture.ticket_request,
-            run_id=type(fixture.ticket.run_id)("run_" + "2" * 32),
-        )
-        error = AccessTicketRunMismatchError
-    else:
-        forged = replace(fixture.chain[-1], signature="hmac-sha256:" + "0" * 64)
-        fixture.chain = (*fixture.chain[:-1], forged)
-        fixture.provider.register(delegation_authorities(fixture.chain))
-        fixture.contracts = delegation_authorities(fixture.chain)
-        error = DelegationSignatureError
-    binding = fixture.runtime.bind(fixture.contracts)
-    with pytest.raises(error):
-        _invoke(
-            fixture,
-            adapter,
-            binding,
-            lambda: pytest.fail("invalid scope/signature dispatched"),
-        )
+def test_static_authority_is_not_replaced_by_active_status(subtests):
+    for adapter in ["grant", "ticket", "delegation"]:
+        with subtests.test(adapter=adapter):
+            fixture = SyntheticAuthority()
+            if adapter == "grant":
+                fixture.grant_request = replace(
+                    fixture.grant_request, action="action:org.example/write@1.0.0"
+                )
+                error = CapabilityGrantScopeError
+            elif adapter == "ticket":
+                fixture.ticket_request = replace(
+                    fixture.ticket_request,
+                    run_id=type(fixture.ticket.run_id)("run_" + "2" * 32),
+                )
+                error = AccessTicketRunMismatchError
+            else:
+                forged = replace(fixture.chain[-1], signature="hmac-sha256:" + "0" * 64)
+                fixture.chain = (*fixture.chain[:-1], forged)
+                fixture.provider.register(delegation_authorities(fixture.chain))
+                fixture.contracts = delegation_authorities(fixture.chain)
+                error = DelegationSignatureError
+            binding = fixture.runtime.bind(fixture.contracts)
+            with pytest.raises(error):
+                _invoke(
+                    fixture,
+                    adapter,
+                    binding,
+                    lambda: pytest.fail("invalid scope/signature dispatched"),
+                )
 
 
 def test_forged_grant_with_registered_status_still_fails_signature():
@@ -145,23 +154,33 @@ def test_forged_grant_with_registered_status_still_fails_signature():
         )
 
 
-@pytest.mark.parametrize("adapter", ["grant", "ticket", "delegation"])
-def test_static_and_live_expiry_emit_content_free_expiry_receipt(adapter):
-    fixture = SyntheticAuthority()
-    binding = fixture.runtime.bind(fixture.contracts)
-    fixture.clock.now = 100
-    with pytest.raises(AuthorityDeniedError, match="authority_expired") as error:
-        _invoke(fixture, adapter, binding, lambda: pytest.fail("expired callback"))
-    assert error.value.receipt.to_dict()["reason_code"] == "authority_expired"
+def test_static_and_live_expiry_emit_content_free_expiry_receipt(subtests):
+    for adapter in ["grant", "ticket", "delegation"]:
+        with subtests.test(adapter=adapter):
+            fixture = SyntheticAuthority()
+            binding = fixture.runtime.bind(fixture.contracts)
+            fixture.clock.now = 100
+            with pytest.raises(
+                AuthorityDeniedError, match="authority_expired"
+            ) as error:
+                _invoke(
+                    fixture, adapter, binding, lambda: pytest.fail("expired callback")
+                )
+            assert error.value.receipt.to_dict()["reason_code"] == "authority_expired"
 
 
-@pytest.mark.parametrize("adapter", ["grant", "ticket", "delegation"])
-def test_status_outage_prevents_every_adapter_callback(adapter):
-    fixture = SyntheticAuthority()
-    binding = fixture.runtime.bind(fixture.contracts)
-    fixture.provider.unavailable = True
-    with pytest.raises(AuthorityDeniedError, match="authority_status_unavailable"):
-        _invoke(fixture, adapter, binding, lambda: pytest.fail("outage callback"))
+def test_status_outage_prevents_every_adapter_callback(subtests):
+    for adapter in ["grant", "ticket", "delegation"]:
+        with subtests.test(adapter=adapter):
+            fixture = SyntheticAuthority()
+            binding = fixture.runtime.bind(fixture.contracts)
+            fixture.provider.unavailable = True
+            with pytest.raises(
+                AuthorityDeniedError, match="authority_status_unavailable"
+            ):
+                _invoke(
+                    fixture, adapter, binding, lambda: pytest.fail("outage callback")
+                )
 
 
 def _approval(fixture, *, store=None):

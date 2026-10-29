@@ -180,38 +180,38 @@ def test_input_order_does_not_change_report_or_repro_hash(caplog) -> None:
     assert caplog.records == []
 
 
-@pytest.mark.parametrize(
-    "update",
-    [
+def test_direct_issue_rejects_uncontrolled_output_fields(subtests):
+    for update in [
         {"reason": "SYNTHETIC-PRIVATE-LABEL"},
         {"locale": "SYNTHETIC-PRIVATE-LABEL"},
         {"label_hashes": ("SYNTHETIC-PRIVATE-LABEL",)},
-    ],
-)
-def test_direct_issue_rejects_uncontrolled_output_fields(update):
-    from openmed.clinical.units.display_audit import UnitDisplayAuditIssue
+    ]:
+        with subtests.test(update=update):
+            from openmed.clinical.units.display_audit import UnitDisplayAuditIssue
 
-    values = dict(kind="missing", reason="missing_display_label", locale="en", count=1)
-    values.update(update)
-    with pytest.raises(ValueError):
-        UnitDisplayAuditIssue(**values)
+            values = dict(
+                kind="missing", reason="missing_display_label", locale="en", count=1
+            )
+            values.update(update)
+            with pytest.raises(ValueError):
+                UnitDisplayAuditIssue(**values)
 
 
-@pytest.mark.parametrize(
-    "update",
-    [
+def test_report_rejects_forged_metadata(subtests):
+    for update in [
         {"schema_version": "SYNTHETIC-PRIVATE-LABEL"},
         {"repro_hash": "sha256:" + "0" * 64},
         {"locales": ("SYNTHETIC-PRIVATE-LABEL",)},
-    ],
-)
-def test_report_rejects_forged_metadata(update):
-    from openmed.clinical.units.display_audit import UnitDisplayAuditReport
+    ]:
+        with subtests.test(update=update):
+            from openmed.clinical.units.display_audit import UnitDisplayAuditReport
 
-    values = dict(locales=("en",), canonical_unit_count=1, display_label_count=1)
-    values.update(update)
-    with pytest.raises(ValueError):
-        UnitDisplayAuditReport(**values)
+            values = dict(
+                locales=("en",), canonical_unit_count=1, display_label_count=1
+            )
+            values.update(update)
+            with pytest.raises(ValueError):
+                UnitDisplayAuditReport(**values)
 
 
 def test_json_indent_cannot_emit_private_content():
