@@ -349,6 +349,7 @@ class ProtectedReferenceFingerprint:
         ngram_digests: Sorted unique character n-gram digests of the
             normalized reference text.
         ngram_size: Character n-gram size used to build ``ngram_digests``.
+        shingle_size: Token window size used to build fragment shingles.
     """
 
     reference_id: str
@@ -357,6 +358,7 @@ class ProtectedReferenceFingerprint:
     fragments: tuple[ReferenceFragmentFingerprint, ...]
     ngram_digests: tuple[str, ...]
     ngram_size: int
+    shingle_size: int = DEFAULT_SHINGLE_SIZE
 
     def __post_init__(self) -> None:
         _require_identifier(self.reference_id, label="reference_id")
@@ -393,6 +395,14 @@ class ProtectedReferenceFingerprint:
                 f"ngram_size must be between 1 and {MAX_NGRAM_SIZE}"
             )
 
+        if (
+            type(self.shingle_size) is not int
+            or not 1 <= self.shingle_size <= MAX_SHINGLE_SIZE
+        ):
+            raise SyntheticMemorizationError(
+                "shingle_size is outside the fingerprint bound"
+            )
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-ready mapping for this reference fingerprint."""
         return {
@@ -400,6 +410,7 @@ class ProtectedReferenceFingerprint:
             "digest": self.digest,
             "char_length": self.char_length,
             "ngram_size": self.ngram_size,
+            "shingle_size": self.shingle_size,
             "fragments": [fragment.to_dict() for fragment in self.fragments],
             "ngram_digests": list(self.ngram_digests),
         }
@@ -426,7 +437,9 @@ def fingerprint_reference(
         SyntheticMemorizationError: If the identifier is invalid, the text is
             not auditable, or it falls below the policy fragment floor.
     """
-    resolved = policy or SyntheticMemorizationPolicy()
+    resolved = policy if policy is not None else SyntheticMemorizationPolicy()
+    if not isinstance(resolved, SyntheticMemorizationPolicy):
+        raise SyntheticMemorizationError("policy must be a SyntheticMemorizationPolicy")
     _require_identifier(reference_id, label="reference_id")
     _require_text(text, label="reference text")
     normalized = normalize_text(text)
@@ -460,6 +473,7 @@ def fingerprint_reference(
         fragments=ordered,
         ngram_digests=_char_ngram_digests(normalized, resolved.exposure_ngram_size),
         ngram_size=resolved.exposure_ngram_size,
+        shingle_size=resolved.shingle_size,
     )
 
 
@@ -708,16 +722,16 @@ class SyntheticMemorizationReport:
             )
         try:
             verdict = MemorizationVerdict(payload["verdict"])
-        except (KeyError, ValueError) as error:
-            raise SyntheticMemorizationError("verdict must be a known value") from error
+        except (KeyError, ValueError):
+            raise SyntheticMemorizationError("verdict must be a known value") from None
         try:
             blocking = tuple(
                 MemorizationSignal(value) for value in payload["blocking_signals"]
             )
-        except (KeyError, TypeError, ValueError) as error:
+        except (KeyError, TypeError, ValueError):
             raise SyntheticMemorizationError(
                 "blocking_signals must be known signal values"
-            ) from error
+            ) from None
         raw_findings = payload.get("findings")
         if not isinstance(raw_findings, list):
             raise SyntheticMemorizationError("findings must be a list")
@@ -738,10 +752,10 @@ class SyntheticMemorizationReport:
         """Rebuild a report from its canonical JSON encoding."""
         try:
             decoded = json.loads(payload)
-        except (TypeError, ValueError) as error:
+        except (TypeError, ValueError):
             raise SyntheticMemorizationError(
                 "report payload is not valid JSON"
-            ) from error
+            ) from None
         if not isinstance(decoded, Mapping):
             raise SyntheticMemorizationError("report payload must be a JSON object")
         return cls.from_dict(decoded)
@@ -767,10 +781,10 @@ def _finding_from_dict(entry: Any) -> MemorizationFinding:
     try:
         signal = MemorizationSignal(entry["signal"])
         reason = MemorizationReasonCode(entry["reason"])
-    except (KeyError, ValueError) as error:
+    except (KeyError, ValueError):
         raise SyntheticMemorizationError(
             "finding signal and reason must be known values"
-        ) from error
+        ) from None
     try:
         return MemorizationFinding(
             candidate_id=entry["candidate_id"],
@@ -782,8 +796,8 @@ def _finding_from_dict(entry: Any) -> MemorizationFinding:
             candidate_length=entry["candidate_length"],
             score=entry["score"],
         )
-    except KeyError as error:
-        raise SyntheticMemorizationError("finding payload is incomplete") from error
+    except KeyError:
+        raise SyntheticMemorizationError("finding payload is incomplete") from None
 
 
 def assert_release_allowed(report: SyntheticMemorizationReport) -> None:
@@ -831,7 +845,7 @@ def audit_synthetic_memorization(
     Raises:
         SyntheticMemorizationError: If inputs violate the audit bounds.
     """
-    resolved = policy or SyntheticMemorizationPolicy()
+    resolved = policy if policy is not None else SyntheticMemorizationPolicy()
     if not isinstance(resolved, SyntheticMemorizationPolicy):
         raise SyntheticMemorizationError("policy must be a SyntheticMemorizationPolicy")
     if not isinstance(references, Sequence) or isinstance(references, (str, bytes)):
@@ -845,6 +859,14 @@ def audit_synthetic_memorization(
             raise SyntheticMemorizationError(
                 "references must contain ProtectedReferenceFingerprint values"
             )
+    if any(
+        reference.ngram_size != resolved.exposure_ngram_size
+        or reference.shingle_size != resolved.shingle_size
+        for reference in references
+    ):
+        raise SyntheticMemorizationError(
+            "reference fingerprint policy does not match audit policy"
+        )
     reference_ids = [reference.reference_id for reference in references]
     if len(set(reference_ids)) != len(reference_ids):
         raise SyntheticMemorizationError("reference identifiers must be unique")

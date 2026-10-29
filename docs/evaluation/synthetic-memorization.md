@@ -81,6 +81,10 @@ caller cannot silently fingerprint a reference that fragments into nothing. A
 inside their documented ranges, `blocking_signals` must be sorted and free of
 duplicates, and every bound has a hard ceiling.
 
+Fingerprints record their character n-gram and token-shingle sizes. The audit
+rejects a mismatched policy; rebuild the protected fingerprints when either
+size changes. Otherwise incomparable hashes could silently hide a match.
+
 ## Release gate
 
 `audit_synthetic_memorization` returns a `SyntheticMemorizationReport`. The

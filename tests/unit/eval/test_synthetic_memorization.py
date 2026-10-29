@@ -136,6 +136,20 @@ def test_reference_fingerprint_honours_policy_granularity() -> None:
     assert coarse.ngram_size == 64
     assert fine.ngram_size != coarse.ngram_size
     assert 0 < len(coarse.ngram_digests) < len(fine.ngram_digests)
+    for policy in (
+        SyntheticMemorizationPolicy(exposure_ngram_size=64),
+        SyntheticMemorizationPolicy(shingle_size=1),
+    ):
+        reference = fingerprint_reference(
+            "protected-003", REFERENCE_TEXT, policy=policy
+        )
+        assert audit_synthetic_memorization(
+            {"candidate-001": REFERENCE_TEXT}, (reference,), policy=policy
+        ).blocked
+        with pytest.raises(SyntheticMemorizationError, match="policy"):
+            audit_synthetic_memorization(
+                {"candidate-001": REFERENCE_TEXT}, (reference,)
+            )
 
 
 def test_fragment_fingerprint_validates_payload() -> None:
@@ -400,6 +414,17 @@ def test_report_from_dict_rejects_bad_payloads() -> None:
         SyntheticMemorizationReport.from_dict(
             {**broken, "findings": [{**broken["findings"][0], "signal": "fuzzy"}]}
         )
+
+    import traceback
+
+    for changes in (
+        {"verdict": SENTINEL},
+        {"blocking_signals": [SENTINEL]},
+        {"findings": [{**payload["findings"][0], "signal": SENTINEL}]},
+    ):
+        with pytest.raises(SyntheticMemorizationError) as error:
+            SyntheticMemorizationReport.from_dict({**payload, **changes})
+        assert SENTINEL not in "".join(traceback.format_exception(error.value))
 
 
 def test_report_from_json_rejects_non_json() -> None:
