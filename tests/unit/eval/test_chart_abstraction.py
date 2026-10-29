@@ -73,9 +73,8 @@ def test_synthetic_gold_is_deterministic_and_all_fields_are_scored():
         assert scores.exact_agreement == AbstractionMetric(2, 2)
 
 
-@pytest.mark.parametrize(
-    "expected,actual,kind,exact,normalized",
-    [
+def test_exact_and_normalized_agreement(subtests):
+    for expected, actual, kind, exact, normalized in [
         ("Synthetic Alpha", " synthetic  ALPHA ", AbstractionFieldType.TEXT, 0, 1),
         ("café", "CAFE\u0301", AbstractionFieldType.TEXT, 0, 1),
         ("code_a", "ＣＯＤＥ＿Ａ", AbstractionFieldType.CATEGORICAL, 0, 1),
@@ -87,14 +86,19 @@ def test_synthetic_gold_is_deterministic_and_all_fields_are_scored():
         (False, False, AbstractionFieldType.BOOLEAN, 1, 1),
         ("code_a", "code_b", AbstractionFieldType.CATEGORICAL, 0, 0),
         ("", "", AbstractionFieldType.TEXT, 1, 1),
-    ],
-)
-def test_exact_and_normalized_agreement(expected, actual, kind, exact, normalized):
-    scores = run_chart_abstraction_benchmark(
-        [gold(expected, kind)], [prediction(actual)]
-    ).overall
-    assert scores.exact_agreement == AbstractionMetric(exact, 1)
-    assert scores.normalized_agreement == AbstractionMetric(normalized, 1)
+    ]:
+        with subtests.test(
+            expected=expected,
+            actual=actual,
+            kind=kind,
+            exact=exact,
+            normalized=normalized,
+        ):
+            scores = run_chart_abstraction_benchmark(
+                [gold(expected, kind)], [prediction(actual)]
+            ).overall
+            assert scores.exact_agreement == AbstractionMetric(exact, 1)
+            assert scores.normalized_agreement == AbstractionMetric(normalized, 1)
 
 
 def test_abstention_errors_are_separate_and_missing_is_not_correct_abstention():
@@ -119,9 +123,8 @@ def test_abstention_errors_are_separate_and_missing_is_not_correct_abstention():
     assert scores.answered_count == 1
 
 
-@pytest.mark.parametrize(
-    "evidence,digest,supported",
-    [
+def test_support_requires_a_fact_bound_clinical_source(subtests):
+    for evidence, digest, supported in [
         (None, None, 0),
         (chain(sources=()), FACT, 0),
         (
@@ -143,15 +146,14 @@ def test_abstention_errors_are_separate_and_missing_is_not_correct_abstention():
             FACT,
             1,
         ),
-    ],
-)
-def test_support_requires_a_fact_bound_clinical_source(evidence, digest, supported):
-    scores = run_chart_abstraction_benchmark(
-        [gold()],
-        [prediction(normalized_fact_digest=digest, evidence_chain=evidence)],
-    ).overall
-    assert scores.exact_agreement == AbstractionMetric(1, 1)
-    assert scores.evidence_support == AbstractionMetric(supported, 1)
+    ]:
+        with subtests.test(evidence=evidence, digest=digest, supported=supported):
+            scores = run_chart_abstraction_benchmark(
+                [gold()],
+                [prediction(normalized_fact_digest=digest, evidence_chain=evidence)],
+            ).overall
+            assert scores.exact_agreement == AbstractionMetric(1, 1)
+            assert scores.evidence_support == AbstractionMetric(supported, 1)
 
 
 def test_source_support_does_not_assert_accuracy_or_review_approval():
@@ -183,9 +185,8 @@ def test_wilson_interval_known_vector_and_empty_denominator():
         AbstractionMetric(2, 1)
 
 
-@pytest.mark.parametrize(
-    "rows,outputs,code",
-    [
+def test_invalid_joins_fail_with_controlled_codes(subtests):
+    for rows, outputs, code in [
         ([], [], "invalid_gold_fields"),
         ([gold(), gold()], [], "duplicate_gold_field"),
         ([gold()], [prediction(), prediction()], "duplicate_prediction_field"),
@@ -206,35 +207,37 @@ def test_wilson_interval_known_vector_and_empty_denominator():
         ),
         (["private-payload"], [], "invalid_gold_fields"),
         ([gold()], ["private-payload"], "invalid_predictions"),
-    ],
-)
-def test_invalid_joins_fail_with_controlled_codes(rows, outputs, code):
-    with pytest.raises(ValueError, match=f"^{code}$"):
-        run_chart_abstraction_benchmark(rows, outputs)
+    ]:
+        with subtests.test(rows=rows, outputs=outputs, code=code):
+            with pytest.raises(ValueError, match=f"^{code}$"):
+                run_chart_abstraction_benchmark(rows, outputs)
 
 
-@pytest.mark.parametrize("collection", ["gold", "predictions"])
-def test_private_iterator_failures_have_controlled_codes_without_context(collection):
-    class BrokenCollection:
-        def __iter__(self):
-            raise RuntimeError("SYNTHETIC_PRIVATE_SOURCE /private/record")
+def test_private_iterator_failures_have_controlled_codes_without_context(subtests):
+    for collection in ["gold", "predictions"]:
+        with subtests.test(collection=collection):
 
-    rows, outputs = [gold()], [prediction()]
-    if collection == "gold":
-        rows = BrokenCollection()
-        code = "invalid_gold_fields"
-    else:
-        outputs = BrokenCollection()
-        code = "invalid_predictions"
-    with pytest.raises(ValueError, match=f"^{code}$") as caught:
-        run_chart_abstraction_benchmark(rows, outputs)
-    assert caught.value.__context__ is None
+            class BrokenCollection:
+                def __iter__(self):
+                    raise RuntimeError("SYNTHETIC_PRIVATE_SOURCE /private/record")
+
+            rows, outputs = [gold()], [prediction()]
+            if collection == "gold":
+                rows = BrokenCollection()
+                code = "invalid_gold_fields"
+            else:
+                outputs = BrokenCollection()
+                code = "invalid_predictions"
+            with pytest.raises(ValueError, match=f"^{code}$") as caught:
+                run_chart_abstraction_benchmark(rows, outputs)
+            assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), {}, []])
-def test_non_scalar_or_nonfinite_values_are_rejected(value):
-    with pytest.raises(ValueError, match="^invalid_value$"):
-        prediction(value)
+def test_non_scalar_or_nonfinite_values_are_rejected(subtests):
+    for value in [float("nan"), float("inf"), {}, []]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="^invalid_value$"):
+                prediction(value)
 
 
 def test_reports_repr_and_errors_do_not_leak_input_canaries():

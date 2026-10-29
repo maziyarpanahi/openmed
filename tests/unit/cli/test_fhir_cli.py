@@ -83,6 +83,7 @@ def test_fhir_bundle_cli_writes_byte_identical_transaction_bundle(
     assert report["result"][0]["reference"] in full_urls
 
 
+@pytest.mark.slow
 def test_fhir_bundle_cli_invalid_type_exits_nonzero(tmp_path: Path) -> None:
     result_file = tmp_path / "result.json"
     result_file.write_text(

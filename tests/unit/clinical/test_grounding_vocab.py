@@ -114,12 +114,13 @@ def test_offline_mode_serves_cached_vocab_without_download(monkeypatch, tmp_path
     assert loader.get_index("rxnorm").get("ASA") == "CONCEPTS-001"
 
 
-@pytest.mark.parametrize("system", ["umls", "snomed", "snomed-ct"])
-def test_restricted_vocabularies_point_to_user_key_path(system):
-    loader = VocabLoader()
+def test_restricted_vocabularies_point_to_user_key_path(subtests):
+    for system in ["umls", "snomed", "snomed-ct"]:
+        with subtests.test(system=system):
+            loader = VocabLoader()
 
-    with pytest.raises(RestrictedVocabularyError, match="user-key-gated"):
-        loader.get_index(system)
+            with pytest.raises(RestrictedVocabularyError, match="user-key-gated"):
+                loader.get_index(system)
 
 
 def test_checksum_mismatch_rejects_local_source(tmp_path):

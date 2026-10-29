@@ -17,7 +17,7 @@ COPY examples/openhim-mediator/mediator-config.json /etc/openmed/mediator-config
 
 RUN python -m pip install --no-cache-dir --upgrade \
         "pip==26.1.2" \
-        "setuptools==83.0.0" \
+        "setuptools==84.1.0" \
         "wheel==0.47.0" \
         "jaraco.context==6.1.2" \
     && pip install --no-cache-dir ".[service]"

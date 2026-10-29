@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.status.generate_nightly_control import build_control_report
 from scripts.status.generate_status import render_status_page, validate_nightly_report
@@ -87,3 +88,28 @@ def test_pages_schedule_runs_control_renderer_and_public_deployment() -> None:
     assert "--nightly-report docs/status/evidence/nightly-control.json" in workflow
     assert "if: always() && github.event_name != 'schedule'" in workflow
     assert "actions/deploy-pages@" in workflow
+
+
+def test_pages_validates_refreshed_status_on_pull_requests_and_deployments() -> None:
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+    )
+    build = workflow["jobs"]["build"]
+    steps = build["steps"]
+    refresh = next(
+        step for step in steps if step["name"] == "Refresh public trust status"
+    )
+    stage = next(
+        step
+        for step in steps
+        if step["name"] == "Stage and verify the exact Pages artifact"
+    )
+    # PR budget checks must include the generated content that gets deployed.
+    assert "if" not in build
+    assert "if" not in refresh
+    assert "if" not in stage
+    assert steps.index(refresh) < steps.index(stage)
+    assert "--source-revision" in refresh["run"]
+    assert "--nightly-report" in refresh["run"]
+    # Validating the deployment artifact must not publish a pull request.
+    assert workflow["jobs"]["deploy"]["if"] == ("github.event_name != 'pull_request'")

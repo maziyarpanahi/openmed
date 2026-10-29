@@ -88,20 +88,18 @@ def test_cost_report_is_deterministic_and_aggregate_only():
     )
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "match"),
-    [
+def test_price_rows_require_citation_date_and_verify_marker(subtests):
+    for field, value, match in [
         ("source_url", None, "source_url"),
         ("captured_at", None, "captured_at"),
         ("verify", False, "verify"),
-    ],
-)
-def test_price_rows_require_citation_date_and_verify_marker(field, value, match):
-    prices = _prices()
-    prices["prices"][0][field] = value
+    ]:
+        with subtests.test(field=field, value=value, match=match):
+            prices = _prices()
+            prices["prices"][0][field] = value
 
-    with pytest.raises((TypeError, ValueError), match=match):
-        cost_vs_cloud_report(_perf_report(), prices, _hardware_cost_model())
+            with pytest.raises((TypeError, ValueError), match=match):
+                cost_vs_cloud_report(_perf_report(), prices, _hardware_cost_model())
 
 
 def test_bundled_cloud_price_table_is_cited_and_loadable():
