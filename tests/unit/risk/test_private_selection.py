@@ -43,6 +43,11 @@ SEED_SENTINEL = "918273645"
 class _ScriptedCsprng(random.SystemRandom):
     """Synthetic CSPRNG double that replays scripted uniforms for tests."""
 
+    def __new__(cls, values: Iterable[float]) -> _ScriptedCsprng:
+        # Python 3.10 seeds random.Random from constructor arguments in __new__,
+        # which fails for an unhashable list of scripted uniforms.
+        return super().__new__(cls)
+
     def __init__(self, values: Iterable[float]) -> None:
         super().__init__()
         self._values = iter(values)
