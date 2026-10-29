@@ -231,6 +231,15 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     assert {"opened", "synchronize", "reopened", "labeled"} <= set(
         workflow["on"]["pull_request"]["types"]
     )
+    active_pr = f"github.event_name == 'pull_request' && ({LABEL_RUN_CONDITION})"
+    # Unrelated label events skip every job, so they need a unique run group
+    # as well as a false cancellation condition; otherwise they cancel CI.
+    assert workflow["concurrency"] == {
+        "group": "${{ github.workflow }}-${{ "
+        + active_pr
+        + " && github.event.pull_request.number || github.run_id }}",
+        "cancel-in-progress": "${{ " + active_pr + " }}",
+    }
     jobs = workflow["jobs"]
     assert jobs["repo-policy"]["if"] == LABEL_RUN_CONDITION
     assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
