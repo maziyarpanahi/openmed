@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
 
+- Validate synthetic artifact facts, times, labels and coordinates against shared Journey truth (#3694).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 

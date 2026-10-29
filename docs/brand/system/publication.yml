@@ -418,6 +418,7 @@ classification:
     - training/synthetic/license-lineage-manifests.md
     - training/synthetic/split-planning.md
     - training/synthetic/multimodal-provenance.md
+    - training/synthetic/truth-alignment.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
