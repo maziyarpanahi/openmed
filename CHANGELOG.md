@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic synthetic dataset partitions that preserve shared trajectory,
+  derivation lineage and transitive ancestry, with explicit unmet-stratum export
+  refusal (#3692).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 
