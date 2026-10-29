@@ -140,20 +140,18 @@ def _validator(name: str) -> Draft202012Validator:
     )
 
 
-@pytest.mark.parametrize("name", sorted(PRIVATE_TRAINING_SCHEMA_BUILDERS))
-def test_catalog_schemas_are_valid_draft_2020_12_and_accept_payloads(
-    name: str,
-) -> None:
-    schema = build_schema(name)
+def test_catalog_schemas_are_valid_draft_2020_12_and_accept_payloads(subtests) -> None:
+    for name in sorted(PRIVATE_TRAINING_SCHEMA_BUILDERS):
+        with subtests.test(name=name):
+            schema = build_schema(name)
 
-    Draft202012Validator.check_schema(schema)
-    assert schema["$schema"] == PRIVATE_TRAINING_SCHEMA_DIALECT
-    _validator(name).validate(_VALID_PAYLOADS[name]())
+            Draft202012Validator.check_schema(schema)
+            assert schema["$schema"] == PRIVATE_TRAINING_SCHEMA_DIALECT
+            _validator(name).validate(_VALID_PAYLOADS[name]())
 
 
-@pytest.mark.parametrize(
-    ("name", "mutate"),
-    [
+def test_malformed_or_content_bearing_payloads_fail(subtests) -> None:
+    for name, mutate in [
         ("federated_round_lifecycle", lambda p: p.update({"extra": 1})),
         ("federated_round_lifecycle", lambda p: p.update({"state": "finished"})),
         (
@@ -202,17 +200,13 @@ def test_catalog_schemas_are_valid_draft_2020_12_and_accept_payloads(
             "federated_aggregate_metric",
             lambda p: p.update({"privacy_mechanism_version": "latest"}),
         ),
-    ],
-)
-def test_malformed_or_content_bearing_payloads_fail(
-    name: str,
-    mutate: Callable[[dict[str, Any]], object],
-) -> None:
-    payload = _VALID_PAYLOADS[name]()
-    mutate(payload)
+    ]:
+        with subtests.test(name=name, mutate=mutate):
+            payload = _VALID_PAYLOADS[name]()
+            mutate(payload)
 
-    with pytest.raises(ValidationError):
-        _validator(name).validate(payload)
+            with pytest.raises(ValidationError):
+                _validator(name).validate(payload)
 
 
 def test_catalog_exposes_every_schema_name_exactly_once() -> None:
@@ -316,9 +310,8 @@ def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_metric_schema_rejects_invalid_runtime_contract_combinations(subtests):
+    for changes in [
         {"participant_count_band": "suppressed"},
         {"participant_count_band": "suppressed", "aggregate_value": None},
         {"uncertainty_method": "suppressed"},
@@ -334,90 +327,93 @@ def test_schema_rendering_is_byte_stable_and_returns_fresh_mappings() -> None:
         {"metric_kind": "rate", "clipping_upper_bound": 1.1},
         {"metric_id": "round.loss\n"},
         {"privacy_mechanism_version": "v1\n"},
-    ],
-)
-def test_metric_schema_rejects_invalid_runtime_contract_combinations(changes):
-    payload = {**_metric_payload(), **changes}
+    ]:
+        with subtests.test(changes=changes):
+            payload = {**_metric_payload(), **changes}
 
-    with pytest.raises(ValueError):
-        FederatedMetricEnvelope.from_dict(payload)
-    with pytest.raises(ValidationError):
-        _validator("federated_aggregate_metric").validate(payload)
-
-
-@pytest.mark.parametrize("confidence", [0, 1, -0.1, 1.1])
-def test_interval_confidence_excludes_both_endpoints(confidence):
-    payload = {
-        **_metric_payload(),
-        "uncertainty_method": "confidence_interval",
-        "uncertainty_lower_bound": 0.25,
-        "uncertainty_upper_bound": 0.75,
-        "confidence_level": confidence,
-    }
-
-    with pytest.raises(ValidationError):
-        _validator("federated_aggregate_metric").validate(payload)
+            with pytest.raises(ValueError):
+                FederatedMetricEnvelope.from_dict(payload)
+            with pytest.raises(ValidationError):
+                _validator("federated_aggregate_metric").validate(payload)
 
 
-@pytest.mark.parametrize("kind", list(FederatedMetricKind))
-@pytest.mark.parametrize("participants", [0, 100])
-@pytest.mark.parametrize("interval", [False, True])
-def test_schema_accepts_runtime_releases_and_suppressed_metrics(
-    kind, participants, interval
-):
-    envelope = build_federated_metric_envelope(
-        metric_id="round.metric",
-        metric_kind=kind,
-        aggregate_value=1 if kind is FederatedMetricKind.COUNT else 0.5,
-        clipping_lower_bound=0,
-        clipping_upper_bound=2 if kind is FederatedMetricKind.COUNT else 1,
-        privacy_mechanism=FederatedPrivacyMechanism.LAPLACE,
-        privacy_mechanism_version="v1",
-        participant_count=participants,
-        uncertainty_method=(
-            FederatedUncertaintyMethod.CONFIDENCE_INTERVAL
-            if interval
-            else FederatedUncertaintyMethod.NONE
-        ),
-        uncertainty_lower_bound=0 if interval else None,
-        uncertainty_upper_bound=1 if interval else None,
-        confidence_level=0.95 if interval else None,
-    )
-    _validator("federated_aggregate_metric").validate(envelope.to_dict())
+def test_interval_confidence_excludes_both_endpoints(subtests):
+    for confidence in [0, 1, -0.1, 1.1]:
+        with subtests.test(confidence=confidence):
+            payload = {
+                **_metric_payload(),
+                "uncertainty_method": "confidence_interval",
+                "uncertainty_lower_bound": 0.25,
+                "uncertainty_upper_bound": 0.75,
+                "confidence_level": confidence,
+            }
+
+            with pytest.raises(ValidationError):
+                _validator("federated_aggregate_metric").validate(payload)
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_schema_accepts_runtime_releases_and_suppressed_metrics(subtests):
+    for kind in list(FederatedMetricKind):
+        for participants in [0, 100]:
+            for interval in [False, True]:
+                with subtests.test(
+                    kind=kind, participants=participants, interval=interval
+                ):
+                    envelope = build_federated_metric_envelope(
+                        metric_id="round.metric",
+                        metric_kind=kind,
+                        aggregate_value=1 if kind is FederatedMetricKind.COUNT else 0.5,
+                        clipping_lower_bound=0,
+                        clipping_upper_bound=2
+                        if kind is FederatedMetricKind.COUNT
+                        else 1,
+                        privacy_mechanism=FederatedPrivacyMechanism.LAPLACE,
+                        privacy_mechanism_version="v1",
+                        participant_count=participants,
+                        uncertainty_method=(
+                            FederatedUncertaintyMethod.CONFIDENCE_INTERVAL
+                            if interval
+                            else FederatedUncertaintyMethod.NONE
+                        ),
+                        uncertainty_lower_bound=0 if interval else None,
+                        uncertainty_upper_bound=1 if interval else None,
+                        confidence_level=0.95 if interval else None,
+                    )
+                    _validator("federated_aggregate_metric").validate(
+                        envelope.to_dict()
+                    )
+
+
+def test_status_schema_rejects_invalid_reason_and_suppression_combinations(subtests):
+    for changes in [
         {"reason_code": "operator_cancelled"},
         {"state": "held", "reason_code": None},
         {"state": "aborted", "reason_code": None},
         {"state": "held", "reason_code": "operator_cancelled"},
         {"participant_count": None, "completed_participant_count": 6},
-    ],
-)
-def test_status_schema_rejects_invalid_reason_and_suppression_combinations(changes):
-    with pytest.raises(ValidationError):
-        _validator("federated_round_status").validate({**_status_payload(), **changes})
+    ]:
+        with subtests.test(changes=changes):
+            with pytest.raises(ValidationError):
+                _validator("federated_round_status").validate(
+                    {**_status_payload(), **changes}
+                )
 
 
-@pytest.mark.parametrize(
-    ("state", "reason"),
-    [
+def test_status_schema_accepts_runtime_reason_codes_and_suppression(subtests):
+    for state, reason in [
         (FederatedRoundState.HELD, FederatedRoundReasonCode.PRIVACY_REVIEW_REQUIRED),
         (FederatedRoundState.ABORTED, FederatedRoundReasonCode.OPERATOR_CANCELLED),
         (FederatedRoundState.COLLECTING, None),
-    ],
-)
-def test_status_schema_accepts_runtime_reason_codes_and_suppression(state, reason):
-    payload = build_federated_round_status(
-        state=state,
-        participant_count=1,
-        completed_participant_count=0,
-        required_quorum=5,
-        reason_code=reason,
-    ).to_dict()
-    _validator("federated_round_status").validate(payload)
+    ]:
+        with subtests.test(state=state, reason=reason):
+            payload = build_federated_round_status(
+                state=state,
+                participant_count=1,
+                completed_participant_count=0,
+                required_quorum=5,
+                reason_code=reason,
+            ).to_dict()
+            _validator("federated_round_status").validate(payload)
 
 
 def test_schema_rejects_out_of_range_dimensions_and_newline_digest():
