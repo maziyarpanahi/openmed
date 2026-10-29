@@ -88,24 +88,22 @@ def test_typed_claim_is_revalidated_before_evaluation():
         compute_citation_support_metrics([claim])
 
 
-@pytest.mark.parametrize(
-    "review",
-    [
+def test_conflicting_review_aliases_fail_closed(subtests):
+    for review in [
         {"label": "supports", "supported": False},
         {"supports": True, "contradicts": True},
         {"label": "supports", "verdict": "contradicts"},
         {"supports_claim": "SYNTHETIC_PRIVATE"},
-    ],
-)
-def test_conflicting_review_aliases_fail_closed(review):
-    claims, evidence = _review_fixture()
-    with pytest.raises(CitationSupportError):
-        compute_citation_support_metrics(
-            claims,
-            evidence,
-            citations=[Citation("c", "e")],
-            adjudications=[{"claim_id": "c", "evidence_id": "e", **review}],
-        )
+    ]:
+        with subtests.test(review=review):
+            claims, evidence = _review_fixture()
+            with pytest.raises(CitationSupportError):
+                compute_citation_support_metrics(
+                    claims,
+                    evidence,
+                    citations=[Citation("c", "e")],
+                    adjudications=[{"claim_id": "c", "evidence_id": "e", **review}],
+                )
 
 
 def test_explicit_source_id_is_not_an_evidence_alias():
