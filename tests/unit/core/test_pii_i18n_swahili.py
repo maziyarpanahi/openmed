@@ -56,9 +56,8 @@ def test_swahili_language_pack_registries_and_surrogate_data():
     )
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_label", "expected_text"),
-    (
+def test_bilingual_context_detects_structured_pii(subtests):
+    for text, expected_label, expected_text in (
         ("Nambari ya kitambulisho 12345678", "KE_NATIONAL_ID", "12345678"),
         ("National ID 87654321", "KE_NATIONAL_ID", "87654321"),
         ("Nambari ya NHIF 987654321", "national_id", "987654321"),
@@ -77,34 +76,29 @@ def test_swahili_language_pack_registries_and_surrogate_data():
         ("Aged 47.", "age", "47"),
         ("Anwani: Kenyatta Avenue 12", "street_address", "Kenyatta Avenue 12"),
         ("msimbo wa posta 00100", "postcode", "00100"),
-    ),
-)
-def test_bilingual_context_detects_structured_pii(
-    text: str,
-    expected_label: str,
-    expected_text: str,
-):
-    detected = safety_sweep(text, [], lang="sw")
-    assert [(entity.label, entity.text) for entity in detected] == [
-        (expected_label, expected_text)
-    ]
+    ):
+        with subtests.test(
+            text=text, expected_label=expected_label, expected_text=expected_text
+        ):
+            detected = safety_sweep(text, [], lang="sw")
+            assert [(entity.label, entity.text) for entity in detected] == [
+                (expected_label, expected_text)
+            ]
 
 
-@pytest.mark.parametrize(
-    "text",
-    (
+def test_ambiguous_bare_numbers_do_not_become_swahili_identifiers(subtests):
+    for text in (
         "Kipimo cha maabara 12345678 kilirudi kawaida.",
         "Dozi 987654321 ilirekodiwa bila nambari ya bima.",
         "Nambari 19791103123456789012 ilirekodiwa kama thamani ya maabara.",
-    ),
-)
-def test_ambiguous_bare_numbers_do_not_become_swahili_identifiers(text: str):
-    identifiers = [
-        entity
-        for entity in safety_sweep(text, [], lang="sw")
-        if entity.label == "national_id"
-    ]
-    assert identifiers == []
+    ):
+        with subtests.test(text=text):
+            identifiers = [
+                entity
+                for entity in safety_sweep(text, [], lang="sw")
+                if entity.label == "national_id"
+            ]
+            assert identifiers == []
 
 
 def test_synthetic_registers_have_exact_offsets():
