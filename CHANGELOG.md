@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Generate local-convention African address and town surrogates, with mask
+  fallback when source-disjoint vocabulary is exhausted (#3891).
+
 - Add synthetic lab time series with bounded offline contracts, synthetic controls
   and documented behavior (#2843).
 

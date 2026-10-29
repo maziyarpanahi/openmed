@@ -397,13 +397,14 @@ A post-office box stays a box, and any other address becomes a street, plot,
 area, or landmark address. The surrogate shares no street, area, or town name
 with the source and reuses none of its numbers. Output is deterministic for a
 given `seed`. An explicit locale such as `locale="ha_NG"` selects the same
-shapes.
+shapes. If the source exhausts the available disjoint vocabulary, the generator
+raises and the anonymizer uses its normal mask placeholder.
 
 All street, area, and town names are synthetic, written for this repository
 from common local place-name patterns and generic tree, plant, and landform
 words. They are not taken from a gazetteer and are not people's names. House,
-plot, and box numbers are random, so no value is a real address. Any match
-with a real place is a coincidence.
+plot, and box numbers are random. No real address record is used, but
+coincidental matches with real places or addresses remain possible.
 
 Other locales, including `zu_ZA`, `xh_ZA`, `en_KE`, `en_NG`, and `am_ET`, use
 their usual generators. isiXhosa addresses come from the `zu_ZA` Faker

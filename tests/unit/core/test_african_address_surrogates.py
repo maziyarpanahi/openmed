@@ -284,6 +284,20 @@ def test_location_surrogate_never_repeats_a_curated_town(lang: str) -> None:
             assert surrogate != town
             assert surrogate in ADDRESS_CONVENTIONS[lang].towns
 
+        convention = ADDRESS_CONVENTIONS[lang]
+        # A detected span may contain every curated place name. It must not
+        # fall back to reusing one of those names when the pool is exhausted.
+        source = ", ".join(convention.towns)
+        with pytest.warns(RuntimeWarning, match="source-disjoint") as caught:
+            assert anonymizer.surrogate(source, "CITY") == "[CITY]"
+        assert all(source not in str(item.message) for item in caught)
+        source = ", ".join(
+            (*convention.street_names, *convention.areas, *convention.towns)
+        )
+        with pytest.warns(RuntimeWarning, match="source-disjoint") as caught:
+            assert anonymizer.surrogate(source, "STREET_ADDRESS") == "[STREET_ADDRESS]"
+        assert all(source not in str(item.message) for item in caught)
+
 
 @pytest.mark.parametrize("lang", sorted(ADDRESS_CONVENTIONS))
 def test_replace_pipeline_swaps_address_spans_without_us_templates(lang: str) -> None:

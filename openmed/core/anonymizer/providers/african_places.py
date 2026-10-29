@@ -30,8 +30,8 @@ surrogate material. Street and area names combine public generic vocabulary
 (tree, plant, landform and settlement words) with common local place-name
 patterns. They were not copied from a gazetteer or address register and are
 not people's names; any match with a real locality is incidental. House, plot
-and box numbers are drawn at random, so no street is paired with a real
-number and no value is a real address.
+and box numbers are drawn at random. No real address record is used; a
+coincidental match with a real address remains possible.
 """
 
 from __future__ import annotations
@@ -449,7 +449,10 @@ def _draw_one(faker, pool: Sequence[str], compact_source: str) -> str:
 
     if not pool:
         return ""
-    return faker.random.choice(_eligible(pool, compact_source) or tuple(pool))
+    eligible = _eligible(pool, compact_source)
+    if not eligible:
+        raise RuntimeError("no source-disjoint surrogate place is available")
+    return faker.random.choice(eligible)
 
 
 def _draw_distinct(
@@ -458,10 +461,12 @@ def _draw_distinct(
     compact_source: str,
     count: int,
 ) -> list[str]:
-    """Draw ``count`` distinct pool values, preferring source-disjoint ones."""
+    """Draw ``count`` distinct source-disjoint pool values, or reject."""
 
     eligible = _eligible(pool, compact_source)
-    return faker.random.sample(eligible if len(eligible) >= count else pool, count)
+    if len(eligible) < count:
+        raise RuntimeError("not enough source-disjoint surrogate areas are available")
+    return faker.random.sample(eligible, count)
 
 
 def _draw_number(faker, excluded: frozenset[int], bounds: tuple[int, int]) -> int:
