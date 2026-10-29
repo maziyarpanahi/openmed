@@ -56,6 +56,7 @@ def _run_consumers(path, token, count):
         results.join_thread()
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 def test_cross_process_claim_has_exactly_one_winner_and_survives_restart(tmp_path):
     path = tmp_path / "claims.db"

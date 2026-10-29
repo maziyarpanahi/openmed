@@ -106,6 +106,7 @@ def _stream_events(client: TestClient, payload: dict[str, Any]) -> list[dict[str
         return [json.loads(line) for line in response.iter_lines() if line]
 
 
+@pytest.mark.slow
 @patch("openmed.core.pii.extract_pii", side_effect=_empty_prediction)
 def test_long_stream_matches_single_shot_byte_for_byte(
     _mock_extract: Any,
