@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   locale folding, byte-stable JSON/Markdown rendering and registry-derived
   entries, plus offline golden tests (#3100).
 
+- Added the offline `openmed i18n check` locale-pack conformance command
+  with one independent result per component, a closed set of stable reason
+  codes, deterministic text/JSON output and offline golden tests (#3103).
+
 - Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
   numbers, context-gated citizenship-certificate and national identity card
   numbers without checksum claims, numeric Bikram Sambat dates and postal
