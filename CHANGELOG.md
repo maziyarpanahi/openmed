@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add synthetic lab time series with bounded offline contracts, synthetic controls
+  and documented behavior (#2843).
+
 - Add synthetic medication courses with bounded offline contracts, synthetic controls
   and documented behavior (#2844).
 
