@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
+  PHI truth manifest addressed by segment, field, repetition, component,
+  subcomponent and raw-text offsets across encoding-character variants, escape
+  sequences, repetitions, timestamp precisions, free text and Z-segments. A
+  value-free leakage harness reports residual PHI after `redact_hl7v2()` by
+  field position and label (#3884).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
@@ -61,13 +68,6 @@ clinical efficacy. Package publication remains a separate release action.
   without restoring the invalid classical scale (#3724).
 
 ### Added
-
-- Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
-  PHI truth manifest addressed by segment, field, repetition, component,
-  subcomponent and raw-text offsets across encoding-character variants, escape
-  sequences, repetitions, timestamp precisions, free text and Z-segments. A
-  value-free leakage harness reports residual PHI after `redact_hl7v2()` by
-  field position and label (#3884).
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
