@@ -957,9 +957,7 @@ class LocalePhiGenerator:
             )
             validator, validator_name = _national_id_validator(language)
             if not validator(value):
-                raise RuntimeError(
-                    f"generated invalid national ID for {language!r}: {value!r}"
-                )
+                raise RuntimeError(f"generated invalid national ID for {language!r}")
             return value, {
                 "field": "identifier",
                 "id_locale": id_locale,
@@ -971,7 +969,7 @@ class LocalePhiGenerator:
         rng = random.Random(seed)
         value = clinical_ids.generate_luhn_identifier(rng=rng)
         if not clinical_ids.validate_luhn(value):
-            raise RuntimeError(f"generated invalid Luhn identifier: {value!r}")
+            raise RuntimeError("generated invalid Luhn identifier")
         return value, {
             "field": "identifier",
             "id_locale": LANG_TO_LOCALE[language],

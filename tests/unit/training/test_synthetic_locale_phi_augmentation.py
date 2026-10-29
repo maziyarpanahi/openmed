@@ -185,18 +185,33 @@ def test_unwired_route_fails_closed(monkeypatch, language, registry):
         LocalePhiGenerator(seed=1).generate(language)
 
 
-def test_placeholder_surrogate_never_becomes_a_gold_span(monkeypatch):
+@pytest.mark.parametrize(
+    ("language", "failed_label", "rejected_value", "message"),
+    [
+        ("tl", PHONE, "[PHONE]", "placeholder for 'tl' field 'phone'"),
+        ("tl", ID_NUM, "private-input-sentinel", "generated invalid national ID"),
+        ("ne", None, "private-luhn-sentinel", "generated invalid Luhn identifier"),
+    ],
+)
+def test_failed_surrogate_never_becomes_a_gold_span(
+    monkeypatch, language, failed_label, rejected_value, message
+):
     real_surrogate = Anonymizer.surrogate
 
-    def phone_fallback(self, original, label, *, lang=None, locale=None):
-        if label == PHONE:
-            return f"[{label}]"
+    def failed_surrogate(self, original, label, *, lang=None, locale=None):
+        if label == failed_label:
+            return rejected_value
         return real_surrogate(self, original, label, lang=lang, locale=locale)
 
-    monkeypatch.setattr(Anonymizer, "surrogate", phone_fallback)
+    monkeypatch.setattr(Anonymizer, "surrogate", failed_surrogate)
+    if failed_label is None:
+        monkeypatch.setattr(
+            clinical_ids, "generate_luhn_identifier", lambda **kwargs: rejected_value
+        )
 
-    with pytest.raises(RuntimeError, match="placeholder for 'tl' field 'phone'"):
-        LocalePhiGenerator(seed=1).generate("tl")
+    with pytest.raises(RuntimeError, match=message) as error:
+        LocalePhiGenerator(seed=1).generate(language)
+    assert rejected_value not in str(error.value)
 
 
 @pytest.mark.parametrize("language", AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)
