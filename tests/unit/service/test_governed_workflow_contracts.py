@@ -61,9 +61,8 @@ def test_reference_roundtrip_and_closed_repr():
     value.require_mutation()
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_reference_rejects_untrusted_fields(subtests):
+    for change in [
         {"schema_version": "unknown"},
         {"run_id": "patient"},
         {"workflow_id": "bad"},
@@ -73,22 +72,22 @@ def test_reference_roundtrip_and_closed_repr():
         {"role": "admin"},
         {"approval": True},
         {"clinical_text": "Synthetic private marker"},
-    ],
-)
-def test_reference_rejects_untrusted_fields(change):
-    value = reference().to_dict()
-    value.update(change)
-    with pytest.raises(WorkflowServiceError) as error:
-        WorkflowReference.from_dict(value)
-    assert error.value.code == "workflow_invalid_input"
-    assert "Synthetic private marker" not in str(error.value)
+    ]:
+        with subtests.test(change=change):
+            value = reference().to_dict()
+            value.update(change)
+            with pytest.raises(WorkflowServiceError) as error:
+                WorkflowReference.from_dict(value)
+            assert error.value.code == "workflow_invalid_input"
+            assert "Synthetic private marker" not in str(error.value)
 
 
-@pytest.mark.parametrize("field", ["expected_state_digest", "request_id"])
-def test_mutation_requires_state_and_idempotency(field):
-    value = replace(reference(), **{field: None})
-    with pytest.raises(WorkflowServiceError):
-        value.require_mutation()
+def test_mutation_requires_state_and_idempotency(subtests):
+    for field in ["expected_state_digest", "request_id"]:
+        with subtests.test(field=field):
+            value = replace(reference(), **{field: None})
+            with pytest.raises(WorkflowServiceError):
+                value.require_mutation()
 
 
 def test_existing_effect_and_outcome_records_are_preserved():
@@ -127,19 +126,19 @@ def test_response_rejects_effect_bound_to_another_run():
         WorkflowView(reference(), STATE, ActionPhase.READY, (e,))
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_service_result_cannot_cross_run_workflow_or_action(subtests):
+    for change in [
         {"run_id": RunId.parse("run_" + "f" * 32)},
         {"workflow_id": WorkflowId.parse("workflow:test.example/other")},
         {"action_digest": "sha256:" + "f" * 64},
-    ],
-)
-def test_service_result_cannot_cross_run_workflow_or_action(change):
-    view = WorkflowView(replace(reference(), **change), STATE, ActionPhase.READY)
-    with pytest.raises(WorkflowServiceError) as error:
-        validate_workflow_view(view, reference())
-    assert error.value.code == "workflow_conflict"
+    ]:
+        with subtests.test(change=change):
+            view = WorkflowView(
+                replace(reference(), **change), STATE, ActionPhase.READY
+            )
+            with pytest.raises(WorkflowServiceError) as error:
+                validate_workflow_view(view, reference())
+            assert error.value.code == "workflow_conflict"
 
 
 def test_modified_frozen_service_results_are_revalidated():
@@ -151,18 +150,19 @@ def test_modified_frozen_service_results_are_revalidated():
     assert "Synthetic private marker" not in str(error.value)
 
 
-@pytest.mark.parametrize("now", [99, 100, 200, 201])
-def test_receipt_metadata_carries_no_time_authority(now):
-    value = receipt()
-    assert validate_workflow_receipt(
-        reference(), value, now=now
-    ) == workflow_receipt_digest(value)
-    assert set(value.to_dict()) == {
-        "schema_version",
-        "action_digest",
-        "token_digest",
-        "code",
-    }
+def test_receipt_metadata_carries_no_time_authority(subtests):
+    for now in [99, 100, 200, 201]:
+        with subtests.test(now=now):
+            value = receipt()
+            assert validate_workflow_receipt(
+                reference(), value, now=now
+            ) == workflow_receipt_digest(value)
+            assert set(value.to_dict()) == {
+                "schema_version",
+                "action_digest",
+                "token_digest",
+                "code",
+            }
 
 
 def test_invalid_clock_is_refused_before_custody():
@@ -184,9 +184,8 @@ def test_receipt_is_actual_public_contract_and_requires_exact_action():
     assert error.value.code == "workflow_conflict"
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
+def test_strict_json_rejects_unsafe_or_excessive_input(subtests):
+    for raw in [
         b'{"x":1,"x":2}',
         b'{"x":NaN}',
         b'{"x":Infinity}',
@@ -195,12 +194,11 @@ def test_receipt_is_actual_public_contract_and_requires_exact_action():
         b"\xff",
         b"{" + b'"x":[' * 10 + b"0" + b"]}" * 10,
         json.dumps({"x": list(range(257))}).encode(),
-    ],
-)
-def test_strict_json_rejects_unsafe_or_excessive_input(raw):
-    with pytest.raises(WorkflowServiceError) as error:
-        parse_workflow_json(raw)
-    assert error.value.code == "workflow_invalid_input"
+    ]:
+        with subtests.test(raw=raw):
+            with pytest.raises(WorkflowServiceError) as error:
+                parse_workflow_json(raw)
+            assert error.value.code == "workflow_invalid_input"
 
 
 def test_json_byte_limit_and_roundtrip():
@@ -211,28 +209,32 @@ def test_json_byte_limit_and_roundtrip():
     assert error.value.code == "workflow_request_too_large"
 
 
-@pytest.mark.parametrize("boundary", ["json", "reference", "receipt", "view"])
-def test_public_workflow_errors_drop_private_context(monkeypatch, boundary):
-    marker = b"synthetic-private-workflow-marker"
+def test_public_workflow_errors_drop_private_context(subtests):
+    for boundary in ["json", "reference", "receipt", "view"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                marker = b"synthetic-private-workflow-marker"
 
-    def private_failure(*args, **kwargs):
-        raise UnicodeDecodeError("utf-8", marker, 0, 1, "invalid")
+                def private_failure(*args, **kwargs):
+                    raise UnicodeDecodeError("utf-8", marker, 0, 1, "invalid")
 
-    if boundary == "json":
-        invoke = lambda: parse_workflow_json(b"\xff" + marker)
-    elif boundary == "reference":
-        payload = reference().to_dict()
-        monkeypatch.setattr(RunId, "parse", private_failure)
-        invoke = lambda: WorkflowReference.from_dict(payload)
-    elif boundary == "receipt":
-        value = ApprovalReceipt(DIGEST, STATE)
-        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
-        invoke = lambda: workflow_receipt_digest(value)
-    else:
-        value = WorkflowView(reference(), STATE, ActionPhase.READY)
-        monkeypatch.setattr(WorkflowView, "to_dict", private_failure)
-        invoke = lambda: validate_workflow_view(value, reference())
-    with pytest.raises(WorkflowServiceError) as caught:
-        invoke()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
-    assert marker.decode() not in str(caught.value)
+                if boundary == "json":
+                    invoke = lambda: parse_workflow_json(b"\xff" + marker)
+                elif boundary == "reference":
+                    payload = reference().to_dict()
+                    monkeypatch.setattr(RunId, "parse", private_failure)
+                    invoke = lambda: WorkflowReference.from_dict(payload)
+                elif boundary == "receipt":
+                    value = ApprovalReceipt(DIGEST, STATE)
+                    monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+                    invoke = lambda: workflow_receipt_digest(value)
+                else:
+                    value = WorkflowView(reference(), STATE, ActionPhase.READY)
+                    monkeypatch.setattr(WorkflowView, "to_dict", private_failure)
+                    invoke = lambda: validate_workflow_view(value, reference())
+                with pytest.raises(WorkflowServiceError) as caught:
+                    invoke()
+                assert (
+                    caught.value.__context__ is None and caught.value.__cause__ is None
+                )
+                assert marker.decode() not in str(caught.value)

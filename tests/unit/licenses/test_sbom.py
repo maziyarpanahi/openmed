@@ -139,6 +139,7 @@ def test_cli_writes_without_network_and_does_not_log_output_path(
     )
 
 
+@pytest.mark.slow
 def test_current_manifests_generate_the_base_runtime_closure() -> None:
     document = sbom.build_sbom(
         ROOT / "pyproject.toml",
@@ -195,16 +196,17 @@ def test_current_manifests_generate_the_base_runtime_closure() -> None:
     assert str(ROOT) not in rendered
 
 
-@pytest.mark.parametrize(
-    "expression",
-    ["((MIT)", "MIT OR", "MIT Apache-2.0", "Synthetic-Private-License"],
-)
-def test_invalid_or_unreviewed_license_syntax_becomes_noassertion(
-    expression: str,
-) -> None:
-    assert sbom._license_value(expression) == [
-        {"license": {"name": sbom.UNKNOWN_LICENSE}}
-    ]
+def test_invalid_or_unreviewed_license_syntax_becomes_noassertion(subtests) -> None:
+    for expression in [
+        "((MIT)",
+        "MIT OR",
+        "MIT Apache-2.0",
+        "Synthetic-Private-License",
+    ]:
+        with subtests.test(expression=expression):
+            assert sbom._license_value(expression) == [
+                {"license": {"name": sbom.UNKNOWN_LICENSE}}
+            ]
 
 
 def test_valid_compound_spdx_expression_is_preserved() -> None:
@@ -403,8 +405,9 @@ def test_malformed_requirement_fails_without_echoing_the_value() -> None:
     assert marker not in str(error.value)
 
 
-@pytest.mark.parametrize("expression", ["(MIT)", "((Apache-2.0))"])
-def test_parenthesized_single_license_emits_a_license_id(expression: str) -> None:
-    assert sbom._license_value(expression) == [
-        {"license": {"id": expression.strip("()")}}
-    ]
+def test_parenthesized_single_license_emits_a_license_id(subtests) -> None:
+    for expression in ["(MIT)", "((Apache-2.0))"]:
+        with subtests.test(expression=expression):
+            assert sbom._license_value(expression) == [
+                {"license": {"id": expression.strip("()")}}
+            ]
