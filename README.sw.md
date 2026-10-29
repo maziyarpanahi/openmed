@@ -9,7 +9,7 @@ Runtime kuu ya ndani ya OpenMed hufanya uchimbaji na uondoaji utambulisho baada 
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -145,7 +145,7 @@ Kwenye maunzi ya Apple yanayoungwa mkono, OpenMed inaweza kutumia **MLX** na **[
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.1.0"),
 ]
 ```
 
@@ -193,11 +193,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Kisha tumia toleo lisilobadilika la OpenMed `v3.0.0`:
+Kisha tumia toleo lisilobadilika la OpenMed `v3.1.0`:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.1.0")
 }
 ```
 
@@ -528,7 +528,7 @@ kutoka kwenye nyaraka za sasa wakati wa kila build kali ya MkDocs.
 | [Maswali](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Wasifu wa Usanidi](https://openmed.life/docs/profiles) | [Huduma ya REST](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [Mwongozo wa Uhamiaji wa OpenMed 3.0.0](docs/migration/2.5-to-3.0.md) | [Maelezo ya Toleo la OpenMed 2.2.0](docs/release/v2.2.0.md) | [Mifano](docs/examples.md) |
+| [Mwongozo wa Uhamiaji wa OpenMed 3.1.0](docs/migration/3.0-to-3.1.md) | [Maelezo ya Toleo la OpenMed 2.2.0](docs/release/v2.2.0.md) | [Mifano](docs/examples.md) |
 | [Mikondo ya Matoleo](docs/release/semver-and-channels.md) | [Sera ya Modeli Zalishi](docs/generative-model-policy.md) | [Kuchangia](docs/contributing.md) |
 | [Sera ya Usalama](SECURITY.md) | [Msimamo wa Uzingatiaji](docs/compliance.md) | [SDK ya Plugin za Upanuzi](docs/plugin-sdk.md) |
 | [Uhamishaji kutoka v1 hadi v2](docs/migration.md) | [Miunganisho ya MCP Client](docs/mcp-clients.md) | [Mwongozo wa Waendelezaji Afrika](docs/africa-onboarding.md) |

@@ -171,32 +171,35 @@ def test_explicit_unsupported_languages_are_never_processed(language, text):
     assert text not in json.dumps(report.to_dict())
 
 
-@pytest.mark.parametrize("language", ["en", "en-US", "EN_us"])
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Social History: retired teacher. Lives alone. Current smoker, 7 drinks/week. Reports food insecurity.",
-        "Social History: no social determinants documented.",
-        "Social History: ask about smoking?",
-    ],
-)
-def test_english_findings_match_legacy_and_feed_completeness(language, text):
-    sections = detect_sections(text)
-    expected = extract_sdoh(text, (), sections)
-    report = extract_sdoh_with_language(text, (), sections, language=language)
-    assert list(report.findings) == expected
-    assert all(
-        item.state is SDOHCategoryState.PROCESSED for item in report.category_results
-    )
-    audit = audit_sdoh_completeness(
-        available_determinant_extractors(), report.category_results
-    )
-    assert sum(item.finding_count for item in audit.categories) == len(expected)
-    for item in report.to_dict()["findings"]:
-        assert set(item) == {"category", "span"}
-    for item in report.category_results:
-        if not item.finding_count:
-            assert item.absence_interpretation == "unmentioned_not_negative"
+def test_english_findings_match_legacy_and_feed_completeness(subtests):
+    for language in ["en", "en-US", "EN_us"]:
+        for text in [
+            "Social History: retired teacher. Lives alone. Current smoker, 7 drinks/week. Reports food insecurity.",
+            "Social History: no social determinants documented.",
+            "Social History: ask about smoking?",
+        ]:
+            with subtests.test(language=language, text=text):
+                sections = detect_sections(text)
+                expected = extract_sdoh(text, (), sections)
+                report = extract_sdoh_with_language(
+                    text, (), sections, language=language
+                )
+                assert list(report.findings) == expected
+                assert all(
+                    item.state is SDOHCategoryState.PROCESSED
+                    for item in report.category_results
+                )
+                audit = audit_sdoh_completeness(
+                    available_determinant_extractors(), report.category_results
+                )
+                assert sum(item.finding_count for item in audit.categories) == len(
+                    expected
+                )
+                for item in report.to_dict()["findings"]:
+                    assert set(item) == {"category", "span"}
+                for item in report.category_results:
+                    if not item.finding_count:
+                        assert item.absence_interpretation == "unmentioned_not_negative"
 
 
 def _isolated_registry(monkeypatch, entries):
@@ -243,27 +246,30 @@ def test_declared_custom_language_and_value_free_audit(monkeypatch):
     assert unsupported.category_results[0].state is SDOHCategoryState.UNSUPPORTED
 
 
-@pytest.mark.parametrize(
-    "language_declaration", [[], ["de"], ["en", "EN"], [None], "en"]
-)
-def test_cue_table_language_declaration_controls_builtin_support(
-    monkeypatch, language_declaration
-):
-    module = import_module("openmed.clinical.sdoh")
-    payload = module.load_sdoh_social_cues()
-    payload["languages"] = language_declaration
-    monkeypatch.setattr(module, "_load_default_sdoh_social_cues", lambda: payload)
-    report = extract_sdoh_with_language("retired teacher", language="en")
-    social = [
-        item
-        for item in report.category_results
-        if item.category in {"employment", "food_insecurity", "living_status"}
-    ]
-    assert all(item.state is not SDOHCategoryState.PROCESSED for item in social)
-    assert not any(
-        item.category in {"employment", "food_insecurity", "living_status"}
-        for item in report.findings
-    )
+def test_cue_table_language_declaration_controls_builtin_support(subtests):
+    for language_declaration in [[], ["de"], ["en", "EN"], [None], "en"]:
+        with subtests.test(language_declaration=language_declaration):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                module = import_module("openmed.clinical.sdoh")
+                payload = module.load_sdoh_social_cues()
+                payload["languages"] = language_declaration
+                monkeypatch.setattr(
+                    module, "_load_default_sdoh_social_cues", lambda: payload
+                )
+                report = extract_sdoh_with_language("retired teacher", language="en")
+                social = [
+                    item
+                    for item in report.category_results
+                    if item.category
+                    in {"employment", "food_insecurity", "living_status"}
+                ]
+                assert all(
+                    item.state is not SDOHCategoryState.PROCESSED for item in social
+                )
+                assert not any(
+                    item.category in {"employment", "food_insecurity", "living_status"}
+                    for item in report.findings
+                )
 
 
 def test_substance_cue_table_also_declares_english():
@@ -327,10 +333,11 @@ def test_unselected_sections_are_explicitly_skipped(monkeypatch):
     )
 
 
-@pytest.mark.parametrize("language", [True, 1, "PRIVATE LANGUAGE", "en\n", "x" * 64])
-def test_malformed_language_values_are_not_echoed(language):
-    with pytest.raises(ValueError, match="^invalid_sdoh_language$"):
-        extract_sdoh_with_language("synthetic", language=language)
+def test_malformed_language_values_are_not_echoed(subtests):
+    for language in [True, 1, "PRIVATE LANGUAGE", "en\n", "x" * 64]:
+        with subtests.test(language=language):
+            with pytest.raises(ValueError, match="^invalid_sdoh_language$"):
+                extract_sdoh_with_language("synthetic", language=language)
 
 
 def test_registry_replacement_resets_language_declaration():

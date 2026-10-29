@@ -13,41 +13,37 @@ from openmed.core.pipeline import LanguageRoute, Pipeline
 from openmed.processing.outputs import PredictionResult
 
 
-@pytest.mark.parametrize(
-    ("source", "script"),
-    [
+def test_auto_pipeline_rejects_unsupported_letters_before_model_inference(subtests):
+    for source, script in [
         ("မြန်မာ", "Myanmar"),
         ("ខ្មែរ", "Khmer"),
         ("ລາວ", "Lao"),
         ("සිංහල", "Sinhala"),
         ("ދިވެހި", "Thaana"),
         ("བོད", "Tibetan"),
-    ],
-)
-def test_auto_pipeline_rejects_unsupported_letters_before_model_inference(
-    source, script
-):
-    calls = []
-    router = LanguageRouter(use_optional_lid=False)
-    decision = router.route(source)
-    assert decision.runs[0].script == script
-    assert decision.runs[0].reason == "unsupported_script"
-    assert decision.confidence < 0.99
-    with pytest.raises(InputError, match="unsupported script") as exc:
-        Pipeline(
-            lang="auto",
-            language_router=router,
-            model_detector=lambda *a, **k: calls.append(a),
-        ).run(source)
-    assert source not in str(exc.value)
-    assert not calls
-    explicit = LanguageRouter(use_optional_lid=False, fallback_pack="en")
-    assert (
-        Pipeline(lang="auto", language_router=explicit)
-        .stage2_language_script(source)
-        .lang
-        == "en"
-    )
+    ]:
+        with subtests.test(source=source, script=script):
+            calls = []
+            router = LanguageRouter(use_optional_lid=False)
+            decision = router.route(source)
+            assert decision.runs[0].script == script
+            assert decision.runs[0].reason == "unsupported_script"
+            assert decision.confidence < 0.99
+            with pytest.raises(InputError, match="unsupported script") as exc:
+                Pipeline(
+                    lang="auto",
+                    language_router=router,
+                    model_detector=lambda *a, **k: calls.append(a),
+                ).run(source)
+            assert source not in str(exc.value)
+            assert not calls
+            explicit = LanguageRouter(use_optional_lid=False, fallback_pack="en")
+            assert (
+                Pipeline(lang="auto", language_router=explicit)
+                .stage2_language_script(source)
+                .lang
+                == "en"
+            )
 
 
 @pytest.mark.parametrize(

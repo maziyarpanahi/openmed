@@ -5,7 +5,7 @@ pipeline or downloads a model. A caller may therefore keep medspaCy entirely
 outside the OpenMed core and pass the resulting document to
 :func:`to_canonical`. The runtime extra requires Python 3.12 or newer because
 medspaCy on older Python versions pins spaCy below the supported security floor.
-Processed document conversion remains available on Python 3.10 or newer.
+Processed document conversion remains available on Python 3.11 or newer.
 
 medspaCy and spaCy character offsets are Python string, half-open offsets:
 ``[start_char, end_char)``. The alignment contract is intentionally exact: an

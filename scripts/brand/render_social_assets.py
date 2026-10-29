@@ -324,7 +324,7 @@ def _network_blocked() -> Iterator[None]:
         socket.create_connection = original_connection  # type: ignore[assignment]
 
 
-def _manifest_without_derivative_byte_hashes(
+def _portable_manifest(
     manifest: dict[str, Any],
 ) -> dict[str, Any]:
     """Return the portable manifest contract used by cross-platform checks.
@@ -332,11 +332,13 @@ def _manifest_without_derivative_byte_hashes(
     Pillow produces identical RGBA pixels for these derivatives on supported
     platforms, but its PNG/ICO compression bytes can differ with the native
     codec build. The committed manifest still records canonical repository
-    byte hashes; cross-platform reproduction compares those derivatives by
-    decoded pixels and keeps byte equality for approved master exports.
+    byte hashes and the Pillow version that generated them. Reproduction with
+    a patched Pillow compares decoded pixels and keeps byte equality for
+    approved master exports, rather than requiring the original library version.
     """
 
     portable = copy.deepcopy(manifest)
+    portable["synchronizer"].pop("pillow_version", None)
     for asset in portable["assets"]:
         asset.pop("native_sha256", None)
         asset.pop("safe_zone_preview_sha256", None)
@@ -459,9 +461,9 @@ def _check() -> int:
         root = Path(temp)
         with _network_blocked():
             rendered_manifest = render_all(root)
-        if _manifest_without_derivative_byte_hashes(
-            committed_manifest
-        ) != _manifest_without_derivative_byte_hashes(rendered_manifest):
+        if _portable_manifest(committed_manifest) != _portable_manifest(
+            rendered_manifest
+        ):
             print("social manifest is stale; synchronize with --write", file=sys.stderr)
             return 1
         mismatches = _validate_committed_output_hashes(committed_manifest)

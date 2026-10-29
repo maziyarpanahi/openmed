@@ -48,15 +48,16 @@ def test_unknown_runtime_is_not_reported_as_supported_or_echoed():
     assert "synthetic_private_runtime" not in report.to_json()
 
 
-@pytest.mark.parametrize("field", ["cloud_fallback", "network_required"])
-@pytest.mark.parametrize("value", [0, None, "", []])
-def test_falsey_non_boolean_policy_is_not_accepted(field, value):
-    manifest = _manifest()
-    manifest[field] = value
-    report = probe_clinical_slm_capabilities(
-        manifest, available_runtime_features=["tokenizers"]
-    )
-    assert not report.supported
+def test_falsey_non_boolean_policy_is_not_accepted(subtests):
+    for field in ["cloud_fallback", "network_required"]:
+        for value in [0, None, "", []]:
+            with subtests.test(field=field, value=value):
+                manifest = _manifest()
+                manifest[field] = value
+                report = probe_clinical_slm_capabilities(
+                    manifest, available_runtime_features=["tokenizers"]
+                )
+                assert not report.supported
 
 
 def test_conflicting_context_aliases_are_rejected():
@@ -109,17 +110,15 @@ def test_invalid_json_does_not_retain_private_exception_context():
     assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_capability_check_rejects_invalid_or_inconsistent_records(subtests):
+    for kwargs in [
         {"name": "synthetic_private", "supported": True},
         {"name": NLI, "supported": True, "reason_codes": ("synthetic_private",)},
         {"name": NLI, "supported": True, "reason_codes": ("task_not_declared",)},
-    ],
-)
-def test_capability_check_rejects_invalid_or_inconsistent_records(kwargs):
-    with pytest.raises(ClinicalSLMCapabilityError):
-        capabilities.ClinicalSLMCapabilityCheck(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ClinicalSLMCapabilityError):
+                capabilities.ClinicalSLMCapabilityCheck(**kwargs)
 
 
 def test_unbounded_requirement_stops_at_limit():

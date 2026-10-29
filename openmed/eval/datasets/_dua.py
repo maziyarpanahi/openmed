@@ -122,22 +122,25 @@ def load_json_rows(
     authority: str,
     object_pairs_hook: Callable[[list[tuple[str, Any]]], dict[str, Any]] | None = None,
 ) -> list[Mapping[str, Any]]:
-    """Load JSON or JSONL rows without writing or caching source content."""
+    """Load JSON or JSONL rows without writing or caching source content.
+
+    JSONL and NDJSON records follow physical file lines; Unicode separators
+    inside JSON strings remain content. The returned rows are materialized.
+    """
 
     if path.suffix.casefold() in {".jsonl", ".ndjson"}:
         rows: list[Mapping[str, Any]] = []
-        for line_number, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
-            if not line.strip():
-                continue
-            try:
-                payload = json.loads(line, object_pairs_hook=object_pairs_hook)
-            except json.JSONDecodeError as exc:
-                raise ValueError(
-                    f"{dataset} JSONL row {line_number} is invalid: {exc.msg}"
-                ) from exc
-            rows.extend(_mapping_rows(payload, dataset=dataset))
+        with path.open(encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line, object_pairs_hook=object_pairs_hook)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"{dataset} JSONL row {line_number} is invalid: {exc.msg}"
+                    ) from exc
+                rows.extend(_mapping_rows(payload, dataset=dataset))
         return rows
 
     try:
