@@ -14,7 +14,9 @@ surrogate values for detected PII entities. It supports:
     determinism is opt-in via ``seed=``.
   - **Format preservation**: phone digit groups, date separators, email
     domains, and ID shapes are kept stable so downstream regexes and
-    template renderers don't break.
+    template renderers don't break. Spans written in native digits
+    (Persian, Arabic-Indic, Devanagari, Thai, ...) get surrogates in the
+    same digit system (see :mod:`digit_systems`).
   - **Custom generators**: extend or override per canonical label via
     :func:`openmed.core.anonymizer.register_label_generator`. Add custom
     Faker providers (e.g. proprietary patient ID formats) via
@@ -45,6 +47,7 @@ from ..language_pack import get_language_pack
 from ..locale_formats import date_order_for_locale
 from ..name_order import CJK_LANGUAGES, normalize_person_span
 from ..script_detect import detect_script
+from .digit_systems import detect_source_digit_style
 from .format_preserve import (
     mask_aadhaar,
     preserve_date_format,
@@ -231,7 +234,10 @@ class Anonymizer:
         Returns:
             A locale-appropriate fake value of the same type as the
             detected PII. Falls back to a format-preserving substitution
-            when no specific generator is registered.
+            when no specific generator is registered. When ``original`` is
+            written in native digits, the generator and its validators work
+            on the ASCII fold and the result is rendered in the source's
+            dominant digit system.
         """
         effective_lang = lang or self.config.lang
         canonical = normalize_label(label, effective_lang)
@@ -267,6 +273,12 @@ class Anonymizer:
                 generator_input = core_name
 
         script = detect_script(generator_input)
+        # Generators and validators see ASCII digits; a native-digit span is
+        # rendered back in its own digit system below.
+        digit_style = detect_source_digit_style(generator_input)
+        if digit_style is not None:
+            generator_input = digit_style.fold(generator_input)
+            seed_value = digit_style.fold(seed_value)
         language_pack = get_language_pack(effective_lang)
         source_key = str(label).strip().upper().replace("-", "_").replace(" ", "_")
         generator, is_script_specific = resolve_label_generator(
@@ -280,7 +292,7 @@ class Anonymizer:
             locale or self.config.locale,
             warn_approximation=not is_script_specific,
         )
-        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
+        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(generator_input):
             # Aadhaar stays checksum-valid even when an English/code-mixed
             # note routes through the generic en_US locale.
             effective_locale = "en_IN"
@@ -295,6 +307,8 @@ class Anonymizer:
 
         try:
             generated = generator(faker, generator_input, locale=effective_locale)
+            if digit_style is not None:
+                generated = digit_style.render(str(generated))
             return f"{generated}{honorific_suffix}"
         except Exception as exc:  # noqa: BLE001 — never let a single label kill the doc
             warnings.warn(
@@ -447,7 +461,19 @@ class Anonymizer:
 
         Only structured labels with an explicit format-preserving generator are
         supported. ``None`` signals callers to use their normal mask fallback.
+        A source written in native digits gets a surrogate in the same digit
+        system; see :mod:`openmed.core.anonymizer.digit_systems`.
         """
+        digit_style = detect_source_digit_style(original or "")
+        if digit_style is not None:
+            surrogate = self.format_preserving_surrogate(
+                digit_style.fold(original),
+                label,
+                lang=lang,
+                locale=locale,
+            )
+            return None if surrogate is None else digit_style.render(surrogate)
+
         effective_lang = lang or self.config.lang
         effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
         canonical = normalize_label(label, effective_lang)
