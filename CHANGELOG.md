@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add synthetic clinical note grammars with bounded offline contracts, synthetic controls
   and documented behavior (#2838).
 
+- Add synthetic longitudinal trajectories with bounded offline contracts, synthetic controls
+  and documented behavior (#2839).
+
 - Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
