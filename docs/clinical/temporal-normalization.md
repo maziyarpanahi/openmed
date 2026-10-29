@@ -81,7 +81,7 @@ for a time, timezone or reduced precision. Journey timestamps, for example,
 continue to require a timezone. Temporal-expression rules, year/month precision
 and caller-supplied `date`/`datetime` objects keep their existing semantics.
 
-The same synthetic conformance vectors run in the existing Python 3.10–3.13
+The same synthetic conformance vectors run in the existing Python 3.11–3.13
 compatibility lanes. An AST check prevents direct clinical `fromisoformat`
 access. Python's [datetime documentation](https://docs.python.org/3.13/library/datetime.html#datetime.datetime.fromisoformat)
 records the grammar expansion in 3.11; this profile is defined independently of

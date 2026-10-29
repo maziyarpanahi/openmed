@@ -342,37 +342,33 @@ def test_span_offsets_out_of_range_are_clamped_without_crash() -> None:
     assert _source_chars(html) == text
 
 
-@pytest.mark.parametrize(
-    "fractional",
-    [1.5, Decimal("1.5"), Fraction(3, 2)],
-)
 def test_fractional_offsets_are_rejected_instead_of_silently_truncated(
-    fractional: object,
+    subtests,
 ) -> None:
-    html = render_spans_html(
-        "abcdef",
-        [{"start": fractional, "end": 4, "label": "INVALID"}],
-        show_legend=False,
-    )
+    for fractional in [1.5, Decimal("1.5"), Fraction(3, 2)]:
+        with subtests.test(fractional=fractional):
+            html = render_spans_html(
+                "abcdef",
+                [{"start": fractional, "end": 4, "label": "INVALID"}],
+                show_legend=False,
+            )
 
-    assert "<mark" not in html
-    assert _source_chars(html) == "abcdef"
+            assert "<mark" not in html
+            assert _source_chars(html) == "abcdef"
 
 
-@pytest.mark.parametrize(
-    "score",
-    [float("nan"), float("inf"), float("-inf"), Decimal("NaN")],
-)
-def test_non_finite_confidence_is_omitted(score: object) -> None:
-    html = render_spans_html(
-        "abcdef",
-        [{"start": 1, "end": 4, "label": "TEST", "score": score}],
-        show_legend=False,
-    )
+def test_non_finite_confidence_is_omitted(subtests) -> None:
+    for score in [float("nan"), float("inf"), float("-inf"), Decimal("NaN")]:
+        with subtests.test(score=score):
+            html = render_spans_html(
+                "abcdef",
+                [{"start": 1, "end": 4, "label": "TEST", "score": score}],
+                show_legend=False,
+            )
 
-    assert 'title="TEST"' in html
-    assert " nan" not in html.lower()
-    assert " inf" not in html.lower()
+            assert 'title="TEST"' in html
+            assert " nan" not in html.lower()
+            assert " inf" not in html.lower()
 
 
 def test_empty_span_list_renders_plain_text() -> None:
