@@ -193,37 +193,32 @@ def test_policy_denial_and_non_success_states_are_not_success() -> None:
     assert unknown.code == "resource_unknown"
 
 
-@pytest.mark.parametrize(
-    "state",
-    [JourneyResourceState.FAILURE, JourneyResourceState.UNSUPPORTED],
-)
-def test_terminal_resource_states_return_value_free_pages(
-    state: JourneyResourceState,
-) -> None:
-    catalog = JourneyResourceCatalog(
-        [
-            JourneyResourceRecord(
-                resource_type=JourneyResourceKind.FACT,
-                resource_id=f"fact_{state.value + '0' * 16}"[:21],
-                namespace="default",
-                data={},
-                state=state,
+def test_terminal_resource_states_return_value_free_pages(subtests) -> None:
+    for state in [JourneyResourceState.FAILURE, JourneyResourceState.UNSUPPORTED]:
+        with subtests.test(state=state):
+            catalog = JourneyResourceCatalog(
+                [
+                    JourneyResourceRecord(
+                        resource_type=JourneyResourceKind.FACT,
+                        resource_id=f"fact_{state.value + '0' * 16}"[:21],
+                        namespace="default",
+                        data={},
+                        state=state,
+                    )
+                ]
             )
-        ]
-    )
 
-    page = catalog.list_resources(
-        JourneyResourceQuery(resource_type=JourneyResourceKind.FACT)
-    )
+            page = catalog.list_resources(
+                JourneyResourceQuery(resource_type=JourneyResourceKind.FACT)
+            )
 
-    assert page.state is state
-    assert page.code == f"resource_{state.value}"
-    assert page.resources == ()
+            assert page.state is state
+            assert page.code == f"resource_{state.value}"
+            assert page.resources == ()
 
 
-@pytest.mark.parametrize(
-    ("query_overrides", "policy_overrides", "code"),
-    [
+def test_access_context_fails_closed_with_reconstructable_decision(subtests) -> None:
+    for query_overrides, policy_overrides, code in [
         ({"role": "guest"}, {}, "role_denied"),
         ({"consent_state": "unknown"}, {}, "consent_unknown"),
         ({"consent_state": "withdrawn"}, {}, "consent_withdrawn"),
@@ -237,40 +232,39 @@ def test_terminal_resource_states_return_value_free_pages(
             },
             "attribute_denied",
         ),
-    ],
-)
-def test_access_context_fails_closed_with_reconstructable_decision(
-    query_overrides: dict[str, Any],
-    policy_overrides: dict[str, Any],
-    code: str,
-) -> None:
-    query = JourneyResourceQuery(
-        resource_type=JourneyResourceKind.FACT,
-        **query_overrides,
-    )
+    ]:
+        with subtests.test(
+            query_overrides=query_overrides,
+            policy_overrides=policy_overrides,
+            code=code,
+        ):
+            query = JourneyResourceQuery(
+                resource_type=JourneyResourceKind.FACT,
+                **query_overrides,
+            )
 
-    page = _catalog().list_resources(
-        query, policy=JourneyAccessPolicy(**policy_overrides)
-    )
+            page = _catalog().list_resources(
+                query, policy=JourneyAccessPolicy(**policy_overrides)
+            )
 
-    assert page.state is JourneyResourceState.DENIED
-    assert page.code == code
-    assert page.resources == ()
-    policy_payload = page.policy.to_dict()
-    assert policy_payload.pop("request_digest") == query.access_request_digest
-    assert policy_payload.pop("decision_id").startswith("decision_")
-    assert policy_payload == {
-        "allowed_fields": [],
-        "attributes": list(query.attributes),
-        "code": code,
-        "consent_state": query.consent_state,
-        "export_policy": query.export_policy,
-        "namespace": query.namespace,
-        "policy_version": JOURNEY_RESOURCE_SCHEMA_VERSION,
-        "purpose": query.purpose,
-        "role": query.role,
-        "state": "denied",
-    }
+            assert page.state is JourneyResourceState.DENIED
+            assert page.code == code
+            assert page.resources == ()
+            policy_payload = page.policy.to_dict()
+            assert policy_payload.pop("request_digest") == query.access_request_digest
+            assert policy_payload.pop("decision_id").startswith("decision_")
+            assert policy_payload == {
+                "allowed_fields": [],
+                "attributes": list(query.attributes),
+                "code": code,
+                "consent_state": query.consent_state,
+                "export_policy": query.export_policy,
+                "namespace": query.namespace,
+                "policy_version": JOURNEY_RESOURCE_SCHEMA_VERSION,
+                "purpose": query.purpose,
+                "role": query.role,
+                "state": "denied",
+            }
 
 
 def test_cursor_cannot_be_reused_under_a_different_access_context() -> None:
@@ -296,10 +290,13 @@ def test_cursor_cannot_be_reused_under_a_different_access_context() -> None:
     assert confused_deputy.resources == ()
 
 
-@pytest.mark.parametrize("first", [0, 101])
-def test_page_size_abuse_limits_fail_before_execution(first: int) -> None:
-    with pytest.raises(ValueError, match="first must be between"):
-        JourneyResourceQuery(resource_type=JourneyResourceKind.FACT, first=first)
+def test_page_size_abuse_limits_fail_before_execution(subtests) -> None:
+    for first in [0, 101]:
+        with subtests.test(first=first):
+            with pytest.raises(ValueError, match="first must be between"):
+                JourneyResourceQuery(
+                    resource_type=JourneyResourceKind.FACT, first=first
+                )
 
 
 def test_records_reject_sensitive_or_unallowlisted_data() -> None:
@@ -373,37 +370,38 @@ def _empty_cohort_record(kind=JourneyResourceKind.COHORT_RUN):
     )
 
 
-@pytest.mark.parametrize(
-    "kind", [JourneyResourceKind.COHORT, JourneyResourceKind.COHORT_RUN]
-)
-def test_empty_warning_survives_cohort_field_selection_and_policy(kind) -> None:
-    record = _empty_cohort_record(kind)
-    query = JourneyResourceQuery(resource_type=kind, fields=("member_count",))
-    catalog = JourneyResourceCatalog((record,))
-    page = catalog.list_resources(query)
-    assert page.state is JourneyResourceState.SUCCESS
-    data = page.resources[0]["data"]
-    assert data == {
-        "member_count": 0,
-        "review_required": True,
-        "warnings": [
-            {
-                "code": "empty_population",
+def test_empty_warning_survives_cohort_field_selection_and_policy(subtests) -> None:
+    for kind in [JourneyResourceKind.COHORT, JourneyResourceKind.COHORT_RUN]:
+        with subtests.test(kind=kind):
+            record = _empty_cohort_record(kind)
+            query = JourneyResourceQuery(resource_type=kind, fields=("member_count",))
+            catalog = JourneyResourceCatalog((record,))
+            page = catalog.list_resources(query)
+            assert page.state is JourneyResourceState.SUCCESS
+            data = page.resources[0]["data"]
+            assert data == {
+                "member_count": 0,
                 "review_required": True,
-                "sub_reasons": ["no_source_patients"],
+                "warnings": [
+                    {
+                        "code": "empty_population",
+                        "review_required": True,
+                        "sub_reasons": ["no_source_patients"],
+                    }
+                ],
             }
-        ],
-    }
-    assert set(page.policy.allowed_fields) == {
-        "member_count",
-        "warnings",
-        "review_required",
-    }
-    policy = JourneyAccessPolicy(fields_by_resource={kind: frozenset({"member_count"})})
-    denied = catalog.list_resources(query, policy=policy)
-    assert denied.state is JourneyResourceState.DENIED
-    assert denied.code == "field_denied"
-    assert denied.resources == ()
+            assert set(page.policy.allowed_fields) == {
+                "member_count",
+                "warnings",
+                "review_required",
+            }
+            policy = JourneyAccessPolicy(
+                fields_by_resource={kind: frozenset({"member_count"})}
+            )
+            denied = catalog.list_resources(query, policy=policy)
+            assert denied.state is JourneyResourceState.DENIED
+            assert denied.code == "field_denied"
+            assert denied.resources == ()
 
 
 def test_legacy_cohort_without_coverage_reports_unknown_not_zero() -> None:

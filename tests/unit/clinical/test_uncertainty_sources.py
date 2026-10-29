@@ -34,9 +34,8 @@ from openmed.clinical.uncertainty_sources import (
 )
 
 
-@pytest.mark.parametrize(
-    "constructor,default",
-    [
+def test_typed_reason_aliases_do_not_conflict_with_implicit_defaults(subtests) -> None:
+    for constructor, default in [
         (EvidenceUncertaintySource, "insufficient"),
         (ModelUncertaintySource, "ambiguous"),
         (PolicyUncertaintySource, "insufficient"),
@@ -47,19 +46,16 @@ from openmed.clinical.uncertainty_sources import (
         (policy_uncertainty, "insufficient"),
         (temporal_uncertainty, "unresolved"),
         (conflict_uncertainty, "unresolved"),
-    ],
-)
-def test_typed_reason_aliases_do_not_conflict_with_implicit_defaults(
-    constructor, default
-) -> None:
-    assert constructor().code == default
-    assert constructor(code=None).code == "unspecified"
-    for alias in ("reason_code", "reason"):
-        assert constructor(**{alias: "unspecified"}).code == "unspecified"
-        with pytest.raises(UncertaintySourceError, match="more than once"):
-            constructor(default, **{alias: "unspecified"})
-    with pytest.raises(UncertaintySourceError, match="more than once"):
-        constructor(reason="unspecified", reason_code="unspecified")
+    ]:
+        with subtests.test(constructor=constructor, default=default):
+            assert constructor().code == default
+            assert constructor(code=None).code == "unspecified"
+            for alias in ("reason_code", "reason"):
+                assert constructor(**{alias: "unspecified"}).code == "unspecified"
+                with pytest.raises(UncertaintySourceError, match="more than once"):
+                    constructor(default, **{alias: "unspecified"})
+            with pytest.raises(UncertaintySourceError, match="more than once"):
+                constructor(reason="unspecified", reason_code="unspecified")
 
 
 RAW_REFERENCE = "synthetic-sensitive-reference-marker"

@@ -19,25 +19,28 @@ from openmed.core.audit import hash_text
 SYNTHETIC_PROTECTED_VALUE = "SYNTHETIC_PROTECTED_VALUE_42"
 
 
-@pytest.mark.parametrize("flag", ["false", "true", 0, 1, None, []])
-def test_non_boolean_protected_render_flags_are_rejected(flag):
-    finding = ReviewFinding("synthetic-id", "finding", text=SYNTHETIC_PROTECTED_VALUE)
-    citation = ReviewCitation(
-        "synthetic-citation", "source", text=SYNTHETIC_PROTECTED_VALUE
-    )
-    packet = build_review_packet([finding], [citation])
-    for render in (
-        finding.to_dict,
-        citation.to_dict,
-        packet.to_dict,
-        packet.to_json,
-        packet.to_markdown,
-    ):
-        with pytest.raises(ValueError, match="boolean"):
-            render(include_protected_text=flag)
-    for keyword in ("include_protected_text", "allow_protected_text"):
-        with pytest.raises(ValueError, match="boolean"):
-            render_review_packet(packet, **{keyword: flag})
+def test_non_boolean_protected_render_flags_are_rejected(subtests):
+    for flag in ["false", "true", 0, 1, None, []]:
+        with subtests.test(flag=flag):
+            finding = ReviewFinding(
+                "synthetic-id", "finding", text=SYNTHETIC_PROTECTED_VALUE
+            )
+            citation = ReviewCitation(
+                "synthetic-citation", "source", text=SYNTHETIC_PROTECTED_VALUE
+            )
+            packet = build_review_packet([finding], [citation])
+            for render in (
+                finding.to_dict,
+                citation.to_dict,
+                packet.to_dict,
+                packet.to_json,
+                packet.to_markdown,
+            ):
+                with pytest.raises(ValueError, match="boolean"):
+                    render(include_protected_text=flag)
+            for keyword in ("include_protected_text", "allow_protected_text"):
+                with pytest.raises(ValueError, match="boolean"):
+                    render_review_packet(packet, **{keyword: flag})
 
 
 def test_lowercase_identifiers_labels_and_metadata_are_not_plaintext():

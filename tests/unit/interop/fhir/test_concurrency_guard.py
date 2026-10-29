@@ -42,23 +42,21 @@ def test_update_requires_both_read_evidence_fields_and_sends_if_match() -> None:
         assert _MARKER not in repr(error.value)
 
 
-@pytest.mark.parametrize(
-    "meta",
-    [
+def test_missing_or_invalid_evidence_fails_closed_without_echo(subtests) -> None:
+    for meta in [
         {},
         {"versionId": "4"},
         {"lastUpdated": "2026-01-01T00:00:00Z"},
         {"versionId": "4\r\nprivate-marker", "lastUpdated": "2026-01-01T00:00:00Z"},
         {"versionId": "4", "lastUpdated": "private-marker"},
         {"versionId": "4", "lastUpdated": "2026-01-01T00:00:00"},
-    ],
-)
-def test_missing_or_invalid_evidence_fails_closed_without_echo(meta: dict) -> None:
-    resource = _resource()
-    resource["meta"] = meta
-    with pytest.raises(ValueError) as error:
-        VersionEvidence.from_resource(resource)
-    assert _MARKER not in str(error.value)
+    ]:
+        with subtests.test(meta=meta):
+            resource = _resource()
+            resource["meta"] = meta
+            with pytest.raises(ValueError) as error:
+                VersionEvidence.from_resource(resource)
+            assert _MARKER not in str(error.value)
 
 
 def test_precondition_and_conflict_representations_are_redacted() -> None:
@@ -69,22 +67,18 @@ def test_precondition_and_conflict_representations_are_redacted() -> None:
     assert precondition.if_match == 'W/"private-marker"'
 
 
-@pytest.mark.parametrize(
-    "status, reason",
-    [
+def test_server_precondition_failures_are_typed_and_value_free(subtests) -> None:
+    for status, reason in [
         (409, "server_conflict"),
         (412, "precondition_failed"),
         (428, "precondition_required"),
-    ],
-)
-def test_server_precondition_failures_are_typed_and_value_free(
-    status: int, reason: str
-) -> None:
-    with pytest.raises(FHIRWriteConflict) as error:
-        require_no_server_conflict(status)
-    assert error.value.reason_code == reason
-    assert _MARKER not in str(error.value)
-    require_no_server_conflict(200)
+    ]:
+        with subtests.test(status=status, reason=reason):
+            with pytest.raises(FHIRWriteConflict) as error:
+                require_no_server_conflict(status)
+            assert error.value.reason_code == reason
+            assert _MARKER not in str(error.value)
+            require_no_server_conflict(200)
 
 
 def test_three_way_summary_reports_only_counts_and_never_merges() -> None:

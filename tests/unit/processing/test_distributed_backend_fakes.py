@@ -300,14 +300,16 @@ def test_spark_task_failure_surfaces_only_the_error_type():
     assert "doc-002" not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "error_type",
-    ["ValueError", "OSError", "SerializationError", "openmed.ShardWriteError"],
-)
-def test_reported_error_types_satisfy_the_manifest_contract(error_type):
+def test_reported_error_types_satisfy_the_manifest_contract(subtests):
     """#1069 rejects any ``error_type`` that is not a bare dotted identifier."""
-
-    assert ERROR_TYPE_PATTERN.match(error_type)
+    for error_type in [
+        "ValueError",
+        "OSError",
+        "SerializationError",
+        "openmed.ShardWriteError",
+    ]:
+        with subtests.test(error_type=error_type):
+            assert ERROR_TYPE_PATTERN.match(error_type)
 
 
 def test_exception_messages_are_not_valid_error_types():
