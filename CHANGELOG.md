@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document existing synthetic generators, offline examples, public exports and
+  dataset provenance limits in a shared navigation group (#3896).
+
 - Add synthetic lab time series with bounded offline contracts, synthetic controls
   and documented behavior (#2843).
 

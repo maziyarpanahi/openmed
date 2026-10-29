@@ -60,7 +60,7 @@ rules were applied.
 
 - `LOCALE_PHI_LABELS` lists the six labels: `PERSON`, `DATE_OF_BIRTH`,
   `ID_NUM`, `PHONE`, `STREET_ADDRESS`, `DATE`.
-- `SUPPORTED_LOCALE_PHI_LANGUAGES` lists the 42 language codes the generator
+- `SUPPORTED_LOCALE_PHI_LANGUAGES` lists the language codes the generator
   accepts. Any other code raises `ValueError` and the message lists the
   supported codes.
 
@@ -98,11 +98,12 @@ not reproducible. `metadata["seed"]` records which of the two was used.
   from Faker locale providers, so they depend on the installed Faker version
   and on how complete that provider is for the language. Identifiers use the
   repository's checksum validators where one exists.
-- **Borrowed Faker locales.** Languages without a native Faker locale (for
-  example `as`, `kn`, `ml`, `mr`, `pa`, `te`, `am`, `ur`, `xh`) emit a
-  `UserWarning` and take names, phones, and addresses from a neighboring
-  locale such as `en_IN` or `hi_IN`. Those values are valid synthetic data but
-  are not written in the target language's own conventions.
+- **Approximated Faker fields.** Some language packs use a neighboring Faker
+  backend for fields such as phones or generic addresses and emit a
+  `UserWarning`. Script-specific providers can still generate native names
+  and places; the warning does not mean every field is borrowed. Consult
+  [language-pack declarations](../../language-packs.md) for the provider and
+  approximation boundaries.
 - **One fixed template per language.** Sentence structure is fixed, so the
   notes teach value formats, not varied clinical prose.
 - **Not clinical ground truth.** The note content is a fictional patient
