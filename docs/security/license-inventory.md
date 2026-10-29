@@ -33,6 +33,10 @@ a dependency also declared in another extra.
 | `apache-beam` | `beam` | `Apache-2.0` |
 | `auto-gptq` | `gptq` | `MIT` |
 | `autoawq` | `awq` | `MIT` |
+| `aiohttp` | `agents, awq, cloud, gptq, llamaindex, operator` | `Apache-2.0 AND MIT` |
+| `multidict` | `agents, awq, beam, cloud, gptq, llamaindex, operator` | `Apache-2.0` |
+| `mako` | `airflow, dagster, prefect` | `MIT` |
+| `tinytag` | `agents, llamaindex` | `MIT` |
 | `banks` | `agents, llamaindex` | `MIT` |
 | `click` | `spacy` | `BSD-3-Clause` |
 | `confluent-kafka` | `kafka` | `Apache-2.0` |
@@ -46,13 +50,16 @@ a dependency also declared in another extra.
 | `extract-msg` | `email-msg-gpl` | `GPL-3.0-only` |
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
+| `filelock` | Optional locking profiles; 3.20.3 uses Unlicense, 4.x MIT | `MIT OR Unlicense` |
 | `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
 | `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
 | `langgraph-sdk` | `agents, langgraph` | `MIT` |
 | `pymongo` | `beam` | `Apache-2.0` |
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
 | `gitpython` | `docs` | `BSD-3-Clause` |
-| `gliner` | `gliner` | `Apache-2.0` |
+| `gliner` | `gliner`, `gliformer` | `Apache-2.0` |
+| `gliformer` | `gliformer`; reviewed wheel LICENSE (0.1.3) | `Apache-2.0` |
+| `gliner2` | `gliner2`; reviewed wheel LICENSE (2.1.0) | `Apache-2.0` |
 | `griffe` | `docs` | `ISC` |
 | `grpcio` | `service` | `Apache-2.0` |
 | `h2` | `beam, prefect` | `MIT` |
@@ -100,7 +107,7 @@ a dependency also declared in another extra.
 | `philter-ucsf` | `philter` | `BSD-3-Clause` |
 | `piexif` | `multimodal` | `MIT` |
 | `pikepdf` | `multimodal` | `MPL-2.0` |
-| `pillow` | `multimodal` | `HPND` |
+| `pillow` | `multimodal`, `gliformer` | `HPND` |
 | `pkuseg` | `zh-pkuseg` | `MIT` |
 | `polars` | `polars` | `MIT` |
 | `prefect` | `prefect` | `Apache-2.0` |
@@ -127,14 +134,14 @@ a dependency also declared in another extra.
 | `safetensors` | `mlx` | `Apache-2.0` |
 | `scispacy` | `scispacy` | `Apache-2.0` |
 | `scrubadub` | `scrubadub` | `Apache-2.0` |
+| `setuptools` | Optional integration tooling; not core | `MIT` |
 | `snowflake-snowpark-python` | `snowflake` | `Apache-2.0` |
 | `spacy` | `spacy` | `MIT` |
 | `sqlalchemy` | `sqlalchemy` | `MIT` |
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `tomli` | `default (Python < 3.11)` | `MIT` |
-| `torch` | `awq, coreml, gliner, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
+| `torch` | `awq, coreml, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
 | `transformers` | `awq, coreml, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |

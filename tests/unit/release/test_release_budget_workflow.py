@@ -1,6 +1,7 @@
 """CI build and release-budget wiring tests."""
 
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -30,6 +31,31 @@ PYTEST_DIAGNOSTIC_WRAPPER = (
 
 def _load_ci() -> dict[str, object]:
     return yaml.load(CI_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+FULL_CI_CONDITION = (
+    "github.event_name != 'pull_request' || "
+    "contains(github.event.pull_request.labels.*.name, 'full-ci')"
+)
+LABEL_RUN_CONDITION = (
+    "github.event.action != 'labeled' || github.event.label.name == 'full-ci'"
+)
+
+
+def _tiered_matrices(lane) -> tuple[list[dict], list[dict]]:
+    """Return the (full, pull-request) matrix rows of a tiered job."""
+    expression = lane["strategy"]["matrix"]
+    match = re.fullmatch(
+        r"\$\{\{ fromJSON\(\((?P<cond>.+)\) && '(?P<full>\{.+\})' "
+        r"\|\| '(?P<pr>\{.+\})'\) \}\}",
+        expression,
+    )
+    assert match, expression
+    assert match["cond"] == FULL_CI_CONDITION
+    return (
+        json.loads(match["full"])["include"],
+        json.loads(match["pr"])["include"],
+    )
 
 
 def test_ci_pins_uv_and_uses_the_native_build_frontend():
@@ -119,84 +145,105 @@ def test_budget_refresh_is_verified_against_the_frozen_pr_base():
     assert steps.index(step) < steps.index(size_step)
 
 
-@pytest.mark.parametrize("delta", [0, -1, 1])
-def test_budget_refresh_comparison_requires_the_exact_measured_size(
-    tmp_path, monkeypatch, delta
-):
-    steps = _load_ci()["jobs"]["build"]["steps"]
-    step = next(
-        step
-        for step in steps
-        if step.get("name") == "Verify refreshed wheel-size baseline"
-    )
-    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    wheel_dir = tmp_path / "dist"
-    wheel_dir.mkdir()
-    wheel = wheel_dir / "openmed-test-py3-none-any.whl"
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("openmed-test.dist-info/WHEEL", "Generator: hatchling test\n")
-    measured = wheel.stat().st_size
-    expected = measured + delta
-    gates = tmp_path / "gates"
-    gates.mkdir()
-    (gates / "release_budgets.json").write_text(
-        json.dumps(
-            {
-                "entries": {
-                    "package::openmed::wheel": {
-                        "metrics": {
-                            "baseline_bytes": expected,
+def test_budget_refresh_comparison_requires_the_exact_measured_size(subtests, tmp_path):
+    case_root = tmp_path
+    for delta in [0, -1, 1]:
+        with subtests.test(delta=delta):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                steps = _load_ci()["jobs"]["build"]["steps"]
+                step = next(
+                    step
+                    for step in steps
+                    if step.get("name") == "Verify refreshed wheel-size baseline"
+                )
+                code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+                wheel_dir = tmp_path / "dist"
+                wheel_dir.mkdir()
+                wheel = wheel_dir / "openmed-test-py3-none-any.whl"
+                with zipfile.ZipFile(wheel, "w") as archive:
+                    archive.writestr(
+                        "openmed-test.dist-info/WHEEL", "Generator: hatchling test\n"
+                    )
+                measured = wheel.stat().st_size
+                expected = measured + delta
+                gates = tmp_path / "gates"
+                gates.mkdir()
+                (gates / "release_budgets.json").write_text(
+                    json.dumps(
+                        {
+                            "entries": {
+                                "package::openmed::wheel": {
+                                    "metrics": {
+                                        "baseline_bytes": expected,
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-            }
-        )
-    )
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["-", str(wheel_dir)])
-    monkeypatch.setenv("BASE_SHA", "a" * 40)
-    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "uv test\n")
-    if measured == expected:
-        exec(compile(code, "<baseline-verification>", "exec"), {})
-    else:
-        with pytest.raises(SystemExit, match="Wheel baseline mismatch"):
-            exec(compile(code, "<baseline-verification>", "exec"), {})
-    receipt = json.loads((wheel_dir / "baseline-receipt.json").read_text())
-    assert receipt["base_sha"] == "a" * 40
-    assert receipt["measured_bytes"] == measured
-    assert receipt["proposed_baseline_bytes"] == expected
-    assert receipt["uv"] == "uv test"
-    assert receipt["wheel_metadata"] == "Generator: hatchling test\n"
-    assert receipt["matches"] is (delta == 0)
+                    )
+                )
+                monkeypatch.chdir(tmp_path)
+                monkeypatch.setattr(sys, "argv", ["-", str(wheel_dir)])
+                monkeypatch.setenv("BASE_SHA", "a" * 40)
+                monkeypatch.setattr(
+                    subprocess, "check_output", lambda *args, **kwargs: "uv test\n"
+                )
+                if measured == expected:
+                    exec(compile(code, "<baseline-verification>", "exec"), {})
+                else:
+                    with pytest.raises(SystemExit, match="Wheel baseline mismatch"):
+                        exec(compile(code, "<baseline-verification>", "exec"), {})
+                receipt = json.loads((wheel_dir / "baseline-receipt.json").read_text())
+                assert receipt["base_sha"] == "a" * 40
+                assert receipt["measured_bytes"] == measured
+                assert receipt["proposed_baseline_bytes"] == expected
+                assert receipt["uv"] == "uv test"
+                assert receipt["wheel_metadata"] == "Generator: hatchling test\n"
+                assert receipt["matches"] is (delta == 0)
 
 
-@pytest.mark.parametrize("wheel_count", [0, 2])
-def test_budget_refresh_rejects_missing_or_ambiguous_wheels(
-    tmp_path, monkeypatch, wheel_count
-):
-    steps = _load_ci()["jobs"]["build"]["steps"]
-    step = next(
-        step
-        for step in steps
-        if step.get("name") == "Verify refreshed wheel-size baseline"
-    )
-    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    for index in range(wheel_count):
-        (tmp_path / f"openmed-{index}-py3-none-any.whl").write_bytes(b"x")
-    monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
-    with pytest.raises(SystemExit, match="Expected exactly one frozen-base wheel"):
-        exec(compile(code, "<baseline-verification>", "exec"), {})
+def test_budget_refresh_rejects_missing_or_ambiguous_wheels(subtests, tmp_path):
+    case_root = tmp_path
+    for wheel_count in [0, 2]:
+        with subtests.test(wheel_count=wheel_count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                steps = _load_ci()["jobs"]["build"]["steps"]
+                step = next(
+                    step
+                    for step in steps
+                    if step.get("name") == "Verify refreshed wheel-size baseline"
+                )
+                code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+                for index in range(wheel_count):
+                    (tmp_path / f"openmed-{index}-py3-none-any.whl").write_bytes(b"x")
+                monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
+                with pytest.raises(
+                    SystemExit, match="Expected exactly one frozen-base wheel"
+                ):
+                    exec(compile(code, "<baseline-verification>", "exec"), {})
 
 
 def test_sdk_compatibility_matches_advertised_python_and_os_support():
-    jobs = _load_ci()["jobs"]
+    workflow = _load_ci()
+    assert {"opened", "synchronize", "reopened", "labeled"} <= set(
+        workflow["on"]["pull_request"]["types"]
+    )
+    jobs = workflow["jobs"]
+    assert jobs["repo-policy"]["if"] == LABEL_RUN_CONDITION
+    assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
     lane = jobs["sdk-compatibility"]
-    matrix = lane["strategy"]["matrix"]
-    versions = ["3.10", "3.11", "3.12", "3.13"]
-    assert matrix == {
-        "os": ["ubuntu-latest", "windows-latest", "macos-latest"],
-        "python-version": versions,
-    }
+    full, pull_request = _tiered_matrices(lane)
+    versions = ["3.11", "3.12", "3.13"]
+    systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
+    assert sorted((row["os"], row["python-version"]) for row in full) == sorted(
+        (system, version) for system in systems for version in versions
+    )
+    # Pull requests keep both ends of the range and every operating system.
+    assert {row["os"] for row in pull_request} == set(systems)
+    assert {row["python-version"] for row in pull_request} >= {"3.11", "3.13"}
     assert lane["strategy"]["fail-fast"] == "false"
     assert int(lane["timeout-minutes"]) <= 30
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
@@ -211,10 +258,9 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
         )
         == versions
     )
-    assert project["requires-python"] == ">=3.10"
-    # CLI imports dependency-report parsing even in a minimal installation.
-    # Development extras used to hide this missing Python 3.10 backport.
-    assert "tomli>=2.0; python_version < '3.11'" in project["dependencies"]
+    assert project["requires-python"] == ">=3.11"
+    # Every supported interpreter ships tomllib, so no TOML backport remains.
+    assert not any(value.startswith("tomli") for value in project["dependencies"])
     assert {
         "Operating System :: POSIX :: Linux",
         "Operating System :: Microsoft :: Windows",
@@ -222,7 +268,7 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     } <= set(project["classifiers"])
     docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
     assert all(version in docs for version in versions)
-    assert "12 jobs" in docs and "sdk-compatibility-gate" in docs
+    assert "9 jobs" in docs and "sdk-compatibility-gate" in docs
 
 
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
@@ -245,19 +291,34 @@ def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
     assert "sdk-compatibility-gate" in jobs["build"]["needs"]
     assert "needs.sdk-compatibility-gate.result == 'success'" in jobs["build"]["if"]
     gate = jobs["sdk-compatibility-gate"]
-    assert gate["needs"] == "sdk-compatibility" and gate["if"] == "always()"
+    assert gate["needs"] == "sdk-compatibility"
+    assert gate["if"] == f"always() && ({LABEL_RUN_CONDITION})"
     assert 'test "$MATRIX_RESULT" = success' in gate["steps"][0]["run"]
 
 
 def _assert_full_suite_diagnostics(lane):
     assert lane.get("continue-on-error", "false") == "false"
+    full, pull_request = _tiered_matrices(lane)
+    # Pushes and `full-ci` pull requests run every test on every platform;
+    # other pull requests may only skip the `slow` and `fuzz` tiers.
+    assert {row["tier"] for row in full} == {"full"}
+    assert {row["os"] for row in full} == {
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest",
+    }
+    assert {row["tier"] for row in pull_request} == {"fast", "portability"}
+    assert sum(row["coverage"] for row in full) == 1
     steps = lane["steps"]
     test_step = next(step for step in steps if step.get("name") == "Test with pytest")
-    assert test_step["timeout-minutes"] == "45"
+    assert int(test_step["timeout-minutes"]) <= 45
     assert test_step.get("continue-on-error", "false") == "false"
-    assert "if" not in test_step
-    # Exact argv retains default full-suite discovery and rejects selection,
-    # early-stop flags, shell success overrides, and changes to coverage.
+    assert test_step["if"] == "matrix.tier != 'portability'"
+    assert test_step["env"]["TIER_MARKERS"] == (
+        "${{ matrix.tier == 'fast' && 'not slow and not fuzz' || '' }}"
+    )
+    # Exact argv retains default discovery and rejects other selection,
+    # early-stop flags and shell success overrides.
     assert shlex.split(test_step["run"]) == [
         "uv",
         "run",
@@ -265,9 +326,11 @@ def _assert_full_suite_diagnostics(lane):
         "python",
         "-c",
         PYTEST_DIAGNOSTIC_WRAPPER,
-        "--cov=openmed",
-        "--cov-report=xml",
-        "--cov-report=term-missing",
+        "-n",
+        "auto",
+        "-m",
+        "$TIER_MARKERS",
+        "$COVERAGE_ARGS",
         "--tb=line",
         "--show-capture=no",
         "--color=no",
@@ -336,38 +399,39 @@ def test_ci_pytest_diagnostic_wrapper_preserves_arguments_and_exit_status(
     assert observed == [("pytest", pytest_args), ("diagnostics", 120, True)]
 
 
-@pytest.mark.parametrize(
-    "suffix",
-    ["-k smoke", "-m 'not slow'", "-x", "--maxfail=1", "--ignore=tests", "|| true"],
-)
-def test_full_suite_diagnostics_contract_rejects_reduced_or_masked_runs(suffix):
-    lane = _load_ci()["jobs"]["test"]
-    step = next(
-        step for step in lane["steps"] if step.get("name") == "Test with pytest"
-    )
-    step["run"] += " " + suffix
-    with pytest.raises(AssertionError):
-        _assert_full_suite_diagnostics(lane)
+def test_full_suite_diagnostics_contract_rejects_reduced_or_masked_runs(subtests):
+    for suffix in [
+        "-k smoke",
+        "-m 'not slow'",
+        "-x",
+        "--maxfail=1",
+        "--ignore=tests",
+        "|| true",
+    ]:
+        with subtests.test(suffix=suffix):
+            lane = _load_ci()["jobs"]["test"]
+            step = next(
+                step for step in lane["steps"] if step.get("name") == "Test with pytest"
+            )
+            step["run"] += " " + suffix
+            with pytest.raises(AssertionError):
+                _assert_full_suite_diagnostics(lane)
 
 
-@pytest.mark.parametrize(
-    ("step_name", "field", "value"),
-    [
+def test_full_suite_diagnostics_contract_rejects_unbounded_or_optional_steps(subtests):
+    for step_name, field, value in [
         ("Test with pytest", "timeout-minutes", "360"),
         ("Test with pytest", "continue-on-error", "true"),
         ("Test with pytest", "if", "false"),
         ("Upload test diagnostics", "if", "success()"),
         ("Upload test diagnostics", "uses", "actions/upload-artifact@v7"),
-    ],
-)
-def test_full_suite_diagnostics_contract_rejects_unbounded_or_optional_steps(
-    step_name, field, value
-):
-    lane = _load_ci()["jobs"]["test"]
-    step = next(step for step in lane["steps"] if step.get("name") == step_name)
-    step[field] = value
-    with pytest.raises(AssertionError):
-        _assert_full_suite_diagnostics(lane)
+    ]:
+        with subtests.test(step_name=step_name, field=field, value=value):
+            lane = _load_ci()["jobs"]["test"]
+            step = next(step for step in lane["steps"] if step.get("name") == step_name)
+            step[field] = value
+            with pytest.raises(AssertionError):
+                _assert_full_suite_diagnostics(lane)
 
 
 def test_full_suite_diagnostics_contract_rejects_job_failure_override():
