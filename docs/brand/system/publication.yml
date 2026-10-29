@@ -427,6 +427,7 @@ classification:
     - training/synthetic/prior-auth-packets.md
     - training/synthetic/clinical-note-grammars.md
     - training/synthetic/longitudinal-trajectories.md
+    - training/synthetic/fhir-records.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
