@@ -20,6 +20,9 @@ the documented Python runtime; it makes no cross-runtime random-number guarantee
 `validate_lab_series` independently checks recipe binding, sample count/time,
 units, exact missingness, ranges, trends, intervention effects and change limits.
 Controlled error categories do not contain source values or private paths.
+Jitter and step checks compare representable floating-point interval endpoints,
+so small declared changes at large magnitudes are not rejected because of
+subtraction rounding. Numerical range checks remain inclusive and strict.
 
 `lab_negative_control(..., kind="range" | "unit" | "time" | "missingness")` emits
 one deliberate corruption with `negative_control` split. The normal validator

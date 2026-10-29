@@ -236,9 +236,16 @@ def validate_lab_series(spec: LabSeriesSpec, series: LabSeries) -> tuple[str, ..
             continue
         if not spec.lower <= value <= spec.upper:
             errors.add("range_violation")
-        if abs(value - spec.expected(index)) > spec.jitter + 1e-8:
+        expected = spec.expected(index)
+        # Compare representable interval endpoints: subtracting large, nearby
+        # samples can exceed a small bound solely through float rounding.
+        if not expected - spec.jitter - 1e-8 <= value <= expected + spec.jitter + 1e-8:
             errors.add("trend_or_intervention_violation")
-        if previous is not None and abs(value - previous) > spec.max_step_change + 1e-8:
+        if previous is not None and not (
+            previous - spec.max_step_change - 1e-8
+            <= value
+            <= previous + spec.max_step_change + 1e-8
+        ):
             errors.add("change_limit_violation")
         previous = value
     return tuple(sorted(errors))

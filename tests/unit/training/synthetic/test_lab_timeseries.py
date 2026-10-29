@@ -133,6 +133,27 @@ def test_valid_narrow_range_preserves_declared_baseline_precision():
     assert record.samples[0].value == recipe.baseline
     assert validate_lab_series(recipe, record) == ()
 
+    large = spec(
+        lower=999999999998.0,
+        upper=1e12,
+        baseline=999999999999.0,
+        missing_indices=(),
+        interventions=(),
+        count=5,
+        trend_per_step=0,
+        jitter=0.0001,
+        max_step_change=0.0002,
+    )
+    for seed in range(8):
+        series = generate_lab_series(large, seed=seed)
+        assert validate_lab_series(large, series) == ()
+    rows = list(series.samples)
+    rows[0] = replace(rows[0], value=large.baseline + 0.01)
+    errors = validate_lab_series(large, replace(series, samples=tuple(rows)))
+    assert "trend_or_intervention_violation" in errors
+    assert "change_limit_violation" in errors
+    assert "range_violation" not in errors
+
 
 def test_signed_zero_recipe_and_intervention_have_one_digest():
     first = spec(
