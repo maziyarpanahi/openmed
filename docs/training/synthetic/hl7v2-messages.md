@@ -83,8 +83,8 @@ with value type `ST`, OBX-14 and the `ZPD` fields.
 | `whole_leaf` | `false` when the value is embedded in OBX or NTE free text |
 | `in_default_map` | Whether a `DEFAULT_FIELD_MAP` rule applies, including OBX value-type gating |
 
-Offsets index the Python string, which equals UTF-8 byte offsets for the
-ASCII values the English providers produce. Plain values have
+Offsets index Python string code points. UTF-8 byte positions may differ when
+a custom encoding character or generated value is non-ASCII. Plain values have
 `raw == value`; escaped values differ only by their escape sequences.
 
 ## Determinism and providers
