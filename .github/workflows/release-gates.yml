@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload Chinese and Indic throughput evidence
         if: always() && hashFiles('i18n-throughput-report.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: i18n-throughput
           path: |
@@ -143,7 +143,7 @@ jobs:
 
       - name: Upload grounding accuracy gate report
         if: always() && hashFiles('grounding-accuracy-gate.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: grounding-accuracy-gate
           path: grounding-accuracy-gate.json
@@ -389,7 +389,7 @@ jobs:
 
       - name: Upload gate evidence
         if: always() && steps.check-candidate.outputs.exists == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-gate-report
           if-no-files-found: error
@@ -447,7 +447,7 @@ jobs:
 
       - name: Upload release-readiness report
         if: always() && hashFiles('release-readiness-report.json') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-readiness-report
           path: release-readiness-report.json
@@ -565,7 +565,7 @@ jobs:
 
       - name: Publish green promotion bundle
         if: steps.promote.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: green-release-promotion
           if-no-files-found: error
@@ -729,7 +729,7 @@ jobs:
             --smoke-failure-reason "Automated rollback after a release regression."
 
       - name: Publish rollback bundle
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-rollback
           if-no-files-found: error
