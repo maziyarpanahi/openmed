@@ -122,10 +122,13 @@ def test_each_task_requires_an_explicit_external_path(
         load_cblue_task(task)
 
 
-@pytest.mark.parametrize("task", CBLUE_TASKS)
-def test_each_task_rejects_a_repository_internal_path(task: str) -> None:
-    with pytest.raises(MultilingualNerCorpusRequired, match="inside the repository"):
-        load_cblue_task(task, synthetic_cblue_fixture_path(task))
+def test_each_task_rejects_a_repository_internal_path(subtests) -> None:
+    for task in CBLUE_TASKS:
+        with subtests.test(task=task):
+            with pytest.raises(
+                MultilingualNerCorpusRequired, match="inside the repository"
+            ):
+                load_cblue_task(task, synthetic_cblue_fixture_path(task))
 
 
 @pytest.mark.parametrize("task", CBLUE_TASKS)
@@ -500,9 +503,8 @@ def _corrupt_first(task: str, **metadata: Any) -> list[BenchmarkFixture]:
     return fixtures
 
 
-@pytest.mark.parametrize(
-    ("reason", "task", "metadata"),
-    [
+def test_each_documented_gate_reason_code_is_reachable(subtests) -> None:
+    for reason, task, metadata in [
         ("unknown_task", CHIP_CDN, {"cblue_task": CMEIE}),
         (
             "incomplete_license_block",
@@ -529,14 +531,9 @@ def _corrupt_first(task: str, **metadata: Any) -> list[BenchmarkFixture]:
             {"corpus_file": "/data/cblue/chip_cdn_test.jsonl"},
         ),
         ("missing_normalized_terms", CHIP_CDN, {"normalized_terms": []}),
-    ],
-)
-def test_each_documented_gate_reason_code_is_reachable(
-    reason: str,
-    task: str,
-    metadata: dict[str, Any],
-) -> None:
-    assert reason in _reasons(_corrupt_first(task, **metadata))
+    ]:
+        with subtests.test(reason=reason, task=task, metadata=metadata):
+            assert reason in _reasons(_corrupt_first(task, **metadata))
 
 
 def test_unexpected_language_is_reachable() -> None:

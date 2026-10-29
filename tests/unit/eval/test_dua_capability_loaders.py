@@ -342,20 +342,18 @@ def test_shared_dua_refusals_do_not_echo_sensitive_paths(tmp_path: Path) -> None
         assert str(repository_root) not in str(captured.value)
 
 
-@pytest.mark.parametrize(
-    "normalize",
-    (
+def test_invalid_corpus_label_error_omits_supplied_value(subtests) -> None:
+    for normalize in (
         map_thyme_relation_type,
         normalize_mednli_label,
-    ),
-)
-def test_invalid_corpus_label_error_omits_supplied_value(normalize) -> None:
-    marker = "synthetic_patient_identifier_123"
+    ):
+        with subtests.test(normalize=normalize):
+            marker = "synthetic_patient_identifier_123"
 
-    with pytest.raises(ValueError) as captured:
-        normalize(marker)
+            with pytest.raises(ValueError) as captured:
+                normalize(marker)
 
-    assert marker not in "".join(traceback.format_exception(captured.value))
+            assert marker not in "".join(traceback.format_exception(captured.value))
 
 
 @pytest.mark.parametrize(

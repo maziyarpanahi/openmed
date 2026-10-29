@@ -398,31 +398,37 @@ def test_failed_auth_attempts_are_rate_limited(
     assert int(second.headers["Retry-After"]) >= 1
 
 
-@pytest.mark.parametrize("claim", ["exp", "iat", "nbf"])
-@pytest.mark.parametrize(
-    "value",
-    [
-        float("nan"),
-        float("inf"),
-        -float("inf"),
-        "nan",
-        "2000000060",
-        True,
-        False,
-        None,
-        10**400,
-    ],
-)
-def test_jwt_dates_require_finite_json_numbers(claim, value):
-    from openmed.service.auth import AuthError, ServiceAuthConfig, authenticate_jwt
+def test_jwt_dates_require_finite_json_numbers(subtests):
+    for claim in ["exp", "iat", "nbf"]:
+        for value in [
+            float("nan"),
+            float("inf"),
+            -float("inf"),
+            "nan",
+            "2000000060",
+            True,
+            False,
+            None,
+            10**400,
+        ]:
+            with subtests.test(claim=claim, value=value):
+                from openmed.service.auth import (
+                    AuthError,
+                    ServiceAuthConfig,
+                    authenticate_jwt,
+                )
 
-    claims = {"exp": 2_000_000_060, "iat": 1_999_999_990, "nbf": 1_999_999_990}
-    claims[claim] = value
-    config = ServiceAuthConfig(jwks=tuple(json.loads(_jwks())["keys"]))
-    with pytest.raises(AuthError) as error:
-        authenticate_jwt(_jwt_hs256(claims), config, now=2_000_000_000)
-    assert error.value.code == "invalid_credentials"
-    assert error.value.message == "Authentication credentials are invalid"
+                claims = {
+                    "exp": 2_000_000_060,
+                    "iat": 1_999_999_990,
+                    "nbf": 1_999_999_990,
+                }
+                claims[claim] = value
+                config = ServiceAuthConfig(jwks=tuple(json.loads(_jwks())["keys"]))
+                with pytest.raises(AuthError) as error:
+                    authenticate_jwt(_jwt_hs256(claims), config, now=2_000_000_000)
+                assert error.value.code == "invalid_credentials"
+                assert error.value.message == "Authentication credentials are invalid"
 
 
 def test_jwt_lifetime_and_leeway_keep_valid_tokens():
@@ -575,14 +581,21 @@ def test_invalid_utf8_jwt_payload_drops_private_decoder_context():
     assert caught.value.__context__ is caught.value.__cause__ is None
 
 
-@pytest.mark.parametrize("now", [float("nan"), float("inf"), -float("inf"), True])
-def test_jwt_validator_refuses_invalid_clock_values(now):
-    from openmed.service.auth import AuthError, ServiceAuthConfig, validate_jwt_claims
+def test_jwt_validator_refuses_invalid_clock_values(subtests):
+    for now in [float("nan"), float("inf"), -float("inf"), True]:
+        with subtests.test(now=now):
+            from openmed.service.auth import (
+                AuthError,
+                ServiceAuthConfig,
+                validate_jwt_claims,
+            )
 
-    with pytest.raises(AuthError, match="credentials are invalid"):
-        validate_jwt_claims(
-            {"exp": 2_000_000_060, "iat": 1_999_999_990}, ServiceAuthConfig(), now=now
-        )
+            with pytest.raises(AuthError, match="credentials are invalid"):
+                validate_jwt_claims(
+                    {"exp": 2_000_000_060, "iat": 1_999_999_990},
+                    ServiceAuthConfig(),
+                    now=now,
+                )
 
 
 def test_nested_router_policies_use_effective_prefixed_templates():

@@ -123,39 +123,41 @@ def test_supported_languages_match_wired_language_set():
     )
 
 
-@pytest.mark.parametrize("language", SUPPORTED_LOCALE_PHI_LANGUAGES)
-def test_locale_phi_example_emits_text_and_canonical_spans(language):
-    example = LocalePhiGenerator(seed=17).generate(language)
+def test_locale_phi_example_emits_text_and_canonical_spans(subtests):
+    for language in SUPPORTED_LOCALE_PHI_LANGUAGES:
+        with subtests.test(language=language):
+            example = LocalePhiGenerator(seed=17).generate(language)
 
-    assert example.text
-    assert example.metadata["synthetic"] is True
-    assert example.metadata["augmentation_only"] is True
-    assert example.metadata["contains_real_phi"] is False
-    assert {span.label for span in example.gold_spans} == set(LOCALE_PHI_LABELS)
-    assert all(span.label in CANONICAL_LABELS for span in example.gold_spans)
+            assert example.text
+            assert example.metadata["synthetic"] is True
+            assert example.metadata["augmentation_only"] is True
+            assert example.metadata["contains_real_phi"] is False
+            assert {span.label for span in example.gold_spans} == set(LOCALE_PHI_LABELS)
+            assert all(span.label in CANONICAL_LABELS for span in example.gold_spans)
 
-    for span in example.gold_spans:
-        assert span.start < span.end
-        assert example.text[span.start : span.end] == span.text
-        assert span.metadata["synthetic"] is True
+            for span in example.gold_spans:
+                assert span.start < span.end
+                assert example.text[span.start : span.end] == span.text
+                assert span.metadata["synthetic"] is True
 
-    item = example.to_training_item()
-    assert item["is_synthetic"] is True
-    assert item["synthetic_source"] == "locale_phi"
-    assert item["labels"] == [span.to_dict() for span in example.gold_spans]
+            item = example.to_training_item()
+            assert item["is_synthetic"] is True
+            assert item["synthetic_source"] == "locale_phi"
+            assert item["labels"] == [span.to_dict() for span in example.gold_spans]
 
 
-@pytest.mark.parametrize("language", SUPPORTED_LOCALE_PHI_LANGUAGES)
-def test_locale_phi_identifier_is_checksum_valid(language):
-    example = LocalePhiGenerator(seed=23).generate(language)
-    id_span = next(span for span in example.gold_spans if span.label == ID_NUM)
+def test_locale_phi_identifier_is_checksum_valid(subtests):
+    for language in SUPPORTED_LOCALE_PHI_LANGUAGES:
+        with subtests.test(language=language):
+            example = LocalePhiGenerator(seed=23).generate(language)
+            id_span = next(span for span in example.gold_spans if span.label == ID_NUM)
 
-    if language in NATIONAL_ID_PROVIDERS:
-        assert id_span.metadata["id_subtype"] == "national_id"
-        assert _ID_VALIDATORS[language](id_span.text)
-    else:
-        assert id_span.metadata["id_subtype"] == "luhn"
-        assert clinical_ids.validate_luhn(id_span.text)
+            if language in NATIONAL_ID_PROVIDERS:
+                assert id_span.metadata["id_subtype"] == "national_id"
+                assert _ID_VALIDATORS[language](id_span.text)
+            else:
+                assert id_span.metadata["id_subtype"] == "luhn"
+                assert clinical_ids.validate_luhn(id_span.text)
 
 
 @pytest.mark.slow
@@ -166,9 +168,8 @@ def test_locale_phi_generation_is_deterministic_per_seed():
     assert first == second
 
 
-@pytest.mark.parametrize(
-    "language",
-    (
+def test_non_latin_locale_templates_render_target_script(subtests):
+    for language in (
         "am",
         "ar",
         "as",
@@ -187,13 +188,12 @@ def test_locale_phi_generation_is_deterministic_per_seed():
         "th",
         "uk",
         "zh",
-    ),
-)
-def test_non_latin_locale_templates_render_target_script(language):
-    example = LocalePhiGenerator(seed=29).generate(language)
-    low, high = _SCRIPT_RANGES[language]
+    ):
+        with subtests.test(language=language):
+            example = LocalePhiGenerator(seed=29).generate(language)
+            low, high = _SCRIPT_RANGES[language]
 
-    assert any(low <= char <= high for char in example.text)
+            assert any(low <= char <= high for char in example.text)
 
 
 def test_locale_phi_generator_rejects_unsupported_language():

@@ -174,15 +174,16 @@ def test_dot_dates_have_validated_coverage_and_no_version_matches(monkeypatch, l
     )
 
 
-@pytest.mark.parametrize("prefix", ["ב", "ל", "מ", "ה", "ו", "כ", "ש"])
-@pytest.mark.parametrize("separator", ["", "-", "־"])
-def test_hebrew_date_prefixes_are_not_in_spans(prefix, separator):
-    for value in ("15.01.1980", "15 בינואר 2026"):
-        text = "נולד " + prefix + separator + value
-        assert any(
-            e.text == value and e.start == len("נולד " + prefix + separator)
-            for e in safety_sweep(text, [], lang="he")
-        )
+def test_hebrew_date_prefixes_are_not_in_spans(subtests):
+    for prefix in ["ב", "ל", "מ", "ה", "ו", "כ", "ש"]:
+        for separator in ["", "-", "־"]:
+            with subtests.test(prefix=prefix, separator=separator):
+                for value in ("15.01.1980", "15 בינואר 2026"):
+                    text = "נולד " + prefix + separator + value
+                    assert any(
+                        e.text == value and e.start == len("נולד " + prefix + separator)
+                        for e in safety_sweep(text, [], lang="he")
+                    )
 
 
 @pytest.mark.parametrize(

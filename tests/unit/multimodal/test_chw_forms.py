@@ -125,49 +125,53 @@ def _coded_json_values(value: Any, path: str = "") -> dict[str, list[Any]]:
     return coded
 
 
-@pytest.mark.parametrize("platform,extension", PLATFORM_EXPORTS)
-def test_platform_exports_round_trip_without_structural_loss(platform, extension):
-    source_path = FIXTURES / f"{platform}.{extension}"
-    result = redact_chw_form(
-        source_path,
-        text_redactor=_synthetic_text_redactor,
-    )
+def test_platform_exports_round_trip_without_structural_loss(subtests):
+    for platform, extension in PLATFORM_EXPORTS:
+        with subtests.test(platform=platform, extension=extension):
+            source_path = FIXTURES / f"{platform}.{extension}"
+            result = redact_chw_form(
+                source_path,
+                text_redactor=_synthetic_text_redactor,
+            )
 
-    assert result.platform == platform
-    assert result.row_count == 2
-    if extension == "json":
-        source = json.loads(source_path.read_text(encoding="utf-8"))
-        output = json.loads(result.text)
-        assert _json_schema(output) == _json_schema(source)
-        assert _list_lengths(output) == _list_lengths(source)
-        assert _coded_json_values(output) == _coded_json_values(source)
-    else:
-        source_rows = list(csv.DictReader(source_path.open(encoding="utf-8")))
-        output_rows = list(csv.DictReader(io.StringIO(result.text)))
-        assert output_rows[0].keys() == source_rows[0].keys()
-        assert len(output_rows) == len(source_rows)
-        coded_headers = [
-            header
-            for header in source_rows[0]
-            if header.lower().endswith(("symptoms", "status"))
-        ]
-        for header in coded_headers:
-            assert [row[header] for row in output_rows] == [
-                row[header] for row in source_rows
-            ]
+            assert result.platform == platform
+            assert result.row_count == 2
+            if extension == "json":
+                source = json.loads(source_path.read_text(encoding="utf-8"))
+                output = json.loads(result.text)
+                assert _json_schema(output) == _json_schema(source)
+                assert _list_lengths(output) == _list_lengths(source)
+                assert _coded_json_values(output) == _coded_json_values(source)
+            else:
+                source_rows = list(csv.DictReader(source_path.open(encoding="utf-8")))
+                output_rows = list(csv.DictReader(io.StringIO(result.text)))
+                assert output_rows[0].keys() == source_rows[0].keys()
+                assert len(output_rows) == len(source_rows)
+                coded_headers = [
+                    header
+                    for header in source_rows[0]
+                    if header.lower().endswith(("symptoms", "status"))
+                ]
+                for header in coded_headers:
+                    assert [row[header] for row in output_rows] == [
+                        row[header] for row in source_rows
+                    ]
 
 
-@pytest.mark.parametrize("platform,extension", PLATFORM_EXPORTS)
-def test_no_seeded_phi_leaks_to_output_or_manifest(platform, extension):
-    result = redact_chw_form(
-        FIXTURES / f"{platform}.{extension}",
-        text_redactor=_synthetic_text_redactor,
-    )
-    serialized = result.text + json.dumps(result.manifest, sort_keys=True)
-    mapping = {f"seed-{index}": value for index, value in enumerate(SEEDED_IDENTIFIERS)}
+def test_no_seeded_phi_leaks_to_output_or_manifest(subtests):
+    for platform, extension in PLATFORM_EXPORTS:
+        with subtests.test(platform=platform, extension=extension):
+            result = redact_chw_form(
+                FIXTURES / f"{platform}.{extension}",
+                text_redactor=_synthetic_text_redactor,
+            )
+            serialized = result.text + json.dumps(result.manifest, sort_keys=True)
+            mapping = {
+                f"seed-{index}": value for index, value in enumerate(SEEDED_IDENTIFIERS)
+            }
 
-    assert_redacted(serialized, mapping)
-    assert not any(value in serialized for value in SEEDED_IDENTIFIERS)
+            assert_redacted(serialized, mapping)
+            assert not any(value in serialized for value in SEEDED_IDENTIFIERS)
 
 
 def test_nested_xform_paths_map_to_canonical_semantics():
@@ -198,9 +202,8 @@ def test_nested_xform_paths_map_to_canonical_semantics():
     assert coded.action == ACTION_FREE_TEXT_REDACT
 
 
-@pytest.mark.parametrize(
-    "path",
-    (
+def test_platform_metadata_is_hashed_or_dropped(subtests):
+    for path in (
         "_uuid",
         "_submission_time",
         "meta/deviceID",
@@ -208,16 +211,15 @@ def test_nested_xform_paths_map_to_canonical_semantics():
         "form/case/@case_id",
         "KEY",
         "PARENT_KEY",
-    ),
-)
-def test_platform_metadata_is_hashed_or_dropped(path):
-    hashed = classify_chw_field(path)
-    dropped = classify_chw_field(path, policy={"metadata_action": "drop"})
+    ):
+        with subtests.test(path=path):
+            hashed = classify_chw_field(path)
+            dropped = classify_chw_field(path, policy={"metadata_action": "drop"})
 
-    assert hashed.action == ACTION_HASH
-    assert hashed.assigned_class == DIRECT_ID
-    assert hashed.detection_source == "platform_metadata"
-    assert dropped.action == ACTION_DROP
+            assert hashed.action == ACTION_HASH
+            assert hashed.assigned_class == DIRECT_ID
+            assert hashed.detection_source == "platform_metadata"
+            assert dropped.action == ACTION_DROP
 
 
 def test_geopoints_are_quasi_identifiers_and_are_generalized_or_dropped():
@@ -260,20 +262,21 @@ def test_manifest_contains_field_policy_and_counts_but_no_values():
     assert "14.716677" not in json.dumps(result.manifest)
 
 
-@pytest.mark.parametrize("extension", ("json", "csv"))
-def test_same_input_and_policy_are_byte_deterministic(extension):
-    path = FIXTURES / f"commcare.{extension}"
-    first = redact_chw_form(path, text_redactor=_synthetic_text_redactor)
-    second = redact_chw_form(path, text_redactor=_synthetic_text_redactor)
+def test_same_input_and_policy_are_byte_deterministic(subtests):
+    for extension in ("json", "csv"):
+        with subtests.test(extension=extension):
+            path = FIXTURES / f"commcare.{extension}"
+            first = redact_chw_form(path, text_redactor=_synthetic_text_redactor)
+            second = redact_chw_form(path, text_redactor=_synthetic_text_redactor)
 
-    assert first.text.encode() == second.text.encode()
-    assert (
-        json.dumps(first.manifest, sort_keys=True).encode()
-        == json.dumps(
-            second.manifest,
-            sort_keys=True,
-        ).encode()
-    )
+            assert first.text.encode() == second.text.encode()
+            assert (
+                json.dumps(first.manifest, sort_keys=True).encode()
+                == json.dumps(
+                    second.manifest,
+                    sort_keys=True,
+                ).encode()
+            )
 
 
 @pytest.mark.parametrize("platform,extension", PLATFORM_EXPORTS)

@@ -25,45 +25,54 @@ from openmed.eval.calibrate import (
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
-@pytest.mark.parametrize("key", ["target", "is_true", "matched"])
-@pytest.mark.parametrize("value", [True, False, 0, 1, 0.0, 1.0])
-def test_calibration_target_accepts_only_boolean_or_binary_numbers(
-    key: str, value: object
-) -> None:
-    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8, key: value}
-    sample = CalibrationSample.from_mapping(row)
-    assert sample.target is bool(value)
+def test_calibration_target_accepts_only_boolean_or_binary_numbers(subtests) -> None:
+    for key in ["target", "is_true", "matched"]:
+        for value in [True, False, 0, 1, 0.0, 1.0]:
+            with subtests.test(key=key, value=value):
+                row = {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    key: value,
+                }
+                sample = CalibrationSample.from_mapping(row)
+                assert sample.target is bool(value)
 
 
-@pytest.mark.parametrize("key", ["target", "is_true", "matched"])
-@pytest.mark.parametrize(
-    "value",
-    [
-        "false",
-        "true",
-        "0",
-        "1",
-        "",
-        "synthetic-private-label",
-        None,
-        [],
-        {},
-        [1],
-        2,
-        -1,
-        0.5,
-        float("nan"),
-        float("inf"),
-        -float("inf"),
-    ],
-)
 def test_calibration_target_rejects_truthiness_and_returns_value_free_error(
-    key: str, value: object
+    subtests,
 ) -> None:
-    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8, key: value}
-    with pytest.raises(ValueError) as caught:
-        CalibrationSample.from_mapping(row)
-    assert str(caught.value) == "calibration target must be a boolean or 0/1"
+    for key in ["target", "is_true", "matched"]:
+        for value in [
+            "false",
+            "true",
+            "0",
+            "1",
+            "",
+            "synthetic-private-label",
+            None,
+            [],
+            {},
+            [1],
+            2,
+            -1,
+            0.5,
+            float("nan"),
+            float("inf"),
+            -float("inf"),
+        ]:
+            with subtests.test(key=key, value=value):
+                row = {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    key: value,
+                }
+                with pytest.raises(ValueError) as caught:
+                    CalibrationSample.from_mapping(row)
+                assert (
+                    str(caught.value) == "calibration target must be a boolean or 0/1"
+                )
 
 
 def test_calibration_target_defaults_and_alias_precedence_are_preserved() -> None:

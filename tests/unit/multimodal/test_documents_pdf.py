@@ -230,10 +230,11 @@ def test_line_preservation_keeps_small_font_tokens_on_same_line(monkeypatch):
     )
 
 
-@pytest.mark.parametrize("value", [1, "true", None])
-def test_line_preservation_rejects_untyped_control(value):
-    with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
-        extract_pdf("unopened.pdf", preserve_lines=value)
+def test_line_preservation_rejects_untyped_control(subtests):
+    for value in [1, "true", None]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
+                extract_pdf("unopened.pdf", preserve_lines=value)
 
 
 @pytest.mark.parametrize(

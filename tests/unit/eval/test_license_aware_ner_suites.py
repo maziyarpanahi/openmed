@@ -125,15 +125,17 @@ def test_naamapadam_official_token_tags_load_hi_and_te() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    ("source_label", "expected"),
-    [("PER", PERSON), ("B-LOC", LOCATION), ("I-ORG", ORGANIZATION)],
-)
-def test_naamapadam_per_loc_org_mapping(source_label: str, expected: str) -> None:
-    mapping = map_naamapadam_label(source_label, language="hi")
+def test_naamapadam_per_loc_org_mapping(subtests) -> None:
+    for source_label, expected in [
+        ("PER", PERSON),
+        ("B-LOC", LOCATION),
+        ("I-ORG", ORGANIZATION),
+    ]:
+        with subtests.test(source_label=source_label, expected=expected):
+            mapping = map_naamapadam_label(source_label, language="hi")
 
-    assert mapping.canonical_label == expected
-    assert mapping.mapped is True
+            assert mapping.canonical_label == expected
+            assert mapping.mapped is True
 
 
 @pytest.mark.parametrize(

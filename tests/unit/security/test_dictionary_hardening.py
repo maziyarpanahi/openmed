@@ -159,9 +159,8 @@ def test_blank_and_comment_records_consume_the_record_budget(tmp_path: Path) -> 
     assert exc_info.value.observed_count == 3
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
+def test_dictionary_limits_are_lower_only(subtests) -> None:
+    for name, value in [
         ("max_compressed_bytes", 16 * 1024 * 1024 + 1),
         ("max_decompressed_bytes", 64 * 1024 * 1024 + 1),
         ("max_entries", 100_001),
@@ -170,24 +169,21 @@ def test_blank_and_comment_records_consume_the_record_budget(tmp_path: Path) -> 
         ("max_term_characters", 257),
         ("max_expansion_ratio", 100.01),
         ("max_expansion_ratio", float("nan")),
-    ],
-)
-def test_dictionary_limits_are_lower_only(name: str, value: int | float) -> None:
-    with pytest.raises(ValueError):
-        DictionaryLimits(**{name: value})
+    ]:
+        with subtests.test(name=name, value=value):
+            with pytest.raises(ValueError):
+                DictionaryLimits(**{name: value})
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
+def test_dictionary_limit_types_fail_closed(subtests) -> None:
+    for name, value in [
         ("max_entries", True),
         ("max_entry_bytes", 1.5),
         ("max_expansion_ratio", "10"),
-    ],
-)
-def test_dictionary_limit_types_fail_closed(name: str, value: object) -> None:
-    with pytest.raises(TypeError):
-        DictionaryLimits(**{name: value})
+    ]:
+        with subtests.test(name=name, value=value):
+            with pytest.raises(TypeError):
+                DictionaryLimits(**{name: value})
 
 
 @pytest.mark.parametrize(

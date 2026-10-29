@@ -590,9 +590,8 @@ def test_dictionary_is_immutable_and_digest_binds_exact_supplied_bytes():
     )
 
 
-@pytest.mark.parametrize(
-    "attrs",
-    [
+def test_invalid_dictionary_constraints_are_fixed_source_free_errors(subtests):
+    for attrs in [
         {"naaccrId": "unknown-id"},
         {"naaccrNum": "-1"},
         {"naaccrNum": "0"},
@@ -607,19 +606,19 @@ def test_dictionary_is_immutable_and_digest_binds_exact_supplied_bytes():
         {"dataType": "dateTime", "length": "24"},
         {"allowUnlimitedText": "true"},
         {"allowUnlimitedText": "false"},
-    ],
-)
-def test_invalid_dictionary_constraints_are_fixed_source_free_errors(attrs):
-    raw = _dictionary((_item(**attrs),))
-    with pytest.raises(NAACCRDictionaryError) as exc:
-        parse_naaccr_dictionary(raw)
-    assert str(exc.value) == "NAACCR projection refused."
-    assert exc.value.__suppress_context__
+    ]:
+        with subtests.test(attrs=attrs):
+            raw = _dictionary((_item(**attrs),))
+            with pytest.raises(NAACCRDictionaryError) as exc:
+                parse_naaccr_dictionary(raw)
+            assert str(exc.value) == "NAACCR projection refused."
+            assert exc.value.__suppress_context__
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
+def test_malformed_oversized_or_entity_dictionary_is_refused_without_source_echo(
+    subtests,
+):
+    for raw in [
         b"<PRIVATE-SURFACE",
         b"<NaaccrDictionary/>",
         b"\xff",
@@ -628,13 +627,12 @@ def test_invalid_dictionary_constraints_are_fixed_source_free_errors(attrs):
         b'<!DOCTYPE x [<!ENTITY secret "PRIVATE SURFACE">]><x>&secret;</x>',
         b'<!DOCTYPE x SYSTEM "file:///PRIVATE-PATH"><x/>',
         b'<?xml version="1.0" encoding="iso-8859-1"?><x/>',
-    ],
-)
-def test_malformed_oversized_or_entity_dictionary_is_refused_without_source_echo(raw):
-    with pytest.raises(NAACCRDictionaryError) as exc:
-        parse_naaccr_dictionary(raw)
-    assert "PRIVATE" not in str(exc.value)
-    assert "PRIVATE" not in json.dumps(exc.value.to_dict())
+    ]:
+        with subtests.test(raw=raw):
+            with pytest.raises(NAACCRDictionaryError) as exc:
+                parse_naaccr_dictionary(raw)
+            assert "PRIVATE" not in str(exc.value)
+            assert "PRIVATE" not in json.dumps(exc.value.to_dict())
 
 
 @pytest.mark.parametrize(
@@ -655,12 +653,17 @@ def test_mapping_unknown_items_and_duplicate_bindings_fail_before_file(
     assert not (tmp_path / "protected.xml").exists()
 
 
-@pytest.mark.parametrize(
-    "path", [(True,), (-1,), (4097,), ("private path",), tuple("x" for _ in range(9))]
-)
-def test_value_paths_are_static_bounded_selectors(path):
-    with pytest.raises(NAACCRProjectionError):
-        NAACCRFieldMapping("code", "code", path)
+def test_value_paths_are_static_bounded_selectors(subtests):
+    for path in [
+        (True,),
+        (-1,),
+        (4097,),
+        ("private path",),
+        tuple("x" for _ in range(9)),
+    ]:
+        with subtests.test(path=path):
+            with pytest.raises(NAACCRProjectionError):
+                NAACCRFieldMapping("code", "code", path)
 
 
 def test_public_error_cannot_echo_untrusted_codes_or_indices():
@@ -726,9 +729,8 @@ def test_multiple_bound_facts_require_one_exact_scalar_and_complete_evidence(
     assert b"OTHER" not in (tmp_path / "protected.xml").read_bytes()
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_dictionary_identity_and_structure_are_validated(subtests):
+    for change in [
         "duplicate_id",
         "duplicate_number",
         "missing_parent",
@@ -736,32 +738,31 @@ def test_multiple_bound_facts_require_one_exact_scalar_and_complete_evidence(
         "missing_uri",
         "future_version",
         "dateTime_old",
-    ],
-)
-def test_dictionary_identity_and_structure_are_validated(change):
-    root = ET.fromstring(_dictionary((_item(),)))
-    defs = root.find("n:ItemDefs", NS)
-    item = defs[1]
-    if change == "duplicate_id":
-        item.set("naaccrId", "opaquePatient")
-    elif change == "duplicate_number":
-        item.set("naaccrNum", "9500")
-    elif change == "missing_parent":
-        del item.attrib["parentXmlElement"]
-    elif change == "missing_uri":
-        del root.attrib["dictionaryUri"]
-    elif change == "future_version":
-        root.set("specificationVersion", "9.0")
-    elif change == "dateTime_old":
-        root.set("specificationVersion", "1.7")
-        item.set("dataType", "dateTime")
-        item.set("length", "25")
-    else:
-        node = root
-        for _ in range(34):
-            node = ET.SubElement(node, "Extra")
-    with pytest.raises(NAACCRDictionaryError):
-        parse_naaccr_dictionary(ET.tostring(root))
+    ]:
+        with subtests.test(change=change):
+            root = ET.fromstring(_dictionary((_item(),)))
+            defs = root.find("n:ItemDefs", NS)
+            item = defs[1]
+            if change == "duplicate_id":
+                item.set("naaccrId", "opaquePatient")
+            elif change == "duplicate_number":
+                item.set("naaccrNum", "9500")
+            elif change == "missing_parent":
+                del item.attrib["parentXmlElement"]
+            elif change == "missing_uri":
+                del root.attrib["dictionaryUri"]
+            elif change == "future_version":
+                root.set("specificationVersion", "9.0")
+            elif change == "dateTime_old":
+                root.set("specificationVersion", "1.7")
+                item.set("dataType", "dateTime")
+                item.set("length", "25")
+            else:
+                node = root
+                for _ in range(34):
+                    node = ET.SubElement(node, "Extra")
+            with pytest.raises(NAACCRDictionaryError):
+                parse_naaccr_dictionary(ET.tostring(root))
 
 
 def test_legacy_unlimited_text_is_explicitly_version_gated(tmp_path):

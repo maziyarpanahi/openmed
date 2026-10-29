@@ -113,9 +113,8 @@ def refresher(store, transport, clock=lambda: 100, **kwargs):
     )
 
 
-@pytest.mark.parametrize(
-    ("required", "granted", "covered"),
-    [
+def test_permission_unions(subtests):
+    for required, granted, covered in [
         (SCOPES, ("system/Observation.rs", "system/Observation.cud"), True),
         (("system/Observation.read",), ("system/Observation.rs",), True),
         (("system/Observation.write",), ("system/Observation.cud",), True),
@@ -140,15 +139,13 @@ def refresher(store, transport, clock=lambda: 100, **kwargs):
         ),
         (("offline_access",), ("online_access",), False),
         ((), (), True),
-    ],
-)
-def test_permission_unions(required, granted, covered):
-    assert smart_scopes_cover(required, granted) is covered
+    ]:
+        with subtests.test(required=required, granted=granted, covered=covered):
+            assert smart_scopes_cover(required, granted) is covered
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
+def test_scope_errors_do_not_echo_private_values(subtests):
+    for bad in [
         "",
         "system/Observation.rr",
         "system/Observation.BAD",
@@ -159,12 +156,11 @@ def test_permission_unions(required, granted, covered):
         "private\\canary",
         "system/Observation.r?name=é",
         "x" * 513,
-    ],
-)
-def test_scope_errors_do_not_echo_private_values(bad):
-    with pytest.raises(ValueError, match="Invalid SMART") as exc:
-        smart_scopes_cover((bad,), SCOPES)
-    assert bad not in str(exc.value) if bad else True
+    ]:
+        with subtests.test(bad=bad):
+            with pytest.raises(ValueError, match="Invalid SMART") as exc:
+                smart_scopes_cover((bad,), SCOPES)
+            assert bad not in str(exc.value) if bad else True
 
 
 def test_scope_bounds_and_value_free_findings():
@@ -307,13 +303,14 @@ def test_malformed_and_bounded_responses(raw):
     assert store.current is None
 
 
-@pytest.mark.parametrize("status", [201, 302, 400, 401, 429, 500])
-def test_no_redirect_or_retry_on_http_failure(status):
-    store = Custody(config())
-    result = refresher(
-        store, lambda _: SMARTTokenResponse(status, response().body)
-    ).ensure_ready(HANDLE)
-    assert result.code == "invalid_response" and result.revocation_confirmed
+def test_no_redirect_or_retry_on_http_failure(subtests):
+    for status in [201, 302, 400, 401, 429, 500]:
+        with subtests.test(status=status):
+            store = Custody(config())
+            result = refresher(
+                store, lambda _: SMARTTokenResponse(status, response().body)
+            ).ensure_ready(HANDLE)
+            assert result.code == "invalid_response" and result.revocation_confirmed
 
 
 @pytest.mark.parametrize("operation", ["reserve", "replace", "release", "revoke"])
@@ -346,33 +343,34 @@ def test_custody_errors_do_not_release_unknown_credential(operation, fault):
         assert store.reserve(HANDLE) is None
 
 
-@pytest.mark.parametrize(
-    "clock",
-    [
+def test_clock_failures_revoke(subtests):
+    for clock in [
         lambda: True,
         lambda: float("nan"),
         lambda: float("inf"),
         lambda: -1,
         lambda: "private",
-    ],
-)
-def test_clock_failures_revoke(clock):
-    store = Custody(config())
-    result = refresher(
-        store, lambda _: pytest.fail("network before valid clock"), clock
-    ).ensure_ready(HANDLE)
-    assert result.code == "invalid_clock" and result.revocation_confirmed
+    ]:
+        with subtests.test(clock=clock):
+            store = Custody(config())
+            result = refresher(
+                store, lambda _: pytest.fail("network before valid clock"), clock
+            ).ensure_ready(HANDLE)
+            assert result.code == "invalid_clock" and result.revocation_confirmed
 
 
-@pytest.mark.parametrize("ending", [99, 340, 400])
-def test_backwards_clock_or_response_latency_consumes_lifetime(ending):
-    times = iter((100, ending))
-    store = Custody(config())
-    result = refresher(store, lambda _: response(), lambda: next(times)).ensure_ready(
-        HANDLE
-    )
-    assert result.code == ("invalid_clock" if ending == 99 else "invalid_response")
-    assert result.revocation_confirmed
+def test_backwards_clock_or_response_latency_consumes_lifetime(subtests):
+    for ending in [99, 340, 400]:
+        with subtests.test(ending=ending):
+            times = iter((100, ending))
+            store = Custody(config())
+            result = refresher(
+                store, lambda _: response(), lambda: next(times)
+            ).ensure_ready(HANDLE)
+            assert result.code == (
+                "invalid_clock" if ending == 99 else "invalid_response"
+            )
+            assert result.revocation_confirmed
 
 
 @pytest.mark.parametrize("operation", ["release", "replace"])
@@ -403,14 +401,17 @@ def test_refresh_without_a_refresh_secret_revokes_without_transport():
     assert result.code == "invalid_grant" and result.revocation_confirmed
 
 
-@pytest.mark.parametrize("handle", ["private-handle", None, 1])
-def test_invalid_handle_never_reaches_custody_or_transport(handle):
-    store = Custody(config())
-    store.reserve = lambda _: pytest.fail("Invalid handle reached custody")
-    result = refresher(
-        store, lambda _: pytest.fail("Invalid handle reached transport")
-    ).ensure_ready(handle)
-    assert result.code == "invalid_request" and "private" not in str(result.to_dict())
+def test_invalid_handle_never_reaches_custody_or_transport(subtests):
+    for handle in ["private-handle", None, 1]:
+        with subtests.test(handle=handle):
+            store = Custody(config())
+            store.reserve = lambda _: pytest.fail("Invalid handle reached custody")
+            result = refresher(
+                store, lambda _: pytest.fail("Invalid handle reached transport")
+            ).ensure_ready(handle)
+            assert result.code == "invalid_request" and "private" not in str(
+                result.to_dict()
+            )
 
 
 def test_foreign_permission_in_custody_never_reaches_transport():
@@ -463,9 +464,8 @@ def test_private_objects_and_error_results_do_not_echo_secrets(caplog):
     assert result.code == "transport_unavailable" and result.revocation_confirmed
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_config_errors_are_value_free(subtests):
+    for changes in [
         {"token_endpoint": "http://private.example/token"},
         {"token_endpoint": "https://user:pass@private.example/token"},
         {"token_endpoint": "https://private.example/token#secret"},
@@ -476,18 +476,17 @@ def test_private_objects_and_error_results_do_not_echo_secrets(caplog):
         {"refresh_margin_seconds": 300},
         {"max_lifetime_seconds": 86401},
         {"max_lifetime_seconds": True},
-    ],
-)
-def test_config_errors_are_value_free(changes):
-    kwargs = {
-        "token_endpoint": "https://auth.example/token",
-        "client_id": "private-client",
-        "grant_type": "refresh_token",
-        "requested_scopes": SCOPES,
-    }
-    kwargs.update(changes)
-    with pytest.raises(ValueError, match="Invalid SMART refresh configuration"):
-        SMARTRefreshConfig(**kwargs)
+    ]:
+        with subtests.test(changes=changes):
+            kwargs = {
+                "token_endpoint": "https://auth.example/token",
+                "client_id": "private-client",
+                "grant_type": "refresh_token",
+                "requested_scopes": SCOPES,
+            }
+            kwargs.update(changes)
+            with pytest.raises(ValueError, match="Invalid SMART refresh configuration"):
+                SMARTRefreshConfig(**kwargs)
 
 
 def test_validator_backend_requires_scope_and_preserves_split_permission_union():
@@ -605,28 +604,30 @@ def test_private_context_does_not_cross_refresh_validation(boundary):
     assert "canary" not in str(caught.value)
 
 
-@pytest.mark.parametrize("foreign", (False, True))
-def test_untrusted_refresh_exception_diagnostics_are_never_read(foreign):
-    class ForeignValidationError(SMARTTokenValidationError):
-        def __init__(self):
-            ValueError.__init__(self, "private-transport-canary")
+def test_untrusted_refresh_exception_diagnostics_are_never_read(subtests):
+    for foreign in (False, True):
+        with subtests.test(foreign=foreign):
 
-        @property
-        def code(self):
-            pytest.fail("private diagnostic getter was evaluated")
+            class ForeignValidationError(SMARTTokenValidationError):
+                def __init__(self):
+                    ValueError.__init__(self, "private-transport-canary")
 
-    error = ForeignValidationError() if foreign else SMARTTokenValidationError()
-    if not foreign:
-        error.code = "private-transport-canary"
-    store = Custody(config())
+                @property
+                def code(self):
+                    pytest.fail("private diagnostic getter was evaluated")
 
-    def transport(_):
-        raise error
+            error = ForeignValidationError() if foreign else SMARTTokenValidationError()
+            if not foreign:
+                error.code = "private-transport-canary"
+            store = Custody(config())
 
-    report = refresher(store, transport).ensure_ready(HANDLE)
-    assert report.code == "invalid_response"
-    assert report.revocation_confirmed and store.current is None
-    assert "canary" not in str(report.to_dict())
+            def transport(_):
+                raise error
+
+            report = refresher(store, transport).ensure_ready(HANDLE)
+            assert report.code == "invalid_response"
+            assert report.revocation_confirmed and store.current is None
+            assert "canary" not in str(report.to_dict())
 
 
 def test_closed_token_error_rejects_diagnostic_string_subclasses():

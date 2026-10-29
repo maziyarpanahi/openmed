@@ -35,25 +35,22 @@ class TestPrivacyFilterIdentifierMatching:
     arbitrary HuggingFace repository names that merely contain the substring
     ``privacy-filter``."""
 
-    @pytest.mark.parametrize(
-        "attacker_name",
-        [
+    def test_attacker_controlled_names_are_not_recognized(self, subtests):
+        for attacker_name in [
             "attacker/foo-privacy-filter-bar",
             "attacker/privacy-filter-rce",
             "evil-org/my-privacy-filter",
             "some/privacy-filter-evil",
             "username/privacy-filter",  # third-party org, not openai/OpenMed
             "OpenMed/not-privacy-filter-but-similar",  # missing trailing-prefix
-        ],
-    )
-    def test_attacker_controlled_names_are_not_recognized(self, attacker_name):
-        from openmed.core.pii import _looks_like_privacy_filter_identifier
+        ]:
+            with subtests.test(attacker_name=attacker_name):
+                from openmed.core.pii import _looks_like_privacy_filter_identifier
 
-        assert _looks_like_privacy_filter_identifier(attacker_name) is False
+                assert _looks_like_privacy_filter_identifier(attacker_name) is False
 
-    @pytest.mark.parametrize(
-        "trusted_name",
-        [
+    def test_first_party_names_are_still_recognized(self, subtests):
+        for trusted_name in [
             "openai/privacy-filter",
             "OpenAI/Privacy-Filter",  # case-insensitive normalization
             "OpenMed/privacy-filter-multilingual",
@@ -64,27 +61,25 @@ class TestPrivacyFilterIdentifierMatching:
             "OpenMed/privacy-filter-multilingual-mlx-8bit",
             "OpenMed/privacy-filter-nemotron-mlx",
             "OpenMed/privacy-filter-nemotron-mlx-8bit",
-        ],
-    )
-    def test_first_party_names_are_still_recognized(self, trusted_name):
-        from openmed.core.pii import _looks_like_privacy_filter_identifier
+        ]:
+            with subtests.test(trusted_name=trusted_name):
+                from openmed.core.pii import _looks_like_privacy_filter_identifier
 
-        assert _looks_like_privacy_filter_identifier(trusted_name) is True
+                assert _looks_like_privacy_filter_identifier(trusted_name) is True
 
-    @pytest.mark.parametrize(
-        "alias",
-        ["privacy-filter", "privacy_filter", "openai-privacy-filter"],
-    )
-    def test_family_aliases_are_recognized(self, alias):
-        from openmed.core.pii import _looks_like_privacy_filter_identifier
+    def test_family_aliases_are_recognized(self, subtests):
+        for alias in ["privacy-filter", "privacy_filter", "openai-privacy-filter"]:
+            with subtests.test(alias=alias):
+                from openmed.core.pii import _looks_like_privacy_filter_identifier
 
-        assert _looks_like_privacy_filter_identifier(alias) is True
+                assert _looks_like_privacy_filter_identifier(alias) is True
 
-    @pytest.mark.parametrize("falsy", ["", None, "   "])
-    def test_blank_inputs_are_not_recognized(self, falsy):
-        from openmed.core.pii import _looks_like_privacy_filter_identifier
+    def test_blank_inputs_are_not_recognized(self, subtests):
+        for falsy in ["", None, "   "]:
+            with subtests.test(falsy=falsy):
+                from openmed.core.pii import _looks_like_privacy_filter_identifier
 
-        assert _looks_like_privacy_filter_identifier(falsy) is False
+                assert _looks_like_privacy_filter_identifier(falsy) is False
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +140,8 @@ class TestPrivacyFilterTorchPipelineGate:
 class TestIsTrustedForRemoteCode:
     """The allowlist function backs the gate."""
 
-    @pytest.mark.parametrize(
-        "trusted",
-        [
+    def test_hardcoded_first_party_models_are_trusted(self, subtests):
+        for trusted in [
             "openai/privacy-filter",
             "OpenMed/privacy-filter-multilingual",
             "OpenMed/privacy-filter-nemotron",
@@ -155,12 +149,11 @@ class TestIsTrustedForRemoteCode:
             "openmed/privacy-filter-multilingual",
             "OPENMED/PRIVACY-FILTER-NEMOTRON",
             "OpenAI/Privacy-Filter",
-        ],
-    )
-    def test_hardcoded_first_party_models_are_trusted(self, trusted):
-        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+        ]:
+            with subtests.test(trusted=trusted):
+                from openmed.torch.privacy_filter import is_trusted_for_remote_code
 
-        assert is_trusted_for_remote_code(trusted) is True
+                assert is_trusted_for_remote_code(trusted) is True
 
     @pytest.mark.parametrize(
         "attacker",

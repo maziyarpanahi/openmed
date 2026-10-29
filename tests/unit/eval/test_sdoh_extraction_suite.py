@@ -137,22 +137,24 @@ def test_suite_registered_and_synthetic_report_reproducible(monkeypatch):
         assert case.text not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    "text,category,predicted,correct",
-    (
+def test_known_misses_stay_in_denominators(subtests):
+    for text, category, predicted, correct in (
         ("Smokes 1 pack per day.", "tobacco", 0, 0),
         ("Uses marijuana occasionally.", "drug", 0, 0),
         ("He smokes cigarettes daily.", "tobacco", 1, 0),
-    ),
-)
-def test_known_misses_stay_in_denominators(text, category, predicted, correct):
-    case = next(x for x in load_sdoh_extraction_fixtures() if x.text == text)
-    counts = run_sdoh_extraction_benchmark([case]).metrics["by_determinant"][category]
-    assert counts["gold_count"] == 1
-    assert counts["prediction_count"] == predicted
-    assert counts["status_matches"] == correct
-    assert counts["status_accuracy"] == 0
-    assert counts["recall"] == predicted
+    ):
+        with subtests.test(
+            text=text, category=category, predicted=predicted, correct=correct
+        ):
+            case = next(x for x in load_sdoh_extraction_fixtures() if x.text == text)
+            counts = run_sdoh_extraction_benchmark([case]).metrics["by_determinant"][
+                category
+            ]
+            assert counts["gold_count"] == 1
+            assert counts["prediction_count"] == predicted
+            assert counts["status_matches"] == correct
+            assert counts["status_accuracy"] == 0
+            assert counts["recall"] == predicted
 
 
 def test_one_to_one_overlap_matching_finds_maximum_not_greedy():
@@ -179,20 +181,19 @@ def test_duplicate_predictions_are_false_positives_and_wrong_status_is_failure()
     assert status["current"]["false_positives"] == 1
 
 
-@pytest.mark.parametrize(
-    "prediction", (_finding(start=4, end=6), _finding(category="drug"))
-)
-def test_touching_offsets_and_wrong_categories_do_not_match(prediction):
-    result = _metrics(_case(SDOHGoldFinding("tobacco", "current", 0, 4)), [prediction])[
-        "overall"
-    ]
-    assert (
-        result["overlap_matches"]
-        == result["exact_matches"]
-        == result["status_matches"]
-        == 0
-    )
-    assert result["false_negatives"] == result["false_positives"] == 1
+def test_touching_offsets_and_wrong_categories_do_not_match(subtests):
+    for prediction in (_finding(start=4, end=6), _finding(category="drug")):
+        with subtests.test(prediction=prediction):
+            result = _metrics(
+                _case(SDOHGoldFinding("tobacco", "current", 0, 4)), [prediction]
+            )["overall"]
+            assert (
+                result["overlap_matches"]
+                == result["exact_matches"]
+                == result["status_matches"]
+                == 0
+            )
+            assert result["false_negatives"] == result["false_positives"] == 1
 
 
 def test_zero_denominators_are_unobserved_and_empty_inputs_refused():
@@ -606,10 +607,11 @@ def test_private_unicode_source_is_refused_before_digest_failure():
     assert "PRIVATE" not in str(caught.value)
 
 
-@pytest.mark.parametrize("boundary", ["gold", "prediction"])
-def test_excessive_window_findings_refuse_without_partial_scores(boundary):
-    with pytest.raises(SDOHBenchmarkError):
-        if boundary == "gold":
-            _case(*([SDOHGoldFinding("tobacco", "current", 0, 4)] * 257))
-        else:
-            _metrics(_case(), [_finding()] * 257)
+def test_excessive_window_findings_refuse_without_partial_scores(subtests):
+    for boundary in ["gold", "prediction"]:
+        with subtests.test(boundary=boundary):
+            with pytest.raises(SDOHBenchmarkError):
+                if boundary == "gold":
+                    _case(*([SDOHGoldFinding("tobacco", "current", 0, 4)] * 257))
+                else:
+                    _metrics(_case(), [_finding()] * 257)

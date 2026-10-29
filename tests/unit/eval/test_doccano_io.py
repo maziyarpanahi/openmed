@@ -265,9 +265,8 @@ def test_import_rejects_a_changed_document() -> None:
         _import(_canonical_document(), text_digest=sha256_digest("some other text"))
 
 
-@pytest.mark.parametrize(
-    ("line", "message"),
-    [
+def test_import_rejects_invalid_annotations(subtests) -> None:
+    for line, message in [
         (
             _document(entities=[_entity(0, "Ada Lovelace", "NOT_A_LABEL")]),
             "unknown label",
@@ -323,13 +322,12 @@ def test_import_rejects_a_changed_document() -> None:
             ),
             "is missing type",
         ),
-    ],
-)
-def test_import_rejects_invalid_annotations(line: str, message: str) -> None:
-    with pytest.raises(AnnotationValidationError, match=message) as excinfo:
-        _import(line)
+    ]:
+        with subtests.test(line=line, message=message):
+            with pytest.raises(AnnotationValidationError, match=message) as excinfo:
+                _import(line)
 
-    assert excinfo.value.format_name == "Doccano JSONL"
+            assert excinfo.value.format_name == "Doccano JSONL"
 
 
 def test_import_declares_unsupported_entity_and_relation_fields() -> None:
@@ -370,9 +368,8 @@ def test_import_rejects_unrepresentable_relation_types() -> None:
         _import(line)
 
 
-@pytest.mark.parametrize(
-    ("line", "message"),
-    [
+def test_import_rejects_malformed_annotation_shapes(subtests) -> None:
+    for line, message in [
         (_document(), "must carry Doccano entities or label spans"),
         (
             _document(
@@ -385,11 +382,10 @@ def test_import_rejects_unrepresentable_relation_types() -> None:
         (_document(label_spans={"a": 1}), "label spans must be a JSON array"),
         (_document(label_spans=[[0, 12]]), "triple"),
         (_document(label_spans=[["a", "b", "PERSON"]]), "must be integers"),
-    ],
-)
-def test_import_rejects_malformed_annotation_shapes(line: str, message: str) -> None:
-    with pytest.raises(AnnotationValidationError, match=message):
-        _import(line)
+    ]:
+        with subtests.test(line=line, message=message):
+            with pytest.raises(AnnotationValidationError, match=message):
+                _import(line)
 
 
 @pytest.mark.parametrize(

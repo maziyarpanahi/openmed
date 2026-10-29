@@ -93,20 +93,18 @@ def test_registered_gliformer_disease_defaults():
     assert record.license == "Apache-2.0"
 
 
-@pytest.mark.parametrize(
-    "model_id,family",
-    [
+def test_unindexed_hub_models_resolve_without_network(subtests):
+    for model_id, family in [
         ("OpenMed/GLiFormer-BioNER-Disease-Large-v2", "gliformer"),
         ("knowledgator/gliformer-base-v1", "gliformer"),
         ("fastino/gliner2-base-v1", "gliner2"),
         ("fastino/gliner2.5-base-v1", "gliner2"),
         ("Ihor/gliner-biomed-large-v1.0", "gliner"),
-    ],
-)
-def test_unindexed_hub_models_resolve_without_network(model_id, family):
-    record = resolve_model_record(model_id)
-    assert record.family == family
-    assert record.path == ""
+    ]:
+        with subtests.test(model_id=model_id, family=family):
+            record = resolve_model_record(model_id)
+            assert record.family == family
+            assert record.path == ""
 
 
 @pytest.mark.parametrize(

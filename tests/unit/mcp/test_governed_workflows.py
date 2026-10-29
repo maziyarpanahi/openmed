@@ -206,26 +206,30 @@ def test_registration_advertises_exact_contracts_without_authority_fields():
         assert "reviewer" not in json.dumps(tool.inputSchema)
 
 
-@pytest.mark.parametrize("operation", ["preflight", "preview", "status"])
-def test_read_commands_only_observe_exact_action(operation):
-    service = _Service()
-    result = _call(_server(service), "openmed_workflow_" + operation)
-    assert (
-        result.isError is False and result.structuredContent == service.view.to_dict()
-    )
-    assert (
-        service.calls == [operation]
-        and service.handoffs == service.clinical_effects == 0
-    )
+def test_read_commands_only_observe_exact_action(subtests):
+    for operation in ["preflight", "preview", "status"]:
+        with subtests.test(operation=operation):
+            service = _Service()
+            result = _call(_server(service), "openmed_workflow_" + operation)
+            assert (
+                result.isError is False
+                and result.structuredContent == service.view.to_dict()
+            )
+            assert (
+                service.calls == [operation]
+                and service.handoffs == service.clinical_effects == 0
+            )
 
 
-@pytest.mark.parametrize("name", GOVERNED_MCP_OPERATIONS)
-def test_default_has_no_live_governance_adapter(name):
-    result = _call(_server(), name)
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_unavailable"
-    )
+def test_default_has_no_live_governance_adapter(subtests):
+    for name in GOVERNED_MCP_OPERATIONS:
+        with subtests.test(name=name):
+            result = _call(_server(), name)
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"]
+                == "governance_unavailable"
+            )
 
 
 def test_review_needs_human_channel_consent_and_creates_no_approval():
@@ -265,9 +269,8 @@ def test_review_without_any_consent_never_dispatches_handoff():
     assert service.calls == ["status"] and service.handoffs == 0
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_edited_expired_or_misbound_consent_cannot_create_review(subtests):
+    for changes in [
         {"tool": "openmed_workflow_preview"},
         {"client": "different-client"},
         {"resource": "different-resource"},
@@ -277,21 +280,20 @@ def test_review_without_any_consent_never_dispatches_handoff():
             "issued_at": int(NOW.timestamp()) - 120,
             "expires_at": int(NOW.timestamp()) - 60,
         },
-    ],
-)
-def test_edited_expired_or_misbound_consent_cannot_create_review(changes):
-    service = _Service()
-    policy, provider = _consent(changes=changes)
-    result = _call(
-        _server(
-            service,
-            governance_consent_policy=policy,
-            governance_consent_receipt_provider=provider,
-        ),
-        "openmed_workflow_request_review",
-    )
-    assert result.isError and service.handoffs == 0
-    assert service.calls == ["status"]
+    ]:
+        with subtests.test(changes=changes):
+            service = _Service()
+            policy, provider = _consent(changes=changes)
+            result = _call(
+                _server(
+                    service,
+                    governance_consent_policy=policy,
+                    governance_consent_receipt_provider=provider,
+                ),
+                "openmed_workflow_request_review",
+            )
+            assert result.isError and service.handoffs == 0
+            assert service.calls == ["status"]
 
 
 @pytest.mark.parametrize(
@@ -328,60 +330,61 @@ def test_mcp_rejects_inline_authority_without_echo_or_logs(field, nested, caplog
     assert SENTINEL not in caplog.text
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_invalid_metadata_is_refused_before_service(subtests):
+    for field, value in [
         ("schema_version", "unknown"),
         ("run_id", SENTINEL),
         ("workflow_id", SENTINEL),
         ("action_digest", SENTINEL),
         ("expected_state_digest", False),
-    ],
-)
-def test_invalid_metadata_is_refused_before_service(field, value):
-    service = _Service()
-    request_data = {**_request().to_dict(), field: value}
-    result = _call(
-        _server(service), "openmed_workflow_preflight", request_data=request_data
-    )
-    assert result.isError and service.calls == []
+    ]:
+        with subtests.test(field=field, value=value):
+            service = _Service()
+            request_data = {**_request().to_dict(), field: value}
+            result = _call(
+                _server(service),
+                "openmed_workflow_preflight",
+                request_data=request_data,
+            )
+            assert result.isError and service.calls == []
 
 
-@pytest.mark.parametrize("request_data", [None, [], "private", {}, True])
-def test_direct_request_parser_refuses_other_shapes(request_data):
-    with pytest.raises(GovernedMCPError, match="Governed workflow request refused"):
-        GovernedMCPRequest.from_dict(request_data)
+def test_direct_request_parser_refuses_other_shapes(subtests):
+    for request_data in [None, [], "private", {}, True]:
+        with subtests.test(request_data=request_data):
+            with pytest.raises(
+                GovernedMCPError, match="Governed workflow request refused"
+            ):
+                GovernedMCPRequest.from_dict(request_data)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_cross_run_action_and_workflow_results_fail_closed(subtests):
+    for field, value in [
         ("run_id", RunId("run_" + "f" * 32)),
         ("workflow_id", WorkflowId("workflow:org.example/other@1.0.0")),
         ("action_digest", OTHER),
-    ],
-)
-def test_cross_run_action_and_workflow_results_fail_closed(field, value):
-    service = _Service()
-    service.view = replace(service.view, **{field: value})
-    result = _call(_server(service), "openmed_workflow_status")
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_conflict"
-    )
+    ]:
+        with subtests.test(field=field, value=value):
+            service = _Service()
+            service.view = replace(service.view, **{field: value})
+            result = _call(_server(service), "openmed_workflow_status")
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"] == "governance_conflict"
+            )
 
 
-@pytest.mark.parametrize(
-    "value", [False, {"status": "approved", "token": SENTINEL}, None]
-)
-def test_untyped_service_results_never_cross_mcp(value):
-    service = _Service()
-    service.preview = lambda request: value
-    result = _call(_server(service), "openmed_workflow_preview")
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_invalid_result"
-    )
+def test_untyped_service_results_never_cross_mcp(subtests):
+    for value in [False, {"status": "approved", "token": SENTINEL}, None]:
+        with subtests.test(value=value):
+            service = _Service()
+            service.preview = lambda request: value
+            result = _call(_server(service), "openmed_workflow_preview")
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"]
+                == "governance_invalid_result"
+            )
 
 
 def test_service_prints_and_failures_do_not_corrupt_stdio_or_echo_values(capsys):
@@ -400,24 +403,29 @@ def test_service_prints_and_failures_do_not_corrupt_stdio_or_echo_values(capsys)
     assert SENTINEL not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("state", [OTHER, None])
-def test_review_requires_current_state_before_consent_or_mutation(state):
-    service = _Service()
-    result = _call(
-        _server(service),
-        "openmed_workflow_request_review",
-        request_data=_request(expected_state_digest=state).to_dict(),
-    )
-    assert result.isError and service.handoffs == 0
+def test_review_requires_current_state_before_consent_or_mutation(subtests):
+    for state in [OTHER, None]:
+        with subtests.test(state=state):
+            service = _Service()
+            result = _call(
+                _server(service),
+                "openmed_workflow_request_review",
+                request_data=_request(expected_state_digest=state).to_dict(),
+            )
+            assert result.isError and service.handoffs == 0
 
 
-@pytest.mark.parametrize(
-    "policy", [None, replace(default_governed_consent_policy(), require_receipt=False)]
-)
-def test_conformance_rejects_missing_or_disabled_receipt_policy(policy):
-    with pytest.raises(ConformanceViolation) as error:
-        validate_governed_tool_registration(TOOL_REGISTRY.latest_specs(), policy)
-    assert error.value.category == "unapproved_state_change"
+def test_conformance_rejects_missing_or_disabled_receipt_policy(subtests):
+    for policy in [
+        None,
+        replace(default_governed_consent_policy(), require_receipt=False),
+    ]:
+        with subtests.test(policy=policy):
+            with pytest.raises(ConformanceViolation) as error:
+                validate_governed_tool_registration(
+                    TOOL_REGISTRY.latest_specs(), policy
+                )
+            assert error.value.category == "unapproved_state_change"
 
 
 def test_registration_refuses_permissive_governance_policy():
@@ -426,19 +434,21 @@ def test_registration_refuses_permissive_governance_policy():
         _server(_Service(), governance_consent_policy=policy)
 
 
-@pytest.mark.parametrize("name", GOVERNED_MCP_OPERATIONS)
-def test_conformance_detects_annotation_drift(name):
-    specs = [
-        replace(s, read_only_hint=not s.read_only_hint) if s.name == name else s
-        for s in TOOL_REGISTRY.latest_specs()
-    ]
-    with pytest.raises(ConformanceViolation):
-        validate_governed_tool_registration(specs, default_governed_consent_policy())
+def test_conformance_detects_annotation_drift(subtests):
+    for name in GOVERNED_MCP_OPERATIONS:
+        with subtests.test(name=name):
+            specs = [
+                replace(s, read_only_hint=not s.read_only_hint) if s.name == name else s
+                for s in TOOL_REGISTRY.latest_specs()
+            ]
+            with pytest.raises(ConformanceViolation):
+                validate_governed_tool_registration(
+                    specs, default_governed_consent_policy()
+                )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_view_invariants_refuse_false_authority_or_invalid_counts(subtests):
+    for field, value in [
         ("proposed_effect_count", True),
         ("proposed_effect_count", 1025),
         ("committed_effect_count", 2),
@@ -447,38 +457,36 @@ def test_conformance_detects_annotation_drift(name):
         ("review_request_digest", SENTINEL),
         ("status", GovernanceStatus.COMPLETED),
         ("grant", GovernanceDecision.DENIED),
-    ],
-)
-def test_view_invariants_refuse_false_authority_or_invalid_counts(field, value):
-    with pytest.raises(GovernedMCPError):
-        _view(**{field: value})
+    ]:
+        with subtests.test(field=field, value=value):
+            with pytest.raises(GovernedMCPError):
+                _view(**{field: value})
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_handoff_acknowledgement_must_reference_exact_action(subtests):
+    for field, value in [
         ("run_id", RunId("run_" + "f" * 32)),
         ("evidence_references", ()),
         ("workflow_id", WorkflowId("workflow:org.example/other@1.0.0")),
-    ],
-)
-def test_handoff_acknowledgement_must_reference_exact_action(field, value):
-    service = _Service()
-    service.review_packet = _packet(**{field: value})
-    policy, provider = _consent()
-    result = _call(
-        _server(
-            service,
-            governance_consent_policy=policy,
-            governance_consent_receipt_provider=provider,
-        ),
-        "openmed_workflow_request_review",
-    )
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_invalid_result"
-    )
-    assert service.handoffs == 1 and service.clinical_effects == 0
+    ]:
+        with subtests.test(field=field, value=value):
+            service = _Service()
+            service.review_packet = _packet(**{field: value})
+            policy, provider = _consent()
+            result = _call(
+                _server(
+                    service,
+                    governance_consent_policy=policy,
+                    governance_consent_receipt_provider=provider,
+                ),
+                "openmed_workflow_request_review",
+            )
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"]
+                == "governance_invalid_result"
+            )
+            assert service.handoffs == 1 and service.clinical_effects == 0
 
 
 def test_service_atomic_state_race_refuses_handoff():
@@ -500,27 +508,27 @@ def test_service_atomic_state_race_refuses_handoff():
     assert service.handoffs == service.clinical_effects == 0
 
 
-@pytest.mark.parametrize(
-    "status,phase",
-    [
+def test_terminal_and_refused_states_never_reach_consent_provider(subtests):
+    for status, phase in [
         (GovernanceStatus.COMPLETED, ActionPhase.COMPLETED),
         (GovernanceStatus.CANCELLED, ActionPhase.ABORTED),
         (GovernanceStatus.DENIED, ActionPhase.PREFLIGHT),
         (GovernanceStatus.UNAVAILABLE, ActionPhase.PREFLIGHT),
-    ],
-)
-def test_terminal_and_refused_states_never_reach_consent_provider(status, phase):
-    service = _Service()
-    service.view = replace(service.view, status=status, phase=phase)
+    ]:
+        with subtests.test(status=status, phase=phase):
+            service = _Service()
+            service.view = replace(service.view, status=status, phase=phase)
 
-    def forbidden(*args):
-        raise AssertionError("Refused workflow requested consent")
+            def forbidden(*args):
+                raise AssertionError("Refused workflow requested consent")
 
-    result = _call(
-        _server(service, governance_consent_receipt_provider=forbidden),
-        "openmed_workflow_request_review",
-    )
-    assert result.isError and service.calls == ["status"] and service.handoffs == 0
+            result = _call(
+                _server(service, governance_consent_receipt_provider=forbidden),
+                "openmed_workflow_request_review",
+            )
+            assert (
+                result.isError and service.calls == ["status"] and service.handoffs == 0
+            )
 
 
 def test_receipt_verification_observation_never_resumes_an_action():
@@ -536,19 +544,21 @@ def test_receipt_verification_observation_never_resumes_an_action():
     assert service.calls == ["status"] and service.clinical_effects == 0
 
 
-@pytest.mark.parametrize("operation", ["preflight", "preview", "status"])
-def test_missing_and_unimplemented_capabilities_are_unavailable(operation):
-    service = _Service()
+def test_missing_and_unimplemented_capabilities_are_unavailable(subtests):
+    for operation in ["preflight", "preview", "status"]:
+        with subtests.test(operation=operation):
+            service = _Service()
 
-    def missing(request):
-        raise NotImplementedError(SENTINEL)
+            def missing(request):
+                raise NotImplementedError(SENTINEL)
 
-    setattr(service, operation, missing)
-    result = _call(_server(service), "openmed_workflow_" + operation)
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_unavailable"
-    )
+            setattr(service, operation, missing)
+            result = _call(_server(service), "openmed_workflow_" + operation)
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"]
+                == "governance_unavailable"
+            )
 
 
 def test_real_signed_expired_consent_never_creates_handoff():
@@ -607,38 +617,37 @@ def test_provider_cannot_rebind_consent_by_mutating_argument_copy():
     assert result.isError and service.calls == ["status"] and service.handoffs == 0
 
 
-@pytest.mark.parametrize(
-    "now", [NOW + timedelta(minutes=11), NOW - timedelta(minutes=1)]
-)
-def test_expired_and_future_handoff_acknowledgements_require_reconciliation(now):
-    service = _Service()
-    policy, provider = _consent()
-    # Change only the trusted handoff-validation clock; consent has its own
-    # service-owned clock. An acknowledgement can fail after handoff creation.
-    server = create_mcp_server(
-        governance_service=service,
-        governance_consent_policy=policy,
-        governance_consent_receipt_provider=provider,
-        governance_clock=lambda: now,
-    )
-    result = _call(server, "openmed_workflow_request_review")
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "governance_invalid_result"
-    )
-    assert service.handoffs == 1 and service.clinical_effects == 0
+def test_expired_and_future_handoff_acknowledgements_require_reconciliation(subtests):
+    for now in [NOW + timedelta(minutes=11), NOW - timedelta(minutes=1)]:
+        with subtests.test(now=now):
+            service = _Service()
+            policy, provider = _consent()
+            # Change only the trusted handoff-validation clock; consent has its own
+            # service-owned clock. An acknowledgement can fail after handoff creation.
+            server = create_mcp_server(
+                governance_service=service,
+                governance_consent_policy=policy,
+                governance_consent_receipt_provider=provider,
+                governance_clock=lambda: now,
+            )
+            result = _call(server, "openmed_workflow_request_review")
+            assert (
+                result.isError
+                and result.structuredContent["error"]["code"]
+                == "governance_invalid_result"
+            )
+            assert service.handoffs == 1 and service.clinical_effects == 0
 
 
-@pytest.mark.parametrize(
-    "clock", [lambda: None, lambda: datetime(2026, 1, 1), lambda: False]
-)
-def test_invalid_trusted_clock_fails_before_any_handoff(clock):
-    service = _Service()
-    result = _call(
-        create_mcp_server(governance_service=service, governance_clock=clock),
-        "openmed_workflow_request_review",
-    )
-    assert result.isError and service.calls == [] and service.handoffs == 0
+def test_invalid_trusted_clock_fails_before_any_handoff(subtests):
+    for clock in [lambda: None, lambda: datetime(2026, 1, 1), lambda: False]:
+        with subtests.test(clock=clock):
+            service = _Service()
+            result = _call(
+                create_mcp_server(governance_service=service, governance_clock=clock),
+                "openmed_workflow_request_review",
+            )
+            assert result.isError and service.calls == [] and service.handoffs == 0
 
 
 @pytest.mark.parametrize(

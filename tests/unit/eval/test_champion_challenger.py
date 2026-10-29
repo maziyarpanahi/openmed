@@ -221,21 +221,18 @@ def test_mismatched_coordinates_are_rejected() -> None:
         compare_champion_challenger(champion, challenger)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
+def test_mismatched_evidence_corpora_are_rejected(subtests) -> None:
+    """Head-to-head metrics must come from the same committed evidence corpora."""
+    for field, value in (
         ("eval_set_hash", "different-eval"),
         ("leakage_fixture_hash", "different-leakage"),
-    ),
-)
-def test_mismatched_evidence_corpora_are_rejected(field: str, value: str) -> None:
-    """Head-to-head metrics must come from the same committed evidence corpora."""
+    ):
+        with subtests.test(field=field, value=value):
+            champion = _report()
+            challenger = _report(**{field: value})
 
-    champion = _report()
-    challenger = _report(**{field: value})
-
-    with pytest.raises(ValueError, match=field):
-        compare_champion_challenger(champion, challenger)
+            with pytest.raises(ValueError, match=field):
+                compare_champion_challenger(champion, challenger)
 
 
 def test_bootstrap_without_champion_promotes_releasable() -> None:

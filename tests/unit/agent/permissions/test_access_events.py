@@ -43,9 +43,8 @@ def ticket() -> AccessTicket:
     return AccessTicket(RUN, PURPOSE, (DATA,), (SELECTOR,), (ACTION,), 100)
 
 
-@pytest.mark.parametrize(
-    ("change", "reason"),
-    [
+def test_each_denial_records_once_without_dispatch(subtests) -> None:
+    for change, reason in [
         ("missing", "missing_ticket"),
         ("invalid", "invalid_ticket"),
         ("expired", "expired"),
@@ -56,64 +55,67 @@ def ticket() -> AccessTicket:
         ("action", "tool_action_denied"),
         ("request", "invalid_request"),
         ("time", "invalid_timestamp"),
-    ],
-)
-def test_each_denial_records_once_without_dispatch(change: str, reason: str) -> None:
-    presented = ticket()
-    proposed = request()
-    now = 99
-    if change == "missing":
-        presented = None
-    elif change == "invalid":
-        presented = CANARY
-    elif change == "expired":
-        now = 100
-    elif change == "run":
-        proposed = replace(proposed, run_id=RunId("run_" + "b" * 32))
-    elif change == "purpose":
-        proposed = replace(proposed, purpose="purpose:org.example/research@1.0.0")
-    elif change == "projection":
-        proposed = replace(proposed, projection=("data:org.example/other@1.0.0",))
-    elif change == "selector":
-        proposed = replace(
-            proposed,
-            record_selectors=(
-                RecordSelector.from_value(
-                    kind=SELECTOR.kind,
-                    value="another synthetic record",
-                    key=b"k" * 32,
-                ),
-            ),
-        )
-    elif change == "action":
-        proposed = replace(
-            proposed,
-            tool_action=ToolAction(
-                ACTION.tool,
-                "action:org.example/export@1.0.0",
-            ),
-        )
-    elif change == "request":
-        proposed = {"patient": CANARY}
-    elif change == "time":
-        now = True
-    sink = MemoryAccessEventSink()
-    calls = []
-    with pytest.raises(AccessTicketError) as caught:
-        dispatch_with_access_ticket(
-            presented,
-            proposed,
-            AccessTicketVerifier(sink=sink),
-            lambda: calls.append(True),
-            now=now,
-        )
-    assert caught.value.code == reason
-    assert calls == []
-    assert len(sink.events) == 1
-    event = sink.events[0]
-    assert event.outcome == "deny"
-    assert event.reason_code == reason
-    assert CANARY not in json.dumps(event.to_dict())
+    ]:
+        with subtests.test(change=change, reason=reason):
+            presented = ticket()
+            proposed = request()
+            now = 99
+            if change == "missing":
+                presented = None
+            elif change == "invalid":
+                presented = CANARY
+            elif change == "expired":
+                now = 100
+            elif change == "run":
+                proposed = replace(proposed, run_id=RunId("run_" + "b" * 32))
+            elif change == "purpose":
+                proposed = replace(
+                    proposed, purpose="purpose:org.example/research@1.0.0"
+                )
+            elif change == "projection":
+                proposed = replace(
+                    proposed, projection=("data:org.example/other@1.0.0",)
+                )
+            elif change == "selector":
+                proposed = replace(
+                    proposed,
+                    record_selectors=(
+                        RecordSelector.from_value(
+                            kind=SELECTOR.kind,
+                            value="another synthetic record",
+                            key=b"k" * 32,
+                        ),
+                    ),
+                )
+            elif change == "action":
+                proposed = replace(
+                    proposed,
+                    tool_action=ToolAction(
+                        ACTION.tool,
+                        "action:org.example/export@1.0.0",
+                    ),
+                )
+            elif change == "request":
+                proposed = {"patient": CANARY}
+            elif change == "time":
+                now = True
+            sink = MemoryAccessEventSink()
+            calls = []
+            with pytest.raises(AccessTicketError) as caught:
+                dispatch_with_access_ticket(
+                    presented,
+                    proposed,
+                    AccessTicketVerifier(sink=sink),
+                    lambda: calls.append(True),
+                    now=now,
+                )
+            assert caught.value.code == reason
+            assert calls == []
+            assert len(sink.events) == 1
+            event = sink.events[0]
+            assert event.outcome == "deny"
+            assert event.reason_code == reason
+            assert CANARY not in json.dumps(event.to_dict())
 
 
 def test_allow_records_once_before_dispatch_and_contains_no_selector_metadata() -> None:
@@ -179,30 +181,32 @@ def test_clock_failure_records_denial_without_provider_details() -> None:
     assert CANARY not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize("denied", [False, True])
-def test_sink_failure_blocks_dispatch_and_does_not_retry(denied: bool) -> None:
-    class FailingSink:
-        calls = 0
+def test_sink_failure_blocks_dispatch_and_does_not_retry(subtests) -> None:
+    for denied in [False, True]:
+        with subtests.test(denied=denied):
 
-        def emit(self, event: AccessEvent) -> None:
-            self.calls += 1
-            raise RuntimeError(CANARY)
+            class FailingSink:
+                calls = 0
 
-    sink = FailingSink()
-    calls = []
-    with pytest.raises(AccessEventError) as caught:
-        dispatch_with_access_ticket(
-            None if denied else ticket(),
-            request(),
-            AccessTicketVerifier(sink=sink),
-            lambda: calls.append(True),
-            now=99,
-        )
-    assert sink.calls == 1
-    assert calls == []
-    assert caught.value.code == "sink_unavailable"
-    assert caught.value.__context__ is None
-    assert CANARY not in "".join(traceback.format_exception(caught.value))
+                def emit(self, event: AccessEvent) -> None:
+                    self.calls += 1
+                    raise RuntimeError(CANARY)
+
+            sink = FailingSink()
+            calls = []
+            with pytest.raises(AccessEventError) as caught:
+                dispatch_with_access_ticket(
+                    None if denied else ticket(),
+                    request(),
+                    AccessTicketVerifier(sink=sink),
+                    lambda: calls.append(True),
+                    now=99,
+                )
+            assert sink.calls == 1
+            assert calls == []
+            assert caught.value.code == "sink_unavailable"
+            assert caught.value.__context__ is None
+            assert CANARY not in "".join(traceback.format_exception(caught.value))
 
 
 @pytest.mark.parametrize(

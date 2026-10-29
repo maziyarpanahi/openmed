@@ -57,17 +57,18 @@ class EqualLoader:
         return self(name, **kwargs)
 
 
-@pytest.mark.parametrize("bound", [False, True])
-def test_equal_unhashable_owners_stay_separate(bound):
-    first, second = EqualLoader(), EqualLoader()
-    assert first == second
-    first_loader = first.from_pretrained if bound else first
-    second_loader = second.from_pretrained if bound else second
+def test_equal_unhashable_owners_stay_separate(subtests):
+    for bound in [False, True]:
+        with subtests.test(bound=bound):
+            first, second = EqualLoader(), EqualLoader()
+            assert first == second
+            first_loader = first.from_pretrained if bound else first
+            second_loader = second.from_pretrained if bound else second
 
-    assert load(first_loader) is first.tokenizer
-    assert load(second_loader) is second.tokenizer
-    assert load(first_loader) is first.tokenizer
-    assert (first.calls, second.calls) == (1, 1)
+            assert load(first_loader) is first.tokenizer
+            assert load(second_loader) is second.tokenizer
+            assert load(first_loader) is first.tokenizer
+            assert (first.calls, second.calls) == (1, 1)
 
 
 def test_repeated_bound_method_access_is_cached():

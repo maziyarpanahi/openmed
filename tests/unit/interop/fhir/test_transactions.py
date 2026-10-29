@@ -82,9 +82,8 @@ def test_canonical_bytes_and_detached_payload():
     assert "日本語" not in repr(result)
 
 
-@pytest.mark.parametrize(
-    "entry,expected_request",
-    [
+def test_request_shapes_are_preserved(subtests):
+    for entry, expected_request in [
         (SyntheticEntry(observation()), {"method": "POST", "url": "Observation"}),
         (
             SyntheticEntry(
@@ -116,13 +115,12 @@ def test_canonical_bytes_and_detached_payload():
                 "ifMatch": 'W/"7"',
             },
         ),
-    ],
-)
-def test_request_shapes_are_preserved(entry, expected_request):
-    original = copy.deepcopy(entry)
-    result = assemble([entry])
-    assert result.bundle["entry"][0]["request"] == expected_request
-    assert entry == original
+    ]:
+        with subtests.test(entry=entry, expected_request=expected_request):
+            original = copy.deepcopy(entry)
+            result = assemble([entry])
+            assert result.bundle["entry"][0]["request"] == expected_request
+            assert entry == original
 
 
 def test_provenance_targets_all_writes_without_copying_source_metadata():
@@ -166,9 +164,8 @@ def test_internal_references_are_rewritten_without_mutating_inputs():
     assert validation_result(result.bundle).valid
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [
+def test_all_reviewed_inputs_change_the_digest(subtests):
+    for mutation in [
         "resource",
         "predicate",
         "version",
@@ -179,41 +176,46 @@ def test_internal_references_are_rewritten_without_mutating_inputs():
         "role",
         "clock",
         "order",
-    ],
-)
-def test_all_reviewed_inputs_change_the_digest(mutation):
-    entries = [
-        SyntheticEntry(observation(id="one"), "update", "identifier=synthetic", "1"),
-        SyntheticEntry({"resourceType": "Patient", "id": "two"}),
-    ]
-    original = assemble(entries)
-    approval = APPROVAL
-    clock = lambda: INSTANT
-    if mutation == "resource":
-        entries[0].resource["status"] = "final"
-    elif mutation == "predicate":
-        entries[0].conditional_predicate = "identifier=changed"
-    elif mutation == "version":
-        entries[0].expected_version = "2"
-    elif mutation == "kind":
-        entries[0].kind = "create"
-        entries[0].expected_version = None
-    elif mutation == "receipt":
-        approval = replace(approval, receipt_digest="sha256:" + "d" * 64)
-    elif mutation == "action":
-        approval = replace(approval, action_digest="sha256:" + "d" * 64)
-    elif mutation == "evidence":
-        approval = replace(approval, evidence_references=("urn:sha256:" + "d" * 64,))
-    elif mutation == "role":
-        approval = replace(approval, reviewer_role=TransactionReviewerRole.DATA_STEWARD)
-    elif mutation == "clock":
-        clock = lambda: INSTANT + timedelta(microseconds=1)
-    elif mutation == "order":
-        entries.reverse()
-    assert (
-        assemble(entries, approval=approval, clock=clock).bundle_digest
-        != original.bundle_digest
-    )
+    ]:
+        with subtests.test(mutation=mutation):
+            entries = [
+                SyntheticEntry(
+                    observation(id="one"), "update", "identifier=synthetic", "1"
+                ),
+                SyntheticEntry({"resourceType": "Patient", "id": "two"}),
+            ]
+            original = assemble(entries)
+            approval = APPROVAL
+            clock = lambda: INSTANT
+            if mutation == "resource":
+                entries[0].resource["status"] = "final"
+            elif mutation == "predicate":
+                entries[0].conditional_predicate = "identifier=changed"
+            elif mutation == "version":
+                entries[0].expected_version = "2"
+            elif mutation == "kind":
+                entries[0].kind = "create"
+                entries[0].expected_version = None
+            elif mutation == "receipt":
+                approval = replace(approval, receipt_digest="sha256:" + "d" * 64)
+            elif mutation == "action":
+                approval = replace(approval, action_digest="sha256:" + "d" * 64)
+            elif mutation == "evidence":
+                approval = replace(
+                    approval, evidence_references=("urn:sha256:" + "d" * 64,)
+                )
+            elif mutation == "role":
+                approval = replace(
+                    approval, reviewer_role=TransactionReviewerRole.DATA_STEWARD
+                )
+            elif mutation == "clock":
+                clock = lambda: INSTANT + timedelta(microseconds=1)
+            elif mutation == "order":
+                entries.reverse()
+            assert (
+                assemble(entries, approval=approval, clock=clock).bundle_digest
+                != original.bundle_digest
+            )
 
 
 def test_limits_are_inclusive_and_count_provenance_and_utf8_bytes():
@@ -238,9 +240,8 @@ def test_entry_limit_refuses_before_clock_or_entry_access():
         )
 
 
-@pytest.mark.parametrize(
-    "entry,code",
-    [
+def test_invalid_entries_have_fixed_errors(subtests):
+    for entry, code in [
         (SyntheticEntry(observation(), "delete"), "unsupported_write_kind"),
         (SyntheticEntry(observation(), "update"), "update_target_required"),
         (
@@ -279,24 +280,30 @@ def test_entry_limit_refuses_before_clock_or_entry_access():
             "invalid_r4_structure",
         ),
         (object(), "invalid_entry"),
-    ],
-)
-def test_invalid_entries_have_fixed_errors(entry, code):
-    with pytest.raises(TransactionAssemblyError, match=f"^{code}$"):
-        assemble([entry])
+    ]:
+        with subtests.test(entry=entry, code=code):
+            with pytest.raises(TransactionAssemblyError, match=f"^{code}$"):
+                assemble([entry])
 
 
-@pytest.mark.parametrize(
-    "value", [float("nan"), float("inf"), {1: "secret"}, ("tuple",), object(), "\ud800"]
-)
-def test_non_json_resources_refused_without_echo(value):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_resource_json$"):
-        assemble([SyntheticEntry(observation(valueString=value))])
+def test_non_json_resources_refused_without_echo(subtests):
+    for value in [
+        float("nan"),
+        float("inf"),
+        {1: "secret"},
+        ("tuple",),
+        object(),
+        "\ud800",
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                TransactionAssemblyError, match="^invalid_resource_json$"
+            ):
+                assemble([SyntheticEntry(observation(valueString=value))])
 
 
-@pytest.mark.parametrize(
-    "predicate",
-    [
+def test_unsafe_predicates_refused(subtests):
+    for predicate in [
         "",
         "?identifier=x",
         "identifier",
@@ -310,18 +317,18 @@ def test_non_json_resources_refused_without_echo(value):
         "identifier=x&",
         "x=" + "a" * 4096,
         "&".join(["x=a"] * 65),
-    ],
-)
-def test_unsafe_predicates_refused(predicate):
-    with pytest.raises(
-        TransactionAssemblyError, match="^invalid_conditional_predicate$"
-    ):
-        assemble([SyntheticEntry(observation(), conditional_predicate=predicate)])
+    ]:
+        with subtests.test(predicate=predicate):
+            with pytest.raises(
+                TransactionAssemblyError, match="^invalid_conditional_predicate$"
+            ):
+                assemble(
+                    [SyntheticEntry(observation(), conditional_predicate=predicate)]
+                )
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
+def test_private_evidence_is_rejected(subtests):
+    for evidence in [
         "synthetic source text",
         "/private/synthetic",
         "https://user:secret@example.invalid/source",
@@ -329,16 +336,16 @@ def test_unsafe_predicates_refused(predicate):
         "urn:sha256:secret",
         "urn:uuid:4C545501-B3A7-4E73-88DB-779B7B5B6D73",
         3,
-    ],
-)
-def test_private_evidence_is_rejected(evidence):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_evidence_references$"):
-        replace(APPROVAL, evidence_references=(evidence,))
+    ]:
+        with subtests.test(evidence=evidence):
+            with pytest.raises(
+                TransactionAssemblyError, match="^invalid_evidence_references$"
+            ):
+                replace(APPROVAL, evidence_references=(evidence,))
 
 
-@pytest.mark.parametrize(
-    "kwargs,code",
-    [
+def test_invalid_approval_metadata(subtests):
+    for kwargs, code in [
         ({"action_digest": "secret"}, "invalid_approval_digest"),
         ({"receipt_digest": "secret"}, "invalid_approval_digest"),
         ({"reviewer_role": "SYNTHETIC NAME"}, "invalid_reviewer_role"),
@@ -347,19 +354,17 @@ def test_private_evidence_is_rejected(evidence):
             {"evidence_references": (APPROVAL.evidence_references[0],) * 2},
             "invalid_evidence_references",
         ),
-    ],
-)
-def test_invalid_approval_metadata(kwargs, code):
-    with pytest.raises(TransactionAssemblyError, match=f"^{code}$"):
-        replace(APPROVAL, **kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, code=code):
+            with pytest.raises(TransactionAssemblyError, match=f"^{code}$"):
+                replace(APPROVAL, **kwargs)
 
 
-@pytest.mark.parametrize(
-    "values", [(True, 100), (1, False), (0, 100), (2, 0), (2.0, 100), (-1, 100)]
-)
-def test_invalid_declared_limits(values):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_limits$"):
-        TransactionLimits(*values)
+def test_invalid_declared_limits(subtests):
+    for values in [(True, 100), (1, False), (0, 100), (2, 0), (2.0, 100), (-1, 100)]:
+        with subtests.test(values=values):
+            with pytest.raises(TransactionAssemblyError, match="^invalid_limits$"):
+                TransactionLimits(*values)
 
 
 def test_duplicate_targets_refused():
@@ -387,12 +392,11 @@ def test_duplicate_targets_refused():
             assemble(entries)
 
 
-@pytest.mark.parametrize(
-    "clock", [None, lambda: "secret", lambda: datetime(2026, 1, 1)]
-)
-def test_invalid_clocks_refused(clock):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_clock$"):
-        assemble(clock=clock)
+def test_invalid_clocks_refused(subtests):
+    for clock in [None, lambda: "secret", lambda: datetime(2026, 1, 1)]:
+        with subtests.test(clock=clock):
+            with pytest.raises(TransactionAssemblyError, match="^invalid_clock$"):
+                assemble(clock=clock)
 
 
 def test_clock_failure_does_not_disclose_exception_text():
@@ -409,12 +413,13 @@ def test_equivalent_timezone_instants_produce_identical_bytes():
     assert assemble(clock=lambda: INSTANT.astimezone(offset)) == assemble()
 
 
-@pytest.mark.parametrize("entries", [[], "secret", None])
-def test_bad_entry_sequences(entries):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_entries$"):
-        assemble_transaction(
-            entries, approval=APPROVAL, limits=LIMITS, clock=lambda: INSTANT
-        )
+def test_bad_entry_sequences(subtests):
+    for entries in [[], "secret", None]:
+        with subtests.test(entries=entries):
+            with pytest.raises(TransactionAssemblyError, match="^invalid_entries$"):
+                assemble_transaction(
+                    entries, approval=APPROVAL, limits=LIMITS, clock=lambda: INSTANT
+                )
 
 
 @pytest.mark.parametrize(
@@ -487,10 +492,13 @@ def test_public_facade_exports_assembler():
     assert public_assembler is assemble_transaction
 
 
-@pytest.mark.parametrize("kwargs", [{"approval": None}, {"limits": None}])
-def test_invalid_assembly_metadata(kwargs):
-    with pytest.raises(TransactionAssemblyError, match="^invalid_assembly_metadata$"):
-        assemble(**kwargs)
+def test_invalid_assembly_metadata(subtests):
+    for kwargs in [{"approval": None}, {"limits": None}]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(
+                TransactionAssemblyError, match="^invalid_assembly_metadata$"
+            ):
+                assemble(**kwargs)
 
 
 def test_protocol_properties_are_read_once_and_clock_is_read_once():

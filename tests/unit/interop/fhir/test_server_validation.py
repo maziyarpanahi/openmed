@@ -126,48 +126,62 @@ def test_default_disabled_does_not_inspect_inputs_or_transport() -> None:
     assert result.request_digest is None
 
 
-@pytest.mark.parametrize("mode", ["create", "update"])
 def test_target_bound_transport_receives_intended_mode_and_only_update_instance(
-    mode: str,
+    subtests,
 ) -> None:
-    transport = _Transport()
-    resource = {"resourceType": "Patient", "name": [{"family": SOURCE_SENTINEL}]}
-    handle = _Handle()
-    arguments = {"resource_id": "synthetic-instance"} if mode == "update" else {}
-    result = _run(
-        transport, mode=mode, resource=resource, credential_handle=handle, **arguments
-    )
-    assert result.is_valid
-    assert len(transport.calls) == 1
-    request = transport.calls[0]
-    assert request["resource_type"] == "Patient"
-    assert request["instance_id"] == arguments.get("resource_id")
-    assert request["credential_handle"] is handle
-    assert request["timeout_seconds"] == 10.0
-    assert request["parameters"]["resourceType"] == "Parameters"
-    assert request["parameters"]["parameter"][0] == {"name": "mode", "valueCode": mode}
-    sent = request["parameters"]["parameter"][1]["resource"]
-    assert sent == resource and sent is not resource
-    assert sent["name"] is not resource["name"]
-    assert len(result.request_digest or "") == 64
+    for mode in ["create", "update"]:
+        with subtests.test(mode=mode):
+            transport = _Transport()
+            resource = {
+                "resourceType": "Patient",
+                "name": [{"family": SOURCE_SENTINEL}],
+            }
+            handle = _Handle()
+            arguments = (
+                {"resource_id": "synthetic-instance"} if mode == "update" else {}
+            )
+            result = _run(
+                transport,
+                mode=mode,
+                resource=resource,
+                credential_handle=handle,
+                **arguments,
+            )
+            assert result.is_valid
+            assert len(transport.calls) == 1
+            request = transport.calls[0]
+            assert request["resource_type"] == "Patient"
+            assert request["instance_id"] == arguments.get("resource_id")
+            assert request["credential_handle"] is handle
+            assert request["timeout_seconds"] == 10.0
+            assert request["parameters"]["resourceType"] == "Parameters"
+            assert request["parameters"]["parameter"][0] == {
+                "name": "mode",
+                "valueCode": mode,
+            }
+            sent = request["parameters"]["parameter"][1]["resource"]
+            assert sent == resource and sent is not resource
+            assert sent["name"] is not resource["name"]
+            assert len(result.request_digest or "") == 64
 
 
-@pytest.mark.parametrize(
-    "severity,valid",
-    [("fatal", False), ("error", False), ("warning", True), ("information", True)],
-)
-def test_http_200_is_classified_by_issues_not_transport_success(
-    severity: str, valid: bool
-) -> None:
-    result = _run(_Transport(_outcome(severity)))
-    assert result.is_valid is valid
-    assert result.reason_code is (
-        FHIRServerValidationReason.VALIDATED
-        if valid
-        else FHIRServerValidationReason.ERROR_ISSUES
-    )
-    assert result.issues[0].severity == severity
-    assert result.issues[0].element_paths == ("Patient.name[].family",)
+def test_http_200_is_classified_by_issues_not_transport_success(subtests) -> None:
+    for severity, valid in [
+        ("fatal", False),
+        ("error", False),
+        ("warning", True),
+        ("information", True),
+    ]:
+        with subtests.test(severity=severity, valid=valid):
+            result = _run(_Transport(_outcome(severity)))
+            assert result.is_valid is valid
+            assert result.reason_code is (
+                FHIRServerValidationReason.VALIDATED
+                if valid
+                else FHIRServerValidationReason.ERROR_ISSUES
+            )
+            assert result.issues[0].severity == severity
+            assert result.issues[0].element_paths == ("Patient.name[].family",)
 
 
 def test_warning_policy_can_stop_preview() -> None:
@@ -191,22 +205,22 @@ def test_nominated_profile_is_in_protected_parameters_and_request_binding_only()
     assert result.request_digest != _run(_Transport()).request_digest
 
 
-@pytest.mark.parametrize(
-    "profile",
-    [
+def test_invalid_profile_is_not_sent_or_reflected(subtests) -> None:
+    for profile in [
         "",
         "file:/synthetic/schema",
         "https://synthetic.invalid/profile?secret=x",
         "https://user:secret@synthetic.invalid/profile",
         "urn:synthetic:profile\n",
         42,
-    ],
-)
-def test_invalid_profile_is_not_sent_or_reflected(profile: Any) -> None:
-    transport = _Transport()
-    result = _run(transport, profile_uri=profile)
-    assert result.reason_code is FHIRServerValidationReason.CONFIGURATION_INVALID
-    assert transport.calls == []
+    ]:
+        with subtests.test(profile=profile):
+            transport = _Transport()
+            result = _run(transport, profile_uri=profile)
+            assert (
+                result.reason_code is FHIRServerValidationReason.CONFIGURATION_INVALID
+            )
+            assert transport.calls == []
 
 
 def test_response_repr_excludes_protected_outcome() -> None:
@@ -214,18 +228,19 @@ def test_response_repr_excludes_protected_outcome() -> None:
     assert SOURCE_SENTINEL not in repr(response)
 
 
-@pytest.mark.parametrize(
-    "status", [201, 204, 301, 400, 401, 403, 404, 405, 429, 500, 501, 503]
-)
 def test_non_200_never_proves_validation_even_with_informational_outcome(
-    status: int,
+    subtests,
 ) -> None:
-    transport = _Transport(status_code=status)
-    result = _run(transport)
-    assert not result.is_valid
-    assert result.reason_code is FHIRServerValidationReason.VALIDATION_UNAVAILABLE
-    assert result.issues == ()
-    assert len(transport.calls) == 1
+    for status in [201, 204, 301, 400, 401, 403, 404, 405, 429, 500, 501, 503]:
+        with subtests.test(status=status):
+            transport = _Transport(status_code=status)
+            result = _run(transport)
+            assert not result.is_valid
+            assert (
+                result.reason_code is FHIRServerValidationReason.VALIDATION_UNAVAILABLE
+            )
+            assert result.issues == ()
+            assert len(transport.calls) == 1
 
 
 def test_transport_exception_is_value_free_and_not_retried(
@@ -247,51 +262,51 @@ def test_transport_exception_is_value_free_and_not_retried(
     assert capsys.readouterr() == ("", "")
 
 
-@pytest.mark.parametrize(
-    "shape",
-    [
+def test_unsupported_cached_operation_stops_before_transport_resolution(
+    subtests,
+) -> None:
+    for shape in [
         "absent",
         "wrong_definition",
         "client_only",
         "other_resource",
         "conflicting",
         "cross_rest",
-    ],
-)
-def test_unsupported_cached_operation_stops_before_transport_resolution(
-    shape: str,
-) -> None:
-    statement = _statement()
-    target = statement["rest"][0]["resource"][0]
-    if shape == "absent":
-        target.pop("operation")
-    elif shape == "wrong_definition":
-        target["operation"][0]["definition"] = "urn:synthetic:other-operation"
-    elif shape == "client_only":
-        statement["rest"][0]["mode"] = "client"
-    elif shape == "other_resource":
-        target["type"] = "Observation"
-    elif shape == "conflicting":
-        target["operation"].append(
-            {"name": "validate", "definition": "urn:synthetic:conflict"}
-        )
-    else:
-        target.pop("operation")
-        statement["rest"].append(
-            {
-                "mode": "server",
-                "operation": [{"name": "validate", "definition": VALIDATE}],
-            }
-        )
+    ]:
+        with subtests.test(shape=shape):
+            statement = _statement()
+            target = statement["rest"][0]["resource"][0]
+            if shape == "absent":
+                target.pop("operation")
+            elif shape == "wrong_definition":
+                target["operation"][0]["definition"] = "urn:synthetic:other-operation"
+            elif shape == "client_only":
+                statement["rest"][0]["mode"] = "client"
+            elif shape == "other_resource":
+                target["type"] = "Observation"
+            elif shape == "conflicting":
+                target["operation"].append(
+                    {"name": "validate", "definition": "urn:synthetic:conflict"}
+                )
+            else:
+                target.pop("operation")
+                statement["rest"].append(
+                    {
+                        "mode": "server",
+                        "operation": [{"name": "validate", "definition": VALIDATE}],
+                    }
+                )
 
-    class Unresolved:
-        @property
-        def validate(self) -> Any:
-            pytest.fail("unsupported metadata must stop before transport resolution")
+            class Unresolved:
+                @property
+                def validate(self) -> Any:
+                    pytest.fail(
+                        "unsupported metadata must stop before transport resolution"
+                    )
 
-    result = _run(Unresolved(), statement=statement)
-    assert result.status is FHIRServerValidationStatus.UNSUPPORTED
-    assert result.request_digest is None
+            result = _run(Unresolved(), statement=statement)
+            assert result.status is FHIRServerValidationStatus.UNSUPPORTED
+            assert result.request_digest is None
 
 
 def test_rest_level_operation_and_known_canonical_version_are_supported() -> None:
@@ -303,25 +318,23 @@ def test_rest_level_operation_and_known_canonical_version_are_supported() -> Non
     assert _run(_Transport(), statement=statement).is_valid
 
 
-@pytest.mark.parametrize(
-    "operation",
-    [
+def test_malformed_operation_metadata_never_sends_resource(subtests) -> None:
+    for operation in [
         None,
         {},
         [None],
         [{}],
         [{"name": "validate"}],
         [{"name": SOURCE_SENTINEL, "definition": None}],
-    ],
-)
-def test_malformed_operation_metadata_never_sends_resource(operation: Any) -> None:
-    statement = _statement()
-    statement["rest"][0]["resource"][0]["operation"] = operation
-    transport = _Transport()
-    result = _run(transport, statement=statement)
-    assert result.reason_code is FHIRServerValidationReason.CAPABILITY_MALFORMED
-    assert transport.calls == []
-    assert SOURCE_SENTINEL not in json.dumps(result.to_dict())
+    ]:
+        with subtests.test(operation=operation):
+            statement = _statement()
+            statement["rest"][0]["resource"][0]["operation"] = operation
+            transport = _Transport()
+            result = _run(transport, statement=statement)
+            assert result.reason_code is FHIRServerValidationReason.CAPABILITY_MALFORMED
+            assert transport.calls == []
+            assert SOURCE_SENTINEL not in json.dumps(result.to_dict())
 
 
 def test_operation_bound_is_not_truncated_to_a_supported_entry() -> None:
@@ -346,9 +359,8 @@ def test_r5_metadata_is_explicitly_unsupported_without_contact() -> None:
     assert transport.calls == []
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_configuration_is_controlled_and_makes_no_request(subtests) -> None:
+    for kwargs in [
         {"enabled": 1},
         {"mode": "delete"},
         {"mode": SOURCE_SENTINEL},
@@ -361,16 +373,15 @@ def test_r5_metadata_is_explicitly_unsupported_without_contact() -> None:
         {"credential_handle": None},
         {"credential_handle": SOURCE_SENTINEL},
         {"transport": None},
-    ],
-)
-def test_invalid_configuration_is_controlled_and_makes_no_request(
-    kwargs: dict[str, Any],
-) -> None:
-    transport = _Transport()
-    result = _run(transport, **kwargs)
-    assert result.reason_code is FHIRServerValidationReason.CONFIGURATION_INVALID
-    assert transport.calls == []
-    assert SOURCE_SENTINEL not in repr(result)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            transport = _Transport()
+            result = _run(transport, **kwargs)
+            assert (
+                result.reason_code is FHIRServerValidationReason.CONFIGURATION_INVALID
+            )
+            assert transport.calls == []
+            assert SOURCE_SENTINEL not in repr(result)
 
 
 def test_unbounded_timeout_and_literal_credential_collections_are_refused() -> None:
@@ -385,9 +396,8 @@ def test_unbounded_timeout_and_literal_credential_collections_are_refused() -> N
         assert transport.calls == []
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_protected_resource_or_instance_is_not_sent(subtests) -> None:
+    for kwargs in [
         {"mode": "update"},
         {"mode": "update", "resource_id": "Patient/0042"},
         {
@@ -412,16 +422,13 @@ def test_unbounded_timeout_and_literal_credential_collections_are_refused() -> N
                 "x": "\u4e2d" * (MAX_SERVER_VALIDATION_RESOURCE_BYTES // 2),
             }
         },
-    ],
-)
-def test_invalid_protected_resource_or_instance_is_not_sent(
-    kwargs: dict[str, Any],
-) -> None:
-    transport = _Transport()
-    result = _run(transport, **kwargs)
-    assert result.reason_code is FHIRServerValidationReason.RESOURCE_INVALID
-    assert transport.calls == []
-    assert SOURCE_SENTINEL not in repr(result)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            transport = _Transport()
+            result = _run(transport, **kwargs)
+            assert result.reason_code is FHIRServerValidationReason.RESOURCE_INVALID
+            assert transport.calls == []
+            assert SOURCE_SENTINEL not in repr(result)
 
 
 def test_cyclic_deep_and_excessive_node_inputs_are_refused_without_request() -> None:
@@ -441,9 +448,8 @@ def test_cyclic_deep_and_excessive_node_inputs_are_refused_without_request() -> 
         assert transport.calls == []
 
 
-@pytest.mark.parametrize(
-    "outcome",
-    [
+def test_malformed_server_outcomes_cannot_pass_or_echo_source(subtests) -> None:
+    for outcome in [
         {},
         {"resourceType": "Patient"},
         {"resourceType": "OperationOutcome", "issue": []},
@@ -466,13 +472,12 @@ def test_cyclic_deep_and_excessive_node_inputs_are_refused_without_request() -> 
                 }
             ],
         },
-    ],
-)
-def test_malformed_server_outcomes_cannot_pass_or_echo_source(outcome: Any) -> None:
-    result = _run(_Transport(outcome))
-    assert result.reason_code is FHIRServerValidationReason.OUTCOME_MALFORMED
-    assert SOURCE_SENTINEL not in repr(result)
-    assert SOURCE_SENTINEL not in json.dumps(result.to_dict())
+    ]:
+        with subtests.test(outcome=outcome):
+            result = _run(_Transport(outcome))
+            assert result.reason_code is FHIRServerValidationReason.OUTCOME_MALFORMED
+            assert SOURCE_SENTINEL not in repr(result)
+            assert SOURCE_SENTINEL not in json.dumps(result.to_dict())
 
 
 def test_issue_and_expression_bounds_refuse_instead_of_hiding_late_errors() -> None:
@@ -546,9 +551,8 @@ def test_identical_inputs_are_deterministic_and_changed_request_has_new_digest()
     )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_public_issue_constructor_refuses_value_bearing_metadata(subtests) -> None:
+    for kwargs in [
         {"severity": SOURCE_SENTINEL, "code": "required"},
         {"severity": "error", "code": SOURCE_SENTINEL},
         {
@@ -556,15 +560,12 @@ def test_identical_inputs_are_deterministic_and_changed_request_has_new_digest()
             "code": "required",
             "element_paths": ("Patient.name.where(value = '0042')",),
         },
-    ],
-)
-def test_public_issue_constructor_refuses_value_bearing_metadata(
-    kwargs: dict[str, Any],
-) -> None:
-    with pytest.raises(ValueError) as error:
-        FHIRServerValidationIssue(**kwargs)
-    assert SOURCE_SENTINEL not in str(error.value)
-    assert "0042" not in str(error.value)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError) as error:
+                FHIRServerValidationIssue(**kwargs)
+            assert SOURCE_SENTINEL not in str(error.value)
+            assert "0042" not in str(error.value)
 
 
 @pytest.mark.integration

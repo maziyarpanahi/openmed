@@ -29,9 +29,10 @@ def test_list_all_suites_offline(monkeypatch, capsys):
     assert by_name["golden"]["access"] == "public-synthetic"
 
 
-@pytest.mark.parametrize("suite", DEFAULT_SUITES)
-def test_default_suite_task_is_explicit(suite):
-    assert suite_metadata(suite)["task"] not in (None, "", "unknown")
+def test_default_suite_task_is_explicit(subtests):
+    for suite in DEFAULT_SUITES:
+        with subtests.test(suite=suite):
+            assert suite_metadata(suite)["task"] not in (None, "", "unknown")
 
 
 def test_describe_n2c2_retains_current_adapter_map(capsys):

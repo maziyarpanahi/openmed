@@ -1957,9 +1957,10 @@ def test_release_gate_rejects_inconsistent_single_release_composition() -> None:
     assert check.details == {"integrity_verified": False}
 
 
-@pytest.mark.parametrize(
-    ("longitudinal_assessed", "overlap_assessed", "risk_status", "violation"),
-    [
+def test_multi_release_risk_gate_rejects_incomplete_composition_review(
+    subtests,
+) -> None:
+    for longitudinal_assessed, overlap_assessed, risk_status, violation in [
         (
             False,
             True,
@@ -1973,35 +1974,34 @@ def test_release_gate_rejects_inconsistent_single_release_composition() -> None:
             "prior_release_overlap_assessed",
         ),
         (True, True, "inconclusive", "risk_status"),
-    ],
-)
-def test_multi_release_risk_gate_rejects_incomplete_composition_review(
-    longitudinal_assessed: bool,
-    overlap_assessed: bool,
-    risk_status: str,
-    violation: str,
-) -> None:
-    evidence = _structured_release_evidence(
-        composition=CompositionEvidence(
-            release_count=2,
-            longitudinal_linkage_assessed=longitudinal_assessed,
-            prior_release_overlap_assessed=overlap_assessed,
+    ]:
+        with subtests.test(
+            longitudinal_assessed=longitudinal_assessed,
+            overlap_assessed=overlap_assessed,
             risk_status=risk_status,
-            evidence_digest=stable_hash(
-                {
-                    "kind": "multi-release-review",
-                    "longitudinal": longitudinal_assessed,
-                    "overlap": overlap_assessed,
-                    "status": risk_status,
-                }
-            ),
-        )
-    )
+            violation=violation,
+        ):
+            evidence = _structured_release_evidence(
+                composition=CompositionEvidence(
+                    release_count=2,
+                    longitudinal_linkage_assessed=longitudinal_assessed,
+                    prior_release_overlap_assessed=overlap_assessed,
+                    risk_status=risk_status,
+                    evidence_digest=stable_hash(
+                        {
+                            "kind": "multi-release-review",
+                            "longitudinal": longitudinal_assessed,
+                            "overlap": overlap_assessed,
+                            "status": risk_status,
+                        }
+                    ),
+                )
+            )
 
-    check = release_gates.evaluate_release_risk_evidence(evidence)
+            check = release_gates.evaluate_release_risk_evidence(evidence)
 
-    assert check.passed is False
-    assert violation in check.details["violations"]["composition_review"]
+            assert check.passed is False
+            assert violation in check.details["violations"]["composition_review"]
 
 
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:

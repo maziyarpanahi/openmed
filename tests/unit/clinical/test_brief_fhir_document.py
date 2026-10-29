@@ -83,12 +83,11 @@ def test_roundtrip_preserves_provenance_offsets_order_and_review_without_writes(
     assert result.to_response()["bundle"]["entry"]
 
 
-@pytest.mark.parametrize(
-    "status", ["final", "amended", "entered-in-error", "PRIVATE_SENTINEL"]
-)
-def test_no_brief_can_be_finalized(status):
-    with pytest.raises(BriefDocumentError, match="^unsupported_finalization$"):
-        export(status=status)
+def test_no_brief_can_be_finalized(subtests):
+    for status in ["final", "amended", "entered-in-error", "PRIVATE_SENTINEL"]:
+        with subtests.test(status=status):
+            with pytest.raises(BriefDocumentError, match="^unsupported_finalization$"):
+                export(status=status)
 
 
 def test_refusal_and_missing_provenance_fail_closed():
@@ -104,30 +103,30 @@ def test_refusal_and_missing_provenance_fail_closed():
         export(replace(brief, _audit_json=json.dumps(audit)))
 
 
-@pytest.mark.parametrize(
-    "mutation", ["summary", "record_hash", "evidence_hash", "review"]
-)
-def test_provenance_drift_and_fabricated_review_are_rejected(mutation):
-    brief = make_brief()
-    audit = brief.to_dict()
-    audit.pop("digest")
-    if mutation == "summary":
-        brief = replace(brief, summary=brief.summary + " Changed.")
-        audit["summary_digest"] = _digest(brief.summary)
-        audit["summary_characters"] = len(brief.summary)
-    elif mutation == "review":
-        audit["provenance"]["review_status"] = "approved"
-    elif mutation == "record_hash":
-        audit["provenance"]["record_hash"] = "sha256:" + "0" * 64
-    else:
-        audit["provenance"]["evidence"][0]["evidence_hash"] = "sha256:" + "0" * 64
-    with pytest.raises(BriefDocumentError):
-        export(replace(brief, _audit_json=json.dumps(audit)))
+def test_provenance_drift_and_fabricated_review_are_rejected(subtests):
+    for mutation in ["summary", "record_hash", "evidence_hash", "review"]:
+        with subtests.test(mutation=mutation):
+            brief = make_brief()
+            audit = brief.to_dict()
+            audit.pop("digest")
+            if mutation == "summary":
+                brief = replace(brief, summary=brief.summary + " Changed.")
+                audit["summary_digest"] = _digest(brief.summary)
+                audit["summary_characters"] = len(brief.summary)
+            elif mutation == "review":
+                audit["provenance"]["review_status"] = "approved"
+            elif mutation == "record_hash":
+                audit["provenance"]["record_hash"] = "sha256:" + "0" * 64
+            else:
+                audit["provenance"]["evidence"][0]["evidence_hash"] = (
+                    "sha256:" + "0" * 64
+                )
+            with pytest.raises(BriefDocumentError):
+                export(replace(brief, _audit_json=json.dumps(audit)))
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [
+def test_closed_subset_rejects_unsafe_or_lossy_mutations(subtests):
+    for mutation in [
         "status",
         "attachment",
         "extension",
@@ -138,54 +137,55 @@ def test_provenance_drift_and_fabricated_review_are_rejected(mutation):
         "timestamp",
         "offset",
         "boolean_offset",
-    ],
-)
-def test_closed_subset_rejects_unsafe_or_lossy_mutations(mutation):
-    payload = export().to_response()
-    composition = payload["bundle"]["entry"][0]["resource"]
-    if mutation == "status":
-        composition["status"] = "final"
-    elif mutation == "attachment":
-        payload["document_reference"]["content"][0]["attachment"]["title"] = (
-            "/private/PRIVATE_SENTINEL"
-        )
-    elif mutation == "extension":
-        composition["extension"].append(
-            {"url": "https://example.invalid", "valueString": "PRIVATE_SENTINEL"}
-        )
-    elif mutation == "narrative":
-        composition["text"]["div"] += "PRIVATE_SENTINEL"
-    elif mutation == "reference":
-        composition["section"][0]["entry"][0]["reference"] = (
-            "https://ehr.invalid/Patient/PRIVATE_SENTINEL"
-        )
-    elif mutation == "section_order":
-        composition["section"].reverse()
-    elif mutation == "request":
-        payload["bundle"]["entry"][0]["request"] = {
-            "method": "POST",
-            "url": "Composition",
-        }
-    elif mutation == "timestamp":
-        payload["bundle"]["timestamp"] = "2026-01-01T00:00:00"
-    else:
-        metadata = json.loads(composition["extension"][0]["valueString"])
-        metadata["citations"][0]["output_start"] = (
-            True if mutation == "boolean_offset" else 1
-        )
-        composition["extension"][0]["valueString"] = json.dumps(metadata)
-    with pytest.raises(BriefDocumentError) as caught:
-        import_brief_document(payload, privacy_detector=lambda _: [])
-    assert "PRIVATE_SENTINEL" not in str(caught.value)
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(mutation=mutation):
+            payload = export().to_response()
+            composition = payload["bundle"]["entry"][0]["resource"]
+            if mutation == "status":
+                composition["status"] = "final"
+            elif mutation == "attachment":
+                payload["document_reference"]["content"][0]["attachment"]["title"] = (
+                    "/private/PRIVATE_SENTINEL"
+                )
+            elif mutation == "extension":
+                composition["extension"].append(
+                    {
+                        "url": "https://example.invalid",
+                        "valueString": "PRIVATE_SENTINEL",
+                    }
+                )
+            elif mutation == "narrative":
+                composition["text"]["div"] += "PRIVATE_SENTINEL"
+            elif mutation == "reference":
+                composition["section"][0]["entry"][0]["reference"] = (
+                    "https://ehr.invalid/Patient/PRIVATE_SENTINEL"
+                )
+            elif mutation == "section_order":
+                composition["section"].reverse()
+            elif mutation == "request":
+                payload["bundle"]["entry"][0]["request"] = {
+                    "method": "POST",
+                    "url": "Composition",
+                }
+            elif mutation == "timestamp":
+                payload["bundle"]["timestamp"] = "2026-01-01T00:00:00"
+            else:
+                metadata = json.loads(composition["extension"][0]["valueString"])
+                metadata["citations"][0]["output_start"] = (
+                    True if mutation == "boolean_offset" else 1
+                )
+                composition["extension"][0]["valueString"] = json.dumps(metadata)
+            with pytest.raises(BriefDocumentError) as caught:
+                import_brief_document(payload, privacy_detector=lambda _: [])
+            assert "PRIVATE_SENTINEL" not in str(caught.value)
+            assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "identifier", ["dehydration", "DEHYDRATION", "dehydration@example.invalid"]
-)
-def test_original_identifier_tokens_never_pass_the_boundary(identifier):
-    with pytest.raises(BriefDocumentError, match="^privacy$"):
-        export(original_identifiers=(identifier,))
+def test_original_identifier_tokens_never_pass_the_boundary(subtests):
+    for identifier in ["dehydration", "DEHYDRATION", "dehydration@example.invalid"]:
+        with subtests.test(identifier=identifier):
+            with pytest.raises(BriefDocumentError, match="^privacy$"):
+                export(original_identifiers=(identifier,))
 
 
 @pytest.mark.parametrize(
@@ -249,17 +249,21 @@ def test_explicit_export_time_is_required_and_normalized():
     assert export().to_response()["bundle"]["timestamp"] == "2026-01-01T00:00:00+00:00"
 
 
-@pytest.mark.parametrize(
-    "timestamp",
-    ["20260101T000000+0000", "2026-W01-4T00:00:00Z", "PRIVATE_TIMESTAMP"],
-)
-def test_import_rejects_timestamps_outside_the_shared_iso_profile(timestamp):
-    payload = export().to_response()
-    payload["bundle"]["timestamp"] = timestamp
-    with pytest.raises(BriefDocumentError, match="^invalid_document$") as caught:
-        import_brief_document(payload, privacy_detector=lambda _: [])
-    assert caught.value.__context__ is None
-    assert timestamp not in str(caught.value)
+def test_import_rejects_timestamps_outside_the_shared_iso_profile(subtests):
+    for timestamp in [
+        "20260101T000000+0000",
+        "2026-W01-4T00:00:00Z",
+        "PRIVATE_TIMESTAMP",
+    ]:
+        with subtests.test(timestamp=timestamp):
+            payload = export().to_response()
+            payload["bundle"]["timestamp"] = timestamp
+            with pytest.raises(
+                BriefDocumentError, match="^invalid_document$"
+            ) as caught:
+                import_brief_document(payload, privacy_detector=lambda _: [])
+            assert caught.value.__context__ is None
+            assert timestamp not in str(caught.value)
 
 
 def test_unicode_and_html_narrative_roundtrip_preserves_scalar_offsets(monkeypatch):

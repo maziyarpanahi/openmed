@@ -292,17 +292,15 @@ def test_no_redirect_even_when_injected_http_client_follows_redirects():
     assert caught.value.mutation_outcome == "unknown"
 
 
-@pytest.mark.parametrize(
-    "body", [b"{" + b" " * 262145, b"\xff", b'{"value":[' + b"0," * 5000 + b"0]}"]
-)
-def test_byte_utf8_and_node_bounds(body):
-    with pytest.raises(WorkflowClientError):
-        parse_workflow_response(body, REFERENCE)
+def test_byte_utf8_and_node_bounds(subtests):
+    for body in [b"{" + b" " * 262145, b"\xff", b'{"value":[' + b"0," * 5000 + b"0]}"]:
+        with subtests.test(body=body):
+            with pytest.raises(WorkflowClientError):
+                parse_workflow_response(body, REFERENCE)
 
 
-@pytest.mark.parametrize(
-    "constructor,values",
-    [
+def test_closed_resource_policy(subtests):
+    for constructor, values in [
         (WorkflowReadOptions, {"max_attempts": True}),
         (WorkflowReadOptions, {"max_attempts": 4}),
         (WorkflowReadOptions, {"retry_delay_seconds": float("inf")}),
@@ -310,11 +308,10 @@ def test_byte_utf8_and_node_bounds(body):
         (WorkflowPollPolicy, {"max_requests": 101}),
         (WorkflowPollPolicy, {"timeout_seconds": 301}),
         (WorkflowPollPolicy, {"interval_seconds": -1}),
-    ],
-)
-def test_closed_resource_policy(constructor, values):
-    with pytest.raises(WorkflowClientError):
-        constructor(**values)
+    ]:
+        with subtests.test(constructor=constructor, values=values):
+            with pytest.raises(WorkflowClientError):
+                constructor(**values)
 
 
 def test_poll_refusal_keeps_the_last_validated_phase():

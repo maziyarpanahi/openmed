@@ -288,19 +288,17 @@ def test_pipeline_compile_forward_wraps_loaded_model(tmp_path):
     assert pipeline.model is compiled_model
 
 
-@pytest.mark.parametrize(
-    ("probability", "expected"),
-    [
+def test_score_reconstruction_preserves_binary32_outputs(subtests):
+    for probability, expected in [
         (0.9, 0.8999999761581421),
         (0.8, 0.800000011920929),
         (0.7, 0.699999988079071),
         (0.95, 0.949999988079071),
-    ],
-)
-def test_score_reconstruction_preserves_binary32_outputs(probability, expected):
-    from openmed.mlx.inference import _score_from_log_probability
+    ]:
+        with subtests.test(probability=probability, expected=expected):
+            from openmed.mlx.inference import _score_from_log_probability
 
-    assert _score_from_log_probability(math.log(probability)) == expected
+            assert _score_from_log_probability(math.log(probability)) == expected
 
 
 @pytest.mark.skipif(

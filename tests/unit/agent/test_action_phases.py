@@ -49,61 +49,83 @@ def test_phase_vocabulary_is_closed_and_json_safe():
     assert json.loads(json.dumps(list(ActionPhase))) == expected
 
 
-@pytest.mark.parametrize(("current", "target"), ORDINARY_EDGES)
-def test_every_ordinary_transition(current, target):
-    assert validate_action_transition(current, target) is None
-    assert validate_action_transition(ActionPhase(current), ActionPhase(target)) is None
+def test_every_ordinary_transition(subtests):
+    for current, target in ORDINARY_EDGES:
+        with subtests.test(current=current, target=target):
+            assert validate_action_transition(current, target) is None
+            assert (
+                validate_action_transition(ActionPhase(current), ActionPhase(target))
+                is None
+            )
 
 
-@pytest.mark.parametrize("current", list(ActionPhase))
-@pytest.mark.parametrize("target", list(ActionPhase))
-@pytest.mark.parametrize("reviewed", [False, True])
-def test_complete_transition_matrix(current, target, reviewed):
-    edge = (current.value, target.value)
-    if edge in ORDINARY_EDGES or (edge == REVIEWED_EDGE and reviewed):
-        assert validate_action_transition(current, target, reviewed=reviewed) is None
-    else:
-        expected_code = (
-            "review_required" if edge == REVIEWED_EDGE else "invalid_transition"
-        )
-        with pytest.raises(ActionPhaseError) as caught:
-            validate_action_transition(current, target, reviewed=reviewed)
-        assert caught.value.code == expected_code
+def test_complete_transition_matrix(subtests):
+    for current in list(ActionPhase):
+        for target in list(ActionPhase):
+            for reviewed in [False, True]:
+                with subtests.test(current=current, target=target, reviewed=reviewed):
+                    edge = (current.value, target.value)
+                    if edge in ORDINARY_EDGES or (edge == REVIEWED_EDGE and reviewed):
+                        assert (
+                            validate_action_transition(
+                                current, target, reviewed=reviewed
+                            )
+                            is None
+                        )
+                    else:
+                        expected_code = (
+                            "review_required"
+                            if edge == REVIEWED_EDGE
+                            else "invalid_transition"
+                        )
+                        with pytest.raises(ActionPhaseError) as caught:
+                            validate_action_transition(
+                                current, target, reviewed=reviewed
+                            )
+                        assert caught.value.code == expected_code
 
 
-@pytest.mark.parametrize("entry", ["preflight", "running"])
-def test_reviewed_resume_reenters_preflight_before_execution(entry):
-    validate_action_transition(entry, "waiting-review")
-    with pytest.raises(ActionPhaseError, match="review_required"):
-        validate_action_transition("waiting-review", "preflight")
-    validate_action_transition("waiting-review", "preflight", reviewed=True)
-    with pytest.raises(ActionPhaseError, match="invalid_transition"):
-        validate_action_transition("preflight", "running", reviewed=True)
-    validate_action_transition("preflight", "ready")
-    validate_action_transition("ready", "running")
-    validate_action_transition("running", "completed")
+def test_reviewed_resume_reenters_preflight_before_execution(subtests):
+    for entry in ["preflight", "running"]:
+        with subtests.test(entry=entry):
+            validate_action_transition(entry, "waiting-review")
+            with pytest.raises(ActionPhaseError, match="review_required"):
+                validate_action_transition("waiting-review", "preflight")
+            validate_action_transition("waiting-review", "preflight", reviewed=True)
+            with pytest.raises(ActionPhaseError, match="invalid_transition"):
+                validate_action_transition("preflight", "running", reviewed=True)
+            validate_action_transition("preflight", "ready")
+            validate_action_transition("ready", "running")
+            validate_action_transition("running", "completed")
 
 
-@pytest.mark.parametrize("reviewed", [False, True])
-@pytest.mark.parametrize("target", ["ready", "running", "completed"])
-def test_review_cannot_jump_to_execution_or_completion(target, reviewed):
-    with pytest.raises(ActionPhaseError, match="invalid_transition"):
-        validate_action_transition("waiting-review", target, reviewed=reviewed)
+def test_review_cannot_jump_to_execution_or_completion(subtests):
+    for reviewed in [False, True]:
+        for target in ["ready", "running", "completed"]:
+            with subtests.test(reviewed=reviewed, target=target):
+                with pytest.raises(ActionPhaseError, match="invalid_transition"):
+                    validate_action_transition(
+                        "waiting-review", target, reviewed=reviewed
+                    )
 
 
-@pytest.mark.parametrize("terminal", ["completed", "aborted"])
-@pytest.mark.parametrize("target", list(ActionPhase))
-@pytest.mark.parametrize("reviewed", [False, True])
-def test_terminal_phases_cannot_be_revived_or_reentered(terminal, target, reviewed):
-    with pytest.raises(ActionPhaseError, match="invalid_transition"):
-        validate_action_transition(terminal, target, reviewed=reviewed)
+def test_terminal_phases_cannot_be_revived_or_reentered(subtests):
+    for terminal in ["completed", "aborted"]:
+        for target in list(ActionPhase):
+            for reviewed in [False, True]:
+                with subtests.test(terminal=terminal, target=target, reviewed=reviewed):
+                    with pytest.raises(ActionPhaseError, match="invalid_transition"):
+                        validate_action_transition(terminal, target, reviewed=reviewed)
 
 
-@pytest.mark.parametrize("phase", list(ActionPhase))
-def test_terminal_and_resumable_are_distinct(phase):
-    for value in (phase, phase.value):
-        assert is_terminal_phase(value) is (phase.value in {"completed", "aborted"})
-        assert is_resumable_phase(value) is (phase.value == "waiting-review")
+def test_terminal_and_resumable_are_distinct(subtests):
+    for phase in list(ActionPhase):
+        with subtests.test(phase=phase):
+            for value in (phase, phase.value):
+                assert is_terminal_phase(value) is (
+                    phase.value in {"completed", "aborted"}
+                )
+                assert is_resumable_phase(value) is (phase.value == "waiting-review")
 
 
 class StringSubclass(str):
@@ -177,24 +199,25 @@ def test_review_declaration_requires_an_exact_boolean(value):
     assert caught.value.field_name == "reviewed"
 
 
-@pytest.mark.parametrize("field", ["current", "target", "reviewed"])
-def test_invalid_input_errors_are_deterministic_and_payload_free(field):
-    sentinel = "Synthetic patient /private/chart bearer-token-sentinel"
-    values = {"current": "queued", "target": "preflight", "reviewed": False}
-    values[field] = sentinel
-    errors = []
-    for _ in range(2):
-        with pytest.raises(ActionPhaseError) as caught:
-            validate_action_transition(**values)
-        error = caught.value
-        errors.append((error.code, error.field_name, str(error)))
-        assert sentinel not in "".join(
-            traceback.format_exception(caught.type, error, caught.tb)
-        )
-        assert sentinel not in repr(vars(error))
-        assert error.__cause__ is None
-        assert error.__context__ is None
-    assert errors[0] == errors[1]
+def test_invalid_input_errors_are_deterministic_and_payload_free(subtests):
+    for field in ["current", "target", "reviewed"]:
+        with subtests.test(field=field):
+            sentinel = "Synthetic patient /private/chart bearer-token-sentinel"
+            values = {"current": "queued", "target": "preflight", "reviewed": False}
+            values[field] = sentinel
+            errors = []
+            for _ in range(2):
+                with pytest.raises(ActionPhaseError) as caught:
+                    validate_action_transition(**values)
+                error = caught.value
+                errors.append((error.code, error.field_name, str(error)))
+                assert sentinel not in "".join(
+                    traceback.format_exception(caught.type, error, caught.tb)
+                )
+                assert sentinel not in repr(vars(error))
+                assert error.__cause__ is None
+                assert error.__context__ is None
+            assert errors[0] == errors[1]
 
 
 def test_transition_table_exposes_review_requirement_and_is_read_only():

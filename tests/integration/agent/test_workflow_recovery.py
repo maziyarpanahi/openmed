@@ -146,9 +146,10 @@ def test_interruption_reconciles_or_retries_every_effect_exactly_once(
     assert set(sink.commits) == {effect.idempotency_key for effect in initial.effects}
 
 
-@pytest.mark.parametrize(
-    ("phase", "expected_disposition", "expected_reason"),
-    [
+def test_interruption_at_each_nonterminal_checkpoint_resumes_or_fails_closed(
+    subtests,
+) -> None:
+    for phase, expected_disposition, expected_reason in [
         (
             RecoveryPhase.PLANNED,
             RecoveryDisposition.REVIEW_REQUIRED,
@@ -174,28 +175,29 @@ def test_interruption_reconciles_or_retries_every_effect_exactly_once(
             RecoveryDisposition.REVIEW_REQUIRED,
             RecoveryReason.WORKFLOW_ABORTED,
         ),
-    ],
-)
-def test_interruption_at_each_nonterminal_checkpoint_resumes_or_fails_closed(
-    phase: RecoveryPhase,
-    expected_disposition: RecoveryDisposition,
-    expected_reason: RecoveryReason,
-) -> None:
-    approval = phase is not RecoveryPhase.PLANNED
-    checkpoint = RecoveryCheckpoint.create(
-        workflow_id=WORKFLOW_ID,
-        run_id=RUN_ID,
-        sequence=0,
-        phase=phase,
-        plan_digest=PLAN_DIGEST,
-        effects=_effects(),
-        approval_action_digest=PLAN_DIGEST if approval else None,
-        approval_receipt_digest=RECEIPT_DIGEST if approval else None,
-        approval_expires_at=1_000 if approval else None,
-    )
-    sink = SyntheticSink()
+    ]:
+        with subtests.test(
+            phase=phase,
+            expected_disposition=expected_disposition,
+            expected_reason=expected_reason,
+        ):
+            approval = phase is not RecoveryPhase.PLANNED
+            checkpoint = RecoveryCheckpoint.create(
+                workflow_id=WORKFLOW_ID,
+                run_id=RUN_ID,
+                sequence=0,
+                phase=phase,
+                plan_digest=PLAN_DIGEST,
+                effects=_effects(),
+                approval_action_digest=PLAN_DIGEST if approval else None,
+                approval_receipt_digest=RECEIPT_DIGEST if approval else None,
+                approval_expires_at=1_000 if approval else None,
+            )
+            sink = SyntheticSink()
 
-    decision = recover_workflow((checkpoint,), sink.observe(checkpoint.effects), now=10)
+            decision = recover_workflow(
+                (checkpoint,), sink.observe(checkpoint.effects), now=10
+            )
 
-    assert decision.disposition is expected_disposition
-    assert decision.reason is expected_reason
+            assert decision.disposition is expected_disposition
+            assert decision.reason is expected_reason

@@ -258,18 +258,16 @@ def test_native_missing_dependencies_explain_exact_extra(monkeypatch, module, fa
         getattr(module, f"ensure_{family}_available")()
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_gliner2_never_guesses_missing_spans_or_confidence(subtests):
+    for payload in [
         {"entities": {"disease": ["asthma"]}},
         {"entities": {"disease": [{"text": "asthma", "start": 0, "end": 6}]}},
         {"entities": []},
-    ],
-)
-def test_gliner2_never_guesses_missing_spans_or_confidence(payload):
-    handle = gliner2_module.GLiNER2Handle(
-        model_id="synthetic/checkpoint",
-        model=SimpleNamespace(extract_entities=lambda *_a, **_k: payload),
-    )
-    with pytest.raises(ValueError, match="GLiNER2"):
-        handle.predict_entities("asthma; asthma", ["disease"])
+    ]:
+        with subtests.test(payload=payload):
+            handle = gliner2_module.GLiNER2Handle(
+                model_id="synthetic/checkpoint",
+                model=SimpleNamespace(extract_entities=lambda *_a, **_k: payload),
+            )
+            with pytest.raises(ValueError, match="GLiNER2"):
+                handle.predict_entities("asthma; asthma", ["disease"])

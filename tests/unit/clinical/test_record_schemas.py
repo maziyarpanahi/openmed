@@ -242,14 +242,17 @@ def test_records_with_extra_text_fields_are_rejected() -> None:
             validate_clinical_record(name, record)
 
 
-@pytest.mark.parametrize(
-    "name",
-    ["brief_audit", "evidence_packet", "nli_verification", "sdoh_evidence_report"],
-)
-def test_value_free_record_schemas_never_declare_free_text_fields(name: str) -> None:
-    assert not (
-        _property_names(load_clinical_record_schema(name)) & FORBIDDEN_TEXT_KEYS
-    )
+def test_value_free_record_schemas_never_declare_free_text_fields(subtests) -> None:
+    for name in [
+        "brief_audit",
+        "evidence_packet",
+        "nli_verification",
+        "sdoh_evidence_report",
+    ]:
+        with subtests.test(name=name):
+            assert not (
+                _property_names(load_clinical_record_schema(name)) & FORBIDDEN_TEXT_KEYS
+            )
 
 
 def test_generated_summary_text_is_declared_only_where_it_is_produced() -> None:
@@ -310,19 +313,20 @@ def test_unknown_record_schema_names_are_rejected() -> None:
         validate_clinical_record("brief_audit_v2", {})
 
 
-@pytest.mark.parametrize("malformed", ["version", "field", "value"])
-def test_validation_errors_never_echo_submitted_content(malformed: str) -> None:
-    sentinel = "synthetic private sentinel"
-    record = _record_payloads()["evidence_packet"]
-    if malformed == "version":
-        record["schema_version"] = sentinel
-    elif malformed == "field":
-        record[sentinel] = sentinel
-    else:
-        record["kind"] = sentinel
-    with pytest.raises(ClinicalRecordSchemaError) as excinfo:
-        validate_clinical_record("evidence_packet", record)
-    assert sentinel not in str(excinfo.value)
+def test_validation_errors_never_echo_submitted_content(subtests) -> None:
+    for malformed in ["version", "field", "value"]:
+        with subtests.test(malformed=malformed):
+            sentinel = "synthetic private sentinel"
+            record = _record_payloads()["evidence_packet"]
+            if malformed == "version":
+                record["schema_version"] = sentinel
+            elif malformed == "field":
+                record[sentinel] = sentinel
+            else:
+                record["kind"] = sentinel
+            with pytest.raises(ClinicalRecordSchemaError) as excinfo:
+                validate_clinical_record("evidence_packet", record)
+            assert sentinel not in str(excinfo.value)
 
 
 def test_validation_location_never_echoes_untrusted_metadata_keys() -> None:
@@ -341,41 +345,42 @@ def test_unknown_schema_error_never_echoes_submitted_name() -> None:
     assert sentinel not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
-def test_nested_record_objects_reject_text_injection(name: str) -> None:
-    from copy import deepcopy
+def test_nested_record_objects_reject_text_injection(subtests) -> None:
+    for name in ["brief_audit", "brief_response"]:
+        with subtests.test(name=name):
+            from copy import deepcopy
 
-    record = _record_payloads()[name]
-    objects: list[tuple[str | int, ...]] = []
+            record = _record_payloads()[name]
+            objects: list[tuple[str | int, ...]] = []
 
-    seen: set[tuple[Any, ...]] = set()
+            seen: set[tuple[Any, ...]] = set()
 
-    def collect(value: Any, path: tuple[str | int, ...]) -> None:
-        if isinstance(value, dict):
-            # List items with the same keys at the same place share a schema
-            # node, so one injection per node covers them.
-            shape = (
-                tuple("*" if isinstance(part, int) else part for part in path),
-                frozenset(value),
-            )
-            if shape not in seen:
-                seen.add(shape)
-                objects.append(path)
-            for key, item in value.items():
-                collect(item, (*path, key))
-        elif isinstance(value, list):
-            for index, item in enumerate(value):
-                collect(item, (*path, index))
+            def collect(value: Any, path: tuple[str | int, ...]) -> None:
+                if isinstance(value, dict):
+                    # List items with the same keys at the same place share a schema
+                    # node, so one injection per node covers them.
+                    shape = (
+                        tuple("*" if isinstance(part, int) else part for part in path),
+                        frozenset(value),
+                    )
+                    if shape not in seen:
+                        seen.add(shape)
+                        objects.append(path)
+                    for key, item in value.items():
+                        collect(item, (*path, key))
+                elif isinstance(value, list):
+                    for index, item in enumerate(value):
+                        collect(item, (*path, index))
 
-    collect(record, ())
-    for path in objects:
-        changed = deepcopy(record)
-        target = changed
-        for part in path:
-            target = target[part]
-        target["source_text"] = "synthetic private sentinel"
-        with pytest.raises(ClinicalRecordSchemaError):
-            validate_clinical_record(name, changed)
+            collect(record, ())
+            for path in objects:
+                changed = deepcopy(record)
+                target = changed
+                for part in path:
+                    target = target[part]
+                target["source_text"] = "synthetic private sentinel"
+                with pytest.raises(ClinicalRecordSchemaError):
+                    validate_clinical_record(name, changed)
 
 
 def test_inverted_offsets_are_rejected_even_when_the_schema_passes() -> None:
@@ -532,64 +537,73 @@ def _custom_review_packet():
     ).to_dict()
 
 
-@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
-def test_schema_accepts_sanitized_review_reference_details(name):
-    payload = _record_payloads()[name]
-    payload["review_packet"] = _custom_review_packet()
-    validate_clinical_record(name, payload)
+def test_schema_accepts_sanitized_review_reference_details(subtests):
+    for name in ["brief_audit", "brief_response"]:
+        with subtests.test(name=name):
+            payload = _record_payloads()[name]
+            payload["review_packet"] = _custom_review_packet()
+            validate_clinical_record(name, payload)
 
 
-@pytest.mark.parametrize("name", ["brief_audit", "brief_response"])
-@pytest.mark.parametrize(
-    "section,field",
-    [
-        ("citations", "citation_id"),
-        ("citations", "source"),
-        ("citations", "title"),
-        ("citations", "locator"),
-        ("citations", "published"),
-        ("findings", "finding_id"),
-        ("findings", "label"),
-        ("findings", "status"),
-        ("gate_results", "gate_id"),
-        ("gate_results", "reason"),
-        ("gate_results", "severity"),
-    ],
-)
-def test_schema_rejects_source_text_in_review_fields(name, section, field):
-    payload = _record_payloads()[name]
-    payload["review_packet"] = _custom_review_packet()
-    payload["review_packet"]["findings"][0].pop("uncertainty")
-    validate_clinical_record(name, payload)
-    payload["review_packet"][section][0][field] = "synthetic private source sentence"
-    with pytest.raises(ClinicalRecordSchemaError):
-        validate_clinical_record(name, payload)
+def test_schema_rejects_source_text_in_review_fields(subtests):
+    for name in ["brief_audit", "brief_response"]:
+        for section, field in [
+            ("citations", "citation_id"),
+            ("citations", "source"),
+            ("citations", "title"),
+            ("citations", "locator"),
+            ("citations", "published"),
+            ("findings", "finding_id"),
+            ("findings", "label"),
+            ("findings", "status"),
+            ("gate_results", "gate_id"),
+            ("gate_results", "reason"),
+            ("gate_results", "severity"),
+        ]:
+            with subtests.test(name=name, section=section, field=field):
+                payload = _record_payloads()[name]
+                payload["review_packet"] = _custom_review_packet()
+                payload["review_packet"]["findings"][0].pop("uncertainty")
+                validate_clinical_record(name, payload)
+                payload["review_packet"][section][0][field] = (
+                    "synthetic private source sentence"
+                )
+                with pytest.raises(ClinicalRecordSchemaError):
+                    validate_clinical_record(name, payload)
 
 
-@pytest.mark.parametrize("schema_name", ["brief_audit", "brief_response"])
-@pytest.mark.parametrize(
-    "mutation", ["private_text", "mapping", "estimator", "count", "class", "duplicate"]
-)
-def test_brief_budget_provenance_is_closed_and_bounded(schema_name, mutation):
-    audit, response = _reviewed_brief_records()
-    payload = response if schema_name == "brief_response" else audit
-    metadata = payload["metrics"]["length_budget"]
-    if mutation == "private_text":
-        metadata["note"] = "SYNTHETIC_PRIVATE_NOTE"
-    elif mutation == "mapping":
-        metadata["mapping_id"] = "SYNTHETIC_PRIVATE_MAPPING"
-    elif mutation == "estimator":
-        metadata["estimator_id"] = "SYNTHETIC_PRIVATE_ESTIMATOR"
-    elif mutation == "count":
-        metadata["budget"]["allocations"][0]["requested_tokens"] = 1_048_641
-    elif mutation == "class":
-        metadata["budget"]["allocations"][0]["evidence_class"] = (
-            "SYNTHETIC_PRIVATE_CLASS"
-        )
-    else:
-        metadata["budget"]["allocations"][1] = metadata["budget"]["allocations"][0]
-    assert list(
-        Draft202012Validator(load_clinical_record_schema(schema_name)).iter_errors(
-            payload
-        )
-    )
+def test_brief_budget_provenance_is_closed_and_bounded(subtests):
+    for schema_name in ["brief_audit", "brief_response"]:
+        for mutation in [
+            "private_text",
+            "mapping",
+            "estimator",
+            "count",
+            "class",
+            "duplicate",
+        ]:
+            with subtests.test(schema_name=schema_name, mutation=mutation):
+                audit, response = _reviewed_brief_records()
+                payload = response if schema_name == "brief_response" else audit
+                metadata = payload["metrics"]["length_budget"]
+                if mutation == "private_text":
+                    metadata["note"] = "SYNTHETIC_PRIVATE_NOTE"
+                elif mutation == "mapping":
+                    metadata["mapping_id"] = "SYNTHETIC_PRIVATE_MAPPING"
+                elif mutation == "estimator":
+                    metadata["estimator_id"] = "SYNTHETIC_PRIVATE_ESTIMATOR"
+                elif mutation == "count":
+                    metadata["budget"]["allocations"][0]["requested_tokens"] = 1_048_641
+                elif mutation == "class":
+                    metadata["budget"]["allocations"][0]["evidence_class"] = (
+                        "SYNTHETIC_PRIVATE_CLASS"
+                    )
+                else:
+                    metadata["budget"]["allocations"][1] = metadata["budget"][
+                        "allocations"
+                    ][0]
+                assert list(
+                    Draft202012Validator(
+                        load_clinical_record_schema(schema_name)
+                    ).iter_errors(payload)
+                )

@@ -81,31 +81,27 @@ def _publication() -> dict[str, object]:
     }
 
 
-@pytest.mark.parametrize(
-    ("path", "route"),
-    [
+def test_public_route_for_path(subtests) -> None:
+    for path, route in [
         ("index.html", "/"),
         ("docs/index.html", "/docs/"),
         ("docs/guide/index.html", "/docs/guide/"),
         ("docs/llms.txt", "/docs/llms.txt"),
-    ],
-)
-def test_public_route_for_path(path: str, route: str) -> None:
-    assert public_route_for_path(path) == route
+    ]:
+        with subtests.test(path=path, route=route):
+            assert public_route_for_path(path) == route
 
 
-@pytest.mark.parametrize(
-    ("path", "owner"),
-    [
+def test_owner_for_path(subtests) -> None:
+    for path, owner in [
         ("index.html", "marketing"),
         ("docs/index.html", "mkdocs"),
         ("docs/demo/web/index.html", "browser-demo"),
         ("docs/eval/benchmark-leaderboard/index.html", "leaderboard"),
         (MANIFEST_NAME, "staging"),
-    ],
-)
-def test_owner_for_path(path: str, owner: str) -> None:
-    assert owner_for_path(path) == owner
+    ]:
+        with subtests.test(path=path, owner=owner):
+            assert owner_for_path(path) == owner
 
 
 def test_translation_groups_map_only_real_sources() -> None:

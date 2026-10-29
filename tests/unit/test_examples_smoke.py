@@ -586,15 +586,13 @@ def test_onboarding_india_dpdp_runs_policy_pipeline_without_network(monkeypatch)
     assert all(entity.action == "replace" for entity in result.pii_entities)
 
 
-@pytest.mark.parametrize(
-    "example_path",
-    [
+def test_chinese_hindi_deid_examples_are_syntactically_valid(subtests):
+    for example_path in [
         Path("examples/deid_chinese_clinical_note.py"),
         Path("examples/deid_hindi_hinglish_note.py"),
-    ],
-)
-def test_chinese_hindi_deid_examples_are_syntactically_valid(example_path):
-    ast.parse(example_path.read_text(encoding="utf-8"))
+    ]:
+        with subtests.test(example_path=example_path):
+            ast.parse(example_path.read_text(encoding="utf-8"))
 
 
 def test_chinese_deid_recognizer_covers_every_synthetic_identifier():
@@ -662,40 +660,38 @@ def test_chinese_deid_example_fails_closed_on_synthetic_leak():
         )
 
 
-@pytest.mark.parametrize(
-    ("note_name", "note"),
-    list(deid_hindi_hinglish_note.NOTES.items()),
-)
-def test_hindi_hinglish_recognizer_covers_every_synthetic_identifier(
-    note_name,
-    note,
-):
-    from openmed.core.custom_recognizer import ABDMRecognizer, CustomRecognizer
+def test_hindi_hinglish_recognizer_covers_every_synthetic_identifier(subtests):
+    for note_name, note in list(deid_hindi_hinglish_note.NOTES.items()):
+        with subtests.test(note_name=note_name, note=note):
+            from openmed.core.custom_recognizer import ABDMRecognizer, CustomRecognizer
 
-    recognizer = CustomRecognizer.from_config(
-        deid_hindi_hinglish_note.INDIA_CUSTOM_RECOGNIZER
-    )
+            recognizer = CustomRecognizer.from_config(
+                deid_hindi_hinglish_note.INDIA_CUSTOM_RECOGNIZER
+            )
 
-    custom_detected = {entity.text for entity in recognizer.detect_entities(note)}
-    abdm_detected = {
-        (entity.text, entity.label) for entity in ABDMRecognizer().detect_entities(note)
-    }
+            custom_detected = {
+                entity.text for entity in recognizer.detect_entities(note)
+            }
+            abdm_detected = {
+                (entity.text, entity.label)
+                for entity in ABDMRecognizer().detect_entities(note)
+            }
 
-    expected_custom = {
-        deid_hindi_hinglish_note.SYNTHETIC_MEDICAL_RECORD_NUMBER,
-        deid_hindi_hinglish_note.SYNTHETIC_PHONE,
-        deid_hindi_hinglish_note.SYNTHETIC_HINDI_NAME
-        if note_name == "hindi"
-        else deid_hindi_hinglish_note.SYNTHETIC_HINGLISH_NAME,
-    }
-    if note_name == "hindi":
-        expected_custom.add(deid_hindi_hinglish_note.SYNTHETIC_CLINICIAN_NAME)
+            expected_custom = {
+                deid_hindi_hinglish_note.SYNTHETIC_MEDICAL_RECORD_NUMBER,
+                deid_hindi_hinglish_note.SYNTHETIC_PHONE,
+                deid_hindi_hinglish_note.SYNTHETIC_HINDI_NAME
+                if note_name == "hindi"
+                else deid_hindi_hinglish_note.SYNTHETIC_HINGLISH_NAME,
+            }
+            if note_name == "hindi":
+                expected_custom.add(deid_hindi_hinglish_note.SYNTHETIC_CLINICIAN_NAME)
 
-    assert custom_detected == expected_custom
-    assert abdm_detected == {
-        (deid_hindi_hinglish_note.SYNTHETIC_AADHAAR, "AADHAAR"),
-        (deid_hindi_hinglish_note.SYNTHETIC_ABHA, "ABHA_NUMBER"),
-    }
+            assert custom_detected == expected_custom
+            assert abdm_detected == {
+                (deid_hindi_hinglish_note.SYNTHETIC_AADHAAR, "AADHAAR"),
+                (deid_hindi_hinglish_note.SYNTHETIC_ABHA, "ABHA_NUMBER"),
+            }
 
 
 def test_hindi_hinglish_deid_example_runs_without_network(tmp_path, monkeypatch):
@@ -744,41 +740,35 @@ def test_hindi_hinglish_deid_example_runs_without_network(tmp_path, monkeypatch)
         )
 
 
-@pytest.mark.parametrize(
-    ("note_name", "note"),
-    list(deid_hindi_hinglish_note.NOTES.items()),
-)
-def test_hindi_hinglish_deid_example_fails_closed_on_synthetic_leak(
-    note_name,
-    note,
-):
-    with pytest.raises(AssertionError, match="survived"):
-        deid_hindi_hinglish_note.assert_synthetic_identifiers_removed(
-            note_name,
-            note,
-        )
+def test_hindi_hinglish_deid_example_fails_closed_on_synthetic_leak(subtests):
+    for note_name, note in list(deid_hindi_hinglish_note.NOTES.items()):
+        with subtests.test(note_name=note_name, note=note):
+            with pytest.raises(AssertionError, match="survived"):
+                deid_hindi_hinglish_note.assert_synthetic_identifiers_removed(
+                    note_name,
+                    note,
+                )
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_language"),
-    [
+def test_deid_demo_detects_unicode_script(subtests):
+    for text, expected_language in [
         ("患者李晓雯今天复诊。", "zh"),
         ("रोगी आज जाँच के लिए आए।", "hi"),
         ("Patient Alex Example was seen today.", "en"),
         ("Patient Ananya ka follow-up aaj hai.", "en"),
         ("1234 / +1 555 0100", "en"),
-    ],
-)
-def test_deid_demo_detects_unicode_script(text, expected_language):
-    assert deid_demo.detect_script(text) == expected_language
+    ]:
+        with subtests.test(text=text, expected_language=expected_language):
+            assert deid_demo.detect_script(text) == expected_language
 
 
-@pytest.mark.parametrize("override", ["zh", "hi", "en"])
-def test_deid_demo_manual_override_wins(override):
-    route = deid_demo.resolve_model_route("患者 हिन्दी Patient", override)
+def test_deid_demo_manual_override_wins(subtests):
+    for override in ["zh", "hi", "en"]:
+        with subtests.test(override=override):
+            route = deid_demo.resolve_model_route("患者 हिन्दी Patient", override)
 
-    assert route.language == override
-    assert route.model_id == deid_demo.MODEL_IDS[override]
+            assert route.language == override
+            assert route.model_id == deid_demo.MODEL_IDS[override]
 
 
 @pytest.mark.parametrize(

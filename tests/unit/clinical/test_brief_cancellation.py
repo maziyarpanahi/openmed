@@ -150,21 +150,22 @@ def test_cooperative_callbacks_receive_same_context_and_uncancelled_output_match
     assert observed == [cancellation] * 4
 
 
-@pytest.mark.parametrize(
-    "error", [KeyboardInterrupt, asyncio.CancelledError, RuntimeError]
-)
-def test_interruption_and_backend_failure_are_distinct(error):
-    value, context = fixture_context()
+def test_interruption_and_backend_failure_are_distinct(subtests):
+    for error in [KeyboardInterrupt, asyncio.CancelledError, RuntimeError]:
+        with subtests.test(error=error):
+            value, context = fixture_context()
 
-    def fail(_):
-        raise error("SYNTHETIC_PRIVATE_FAILURE")
+            def fail(_):
+                raise error("SYNTHETIC_PRIVATE_FAILURE")
 
-    result = build_clinical_brief(value, context=context, model=fail)
-    assert result.refusal_reason is (
-        BriefRefusal.STAGE_FAILED if error is RuntimeError else BriefRefusal.CANCELLED
-    )
-    assert result.summary == ""
-    assert "SYNTHETIC_PRIVATE" not in json.dumps(result.to_response())
+            result = build_clinical_brief(value, context=context, model=fail)
+            assert result.refusal_reason is (
+                BriefRefusal.STAGE_FAILED
+                if error is RuntimeError
+                else BriefRefusal.CANCELLED
+            )
+            assert result.summary == ""
+            assert "SYNTHETIC_PRIVATE" not in json.dumps(result.to_response())
 
 
 def test_expiry_is_terminal_and_explicit_cancel_wins(monkeypatch):

@@ -28,9 +28,8 @@ def write_markdown_inventory(path: Path, rows: str) -> Path:
     return target
 
 
-@pytest.mark.parametrize(
-    ("expression", "expected"),
-    [
+def test_classify_license_fails_closed(subtests) -> None:
+    for expression, expected in [
         ("MIT", inventory.LicenseClass.PERMISSIVE),
         ("Apache-2.0 OR BSD-3-Clause", inventory.LicenseClass.PERMISSIVE),
         ("GPL-3.0-only", inventory.LicenseClass.RESTRICTED),
@@ -38,10 +37,9 @@ def write_markdown_inventory(path: Path, rows: str) -> Path:
         ("MIT OR", inventory.LicenseClass.UNKNOWN),
         ("LicenseRef-local-review", inventory.LicenseClass.UNKNOWN),
         ("", inventory.LicenseClass.UNKNOWN),
-    ],
-)
-def test_classify_license_fails_closed(expression: str, expected: str) -> None:
-    assert inventory.classify_license(expression) == expected
+    ]:
+        with subtests.test(expression=expression, expected=expected):
+            assert inventory.classify_license(expression) == expected
 
 
 def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
@@ -113,18 +111,20 @@ def test_quarantined_bridge_does_not_allow_an_unknown_license() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "expression",
-    ["AGPL-3.0-only", "Elastic-2.0", "GPL-3.0-only AND Elastic-2.0"],
-)
-def test_bridge_exception_requires_the_reviewed_license(expression: str) -> None:
-    records = inventory.audit_inventory(
-        [inventory.InventoryEntry("extract-msg", expression, scope="email-msg-gpl")]
-    )
+def test_bridge_exception_requires_the_reviewed_license(subtests) -> None:
+    for expression in ["AGPL-3.0-only", "Elastic-2.0", "GPL-3.0-only AND Elastic-2.0"]:
+        with subtests.test(expression=expression):
+            records = inventory.audit_inventory(
+                [
+                    inventory.InventoryEntry(
+                        "extract-msg", expression, scope="email-msg-gpl"
+                    )
+                ]
+            )
 
-    assert [record.name for record in inventory.gate_failures(records)] == [
-        "extract-msg"
-    ]
+            assert [record.name for record in inventory.gate_failures(records)] == [
+                "extract-msg"
+            ]
 
 
 @pytest.mark.parametrize(
@@ -259,11 +259,12 @@ def test_malformed_inventory_error_does_not_echo_source_values(tmp_path: Path) -
     assert "synthetic-private-value" not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "expression", ["((MIT)", "MIT)", "MIT (OR Apache-2.0)", "MIT_", "MIT WITH MIT"]
-)
-def test_malformed_permissive_expression_cannot_pass(expression: str) -> None:
-    assert inventory.classify_license(expression) == inventory.LicenseClass.UNKNOWN
+def test_malformed_permissive_expression_cannot_pass(subtests) -> None:
+    for expression in ["((MIT)", "MIT)", "MIT (OR Apache-2.0)", "MIT_", "MIT WITH MIT"]:
+        with subtests.test(expression=expression):
+            assert (
+                inventory.classify_license(expression) == inventory.LicenseClass.UNKNOWN
+            )
 
 
 def test_balanced_permissive_group_is_supported() -> None:

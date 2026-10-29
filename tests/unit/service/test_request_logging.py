@@ -307,29 +307,27 @@ def test_access_log_format_can_be_plain(
     assert "request_id=req-plain-log" in records[0].getMessage()
 
 
-@pytest.mark.parametrize(
-    ("path", "expected"),
-    [
+def test_access_template_uses_registered_route_when_scope_path_is_empty(subtests):
+    for path, expected in [
         ("/graphql", "/graphql"),
         ("/jobs/SYNTHETIC-PRIVATE-ID", "/jobs/{job_id}"),
         ("/SYNTHETIC-PRIVATE-ID", "unknown"),
-    ],
-)
-def test_access_template_uses_registered_route_when_scope_path_is_empty(path, expected):
-    from types import SimpleNamespace
+    ]:
+        with subtests.test(path=path, expected=expected):
+            from types import SimpleNamespace
 
-    from openmed.service.logging import _route_template
+            from openmed.service.logging import _route_template
 
-    scope = {
-        "type": "http",
-        "method": "GET",
-        "path": path,
-        "root_path": "",
-        "headers": [],
-        "query_string": b"value=SYNTHETIC-PRIVATE-QUERY",
-        "route": SimpleNamespace(path=""),
-        "app": create_app(),
-    }
-    template = _route_template(scope)
-    assert template == expected
-    assert "SYNTHETIC-PRIVATE" not in template
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": path,
+                "root_path": "",
+                "headers": [],
+                "query_string": b"value=SYNTHETIC-PRIVATE-QUERY",
+                "route": SimpleNamespace(path=""),
+                "app": create_app(),
+            }
+            template = _route_template(scope)
+            assert template == expected
+            assert "SYNTHETIC-PRIVATE" not in template

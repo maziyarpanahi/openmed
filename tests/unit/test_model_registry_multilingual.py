@@ -86,39 +86,43 @@ class TestRegistryCompleteness:
                 f"Default model for {lang} ({model_id}) not found in registry"
             )
 
-    @pytest.mark.parametrize("lang", sorted(V2_REGISTRY_LANGUAGES))
-    def test_v2_language_has_manifest_backed_model(self, lang):
-        models = get_pii_models_by_language(lang)
+    def test_v2_language_has_manifest_backed_model(self, subtests):
+        for lang in sorted(V2_REGISTRY_LANGUAGES):
+            with subtests.test(lang=lang):
+                models = get_pii_models_by_language(lang)
 
-        assert models
-        assert all(isinstance(info, ModelInfo) for info in models.values())
-        assert DEFAULT_PII_MODELS[lang] in {info.model_id for info in models.values()}
+                assert models
+                assert all(isinstance(info, ModelInfo) for info in models.values())
+                assert DEFAULT_PII_MODELS[lang] in {
+                    info.model_id for info in models.values()
+                }
 
-    @pytest.mark.parametrize("lang", sorted(V2_REGISTRY_LANGUAGES))
-    def test_v2_manifest_rows_include_release_metadata(self, lang):
-        row = next(
-            row
-            for row in load_manifest_rows()
-            if row["repo_id"] == DEFAULT_PII_MODELS[lang]
-        )
+    def test_v2_manifest_rows_include_release_metadata(self, subtests):
+        for lang in sorted(V2_REGISTRY_LANGUAGES):
+            with subtests.test(lang=lang):
+                row = next(
+                    row
+                    for row in load_manifest_rows()
+                    if row["repo_id"] == DEFAULT_PII_MODELS[lang]
+                )
 
-        assert row["languages"] == [lang]
-        assert row["license"] == "apache-2.0"
-        assert row["param_count"] > 0
-        assert row["script_coverage"]
-        assert set(row["download_sizes"]) == {
-            "safetensors",
-            "mlx",
-            "coreml",
-            "onnx",
-        }
-        if row["released"] is None:
-            assert row.get("download_mb") is None
-            assert row.get("disk_mb") is None
-            assert all(size is None for size in row["download_sizes"].values())
-        else:
-            assert row["download_mb"] > 0
-            assert row["disk_mb"] > 0
+                assert row["languages"] == [lang]
+                assert row["license"] == "apache-2.0"
+                assert row["param_count"] > 0
+                assert row["script_coverage"]
+                assert set(row["download_sizes"]) == {
+                    "safetensors",
+                    "mlx",
+                    "coreml",
+                    "onnx",
+                }
+                if row["released"] is None:
+                    assert row.get("download_mb") is None
+                    assert row.get("disk_mb") is None
+                    assert all(size is None for size in row["download_sizes"].values())
+                else:
+                    assert row["download_mb"] > 0
+                    assert row["disk_mb"] > 0
 
 
 class TestModelNaming:
@@ -158,15 +162,13 @@ class TestModelNaming:
                 f"Model {key} has unexpected model_id prefix: {info.model_id}"
             )
 
-    @pytest.mark.parametrize(
-        ("lang", "expected_key"),
-        (
+    def test_v2_language_compatibility_aliases_are_stable(self, subtests):
+        for lang, expected_key in (
             ("bn", "pii_bn_msuperclinical_large"),
             ("zh", "pii_zh_bigmed_large"),
-        ),
-    )
-    def test_v2_language_compatibility_aliases_are_stable(self, lang, expected_key):
-        assert expected_key in get_pii_models_by_language(lang)
+        ):
+            with subtests.test(lang=lang, expected_key=expected_key):
+                assert expected_key in get_pii_models_by_language(lang)
 
     def test_tamil_compatibility_alias_resolves_only_as_a_placeholder(self):
         alias = OPENMED_MODELS["pii_ta_msuperclinical_large"]
@@ -304,9 +306,7 @@ class TestPortugueseNerRegistry:
 
         assert openmed.get_ner_models_by_language is get_ner_models_by_language
 
-    @pytest.mark.parametrize(
-        ("label", "expected"),
-        (("DOENCA", DISEASE), ("ANATOMIA", ANATOMY)),
-    )
-    def test_portuguese_family_labels_normalize(self, label, expected):
-        assert normalize_label(label, lang="pt") == expected
+    def test_portuguese_family_labels_normalize(self, subtests):
+        for label, expected in (("DOENCA", DISEASE), ("ANATOMIA", ANATOMY)):
+            with subtests.test(label=label, expected=expected):
+                assert normalize_label(label, lang="pt") == expected

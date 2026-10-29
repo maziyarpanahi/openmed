@@ -194,9 +194,8 @@ def test_local_backend_guide_check_rejects_new_brief_refusal(monkeypatch):
         _assert_documented_backend_outcomes(BACKEND_GUIDE.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize(
-    ("before", "after", "message"),
-    [
+def test_local_backend_guide_check_rejects_table_drift(subtests):
+    for before, after, message in [
         ("| `LocalNLIError` |", "| `SyntheticMissingError` |", "errors differ"),
         (
             "| `LocalNLIError` |",
@@ -206,12 +205,13 @@ def test_local_backend_guide_check_rejects_new_brief_refusal(monkeypatch):
         ("| `PRIVACY` | `privacy` |", "| `PRIVACY` | `changed` |", "refusals differ"),
         ("## Backend exceptions\n", "## Removed table\n", "table is missing"),
         ("## Brief refusals\n", "## Removed table\n", "table is missing"),
-    ],
-)
-def test_local_backend_guide_check_rejects_table_drift(before, after, message):
-    markdown = BACKEND_GUIDE.read_text(encoding="utf-8").replace(before, after, 1)
-    with pytest.raises(AssertionError, match=message):
-        _assert_documented_backend_outcomes(markdown)
+    ]:
+        with subtests.test(before=before, after=after, message=message):
+            markdown = BACKEND_GUIDE.read_text(encoding="utf-8").replace(
+                before, after, 1
+            )
+            with pytest.raises(AssertionError, match=message):
+                _assert_documented_backend_outcomes(markdown)
 
 
 @pytest.mark.skipif(
@@ -431,9 +431,8 @@ def test_template_digest_does_not_depend_on_patient_text(local_runner):
     assert "three concise sentences" in messages[1]["content"]
 
 
-@pytest.mark.parametrize(
-    "model",
-    [
+def test_remote_backend_is_rejected_without_echo(subtests):
+    for model in [
         "https://invalid.test/private",
         "openai",
         "azure",
@@ -442,18 +441,18 @@ def test_template_digest_does_not_depend_on_patient_text(local_runner):
         "file:///private/note",
         "ftp://invalid",
         "remote",
-    ],
-)
-def test_remote_backend_is_rejected_without_echo(model):
-    with pytest.raises(backends.RemoteSummarizerError) as caught:
-        backends.resolve_summarizer_backend(model)
-    assert str(caught.value) == "remote summarizer backends are prohibited"
+    ]:
+        with subtests.test(model=model):
+            with pytest.raises(backends.RemoteSummarizerError) as caught:
+                backends.resolve_summarizer_backend(model)
+            assert str(caught.value) == "remote summarizer backends are prohibited"
 
 
-@pytest.mark.parametrize("model", ["unknown", "/private/note", "org/unreviewed", 3, {}])
-def test_unregistered_backend_is_rejected(model):
-    with pytest.raises(backends.LocalSummarizerError):
-        backends.resolve_summarizer_backend(model)
+def test_unregistered_backend_is_rejected(subtests):
+    for model in ["unknown", "/private/note", "org/unreviewed", 3, {}]:
+        with subtests.test(model=model):
+            with pytest.raises(backends.LocalSummarizerError):
+                backends.resolve_summarizer_backend(model)
 
 
 def test_missing_extra_has_canonical_error_and_no_implicit_fallback(monkeypatch):
@@ -533,16 +532,18 @@ def test_custom_missing_dependency_cannot_echo_note_in_error():
     assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize("budget", [True, 0, -1, 1.5, 2**51])
-def test_memory_budget_validation(budget):
-    with pytest.raises(backends.LocalSummarizerError):
-        backends.MLXSummarizerBackend(memory_budget_bytes=budget)
+def test_memory_budget_validation(subtests):
+    for budget in [True, 0, -1, 1.5, 2**51]:
+        with subtests.test(budget=budget):
+            with pytest.raises(backends.LocalSummarizerError):
+                backends.MLXSummarizerBackend(memory_budget_bytes=budget)
 
 
-@pytest.mark.parametrize("output", [None, 1, {}, "x" * 8193])
-def test_invalid_custom_output_is_rejected(output):
-    with pytest.raises(backends.LocalSummarizerError):
-        summarize_deidentified(deidentified(), model=lambda _: output)
+def test_invalid_custom_output_is_rejected(subtests):
+    for output in [None, 1, {}, "x" * 8193]:
+        with subtests.test(output=output):
+            with pytest.raises(backends.LocalSummarizerError):
+                summarize_deidentified(deidentified(), model=lambda _: output)
 
 
 def test_preflight_order_is_enforced(local_runner, monkeypatch):
@@ -795,14 +796,15 @@ def test_provider_refusal_subclass_cannot_leak_exception_properties(
     assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    ("model", "reason"),
-    [("not-a-registered-alias", "unregistered_alias"), (123, "invalid_backend")],
-)
-def test_backend_resolution_reasons_are_typed(model, reason):
-    with pytest.raises(backends.LocalSummarizerError) as caught:
-        backends.resolve_summarizer_backend(model)
-    assert caught.value.reason == reason
+def test_backend_resolution_reasons_are_typed(subtests):
+    for model, reason in [
+        ("not-a-registered-alias", "unregistered_alias"),
+        (123, "invalid_backend"),
+    ]:
+        with subtests.test(model=model, reason=reason):
+            with pytest.raises(backends.LocalSummarizerError) as caught:
+                backends.resolve_summarizer_backend(model)
+            assert caught.value.reason == reason
 
 
 def test_builtin_mode_rejected_before_deidentification(monkeypatch):
@@ -860,15 +862,16 @@ def test_local_failures_preserve_safe_reasons(
     assert "synthetic-private" not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    ("output", "reason"),
-    [(object(), "invalid_output"), ("x" * 8193, "output_limit_exceeded")],
-)
-def test_custom_type_and_size_failures_are_distinct(output, reason):
-    with pytest.raises(backends.LocalSummarizerError) as caught:
-        summarize_deidentified(deidentified(), model=lambda _: output)
-    assert caught.value.reason == reason
-    assert caught.value.__context__ is None
+def test_custom_type_and_size_failures_are_distinct(subtests):
+    for output, reason in [
+        (object(), "invalid_output"),
+        ("x" * 8193, "output_limit_exceeded"),
+    ]:
+        with subtests.test(output=output, reason=reason):
+            with pytest.raises(backends.LocalSummarizerError) as caught:
+                summarize_deidentified(deidentified(), model=lambda _: output)
+            assert caught.value.reason == reason
+            assert caught.value.__context__ is None
 
 
 def test_uncontrolled_error_message_and_reason_never_escape():
@@ -897,9 +900,8 @@ def test_summarizer_types_are_public_without_loading_models():
         assert getattr(clinical, name) is getattr(backends, name)
 
 
-@pytest.mark.parametrize(
-    "sentences",
-    [
+def test_extractive_script_boundaries_keep_three_exact_source_sentences(subtests):
+    for sentences in [
         ["咳嗽持续。", "开始治疗。", "病情好转。", "随后出院。"],
         ["咳が続く。", "薬を投与した。", "改善した。", "退院した。"],
         ["खांसी है।", "उपचार दिया।", "सुधार हुआ।", "छुट्टी मिली।"],
@@ -910,14 +912,13 @@ def test_summarizer_types_are_public_without_loading_models():
             "Stable.",
             "Discharged.",
         ],
-    ],
-)
-def test_extractive_script_boundaries_keep_three_exact_source_sentences(sentences):
-    note = " ".join(sentences)
-    result = backends.ExtractiveSummarizerBackend().summarize(note)
-    assert result == " ".join(sentences[:3])
-    assert all(sentence in note for sentence in sentences[:3])
-    assert sentences[3] not in result
+    ]:
+        with subtests.test(sentences=sentences):
+            note = " ".join(sentences)
+            result = backends.ExtractiveSummarizerBackend().summarize(note)
+            assert result == " ".join(sentences[:3])
+            assert all(sentence in note for sentence in sentences[:3])
+            assert sentences[3] not in result
 
 
 def test_long_cjk_note_has_a_bounded_extractive_summary():

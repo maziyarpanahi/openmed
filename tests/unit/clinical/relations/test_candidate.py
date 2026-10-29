@@ -134,10 +134,8 @@ def test_max_pairs_bounds_a_500_span_document() -> None:
     assert len(candidates) == 37
 
 
-@pytest.mark.parametrize(
-    ("argument", "value"),
-    [("max_window", -1), ("max_pairs", -1)],
-)
-def test_invalid_generation_guards_raise(argument: str, value: int) -> None:
-    with pytest.raises(ValueError):
-        generate_relation_candidates("x", (), **{argument: value})
+def test_invalid_generation_guards_raise(subtests) -> None:
+    for argument, value in [("max_window", -1), ("max_pairs", -1)]:
+        with subtests.test(argument=argument, value=value):
+            with pytest.raises(ValueError):
+                generate_relation_candidates("x", (), **{argument: value})

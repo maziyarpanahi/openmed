@@ -86,34 +86,36 @@ def test_generated_multiscript_spans_never_split_graphemes(case):
     assert refine_privacy_filter_span("private_person", *refined, text) == refined
 
 
-@pytest.mark.parametrize(
-    ("label", "text", "expected_text"),
-    [
+def test_latin_refinement_regression_bytes_are_unchanged(subtests):
+    for label, text, expected_text in [
         ("private_email", " alice@example.test and ", "alice@example.test"),
         ("private_url", " https://example.test/path, ", "https://example.test/path"),
         ("private_phone", " +1 (415) 555-0123 and ", "+1 (415) 555-0123"),
         ("private_person", " Jane Doe and ", "Jane Doe"),
         ("private_person", " Jane Doe or ", "Jane Doe"),
-    ],
-)
-def test_latin_refinement_regression_bytes_are_unchanged(label, text, expected_text):
-    start, end = refine_privacy_filter_span(label, 0, len(text), text)
+    ]:
+        with subtests.test(label=label, text=text, expected_text=expected_text):
+            start, end = refine_privacy_filter_span(label, 0, len(text), text)
 
-    assert (start, end) == (
-        text.index(expected_text),
-        text.index(expected_text) + len(expected_text),
-    )
-    assert text[start:end].encode("utf-8") == expected_text.encode("utf-8")
+            assert (start, end) == (
+                text.index(expected_text),
+                text.index(expected_text) + len(expected_text),
+            )
+            assert text[start:end].encode("utf-8") == expected_text.encode("utf-8")
 
 
-@pytest.mark.parametrize("prefix", ["患者", "रवि"])
-def test_script_adjacency_refines_latin_email_without_word_spacing(prefix):
-    text = f"{prefix}alice@example.test連絡"
+def test_script_adjacency_refines_latin_email_without_word_spacing(subtests):
+    for prefix in ["患者", "रवि"]:
+        with subtests.test(prefix=prefix):
+            text = f"{prefix}alice@example.test連絡"
 
-    start, end = refine_privacy_filter_span("private_email", 0, len(text), text)
+            start, end = refine_privacy_filter_span("private_email", 0, len(text), text)
 
-    assert (start, end) == (len(prefix), len(prefix) + len("alice@example.test"))
-    assert text[start:end] == "alice@example.test"
+            assert (start, end) == (
+                len(prefix),
+                len(prefix) + len("alice@example.test"),
+            )
+            assert text[start:end] == "alice@example.test"
 
 
 def test_cjk_adjacency_does_not_leak_into_latin_url():
@@ -169,12 +171,10 @@ def test_grapheme_iterator_handles_core_uax29_sequences():
     assert clusters == ["\r\n", "🇫🇷", "👩\u200d⚕️", "각"]
 
 
-@pytest.mark.parametrize(
-    "text",
-    ["क्षि", "ক্ষি", "ਕ੍ਸ਼ਿ", "ક્ષિ", "କ୍ଷି", "க்ஷி", "క్షి", "ಕ್ಷಿ", "ക്ഷി"],
-)
-def test_grapheme_iterator_keeps_supported_indic_conjuncts_whole(text):
-    assert list(iter_grapheme_cluster_spans(text)) == [(0, len(text))]
+def test_grapheme_iterator_keeps_supported_indic_conjuncts_whole(subtests):
+    for text in ["क्षि", "ক্ষি", "ਕ੍ਸ਼ਿ", "ક્ષિ", "କ୍ଷି", "க்ஷி", "క్షి", "ಕ್ಷಿ", "ക്ഷി"]:
+        with subtests.test(text=text):
+            assert list(iter_grapheme_cluster_spans(text)) == [(0, len(text))]
 
 
 def test_span_snapping_only_inspects_clusters_touching_boundaries(monkeypatch):

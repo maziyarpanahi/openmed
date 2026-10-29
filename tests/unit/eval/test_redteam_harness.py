@@ -456,13 +456,14 @@ def test_cli_uses_environment_threshold(
     assert exit_code == 1
 
 
-@pytest.mark.parametrize("threshold", (-0.01, 1.01))
-def test_invalid_threshold_is_rejected(threshold: float) -> None:
-    with pytest.raises(ValueError, match="between 0 and 1"):
-        run_redteam(
-            deidentifier=_protect_every_assertion,
-            max_bypass_rate=threshold,
-        )
+def test_invalid_threshold_is_rejected(subtests) -> None:
+    for threshold in (-0.01, 1.01):
+        with subtests.test(threshold=threshold):
+            with pytest.raises(ValueError, match="between 0 and 1"):
+                run_redteam(
+                    deidentifier=_protect_every_assertion,
+                    max_bypass_rate=threshold,
+                )
 
 
 def test_boolean_threshold_is_rejected() -> None:

@@ -149,10 +149,11 @@ def test_minimum_age_is_exclusive_and_future_times_are_untouched(
     assert journal.load() == before
 
 
-@pytest.mark.parametrize("age", [-1, True, 1.5, "50", 2**63])
-def test_invalid_policy_is_value_free(age: object) -> None:
-    with pytest.raises(RecoveryError, match="invalid_non_negative_integer"):
-        JournalRetentionPolicy(age)  # type: ignore[arg-type]
+def test_invalid_policy_is_value_free(subtests) -> None:
+    for age in [-1, True, 1.5, "50", 2**63]:
+        with subtests.test(age=age):
+            with pytest.raises(RecoveryError, match="invalid_non_negative_integer"):
+                JournalRetentionPolicy(age)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -413,10 +414,9 @@ def test_journal_lock_symlink_and_interrupted_acquisition_fail_safely(
     assert target.read_text() == "untouched"
 
 
-@pytest.mark.parametrize(
-    "parser", [RetiredJournalRecord.from_json, JournalRetirementPlan.from_json]
-)
-def test_private_json_document_is_not_retained_in_exception_context(parser):
-    with pytest.raises(RecoveryError) as caught:
-        parser('{"SYNTHETIC_PRIVATE_RECORD":')
-    assert caught.value.__context__ is None
+def test_private_json_document_is_not_retained_in_exception_context(subtests):
+    for parser in [RetiredJournalRecord.from_json, JournalRetirementPlan.from_json]:
+        with subtests.test(parser=parser):
+            with pytest.raises(RecoveryError) as caught:
+                parser('{"SYNTHETIC_PRIVATE_RECORD":')
+            assert caught.value.__context__ is None

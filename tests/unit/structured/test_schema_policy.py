@@ -346,24 +346,22 @@ def test_declared_identifier_container_suppresses_uncovered_descendants():
     assert transformed == {"resourceType": "Patient", "custom": {"alternates": []}}
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_policy_rejects_falsy_wrong_container_types(subtests):
+    for payload in [
         {"fields": []},
         {"resources": []},
-    ],
-)
-def test_policy_rejects_falsy_wrong_container_types(payload):
-    policy = {
-        "schema_version": 1,
-        "name": "invalid_policy",
-        "schema": "fhir",
-        "fields": {"Patient.resourceType": "keep"},
-        **payload,
-    }
+    ]:
+        with subtests.test(payload=payload):
+            policy = {
+                "schema_version": 1,
+                "name": "invalid_policy",
+                "schema": "fhir",
+                "fields": {"Patient.resourceType": "keep"},
+                **payload,
+            }
 
-    with pytest.raises(SchemaPolicyError):
-        load_schema_policy(policy)
+            with pytest.raises(SchemaPolicyError):
+                load_schema_policy(policy)
 
 
 def test_non_string_schema_override_has_domain_error():

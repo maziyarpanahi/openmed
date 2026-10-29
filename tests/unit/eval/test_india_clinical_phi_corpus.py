@@ -145,22 +145,18 @@ def test_clinical_phi_manifest_registers_dedicated_india_source() -> None:
     assert resolved.records
 
 
-@pytest.mark.parametrize(
-    ("changes", "message"),
-    (
+def test_india_manifest_rejects_unsafe_declarations(subtests) -> None:
+    for changes, message in (
         ({"synthetic_only": False}, "synthetic-only"),
         ({"contains_real_phi": True}, "contains_real_phi=false"),
         ({"contains_dua_data": True}, "contains_dua_data=false"),
         ({"disclaimer": "Evaluation fixture."}, "assist-only and non-decisional"),
-    ),
-)
-def test_india_manifest_rejects_unsafe_declarations(
-    changes: dict[str, object], message: str
-) -> None:
-    manifest = load_india_clinical_phi_corpus().manifest
+    ):
+        with subtests.test(changes=changes, message=message):
+            manifest = load_india_clinical_phi_corpus().manifest
 
-    with pytest.raises(ValueError, match=message):
-        validate_india_clinical_phi_manifest(replace(manifest, **changes))
+            with pytest.raises(ValueError, match=message):
+                validate_india_clinical_phi_manifest(replace(manifest, **changes))
 
 
 def test_india_loader_rejects_missing_safety_declaration(tmp_path: Path) -> None:

@@ -806,14 +806,15 @@ def test_receipt_time_authority_remains_in_service_custody(
     }
 
 
-@pytest.mark.parametrize("operation", ["status", "stop", "resume"])
-def test_production_parser_preserves_existing_admission_commands(operation):
-    import importlib
+def test_production_parser_preserves_existing_admission_commands(subtests):
+    for operation in ["status", "stop", "resume"]:
+        with subtests.test(operation=operation):
+            import importlib
 
-    cli_module = importlib.import_module("openmed.cli.main")
-    args = cli_module.build_parser().parse_args(["agents", operation])
-    assert args.admission_operation == operation
-    assert args.handler.__name__ == "_handle_admission"
+            cli_module = importlib.import_module("openmed.cli.main")
+            args = cli_module.build_parser().parse_args(["agents", operation])
+            assert args.admission_operation == operation
+            assert args.handler.__name__ == "_handle_admission"
 
 
 def test_production_admission_status_is_not_intercepted_by_workflow_service(capsys):

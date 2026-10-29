@@ -194,10 +194,11 @@ def test_romanized_surrogate_redetects_under_same_pack(
     assert model_calls == [FIXTURE_MODEL]
 
 
-@pytest.mark.parametrize("lang", TARGET_LANGUAGES)
-def test_target_script_has_dependency_free_latin_rendering(lang: str) -> None:
-    romanized = romanize_name(ROMANIZATION_SAMPLES[lang], lang=lang)
+def test_target_script_has_dependency_free_latin_rendering(subtests) -> None:
+    for lang in TARGET_LANGUAGES:
+        with subtests.test(lang=lang):
+            romanized = romanize_name(ROMANIZATION_SAMPLES[lang], lang=lang)
 
-    assert romanized
-    assert romanized.isascii()
-    assert detect_script(romanized) == "Latin"
+            assert romanized
+            assert romanized.isascii()
+            assert detect_script(romanized) == "Latin"

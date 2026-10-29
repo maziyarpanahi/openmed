@@ -745,14 +745,15 @@ def test_run_id_carries_the_same_bounds_as_the_other_free_text_labels(
 # --- Non-finite floats -----------------------------------------------------
 
 
-@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
-def test_non_finite_timestamps_are_refused(bad: float) -> None:
-    manifest = _manifest()
+def test_non_finite_timestamps_are_refused(subtests) -> None:
+    for bad in [float("nan"), float("inf"), float("-inf")]:
+        with subtests.test(bad=bad):
+            manifest = _manifest()
 
-    with pytest.raises(RunManifestError, match="finite"):
-        replace(manifest.shard(0), started_at=bad)
-    with pytest.raises(RunManifestError, match="finite"):
-        replace(manifest, updated_at=bad)
+            with pytest.raises(RunManifestError, match="finite"):
+                replace(manifest.shard(0), started_at=bad)
+            with pytest.raises(RunManifestError, match="finite"):
+                replace(manifest, updated_at=bad)
 
 
 def test_non_finite_timestamps_are_refused_on_load(tmp_path: Path) -> None:

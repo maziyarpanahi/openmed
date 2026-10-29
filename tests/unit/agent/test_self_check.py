@@ -112,9 +112,8 @@ def test_fixture_bound_drift_fails_independently(
     _assert_closed(report)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_result_rejects_uncontrolled_fields(subtests) -> None:
+    for field, value in [
         ("name", _MARKER),
         ("status", "passed"),
         ("reason", _MARKER),
@@ -123,34 +122,34 @@ def test_fixture_bound_drift_fails_independently(
         ("control_count", 2049),
         ("digest", _MARKER),
         ("digest", None),
-    ],
-)
-def test_result_rejects_uncontrolled_fields(field: str, value: Any) -> None:
-    data = {
-        "name": check.SelfCheckName.SCHEMA,
-        "status": check.SelfCheckStatus.PASSED,
-        "reason": check.SelfCheckReason.OK,
-        "case_count": 1,
-        "control_count": 1,
-        "digest": "sha256:" + "1" * 64,
-    }
-    data[field] = value
-    with pytest.raises(ValueError, match="self_check:") as exc:
-        check.AgentSelfCheckResult(**data)
-    assert _MARKER not in str(exc.value)
+    ]:
+        with subtests.test(field=field, value=value):
+            data = {
+                "name": check.SelfCheckName.SCHEMA,
+                "status": check.SelfCheckStatus.PASSED,
+                "reason": check.SelfCheckReason.OK,
+                "case_count": 1,
+                "control_count": 1,
+                "digest": "sha256:" + "1" * 64,
+            }
+            data[field] = value
+            with pytest.raises(ValueError, match="self_check:") as exc:
+                check.AgentSelfCheckResult(**data)
+            assert _MARKER not in str(exc.value)
 
 
-@pytest.mark.parametrize("shape", ["missing", "duplicate", "reversed", "list"])
-def test_report_requires_every_check_once(shape: str) -> None:
-    rows = check.run_agent_self_check().checks
-    invalid = {
-        "missing": rows[:-1],
-        "duplicate": rows[:-1] + (rows[0],),
-        "reversed": tuple(reversed(rows)),
-        "list": list(rows),
-    }[shape]
-    with pytest.raises(ValueError, match="incomplete_report"):
-        check.AgentSelfCheckReport(invalid)
+def test_report_requires_every_check_once(subtests) -> None:
+    for shape in ["missing", "duplicate", "reversed", "list"]:
+        with subtests.test(shape=shape):
+            rows = check.run_agent_self_check().checks
+            invalid = {
+                "missing": rows[:-1],
+                "duplicate": rows[:-1] + (rows[0],),
+                "reversed": tuple(reversed(rows)),
+                "list": list(rows),
+            }[shape]
+            with pytest.raises(ValueError, match="incomplete_report"):
+                check.AgentSelfCheckReport(invalid)
 
 
 @pytest.mark.parametrize(
@@ -513,12 +512,11 @@ def test_no_network_sleeps_models_or_config_reads(
         assert _MARKER not in output.out + output.err
 
 
-@pytest.mark.parametrize(
-    "payload", ["[" * 30 + "0" + "]" * 30, json.dumps([0] * 20_001)]
-)
-def test_parser_has_depth_and_node_budgets(payload: str) -> None:
-    with pytest.raises(ValueError, match="invalid_json_bounds"):
-        check._bounded_json(payload)
+def test_parser_has_depth_and_node_budgets(subtests) -> None:
+    for payload in ["[" * 30 + "0" + "]" * 30, json.dumps([0] * 20_001)]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ValueError, match="invalid_json_bounds"):
+                check._bounded_json(payload)
 
 
 @pytest.mark.parametrize("site", ["construction", "json", "text"])

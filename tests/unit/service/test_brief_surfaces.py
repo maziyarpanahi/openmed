@@ -101,9 +101,8 @@ def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
     assert response.json() == expected
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_rest_rejects_untrusted_configuration(subtests):
+    for change in [
         {"model": "https://remote.example"},
         {"profile": "unknown"},
         {"review_id": "invalid"},
@@ -111,15 +110,18 @@ def test_actual_bound_response_retains_optional_metadata_over_http(monkeypatch):
         {"text": ""},
         {"text": "é" * 9000},
         {"context": {"approved": True}},
-    ],
-)
-def test_rest_rejects_untrusted_configuration(change):
-    payload = {"text": "Synthetic note", "model": "extractive", "review_id": REVIEW_ID}
-    payload.update(change)
-    with TestClient(create_app(), base_url="http://127.0.0.1") as client:
-        response = client.post("/brief", json=payload)
-    assert response.status_code == 422
-    assert "Synthetic note" not in response.text
+    ]:
+        with subtests.test(change=change):
+            payload = {
+                "text": "Synthetic note",
+                "model": "extractive",
+                "review_id": REVIEW_ID,
+            }
+            payload.update(change)
+            with TestClient(create_app(), base_url="http://127.0.0.1") as client:
+                response = client.post("/brief", json=payload)
+            assert response.status_code == 422
+            assert "Synthetic note" not in response.text
 
 
 def test_missing_review_and_mismatched_provider_refuse():

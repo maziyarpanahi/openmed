@@ -205,11 +205,12 @@ def test_measured_coverage_is_bound_to_digest_and_warning_is_verified() -> None:
         CohortExecution.from_dict(tampered)
 
 
-@pytest.mark.parametrize("invalid", [-1, True, 1.2, "synthetic-private-count"])
-def test_coverage_rejects_invalid_counts_without_echoing_values(invalid) -> None:
-    with pytest.raises(ValueError) as caught:
-        CohortCoverage(source_patient_count=invalid)
-    assert "synthetic-private-count" not in str(caught.value)
+def test_coverage_rejects_invalid_counts_without_echoing_values(subtests) -> None:
+    for invalid in [-1, True, 1.2, "synthetic-private-count"]:
+        with subtests.test(invalid=invalid):
+            with pytest.raises(ValueError) as caught:
+                CohortCoverage(source_patient_count=invalid)
+            assert "synthetic-private-count" not in str(caught.value)
 
 
 def test_coverage_rejects_unknown_fields_duplicate_sets_and_false_zero() -> None:
@@ -305,14 +306,15 @@ def test_legacy_integrity_and_same_major_policy_are_retained() -> None:
     assert CohortExecution.from_dict(future.to_dict()) == future
 
 
-@pytest.mark.parametrize("hidden", ['"synthetic-private-sentinel"', "NaN"])
-def test_legacy_byte_retention_rejects_ambiguous_json(hidden) -> None:
-    _, payload = _legacy_execution(())
-    original = json.dumps(payload)
-    ambiguous = original.replace("{", '{"review_required": ' + hidden + ", ", 1)
-    with pytest.raises(SavedCohortError) as caught:
-        CohortExecution.from_json(ambiguous)
-    assert "synthetic-private-sentinel" not in str(caught.value)
+def test_legacy_byte_retention_rejects_ambiguous_json(subtests) -> None:
+    for hidden in ['"synthetic-private-sentinel"', "NaN"]:
+        with subtests.test(hidden=hidden):
+            _, payload = _legacy_execution(())
+            original = json.dumps(payload)
+            ambiguous = original.replace("{", '{"review_required": ' + hidden + ", ", 1)
+            with pytest.raises(SavedCohortError) as caught:
+                CohortExecution.from_json(ambiguous)
+            assert "synthetic-private-sentinel" not in str(caught.value)
 
 
 @pytest.mark.parametrize(
@@ -393,30 +395,25 @@ def test_definition_expression_not_flat_criterion_order_determines_membership() 
     assert result.value.memberships[0].eligible
 
 
-@pytest.mark.parametrize(
-    ("state", "reason"),
-    [
+def test_unresolved_memberships_require_review_and_cannot_be_eligible(subtests) -> None:
+    for state, reason in [
         (MembershipState.UNKNOWN, "evidence_missing"),
         (MembershipState.CONFLICT, "evidence_conflict"),
-    ],
-)
-def test_unresolved_memberships_require_review_and_cannot_be_eligible(
-    state: MembershipState,
-    reason: str,
-) -> None:
-    membership = _membership(second=state)
-    execution = _execution((membership,))
+    ]:
+        with subtests.test(state=state, reason=reason):
+            membership = _membership(second=state)
+            execution = _execution((membership,))
 
-    assert execution.review_required
-    assert membership.review_required
-    assert not membership.eligible
-    assert membership.criteria[1].reason_codes == (reason,)
+            assert execution.review_required
+            assert membership.review_required
+            assert not membership.eligible
+            assert membership.criteria[1].reason_codes == (reason,)
 
-    with pytest.raises(
-        SavedCohortConflictError,
-        match="unresolved criterion cannot produce eligible membership",
-    ):
-        replace(membership, state=MembershipState.MET)
+            with pytest.raises(
+                SavedCohortConflictError,
+                match="unresolved criterion cannot produce eligible membership",
+            ):
+                replace(membership, state=MembershipState.MET)
 
 
 @pytest.mark.parametrize("fchmod_available", [True, False])

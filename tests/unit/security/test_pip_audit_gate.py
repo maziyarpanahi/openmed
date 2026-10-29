@@ -161,41 +161,37 @@ review_by = "2026-01-01"
         pip_audit_gate.load_ignores(ignore_file, today=dt.date(2026, 6, 16))
 
 
-@pytest.mark.parametrize("sink", ["refs", "templates", "gen"])
-@pytest.mark.parametrize(
-    "expression",
-    [
-        "range.__class__.__mro__",
-        "''.__class__.__mro__",
-        '("{0.__class__.__mro__}"|attr("format"))("")',
-    ],
-)
-def test_reference_templates_reject_private_attribute_access(
-    sink: str, expression: str
-) -> None:
-    import fsspec
-    from jinja2.exceptions import SecurityError
+def test_reference_templates_reject_private_attribute_access(subtests) -> None:
+    for sink in ["refs", "templates", "gen"]:
+        for expression in [
+            "range.__class__.__mro__",
+            "''.__class__.__mro__",
+            '("{0.__class__.__mro__}"|attr("format"))("")',
+        ]:
+            with subtests.test(sink=sink, expression=expression):
+                import fsspec
+                from jinja2.exceptions import SecurityError
 
-    template = "{{ " + expression + " }}"
-    spec: dict = {"version": 1, "refs": {}}
-    if sink == "refs":
-        spec["templates"] = {"root": "memory://"}
-        spec["refs"] = {"chunk": [template]}
-    elif sink == "templates":
-        spec["templates"] = {"target": template}
-        spec["refs"] = {"chunk": ["{{ target }}"]}
-    else:
-        spec["gen"] = [
-            {
-                "key": template,
-                "url": "memory://chunk/{{ i }}",
-                "offset": "0",
-                "length": "1",
-                "dimensions": {"i": [0]},
-            }
-        ]
-    with pytest.raises(SecurityError):
-        fsspec.filesystem("reference", fo=spec, simple_templates=False)
+                template = "{{ " + expression + " }}"
+                spec: dict = {"version": 1, "refs": {}}
+                if sink == "refs":
+                    spec["templates"] = {"root": "memory://"}
+                    spec["refs"] = {"chunk": [template]}
+                elif sink == "templates":
+                    spec["templates"] = {"target": template}
+                    spec["refs"] = {"chunk": ["{{ target }}"]}
+                else:
+                    spec["gen"] = [
+                        {
+                            "key": template,
+                            "url": "memory://chunk/{{ i }}",
+                            "offset": "0",
+                            "length": "1",
+                            "dimensions": {"i": [0]},
+                        }
+                    ]
+                with pytest.raises(SecurityError):
+                    fsspec.filesystem("reference", fo=spec, simple_templates=False)
 
 
 def test_reference_generator_retains_safe_variable_interpolation() -> None:

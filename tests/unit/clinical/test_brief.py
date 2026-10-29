@@ -219,21 +219,20 @@ def test_budget_rejects_unmapped_reviewed_field():
     assert "private-field" not in json.dumps(brief.to_dict())
 
 
-@pytest.mark.parametrize(
-    "reason", ["unregistered_alias", "artifact_not_cached", "runtime_unavailable"]
-)
-def test_unavailable_backend_is_typed_without_private_details(reason):
-    from openmed.clinical.summarize_backends import LocalSummarizerError
+def test_unavailable_backend_is_typed_without_private_details(subtests):
+    for reason in ["unregistered_alias", "artifact_not_cached", "runtime_unavailable"]:
+        with subtests.test(reason=reason):
+            from openmed.clinical.summarize_backends import LocalSummarizerError
 
-    value, context = fixture_context()
+            value, context = fixture_context()
 
-    def unavailable(_):
-        raise LocalSummarizerError("PRIVATE_BACKEND_PATH", reason=reason)
+            def unavailable(_):
+                raise LocalSummarizerError("PRIVATE_BACKEND_PATH", reason=reason)
 
-    brief = build_clinical_brief(value, context=context, model=unavailable)
-    assert brief.refusal_reason is BriefRefusal.MODEL_UNAVAILABLE
-    assert brief.summary == ""
-    assert "PRIVATE_BACKEND_PATH" not in json.dumps(brief.to_response())
+            brief = build_clinical_brief(value, context=context, model=unavailable)
+            assert brief.refusal_reason is BriefRefusal.MODEL_UNAVAILABLE
+            assert brief.summary == ""
+            assert "PRIVATE_BACKEND_PATH" not in json.dumps(brief.to_response())
 
 
 def test_unregistered_alias_refuses_before_generation():
@@ -243,20 +242,21 @@ def test_unregistered_alias_refuses_before_generation():
     assert brief.to_dict()["stages"] == ["deidentification"]
 
 
-@pytest.mark.parametrize("label", ["contradiction", "neutral"])
-def test_nli_rejects_contradiction_and_abstention(label):
-    result, context = fixture_context()
-    context = replace(
-        context,
-        nli_predict=lambda p, h: {
-            "label": label,
-            "score": 1.0,
-            "calibration_id": "synthetic-test-only",
-        },
-    )
-    brief = build_clinical_brief(result, model="extractive", context=context)
-    assert brief.refusal_reason is BriefRefusal.NLI_REJECTED
-    assert brief.summary == ""
+def test_nli_rejects_contradiction_and_abstention(subtests):
+    for label in ["contradiction", "neutral"]:
+        with subtests.test(label=label):
+            result, context = fixture_context()
+            context = replace(
+                context,
+                nli_predict=lambda p, h: {
+                    "label": label,
+                    "score": 1.0,
+                    "calibration_id": "synthetic-test-only",
+                },
+            )
+            brief = build_clinical_brief(result, model="extractive", context=context)
+            assert brief.refusal_reason is BriefRefusal.NLI_REJECTED
+            assert brief.summary == ""
 
 
 def test_empty_evidence_refuses_before_generator():

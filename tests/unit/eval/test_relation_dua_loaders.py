@@ -83,24 +83,20 @@ def test_made_source_errors_do_not_echo_sensitive_filename(tmp_path: Path) -> No
     assert malformed.name not in "".join(traceback.format_exception(captured.value))
 
 
-@pytest.mark.parametrize(
-    "normalize",
-    (
+def test_relation_loader_invalid_label_error_omits_supplied_value(subtests) -> None:
+    for normalize in (
         map_made_entity_label,
         map_made_relation_type,
         map_n2c2_2018_track2_entity_label,
         map_n2c2_2018_track2_relation_type,
-    ),
-)
-def test_relation_loader_invalid_label_error_omits_supplied_value(
-    normalize,
-) -> None:
-    marker = "synthetic_patient_identifier_123"
+    ):
+        with subtests.test(normalize=normalize):
+            marker = "synthetic_patient_identifier_123"
 
-    with pytest.raises(ValueError) as captured:
-        normalize(marker)
+            with pytest.raises(ValueError) as captured:
+                normalize(marker)
 
-    assert marker not in "".join(traceback.format_exception(captured.value))
+            assert marker not in "".join(traceback.format_exception(captured.value))
 
 
 def test_relation_dua_mappings_are_total_and_canonical() -> None:

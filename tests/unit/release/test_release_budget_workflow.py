@@ -378,38 +378,39 @@ def test_ci_pytest_diagnostic_wrapper_preserves_arguments_and_exit_status(
     assert observed == [("pytest", pytest_args), ("diagnostics", 120, True)]
 
 
-@pytest.mark.parametrize(
-    "suffix",
-    ["-k smoke", "-m 'not slow'", "-x", "--maxfail=1", "--ignore=tests", "|| true"],
-)
-def test_full_suite_diagnostics_contract_rejects_reduced_or_masked_runs(suffix):
-    lane = _load_ci()["jobs"]["test"]
-    step = next(
-        step for step in lane["steps"] if step.get("name") == "Test with pytest"
-    )
-    step["run"] += " " + suffix
-    with pytest.raises(AssertionError):
-        _assert_full_suite_diagnostics(lane)
+def test_full_suite_diagnostics_contract_rejects_reduced_or_masked_runs(subtests):
+    for suffix in [
+        "-k smoke",
+        "-m 'not slow'",
+        "-x",
+        "--maxfail=1",
+        "--ignore=tests",
+        "|| true",
+    ]:
+        with subtests.test(suffix=suffix):
+            lane = _load_ci()["jobs"]["test"]
+            step = next(
+                step for step in lane["steps"] if step.get("name") == "Test with pytest"
+            )
+            step["run"] += " " + suffix
+            with pytest.raises(AssertionError):
+                _assert_full_suite_diagnostics(lane)
 
 
-@pytest.mark.parametrize(
-    ("step_name", "field", "value"),
-    [
+def test_full_suite_diagnostics_contract_rejects_unbounded_or_optional_steps(subtests):
+    for step_name, field, value in [
         ("Test with pytest", "timeout-minutes", "360"),
         ("Test with pytest", "continue-on-error", "true"),
         ("Test with pytest", "if", "false"),
         ("Upload test diagnostics", "if", "success()"),
         ("Upload test diagnostics", "uses", "actions/upload-artifact@v7"),
-    ],
-)
-def test_full_suite_diagnostics_contract_rejects_unbounded_or_optional_steps(
-    step_name, field, value
-):
-    lane = _load_ci()["jobs"]["test"]
-    step = next(step for step in lane["steps"] if step.get("name") == step_name)
-    step[field] = value
-    with pytest.raises(AssertionError):
-        _assert_full_suite_diagnostics(lane)
+    ]:
+        with subtests.test(step_name=step_name, field=field, value=value):
+            lane = _load_ci()["jobs"]["test"]
+            step = next(step for step in lane["steps"] if step.get("name") == step_name)
+            step[field] = value
+            with pytest.raises(AssertionError):
+                _assert_full_suite_diagnostics(lane)
 
 
 def test_full_suite_diagnostics_contract_rejects_job_failure_override():

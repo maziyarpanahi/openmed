@@ -59,28 +59,26 @@ def test_extracts_exact_fixture_with_total_safe_source_map() -> None:
     assert "display:none" not in flattened
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_suppression_and_malformed_inputs(subtests) -> None:
+    for source, expected in [
         ("<head><title>x</title><body><p>Jane</p>", "Jane"),
         ("<head><script>Hidden Jane<body><p>Jane</p>", ""),
         ("<head><style>Hidden Jane<body><p>Jane</p>", ""),
         ("<p>Patient Jane", "Patient Jane"),
         ("<!-- x --><!doctype html><head>x</head><script>x</script>", ""),
         ("", ""),
-    ],
-)
-def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
-    document = extract_html(source)
-    assert document.text == expected
-    assert all(
-        document.location_at(index) is not None for index in range(len(document.text))
-    )
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
+            assert document.text == expected
+            assert all(
+                document.location_at(index) is not None
+                for index in range(len(document.text))
+            )
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_title_contents_are_always_suppressed(subtests) -> None:
+    for source, expected in [
         ("<title>Hidden Jane</title><p>Visible text</p>", "Visible text"),
         (
             "<html><title>Hidden Jane</title><body><p>Visible text</p></body></html>",
@@ -97,15 +95,11 @@ def test_suppression_and_malformed_inputs(source: str, expected: str) -> None:
             "Visible text",
         ),
         ("<title>Hidden Jane<body><p>Still hidden</p></body>", ""),
-    ],
-)
-def test_title_contents_are_always_suppressed(
-    source: str,
-    expected: str,
-) -> None:
-    document = extract_html(source)
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
 
-    assert document.text == expected
+            assert document.text == expected
 
 
 @pytest.mark.parametrize(
@@ -162,9 +156,8 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
     assert output.read_text(encoding="utf-8") == expected
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_template_contents_are_always_suppressed(subtests) -> None:
+    for source, expected in [
         ("<template>Hidden Jane</template><p>Visible</p>", "Visible"),
         (
             "<template><p>Hidden Jane &amp; Roe</p>"
@@ -179,15 +172,11 @@ def test_suppressed_container_is_excluded_from_detector_and_preserved(
         ),
         ("<body><template>Hidden Jane</template><p>Visible</p></body>", "Visible"),
         ("<template>Hidden Jane<body><p>Still hidden</p></body>", ""),
-    ],
-)
-def test_template_contents_are_always_suppressed(
-    source: str,
-    expected: str,
-) -> None:
-    document = extract_html(source)
+    ]:
+        with subtests.test(source=source, expected=expected):
+            document = extract_html(source)
 
-    assert document.text == expected
+            assert document.text == expected
 
 
 @pytest.mark.parametrize(

@@ -161,32 +161,31 @@ def test_canaries_stay_inside_private_rows_and_rollback_material(caplog):
     assert source.pipeline_digest == PIPELINE
 
 
-@pytest.mark.parametrize(
-    "change", ["missing", "extra", "duplicate", "wrong_digest", "wrong_table"]
-)
-def test_lineage_coverage_changes_block_approval(change):
-    stage = staged()
-    records = list(stage.lineage.records)
-    if change == "missing":
-        records.pop()
-    elif change == "extra":
-        records.append(replace(records[0], mutation_ordinal=0))
-    elif change == "duplicate":
-        records.append(records[0])
-    elif change == "wrong_digest":
-        records[0] = replace(records[0], row_digest="sha256:" + "d" * 64)
-    else:
-        records[0] = replace(records[0], table="observation")
-    changed = replace(stage, lineage=NlpOmopWriteLineage(records))
-    packet, manifest = preview(changed)
-    assert not packet.is_approvable
-    with pytest.raises(NlpOmopStagingError, match="preflight_failed"):
-        changed.bind_approval(
-            packet,
-            manifest,
-            approved_preview_digest=packet.preview_digest,
-            approval_receipt_digest=RECEIPT,
-        )
+def test_lineage_coverage_changes_block_approval(subtests):
+    for change in ["missing", "extra", "duplicate", "wrong_digest", "wrong_table"]:
+        with subtests.test(change=change):
+            stage = staged()
+            records = list(stage.lineage.records)
+            if change == "missing":
+                records.pop()
+            elif change == "extra":
+                records.append(replace(records[0], mutation_ordinal=0))
+            elif change == "duplicate":
+                records.append(records[0])
+            elif change == "wrong_digest":
+                records[0] = replace(records[0], row_digest="sha256:" + "d" * 64)
+            else:
+                records[0] = replace(records[0], table="observation")
+            changed = replace(stage, lineage=NlpOmopWriteLineage(records))
+            packet, manifest = preview(changed)
+            assert not packet.is_approvable
+            with pytest.raises(NlpOmopStagingError, match="preflight_failed"):
+                changed.bind_approval(
+                    packet,
+                    manifest,
+                    approved_preview_digest=packet.preview_digest,
+                    approval_receipt_digest=RECEIPT,
+                )
 
 
 def test_replace_by_note_tombstones_stale_rows_and_preserves_old_pipeline():
@@ -223,31 +222,30 @@ def test_replace_requires_explicit_snapshot_and_old_pipeline_evidence():
         staged(existing_pipeline_digests={"sha256:" + "f" * 64: OLD_PIPELINE})
 
 
-@pytest.mark.parametrize(
-    "kind", ["missing", "extra", "stale", "retired", "snapshot_changed"]
-)
-def test_vocabulary_gate_and_coverage_fail_closed(kind):
-    kwargs = {}
-    if kind == "missing":
-        kwargs["vocabulary_mappings"] = ()
-    elif kind == "extra":
-        kwargs["vocabulary_mappings"] = mappings(stale=True)
-    elif kind == "stale":
-        kwargs["vocabulary_mappings"] = mappings(version="release-stale")
-    elif kind == "retired":
-        kwargs["vocabulary_snapshot"] = snapshot(retired=True)
-    else:
-        kwargs["vocabulary_snapshot"] = snapshot(version="release-changed")
-    stage = staged(**kwargs)
-    packet, manifest = preview(stage)
-    assert not packet.is_approvable
-    with pytest.raises(NlpOmopStagingError, match="preflight_failed"):
-        stage.bind_approval(
-            packet,
-            manifest,
-            approved_preview_digest=packet.preview_digest,
-            approval_receipt_digest=RECEIPT,
-        )
+def test_vocabulary_gate_and_coverage_fail_closed(subtests):
+    for kind in ["missing", "extra", "stale", "retired", "snapshot_changed"]:
+        with subtests.test(kind=kind):
+            kwargs = {}
+            if kind == "missing":
+                kwargs["vocabulary_mappings"] = ()
+            elif kind == "extra":
+                kwargs["vocabulary_mappings"] = mappings(stale=True)
+            elif kind == "stale":
+                kwargs["vocabulary_mappings"] = mappings(version="release-stale")
+            elif kind == "retired":
+                kwargs["vocabulary_snapshot"] = snapshot(retired=True)
+            else:
+                kwargs["vocabulary_snapshot"] = snapshot(version="release-changed")
+            stage = staged(**kwargs)
+            packet, manifest = preview(stage)
+            assert not packet.is_approvable
+            with pytest.raises(NlpOmopStagingError, match="preflight_failed"):
+                stage.bind_approval(
+                    packet,
+                    manifest,
+                    approved_preview_digest=packet.preview_digest,
+                    approval_receipt_digest=RECEIPT,
+                )
 
 
 def test_approval_packet_change_requires_new_human_review():
@@ -272,28 +270,29 @@ def test_approval_packet_change_requires_new_human_review():
         )
 
 
-@pytest.mark.parametrize(
-    "kind", ["missing", "extra", "wrong_strategy", "wrong_payload"]
-)
-def test_rollback_coverage_must_match_private_material(kind):
-    stage = staged()
-    instructions = list(stage.rollback_requirements)
-    if kind == "missing":
-        instructions.pop()
-    elif kind == "extra":
-        instructions.append(
-            replace(instructions[0], mutation_ordinal=len(instructions))
-        )
-    elif kind == "wrong_strategy":
-        from openmed.interop.omop_rollback_manifest import RollbackStrategy
+def test_rollback_coverage_must_match_private_material(subtests):
+    for kind in ["missing", "extra", "wrong_strategy", "wrong_payload"]:
+        with subtests.test(kind=kind):
+            stage = staged()
+            instructions = list(stage.rollback_requirements)
+            if kind == "missing":
+                instructions.pop()
+            elif kind == "extra":
+                instructions.append(
+                    replace(instructions[0], mutation_ordinal=len(instructions))
+                )
+            elif kind == "wrong_strategy":
+                from openmed.interop.omop_rollback_manifest import RollbackStrategy
 
-        instructions[0] = replace(
-            instructions[0], strategy=RollbackStrategy.RESTORE_BEFORE_IMAGE
-        )
-    else:
-        instructions[0] = replace(instructions[0], rollback_artifact_digest=RECEIPT)
-    with pytest.raises(NlpOmopStagingError, match="invalid_rollback"):
-        stage.build_rollback_manifest(instructions)
+                instructions[0] = replace(
+                    instructions[0], strategy=RollbackStrategy.RESTORE_BEFORE_IMAGE
+                )
+            else:
+                instructions[0] = replace(
+                    instructions[0], rollback_artifact_digest=RECEIPT
+                )
+            with pytest.raises(NlpOmopStagingError, match="invalid_rollback"):
+                stage.build_rollback_manifest(instructions)
 
 
 def test_private_row_inputs_are_frozen_and_material_returns_copies():
@@ -307,35 +306,33 @@ def test_private_row_inputs_are_frozen_and_material_returns_copies():
     assert stage.rollback_material(0)["key"]
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_malformed_source_rows_have_value_free_errors(subtests):
+    for change in [
         "offset",
         "missing_note",
         "nlp_system",
         "source_digest",
         "unknown_column",
         "duplicate_row",
-    ],
-)
-def test_malformed_source_rows_have_value_free_errors(change):
-    source = tables()
-    rows = copy.deepcopy(source.tables)
-    if change == "offset":
-        rows["note_nlp"][0]["offset_end"] = 10_000
-    elif change == "missing_note":
-        rows["note_nlp"][0]["note_id"] = 123
-    elif change == "nlp_system":
-        rows["note_nlp"][0]["nlp_system"] = ""
-    elif change == "source_digest":
-        rows["note"][0]["source_note_hash"] = CANARY
-    elif change == "unknown_column":
-        rows["note_nlp"][0][CANARY] = CANARY
-    else:
-        rows["note_nlp"] = rows["note_nlp"] + rows["note_nlp"]
-    with pytest.raises(NlpOmopStagingError) as exc:
-        staged(tables=replace(source, tables=rows))
-    assert CANARY not in str(exc.value)
+    ]:
+        with subtests.test(change=change):
+            source = tables()
+            rows = copy.deepcopy(source.tables)
+            if change == "offset":
+                rows["note_nlp"][0]["offset_end"] = 10_000
+            elif change == "missing_note":
+                rows["note_nlp"][0]["note_id"] = 123
+            elif change == "nlp_system":
+                rows["note_nlp"][0]["nlp_system"] = ""
+            elif change == "source_digest":
+                rows["note"][0]["source_note_hash"] = CANARY
+            elif change == "unknown_column":
+                rows["note_nlp"][0][CANARY] = CANARY
+            else:
+                rows["note_nlp"] = rows["note_nlp"] + rows["note_nlp"]
+            with pytest.raises(NlpOmopStagingError) as exc:
+                staged(tables=replace(source, tables=rows))
+            assert CANARY not in str(exc.value)
 
 
 def test_lineage_record_rejects_free_text_system_and_pipeline_values():
@@ -358,9 +355,8 @@ def with_rows(source, rows):
     )
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_source_relationships_are_verified_in_both_directions(subtests):
+    for change in [
         "missing_domain",
         "missing_column",
         "event",
@@ -369,30 +365,29 @@ def with_rows(source, rows):
         "concept",
         "source_hash",
         "missing_mapping_row",
-    ],
-)
-def test_source_relationships_are_verified_in_both_directions(change):
-    source = tables()
-    rows = copy.deepcopy(source.tables)
-    if change == "missing_domain":
-        rows["condition_occurrence"] = ()
-    elif change == "missing_column":
-        rows["note_nlp"][0].pop("note_nlp_event_id")
-    elif change == "event":
-        rows["note_nlp"][0]["note_nlp_event_id"] += 1
-    elif change in {"person", "visit"}:
-        field = "person_id" if change == "person" else "visit_occurrence_id"
-        rows["condition_occurrence"][0][field] += 1
-    elif change == "concept":
-        rows["condition_occurrence"][0]["condition_concept_id"] = 0
-    elif change == "source_hash":
-        rows["condition_occurrence"][0]["source_note_hash"] = "2" * 64
-    else:
-        rows["source_to_concept_map"] = ()
-        # Target provenance supplied separately is still required by the gate.
-        # The loader lineage contract requires its span mapping row as well.
-    with pytest.raises(NlpOmopStagingError):
-        staged(tables=with_rows(source, rows))
+    ]:
+        with subtests.test(change=change):
+            source = tables()
+            rows = copy.deepcopy(source.tables)
+            if change == "missing_domain":
+                rows["condition_occurrence"] = ()
+            elif change == "missing_column":
+                rows["note_nlp"][0].pop("note_nlp_event_id")
+            elif change == "event":
+                rows["note_nlp"][0]["note_nlp_event_id"] += 1
+            elif change in {"person", "visit"}:
+                field = "person_id" if change == "person" else "visit_occurrence_id"
+                rows["condition_occurrence"][0][field] += 1
+            elif change == "concept":
+                rows["condition_occurrence"][0]["condition_concept_id"] = 0
+            elif change == "source_hash":
+                rows["condition_occurrence"][0]["source_note_hash"] = "2" * 64
+            else:
+                rows["source_to_concept_map"] = ()
+                # Target provenance supplied separately is still required by the gate.
+                # The loader lineage contract requires its span mapping row as well.
+            with pytest.raises(NlpOmopStagingError):
+                staged(tables=with_rows(source, rows))
 
 
 def test_replace_is_scoped_to_patient_and_note_not_hash_alone():
@@ -572,35 +567,36 @@ def test_private_rollback_material_hashes_match_exact_expected_artifacts():
             assert material["before_image"] == old_rows[mutation.key.digest]
 
 
-@pytest.mark.parametrize(
-    "kind", ["table", "field", "digest", "schema", "counts", "issue"]
-)
-def test_forged_public_preview_cannot_echo_private_metadata(kind):
-    from openmed.interop.omop import OmopReferenceIssue
+def test_forged_public_preview_cannot_echo_private_metadata(subtests):
+    for kind in ["table", "field", "digest", "schema", "counts", "issue"]:
+        with subtests.test(kind=kind):
+            from openmed.interop.omop import OmopReferenceIssue
 
-    packet, _ = preview(staged())
-    inner = packet.batch_preview
-    if kind == "schema":
-        changed = replace(inner, schema=CANARY)
-    elif kind == "counts":
-        changed = replace(inner, operation_counts=((CANARY, 1),))
-    elif kind == "issue":
-        changed = replace(inner, issues=(OmopReferenceIssue(0, CANARY, "note"),))
-    else:
-        item = inner.mutations[0]
-        kwargs = (
-            {"table": CANARY}
-            if kind == "table"
-            else {"field_names": (CANARY,)}
-            if kind == "field"
-            else {"row_digest": CANARY}
-        )
-        changed = replace(
-            inner, mutations=(replace(item, **kwargs), *inner.mutations[1:])
-        )
-    with pytest.raises(NlpOmopStagingError, match="invalid_preview") as exc:
-        replace(packet, batch_preview=changed)
-    assert CANARY not in str(exc.value)
+            packet, _ = preview(staged())
+            inner = packet.batch_preview
+            if kind == "schema":
+                changed = replace(inner, schema=CANARY)
+            elif kind == "counts":
+                changed = replace(inner, operation_counts=((CANARY, 1),))
+            elif kind == "issue":
+                changed = replace(
+                    inner, issues=(OmopReferenceIssue(0, CANARY, "note"),)
+                )
+            else:
+                item = inner.mutations[0]
+                kwargs = (
+                    {"table": CANARY}
+                    if kind == "table"
+                    else {"field_names": (CANARY,)}
+                    if kind == "field"
+                    else {"row_digest": CANARY}
+                )
+                changed = replace(
+                    inner, mutations=(replace(item, **kwargs), *inner.mutations[1:])
+                )
+            with pytest.raises(NlpOmopStagingError, match="invalid_preview") as exc:
+                replace(packet, batch_preview=changed)
+            assert CANARY not in str(exc.value)
 
 
 @pytest.mark.parametrize("boundary", ["staging", "lineage", "rollback", "evidence"])

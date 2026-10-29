@@ -76,6 +76,9 @@ pytest -m slow              # only long-running cases
   test that repeats them only fails on unrelated changes.
 - Build expensive fixtures once (module or session scope, or a cached
   template that each test copies) instead of rebuilding them per case.
+- Sweep a data table (every locale, command or vector) inside one test with
+  the `subtests` fixture rather than one parametrized case per row. Each row
+  is still reported on failure, and collection stays small.
 
 For zero-shot smoke checks:
 

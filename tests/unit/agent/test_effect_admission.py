@@ -40,12 +40,13 @@ def controller(tmp_path: Path) -> EffectAdmissionController:
     return EffectAdmissionController(store)
 
 
-@pytest.mark.parametrize("workflow", [WORKFLOW, OTHER])
-def test_no_configuration_never_invokes_effect(workflow: WorkflowId) -> None:
-    effect = Mock()
-    with pytest.raises(AdmissionError, match="admission_disabled"):
-        dispatch_with_admission(effect, workflow_id=workflow)
-    effect.assert_not_called()
+def test_no_configuration_never_invokes_effect(subtests) -> None:
+    for workflow in [WORKFLOW, OTHER]:
+        with subtests.test(workflow=workflow):
+            effect = Mock()
+            with pytest.raises(AdmissionError, match="admission_disabled"):
+                dispatch_with_admission(effect, workflow_id=workflow)
+            effect.assert_not_called()
 
 
 def test_workflow_enable_admits_only_that_scope(
