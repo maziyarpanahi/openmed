@@ -38,70 +38,71 @@ def test_perturbers_are_seeded_and_reproject_gold_spans_without_drift():
         assert span.end > span.start
 
 
-@pytest.mark.parametrize("operator", ["bidi_in_value", "native_digit_substitution"])
-@pytest.mark.parametrize(
-    ("lang", "prefix", "value"),
-    [
-        ("fa", "کد ملی ", "0012345679"),
-        ("ar", "الرقم القومي ", "29001011234562"),
-        ("ur", "آدھار ", "2345 6789 0124"),
-        ("he", "טלפון ", "0501234567"),
-    ],
-)
-def test_native_digit_and_in_value_bidi_operators_are_seeded_and_detected(
-    operator, lang, prefix, value
-):
-    from openmed.core.safety_sweep import safety_sweep
+def test_native_digit_and_in_value_bidi_operators_are_seeded_and_detected(subtests):
+    for operator in ["bidi_in_value", "native_digit_substitution"]:
+        for lang, prefix, value in [
+            ("fa", "کد ملی ", "0012345679"),
+            ("ar", "الرقم القومي ", "29001011234562"),
+            ("ur", "آدھار ", "2345 6789 0124"),
+            ("he", "טלפון ", "0501234567"),
+        ]:
+            with subtests.test(
+                operator=operator, lang=lang, prefix=prefix, value=value
+            ):
+                from openmed.core.safety_sweep import safety_sweep
 
-    fixture = BenchmarkFixture.from_mapping(
-        {
-            "id": "synthetic-rtl",
-            "text": prefix + value,
-            "language": lang,
-            "gold_spans": [
-                {"start": len(prefix), "end": len(prefix + value), "label": "ID_NUM"}
-            ],
-        }
-    )
-    first = perturb_fixture(fixture, operator, seed=6)
-    second = perturb_fixture(fixture, operator, seed=6)
-    assert first.text == second.text
-    assert first.gold_spans == second.gold_spans
-    assert first.text != fixture.text
-    detected = safety_sweep(first.text, [], lang=lang)
-    for span in first.gold_spans:
-        assert any(
-            entity.start <= span.start and entity.end >= span.end for entity in detected
-        )
+                fixture = BenchmarkFixture.from_mapping(
+                    {
+                        "id": "synthetic-rtl",
+                        "text": prefix + value,
+                        "language": lang,
+                        "gold_spans": [
+                            {
+                                "start": len(prefix),
+                                "end": len(prefix + value),
+                                "label": "ID_NUM",
+                            }
+                        ],
+                    }
+                )
+                first = perturb_fixture(fixture, operator, seed=6)
+                second = perturb_fixture(fixture, operator, seed=6)
+                assert first.text == second.text
+                assert first.gold_spans == second.gold_spans
+                assert first.text != fixture.text
+                detected = safety_sweep(first.text, [], lang=lang)
+                for span in first.gold_spans:
+                    assert any(
+                        entity.start <= span.start and entity.end >= span.end
+                        for entity in detected
+                    )
 
 
-@pytest.mark.parametrize(
-    "perturbation",
-    [
+def test_builtin_perturbers_modify_text_and_keep_span_offsets_valid(subtests):
+    for perturbation in [
         character_typo_perturbation(probability=1.0),
         ocr_noise_perturbation(probability=1.0),
         case_flip_perturbation(probability=1.0),
         whitespace_noise_perturbation(probability=1.0),
-    ],
-)
-def test_builtin_perturbers_modify_text_and_keep_span_offsets_valid(perturbation):
-    fixture = BenchmarkFixture.from_mapping(
-        {
-            "id": "ocr-note",
-            "text": "MRN m rn l O 1 belongs to John Doe",
-            "language": "en",
-            "gold_spans": [
-                {"start": 4, "end": 14, "label": "MRN"},
-                {"start": 26, "end": 34, "label": "PERSON"},
-            ],
-        }
-    )
+    ]:
+        with subtests.test(perturbation=perturbation):
+            fixture = BenchmarkFixture.from_mapping(
+                {
+                    "id": "ocr-note",
+                    "text": "MRN m rn l O 1 belongs to John Doe",
+                    "language": "en",
+                    "gold_spans": [
+                        {"start": 4, "end": 14, "label": "MRN"},
+                        {"start": 26, "end": 34, "label": "PERSON"},
+                    ],
+                }
+            )
 
-    perturbed = perturb_fixture(fixture, perturbation, seed=3)
+            perturbed = perturb_fixture(fixture, perturbation, seed=3)
 
-    assert perturbed.text != fixture.text
-    for span in perturbed.gold_spans:
-        assert span.text == perturbed.text[span.start : span.end]
+            assert perturbed.text != fixture.text
+            for span in perturbed.gold_spans:
+                assert span.text == perturbed.text[span.start : span.end]
 
 
 def test_identity_perturbation_yields_zero_metric_deltas():

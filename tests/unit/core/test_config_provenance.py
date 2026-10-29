@@ -164,26 +164,32 @@ def test_config_credentials_never_serialize_or_persist(monkeypatch, tmp_path):
     assert config_module.load_config_from_file(saved).timeout == 77
 
 
-@pytest.mark.parametrize("as_json", [True, False])
-def test_cli_config_show_and_set_do_not_expose_credentials(
-    monkeypatch, tmp_path, capsys, as_json
-):
-    from openmed.cli.main import main
-    from openmed.core import config as config_module
+def test_cli_config_show_and_set_do_not_expose_credentials(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for as_json in [True, False]:
+        with subtests.test(as_json=as_json):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.cli.main import main
+                from openmed.core import config as config_module
 
-    sentinel = "hf_SYNTHETIC_CLI_CONFIG_TOKEN"
-    monkeypatch.setenv("HF_TOKEN", sentinel)
-    monkeypatch.setenv("OPENMED_CONFIG", str(tmp_path / "config.toml"))
-    monkeypatch.setattr(config_module, "_config", config_module.OpenMedConfig())
-    options = ["--json"] if as_json else []
-    assert main(["config", "show", *options]) == 0
-    captured = capsys.readouterr()
-    assert sentinel not in captured.out + captured.err
-    assert "hf_token_present" in captured.out
-    assert main(["config", "set", "timeout", "77", *options]) == 0
-    captured = capsys.readouterr()
-    assert sentinel not in captured.out + captured.err
-    assert sentinel not in (tmp_path / "config.toml").read_text()
+                sentinel = "hf_SYNTHETIC_CLI_CONFIG_TOKEN"
+                monkeypatch.setenv("HF_TOKEN", sentinel)
+                monkeypatch.setenv("OPENMED_CONFIG", str(tmp_path / "config.toml"))
+                monkeypatch.setattr(
+                    config_module, "_config", config_module.OpenMedConfig()
+                )
+                options = ["--json"] if as_json else []
+                assert main(["config", "show", *options]) == 0
+                captured = capsys.readouterr()
+                assert sentinel not in captured.out + captured.err
+                assert "hf_token_present" in captured.out
+                assert main(["config", "set", "timeout", "77", *options]) == 0
+                captured = capsys.readouterr()
+                assert sentinel not in captured.out + captured.err
+                assert sentinel not in (tmp_path / "config.toml").read_text()
 
 
 def test_legacy_stored_credential_warns_and_doctor_never_prints_it(
