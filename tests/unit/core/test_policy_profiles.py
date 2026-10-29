@@ -282,30 +282,28 @@ _NORTH_AFRICA_SENSITIVE_CLASS_LABELS = {
 }
 
 
-@pytest.mark.parametrize(
-    ("policy_name", "sensitive_classes"),
-    _NORTH_AFRICA_SENSITIVE_CLASS_LABELS.items(),
-)
-def test_north_africa_profiles_mask_statutory_sensitive_classes(
-    policy_name,
-    sensitive_classes,
-):
-    profile = load_policy(policy_name)
+def test_north_africa_profiles_mask_statutory_sensitive_classes(subtests):
+    for policy_name, sensitive_classes in _NORTH_AFRICA_SENSITIVE_CLASS_LABELS.items():
+        with subtests.test(
+            policy_name=policy_name, sensitive_classes=sensitive_classes
+        ):
+            profile = load_policy(policy_name)
 
-    assert profile.default_action == "mask"
-    assert profile.safety_sweep_mandatory is True
-    assert profile.keep_mapping is False
-    assert profile.reversible_id is False
-    assert set(profile.actions) == set(CANONICAL_LABELS)
-    assert set(sensitive_classes.values()) <= set(CANONICAL_LABELS)
-    assert all(
-        profile.action_for(label) != "keep" for label in sensitive_classes.values()
-    )
-    assert lint_policy(policy_name) == ()
+            assert profile.default_action == "mask"
+            assert profile.safety_sweep_mandatory is True
+            assert profile.keep_mapping is False
+            assert profile.reversible_id is False
+            assert set(profile.actions) == set(CANONICAL_LABELS)
+            assert set(sensitive_classes.values()) <= set(CANONICAL_LABELS)
+            assert all(
+                profile.action_for(label) != "keep"
+                for label in sensitive_classes.values()
+            )
+            assert lint_policy(policy_name) == ()
 
-    compiled = compile_policy(policy_name)
-    assert compiled.proof.verified is True
-    assert compiled.proof.coverage_percent == 100.0
+            compiled = compile_policy(policy_name)
+            assert compiled.proof.verified is True
+            assert compiled.proof.coverage_percent == 100.0
 
 
 def test_africa_malabo_baseline_loads_with_conservative_defaults():
@@ -340,9 +338,8 @@ def test_africa_malabo_baseline_loads_with_conservative_defaults():
     assert compiled.proof.coverage_percent == 100.0
 
 
-@pytest.mark.parametrize(
-    ("policy_name", "locale", "text", "identifiers"),
-    [
+def test_north_africa_profiles_leave_zero_synthetic_identifier_leakage(subtests):
+    for policy_name, locale, text, identifiers in [
         (
             "eg_pdpl",
             "ar_EG",
@@ -383,41 +380,40 @@ def test_africa_malabo_baseline_loads_with_conservative_defaults():
                 "15/09/1447",
             ),
         ),
-    ],
-)
-def test_north_africa_profiles_leave_zero_synthetic_identifier_leakage(
-    monkeypatch,
-    policy_name,
-    locale,
-    text,
-    identifiers,
-):
-    _patch_extract_many(monkeypatch, [])
+    ]:
+        with subtests.test(
+            policy_name=policy_name, locale=locale, text=text, identifiers=identifiers
+        ):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                _patch_extract_many(monkeypatch, [])
 
-    result = deidentify(
-        text,
-        lang="ar",
-        locale=locale,
-        policy=policy_name,
-        use_safety_sweep=False,
-    )
+                result = deidentify(
+                    text,
+                    lang="ar",
+                    locale=locale,
+                    policy=policy_name,
+                    use_safety_sweep=False,
+                )
 
-    assert all(identifier not in result.deidentified_text for identifier in identifiers)
-    assert result.mapping is None
-    assert result.metadata["policy"]["name"] == policy_name
-    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
-    assert result.pii_entities
-    assert all(entity.action == "mask" for entity in result.pii_entities)
-    swept_names = {
-        entity.text
-        for entity in result.pii_entities
-        if entity.canonical_label == "PERSON"
-        and (entity.metadata or {}).get("source") == "safety_sweep"
-    }
-    assert all(
-        any(name in swept_name for swept_name in swept_names)
-        for name in identifiers[:2]
-    )
+                assert all(
+                    identifier not in result.deidentified_text
+                    for identifier in identifiers
+                )
+                assert result.mapping is None
+                assert result.metadata["policy"]["name"] == policy_name
+                assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+                assert result.pii_entities
+                assert all(entity.action == "mask" for entity in result.pii_entities)
+                swept_names = {
+                    entity.text
+                    for entity in result.pii_entities
+                    if entity.canonical_label == "PERSON"
+                    and (entity.metadata or {}).get("source") == "safety_sweep"
+                }
+                assert all(
+                    any(name in swept_name for swept_name in swept_names)
+                    for name in identifiers[:2]
+                )
 
 
 def test_china_pipl_profile_covers_sensitive_personal_information():
@@ -506,22 +502,18 @@ def test_india_dpdp_act_profile_is_complete_and_assist_only():
     assert disclaimer["autonomous_determination"] is False
 
 
-@pytest.mark.parametrize(
-    "source_label",
-    [
+def test_indian_national_identifier_aliases_normalize_to_id_num(subtests):
+    for source_label in [
         "aadhaar",
         "Aadhaar Number",
         "ABHA",
         "ABHA Number",
         "PAN",
         "Permanent Account Number",
-    ],
-)
-def test_indian_national_identifier_aliases_normalize_to_id_num(
-    source_label: str,
-):
-    assert normalize_label(source_label) == "ID_NUM"
-    assert id_subtype_for(source_label) == "national_id"
+    ]:
+        with subtests.test(source_label=source_label):
+            assert normalize_label(source_label) == "ID_NUM"
+            assert id_subtype_for(source_label) == "national_id"
 
 
 def test_za_popia_profile_loads_with_special_information_defaults():
@@ -965,14 +957,14 @@ def test_unknown_policy_raises_before_detection(monkeypatch):
         assert name in message
 
 
-@pytest.mark.parametrize(
-    "bad_policy", [123, {"posture": "strict"}, ["hipaa_safe_harbor"]]
-)
-def test_malformed_policy_type_raises_type_error_explaining_accepted_forms(bad_policy):
-    with pytest.raises(
-        TypeError, match="policy must be a profile name string or a PolicyProfile"
-    ):
-        load_policy(bad_policy)
+def test_malformed_policy_type_raises_type_error_explaining_accepted_forms(subtests):
+    for bad_policy in [123, {"posture": "strict"}, ["hipaa_safe_harbor"]]:
+        with subtests.test(bad_policy=bad_policy):
+            with pytest.raises(
+                TypeError,
+                match="policy must be a profile name string or a PolicyProfile",
+            ):
+                load_policy(bad_policy)
 
 
 def test_strict_no_leak_forces_union_sweep_and_accurate_cascade(monkeypatch):

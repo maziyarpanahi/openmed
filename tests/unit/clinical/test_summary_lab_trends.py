@@ -78,9 +78,8 @@ def test_sequence_contains_no_clinical_interpretation() -> None:
     assert "abnormal" not in result.to_json()
 
 
-@pytest.mark.parametrize(
-    ("observations", "expected_code"),
-    [
+def test_incomplete_sequences_emit_codes_without_any_values(subtests) -> None:
+    for observations, expected_code in [
         (
             (
                 LabTrendObservation(None, 1, "mg/dL", "2026-01-01", _evidence("1")),
@@ -119,19 +118,16 @@ def test_sequence_contains_no_clinical_interpretation() -> None:
             ),
             "missing_evidence",
         ),
-    ],
-)
-def test_incomplete_sequences_emit_codes_without_any_values(
-    observations: tuple[LabTrendObservation, ...], expected_code: str
-) -> None:
-    result = render_lab_trend_summary(observations)
+    ]:
+        with subtests.test(observations=observations, expected_code=expected_code):
+            result = render_lab_trend_summary(observations)
 
-    assert result.status == "insufficient"
-    assert result.sequence is None
-    assert expected_code in result.insufficiency_codes
-    payload = result.to_dict()
-    assert "sequence" not in payload
-    assert "value" not in result.to_json()
+            assert result.status == "insufficient"
+            assert result.sequence is None
+            assert expected_code in result.insufficiency_codes
+            payload = result.to_dict()
+            assert "sequence" not in payload
+            assert "value" not in result.to_json()
 
 
 def test_incompatible_analytes_and_units_suppress_complete_sequence() -> None:

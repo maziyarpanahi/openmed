@@ -149,15 +149,18 @@ def test_schema_failures_and_unbounded_arguments_fail_closed(arguments):
     assert report.counts.schema_invalid_calls == 1
 
 
-@pytest.mark.parametrize(
-    "output",
-    [None, "private canary", [object()], [None] * (MAX_PROPOSALS_PER_TURN + 1)],
-)
-def test_malformed_outputs_fail_without_values(output):
-    report = qualify_planner(lambda context, catalog: output)
-    assert not report.qualified
-    assert report.counts.planner_errors or report.counts.schema_invalid_calls
-    assert "private canary" not in report.to_json()
+def test_malformed_outputs_fail_without_values(subtests):
+    for output in [
+        None,
+        "private canary",
+        [object()],
+        [None] * (MAX_PROPOSALS_PER_TURN + 1),
+    ]:
+        with subtests.test(output=output):
+            report = qualify_planner(lambda context, catalog: output)
+            assert not report.qualified
+            assert report.counts.planner_errors or report.counts.schema_invalid_calls
+            assert "private canary" not in report.to_json()
 
 
 def test_empty_or_repeating_planner_cannot_qualify_and_empty_report_fails():
