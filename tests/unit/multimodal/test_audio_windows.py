@@ -105,23 +105,29 @@ def test_large_overlap_does_not_overcount_a_single_full_window() -> None:
     assert spans(plan) == [(0, MAX_AUDIO_WINDOW_COUNT + 1)]
 
 
-@pytest.mark.parametrize("duration", [1, 7, 999, 1000, 1001, 4321])
-@pytest.mark.parametrize("window,overlap", [(500, 0), (600, 300), (250, 249), (1, 0)])
-def test_windows_cover_the_duration_without_gaps(duration, window, overlap) -> None:
-    plan = plan_audio_windows(duration, window_ms=window, overlap_ms=overlap)
-    assert plan.windows[0].start_ms == 0
-    assert plan.covered_ms == duration
-    for previous, current in zip(plan.windows, plan.windows[1:]):
-        assert current.start_ms <= previous.end_ms
-        assert current.end_ms > previous.end_ms
-        assert current.overlap_ms == previous.end_ms - current.start_ms
+def test_windows_cover_the_duration_without_gaps(subtests) -> None:
+    for duration in [1, 7, 999, 1000, 1001, 4321]:
+        for window, overlap in [(500, 0), (600, 300), (250, 249), (1, 0)]:
+            with subtests.test(duration=duration, window=window, overlap=overlap):
+                plan = plan_audio_windows(
+                    duration, window_ms=window, overlap_ms=overlap
+                )
+                assert plan.windows[0].start_ms == 0
+                assert plan.covered_ms == duration
+                for previous, current in zip(plan.windows, plan.windows[1:]):
+                    assert current.start_ms <= previous.end_ms
+                    assert current.end_ms > previous.end_ms
+                    assert current.overlap_ms == previous.end_ms - current.start_ms
 
 
-@pytest.mark.parametrize("policy", [TailPolicy.DROP, TailPolicy.MERGE])
-def test_dropped_and_merged_plans_still_start_at_zero(policy) -> None:
-    plan = plan_audio_windows(1001, window_ms=500, min_tail_ms=499, tail_policy=policy)
-    assert plan.windows[0].start_ms == 0
-    assert plan.covered_ms == (1000 if policy is TailPolicy.DROP else 1001)
+def test_dropped_and_merged_plans_still_start_at_zero(subtests) -> None:
+    for policy in [TailPolicy.DROP, TailPolicy.MERGE]:
+        with subtests.test(policy=policy):
+            plan = plan_audio_windows(
+                1001, window_ms=500, min_tail_ms=499, tail_policy=policy
+            )
+            assert plan.windows[0].start_ms == 0
+            assert plan.covered_ms == (1000 if policy is TailPolicy.DROP else 1001)
 
 
 def test_window_identifiers_are_stable_and_indexed() -> None:
@@ -180,21 +186,21 @@ def test_min_tail_longer_than_the_window_fails_closed() -> None:
         plan_audio_windows(1000, window_ms=500, min_tail_ms=501)
 
 
-@pytest.mark.parametrize("value", [True, False, 1.0, "500", None, b"500"])
-def test_boolean_and_non_integer_parameters_fail_closed(value) -> None:
-    with pytest.raises(AudioWindowError, match="_not_an_integer$"):
-        plan_audio_windows(value, window_ms=500)
-    with pytest.raises(AudioWindowError, match="_not_an_integer$"):
-        plan_audio_windows(1000, window_ms=value)
-    with pytest.raises(AudioWindowError, match="_not_an_integer$"):
-        plan_audio_windows(1000, window_ms=500, overlap_ms=value)
-    with pytest.raises(AudioWindowError, match="_not_an_integer$"):
-        plan_audio_windows(1000, window_ms=500, min_tail_ms=value)
+def test_boolean_and_non_integer_parameters_fail_closed(subtests) -> None:
+    for value in [True, False, 1.0, "500", None, b"500"]:
+        with subtests.test(value=value):
+            with pytest.raises(AudioWindowError, match="_not_an_integer$"):
+                plan_audio_windows(value, window_ms=500)
+            with pytest.raises(AudioWindowError, match="_not_an_integer$"):
+                plan_audio_windows(1000, window_ms=value)
+            with pytest.raises(AudioWindowError, match="_not_an_integer$"):
+                plan_audio_windows(1000, window_ms=500, overlap_ms=value)
+            with pytest.raises(AudioWindowError, match="_not_an_integer$"):
+                plan_audio_windows(1000, window_ms=500, min_tail_ms=value)
 
 
-@pytest.mark.parametrize(
-    "kwargs,category",
-    [
+def test_out_of_range_parameters_fail_closed(subtests) -> None:
+    for kwargs, category in [
         ({"duration_ms": -1}, "audio_duration_out_of_range"),
         ({"duration_ms": MAX_AUDIO_DURATION_MS + 1}, "audio_duration_out_of_range"),
         ({"duration_ms": 2**70}, "audio_duration_out_of_range"),
@@ -202,15 +208,14 @@ def test_boolean_and_non_integer_parameters_fail_closed(value) -> None:
         ({"window_ms": MAX_AUDIO_WINDOW_MS + 1}, "audio_window_out_of_range"),
         ({"overlap_ms": -1}, "audio_overlap_out_of_range"),
         ({"min_tail_ms": -1}, "audio_min_tail_out_of_range"),
-    ],
-)
-def test_out_of_range_parameters_fail_closed(kwargs, category) -> None:
-    call = {"duration_ms": 1000, "window_ms": 500}
-    call.update(kwargs)
-    duration = call.pop("duration_ms")
-    with pytest.raises(AudioWindowError) as excinfo:
-        plan_audio_windows(duration, **call)
-    assert excinfo.value.category == category
+    ]:
+        with subtests.test(kwargs=kwargs, category=category):
+            call = {"duration_ms": 1000, "window_ms": 500}
+            call.update(kwargs)
+            duration = call.pop("duration_ms")
+            with pytest.raises(AudioWindowError) as excinfo:
+                plan_audio_windows(duration, **call)
+            assert excinfo.value.category == category
 
 
 def test_excessive_window_counts_fail_closed_before_planning() -> None:
@@ -223,10 +228,13 @@ def test_excessive_window_counts_fail_closed_before_planning() -> None:
     )
 
 
-@pytest.mark.parametrize("value", ["", "Keep", "truncate", 0, None, True])
-def test_unsupported_tail_policies_fail_closed(value) -> None:
-    with pytest.raises(AudioWindowError, match="^audio_tail_policy_unsupported$"):
-        plan_audio_windows(1000, window_ms=500, tail_policy=value)
+def test_unsupported_tail_policies_fail_closed(subtests) -> None:
+    for value in ["", "Keep", "truncate", 0, None, True]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                AudioWindowError, match="^audio_tail_policy_unsupported$"
+            ):
+                plan_audio_windows(1000, window_ms=500, tail_policy=value)
 
 
 def test_tail_policy_values_are_a_closed_vocabulary() -> None:

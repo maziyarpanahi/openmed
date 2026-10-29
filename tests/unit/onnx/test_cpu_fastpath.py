@@ -48,38 +48,39 @@ def _features(tier: str) -> cpu_features.CpuFeatures:
     return cpu_features.detect_cpu_features(machine="x86_64", flags="")
 
 
-@pytest.mark.parametrize("tier", ["scalar", "avx2", "avx512", "neon"])
-def test_fastpath_matches_reference_spans_bit_for_decision(tier: str) -> None:
-    hidden_states, weights, bias, offsets, id2label = _synthetic_case()
-    head = cpu_fastpath.quantize_classification_head(weights, bias)
+def test_fastpath_matches_reference_spans_bit_for_decision(subtests) -> None:
+    for tier in ["scalar", "avx2", "avx512", "neon"]:
+        with subtests.test(tier=tier):
+            hidden_states, weights, bias, offsets, id2label = _synthetic_case()
+            head = cpu_fastpath.quantize_classification_head(weights, bias)
 
-    result = cpu_fastpath.run_cpu_fastpath(
-        hidden_states,
-        head,
-        offsets,
-        id2label,
-        features=_features(tier),
-    )
-    reference = cpu_fastpath.run_reference_classification_head(
-        hidden_states,
-        weights,
-        bias,
-        offsets,
-        id2label,
-    )
+            result = cpu_fastpath.run_cpu_fastpath(
+                hidden_states,
+                head,
+                offsets,
+                id2label,
+                features=_features(tier),
+            )
+            reference = cpu_fastpath.run_reference_classification_head(
+                hidden_states,
+                weights,
+                bias,
+                offsets,
+                id2label,
+            )
 
-    assert result.kernel == tier
-    assert np.array_equal(result.label_ids, reference.label_ids)
-    assert [(span.label, span.start, span.end) for span in result.spans] == [
-        ("PERSON", 0, 12)
-    ]
-    assert [
-        (span.label, span.token_start, span.token_end, span.start, span.end)
-        for span in result.spans
-    ] == [
-        (span.label, span.token_start, span.token_end, span.start, span.end)
-        for span in reference.spans
-    ]
+            assert result.kernel == tier
+            assert np.array_equal(result.label_ids, reference.label_ids)
+            assert [(span.label, span.start, span.end) for span in result.spans] == [
+                ("PERSON", 0, 12)
+            ]
+            assert [
+                (span.label, span.token_start, span.token_end, span.start, span.end)
+                for span in result.spans
+            ] == [
+                (span.label, span.token_start, span.token_end, span.start, span.end)
+                for span in reference.spans
+            ]
 
 
 def test_numerical_equivalence_guard_accepts_synthetic_note() -> None:
@@ -281,17 +282,12 @@ def test_avx2_runner_records_nontrivial_latency_reduction() -> None:
     assert record.passed is True
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
+def test_quantize_classification_head_rejects_invalid_inputs(subtests) -> None:
+    for kwargs, message in [
         ({"weights": np.zeros((0, 4))}, "non-empty"),
         ({"weights": np.zeros((2, 4)), "bias": np.zeros(3)}, "bias"),
         ({"weights": np.array([[np.nan, 0.0]])}, "finite"),
-    ],
-)
-def test_quantize_classification_head_rejects_invalid_inputs(
-    kwargs: dict,
-    message: str,
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        cpu_fastpath.quantize_classification_head(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, message=message):
+            with pytest.raises(ValueError, match=message):
+                cpu_fastpath.quantize_classification_head(**kwargs)
