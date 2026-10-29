@@ -218,18 +218,17 @@ def test_untrusted_host_with_valid_request_never_reaches_transport(
 
 
 @pytest.mark.parametrize(
-    "base_url",
-    [
-        "http://127.0.0.1",
-        "http://127.0.0.1:8081",
-        "http://localhost:8081",
-        "http://[::1]:8081",
-    ],
+    "host",
+    ["127.0.0.1", "127.0.0.1:8081", "localhost:8081", "[::1]:8081"],
 )
-def test_loopback_hosts_are_trusted_by_default(base_url: str) -> None:
+def test_loopback_hosts_are_trusted_by_default(host: str) -> None:
+    # The Host header is set directly because some Starlette TestClient
+    # releases cannot parse a bracketed IPv6 base_url.
     recorder = _Recorder()
-    with _client(_app(recorder), base_url=base_url) as client:
-        response = client.post("/v1/chat/completions", json=_request())
+    with _client(_app(recorder)) as client:
+        response = client.post(
+            "/v1/chat/completions", json=_request(), headers={"host": host}
+        )
 
     assert response.status_code == 200
     content = response.json()["choices"][0]["message"]["content"]
