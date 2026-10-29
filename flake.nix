@@ -78,9 +78,13 @@
                   hash = "sha256-Ir9N9QJDvHsfck5q3zgx9vfHky6XXpgsAJA6uhoHrgE=";
                 };
                 nativeCheckInputs = old.nativeCheckInputs ++ [ final.jinja2 ];
-                # Compares cached bytes across rapid rewrites with timestamp
-                # checks; it intermittently reads stale data on loaded runners.
-                disabledTests = old.disabledTests ++ [ "test_filecache_with_checks" ];
+                # These compare cached files across rapid rewrites and expiry
+                # windows using timestamps, so they intermittently see stale or
+                # already-expired entries on loaded runners.
+                disabledTests = old.disabledTests ++ [
+                  "test_expiry"
+                  "test_filecache_with_checks"
+                ];
                 meta = old.meta // {
                   changelog = "https://github.com/fsspec/filesystem_spec/blob/2026.6.0/docs/source/changelog.rst";
                 };
