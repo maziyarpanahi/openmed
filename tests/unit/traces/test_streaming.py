@@ -153,20 +153,16 @@ def test_expanded_output_record_cannot_exceed_byte_bound() -> None:
     assert runner.report.records_emitted == 0
 
 
-@pytest.mark.parametrize(
-    "record",
-    [
+def test_byte_bound_accounts_for_numbers_and_json_escaping(subtests) -> None:
+    for record in [
         {"sequence": 10**100},
         {"payload": '"' * 60},
-    ],
-)
-def test_byte_bound_accounts_for_numbers_and_json_escaping(
-    record: dict[str, Any],
-) -> None:
-    runner = TraceRedactor(byte_batch_size=100)
+    ]:
+        with subtests.test(record=record):
+            runner = TraceRedactor(byte_batch_size=100)
 
-    with pytest.raises(TraceRecordTooLargeError):
-        list(runner.iter_records([record]))
+            with pytest.raises(TraceRecordTooLargeError):
+                list(runner.iter_records([record]))
 
 
 def test_wildcard_paths_redact_lists_and_tuples() -> None:

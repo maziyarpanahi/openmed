@@ -171,40 +171,37 @@ def test_zero_subject_run_retains_population_trace_and_zero_counts():
     assert all(t.output_count == 0 for t in packet.calculation_trace)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_packets_and_reports_never_copy_patient_values_or_identifiers(subtests):
+    for value in [
         "Jane Synthetic 555-010-1234 jane.synthetic@example.test",
         "MRN: SYNTHETIC-123; 123 Synthetic Street; 1940-01-02",
         "مصطنع ۱۲۳۴۵۶۷۸۹۰",
         "架空患者 １２３４５６７８９０",
         "नकली १२३४५६७८९०",
-    ],
-)
-def test_packets_and_reports_never_copy_patient_values_or_identifiers(value):
-    run = _run(value=value)
-    packet = _packet(run)
-    public = (
-        packet.to_json()
-        + repr(packet)
-        + compare_quality_measure_evidence(packet, packet).to_json()
-    )
-    assert value not in public and value not in json.dumps(
-        packet.to_dict(), ensure_ascii=False
-    )
-    forbidden = [run.run_id, run.source_snapshot_id, run.evaluated_at]
-    for s in run.subject_results:
-        forbidden.extend([s.subject_id, s.result_id])
-        for p in s.populations:
-            forbidden.extend(p.evidence.fact_ids + p.evidence.evidence_ids)
-    assert all(item not in public for item in forbidden)
-    assert KEY.decode() not in public
-    assert "subject_results" not in public and "population_counts" not in public
+    ]:
+        with subtests.test(value=value):
+            run = _run(value=value)
+            packet = _packet(run)
+            public = (
+                packet.to_json()
+                + repr(packet)
+                + compare_quality_measure_evidence(packet, packet).to_json()
+            )
+            assert value not in public and value not in json.dumps(
+                packet.to_dict(), ensure_ascii=False
+            )
+            forbidden = [run.run_id, run.source_snapshot_id, run.evaluated_at]
+            for s in run.subject_results:
+                forbidden.extend([s.subject_id, s.result_id])
+                for p in s.populations:
+                    forbidden.extend(p.evidence.fact_ids + p.evidence.evidence_ids)
+            assert all(item not in public for item in forbidden)
+            assert KEY.decode() not in public
+            assert "subject_results" not in public and "population_counts" not in public
 
 
-@pytest.mark.parametrize(
-    "case,reasons,sources,result_changed",
-    [
+def test_native_and_packet_comparators_have_documented_parity(subtests):
+    for case, reasons, sources, result_changed in [
         ("same", set(), set(), False),
         (
             "value_digest",
@@ -265,131 +262,140 @@ def test_packets_and_reports_never_copy_patient_values_or_identifiers(value):
         ("evaluation_time", set(), set(), False),
         ("snapshot_identity", set(), set(), False),
         ("equivalent_period", {"measurement_period_changed"}, set(), False),
-    ],
-)
-def test_native_and_packet_comparators_have_documented_parity(
-    case, reasons, sources, result_changed
-):
-    baseline = _run()
-    candidate = baseline
-    definition = baseline.definition
-    if case.startswith("value_"):
-        bindings = definition.value_sets
-        if case == "value_digest":
-            bindings = (replace(bindings[0], digest=canonical_digest(["changed"])),)
-        elif case == "value_version":
-            bindings = (replace(bindings[0], version="2026.2"),)
-        elif case == "value_added":
-            bindings += (
-                ValueSetBinding("synthetic.second", "2026.1", canonical_digest([1])),
-            )
-        else:
-            bindings = ()
-        candidate = _rebind(
-            baseline, definition=replace(definition, value_sets=bindings)
-        )
-    elif case == "definition_version":
-        candidate = _rebind(baseline, definition=replace(definition, version="1.1.0"))
-    elif case.startswith("engine_"):
-        change = (
-            {"version": "1.1.0"}
-            if case == "engine_version"
-            else {"artifact_digest": canonical_digest([1])}
-        )
-        candidate = _rebind(baseline, engine=replace(baseline.engine, **change))
-    elif case in {"period", "equivalent_period"}:
-        period = (
-            MeasureTimeWindow("2026-02-01T00:00:00Z", PERIOD.end)
-            if case == "period"
-            else MeasureTimeWindow(
-                "2026-01-01T01:00:00+01:00", "2027-01-01T00:59:59+01:00"
-            )
-        )
-        candidate = _rebind(baseline, measurement_period=period)
-    elif case in {"snapshot", "projection"}:
-        name = (
-            "source_snapshot_digest"
-            if case == "snapshot"
-            else "input_projection_digest"
-        )
-        candidate = _rebind(baseline, **{name: canonical_digest([1])})
-    elif case in {"population_logic", "exclusion_logic"}:
-        name = "denominator" if case == "population_logic" else "exclusion"
-        populations = tuple(
-            replace(p, expression_ref="native:changed")
-            if p.population_id == name
-            else p
-            for p in definition.populations
-        )
-        candidate = _rebind(
-            baseline, definition=replace(definition, populations=populations)
-        )
-    elif case in {"population_state", "unknown_state"}:
-        candidate = _run(
-            numerator_status="inactive" if case == "population_state" else "unknown"
-        )
-    elif case == "evidence_only":
-        subjects = tuple(
-            replace(
-                s,
-                trace=tuple(
-                    replace(t, evidence_digest=canonical_digest(["new evidence"]))
-                    if t.step_id == "exclusion"
-                    else t
-                    for t in s.trace
-                ),
-            )
-            for s in baseline.subject_results
-        )
-        candidate = replace(baseline, subject_results=subjects)
-    elif case == "run_identity":
-        candidate = replace(baseline, run_id="measurerun_otheridentifier01")
-    elif case == "evaluation_time":
-        candidate = _rebind(baseline, evaluated_at="2027-01-03T00:00:00Z")
-    elif case == "snapshot_identity":
-        candidate = _rebind(baseline, source_snapshot_id="snapshot_otheridentifier01")
-    before, after = _packet(baseline), _packet(candidate)
-    assert before.verify(KEY) and after.verify(KEY)
-    native = compare_measure_runs(baseline, candidate)
-    evidence = compare_quality_measure_evidence(before, after)
-    assert set(native.reason_codes) == reasons
-    assert {d.source.value for d in evidence.drift} == sources
-    assert native.result_drift == evidence.result_changed == result_changed
-    if case in {"value_digest", "engine_version", "period"}:
-        assert before.packet_digest != after.packet_digest
-        assert before.signature != after.signature
+    ]:
+        with subtests.test(
+            case=case, reasons=reasons, sources=sources, result_changed=result_changed
+        ):
+            baseline = _run()
+            candidate = baseline
+            definition = baseline.definition
+            if case.startswith("value_"):
+                bindings = definition.value_sets
+                if case == "value_digest":
+                    bindings = (
+                        replace(bindings[0], digest=canonical_digest(["changed"])),
+                    )
+                elif case == "value_version":
+                    bindings = (replace(bindings[0], version="2026.2"),)
+                elif case == "value_added":
+                    bindings += (
+                        ValueSetBinding(
+                            "synthetic.second", "2026.1", canonical_digest([1])
+                        ),
+                    )
+                else:
+                    bindings = ()
+                candidate = _rebind(
+                    baseline, definition=replace(definition, value_sets=bindings)
+                )
+            elif case == "definition_version":
+                candidate = _rebind(
+                    baseline, definition=replace(definition, version="1.1.0")
+                )
+            elif case.startswith("engine_"):
+                change = (
+                    {"version": "1.1.0"}
+                    if case == "engine_version"
+                    else {"artifact_digest": canonical_digest([1])}
+                )
+                candidate = _rebind(baseline, engine=replace(baseline.engine, **change))
+            elif case in {"period", "equivalent_period"}:
+                period = (
+                    MeasureTimeWindow("2026-02-01T00:00:00Z", PERIOD.end)
+                    if case == "period"
+                    else MeasureTimeWindow(
+                        "2026-01-01T01:00:00+01:00", "2027-01-01T00:59:59+01:00"
+                    )
+                )
+                candidate = _rebind(baseline, measurement_period=period)
+            elif case in {"snapshot", "projection"}:
+                name = (
+                    "source_snapshot_digest"
+                    if case == "snapshot"
+                    else "input_projection_digest"
+                )
+                candidate = _rebind(baseline, **{name: canonical_digest([1])})
+            elif case in {"population_logic", "exclusion_logic"}:
+                name = "denominator" if case == "population_logic" else "exclusion"
+                populations = tuple(
+                    replace(p, expression_ref="native:changed")
+                    if p.population_id == name
+                    else p
+                    for p in definition.populations
+                )
+                candidate = _rebind(
+                    baseline, definition=replace(definition, populations=populations)
+                )
+            elif case in {"population_state", "unknown_state"}:
+                candidate = _run(
+                    numerator_status="inactive"
+                    if case == "population_state"
+                    else "unknown"
+                )
+            elif case == "evidence_only":
+                subjects = tuple(
+                    replace(
+                        s,
+                        trace=tuple(
+                            replace(
+                                t, evidence_digest=canonical_digest(["new evidence"])
+                            )
+                            if t.step_id == "exclusion"
+                            else t
+                            for t in s.trace
+                        ),
+                    )
+                    for s in baseline.subject_results
+                )
+                candidate = replace(baseline, subject_results=subjects)
+            elif case == "run_identity":
+                candidate = replace(baseline, run_id="measurerun_otheridentifier01")
+            elif case == "evaluation_time":
+                candidate = _rebind(baseline, evaluated_at="2027-01-03T00:00:00Z")
+            elif case == "snapshot_identity":
+                candidate = _rebind(
+                    baseline, source_snapshot_id="snapshot_otheridentifier01"
+                )
+            before, after = _packet(baseline), _packet(candidate)
+            assert before.verify(KEY) and after.verify(KEY)
+            native = compare_measure_runs(baseline, candidate)
+            evidence = compare_quality_measure_evidence(before, after)
+            assert set(native.reason_codes) == reasons
+            assert {d.source.value for d in evidence.drift} == sources
+            assert native.result_drift == evidence.result_changed == result_changed
+            if case in {"value_digest", "engine_version", "period"}:
+                assert before.packet_digest != after.packet_digest
+                assert before.signature != after.signature
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_tampered_adapter_packet_fails_signature_verification(subtests):
+    for field in [
         "value_sets",
         "implementation",
         "time_boundaries",
         "input_projection",
         "calculation_trace",
         "result",
-    ],
-)
-def test_tampered_adapter_packet_fails_signature_verification(field):
-    packet = _packet(_run())
-    data = packet.to_dict()
-    if field == "value_sets":
-        data[field][0]["expansion_digest"] = canonical_digest([1])
-    elif field == "implementation":
-        data[field]["version"] = "1.1.0"
-    elif field == "time_boundaries":
-        data[field]["end"] = "2027-02-01T00:00:00Z"
-    elif field == "input_projection":
-        data[field]["projection_digest"] = canonical_digest([1])
-    elif field == "calculation_trace":
-        data[field][0]["output_digest"] = canonical_digest([1])
-    else:
-        data[field]["numerator_count"] = 1
-    with pytest.raises(QualityMeasureEvidenceError, match="signature_mismatch"):
-        QualityMeasureEvidencePacket.from_dict(data).verify(KEY)
-    with pytest.raises(QualityMeasureEvidenceError, match="signature_mismatch"):
-        packet.verify(b"another-synthetic-key")
+    ]:
+        with subtests.test(field=field):
+            packet = _packet(_run())
+            data = packet.to_dict()
+            if field == "value_sets":
+                data[field][0]["expansion_digest"] = canonical_digest([1])
+            elif field == "implementation":
+                data[field]["version"] = "1.1.0"
+            elif field == "time_boundaries":
+                data[field]["end"] = "2027-02-01T00:00:00Z"
+            elif field == "input_projection":
+                data[field]["projection_digest"] = canonical_digest([1])
+            elif field == "calculation_trace":
+                data[field][0]["output_digest"] = canonical_digest([1])
+            else:
+                data[field]["numerator_count"] = 1
+            with pytest.raises(QualityMeasureEvidenceError, match="signature_mismatch"):
+                QualityMeasureEvidencePacket.from_dict(data).verify(KEY)
+            with pytest.raises(QualityMeasureEvidenceError, match="signature_mismatch"):
+                packet.verify(b"another-synthetic-key")
 
 
 def test_provider_failure_diagnostics_hide_credentials_and_private_paths():
@@ -408,25 +414,33 @@ def test_provider_failure_diagnostics_hide_credentials_and_private_paths():
     )
 
 
-@pytest.mark.parametrize("key", [b"short", None, "synthetic-secret", 42])
-def test_invalid_provider_keys_fail_closed_without_echo(key):
-    with pytest.raises(QualityMeasureEvidenceError, match="invalid_signing_key"):
-        _packet(_run(), key_provider=lambda _: key)
+def test_invalid_provider_keys_fail_closed_without_echo(subtests):
+    for key in [b"short", None, "synthetic-secret", 42]:
+        with subtests.test(key=key):
+            with pytest.raises(
+                QualityMeasureEvidenceError, match="invalid_signing_key"
+            ):
+                _packet(_run(), key_provider=lambda _: key)
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{"input_schema_digest": "private path"}, {"key_id": "private key path"}]
-)
-def test_invalid_public_metadata_is_rejected_before_provider(kwargs):
-    requests = []
-    with pytest.raises(QualityMeasureEvidenceError):
-        _packet(_run(), key_provider=lambda key: requests.append(key) or KEY, **kwargs)
-    assert requests == []
+def test_invalid_public_metadata_is_rejected_before_provider(subtests):
+    for kwargs in [
+        {"input_schema_digest": "private path"},
+        {"key_id": "private key path"},
+    ]:
+        with subtests.test(kwargs=kwargs):
+            requests = []
+            with pytest.raises(QualityMeasureEvidenceError):
+                _packet(
+                    _run(),
+                    key_provider=lambda key: requests.append(key) or KEY,
+                    **kwargs,
+                )
+            assert requests == []
 
 
-@pytest.mark.parametrize(
-    "period,code",
-    [
+def test_unrepresentable_periods_fail_without_rounding(subtests):
+    for period, code in [
         (
             MeasureTimeWindow("2026-01-01T00:00:00.1Z", PERIOD.end),
             "unsupported_time_precision",
@@ -435,12 +449,11 @@ def test_invalid_public_metadata_is_rejected_before_provider(kwargs):
             MeasureTimeWindow(PERIOD.start, "9999-12-31T23:59:59Z"),
             "unsupported_time_range",
         ),
-    ],
-)
-def test_unrepresentable_periods_fail_without_rounding(period, code):
-    with pytest.raises(QualityMeasureEvidenceError, match=code) as caught:
-        _packet(_rebind(_run(), measurement_period=period))
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(period=period, code=code):
+            with pytest.raises(QualityMeasureEvidenceError, match=code) as caught:
+                _packet(_rebind(_run(), measurement_period=period))
+            assert caught.value.__context__ is None
 
 
 def test_instant_period_becomes_one_second_half_open_interval():

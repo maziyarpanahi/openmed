@@ -294,12 +294,13 @@ def test_repeated_phrase_alignment_preserves_each_phi_anchor():
         assert original[original_start:original_end] == "王"
 
 
-@pytest.mark.parametrize("config", list(OpenCCConfig))
-def test_all_supported_opencc_configs_load(config):
-    result = convert_script("患者头痛", config)
+def test_all_supported_opencc_configs_load(subtests):
+    for config in list(OpenCCConfig):
+        with subtests.test(config=config):
+            result = convert_script("患者头痛", config)
 
-    assert result.opencc_available is True
-    assert len(result.char_origins) == len(result.text)
+            assert result.opencc_available is True
+            assert len(result.char_origins) == len(result.text)
 
 
 def test_conversion_result_supports_text_alignment_unpacking():
@@ -481,9 +482,8 @@ def test_config_exposes_optional_chinese_target_script():
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("surface", "expected"),
-    [
+def test_parse_chinese_numeral_table(subtests):
+    for surface, expected in [
         ("一", 1),
         ("十", 10),
         ("二十", 20),
@@ -496,16 +496,16 @@ def test_config_exposes_optional_chinese_target_script():
         ("壹萬零壹", 10_001),
         ("一亿零三万零五", 100_030_005),
         ("一万亿", 1_000_000_000_000),
-    ],
-)
-def test_parse_chinese_numeral_table(surface, expected):
-    assert parse_chinese_numeral(surface) == expected
+    ]:
+        with subtests.test(surface=surface, expected=expected):
+            assert parse_chinese_numeral(surface) == expected
 
 
-@pytest.mark.parametrize("surface", ["", "〇", "零", "一百十百", "一百A"])
-def test_parse_chinese_numeral_rejects_ambiguous_or_invalid_runs(surface):
-    with pytest.raises(ValueError):
-        parse_chinese_numeral(surface)
+def test_parse_chinese_numeral_rejects_ambiguous_or_invalid_runs(subtests):
+    for surface in ["", "〇", "零", "一百十百", "一百A"]:
+        with subtests.test(surface=surface):
+            with pytest.raises(ValueError):
+                parse_chinese_numeral(surface)
 
 
 def test_find_chinese_numbers_returns_exact_codepoint_spans_and_values():
@@ -594,19 +594,17 @@ def test_chinese_quantity_pattern_covers_only_the_numeral_run():
     assert score == pytest.approx(0.7)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_chinese_patterns_reject_invalid_numeral_and_calendar_surfaces(subtests):
+    for text in [
         "出生于二〇二四年十三月三十二日",
         "出生于一百十百年十二月三日",
         "剂量〇毫升",
         "剂量一百十百毫升",
-    ],
-)
-def test_chinese_patterns_reject_invalid_numeral_and_calendar_surfaces(text):
-    units = find_semantic_units(text, get_patterns_for_language("zh"))
+    ]:
+        with subtests.test(text=text):
+            units = find_semantic_units(text, get_patterns_for_language("zh"))
 
-    assert not any(unit[2] in {"date", "quantity"} for unit in units)
+            assert not any(unit[2] in {"date", "quantity"} for unit in units)
 
 
 def test_chinese_numeral_patterns_preserve_existing_chinese_patterns():

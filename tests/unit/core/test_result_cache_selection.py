@@ -65,11 +65,13 @@ def test_same_capacity_reuses_cache_and_contents(monkeypatch):
     assert second.get("synthetic") == 1
 
 
-@pytest.mark.parametrize("capacity", [0, 1, 128])
-def test_requested_capacity_is_unchanged_without_contention(monkeypatch, capacity):
-    monkeypatch.setattr(result_cache, "RESULT_CACHE", None)
-    cache = result_cache.get_result_cache(capacity)
-    assert cache.max_entries == capacity
+def test_requested_capacity_is_unchanged_without_contention(subtests):
+    for capacity in [0, 1, 128]:
+        with subtests.test(capacity=capacity):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(result_cache, "RESULT_CACHE", None)
+                cache = result_cache.get_result_cache(capacity)
+                assert cache.max_entries == capacity
 
 
 def test_replacement_does_not_mutate_previously_returned_cache(monkeypatch):
