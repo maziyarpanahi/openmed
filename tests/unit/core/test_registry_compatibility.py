@@ -72,9 +72,8 @@ def test_compatible_report_compares_all_contract_dimensions_offline() -> None:
     assert report.fingerprint == report.to_dict()["fingerprint"]
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "reason"),
-    [
+def test_contract_mismatch_blocks_without_copying_raw_values(subtests) -> None:
+    for field, value, reason in [
         ("policy_fingerprint", "synthetic-policy-v2", "POLICY_FINGERPRINT_MISMATCH"),
         ("tokenizer_ids", (101, 999), "TOKENIZER_CONTRACT_MISMATCH"),
         (
@@ -82,33 +81,28 @@ def test_compatible_report_compares_all_contract_dimensions_offline() -> None:
             ("openmed.evidence.v2",),
             "EVIDENCE_SCHEMA_MISMATCH",
         ),
-    ],
-)
-def test_contract_mismatch_blocks_without_copying_raw_values(
-    field: str,
-    value: object,
-    reason: str,
-) -> None:
-    current = _checkpoint(
-        "/synthetic/private/current",
-        version="2.0.0",
-        lineage=["/synthetic/private/rollback"],
-    )
-    rollback = _checkpoint(
-        "/synthetic/private/rollback",
-        version="1.0.0",
-        lineage=(),
-    )
-    rollback[field] = value
+    ]:
+        with subtests.test(field=field, value=value, reason=reason):
+            current = _checkpoint(
+                "/synthetic/private/current",
+                version="2.0.0",
+                lineage=["/synthetic/private/rollback"],
+            )
+            rollback = _checkpoint(
+                "/synthetic/private/rollback",
+                version="1.0.0",
+                lineage=(),
+            )
+            rollback[field] = value
 
-    report = build_rollback_compatibility_report(current, rollback)
-    serialized = report.to_json()
+            report = build_rollback_compatibility_report(current, rollback)
+            serialized = report.to_json()
 
-    assert report.decision == DECISION_BLOCKED
-    assert reason in report.blocked_reasons
-    assert "/synthetic/private" not in serialized
-    assert "synthetic-policy-v2" not in serialized
-    assert "999" not in serialized
+            assert report.decision == DECISION_BLOCKED
+            assert reason in report.blocked_reasons
+            assert "/synthetic/private" not in serialized
+            assert "synthetic-policy-v2" not in serialized
+            assert "999" not in serialized
 
 
 def test_missing_contract_metadata_fails_closed_and_is_deterministic() -> None:

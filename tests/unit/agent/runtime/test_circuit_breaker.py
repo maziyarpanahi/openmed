@@ -36,9 +36,8 @@ def _record(
     return breaker.record_failure(failure_class, f"{index:064x}", now=NOW)
 
 
-@pytest.mark.parametrize(
-    ("failure_class", "limit", "reason", "decision", "actions"),
-    [
+def test_each_failure_class_halts_at_its_threshold(subtests) -> None:
+    for failure_class, limit, reason, decision, actions in [
         (
             FailureClass.UNCERTAINTY,
             3,
@@ -60,40 +59,41 @@ def _record(
             "assess_safety",
             ["review_tool_failure", "abort_run"],
         ),
-    ],
-)
-def test_each_failure_class_halts_at_its_threshold(
-    failure_class: FailureClass,
-    limit: int,
-    reason: str,
-    decision: str,
-    actions: list[str],
-) -> None:
-    breaker = _breaker()
-    for index in range(1, limit):
-        assert _record(breaker, failure_class, index) is None
-        assert breaker.halted is False
+    ]:
+        with subtests.test(
+            failure_class=failure_class,
+            limit=limit,
+            reason=reason,
+            decision=decision,
+            actions=actions,
+        ):
+            breaker = _breaker()
+            for index in range(1, limit):
+                assert _record(breaker, failure_class, index) is None
+                assert breaker.halted is False
 
-    handoff = _record(breaker, failure_class, limit)
+            handoff = _record(breaker, failure_class, limit)
 
-    assert handoff is breaker.handoff
-    assert breaker.halted is True
-    assert handoff is not None
-    assert handoff.failure_class is failure_class
-    assert handoff.attempted_step_digests == tuple(
-        f"{index:064x}" for index in range(1, limit + 1)
-    )
-    assert handoff.packet.reason_code == reason
-    assert handoff.packet.requested_decision.value == decision
-    assert handoff.packet.requires_human_review is True
-    assert handoff.packet.authorizes_clinical_action is False
-    assert handoff.packet.issued_at == NOW
-    assert handoff.packet.expires_at == NOW + timedelta(minutes=30)
-    assert [action.value for action in handoff.allowed_recovery_actions] == actions
+            assert handoff is breaker.handoff
+            assert breaker.halted is True
+            assert handoff is not None
+            assert handoff.failure_class is failure_class
+            assert handoff.attempted_step_digests == tuple(
+                f"{index:064x}" for index in range(1, limit + 1)
+            )
+            assert handoff.packet.reason_code == reason
+            assert handoff.packet.requested_decision.value == decision
+            assert handoff.packet.requires_human_review is True
+            assert handoff.packet.authorizes_clinical_action is False
+            assert handoff.packet.issued_at == NOW
+            assert handoff.packet.expires_at == NOW + timedelta(minutes=30)
+            assert [
+                action.value for action in handoff.allowed_recovery_actions
+            ] == actions
 
-    with pytest.raises(CircuitBreakerError, match="circuit_open"):
-        _record(breaker, failure_class, limit + 1)
-    assert breaker.handoff is handoff
+            with pytest.raises(CircuitBreakerError, match="circuit_open"):
+                _record(breaker, failure_class, limit + 1)
+            assert breaker.handoff is handoff
 
 
 def test_mixed_failures_halt_at_total_limit_without_reset() -> None:
@@ -136,12 +136,13 @@ def test_one_failure_limit_trips_immediately_and_serializes_deterministically() 
     assert first.to_dict()["reviewer_packet"]["evidence_references"] == []
 
 
-@pytest.mark.parametrize("value", [0, -1, 33, True, 1.5, "3"])
-def test_thresholds_are_positive_bounded_integers(value: object) -> None:
-    with pytest.raises(CircuitBreakerError) as caught:
-        CircuitBreakerPolicy(total=value)  # type: ignore[arg-type]
-    assert caught.value.code == "invalid_threshold"
-    assert caught.value.field_name == "total"
+def test_thresholds_are_positive_bounded_integers(subtests) -> None:
+    for value in [0, -1, 33, True, 1.5, "3"]:
+        with subtests.test(value=value):
+            with pytest.raises(CircuitBreakerError) as caught:
+                CircuitBreakerPolicy(total=value)  # type: ignore[arg-type]
+            assert caught.value.code == "invalid_threshold"
+            assert caught.value.field_name == "total"
 
 
 def test_invalid_inputs_do_not_advance_the_circuit_or_echo_values() -> None:
