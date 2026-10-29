@@ -48,6 +48,87 @@ func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
 
+func TestWorkflowTransportBindingsAreExplicitAndDoNotRetry(t *testing.T) {
+	state := "sha256:" + strings.Repeat("b", 64)
+	key := "req_" + strings.Repeat("2", 32)
+	ref := openmed.GovernedWorkflowReference{
+		SchemaVersion: "openmed.service.workflow_request.v1",
+		RunID:         "run_" + strings.Repeat("1", 32), WorkflowID: "workflow:test.example/review",
+		ActionDigest:        "sha256:" + strings.Repeat("a", 64),
+		ExpectedStateDigest: &state, RequestID: &key,
+	}
+	mutation := openmed.GovernedWorkflowMutation{
+		SchemaVersion: ref.SchemaVersion, RunID: ref.RunID, WorkflowID: ref.WorkflowID,
+		ActionDigest: ref.ActionDigest, ExpectedStateDigest: state, RequestID: key,
+	}
+	review := openmed.GovernedWorkflowReview{
+		SchemaVersion: ref.SchemaVersion, RunID: ref.RunID, WorkflowID: ref.WorkflowID,
+		ActionDigest: ref.ActionDigest, ExpectedStateDigest: state, RequestID: key,
+		Receipt: openmed.JSONObject{"schema_version": "synthetic-expired-refusal-vector"},
+	}
+	cases := []struct {
+		path string
+		call func(*openmed.Client) (*openmed.JSONObject, error)
+	}{
+		{"preflight", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowPreflight(context.Background(), ref)
+		}},
+		{"preview", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowPreview(context.Background(), ref)
+		}},
+		{"status", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowStatus(context.Background(), ref)
+		}},
+		{"review-receipts", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowSubmitReceipt(context.Background(), review)
+		}},
+		{"cancel", func(c *openmed.Client) (*openmed.JSONObject, error) {
+			return c.WorkflowCancel(context.Background(), mutation)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			for _, refused := range []bool{false, true} {
+				calls := 0
+				transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					calls++
+					if req.Method != http.MethodPost || req.URL.Path != "/v1/workflows/"+tc.path || req.URL.RawQuery != "" {
+						t.Fatal("unexpected workflow transport target")
+					}
+					var body map[string]any
+					decodeBody(t, req, &body)
+					if body["run_id"] != ref.RunID || body["action_digest"] != ref.ActionDigest || body["request_id"] != key {
+						t.Fatal("workflow reference changed in transport")
+					}
+					status := http.StatusOK
+					response := `{"schema_version":"openmed.service.workflow_response.v1","committed_effect_count":0}`
+					if refused {
+						status = http.StatusServiceUnavailable
+						response = `{"error":{"code":"workflow_mutation_unknown","message":"Governed workflow request refused.","details":[]}}`
+					}
+					return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(response))}, nil
+				})
+				client, err := openmed.New("https://openmed.invalid", openmed.WithHTTPClient(&http.Client{Transport: transport}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				result, err := tc.call(client)
+				if calls != 1 {
+					t.Fatal("workflow transport retried")
+				}
+				if refused {
+					var apiError *openmed.APIError
+					if !errors.As(err, &apiError) || apiError.Code() != "workflow_mutation_unknown" {
+						t.Fatal("unknown mutation result was concealed")
+					}
+				} else if err != nil || (*result)["committed_effect_count"] != float64(0) {
+					t.Fatal("workflow metadata changed")
+				}
+			}
+		})
+	}
+}
+
 type countingReadCloser struct {
 	remaining int
 	read      int

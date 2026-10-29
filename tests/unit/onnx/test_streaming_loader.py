@@ -27,6 +27,7 @@ from openmed.onnx.streaming_loader import (
 )
 
 
+@pytest.mark.slow
 def test_streamed_safetensors_matches_full_inference_spans(
     tmp_path: Path,
 ) -> None:

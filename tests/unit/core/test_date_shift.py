@@ -4,10 +4,74 @@ from datetime import datetime, timedelta
 import pytest
 
 from openmed.core.date_shift import stable_offset_for, stable_offset_from_seed
+from openmed.core.locale_formats import LOCALE_DATE_ORDER, parse_date
 from openmed.core.pipeline import Pipeline
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 HMAC_TEST_MATERIAL = bytes(range(1, 33))
+
+
+@pytest.mark.parametrize(("lang", "order"), sorted(LOCALE_DATE_ORDER.items()))
+@pytest.mark.parametrize("separator", [".", "/", "-"])
+def test_every_locale_numeric_shift_preserves_order_separator_and_interval(
+    lang, order, separator
+):
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    values = {
+        "dmy": ("11{0}10{0}2026", "13{0}10{0}2026"),
+        "mdy": ("10{0}11{0}2026", "10{0}13{0}2026"),
+        "ymd": ("2026{0}10{0}11", "2026{0}10{0}13"),
+    }[order]
+    first, second = (value.format(separator) for value in values)
+    for shifter in (_shift_date, _shift_date_basic):
+        shifted = [shifter(value, 1, lang=lang) for value in (first, second)]
+        parsed = [parse_date(value, lang) for value in shifted]
+        assert [value.normalized for value in parsed] == [
+            (2026, 10, 12),
+            (2026, 10, 14),
+        ]
+        assert all(value.order == order for value in parsed)
+        assert all(value.count(separator) == 2 for value in shifted)
+
+
+def test_unknown_locale_ambiguous_dates_are_not_guessed():
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    for shifter in (_shift_date, _shift_date_basic):
+        assert shifter("11/10/2026", 1, lang=None) == "[DATE_SHIFTED]"
+
+
+def test_registered_and_national_id_languages_have_date_orders():
+    from openmed.core.language_pack_catalog import (
+        BUILTIN_LANGUAGE_PACKS,
+        NATIONAL_ID_ONLY_LANGUAGES,
+    )
+
+    languages = {
+        pack.code for pack in BUILTIN_LANGUAGE_PACKS
+    } | NATIONAL_ID_ONLY_LANGUAGES
+    assert languages <= LOCALE_DATE_ORDER.keys()
+
+
+@pytest.mark.parametrize(("lang", "order"), sorted(LOCALE_DATE_ORDER.items()))
+def test_surrogate_date_generators_share_locale_order(lang, order):
+    import random
+    from types import SimpleNamespace
+
+    from openmed.core.anonymizer.format_preserve import preserve_date_format
+    from openmed.core.anonymizer.registry import _gen_date, _gen_date_of_birth
+    from openmed.core.locale_formats import date_order_for_locale
+
+    original = "2026.10.11" if order == "ymd" else "11.10.2026"
+    expected = preserve_date_format(original, date_order=order, rng=random.Random(4))
+    locale = lang if "-" in lang else lang + "_XX"
+    assert date_order_for_locale(locale) == order
+    for generator in (_gen_date, _gen_date_of_birth):
+        actual = generator(
+            SimpleNamespace(random=random.Random(4)), original, locale=locale
+        )
+        assert actual == expected
 
 
 def _prediction(text: str, *entities: EntityPrediction) -> PredictionResult:

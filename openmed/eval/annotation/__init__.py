@@ -1,4 +1,4 @@
-"""Synthetic annotation task generation and BRAT/CoNLL interchange."""
+"""Synthetic annotation task generation and BRAT/CoNLL/Doccano interchange."""
 
 from openmed.eval.annotation.agreement import (
     AgreementReport,
@@ -24,6 +24,16 @@ from openmed.eval.annotation.conll_io import (
     parse_conll,
     read_conll,
     write_conll,
+)
+from openmed.eval.annotation.doccano_io import (
+    DOCCANO_DOCUMENT_FIELDS,
+    DOCCANO_ENTITY_FIELDS,
+    DOCCANO_FORMAT_NAME,
+    DOCCANO_RELATION_FIELDS,
+    DOCCANO_SOURCE_FORMAT,
+    DoccanoImport,
+    export_doccano,
+    import_doccano,
 )
 from openmed.eval.annotation.interchange import (
     ANNOTATION_INTERCHANGE_COMPATIBILITY,
@@ -89,6 +99,12 @@ __all__ = [
     "AnnotationType",
     "AnnotationValidationError",
     "CoordinateConvention",
+    "DOCCANO_DOCUMENT_FIELDS",
+    "DOCCANO_ENTITY_FIELDS",
+    "DOCCANO_FORMAT_NAME",
+    "DOCCANO_RELATION_FIELDS",
+    "DOCCANO_SOURCE_FORMAT",
+    "DoccanoImport",
     "InterAnnotatorAgreement",
     "MAX_ANNOTATION_EMBEDDING_DIMENSIONS",
     "MAX_ANNOTATION_INPUT_BYTES",
@@ -103,6 +119,7 @@ __all__ = [
     "cohen_kappa_agreement",
     "convert_record_offsets",
     "export_annotation_tsv",
+    "export_doccano",
     "format_brat",
     "format_conll",
     "fleiss_kappa",
@@ -110,6 +127,7 @@ __all__ = [
     "generate_annotation_task",
     "generate_synthetic_annotation_task",
     "import_annotation_tsv",
+    "import_doccano",
     "load_annotation_interchange_schema",
     "parse_brat",
     "parse_conll",

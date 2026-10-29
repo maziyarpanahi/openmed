@@ -23,6 +23,7 @@ _FOCUSED_TEST = (
 )
 
 
+@pytest.mark.slow
 def test_required_rules_have_fixture_and_focused_test_coverage(monkeypatch) -> None:
     matrix = build_policy_coverage_matrix()
 
@@ -114,6 +115,7 @@ def test_uncovered_required_rules_fail_without_raw_values_in_exception() -> None
     assert "value" not in str(error).lower()
 
 
+@pytest.mark.slow
 def test_manifest_and_markdown_are_deterministic_and_counts_only(tmp_path) -> None:
     first = generate_policy_coverage(tmp_path / "first")
     second = generate_policy_coverage(tmp_path / "second")

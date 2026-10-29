@@ -197,7 +197,90 @@ def multipage_pdf_bytes() -> bytes:
     )
 
 
+def annotated_pdf_bytes(
+    subtype: str = "FreeText",
+    *,
+    contents: str = "SYNTHETIC_CONTENTS_3726",
+    appearance_text: str = "SYNTHETIC_AP_3726",
+    state_dictionary: bool = False,
+    malformed: str | None = None,
+    rotation: int = 0,
+    matrix: tuple[float, ...] | None = None,
+    cropbox: tuple[float, ...] | None = None,
+) -> bytes:
+    """Build an annotation with independent synthetic Contents and appearance."""
+    from io import BytesIO
+
+    import pikepdf
+
+    with pikepdf.open(BytesIO(original_pdf_bytes())) as pdf:
+        page = pdf.pages[0]
+        page.Rotate = rotation
+        if cropbox is not None:
+            page.CropBox = pikepdf.Array(cropbox)
+        appearance = pdf.make_stream(
+            b"BT /F1 12 Tf 1 0 0 1 4 14 Tm ("
+            + appearance_text.encode("ascii")
+            + b") Tj ET"
+        )
+        appearance.Type = pikepdf.Name("/XObject")
+        appearance.Subtype = pikepdf.Name("/Form")
+        appearance.BBox = pikepdf.Array([0, 0, 228, 40])
+        appearance.Resources = page.Resources
+        if matrix is not None:
+            appearance.Matrix = pikepdf.Array(matrix)
+        annotation = pdf.make_indirect(
+            pikepdf.Dictionary(
+                Type=pikepdf.Name("/Annot"),
+                Subtype=pikepdf.Name("/" + subtype),
+                Rect=pikepdf.Array([72, 540, 300, 580]),
+                Contents=contents,
+                AP=pikepdf.Dictionary(N=appearance),
+                F=4,
+            )
+        )
+        if state_dictionary:
+            annotation.AP.N = pikepdf.Dictionary(On=appearance)
+            annotation.AS = pikepdf.Name("/On")
+        if subtype == "Widget":
+            annotation.FT = pikepdf.Name("/Tx")
+            annotation.T = "synthetic-field"
+            annotation.V = contents
+            pdf.Root.AcroForm = pikepdf.Dictionary(
+                Fields=pikepdf.Array([annotation]), NeedAppearances=False
+            )
+        if malformed == "bbox":
+            del appearance["/BBox"]
+        elif malformed == "matrix":
+            appearance.Matrix = pikepdf.Array([0, 0, 0, 0, 0, 0])
+        elif malformed == "state":
+            annotation.AP.N = pikepdf.Dictionary(On=appearance)
+            annotation.AS = pikepdf.Name("/Missing")
+        elif malformed == "image":
+            image = pdf.make_stream(b"\x00\x00\x00")
+            image.Type = pikepdf.Name("/XObject")
+            image.Subtype = pikepdf.Name("/Image")
+            image.Width = image.Height = 1
+            image.ColorSpace = pikepdf.Name("/DeviceRGB")
+            image.BitsPerComponent = 8
+            appearance.Resources = pikepdf.Dictionary(
+                XObject=pikepdf.Dictionary(Im0=image)
+            )
+            appearance.write(b"q 20 0 0 20 0 0 cm /Im0 Do Q")
+        elif malformed == "vector":
+            appearance.write(appearance.read_bytes() + b" 0 0 m 12 0 l 6 12 l h f")
+        elif malformed == "clipped":
+            annotation.Rect = pikepdf.Array([-72, 540, 156, 580])
+        elif malformed == "overflow":
+            appearance.write(b"BT /F1 12 Tf 1 0 0 1 -20 14 Tm (OUTSIDE) Tj ET")
+        page.Annots = pikepdf.Array([annotation])
+        output = BytesIO()
+        pdf.save(output)
+        return output.getvalue()
+
+
 __all__ = [
+    "annotated_pdf_bytes",
     "build_pdf",
     "build_pdf_pages",
     "clean_redaction_pdf_bytes",

@@ -20,8 +20,9 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
+from functools import partial
 from importlib import resources
 from typing import Any, Dict, List, Optional, Set
 
@@ -55,7 +56,13 @@ from .language_pack_catalog import (
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
-from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
+from .locale_formats import (
+    LOCALE_DATE_ORDER,
+    LOCALE_PII_FORMATS,
+    LocalePIIFormat,
+    date_order_for_locale,
+    parse_date,
+)
 from .registry_service import manifest_pii_languages
 
 # ---------------------------------------------------------------------------
@@ -2462,7 +2469,9 @@ def validate_thai_national_id(text: str) -> bool:
     Returns:
         True if the ID has valid shape and checksum.
     """
-    digits = re.sub(r"[^0-9]", "", text)
+    digits = "".join(
+        str(unicodedata.decimal(char)) for char in text if char.isdecimal()
+    )
 
     if len(digits) != 13:
         return False
@@ -8552,7 +8561,8 @@ _HEBREW_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.3,
     ),
     PIIPattern(
-        r"\b\d{1,2}\s+(?:\u05d9\u05e0\u05d5\u05d0\u05e8|\u05e4\u05d1\u05e8\u05d5\u05d0\u05e8|\u05de\u05e8\u05e5|\u05d0\u05e4\u05e8\u05d9\u05dc|\u05de\u05d0\u05d9|\u05d9\u05d5\u05e0\u05d9|\u05d9\u05d5\u05dc\u05d9|\u05d0\u05d5\u05d2\u05d5\u05e1\u05d8|\u05e1\u05e4\u05d8\u05de\u05d1\u05e8|\u05d0\u05d5\u05e7\u05d8\u05d5\u05d1\u05e8|\u05e0\u05d5\u05d1\u05de\u05d1\u05e8|\u05d3\u05e6\u05de\u05d1\u05e8)\s+\d{4}\b",
+        r"(?:(?<!\w)|(?<=[בלמהוכש])|(?<=[בלמהוכש][-־]))\d{1,2}\s+"
+        r"[בלמהוכש]?[-־]?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)\s+\d{4}\b",
         "date",
         priority=8,
         base_score=0.7,
@@ -9143,6 +9153,7 @@ _THAI_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.4,
         validator=validate_thai_national_id,
+        reject_on_validation_failure=True,
     ),
     PIIPattern(
         r"(?<!\d)\d{5}(?!\d)",
@@ -13204,6 +13215,38 @@ def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     return deduped
 
 
+def _valid_numeric_date(value: str, *, lang: str) -> bool:
+    """Validate Gregorian shapes without accepting version/section numbers."""
+    parsed = parse_date(value, lang=lang)
+    if parsed.normalized is not None:
+        return True
+    # A year-last date in a year-first locale is accepted only when its order
+    # is unambiguous. This protects imported DOB forms without guessing.
+    return (
+        date_order_for_locale(lang) == "ymd"
+        and parse_date(value).normalized is not None
+    )
+
+
+def _numeric_date_pattern(lang: str) -> PIIPattern:
+    # Four-digit Gregorian years distinguish dates from dotted version numbers.
+    # Hebrew attached prepositions are context, never part of the matched span.
+    boundary = r"(?<![\w.])"
+    if _normalize_pattern_language(lang) == "he":
+        boundary = r"(?:(?<![\w.])|(?<=[בלמהוכש])|(?<=[בלמהוכש][-־]))"
+    return PIIPattern(
+        boundary + r"(?:\d{4}([./-])\d{1,2}\1\d{1,2}|"
+        r"\d{1,2}([./-])\d{1,2}\2\d{4})(?![\w.]\d|\w)",
+        "date",
+        # A fallback must not replace a language pack's existing date rule and
+        # recalibrate otherwise unchanged model/date evidence.
+        priority=7,
+        base_score=0.85,
+        validator=partial(_valid_numeric_date, lang=lang),
+        reject_on_validation_failure=True,
+    )
+
+
 def get_patterns_for_language(
     lang: str,
     locale: str | None = None,
@@ -13262,6 +13305,8 @@ def get_patterns_for_language(
     )
 
     combined = base
+    if base_lang in LOCALE_DATE_ORDER:
+        combined = combined + [_numeric_date_pattern(locale or lang)]
     if base_lang != "en":
         language_patterns = LANGUAGE_PII_PATTERNS.get(base_lang, [])
         combined = combined + [
@@ -13281,6 +13326,19 @@ def get_patterns_for_language(
         indian_pattern_ids = {id(pattern) for pattern in INDIAN_MULTI_ID_PII_PATTERNS}
         combined = [
             pattern for pattern in combined if id(pattern) not in indian_pattern_ids
+        ]
+
+    if base_lang in {"fa", "ur"}:
+        from .script_detect import fold_perso_arabic_letters
+
+        fold = partial(fold_perso_arabic_letters, lang=base_lang)
+        combined = [
+            replace(
+                pattern,
+                pattern=fold(pattern.pattern),
+                context_normalizer=fold,
+            )
+            for pattern in combined
         ]
 
     return combined

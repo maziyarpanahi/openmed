@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timezone
 from typing import Any, Literal
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 SpanOffset = tuple[int, int]
 MedicationStatus = Literal["started", "continued", "held", "changed", "stopped"]
 
@@ -1192,7 +1194,7 @@ def _normalize_timestamp(value: object | None) -> _NormalizedTimestamp | None:
     candidate = text[:-1] + "+00:00" if text.endswith("z") else text
     parsed_datetime: datetime | None = None
     try:
-        parsed_datetime = datetime.fromisoformat(candidate)
+        parsed_datetime = parse_iso_datetime(candidate)
     except ValueError:
         for pattern in ("%Y/%m/%d", "%m/%d/%Y", "%d %B %Y", "%d %b %Y"):
             try:

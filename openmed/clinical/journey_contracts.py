@@ -21,6 +21,8 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Any, ClassVar, Final
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 JOURNEY_CONTRACT_SCHEMA_VERSION: Final = "1.0.0"
 JOURNEY_CONTRACT_SCHEMA_MAJOR: Final = 1
 JOURNEY_SCHEMA_PACKAGE: Final = "openmed.core.schemas.json"
@@ -307,7 +309,7 @@ def _timestamp(value: Any, field_name: str) -> str:
     text = _required_text(value, field_name, max_length=64)
     candidate = text[:-1] + "+00:00" if text.endswith("Z") else text
     try:
-        parsed = datetime.fromisoformat(candidate)
+        parsed = parse_iso_datetime(candidate)
     except ValueError:
         raise JourneyContractError(
             f"{field_name} must be an ISO-8601 timestamp"

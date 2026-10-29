@@ -33,3 +33,50 @@ python scripts/install/smoke_check.py --python /path/to/venv/bin/python
 
 This is an install/runtime evidence check, not a compliance certification or a
 clinical decision guarantee.
+
+## Clinical brief installation profiles
+
+Add `--brief-profile core` for a **minimal, non-editable** installation, or
+`--brief-profile adapters` for an installation with exactly the declared
+`[cli,service,mcp]` extras. Neither profile installs MLX, PyTorch, Transformers,
+model weights or training data. The profiles intentionally reject environments
+containing those runtimes: they verify the missing-runtime contract separately
+from model qualification.
+
+Both profiles exercise the Python brief composer, reviewed synthetic provider
+injection, the installed CLI entry point, private summary/audit separation,
+exclusive output creation, typed missing-runtime errors and full-chain privacy
+sentinels. The adapter profile additionally exercises REST, the Python REST
+client and the read-only MCP adapter through in-memory transports. Test scores
+are synthetic fixtures, not calibrated model evidence or clinical validation.
+
+Probes run under `python -I` in a temporary directory outside the checkout.
+They reject editable installs, check imported module locations, and require
+the repository root to be absent from `sys.path`. Python outbound connection
+and DNS calls are blocked during application operations, with an empty cache
+and offline flags. Windows event-loop self-pipe setup happens before the guard;
+no application listener is started. These guards are test controls, not an
+OS-level security sandbox for untrusted native code.
+
+Resource checks load the packaged review-packet schema, thresholds and synthetic
+grounding vocabulary using `importlib.resources`. Unix outputs must have mode
+`0600`; Windows checks readable/writable regular files and exclusive-create
+behavior, **not** Unix permission bits or unverified Windows ACL guarantees.
+
+To reproduce the complete CI lane from the checkout:
+
+```bash
+uv build --out-dir /path/to/artifacts
+uv export --frozen --no-hashes --no-emit-project --extra cli --extra service --extra mcp --output-file /path/to/constraints.txt
+python scripts/install/smoke_check.py --artifacts /path/to/artifacts --constraints /path/to/constraints.txt --report /path/to/smoke.json
+```
+
+The artifact directory must contain exactly one wheel and one sdist. This
+**explicit artifact mode** uses `uv` to install package/build dependencies in
+fresh disposable environments; dependency preparation may use the network.
+Runtime probes do not. Each artifact is tested with core and adapter installs,
+then a disposable copy with the required schema deliberately omitted is
+installed. That negative control must fail specifically at resource resolution.
+The original artifacts and existing environments are never modified. Installer
+output, traceback contents and local paths are not relayed to reports; failures
+use fixed codes. A successful lane has six passing rows, including two controls.

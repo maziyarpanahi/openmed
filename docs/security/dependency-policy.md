@@ -21,6 +21,144 @@ an active ignore fail CI so exceptions stay visible. Each ignore must include:
 Expired ignores fail CI. Remove an ignore as soon as the dependency can be
 upgraded.
 
+## Image dependencies and Python compatibility
+
+The `agents`, `beam`, `llamaindex`, `mlx`, `multimodal`, and `ocr-paddle` extras
+require Pillow 13 in both wheel metadata and the frozen lock.
+[Pillow 13 drops Python 3.10](https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#python-3-10),
+which OpenMed no longer supports either. The base SDK remains Pillow-free.
+Upgrade legacy image environments before processing untrusted input; vulnerable
+Pillow is unsupported. The lock also requires Certifi 2026.10.19. No audit
+exception is added.
+
+Pillow tests run on every supported Python version. Beam needs the explicit,
+DirectRunner-tested
+[installation overrides](../integrations/beam.md); pip does not inherit uv
+project overrides. Other runners and image transforms need separate validation.
+Brand checks retain generator-version provenance, master bytes, derivative
+pixels and committed hashes; upgrades do not authorize image drift.
+
+## Optional storage and locking dependencies
+
+Affected extras publish the October 20 security floors: `aiohttp>=3.14.4`,
+`banks>=2.5.1`, `mako>=1.4.2`, `multidict>=6.9.1` and `tinytag>=2.3.0`.
+The frozen lock agrees; core dependencies and AWQ's Linux-only boundary remain
+unchanged. NLTK's former time-limited exception is [retired](dependency-risk.md).
+
+Filesystem profiles require `fsspec>=2026.6.0` and `jinja2>=3.1.6` for
+[reference-template execution](https://github.com/fsspec/filesystem_spec/security/advisories/GHSA-27vj-qcqg-25rc)
+and [attr/format traversal](https://github.com/pallets/jinja/security/advisories/GHSA-cpwx-vrp4-4pq7).
+Tests reject both traversal forms across all three template paths while retaining
+variable interpolation. Downstream protocol checks occur too late to replace
+these fixes. The cloud lock pairs fsspec and s3fs 2026.6.0.
+
+Locking profiles use `filelock>=4.2.1`, which needs the
+[Python 3.11 floor](#python-311-floor-and-the-snowflake-filelock-override).
+Setuptools-backed profiles and container recipes require 84.1.0 for the
+namespace-file path fix.
+
+Snowflake 4.x still caps filelock below 4. The repository overrides that cap;
+its cache persistence, lock contention and local Snowpark UDF tests validate the
+combination. Use `uv sync --frozen --extra snowflake` from this checkout.
+Ordinary pip cannot resolve the secure Snowflake extra on Python 3.11+ until
+upstream lifts its cap. Live Snowflake sessions require separate validation.
+
+## Optional graph and Beam dependencies
+
+The `langgraph` and `agents` profiles require `langgraph-sdk>=0.4.4` to address
+[resource-scoped authorization action handling](https://github.com/langchain-ai/langgraph/security/advisories/GHSA-fvww-7h3r-vfhp).
+The `beam` profile requires `pymongo>=4.18.3` for the upstream URI host-parsing
+and BSON buffer-size fixes and CVE-2026-106435. Both floors are published and
+mirrored in the frozen resolver constraints without overriding parent dependency
+bounds. Neither package is added to the base or development-only environment.
+
+The frozen resolver also requires the patched transitive releases
+`dnspython>=2.9.0` (CVE-2026-114605, through `airflow` and `beam`),
+`msgpack>=1.2.3` (CVE-2026-114613, through `ray`), `nltk>=3.10.4`
+(GHSA-j456-xh4h-cpf2, through the NLTK-backed integration extras) and
+`tornado>=6.6` (CVE-2026-115927, CVE-2026-116577 and CVE-2026-116578,
+through the notebook and development tooling).
+
+PyMongo 4.18 requires MongoDB Server 4.4 or newer. OpenMed has no native MongoDB
+storage API, but callers using upstream Beam MongoDB IO must account for that
+[driver compatibility change](https://www.mongodb.com/docs/languages/python/pymongo-driver/current/reference/upgrade/).
+No scanner threshold or vulnerability exception is changed by these upgrades.
+
+## Optional model runtimes
+
+Torch-backed extras require `torch>=2.13.0`, including extras that bring Torch
+transitively through model, quantization, or OCR packages. The same floor applies
+to current container, standalone, model-smoke, and conversion recipes. Torch
+remains optional: the base SDK, CLI, MCP, and minimal ONNX Runtime profiles do
+not install it. The SDK supports Python 3.11 and newer.
+
+This floor includes the fixes for the
+[weights-only checkpoint advisory](https://github.com/pytorch/pytorch/security/advisories/GHSA-63cw-57p8-fm3p),
+[TorchScript advisory](https://github.com/advisories/GHSA-rrmf-rvhw-rf47), and
+[LSTM-cell advisory](https://github.com/advisories/GHSA-qfhq-4f3w-5fph).
+It is a dependency boundary, not a claim that every model artifact or converter
+has been qualified. Do not enable remote model code or relax artifact-integrity
+controls to work around an incompatible model.
+
+Torch 2.13 publishes wheels for Linux aarch64/x86_64, Windows AMD64, and macOS
+14+ Apple Silicon. It does not provide an Intel macOS wheel. A failed
+optional runtime installation on an unsupported platform must not downgrade to
+a vulnerable release or raise the base SDK's Python minimum. Use a supported
+runtime/platform or an independently validated non-Torch path.
+The PyPI Linux Torch 2.13 distribution depends on CUDA 13 packages; recheck GPU
+architecture and driver compatibility before deployment. The reference Docker
+recipe selects the upstream CPU wheel index instead. macOS CPU/CoreML smoke
+tests do not qualify CUDA, AWQ, or GPTQ execution on a production GPU.
+
+Audit the exact optional profile used by a deployment, not only the CI `dev`
+environment. For example, after a frozen `dev,hf,service` sync, run the same
+dependency gate without changing that environment. Advisory IDs without usable
+fixes still require the explicit, time-boxed process above; a Torch upgrade is
+not an exception for other packages. Prefer operator-selected, pinned, trusted
+artifacts and safetensors where available, but do not treat those controls as a
+substitute for dependency updates or a general guarantee about native parsers.
+
+The scanned root and published multi-architecture service containers use the
+same digest-pinned runtime bases and library/tooling repairs. Their build context
+copies only the Python package, required package metadata, retained registry
+files and bundled synthetic red-team fixture, not unrelated desktop source
+trees. Dependencies are checked before the installer is removed from the final
+runtime. Add optional packages by rebuilding the image; the production image is
+not an interactive package-installation environment. Scan the actual final
+image, including vendored dependencies, rather than assuming the installed
+top-level versions or the repository lock describe all of its contents.
+
+The PyTorch CPU wheel index also serves its own, older copies of Torch's
+dependencies. The service images therefore install patched PyPI releases of
+`filelock` and `setuptools` before Torch, so Torch's unpinned `filelock`
+requirement is already satisfied and the CPU index cannot replace it. The
+universal lock separately requires `brotlicffi>=1.2.1.0` and
+`setuptools>=84.1.0`.
+
+## Python 3.11 floor and the Snowflake filelock override
+
+OpenMed requires Python 3.11 or newer. Python 3.10 reached end of life in
+October 2026, and `filelock` 4.1.1 and later, including the 4.2.1 release that
+fixes CVE-2026-112940, CVE-2026-112913 and CVE-2026-112907, require Python 3.11.
+
+Every `snowflake-snowpark-python` release requires
+`snowflake-connector-python<5`, and the connector's 4.x releases cap
+`filelock<4`. The universal lock therefore overrides that cap with
+`filelock>=4.2.1` rather than dropping the `snowflake` extra. The connector uses
+only `FileLock`, `BaseFileLock` and `Timeout` for its OCSP and CRL caches.
+filelock 4's breaking change is limited to the `SoftReadWriteLock` on-disk
+protocol, which the connector does not use. Its cache save, lock-timeout,
+fork, thread-local CRL and cleanup paths were exercised offline with filelock
+4.2.4 before the override was adopted. Recheck this when the connector or
+Snowpark changes its `filelock` or connector bounds, and remove the override
+once Snowpark accepts a connector release without the cap.
+
+The override has two visible effects. `uv pip check` reports the connector's
+declared `filelock<4` requirement in a frozen `snowflake` environment, and pip
+does not inherit uv project overrides, so ordinary pip cannot resolve the
+`snowflake` extra until upstream lifts the cap. Use the frozen environment the
+[Snowflake guide](../snowflake-udf.md) shows.
+
 ## Dependabot
 
 Dependabot checks Python packages and GitHub Actions weekly. Python dependency

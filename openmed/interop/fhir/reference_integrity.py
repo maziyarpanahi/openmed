@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 from urllib.parse import urlsplit
@@ -29,6 +29,7 @@ __all__ = [
     "check_fhir_reference_integrity",
     "check_reference_integrity",
     "fhir_reference_integrity_report",
+    "iter_fhir_elements",
     "reference_integrity_report",
 ]
 
@@ -474,46 +475,57 @@ def _inspect_references(
     identities: Mapping[tuple[str, str], Sequence[str]],
     collector: _FindingCollector,
 ) -> int:
+    reference_count = 0
+    for child_path, key, child in iter_fhir_elements(value, path):
+        if key == "reference":
+            if not isinstance(child, str) or not child.strip():
+                collector.add("invalid_reference", child_path)
+            else:
+                reference_count += 1
+                _check_reference_target(
+                    child,
+                    child_path,
+                    contained_ids,
+                    full_urls,
+                    identities,
+                    collector,
+                )
+    return reference_count
+
+
+def iter_fhir_elements(
+    value: Any,
+    path: str,
+    *,
+    path_keys: frozenset[str] | None = None,
+) -> Iterator[tuple[str, Any, Any]]:
+    """Walk every mapping element, including nested and contained resources.
+
+    Args:
+        value: A JSON-shaped value; callers must reject cyclic input.
+        path: Developer-controlled root element path.
+        path_keys: Optional fixed vocabulary for value-free paths. Unknown keys
+            become positional ``field[index]`` segments rather than input text.
+
+    Yields:
+        Structural path, mapping key, and child value in deterministic order.
+        Values are transient inputs, never diagnostics or report fields.
+    """
+
     if isinstance(value, Mapping):
-        reference_count = 0
-        for key in _ordered_keys(value):
+        for index, key in enumerate(_ordered_keys(value)):
             child = value[key]
-            child_path = _child_path(path, key)
-            if key == "reference":
-                if not isinstance(child, str) or not child.strip():
-                    collector.add("invalid_reference", child_path)
-                else:
-                    reference_count += 1
-                    _check_reference_target(
-                        child,
-                        child_path,
-                        contained_ids,
-                        full_urls,
-                        identities,
-                        collector,
-                    )
-            reference_count += _inspect_references(
-                child,
-                child_path,
-                contained_ids,
-                full_urls,
-                identities,
-                collector,
+            child_path = (
+                _child_path(path, key)
+                if path_keys is None or key in path_keys
+                else f"{path}.field[{index}]"
             )
-        return reference_count
+            yield child_path, key, child
+            yield from iter_fhir_elements(child, child_path, path_keys=path_keys)
     if _is_sequence(value):
-        return sum(
-            _inspect_references(
-                item,
-                f"{path}[{index}]",
-                contained_ids,
-                full_urls,
-                identities,
-                collector,
-            )
-            for index, item in enumerate(value)
-        )
-    return 0
+        for index, item in enumerate(value):
+            yield f"{path}[{index}]", None, item
+            yield from iter_fhir_elements(item, f"{path}[{index}]", path_keys=path_keys)
 
 
 def _check_reference_target(

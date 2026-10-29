@@ -85,19 +85,17 @@ def test_chinese_closing_quote_stays_with_preceding_sentence():
     _assert_exact_round_trip(text, spans)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_non_quote_bracket_punctuation_does_not_end_outer_sentence(subtests):
+    for text in [
         "医嘱（立即复诊！）患者知情。",
         "记录〔血压正常；〕继续观察。",
         "依据《临床指南。》调整用药。",
-    ],
-)
-def test_non_quote_bracket_punctuation_does_not_end_outer_sentence(text: str):
-    spans = segment_chinese_text(text)
+    ]:
+        with subtests.test(text=text):
+            spans = segment_chinese_text(text)
 
-    assert [span.text for span in spans] == [text]
-    _assert_exact_round_trip(text, spans)
+            assert [span.text for span in spans] == [text]
+            _assert_exact_round_trip(text, spans)
 
 
 def test_closing_quote_followed_by_comma_continues_the_outer_sentence():
@@ -235,11 +233,12 @@ def test_explicit_segmenter_override_is_preserved_for_indic_text():
     assert spans == [SentenceSpan(text, 0, len(text))]
 
 
-@pytest.mark.parametrize("backend", ["fast", "", None])
-@pytest.mark.parametrize("text", ["", "Patient is stable."])
-def test_unknown_backend_raises_value_error(backend, text):
-    with pytest.raises(ValueError, match="Unknown segmentation backend"):
-        segment_text(text, backend=backend)
+def test_unknown_backend_raises_value_error(subtests):
+    for backend in ["fast", "", None]:
+        for text in ["", "Patient is stable."]:
+            with subtests.test(backend=backend, text=text):
+                with pytest.raises(ValueError, match="Unknown segmentation backend"):
+                    segment_text(text, backend=backend)
 
 
 def test_preconstructed_segmenter_with_yasbd_backend_raises():
