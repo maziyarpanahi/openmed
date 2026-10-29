@@ -355,6 +355,7 @@ nav:
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -367,7 +368,9 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
