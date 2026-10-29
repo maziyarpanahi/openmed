@@ -20,9 +20,8 @@ from openmed.clinical.sections import (
 )
 
 
-@pytest.mark.parametrize(
-    ("expected_type", "text"),
-    (
+def test_classify_document_covers_canonical_note_types(subtests) -> None:
+    for expected_type, text in (
         (
             "discharge_summary",
             "DISCHARGE SUMMARY\nHospital course: Stable.\nDischarge diagnoses: Cough.",
@@ -51,43 +50,40 @@ from openmed.clinical.sections import (
             "consult_note",
             "CONSULTATION NOTE\nReason for consultation: Cough.\nRecommendations: Review.",
         ),
-    ),
-)
-def test_classify_document_covers_canonical_note_types(
-    expected_type: str,
-    text: str,
-) -> None:
-    classification = classify_document(text)
+    ):
+        with subtests.test(expected_type=expected_type, text=text):
+            classification = classify_document(text)
 
-    assert classification["type"] == expected_type
-    assert 0.5 <= classification["confidence"] <= 1.0
-    assert set(classification) == {
-        "type",
-        "loinc_code",
-        "loinc_axes",
-        "confidence",
-    }
-    assert classification["loinc_code"] == DOCUMENT_TYPE_TO_LOINC[expected_type]["code"]
-    assert set(classification["loinc_axes"] or {}) == set(LOINC_AXIS_NAMES)
+            assert classification["type"] == expected_type
+            assert 0.5 <= classification["confidence"] <= 1.0
+            assert set(classification) == {
+                "type",
+                "loinc_code",
+                "loinc_axes",
+                "confidence",
+            }
+            assert (
+                classification["loinc_code"]
+                == DOCUMENT_TYPE_TO_LOINC[expected_type]["code"]
+            )
+            assert set(classification["loinc_axes"] or {}) == set(LOINC_AXIS_NAMES)
 
 
-@pytest.mark.parametrize(
-    "text",
-    (
+def test_classify_document_abstains_for_unknown_or_ambiguous_notes(subtests) -> None:
+    for text in (
         "",
         "Brief synthetic clinical narrative without a note-type signature.",
         "RADIOLOGY REPORT\nPATHOLOGY REPORT\nSynthetic mixed template.",
-    ),
-)
-def test_classify_document_abstains_for_unknown_or_ambiguous_notes(text: str) -> None:
-    classification = classify_document(text)
+    ):
+        with subtests.test(text=text):
+            classification = classify_document(text)
 
-    assert classification == {
-        "type": UNKNOWN_DOCUMENT_TYPE,
-        "loinc_code": None,
-        "loinc_axes": None,
-        "confidence": 0.0,
-    }
+            assert classification == {
+                "type": UNKNOWN_DOCUMENT_TYPE,
+                "loinc_code": None,
+                "loinc_axes": None,
+                "confidence": 0.0,
+            }
 
 
 def test_classify_document_uses_only_the_first_configured_token_window() -> None:

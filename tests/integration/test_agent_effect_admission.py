@@ -46,39 +46,45 @@ def controller_at(tmp_path: Path) -> EffectAdmissionController:
     )
 
 
-@pytest.mark.parametrize("kind", [EffectKind.FHIR_WRITE, EffectKind.OMOP_BATCH])
 def test_stop_after_preview_blocks_valid_approval_before_effect(
-    tmp_path: Path, kind: EffectKind
+    subtests, tmp_path
 ) -> None:
-    store = SQLiteAdmissionStore(tmp_path / "ledger.db", tmp_path / "anchor.db", KEY)
-    store.initialize(now=100)
-    controller = EffectAdmissionController(store)
-    controller.enable(workflow_id=WORKFLOW, now=101)
-    generation = controller.require_admitted(WORKFLOW).generation
-    token = ApprovalTokenSigner(KEY, clock=lambda: 101).issue(
-        action_digest=ACTION, reviewer_role=ROLE, expires_at=200
-    )
-    verifier = ApprovalTokenVerifier(KEY, InMemoryApprovalNonceStore())
-    effect = Mock(name=kind.value, return_value="opaque-commit-reference")
-    controller.stop(now=102)
-    with pytest.raises(AdmissionError, match="admission_stopped"):
-        dispatch_with_approval_token(
-            token,
-            action_digest=ACTION,
-            reviewer_role=ROLE,
-            verifier=verifier,
-            now=103,
-            dispatch=lambda: dispatch_with_admission(
-                effect,
-                workflow_id=WORKFLOW,
-                admission=controller,
-                generation=generation,
-            ),
-        )
-    effect.assert_not_called()
-    # Read-only preview/review work remains callable; no admission check is used.
-    preview = Mock(return_value=ACTION)
-    assert preview() == ACTION
+    case_root = tmp_path
+    for kind in [EffectKind.FHIR_WRITE, EffectKind.OMOP_BATCH]:
+        with subtests.test(kind=kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            store = SQLiteAdmissionStore(
+                tmp_path / "ledger.db", tmp_path / "anchor.db", KEY
+            )
+            store.initialize(now=100)
+            controller = EffectAdmissionController(store)
+            controller.enable(workflow_id=WORKFLOW, now=101)
+            generation = controller.require_admitted(WORKFLOW).generation
+            token = ApprovalTokenSigner(KEY, clock=lambda: 101).issue(
+                action_digest=ACTION, reviewer_role=ROLE, expires_at=200
+            )
+            verifier = ApprovalTokenVerifier(KEY, InMemoryApprovalNonceStore())
+            effect = Mock(name=kind.value, return_value="opaque-commit-reference")
+            controller.stop(now=102)
+            with pytest.raises(AdmissionError, match="admission_stopped"):
+                dispatch_with_approval_token(
+                    token,
+                    action_digest=ACTION,
+                    reviewer_role=ROLE,
+                    verifier=verifier,
+                    now=103,
+                    dispatch=lambda: dispatch_with_admission(
+                        effect,
+                        workflow_id=WORKFLOW,
+                        admission=controller,
+                        generation=generation,
+                    ),
+                )
+            effect.assert_not_called()
+            # Read-only preview/review work remains callable; no admission check is used.
+            preview = Mock(return_value=ACTION)
+            assert preview() == ACTION
 
 
 def test_restart_cannot_resume_stopped_recovery(tmp_path: Path) -> None:

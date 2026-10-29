@@ -110,17 +110,18 @@ def test_fresh_registration_of_same_callable_still_requires_review():
     assert catalog.check(swapped).reasons == ("implementation_changed",)
 
 
-@pytest.mark.parametrize("replacement_version", [None, "2.0.0"])
-def test_removed_tool_or_version_never_falls_back_to_latest(replacement_version):
-    catalog, _, names = setup_catalog()
-    registry = ToolRegistry()
-    if replacement_version:
-        registry.register(spec(replacement_version), handler=replacement)
-    assert catalog.check(registry).reasons == ("tool_unavailable",)
-    with pytest.raises(ToolCatalogReviewRequired, match="tool_unavailable"):
-        catalog.invoke(registry, TOOL, "1.0.0", {})
-    with pytest.raises(ToolCatalogReviewRequired, match="tool_unavailable"):
-        RunToolCatalog.restore(catalog.snapshot, registry, names)
+def test_removed_tool_or_version_never_falls_back_to_latest(subtests):
+    for replacement_version in [None, "2.0.0"]:
+        with subtests.test(replacement_version=replacement_version):
+            catalog, _, names = setup_catalog()
+            registry = ToolRegistry()
+            if replacement_version:
+                registry.register(spec(replacement_version), handler=replacement)
+            assert catalog.check(registry).reasons == ("tool_unavailable",)
+            with pytest.raises(ToolCatalogReviewRequired, match="tool_unavailable"):
+                catalog.invoke(registry, TOOL, "1.0.0", {})
+            with pytest.raises(ToolCatalogReviewRequired, match="tool_unavailable"):
+                RunToolCatalog.restore(catalog.snapshot, registry, names)
 
 
 def test_spec_without_registered_handler_is_unavailable():
@@ -131,15 +132,18 @@ def test_spec_without_registered_handler_is_unavailable():
         RunToolCatalog.capture(RUN, ToolInventory((record(spec()),)), registry, names)
 
 
-@pytest.mark.parametrize("schema_field", ["input_schema", "output_schema"])
-def test_nested_schema_mutation_invalidates_preview_and_resume(schema_field):
-    catalog, registry, names = setup_catalog()
-    getattr(registry.get("count_local"), schema_field)["required"] = ["new_field"]
-    assert catalog.check(registry).reasons == ("schema_changed",)
-    with pytest.raises(ToolCatalogReviewRequired, match="schema_changed"):
-        catalog.invoke(registry, TOOL, "1.0.0", {})
-    with pytest.raises(ToolCatalogReviewRequired, match="schema_changed"):
-        RunToolCatalog.restore(catalog.snapshot, registry, names)
+def test_nested_schema_mutation_invalidates_preview_and_resume(subtests):
+    for schema_field in ["input_schema", "output_schema"]:
+        with subtests.test(schema_field=schema_field):
+            catalog, registry, names = setup_catalog()
+            getattr(registry.get("count_local"), schema_field)["required"] = [
+                "new_field"
+            ]
+            assert catalog.check(registry).reasons == ("schema_changed",)
+            with pytest.raises(ToolCatalogReviewRequired, match="schema_changed"):
+                catalog.invoke(registry, TOOL, "1.0.0", {})
+            with pytest.raises(ToolCatalogReviewRequired, match="schema_changed"):
+                RunToolCatalog.restore(catalog.snapshot, registry, names)
 
 
 def test_schema_change_in_replacement_reports_both_drifts():
@@ -166,9 +170,8 @@ def test_side_effect_drift_fails_closed():
     )
 
 
-@pytest.mark.parametrize(
-    ("hints", "expected"),
-    [
+def test_registry_side_effect_projection_is_conservative(subtests):
+    for hints, expected in [
         ({"read_only_hint": True}, SideEffectClass.READ_ONLY),
         (
             {"read_only_hint": False, "destructive_hint": True},
@@ -179,10 +182,9 @@ def test_side_effect_drift_fails_closed():
             SideEffectClass.IDEMPOTENT_WRITE,
         ),
         ({"read_only_hint": False}, SideEffectClass.NON_IDEMPOTENT_WRITE),
-    ],
-)
-def test_registry_side_effect_projection_is_conservative(hints, expected):
-    assert tool_spec_side_effect_class(spec(**hints)) is expected
+    ]:
+        with subtests.test(hints=hints, expected=expected):
+            assert tool_spec_side_effect_class(spec(**hints)) is expected
 
 
 def test_schema_digest_is_canonical_and_covers_both_schemas():
@@ -254,37 +256,44 @@ def test_empty_catalog_is_stable_and_run_identity_is_bound():
     )
 
 
-@pytest.mark.parametrize("level", ["snapshot", "binding", "tool"])
-@pytest.mark.parametrize(
-    "field", ["endpoint", "credential", "arguments", "patient_id", "path", "handler"]
-)
-def test_content_bearing_fields_are_rejected_at_every_snapshot_level(level, field):
-    catalog, _, _ = setup_catalog()
-    payload = catalog.snapshot.to_dict()
-    target = payload if level == "snapshot" else payload["bindings"][0]
-    if level == "tool":
-        target = target["tool"]
-    target[field] = SENTINEL
-    with pytest.raises(ToolCatalogBindingError, match="invalid_snapshot") as caught:
-        RunToolCatalogSnapshot.from_dict(payload)
-    assert SENTINEL not in str(caught.value) + repr(caught.value)
+def test_content_bearing_fields_are_rejected_at_every_snapshot_level(subtests):
+    for level in ["snapshot", "binding", "tool"]:
+        for field in [
+            "endpoint",
+            "credential",
+            "arguments",
+            "patient_id",
+            "path",
+            "handler",
+        ]:
+            with subtests.test(level=level, field=field):
+                catalog, _, _ = setup_catalog()
+                payload = catalog.snapshot.to_dict()
+                target = payload if level == "snapshot" else payload["bindings"][0]
+                if level == "tool":
+                    target = target["tool"]
+                target[field] = SENTINEL
+                with pytest.raises(
+                    ToolCatalogBindingError, match="invalid_snapshot"
+                ) as caught:
+                    RunToolCatalogSnapshot.from_dict(payload)
+                assert SENTINEL not in str(caught.value) + repr(caught.value)
 
 
-@pytest.mark.parametrize(
-    "field", ["run_id", "schema_version", "implementation_id", "schema_digest"]
-)
-def test_identifying_snapshot_values_fail_without_echo(field):
-    catalog, _, _ = setup_catalog()
-    payload = catalog.snapshot.to_dict()
-    target = payload
-    if field == "implementation_id":
-        target = payload["bindings"][0]
-    elif field == "schema_digest":
-        target = payload["bindings"][0]["tool"]
-    target[field] = SENTINEL
-    with pytest.raises(ToolCatalogBindingError) as caught:
-        RunToolCatalogSnapshot.from_dict(payload)
-    assert SENTINEL not in str(caught.value) + repr(caught.value)
+def test_identifying_snapshot_values_fail_without_echo(subtests):
+    for field in ["run_id", "schema_version", "implementation_id", "schema_digest"]:
+        with subtests.test(field=field):
+            catalog, _, _ = setup_catalog()
+            payload = catalog.snapshot.to_dict()
+            target = payload
+            if field == "implementation_id":
+                target = payload["bindings"][0]
+            elif field == "schema_digest":
+                target = payload["bindings"][0]["tool"]
+            target[field] = SENTINEL
+            with pytest.raises(ToolCatalogBindingError) as caught:
+                RunToolCatalogSnapshot.from_dict(payload)
+            assert SENTINEL not in str(caught.value) + repr(caught.value)
 
 
 def test_representations_and_reports_exclude_runtime_metadata_and_arguments():
@@ -354,13 +363,14 @@ def test_duplicate_bindings_and_invalid_implementation_ids_are_rejected():
         CatalogEligibility(catalog.snapshot.digest, (SENTINEL,))
 
 
-@pytest.mark.parametrize(
-    "names", [{}, {(TOOL, "2.0.0"): "count_local"}, {(TOOL, "1.0.0"): 1}]
-)
-def test_incomplete_or_malformed_selection_is_rejected(names):
-    _, registry, _ = setup_catalog()
-    with pytest.raises(ToolCatalogBindingError, match="invalid_selection"):
-        RunToolCatalog.capture(RUN, ToolInventory((record(spec()),)), registry, names)
+def test_incomplete_or_malformed_selection_is_rejected(subtests):
+    for names in [{}, {(TOOL, "2.0.0"): "count_local"}, {(TOOL, "1.0.0"): 1}]:
+        with subtests.test(names=names):
+            _, registry, _ = setup_catalog()
+            with pytest.raises(ToolCatalogBindingError, match="invalid_selection"):
+                RunToolCatalog.capture(
+                    RUN, ToolInventory((record(spec()),)), registry, names
+                )
 
 
 def test_capture_rejects_unreviewed_schema_and_risk_class():

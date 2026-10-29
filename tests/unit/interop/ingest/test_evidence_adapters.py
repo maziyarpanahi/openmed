@@ -368,6 +368,7 @@ def test_csv_bom_unicode_quoted_newline_and_indexes_round_trip(
     }
 
 
+@pytest.mark.slow
 @given(
     st.lists(
         st.lists(
