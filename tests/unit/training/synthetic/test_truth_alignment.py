@@ -142,7 +142,7 @@ def test_all_declared_modalities_share_one_existing_truth_graph():
     assert result["missing_modalities"] == []
 
 
-def test_valid_locator_from_another_truth_fact_cannot_be_substituted():
+def test_locator_cannot_move_between_truth_or_artifact_bindings():
     fact, locator, view = package()
     other = replace(locator, locator_id="evidence_" + "b" * 16)
     substituted = replace(
@@ -154,6 +154,18 @@ def test_valid_locator_from_another_truth_fact_cannot_be_substituted():
         [fact], [locator, other], [substituted], expected_modalities=["note"]
     )
     assert "missing_evidence" in {row["category"] for row in result["findings"]}
+
+    moved_artifact = replace(view.artifact, artifact_id="artifact_" + "b" * 16)
+    copied = replace(
+        view,
+        artifact=moved_artifact,
+        evidence=(replace(locator, artifact_id=moved_artifact.artifact_id),),
+    )
+    result = validate_truth_alignment(
+        [fact], [locator], [copied], expected_modalities=["note"]
+    )
+    assert result["valid_for_training"] is False
+    assert "artifact_reference" in {row["category"] for row in result["findings"]}
 
 
 def test_omitted_fact_evidence_binding_is_a_named_negative_control():

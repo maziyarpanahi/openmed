@@ -10,7 +10,9 @@ All records must explicitly declare synthetic origin. Each view declares the
 same truth subset; use separate packages for intentionally partial views. The
 validator checks medication/value and unit changes, effective times, fact labels,
 missing/unexpected facts, evidence references, coordinate transforms and artifact
-bindings. It never fabricates missing modalities. Reports use hashed artifact/fact
+bindings. Both the shared truth locator and the observed locator must bind to
+the view's artifact; copying a locator ID onto another artifact cannot qualify
+that artifact. It never fabricates missing modalities. Reports use hashed artifact/fact
 references and controlled mismatch categories, not submitted values.
 
 Intentional corruptions require a named negative-control fixture, explicit

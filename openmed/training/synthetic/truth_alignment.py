@@ -209,7 +209,10 @@ def validate_truth_alignment(
                 ):
                     finding(view, fact_id, "missing_evidence")
                     continue
-                if actual_locator.artifact_id != view.artifact.artifact_id:
+                if (
+                    actual_locator.artifact_id != view.artifact.artifact_id
+                    or expected_locator.artifact_id != view.artifact.artifact_id
+                ):
                     finding(view, fact_id, "artifact_reference")
                 if (
                     actual_locator.location_type != expected_locator.location_type
