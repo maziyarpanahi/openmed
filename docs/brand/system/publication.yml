@@ -462,6 +462,7 @@ classification:
     - eval-harness.md
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
+    - evaluation/cross-lingual-regressions.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md
