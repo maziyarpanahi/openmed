@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add local abbreviation mining with bounded offline contracts, synthetic controls
   and documented behavior (#2858).
 
+- Add code-switch span projection with bounded offline contracts, synthetic controls
+  and documented behavior (#2860).
+
 - Added a bounded, value-free synthetic memorization audit that fingerprints
   protected reference material, blocks exact, paraphrase-style and exposure
   matches on configurable signals, and renders canonical digest-only JSON
