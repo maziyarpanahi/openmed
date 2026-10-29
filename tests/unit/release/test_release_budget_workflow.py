@@ -1,6 +1,7 @@
 """CI build and release-budget wiring tests."""
 
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -30,6 +31,28 @@ PYTEST_DIAGNOSTIC_WRAPPER = (
 
 def _load_ci() -> dict[str, object]:
     return yaml.load(CI_WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+FULL_CI_CONDITION = (
+    "github.event_name != 'pull_request' || "
+    "contains(github.event.pull_request.labels.*.name, 'full-ci')"
+)
+
+
+def _tiered_matrices(lane) -> tuple[list[dict], list[dict]]:
+    """Return the (full, pull-request) matrix rows of a tiered job."""
+    expression = lane["strategy"]["matrix"]
+    match = re.fullmatch(
+        r"\$\{\{ fromJSON\(\((?P<cond>.+)\) && '(?P<full>\{.+\})' "
+        r"\|\| '(?P<pr>\{.+\})'\) \}\}",
+        expression,
+    )
+    assert match, expression
+    assert match["cond"] == FULL_CI_CONDITION
+    return (
+        json.loads(match["full"])["include"],
+        json.loads(match["pr"])["include"],
+    )
 
 
 def test_ci_pins_uv_and_uses_the_native_build_frontend():
@@ -191,12 +214,15 @@ def test_budget_refresh_rejects_missing_or_ambiguous_wheels(
 def test_sdk_compatibility_matches_advertised_python_and_os_support():
     jobs = _load_ci()["jobs"]
     lane = jobs["sdk-compatibility"]
-    matrix = lane["strategy"]["matrix"]
+    full, pull_request = _tiered_matrices(lane)
     versions = ["3.10", "3.11", "3.12", "3.13"]
-    assert matrix == {
-        "os": ["ubuntu-latest", "windows-latest", "macos-latest"],
-        "python-version": versions,
-    }
+    systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
+    assert sorted((row["os"], row["python-version"]) for row in full) == sorted(
+        (system, version) for system in systems for version in versions
+    )
+    # Pull requests keep both ends of the range and every operating system.
+    assert {row["os"] for row in pull_request} == set(systems)
+    assert {row["python-version"] for row in pull_request} >= {"3.10", "3.13"}
     assert lane["strategy"]["fail-fast"] == "false"
     assert int(lane["timeout-minutes"]) <= 30
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
@@ -251,13 +277,27 @@ def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
 
 def _assert_full_suite_diagnostics(lane):
     assert lane.get("continue-on-error", "false") == "false"
+    full, pull_request = _tiered_matrices(lane)
+    # Pushes and `full-ci` pull requests run every test on every platform;
+    # other pull requests may only skip the `slow` and `fuzz` tiers.
+    assert {row["tier"] for row in full} == {"full"}
+    assert {row["os"] for row in full} == {
+        "ubuntu-latest",
+        "windows-latest",
+        "macos-latest",
+    }
+    assert {row["tier"] for row in pull_request} == {"fast", "portability"}
+    assert sum(row["coverage"] for row in full) == 1
     steps = lane["steps"]
     test_step = next(step for step in steps if step.get("name") == "Test with pytest")
-    assert test_step["timeout-minutes"] == "60"
+    assert int(test_step["timeout-minutes"]) <= 45
     assert test_step.get("continue-on-error", "false") == "false"
-    assert "if" not in test_step
-    # Exact argv retains default full-suite discovery and rejects selection,
-    # early-stop flags, shell success overrides, and changes to coverage.
+    assert test_step["if"] == "matrix.tier != 'portability'"
+    assert test_step["env"]["TIER_MARKERS"] == (
+        "${{ matrix.tier == 'fast' && 'not slow and not fuzz' || '' }}"
+    )
+    # Exact argv retains default discovery and rejects other selection,
+    # early-stop flags and shell success overrides.
     assert shlex.split(test_step["run"]) == [
         "uv",
         "run",
@@ -267,9 +307,9 @@ def _assert_full_suite_diagnostics(lane):
         PYTEST_DIAGNOSTIC_WRAPPER,
         "-n",
         "auto",
-        "--cov=openmed",
-        "--cov-report=xml",
-        "--cov-report=term-missing",
+        "-m",
+        "$TIER_MARKERS",
+        "$COVERAGE_ARGS",
         "--tb=line",
         "--show-capture=no",
         "--color=no",

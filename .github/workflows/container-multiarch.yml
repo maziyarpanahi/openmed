@@ -29,12 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            arch: amd64
-          - platform: linux/arm64
-            arch: arm64
+      # Pull requests smoke-test the native amd64 image; the emulated arm64
+      # build runs on pushes, tags and manual runs.
+      matrix: ${{ fromJSON(github.event_name == 'pull_request' && '{"include":[{"platform":"linux/amd64","arch":"amd64"}]}' || '{"include":[{"platform":"linux/amd64","arch":"amd64"},{"platform":"linux/arm64","arch":"arm64"}]}') }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
