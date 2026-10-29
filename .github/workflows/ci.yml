@@ -8,8 +8,15 @@ on:
     types: [opened, synchronize, reopened, labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Concurrency is evaluated before job conditions. An unrelated label event
+  # must not replace the useful PR run with a run whose jobs all skip.
+  group: >-
+    ${{ github.workflow }}-${{ github.event_name == 'pull_request' &&
+    (github.event.action != 'labeled' || github.event.label.name == 'full-ci') &&
+    github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request' &&
+    (github.event.action != 'labeled' || github.event.label.name == 'full-ci') }}
 
 jobs:
   repo-policy:
