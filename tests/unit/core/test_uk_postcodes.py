@@ -216,13 +216,52 @@ def test_postcode_shaped_non_postcodes_are_never_returned(text):
     assert [entity for entity in swept if entity.label == "postcode"] == []
 
 
-def test_lookalike_inward_codes_need_address_context():
-    bare = "Phone upgraded to Galaxy S23 8GB today."
+def test_lookalike_inward_codes_need_address_context(monkeypatch):
+    _install_fake_model(monkeypatch)
+    for bare in (
+        "Phone upgraded to Galaxy S23 8GB today.",
+        "Phone always uses Galaxy S23 8GB hardware.",
+        "Drivers use Galaxy S23 8GB hardware.",
+    ):
+        assert _uk_postcode_spans(bare) == []
+        assert not any(
+            entity.label == "postcode"
+            for entity in safety_sweep(bare, [], lang="en", locale="en_GB")
+        )
     addressed = "Address: 1 Example Street, Exampletown ZZ1 2GB."
     start = addressed.index("ZZ1 2GB")
-
-    assert _uk_postcode_spans(bare) == []
     assert _uk_postcode_spans(addressed) == [("ZZ1 2GB", start, start + 7)]
+    for street_type in (
+        "Close",
+        "Drive",
+        "Way",
+        "Crescent",
+        "Court",
+        "Place",
+        "Gardens",
+        "Terrace",
+        "Grove",
+        "Mews",
+        "Square",
+    ):
+        text = f"4 Example {street_type}, Testville ZZ1 5TH"
+        start = text.index("ZZ1 5TH")
+        assert _uk_postcode_spans(text) == [("ZZ1 5TH", start, start + 7)]
+        result = extract_pii(
+            text, model_name="fixture-pii-model", lang="en", locale="en_GB"
+        )
+        assert any(
+            entity.label == "postcode"
+            and entity.start == start
+            and entity.end == start + 7
+            for entity in result.entities
+        )
+        assert (
+            "ZZ1 5TH"
+            not in deidentify(
+                text, model_name="fixture-pii-model", lang="en", locale="en_GB"
+            ).deidentified_text
+        )
 
 
 def test_postcode_next_to_nhs_number_and_nino_stays_separate(monkeypatch):

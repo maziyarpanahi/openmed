@@ -398,7 +398,8 @@ without context, in every Royal Mail outward-code shape plus `GIR 0AA`, with a
 single space, no space, or lowercase, and are labelled `ZIPCODE`. A full UK
 postcode covers about 15 addresses, so the rule does not wait for the model.
 Tokens whose inward code reads as a data size or an ordinal, such as `8GB` or
-`2ND`, count only near address words. Other locales, including plain `en`, keep
+`2ND`, count only near address words, including common street types such as
+Close, Drive and Way. Other locales, including plain `en`, keep
 the US ZIP rule alone.
 
 ### Spanish — `es`

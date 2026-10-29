@@ -5438,9 +5438,10 @@ _IRISH_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 # UK postcodes follow the Royal Mail outward/inward grammar. The outward code
 # has one of six shapes (A9, A99, A9A, AA9, AA99, AA9A): Q, V and X never open
 # it, only ABCDEFGHJKPSTUW close an A9A district and only ABEHMNPRVWXY close an
-# AA9A district. Royal Mail never puts I, J or Z second; Z is still accepted
-# there so the NHS pseudo-postcode area ZZ (ZZ99 codes) stays covered. The
-# inward code is a digit and two letters, never C, I, K, M, O or V. GIR 0AA is
+# AA9A district. Royal Mail never puts I, J or Z second; Z is accepted there
+# for synthetic ZZ-area fixtures. NHS pseudo-postcodes with excluded inward
+# letters remain outside this grammar. The inward code is a digit and two
+# letters, never C, I, K, M, O or V. GIR 0AA is
 # the one code outside this grammar.
 _UK_POSTCODE_SEPARATOR = r"[ \u00a0]?"
 _UK_POSTCODE_OUTWARD = (
@@ -5470,6 +5471,17 @@ _UK_POSTCODE_CONTEXT = [
     "road",
     "lane",
     "avenue",
+    "close",
+    "drive",
+    "way",
+    "crescent",
+    "court",
+    "place",
+    "gardens",
+    "terrace",
+    "grove",
+    "mews",
+    "square",
 ]
 
 
