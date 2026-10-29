@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored the Transformers.js runtime environment exactly after concurrent
+  model loads, so overlapping local and remote loads no longer leave
+  `allowLocalModels` or `allowRemoteModels` behind on the shared module object
+  (#3953).
+
 ### Added
 
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
