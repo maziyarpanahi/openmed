@@ -95,35 +95,32 @@ def test_unexpected_remote_data_call_fails_closed_and_stays_safe() -> None:
     assert "url_digest" in rendered
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_public_summary_rejects_unsafe_metadata(subtests) -> None:
+    """Exported report types cannot be used to serialize arbitrary values."""
+    for field, value in [
         ("method", "SYNTHETIC-PATIENT-METHOD"),
         ("resource_type", "synthetic-patient-resource"),
         ("scheme", "synthetic-patient-scheme"),
         ("url_digest", "synthetic-patient-url"),
         ("origin_digest", "synthetic-patient-origin"),
         ("classification", "synthetic-patient-classification"),
-    ],
-)
-def test_public_summary_rejects_unsafe_metadata(field: str, value: str) -> None:
-    """Exported report types cannot be used to serialize arbitrary values."""
+    ]:
+        with subtests.test(field=field, value=value):
+            values: dict[str, object] = {
+                "classification": "unexpected-network",
+                "index": 0,
+                "method": "GET",
+                "origin_digest": "a" * 64,
+                "resource_type": "fetch",
+                "scheme": "https",
+                "url_digest": "b" * 64,
+            }
+            values[field] = value
 
-    values: dict[str, object] = {
-        "classification": "unexpected-network",
-        "index": 0,
-        "method": "GET",
-        "origin_digest": "a" * 64,
-        "resource_type": "fetch",
-        "scheme": "https",
-        "url_digest": "b" * 64,
-    }
-    values[field] = value
+            with pytest.raises(ValueError, match="safe metadata") as raised:
+                RequestSummary(**values)  # type: ignore[arg-type]
 
-    with pytest.raises(ValueError, match="safe metadata") as raised:
-        RequestSummary(**values)  # type: ignore[arg-type]
-
-    assert value not in str(raised.value)
+            assert value not in str(raised.value)
 
 
 def test_public_report_requires_validated_sequential_summaries() -> None:
@@ -377,35 +374,29 @@ def test_string_subclass_hooks_cannot_run_during_classification() -> None:
     assert _HookedText.called is False
 
 
-@pytest.mark.parametrize(
-    "entry",
-    [
+def test_model_allowlist_rejects_host_wide_and_wildcard_entries(subtests) -> None:
+    """Only exact assets and explicitly bounded directory paths are accepted."""
+    for entry in [
         "https://models.example.invalid",
         "https://models.example.invalid/",
         "https://models.example.invalid/models/*",
         "https://*.example.invalid/models/redactor/",
-    ],
-)
-def test_model_allowlist_rejects_host_wide_and_wildcard_entries(entry: str) -> None:
-    """Only exact assets and explicitly bounded directory paths are accepted."""
-
-    with pytest.raises(ValueError, match="model asset"):
-        NetworkEgressProbe(allowed_model_assets=(entry,))
+    ]:
+        with subtests.test(entry=entry):
+            with pytest.raises(ValueError, match="model asset"):
+                NetworkEgressProbe(allowed_model_assets=(entry,))
 
 
-@pytest.mark.parametrize(
-    "entry",
-    [
+def test_model_allowlist_rejects_ambiguous_roots_and_prefixes(subtests) -> None:
+    """Allowlist roots and prefixes cannot be reinterpreted as data routes."""
+    for entry in [
         "https://models.example.invalid/?asset=model.onnx",
         "https://models.example.invalid/models/?asset=/",
         "https://models.example.invalid/models/%2e%2e/private/",
-    ],
-)
-def test_model_allowlist_rejects_ambiguous_roots_and_prefixes(entry: str) -> None:
-    """Allowlist roots and prefixes cannot be reinterpreted as data routes."""
-
-    with pytest.raises(ValueError, match="model asset"):
-        NetworkEgressProbe(allowed_model_assets=(entry,))
+    ]:
+        with subtests.test(entry=entry):
+            with pytest.raises(ValueError, match="model asset"):
+                NetworkEgressProbe(allowed_model_assets=(entry,))
 
 
 def test_request_count_is_bounded_and_fails_closed(

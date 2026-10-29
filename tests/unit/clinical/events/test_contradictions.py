@@ -308,17 +308,20 @@ def test_event_dates_require_complete_iso_day_strings() -> None:
         )
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-def test_explicit_precedes_reports_only_reversed_order(reverse):
-    first, second = (
-        ("2026-01-02", "2026-01-01") if reverse else ("2026-01-01", "2026-01-02")
-    )
-    events = [
-        EventInterval("a", "event", first, first, precedes=("b",)),
-        EventInterval("b", "event", second, second),
-    ]
-    report = report_event_contradictions(events)
-    assert report.counts["impossible_order"] == int(reverse)
+def test_explicit_precedes_reports_only_reversed_order(subtests):
+    for reverse in [False, True]:
+        with subtests.test(reverse=reverse):
+            first, second = (
+                ("2026-01-02", "2026-01-01")
+                if reverse
+                else ("2026-01-01", "2026-01-02")
+            )
+            events = [
+                EventInterval("a", "event", first, first, precedes=("b",)),
+                EventInterval("b", "event", second, second),
+            ]
+            report = report_event_contradictions(events)
+            assert report.counts["impossible_order"] == int(reverse)
 
 
 def test_implicit_sequences_do_not_compare_different_entities():
@@ -335,12 +338,15 @@ def test_implicit_sequences_do_not_compare_different_entities():
     assert report.counts["impossible_order"] == 0
 
 
-@pytest.mark.parametrize("offset", [1.5, "synthetic_private_marker"])
-def test_offsets_are_exact_integers_without_sensitive_exception_context(offset):
-    with pytest.raises(TypeError) as caught:
-        EventInterval("a", "event", "2026-01-01", "2026-01-02", source_start=offset)
-    assert caught.value.__context__ is None
-    assert caught.value.__cause__ is None
+def test_offsets_are_exact_integers_without_sensitive_exception_context(subtests):
+    for offset in [1.5, "synthetic_private_marker"]:
+        with subtests.test(offset=offset):
+            with pytest.raises(TypeError) as caught:
+                EventInterval(
+                    "a", "event", "2026-01-01", "2026-01-02", source_start=offset
+                )
+            assert caught.value.__context__ is None
+            assert caught.value.__cause__ is None
 
 
 def test_report_metadata_is_fixed_and_value_free():

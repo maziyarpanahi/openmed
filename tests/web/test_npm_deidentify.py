@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_DIR = ROOT / "js" / "openmedkit-web"
 
 
+@pytest.mark.slow
 def test_openmedkit_web_package_checks() -> None:
     node = shutil.which("node")
     npm = shutil.which("npm")
