@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shift declared Hijri and Bikram Sambat dates through bounded, digest-verified permissive calendar tables (#3888).
+
 - Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
