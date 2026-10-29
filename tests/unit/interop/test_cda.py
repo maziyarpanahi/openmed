@@ -304,23 +304,26 @@ def test_registered_xml_handler_routes_cda_xml_without_multimodal_extra(monkeypa
     assert "Pt [PERSON]" in doc.text
 
 
-@pytest.mark.parametrize("case", ["deep", "wide"])
-def test_coverage_inventory_refuses_unbounded_xml_without_partial_metadata(case):
-    if case == "deep":
-        body = (
-            "<element>" * 65
-            + "<addr>PrivateSyntheticAddress</addr>"
-            + "</element>" * 65
-        )
-    else:
-        body = "<element/>" * 10001
-    xml = f'<ClinicalDocument xmlns="{CDA_NAMESPACE}">{body}</ClinicalDocument>'
-    report = {}
-    with pytest.raises(ValueError, match="CDA coverage limit exceeded") as caught:
-        cda.redact_cda(xml, coverage_report=report)
-    assert report == {}
-    assert "PrivateSyntheticAddress" not in str(caught.value)
-    assert caught.value.__context__ is None
+def test_coverage_inventory_refuses_unbounded_xml_without_partial_metadata(subtests):
+    for case in ["deep", "wide"]:
+        with subtests.test(case=case):
+            if case == "deep":
+                body = (
+                    "<element>" * 65
+                    + "<addr>PrivateSyntheticAddress</addr>"
+                    + "</element>" * 65
+                )
+            else:
+                body = "<element/>" * 10001
+            xml = f'<ClinicalDocument xmlns="{CDA_NAMESPACE}">{body}</ClinicalDocument>'
+            report = {}
+            with pytest.raises(
+                ValueError, match="CDA coverage limit exceeded"
+            ) as caught:
+                cda.redact_cda(xml, coverage_report=report)
+            assert report == {}
+            assert "PrivateSyntheticAddress" not in str(caught.value)
+            assert caught.value.__context__ is None
 
 
 def test_generated_ccda_documents_stay_cda_and_inventory_unmapped_actors():

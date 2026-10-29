@@ -129,25 +129,20 @@ def test_router_mapping_extraction_ignores_source_values() -> None:
     assert private_description not in report.to_json()
 
 
-@pytest.mark.parametrize(
-    ("mapping", "reason"),
-    [
+def test_unsafe_mapping_states_fail_closed(subtests) -> None:
+    for mapping, reason in [
         (_mapping(0), "unmapped_concept"),
         (_mapping(404), "concept_not_found"),
         (_mapping(303), "concept_not_standard"),
         (_mapping(101, version=None), "mapping_version_missing"),
         (_mapping(101, vocabulary_id="OTHER"), "concept_vocabulary_changed"),
-    ],
-)
-def test_unsafe_mapping_states_fail_closed(
-    mapping: VocabularyMappingProvenance,
-    reason: str,
-) -> None:
-    report = VocabularyWriteGate(_snapshot()).evaluate((mapping,))
+    ]:
+        with subtests.test(mapping=mapping, reason=reason):
+            report = VocabularyWriteGate(_snapshot()).evaluate((mapping,))
 
-    assert not report.is_compatible
-    assert report.decisions[0].reason == reason
-    assert report.remapping_queue[0].reason == reason
+            assert not report.is_compatible
+            assert report.decisions[0].reason == reason
+            assert report.remapping_queue[0].reason == reason
 
 
 def test_missing_target_vocabulary_version_requires_remapping() -> None:

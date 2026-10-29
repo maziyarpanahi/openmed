@@ -91,9 +91,8 @@ def test_replay_is_invariant_to_synthetic_input_order() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "category"),
-    [
+def test_replay_classifies_environment_and_policy_mismatches(subtests) -> None:
+    for field, value, category in [
         ("environment", {"runtime": "other", "offline": True}, "environment"),
         (
             "policy",
@@ -103,20 +102,15 @@ def test_replay_is_invariant_to_synthetic_input_order() -> None:
             },
             "policy",
         ),
-    ],
-)
-def test_replay_classifies_environment_and_policy_mismatches(
-    field: str,
-    value: dict[str, object],
-    category: str,
-) -> None:
-    kwargs = {field: value}
+    ]:
+        with subtests.test(field=field, value=value, category=category):
+            kwargs = {field: value}
 
-    report = replay_evidence(_manifest(), **kwargs)
+            report = replay_evidence(_manifest(), **kwargs)
 
-    assert category in report.mismatch_categories
-    assert report.matched is False
-    assert report.to_dict()["mismatches"][0]["category"] == category
+            assert category in report.mismatch_categories
+            assert report.matched is False
+            assert report.to_dict()["mismatches"][0]["category"] == category
 
 
 def test_policy_drift_that_changes_counts_is_classified_as_result_too() -> None:

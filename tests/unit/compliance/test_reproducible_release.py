@@ -181,10 +181,11 @@ def test_invalid_input_errors_do_not_echo_paths_or_raw_values() -> None:
     assert "credential" not in str(raised.value)
 
 
-@pytest.mark.parametrize("artifact_id", ["wheel+local", "package@version"])
-def test_valid_artifact_identifiers_can_report_hash_mismatches(artifact_id):
-    expected = _record(artifact_hashes={artifact_id: _digest("a")})
-    actual = _record(artifact_hashes={artifact_id: _digest("b")})
-    report = verify_release_provenance(expected, actual)
-    assert not report.valid
-    assert report.mismatch_categories == (MISMATCH_ARTIFACT_HASH,)
+def test_valid_artifact_identifiers_can_report_hash_mismatches(subtests):
+    for artifact_id in ["wheel+local", "package@version"]:
+        with subtests.test(artifact_id=artifact_id):
+            expected = _record(artifact_hashes={artifact_id: _digest("a")})
+            actual = _record(artifact_hashes={artifact_id: _digest("b")})
+            report = verify_release_provenance(expected, actual)
+            assert not report.valid
+            assert report.mismatch_categories == (MISMATCH_ARTIFACT_HASH,)
