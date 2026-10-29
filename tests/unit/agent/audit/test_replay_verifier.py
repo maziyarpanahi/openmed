@@ -106,24 +106,22 @@ def test_replay_is_deterministic_and_read_only():
     assert ledger == fixture()[1]
 
 
-@pytest.mark.parametrize(
-    "field,expected_artifact",
-    [
+def test_first_semantic_divergence_is_hash_only(subtests):
+    for field, expected_artifact in [
         ("policy_snapshot", "policy_digest"),
         ("tool_response", "response_digest"),
         ("model_configuration", "model_digest"),
         ("tool_contract", "tool_digest"),
-    ],
-)
-def test_first_semantic_divergence_is_hash_only(field, expected_artifact):
-    manifest, ledger, frozen = fixture()
-    changed = replace(frozen[0], **{field: b"PRIVATE_VALUE"})
-    report = replay(manifest, ledger, (changed, frozen[1]))
-    assert not report.matched
-    assert report.step == 0
-    assert report.artifact == expected_artifact
-    assert report.expected_digest != report.actual_digest
-    assert "PRIVATE_VALUE" not in repr(report.to_dict())
+    ]:
+        with subtests.test(field=field, expected_artifact=expected_artifact):
+            manifest, ledger, frozen = fixture()
+            changed = replace(frozen[0], **{field: b"PRIVATE_VALUE"})
+            report = replay(manifest, ledger, (changed, frozen[1]))
+            assert not report.matched
+            assert report.step == 0
+            assert report.artifact == expected_artifact
+            assert report.expected_digest != report.actual_digest
+            assert "PRIVATE_VALUE" not in repr(report.to_dict())
 
 
 def test_later_divergence_reports_later_step():
@@ -206,24 +204,22 @@ def test_invalid_grant_is_refused_even_when_response_differs():
     assert "PRIVATE_VALUE" not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_report_refuses_non_digest_content(subtests):
+    for changes in [
         {"artifact": "synthetic-private-marker"},
         {"expected_digest": "synthetic-private-marker"},
         {"actual_digest": "synthetic-private-marker"},
         {"matched": True},
-    ],
-)
-def test_report_refuses_non_digest_content(changes):
-    fields = dict(
-        matched=False,
-        step=0,
-        artifact="response_digest",
-        expected_digest="hmac-sha256:" + "a" * 64,
-        actual_digest="hmac-sha256:" + "b" * 64,
-    )
-    fields.update(changes)
-    with pytest.raises(ReplayError, match="invalid_report") as caught:
-        ReplayReport(**fields)
-    assert "synthetic-private-marker" not in str(caught.value)
+    ]:
+        with subtests.test(changes=changes):
+            fields = dict(
+                matched=False,
+                step=0,
+                artifact="response_digest",
+                expected_digest="hmac-sha256:" + "a" * 64,
+                actual_digest="hmac-sha256:" + "b" * 64,
+            )
+            fields.update(changes)
+            with pytest.raises(ReplayError, match="invalid_report") as caught:
+                ReplayReport(**fields)
+            assert "synthetic-private-marker" not in str(caught.value)

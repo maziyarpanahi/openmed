@@ -99,21 +99,21 @@ INVALID_CASES = (
 )
 
 
-@pytest.mark.parametrize(
-    ("_id_type", "_entity_type", "value", "validator"), VALID_CASES
-)
-def test_valid_synthetic_cases_pass_structure_validation(
-    _id_type,
-    _entity_type,
-    value,
-    validator,
-):
-    assert validator(value) is True
+def test_valid_synthetic_cases_pass_structure_validation(subtests):
+    for _id_type, _entity_type, value, validator in VALID_CASES:
+        with subtests.test(
+            _id_type=_id_type,
+            _entity_type=_entity_type,
+            value=value,
+            validator=validator,
+        ):
+            assert validator(value) is True
 
 
-@pytest.mark.parametrize(("value", "validator"), INVALID_CASES)
-def test_structurally_invalid_cases_are_rejected(value, validator):
-    assert validator(value) is False
+def test_structurally_invalid_cases_are_rejected(subtests):
+    for value, validator in INVALID_CASES:
+        with subtests.test(value=value, validator=validator):
+            assert validator(value) is False
 
 
 def test_pan_public_structure_and_synthetic_checksum_behavior():
@@ -169,28 +169,26 @@ def test_every_faker_provider_method_round_trips_through_its_validator():
             assert validator(getattr(faker, method)()) is True
 
 
-@pytest.mark.parametrize("alias", ("in", "india", "hi", "te", "en_IN", "hi_IN"))
-@pytest.mark.parametrize(
-    "id_type",
-    (
-        "pan",
-        "gstin",
-        "ifsc",
-        "voter_id_epic",
-        "indian_driving_licence",
-        "indian_passport",
-        "vehicle_registration",
-        "abha",
-    ),
-)
-def test_registry_exposes_all_india_aliases(alias, id_type):
-    spec = get_national_id(alias, id_type)
-    assert spec is not None
+def test_registry_exposes_all_india_aliases(subtests):
+    for alias in ("in", "india", "hi", "te", "en_IN", "hi_IN"):
+        for id_type in (
+            "pan",
+            "gstin",
+            "ifsc",
+            "voter_id_epic",
+            "indian_driving_licence",
+            "indian_passport",
+            "vehicle_registration",
+            "abha",
+        ):
+            with subtests.test(alias=alias, id_type=id_type):
+                spec = get_national_id(alias, id_type)
+                assert spec is not None
 
-    faker = Faker("en_IN")
-    register_clinical_providers(faker)
-    faker.seed_instance(1493)
-    assert spec.validate(getattr(faker, spec.faker_method)()) is True
+                faker = Faker("en_IN")
+                register_clinical_providers(faker)
+                faker.seed_instance(1493)
+                assert spec.validate(getattr(faker, spec.faker_method)()) is True
 
 
 def test_label_subtypes_policy_and_hipaa_resolution():
