@@ -62,9 +62,9 @@ def test_broken_duplicate_cue_yaml_is_rejected_by_load_status_vocab(tmp_path) ->
         load_status_vocab(path)
 
 
-@pytest.mark.parametrize(
-    ("phrase", "negated", "temporality", "expected"),
-    [
+def test_normalize_mobility_status(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for phrase, negated, temporality, expected in [
         ("uses a walker", False, None, "assisted"),
         ("ambulates without assistance", False, None, "ambulatory"),
         ("no longer uses a cane", False, None, "former"),
@@ -72,17 +72,18 @@ def test_broken_duplicate_cue_yaml_is_rejected_by_load_status_vocab(tmp_path) ->
         ("uses a wheelchair", True, None, "never"),
         ("uses a wheelchair", False, "historical", "former"),
         ("", False, None, "unknown"),
-    ],
-)
-def test_normalize_mobility_status(
-    phrase, negated, temporality, expected, tmp_path
-) -> None:
-    path = example.write_example_vocabulary(tmp_path)
-    mobility = load_status_vocab(path)["vocabularies"]["mobility"]
+    ]:
+        with subtests.test(
+            phrase=phrase, negated=negated, temporality=temporality, expected=expected
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = example.write_example_vocabulary(tmp_path)
+            mobility = load_status_vocab(path)["vocabularies"]["mobility"]
 
-    assert (
-        example.normalize_mobility_status(
-            phrase, mobility, negated=negated, temporality=temporality
-        )
-        == expected
-    )
+            assert (
+                example.normalize_mobility_status(
+                    phrase, mobility, negated=negated, temporality=temporality
+                )
+                == expected
+            )

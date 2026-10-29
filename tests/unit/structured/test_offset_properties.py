@@ -180,24 +180,19 @@ def test_property_suite_handles_unicode_lines_columns_and_empty_spans(
     assert case.text not in json.dumps(report.to_dict(), ensure_ascii=False)
 
 
-@pytest.mark.parametrize(
-    ("source_spans", "category"),
-    [
+def test_invalid_inputs_raise_safe_categories(subtests) -> None:
+    for source_spans, category in [
         (({"start": -1, "end": 0},), "invalid_offsets"),
         (((0, 100),), "invalid_offsets"),
         (((2, 3), (0, 1)), "span_order"),
         (((0, 2), (1, 3)), "span_overlap"),
-    ],
-)
-def test_invalid_inputs_raise_safe_categories(
-    source_spans: tuple[Any, ...],
-    category: str,
-) -> None:
-    with pytest.raises(OffsetProjectionError) as raised:
-        validate_offset_projection("synthetic text", source_spans)
+    ]:
+        with subtests.test(source_spans=source_spans, category=category):
+            with pytest.raises(OffsetProjectionError) as raised:
+                validate_offset_projection("synthetic text", source_spans)
 
-    assert raised.value.category == category
-    assert "synthetic text" not in str(raised.value)
+            assert raised.value.category == category
+            assert "synthetic text" not in str(raised.value)
 
 
 def test_unmapped_non_empty_spans_can_be_reported_without_raw_text() -> None:

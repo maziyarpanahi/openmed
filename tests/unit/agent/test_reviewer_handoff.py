@@ -79,28 +79,29 @@ def test_valid_packet_only_requests_review_and_grants_no_authority() -> None:
     assert packet.authorizes_clinical_action is False
 
 
-@pytest.mark.parametrize(
-    "reason_code",
-    [
+def test_abstention_and_review_reason_codes_are_accepted(subtests) -> None:
+    for reason_code in [
         "insufficient_evidence",
         "out_of_scope",
         "low_confidence",
         "conflicting_evidence",
         "safety_review",
         "human_gate",
-    ],
-)
-def test_abstention_and_review_reason_codes_are_accepted(reason_code: str) -> None:
-    packet = ReviewerHandoffPacket.from_dict(_payload(reason_code=reason_code), now=NOW)
-    assert packet.reason_code == reason_code
+    ]:
+        with subtests.test(reason_code=reason_code):
+            packet = ReviewerHandoffPacket.from_dict(
+                _payload(reason_code=reason_code), now=NOW
+            )
+            assert packet.reason_code == reason_code
 
 
-@pytest.mark.parametrize("decision", list(RequestedDecision))
-def test_requested_decision_vocabulary_round_trips(decision: RequestedDecision) -> None:
-    packet = ReviewerHandoffPacket.from_dict(
-        _payload(requested_decision=decision.value), now=NOW
-    )
-    assert packet.requested_decision is decision
+def test_requested_decision_vocabulary_round_trips(subtests) -> None:
+    for decision in list(RequestedDecision):
+        with subtests.test(decision=decision):
+            packet = ReviewerHandoffPacket.from_dict(
+                _payload(requested_decision=decision.value), now=NOW
+            )
+            assert packet.requested_decision is decision
 
 
 def test_missing_requested_decision_fails_closed() -> None:
@@ -155,9 +156,8 @@ def test_unknown_free_text_field_fails_with_phi_safe_error() -> None:
     assert sentinel not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "code"),
-    [
+def test_invalid_fields_fail_without_echo(subtests) -> None:
+    for field, value, code in [
         (
             "schema_version",
             "openmed.agent.reviewer_handoff.v2",
@@ -170,14 +170,13 @@ def test_unknown_free_text_field_fails_with_phi_safe_error() -> None:
         ("requested_decision", "approve_treatment", "unknown_decision"),
         ("issued_at", "2026-09-20 11:00:00", "invalid_timestamp"),
         ("expires_at", "2026-09-20T13:00:00+00:00", "invalid_timestamp"),
-    ],
-)
-def test_invalid_fields_fail_without_echo(field: str, value: Any, code: str) -> None:
-    with pytest.raises(ReviewerHandoffError) as caught:
-        ReviewerHandoffPacket.from_dict(_payload(**{field: value}), now=NOW)
+    ]:
+        with subtests.test(field=field, value=value, code=code):
+            with pytest.raises(ReviewerHandoffError) as caught:
+                ReviewerHandoffPacket.from_dict(_payload(**{field: value}), now=NOW)
 
-    assert caught.value.code == code
-    assert str(value) not in str(caught.value)
+            assert caught.value.code == code
+            assert str(value) not in str(caught.value)
 
 
 def test_expiry_must_follow_issue_time() -> None:

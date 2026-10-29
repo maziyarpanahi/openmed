@@ -128,9 +128,8 @@ def test_batch_response_uses_the_same_conservative_classification() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "intended,received",
-    [
+def test_invalid_shapes_raise_value_free_errors(subtests) -> None:
+    for intended, received in [
         ({"resourceType": "Bundle", "type": "transaction", "entry": {}}, None),
         (_request("GET"), None),
         (
@@ -146,11 +145,8 @@ def test_batch_response_uses_the_same_conservative_classification() -> None:
             {"resourceType": "Bundle", "type": "batch-response", "entry": []},
         ),
         (_request("POST"), _response("200 OK", "201 Created")),
-    ],
-)
-def test_invalid_shapes_raise_value_free_errors(
-    intended: dict, received: dict | None
-) -> None:
-    with pytest.raises(ValueError) as error:
-        build_compensation_report(intended, received)
-    assert _PRIVATE not in str(error.value)
+    ]:
+        with subtests.test(intended=intended, received=received):
+            with pytest.raises(ValueError) as error:
+                build_compensation_report(intended, received)
+            assert _PRIVATE not in str(error.value)

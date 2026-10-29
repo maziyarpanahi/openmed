@@ -232,13 +232,11 @@ def test_ancestor_rules_and_preserved_paths_cannot_overlap():
         )
 
 
-@pytest.mark.parametrize(
-    "action",
-    [ACTION_HASH, ACTION_NULL, ACTION_REMOVE, ACTION_REPLACE],
-)
-def test_resource_root_cannot_be_transformed(action: str):
-    with pytest.raises(RedactionContractError):
-        RedactionContract(rules=(RedactionRule("$", action=action),))
+def test_resource_root_cannot_be_transformed(subtests):
+    for action in [ACTION_HASH, ACTION_NULL, ACTION_REMOVE, ACTION_REPLACE]:
+        with subtests.test(action=action):
+            with pytest.raises(RedactionContractError):
+                RedactionContract(rules=(RedactionRule("$", action=action),))
 
 
 def test_only_explicit_array_wildcards_are_accepted():
@@ -399,18 +397,19 @@ def test_invalid_scalar_and_strict_inputs_are_bounded_and_value_free():
     assert "synthetic" not in str(key_error.value)
 
 
-@pytest.mark.parametrize("source,replacement", [(0, False), (True, 1), (1, 1.0)])
-def test_replacement_counts_changes_between_distinct_json_scalar_types(
-    source: object, replacement: object
-):
-    result = redact_resource(
-        {"value": source},
-        RedactionContract(rules=(RedactionRule("value", replacement=replacement),)),
-    )
+def test_replacement_counts_changes_between_distinct_json_scalar_types(subtests):
+    for source, replacement in [(0, False), (True, 1), (1, 1.0)]:
+        with subtests.test(source=source, replacement=replacement):
+            result = redact_resource(
+                {"value": source},
+                RedactionContract(
+                    rules=(RedactionRule("value", replacement=replacement),)
+                ),
+            )
 
-    assert type(result.resource["value"]) is type(replacement)
-    assert result.report.changed_value_count == 1
-    assert result.report.source_digest != result.report.output_digest
+            assert type(result.resource["value"]) is type(replacement)
+            assert result.report.changed_value_count == 1
+            assert result.report.source_digest != result.report.output_digest
 
 
 def test_array_removal_reports_nullification_without_removing_a_position():
