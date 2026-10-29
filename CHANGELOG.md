@@ -137,6 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve registered non-CJK honorifics and grammatical cues in person
+  surrogates, and retain Vietnamese family-first order (#3887).
+
 - Keep Arabic (`ar`) and Amharic (`am`) name, city, and street surrogates in
   the source script. Arabic-script spans use Faker's `ar_AA` names and curated
   synthetic Egyptian place templates unless a regional locale ships
