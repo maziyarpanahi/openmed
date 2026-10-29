@@ -422,6 +422,8 @@ classification:
     - training/synthetic/truth-alignment.md
     - training/synthetic/release-capsules.md
     - training/synthetic/dataset-recipes.md
+    - training/synthetic/lab-time-series.md
+    - training/synthetic/medication-courses.md
     - training/synthetic/prior-auth-packets.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
