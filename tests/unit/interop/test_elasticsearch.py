@@ -67,10 +67,11 @@ def test_pipeline_is_explicit_deterministic_and_offline() -> None:
     assert processor.config.patterns == DEFAULT_ELASTICSEARCH_GROK_PATTERNS
 
 
-@pytest.mark.parametrize("field", ["message.*", "message[0]", "{{field_name}}"])
-def test_dynamic_field_paths_are_rejected(field: str) -> None:
-    with pytest.raises(UnsupportedDynamicFieldError, match="dynamic"):
-        ElasticsearchRedactionConfig(fields=[field])
+def test_dynamic_field_paths_are_rejected(subtests) -> None:
+    for field in ["message.*", "message[0]", "{{field_name}}"]:
+        with subtests.test(field=field):
+            with pytest.raises(UnsupportedDynamicFieldError, match="dynamic"):
+                ElasticsearchRedactionConfig(fields=[field])
 
 
 def test_selected_fields_are_redacted_without_mutating_input_and_diagnostics_are_counts_only() -> (
@@ -257,19 +258,21 @@ def test_hostile_boundary_failures_are_value_free() -> None:
     assert _SYNTHETIC_VALUE not in str(spoofed_error.value)
 
 
-@pytest.mark.parametrize("fatal_error", [KeyboardInterrupt, SystemExit])
-def test_process_preserves_interpreter_control_exceptions(fatal_error) -> None:
-    def aborting_redactor(text: str):
-        del text
-        raise fatal_error
+def test_process_preserves_interpreter_control_exceptions(subtests) -> None:
+    for fatal_error in [KeyboardInterrupt, SystemExit]:
+        with subtests.test(fatal_error=fatal_error):
 
-    processor = ElasticsearchRedactionProcessor(fields=["message"])
+            def aborting_redactor(text: str):
+                del text
+                raise fatal_error
 
-    with pytest.raises(fatal_error):
-        processor.process(
-            {"message": _SYNTHETIC_VALUE},
-            redactor=aborting_redactor,
-        )
+            processor = ElasticsearchRedactionProcessor(fields=["message"])
+
+            with pytest.raises(fatal_error):
+                processor.process(
+                    {"message": _SYNTHETIC_VALUE},
+                    redactor=aborting_redactor,
+                )
 
 
 def test_optional_entity_metadata_failure_does_not_expose_source() -> None:
