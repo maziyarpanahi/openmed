@@ -369,6 +369,7 @@ nav:
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
       - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
@@ -400,6 +401,8 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
@@ -463,6 +466,7 @@ nav:
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
