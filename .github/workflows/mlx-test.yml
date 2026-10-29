@@ -16,6 +16,10 @@ on:
       - 'tests/unit/mlx/**'
       - 'tests/unit/test_backends.py'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   mlx-unit-tests:
     name: MLX unit tests (no hardware)

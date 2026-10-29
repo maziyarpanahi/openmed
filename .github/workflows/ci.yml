@@ -7,6 +7,10 @@ on:
     branches: [ main, master, develop ]
     types: [opened, synchronize, reopened, labeled]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   repo-policy:
     if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
