@@ -31,8 +31,7 @@ from ..core.language_pack import (
     LanguagePackRegistry,
     get_language_pack,
 )
-from ..core.language_pack_catalog import LANG_TO_LOCALE, is_registered_segmenter
-from ..core.locale_tag import normalize_locale_tag
+from ..core.language_pack_catalog import is_registered_segmenter
 from ._output import EXIT_ERROR, EXIT_OK, EXIT_USAGE, CliError, emit
 
 I18N_CHECK_SCHEMA_VERSION: Final[str] = "openmed.i18n.locale_pack_conformance.v1"
@@ -553,7 +552,7 @@ def _validator_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
 
 
 def _surrogate_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
-    """Check that the surrogate locale is a catalog locale or canonical tag."""
+    """Check the same installed-backend contract as pack coherence."""
 
     if pack is None:
         return _unavailable("surrogate")
@@ -568,8 +567,10 @@ def _surrogate_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
                 "pack declares no surrogate locale",
             )
         ]
-    catalog_locales = frozenset(LANG_TO_LOCALE.values())
-    if locale in catalog_locales or _canonical_locale(locale) is not None:
+    from ..core.language_pack_coherence import MISSING, _surrogate_locale_status
+
+    status, _ = _surrogate_locale_status(pack)
+    if status != MISSING:
         return [
             _finding(
                 "surrogate",
@@ -583,18 +584,9 @@ def _surrogate_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
             "surrogate",
             FAIL,
             "surrogate_locale_invalid",
-            f"surrogate locale {locale!r} is neither a catalog nor a BCP 47 tag",
+            f"surrogate locale {locale!r} has no installed backend",
         )
     ]
-
-
-def _canonical_locale(value: str) -> str | None:
-    """Return the canonical form of a locale tag, or ``None`` when invalid."""
-
-    try:
-        return normalize_locale_tag(value)
-    except ValueError:
-        return None
 
 
 def _fixture_findings(

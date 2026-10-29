@@ -43,18 +43,20 @@ others from running.
   that its recognizers are valid names.
 - `validator` resolves every `national_id_providers` entry against the
   `validate_<provider>` callables exported by `openmed.core.pii_i18n`.
-- `surrogate` checks that the declared `surrogate_locale` resolves in the locale
-  catalog.
+- `surrogate` checks that the declared `surrogate_locale` resolves to an installed
+  Faker backend or a supported conceptual-locale fallback, using the same
+  contract as pack coherence. A structurally valid locale tag alone is
+  insufficient.
 - `fixtures` scans each `--fixture-root` directory for `.json`/`.jsonl` records
   and requires them to target the language, declare
   `"safety": "verified_synthetic"`, and carry no text-bearing keys.
 - `span_integrity` loads each `--spans` payload
   (`{"text": ..., "spans": [{"start", "end", "label", "text"}]}`) and validates
   the offsets with `validate_span_integrity`.
-- `evidence` requires each `--evidence` path to exist and be unique, and reports
-  a `<scope>:sha256:<hex>` reference per file.
+- `evidence` requires each `--evidence` path to exist and be unique, using
+  `<scope>:sha256:<hex>` path references internally to detect duplicates.
 
-A check that finds no gap reports `fail` with a stable reason code; the closed
+A check that finds a gap reports `fail` with a stable reason code; the closed
 set lives in `REASON_CODES`, so a report can never carry an undocumented code.
 Reason codes are grouped by component in the source constants.
 

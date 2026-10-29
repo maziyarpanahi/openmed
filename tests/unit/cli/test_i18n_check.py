@@ -252,10 +252,11 @@ def test_validator_component_skips_without_providers() -> None:
     assert _reasons(report, "validator") == ["no_national_id_providers"]
 
 
-def test_surrogate_failure_is_isolated() -> None:
+@pytest.mark.parametrize("locale", ["xx_YY", "zz-ZZ"])
+def test_surrogate_failure_is_isolated(locale: str) -> None:
     report = run_locale_pack_conformance(
         "zz",
-        pack=_synthetic_pack(surrogate_locale="xx_YY"),
+        pack=_synthetic_pack(surrogate_locale=locale),
     )
 
     assert _reasons(report, "surrogate") == ["surrogate_locale_invalid"]
