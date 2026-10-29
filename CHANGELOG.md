@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add language coverage diffs with bounded offline contracts, synthetic controls
+  and documented behavior (#3101).
+
 - Add clinical language readiness with bounded offline contracts, synthetic controls
   and documented behavior (#2855).
 
