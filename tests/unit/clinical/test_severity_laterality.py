@@ -33,72 +33,66 @@ def _by_kind(attachments, kind):
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("cue", "expected"),
-    [
+def test_descriptive_severity_normalizes_to_ordinal_bucket(subtests):
+    for cue, expected in [
         ("mild", SEVERITY_MILD),
         ("slight", SEVERITY_MILD),
         ("moderate", SEVERITY_MODERATE),
         ("severe", SEVERITY_SEVERE),
         ("marked", SEVERITY_SEVERE),
-    ],
-)
-def test_descriptive_severity_normalizes_to_ordinal_bucket(cue, expected):
-    text = f"Patient reports {cue} headache today."
-    finding = _span(text, "headache", "CONDITION")
+    ]:
+        with subtests.test(cue=cue, expected=expected):
+            text = f"Patient reports {cue} headache today."
+            finding = _span(text, "headache", "CONDITION")
 
-    attachments = extract_severity_laterality([finding], text)
+            attachments = extract_severity_laterality([finding], text)
 
-    severities = _by_kind(attachments, "severity")
-    assert len(severities) == 1
-    hit = severities[0]
-    assert hit["normalized"] == expected
-    assert hit["ordinal"] == SEVERITY_ORDINAL[expected]
-    assert hit["scale"] == "descriptive"
-    assert hit["target_offset"] == (finding["start"], finding["end"])
+            severities = _by_kind(attachments, "severity")
+            assert len(severities) == 1
+            hit = severities[0]
+            assert hit["normalized"] == expected
+            assert hit["ordinal"] == SEVERITY_ORDINAL[expected]
+            assert hit["scale"] == "descriptive"
+            assert hit["target_offset"] == (finding["start"], finding["end"])
 
 
-@pytest.mark.parametrize(
-    ("cue", "expected"),
-    [
+def test_graded_severity_maps_roman_and_arabic(subtests):
+    for cue, expected in [
         ("grade 1", SEVERITY_MILD),
         ("grade II", SEVERITY_MODERATE),
         ("grade III", SEVERITY_SEVERE),
         ("grade IV", SEVERITY_SEVERE),
-    ],
-)
-def test_graded_severity_maps_roman_and_arabic(cue, expected):
-    text = f"Biopsy shows {cue} tumor in the specimen."
-    finding = _span(text, "tumor", "CONDITION")
+    ]:
+        with subtests.test(cue=cue, expected=expected):
+            text = f"Biopsy shows {cue} tumor in the specimen."
+            finding = _span(text, "tumor", "CONDITION")
 
-    attachments = extract_severity_laterality([finding], text)
+            attachments = extract_severity_laterality([finding], text)
 
-    severities = _by_kind(attachments, "severity")
-    assert len(severities) == 1
-    assert severities[0]["normalized"] == expected
-    assert severities[0]["scale"] == "graded"
+            severities = _by_kind(attachments, "severity")
+            assert len(severities) == 1
+            assert severities[0]["normalized"] == expected
+            assert severities[0]["scale"] == "graded"
 
 
-@pytest.mark.parametrize(
-    ("cue", "expected"),
-    [
+def test_numeric_pain_score_buckets(subtests):
+    for cue, expected in [
         ("0/10", SEVERITY_NONE),
         ("2/10", SEVERITY_MILD),
         ("5/10", SEVERITY_MODERATE),
         ("9/10", SEVERITY_SEVERE),
-    ],
-)
-def test_numeric_pain_score_buckets(cue, expected):
-    text = f"Chest pain rated {cue} on presentation."
-    finding = _span(text, "Chest pain", "CONDITION")
+    ]:
+        with subtests.test(cue=cue, expected=expected):
+            text = f"Chest pain rated {cue} on presentation."
+            finding = _span(text, "Chest pain", "CONDITION")
 
-    attachments = extract_severity_laterality([finding], text)
+            attachments = extract_severity_laterality([finding], text)
 
-    severities = _by_kind(attachments, "severity")
-    assert len(severities) == 1
-    assert severities[0]["normalized"] == expected
-    assert severities[0]["scale"] == "numeric_pain"
-    assert severities[0]["ordinal"] == SEVERITY_ORDINAL[expected]
+            severities = _by_kind(attachments, "severity")
+            assert len(severities) == 1
+            assert severities[0]["normalized"] == expected
+            assert severities[0]["scale"] == "numeric_pain"
+            assert severities[0]["ordinal"] == SEVERITY_ORDINAL[expected]
 
 
 # --------------------------------------------------------------------------
@@ -122,25 +116,23 @@ def test_laterality_attaches_to_nearest_finding_not_distant():
     )
 
 
-@pytest.mark.parametrize(
-    ("cue", "expected"),
-    [
+def test_laterality_controlled_set(subtests):
+    for cue, expected in [
         ("bilateral", LATERALITY_BILATERAL),
         ("b/l", LATERALITY_BILATERAL),
         ("left-sided", LATERALITY_LEFT),
         ("right", LATERALITY_RIGHT),
         ("unilateral", LATERALITY_UNSPECIFIED),
-    ],
-)
-def test_laterality_controlled_set(cue, expected):
-    text = f"There is {cue} pneumonia on the chest film."
-    finding = _span(text, "pneumonia", "CONDITION")
+    ]:
+        with subtests.test(cue=cue, expected=expected):
+            text = f"There is {cue} pneumonia on the chest film."
+            finding = _span(text, "pneumonia", "CONDITION")
 
-    attachments = extract_severity_laterality([finding], text)
+            attachments = extract_severity_laterality([finding], text)
 
-    lat = _by_kind(attachments, "laterality")
-    assert len(lat) == 1
-    assert lat[0]["normalized"] == expected
+            lat = _by_kind(attachments, "laterality")
+            assert len(lat) == 1
+            assert lat[0]["normalized"] == expected
 
 
 def test_position_modifier_is_separate_axis():

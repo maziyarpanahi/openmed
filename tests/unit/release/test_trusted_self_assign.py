@@ -81,9 +81,8 @@ def test_parse_assignment_request_accepts_exact_open_issue_command():
     )
 
 
-@pytest.mark.parametrize(
-    "event",
-    [
+def test_parse_assignment_request_ignores_unsupported_events(subtests):
+    for event in [
         issue_comment_event(action="edited"),
         issue_comment_event(body=" /assign"),
         issue_comment_event(body="/assign\n"),
@@ -92,10 +91,9 @@ def test_parse_assignment_request_accepts_exact_open_issue_command():
         issue_comment_event(pull_request=True),
         issue_comment_event(user_type="Bot"),
         issue_comment_event(login="dependabot[bot]"),
-    ],
-)
-def test_parse_assignment_request_ignores_unsupported_events(event):
-    assert trusted_self_assign.parse_assignment_request(event) is None
+    ]:
+        with subtests.test(event=event):
+            assert trusted_self_assign.parse_assignment_request(event) is None
 
 
 def test_parse_assignment_request_rejects_invalid_relevant_login():
@@ -197,26 +195,27 @@ def test_client_uses_scoped_merged_pull_request_search(monkeypatch):
     ]
 
 
-@pytest.mark.parametrize(
-    "response",
-    [
+def test_client_fails_closed_on_incomplete_or_invalid_search(subtests):
+    for response in [
         {"total_count": 1, "incomplete_results": True},
         {"total_count": 1},
         {"total_count": True, "incomplete_results": False},
         {"total_count": -1, "incomplete_results": False},
         {"total_count": "1", "incomplete_results": False},
-    ],
-)
-def test_client_fails_closed_on_incomplete_or_invalid_search(monkeypatch, response):
-    client = trusted_self_assign.GitHubClient("test-token")
-    monkeypatch.setattr(
-        client,
-        "_request_json",
-        lambda *args, **kwargs: response,
-    )
+    ]:
+        with subtests.test(response=response):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                client = trusted_self_assign.GitHubClient("test-token")
+                monkeypatch.setattr(
+                    client,
+                    "_request_json",
+                    lambda *args, **kwargs: response,
+                )
 
-    with pytest.raises(trusted_self_assign.GitHubResponseError):
-        client.merged_pull_request_count("maziyarpanahi/openmed", "merged-user")
+                with pytest.raises(trusted_self_assign.GitHubResponseError):
+                    client.merged_pull_request_count(
+                        "maziyarpanahi/openmed", "merged-user"
+                    )
 
 
 def test_client_posts_additive_assignee_payload(monkeypatch):

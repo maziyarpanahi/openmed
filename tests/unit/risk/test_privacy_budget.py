@@ -206,21 +206,24 @@ def test_hostile_budget_mapping_fails_without_echoing_values() -> None:
     assert "synthetic-sensitive-value" not in str(error.value)
 
 
-@pytest.mark.parametrize("tiny", [1e-17, 1e-100, 5e-324])
-@pytest.mark.parametrize("dimension", ["epsilon", "delta"])
-def test_exhausted_budget_rejects_even_subnormal_spends(tiny, dimension) -> None:
-    ledger = PrivacyBudgetLedger({"release": {"epsilon": 1.0, "delta": 0.5}})
-    ledger.record_release("release", 1.0, 0.5)
-    request = {"epsilon": 0.0, "delta": 0.0, dimension: tiny}
+def test_exhausted_budget_rejects_even_subnormal_spends(subtests) -> None:
+    for tiny in [1e-17, 1e-100, 5e-324]:
+        for dimension in ["epsilon", "delta"]:
+            with subtests.test(tiny=tiny, dimension=dimension):
+                ledger = PrivacyBudgetLedger(
+                    {"release": {"epsilon": 1.0, "delta": 0.5}}
+                )
+                ledger.record_release("release", 1.0, 0.5)
+                request = {"epsilon": 0.0, "delta": 0.0, dimension: tiny}
 
-    decision = ledger.check("release", **request)
-    assert not decision.allowed
-    assert getattr(decision, f"projected_{dimension}") > getattr(
-        decision, f"max_{dimension}"
-    )
-    with pytest.raises(PrivacyBudgetLedgerExceeded):
-        ledger.record_release("release", **request)
-    assert len(ledger.spends) == 1
+                decision = ledger.check("release", **request)
+                assert not decision.allowed
+                assert getattr(decision, f"projected_{dimension}") > getattr(
+                    decision, f"max_{dimension}"
+                )
+                with pytest.raises(PrivacyBudgetLedgerExceeded):
+                    ledger.record_release("release", **request)
+                assert len(ledger.spends) == 1
 
 
 def test_tiny_prior_spend_is_not_lost_when_adding_a_large_spend() -> None:
