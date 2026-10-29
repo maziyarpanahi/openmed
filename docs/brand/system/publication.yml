@@ -414,6 +414,7 @@ classification:
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
+    - training/synthetic/hl7v2-messages.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
