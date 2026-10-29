@@ -53,7 +53,9 @@ The runner rejects unavailable generators, wrong versions, missing dependencies,
 cycles and output-limit violations. It reserves a new destination, writes into an
 owned sibling stage, validates every generator and runs local validation/capsule
 hooks only after successful generation. Hooks cannot silently alter generated
-artifacts or derivation metadata. Only then are derivation and completion markers
+artifacts or derivation metadata. Root `derivation.json` and `complete.json` are
+reserved for the runner; hooks cannot create these metadata paths. Only then are
+derivation and completion markers
 written and the stage atomically promoted. Failures and handled interruptions
 clean the owned stage/reservation; existing destinations are never overwritten.
 An unhandled process kill can leave a hidden abandoned stage, never a complete

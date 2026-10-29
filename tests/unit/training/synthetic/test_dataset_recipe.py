@@ -156,6 +156,21 @@ def test_hook_failure_or_manifest_mutation_cannot_complete(tmp_path):
         )
     assert not (tmp_path / "out").exists()
 
+    for filename in ("complete.json", "derivation.json"):
+
+        def reserved(stage, manifest, filename=filename):
+            (stage / filename).write_bytes(b"{}")
+
+        with pytest.raises(ValueError):
+            run_dataset_recipe(
+                recipe([node(generator="stub")]),
+                tmp_path / "out",
+                registry=stub(),
+                post_generation_hooks=[reserved],
+            )
+        assert not (tmp_path / "out").exists()
+        assert not list(tmp_path.glob(".openmed-synthetic-*"))
+
 
 def test_existing_destination_and_files_are_preserved(tmp_path):
     output = tmp_path / "out"

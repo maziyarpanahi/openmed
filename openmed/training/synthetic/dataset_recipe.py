@@ -295,6 +295,10 @@ def run_dataset_recipe(
         all_paths = list(stage.rglob("*"))
         if any(path.is_symlink() for path in all_paths):
             raise ValueError("post-generation output cannot include symbolic links")
+        if any(
+            (stage / name).exists() for name in ("derivation.json", "complete.json")
+        ):
+            raise ValueError("post-generation hook used reserved completion metadata")
         files = [path for path in all_paths if path.is_file()]
         if (
             len(files) > 2048
