@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generate structured multilingual synthetic dialogue with grapheme-safe spans, Journey fact evidence and explicit adjudication truth (#2846).
 
+- Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
+
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
   derivation lineage and transitive ancestry, with explicit unmet-stratum export
   refusal (#3692).
