@@ -174,23 +174,20 @@ def test_suite_registry_loads_i2b2_from_configured_path(
     assert metadata["label_mapping"]["NAME/PATIENT"] == PERSON
 
 
-@pytest.mark.parametrize(
-    ("loader", "path_env"),
-    (
+def test_dua_relation_loaders_refuse_without_credentialed_path(subtests) -> None:
+    for loader, path_env in (
         (load_biored_relation_fixtures, BIORED_PATH_ENV),
         (load_n2c2_2018_relation_fixtures, N2C2_2018_PATH_ENV),
         (load_n2c2_2022_relation_fixtures, N2C2_2022_PATH_ENV),
-    ),
-)
-def test_dua_relation_loaders_refuse_without_credentialed_path(
-    loader,
-    path_env: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(path_env, raising=False)
+    ):
+        with subtests.test(loader=loader, path_env=path_env):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(path_env, raising=False)
 
-    with pytest.raises(DUACredentialRequired, match="No corpus rows were loaded"):
-        loader()
+                with pytest.raises(
+                    DUACredentialRequired, match="No corpus rows were loaded"
+                ):
+                    loader()
 
 
 def test_biored_loader_maps_bioc_json_to_relation_fixture(tmp_path: Path) -> None:
@@ -305,37 +302,37 @@ def test_n2c2_loader_preserves_tabs_in_brat_entity_text(tmp_path: Path) -> None:
     assert fixture.entities[0].text == "Drug\tname"
 
 
-@pytest.mark.parametrize(
-    "corpus",
-    (BIORED, N2C2_2018, N2C2_2022),
-)
 def test_each_dua_relation_loader_scores_through_promotion_g9(
-    corpus: str,
-    tmp_path: Path,
+    subtests, tmp_path
 ) -> None:
-    fixture_loaders = {
-        BIORED: _write_and_load_biored,
-        N2C2_2018: _write_and_load_n2c2_2018,
-        N2C2_2022: _write_and_load_n2c2_2022,
-    }
-    fixtures = fixture_loaders[corpus](tmp_path)
+    case_root = tmp_path
+    for corpus in (BIORED, N2C2_2018, N2C2_2022):
+        with subtests.test(corpus=corpus):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            fixture_loaders = {
+                BIORED: _write_and_load_biored,
+                N2C2_2018: _write_and_load_n2c2_2018,
+                N2C2_2022: _write_and_load_n2c2_2022,
+            }
+            fixtures = fixture_loaders[corpus](tmp_path)
 
-    report = run_dua_relation_promotion_benchmark(
-        fixtures,
-        suite=corpus,
-        model_name="synthetic-relation-model",
-        runner=lambda fixture, _model, _device: fixture.relations,
-        ci_resamples=20,
-        ci_seed=17,
-    )
+            report = run_dua_relation_promotion_benchmark(
+                fixtures,
+                suite=corpus,
+                model_name="synthetic-relation-model",
+                runner=lambda fixture, _model, _device: fixture.relations,
+                ci_resamples=20,
+                ci_seed=17,
+            )
 
-    gate = report.metrics["g9_dua_promotion"]
-    assert gate["gate"] == "G9"
-    assert gate["passed"] is True
-    assert gate["details"]["strict"]["lower"] == 1.0
-    assert gate["details"]["gate_tier"] == "promotion"
-    assert gate["details"]["daily_blocking"] is False
-    assert report.metadata["promotion_blocking"] is True
+            gate = report.metrics["g9_dua_promotion"]
+            assert gate["gate"] == "G9"
+            assert gate["passed"] is True
+            assert gate["details"]["strict"]["lower"] == 1.0
+            assert gate["details"]["gate_tier"] == "promotion"
+            assert gate["details"]["daily_blocking"] is False
+            assert report.metadata["promotion_blocking"] is True
 
 
 def test_dua_relation_promotion_requires_matching_suite_and_fixture_dataset(

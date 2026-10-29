@@ -93,41 +93,38 @@ def test_registered_gliformer_disease_defaults():
     assert record.license == "Apache-2.0"
 
 
-@pytest.mark.parametrize(
-    "model_id,family",
-    [
+def test_unindexed_hub_models_resolve_without_network(subtests):
+    for model_id, family in [
         ("OpenMed/GLiFormer-BioNER-Disease-Large-v2", "gliformer"),
         ("knowledgator/gliformer-base-v1", "gliformer"),
         ("fastino/gliner2-base-v1", "gliner2"),
         ("fastino/gliner2.5-base-v1", "gliner2"),
         ("Ihor/gliner-biomed-large-v1.0", "gliner"),
-    ],
-)
-def test_unindexed_hub_models_resolve_without_network(model_id, family):
-    record = resolve_model_record(model_id)
-    assert record.family == family
-    assert record.path == ""
+    ]:
+        with subtests.test(model_id=model_id, family=family):
+            record = resolve_model_record(model_id)
+            assert record.family == family
+            assert record.path == ""
 
 
-@pytest.mark.parametrize(
-    "config,family",
-    [
+def test_local_config_resolves_arbitrary_directory_name(subtests, tmp_path):
+    case_root = tmp_path
+    for config, family in [
         ({"model_type": "gliformer-layout"}, "gliformer"),
         ({"model_type": "gliner2", "architecture": "boundary"}, "gliner2"),
         ({"architectures": ["Gliner2ForSchemaExtraction"]}, "gliner2"),
-    ],
-)
-@pytest.mark.parametrize("filename", ["config.json", "gliner_config.json"])
-def test_local_config_resolves_arbitrary_directory_name(
-    tmp_path, config, family, filename
-):
-    directory = tmp_path / "arbitrary-export"
-    directory.mkdir()
-    (directory / filename).write_text(json.dumps(config))
-    record = resolve_model_record(str(directory))
-    assert record.family == family
-    assert record.path == str(directory)
-    assert build_index(tmp_path).models[0].family == family
+    ]:
+        for filename in ["config.json", "gliner_config.json"]:
+            with subtests.test(config=config, family=family, filename=filename):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                directory = tmp_path / "arbitrary-export"
+                directory.mkdir()
+                (directory / filename).write_text(json.dumps(config))
+                record = resolve_model_record(str(directory))
+                assert record.family == family
+                assert record.path == str(directory)
+                assert build_index(tmp_path).models[0].family == family
 
 
 def test_explicit_family_accepts_ambiguous_identifier():

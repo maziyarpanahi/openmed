@@ -144,26 +144,26 @@ def test_subprocess_runtime_parses_llama_style_bracket_output(
     ]
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_subprocess_runtime_rejects_unbounded_or_ambiguous_options(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for kwargs in [
         {"command": ["embedding"], "timeout_seconds": float("nan")},
         {"command": ["embedding"], "context_size": True},
         {"command": ["embedding"], "batch_size": 65_537},
         {"command": "embedding"},
         {"command": ["embedding"], "extra_args": "--verbose"},
-    ],
-)
-def test_subprocess_runtime_rejects_unbounded_or_ambiguous_options(
-    tmp_path: Path,
-    kwargs: dict[str, object],
-) -> None:
-    module = _runtime_module()
-    model = tmp_path / "model.gguf"
-    model.write_bytes(b"GGUF")
+    ]:
+        with subtests.test(kwargs=kwargs):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            module = _runtime_module()
+            model = tmp_path / "model.gguf"
+            model.write_bytes(b"GGUF")
 
-    with pytest.raises(ValueError):
-        module.LlamaCppEmbeddingRuntime(model, **kwargs)
+            with pytest.raises(ValueError):
+                module.LlamaCppEmbeddingRuntime(model, **kwargs)
 
 
 def test_subprocess_runtime_rejects_nul_text_and_oversized_output(
