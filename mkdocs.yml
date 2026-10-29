@@ -352,11 +352,16 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
       - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+      - Synthetic Split Planning: training/synthetic/split-planning.md
+      - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+      - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+      - Synthetic Release Capsules: training/synthetic/release-capsules.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -407,6 +412,7 @@ nav:
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
       - Scarce-label Native Review: languages/scarce-label-review.md
       - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
