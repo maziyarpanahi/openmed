@@ -784,6 +784,7 @@ def test_installed_backend_passes_shared_conformance_suite(backend, record_prope
     assert report.chars_per_second > 0.0
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 def test_installed_backends_agree_on_dictionary_override_spans(record_property):
     available = []

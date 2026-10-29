@@ -113,6 +113,7 @@ def test_sentence_window_and_adjacent_section_rules_are_explicit() -> None:
     assert candidate.features["adjacent_section"] == 1.0
 
 
+@pytest.mark.slow
 def test_max_pairs_bounds_a_500_span_document() -> None:
     surfaces = [f"D{index}" if index % 2 == 0 else f"P{index}" for index in range(500)]
     text = " ".join(surfaces)

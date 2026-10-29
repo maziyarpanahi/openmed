@@ -360,6 +360,7 @@ def test_prefetch_model_preserves_single_allow_pattern(
     assert [call["filename"] for call in calls] == ["model.safetensors"]
 
 
+@pytest.mark.slow
 def test_prefetch_model_downloads_through_hf_endpoint_mirror(
     tmp_path: Path,
 ) -> None:

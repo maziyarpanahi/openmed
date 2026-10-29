@@ -209,6 +209,7 @@ def _maxrss_bytes() -> int:
     return int(value) * 1024
 
 
+@pytest.mark.slow
 def test_ingests_million_resource_export_with_bounded_memory(tmp_path: Path) -> None:
     server = _FakeBulkServer(resource_counts=[100_000] * 10)
     config = _config(tmp_path, server, max_inflight_downloads=4)

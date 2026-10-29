@@ -801,6 +801,7 @@ def test_reviewed_assumptions_notes_are_digest_bound_without_content_disclosure(
     assert "assumptions-notes-canary" not in evidence.read_text(encoding="utf-8")
 
 
+@pytest.mark.slow
 def test_expert_review_verify_rejects_duplicate_json_keys_without_echo(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

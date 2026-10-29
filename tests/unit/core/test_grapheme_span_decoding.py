@@ -55,6 +55,7 @@ def _synthetic_multiscript_spans(draw):
     return clusters, text, start, end
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @settings(max_examples=600, deadline=None)
 @given(_synthetic_multiscript_spans())

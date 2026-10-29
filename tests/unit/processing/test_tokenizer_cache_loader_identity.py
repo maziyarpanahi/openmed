@@ -169,6 +169,7 @@ def test_loader_entries_respect_lru_capacity(monkeypatch):
     assert len(tokenizer_cache._TOKENIZER_CACHE) == 2
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("evict", [False, True])
 def test_loader_owner_is_released_with_its_cache_entry(monkeypatch, evict):
     monkeypatch.setattr(tokenizer_cache, "DEFAULT_TOKENIZER_CACHE_SIZE", 1)

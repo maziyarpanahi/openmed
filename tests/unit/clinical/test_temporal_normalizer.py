@@ -122,6 +122,7 @@ def _assert_shared_iso_parsing(sources: dict[str, str]) -> None:
     assert offenders == []
 
 
+@pytest.mark.slow
 def test_clinical_code_uses_the_shared_iso_profile_instead_of_interpreter_grammar():
     _assert_shared_iso_parsing(
         {

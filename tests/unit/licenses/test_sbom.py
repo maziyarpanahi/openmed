@@ -139,6 +139,7 @@ def test_cli_writes_without_network_and_does_not_log_output_path(
     )
 
 
+@pytest.mark.slow
 def test_current_manifests_generate_the_base_runtime_closure() -> None:
     document = sbom.build_sbom(
         ROOT / "pyproject.toml",

@@ -208,6 +208,7 @@ def _synthetic_han_decode_case(draw):
     return text, words, word_tokens, raw_start, raw_end
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @settings(max_examples=2000, deadline=None)
 @given(_synthetic_han_decode_case())

@@ -102,6 +102,7 @@ def test_non_list_canonical_labels_is_flagged(tmp_path: Path) -> None:
     assert manifest_label_errors(manifest_path=manifest)
 
 
+@pytest.mark.slow
 def test_committed_catalog_surfaces_are_current() -> None:
     assert regenerate_surfaces.surface_errors() == []
 
@@ -115,6 +116,7 @@ def test_runtime_registry_and_pii_defaults_derive_from_manifest() -> None:
     regenerate_surfaces.validate_pii_derivation(rows)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("relative_path", "old", "new"),
     (

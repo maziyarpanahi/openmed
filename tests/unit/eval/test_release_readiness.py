@@ -597,6 +597,7 @@ def _sdk_repository(tmp_path: Path, *, newline: str | None = None) -> Path:
     return root
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
 def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     tmp_path,
@@ -624,6 +625,7 @@ def test_sdk_continuity_allows_representation_migration_and_signs_actual_checks(
     assert "qualification" in report.checks[0].details["scope"]
 
 
+@pytest.mark.slow
 def test_sdk_continuity_rejects_changed_artifacts_evidence_and_pointers(tmp_path):
     root = _sdk_repository(tmp_path)
     for name in ("models.jsonl", "gates/baseline.json", "gates/registry_state.json"):
@@ -641,6 +643,7 @@ def test_sdk_continuity_rejects_changed_artifacts_evidence_and_pointers(tmp_path
         path.write_bytes(original)
 
 
+@pytest.mark.slow
 def test_sdk_continuity_refuses_missing_or_unsafe_baseline(tmp_path):
     root = _sdk_repository(tmp_path)
     for baseline in ("v0.9.0", "HEAD", "--help", "v1.0.0:models.jsonl"):
@@ -649,6 +652,7 @@ def test_sdk_continuity_refuses_missing_or_unsafe_baseline(tmp_path):
         assert not report.checks[0].passed
 
 
+@pytest.mark.slow
 def test_sdk_continuity_accepts_catalog_edits_without_model_promotion(tmp_path):
     root = _sdk_repository(tmp_path)
     path = root / "models.jsonl"
@@ -691,6 +695,7 @@ def test_sdk_catalog_edits_cannot_mask_artifact_or_metadata_regressions(
     assert not report.checks[0].passed
 
 
+@pytest.mark.slow
 def test_sdk_catalog_edits_cannot_change_tokenizer_measurements(tmp_path):
     root = _sdk_repository(tmp_path)
     path = root / "models.jsonl"
@@ -716,6 +721,7 @@ def _add_summary_policy(root: Path) -> dict:
     return payload
 
 
+@pytest.mark.slow
 def test_sdk_continuity_allows_new_strict_summary_policy_without_training(tmp_path):
     root = _sdk_repository(tmp_path)
     _add_summary_policy(root)
@@ -724,6 +730,7 @@ def test_sdk_continuity_allows_new_strict_summary_policy_without_training(tmp_pa
     assert report.checks[0].gate == "sdk_model_continuity"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("key", "value"),
     [
@@ -745,6 +752,7 @@ def test_sdk_continuity_rejects_invalid_or_relaxed_summary_policy(tmp_path, key,
     assert report.decision == NOT_READY
 
 
+@pytest.mark.slow
 def test_sdk_summary_policy_cannot_rewrite_retained_model_evidence(tmp_path):
     root = _sdk_repository(tmp_path)
     payload = _add_summary_policy(root)
@@ -754,6 +762,7 @@ def test_sdk_summary_policy_cannot_rewrite_retained_model_evidence(tmp_path):
     assert report.decision == NOT_READY
 
 
+@pytest.mark.slow
 def test_sdk_continuity_rejects_non_object_evidence_without_crashing(tmp_path):
     root = _sdk_repository(tmp_path)
     (root / "gates/baseline.json").write_text("[]")
@@ -768,6 +777,7 @@ def test_missing_model_gate_still_fails_without_explicit_sdk_scope(tmp_path):
     assert not report.checks[0].passed
 
 
+@pytest.mark.slow
 def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
     root = _sdk_repository(tmp_path)
     path = root / "gates/registry_state.json"
@@ -784,6 +794,7 @@ def test_sdk_continuity_rejects_changed_slot_coordinates_and_versions(tmp_path):
         assert not report.checks[0].passed
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "event,declared,expected,expected_base,expected_guide",
     [
@@ -887,6 +898,7 @@ def test_sdk_workflow_classifies_real_version_boundaries(
     )
 
 
+@pytest.mark.slow
 def test_sdk_workflow_refuses_invalid_declared_version(tmp_path):
     """Malformed metadata cannot turn a real candidate into an ordinary PR."""
     root = tmp_path / "repository"

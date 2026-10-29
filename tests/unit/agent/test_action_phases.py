@@ -226,6 +226,7 @@ def test_phase_contract_is_available_from_public_agent_api():
         assert name in agent.__all__
 
 
+@pytest.mark.slow
 def test_validation_is_import_light_and_has_no_execution_side_effects():
     script = """
 import sys

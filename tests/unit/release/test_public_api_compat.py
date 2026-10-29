@@ -144,6 +144,7 @@ def test_agent_namespace_addition_passes_cli_without_allowlisting(
     assert f"{namespace}.new_review_contract" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_gate_captures_governance_without_optional_mcp_hf_or_service_extras():
     script = f"""
 import importlib.abc
@@ -469,6 +470,7 @@ def test_unavailable_current_export_is_not_reported_changed():
 # --- CLI behaviour ----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_update_writes_baseline_then_check_passes(tmp_path):
     baseline_path = tmp_path / "baseline.json"
     allowlist_path = tmp_path / "allowlist.json"

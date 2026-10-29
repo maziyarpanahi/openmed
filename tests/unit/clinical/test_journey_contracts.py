@@ -114,6 +114,7 @@ def test_all_contracts_round_trip_and_validate_against_bundled_schemas() -> None
         assert record.canonical_hash.startswith("sha256:")
 
 
+@pytest.mark.slow
 def test_canonical_serialization_is_byte_stable_across_fresh_processes() -> None:
     payload = _fixtures()["clinical_fact"]
     script = (

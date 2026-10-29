@@ -327,6 +327,7 @@ def test_server_owned_enable_and_mutation_opt_ins():
     assert not service.calls
 
 
+@pytest.mark.slow
 def test_actual_consumed_receipt_duplicate_ack_and_cancellation_intent():
     service = CustodiedService()
     with client(service) as http:

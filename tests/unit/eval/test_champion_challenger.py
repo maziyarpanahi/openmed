@@ -273,6 +273,7 @@ def test_ledger_reproduces_byte_identically(tmp_path: Path) -> None:
     assert reloaded.record_hash == first.record_hash
 
 
+@pytest.mark.slow
 def test_record_reproduces_across_process(tmp_path: Path) -> None:
     """A record written by the CLI matches the in-process record byte-for-byte."""
 

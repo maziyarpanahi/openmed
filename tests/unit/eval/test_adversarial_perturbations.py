@@ -90,6 +90,7 @@ def test_operators_perturb_each_synthetic_gold_span(operator):
         assert dirty_span.text != clean_span.text
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "name",
     [

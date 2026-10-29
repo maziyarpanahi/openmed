@@ -541,6 +541,7 @@ def test_deidentify_mask_idempotent(doc):
         )
 
 
+@pytest.mark.slow
 @given(doc=planted_documents())
 def test_deidentify_deterministic_fixed_seed(doc):
     """A fixed seed yields byte-identical redacted output across runs."""
@@ -733,6 +734,7 @@ def test_repeated_dates_share_one_pipeline_shift(shift, keep_year):
     )
 
 
+@pytest.mark.slow
 @settings(deadline=None)
 @given(doc=long_planted_documents())
 def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
@@ -764,6 +766,7 @@ def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
         )
 
 
+@pytest.mark.slow
 @settings(deadline=None)
 @given(case=chunk_boundary_documents())
 def test_streaming_chunk_boundary_matches_single_pass(case):

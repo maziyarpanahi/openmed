@@ -138,6 +138,7 @@ def _make_adapter(
     return client, OpenMRSAdapter(client, deidentifier=_fake_deidentify)
 
 
+@pytest.mark.slow
 def test_registry_is_lazy_and_does_not_import_openmrs_or_httpx() -> None:
     script = """
 import sys

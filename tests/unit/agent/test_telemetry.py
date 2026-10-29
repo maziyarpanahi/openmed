@@ -56,6 +56,7 @@ def test_disabled_ignores_injected_sinks_and_clock(monkeypatch: Any) -> None:
     assert sink.spans == sink.metrics == []
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("enabled,absent", [(False, False), (True, True)])
 def test_fresh_process_never_imports_otel_when_disabled_or_absent(
     enabled: bool, absent: bool

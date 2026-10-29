@@ -370,6 +370,7 @@ def test_conformal_calibration_preserves_shifted_critical_coverage() -> None:
     assert all(row["coverage_gap"] <= 0.01 for row in report.language_coverage.values())
 
 
+@pytest.mark.slow
 def test_conformal_payload_is_byte_stable_and_loadable(tmp_path: Path) -> None:
     calibration, gate = _shifted_critical_samples()
     kwargs = {

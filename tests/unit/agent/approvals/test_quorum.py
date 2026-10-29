@@ -193,6 +193,7 @@ def test_decision_contains_only_roles_counts_and_digests():
     assert isinstance(decision, ApprovalQuorumDecision)
 
 
+@pytest.mark.slow
 def test_raw_payloads_and_oversized_sets_are_refused():
     with pytest.raises(ApprovalQuorumError, match="invalid_receipt"):
         evaluate([{"payload": "Synthetic Patient ID 123"}])

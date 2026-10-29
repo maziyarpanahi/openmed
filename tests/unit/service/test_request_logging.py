@@ -34,6 +34,7 @@ PHI_SUBSTRINGS = (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("level", ["INFO", "off"])
 def test_reference_launch_emits_only_safe_access_records(level, tmp_path):
     import os

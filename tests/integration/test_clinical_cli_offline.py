@@ -29,6 +29,7 @@ sys.exit(main(sys.argv[1:]))
 """
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", ["sdoh", "relations", "timeline"])
 def test_offline_process_returns_one_value_free_envelope(tmp_path, name):
     text = (
@@ -118,6 +119,7 @@ def test_offline_process_returns_one_value_free_envelope(tmp_path, name):
         assert protected not in result.stdout + result.stderr + output.read_text()
 
 
+@pytest.mark.slow
 def test_help_and_invalid_arguments_are_private_across_process(tmp_path):
     env = {
         **os.environ,

@@ -46,6 +46,7 @@ def _run(path: Path, request: object) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("all_pass", [False, True])
 def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
     all_pass: bool, tmp_path: Path
@@ -93,6 +94,7 @@ def test_dqd_file_to_signed_report_runs_without_dqd_or_r(
     assert json.loads(command.stdout) == expected
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "case,state",
     [

@@ -143,6 +143,7 @@ def test_runtime_helper_reports_missing_optional_extra(monkeypatch):
         medspacy_context.process_to_canonical("synthetic", nlp=lambda value: value)
 
 
+@pytest.mark.slow
 def test_core_import_does_not_import_medspacy_or_spacy():
     code = """
 import sys

@@ -277,6 +277,7 @@ def test_dictionary_parser_fuzz_target_is_fail_closed(
         assert not any(char in r".^$*+?{}[]\|()" for char in entry.term)
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @pytest.mark.timeout(30)
 @settings(max_examples=FUZZ_EXAMPLES, deadline=None, derandomize=True)

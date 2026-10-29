@@ -158,6 +158,7 @@ def test_locale_phi_identifier_is_checksum_valid(language):
         assert clinical_ids.validate_luhn(id_span.text)
 
 
+@pytest.mark.slow
 def test_locale_phi_generation_is_deterministic_per_seed():
     first = generate_locale_phi_examples(seed=101)
     second = generate_locale_phi_examples(seed=101)

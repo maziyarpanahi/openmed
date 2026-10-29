@@ -832,6 +832,7 @@ def test_handler_rejects_malformed_offsets_without_exposing_detector_values(
     assert not output.exists()
 
 
+@pytest.mark.slow
 def test_clean_package_import_activates_handlers_without_optional_extra() -> None:
     command = (
         "import openmed.multimodal as m; "

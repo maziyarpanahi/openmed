@@ -131,6 +131,7 @@ def test_failed_cleanup_is_controlled_and_retry_checks_remaining_hashes(
     assert journal.load() == plan.record
 
 
+@pytest.mark.slow
 def test_existing_journal_instance_waits_for_cross_process_retirement_lock(
     tmp_path: Path,
 ) -> None:

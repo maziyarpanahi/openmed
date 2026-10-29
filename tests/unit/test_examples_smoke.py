@@ -151,6 +151,7 @@ def test_sdoh_timeline_example_runs_real_public_calls_offline(
     _assert_sdoh_timeline_demo_output(captured.out)
 
 
+@pytest.mark.slow
 def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
@@ -1091,6 +1092,7 @@ def test_nli_relation_example_runs_public_calls_offline(
     _assert_nli_relation_demo_output(captured.out)
 
 
+@pytest.mark.slow
 def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(

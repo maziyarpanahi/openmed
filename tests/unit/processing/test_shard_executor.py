@@ -523,6 +523,7 @@ def test_publish_survives_a_windows_style_sharing_violation(
     assert sorted(entry.name for entry in tmp_path.iterdir()) == [path.name]
 
 
+@pytest.mark.slow
 def test_persistent_permission_error_is_not_mistaken_for_contention(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

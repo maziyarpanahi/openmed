@@ -694,6 +694,7 @@ def test_relation_golden_gate_passes_at_pinned_tolerance_and_is_signed(
     assert restored_check.details == check.details
 
 
+@pytest.mark.slow
 def test_relation_golden_gate_quarantines_strict_f1_regression(
     tmp_path: Path,
 ) -> None:
@@ -932,6 +933,7 @@ def test_g10_faithfulness_gate_passes_grounded_outputs(tmp_path: Path) -> None:
     assert check.details["ungrounded_fact_rate"] == pytest.approx(0.0)
 
 
+@pytest.mark.slow
 def test_g10_faithfulness_gate_quarantines_fabricated_facts(
     tmp_path: Path,
 ) -> None:
@@ -2218,6 +2220,7 @@ def test_export_variant_gate_blocks_degraded_variant_and_reports_format(
     assert _check(result, "export_variants:webgpu").passed is True
 
 
+@pytest.mark.slow
 def test_export_variant_gate_fails_closed_when_required_variant_missing(
     tmp_path: Path,
 ) -> None:

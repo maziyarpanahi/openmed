@@ -581,6 +581,7 @@ def test_symlink_artifact_is_denied(tmp_path: Path) -> None:
     assert result.code == "artifact_path_unsafe"
 
 
+@pytest.mark.slow
 @given(priority=st.integers(min_value=0, max_value=10_000))
 def test_manifest_digest_and_resolution_are_deterministic_for_priority(
     priority: int,

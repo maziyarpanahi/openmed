@@ -179,6 +179,7 @@ def test_usage_errors_exit_two(tmp_path: Path, arguments: list[str]) -> None:
     assert _MODEL_SENTINEL not in stderr
 
 
+@pytest.mark.slow
 def test_help_lists_the_command_with_its_own_usage_line() -> None:
     exit_code, stdout, _ = _run("models", "--help")
 

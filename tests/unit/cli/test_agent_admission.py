@@ -164,6 +164,7 @@ def test_production_entry_point_stop_resume_and_invalid_metadata(
     assert json.loads(capsys.readouterr().out)["generation"] == 4
 
 
+@pytest.mark.slow
 def test_actual_console_script_supports_agents_status(openmed_console_script) -> None:
     import subprocess
 
