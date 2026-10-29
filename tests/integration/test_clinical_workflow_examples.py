@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 @pytest.mark.parametrize(
     "name",

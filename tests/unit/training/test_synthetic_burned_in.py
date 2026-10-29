@@ -670,6 +670,7 @@ def test_system_thai_font_with_raqm_renders_distinct_shaped_names(hide_default_f
         _assert_boxes_bound_text(example)
 
 
+@pytest.mark.slow
 def test_importing_core_and_burned_in_module_does_not_import_pillow():
     code = (
         "import sys\n"
