@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add clinical transliteration provenance with bounded offline contracts, synthetic controls
+  and documented behavior (#2857).
+
 - Added a bounded, value-free synthetic memorization audit that fingerprints
   protected reference material, blocks exact, paraphrase-style and exposure
   matches on configurable signals, and renders canonical digest-only JSON
