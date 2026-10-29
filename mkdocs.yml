@@ -408,6 +408,7 @@ nav:
       - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
       - Scarce-label Native Review: languages/scarce-label-review.md
       - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md

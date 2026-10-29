@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   derivation lineage and transitive ancestry, with explicit unmet-stratum export
   refusal (#3692).
 
+- Report independent synthetic fidelity axes, Wilson intervals and aggregate
+  reference distribution comparisons without retaining reference records (#2852).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 
