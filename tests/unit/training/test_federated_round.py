@@ -33,34 +33,30 @@ EXPECTED_TRANSITIONS = {
 }
 
 
-@pytest.mark.parametrize("current", FEDERATED_ROUND_STATES)
-def test_transition_table_covers_every_state(current: FederatedRoundState) -> None:
-    expected = EXPECTED_TRANSITIONS[current]
+def test_transition_table_covers_every_state(subtests) -> None:
+    for current in FEDERATED_ROUND_STATES:
+        with subtests.test(current=current):
+            expected = EXPECTED_TRANSITIONS[current]
 
-    assert set(FEDERATED_ROUND_TRANSITIONS[current]) == expected
-    assert set(allowed_round_transitions(current)) == expected
-    for target in FEDERATED_ROUND_STATES:
-        assert can_transition_round(current, target) is (target in expected)
-        if target in expected:
-            validate_round_transition(current, target)
+            assert set(FEDERATED_ROUND_TRANSITIONS[current]) == expected
+            assert set(allowed_round_transitions(current)) == expected
+            for target in FEDERATED_ROUND_STATES:
+                assert can_transition_round(current, target) is (target in expected)
+                if target in expected:
+                    validate_round_transition(current, target)
 
 
-@pytest.mark.parametrize(
-    ("current", "target"),
-    [
+def test_skipped_backward_and_post_terminal_transitions_are_rejected(subtests) -> None:
+    for current, target in [
         (S.PLANNED, S.COLLECTING),
         (S.COLLECTING, S.PREFLIGHT),
         (S.EVALUATING, S.PREFLIGHT),
         (S.PROMOTED, S.ABORTED),
         (S.ABORTED, S.PLANNED),
-    ],
-)
-def test_skipped_backward_and_post_terminal_transitions_are_rejected(
-    current: FederatedRoundState,
-    target: FederatedRoundState,
-) -> None:
-    with pytest.raises(FederatedRoundTransitionError):
-        validate_round_transition(current, target)
+    ]:
+        with subtests.test(current=current, target=target):
+            with pytest.raises(FederatedRoundTransitionError):
+                validate_round_transition(current, target)
 
 
 def test_held_round_must_return_through_evaluation_before_promotion() -> None:
@@ -74,17 +70,16 @@ def test_held_round_must_return_through_evaluation_before_promotion() -> None:
     assert promoted.is_terminal is True
 
 
-@pytest.mark.parametrize("terminal", FEDERATED_ROUND_TERMINAL_STATES)
-def test_promoted_and_aborted_rounds_are_terminal(
-    terminal: FederatedRoundState,
-) -> None:
-    lifecycle = FederatedRoundLifecycle(terminal)
+def test_promoted_and_aborted_rounds_are_terminal(subtests) -> None:
+    for terminal in sorted(FEDERATED_ROUND_TERMINAL_STATES):
+        with subtests.test(terminal=terminal):
+            lifecycle = FederatedRoundLifecycle(terminal)
 
-    assert lifecycle.is_terminal is True
-    assert lifecycle.allowed_transitions() == ()
-    for target in FEDERATED_ROUND_STATES:
-        with pytest.raises(FederatedRoundTransitionError):
-            lifecycle.transition_to(target)
+            assert lifecycle.is_terminal is True
+            assert lifecycle.allowed_transitions() == ()
+            for target in FEDERATED_ROUND_STATES:
+                with pytest.raises(FederatedRoundTransitionError):
+                    lifecycle.transition_to(target)
 
 
 def test_lifecycle_is_immutable_and_transitions_return_new_values() -> None:
@@ -115,9 +110,8 @@ def test_serialization_is_versioned_deterministic_and_round_trips() -> None:
     assert json.loads(lifecycle.to_json()) == lifecycle.to_dict()
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_deserialization_fails_closed(subtests) -> None:
+    for payload in [
         {},
         {"schema_version": FEDERATED_ROUND_SCHEMA_VERSION},
         {
@@ -128,11 +122,10 @@ def test_serialization_is_versioned_deterministic_and_round_trips() -> None:
         {"schema_version": "v2", "state": "planned"},
         {"schema_version": FEDERATED_ROUND_SCHEMA_VERSION, "state": "unknown"},
         {"schema_version": FEDERATED_ROUND_SCHEMA_VERSION, "state": 1},
-    ],
-)
-def test_deserialization_fails_closed(payload: dict[str, object]) -> None:
-    with pytest.raises(FederatedRoundStateError):
-        FederatedRoundLifecycle.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(FederatedRoundStateError):
+                FederatedRoundLifecycle.from_dict(payload)
 
 
 def test_errors_and_serialization_do_not_expose_caller_metadata() -> None:
