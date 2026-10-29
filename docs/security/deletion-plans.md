@@ -101,3 +101,102 @@ counts, and ownership state immediately before invoking the first callback.
 The module has no network dependency or mandatory outbound call. Use synthetic
 offline fixtures for tests and never place protected health information,
 credentials, or raw paths in a manifest report.
+
+## Federated round purges
+
+`openmed.training.federated_artifact_purge` applies these plans to
+private-learning artifacts. Individual client updates can leak training text
+even after clipping, and local runs leave tokenized caches and resume state
+behind, so a round policy declares a retention class for every artifact class
+and the purge runs as soon as the round no longer needs that material.
+
+| Artifact class | Allowed disposition |
+| --- | --- |
+| `client_update_payload`, `masked_input`, `share_material` | `mandatory_purge` |
+| `local_cache`, `resume_checkpoint`, `transcript` | `mandatory_purge` (default) or `best_effort_purge` |
+| `commitment`, `evidence` | `preserve` |
+
+`FederatedRetentionPolicy` requires a declaration for every class and refuses
+any weaker disposition. The coordinator purges after the aggregate commitment
+is recorded (`commitment_recorded`) or the round aborts (`round_aborted`). A
+client purges after it submits its update (`update_submitted`) or aborts.
+
+```python
+from openmed.training.federated_artifact_purge import (
+    FederatedArtifactPurge,
+    FederatedPurgeSide,
+    FederatedPurgeTrigger,
+    FederatedRetentionPolicy,
+    PrivateLearningArtifactClass,
+    emit_federated_round_evidence,
+)
+
+registry = {}  # private digest -> local location, never serialized
+
+
+def delete_owned_artifact(artifact):
+    # Resolve the digest through the private registry and remove it.
+    # Treat an already-missing artifact as deleted so restarts are idempotent.
+    registry.pop(artifact.artifact_hash, None)
+
+
+purge = FederatedArtifactPurge(
+    FederatedRetentionPolicy(FederatedPurgeSide.COORDINATOR),
+    round_reference="synthetic-round-1",
+)
+payload = purge.register(
+    "synthetic-client-update",
+    PrivateLearningArtifactClass.CLIENT_UPDATE_PAYLOAD,
+)
+registry[payload] = "synthetic-client-update"
+commitment = purge.register(
+    "synthetic-commitment",
+    PrivateLearningArtifactClass.COMMITMENT,
+    dependencies=[payload],
+)
+
+purge.record_trigger(
+    FederatedPurgeTrigger.COMMITMENT_RECORDED,
+    commitment_digest="sha256:" + "c" * 64,
+)
+receipt = purge.run(delete_owned_artifact)
+evidence = emit_federated_round_evidence(purge, lambda bundle: None)
+print(receipt.to_json())
+```
+
+`register()` hashes each reference at the boundary and returns the digest the
+injected deleter receives. Prefer opaque references or keyed `hmac-sha256:`
+digests over raw paths, because a plain SHA-256 of a predictable path can be
+guessed. Registration closes when the trigger is recorded, and a dependency
+must already be registered.
+
+Each target runs through its own confirmed single-target plan built over the
+full round manifest, so one failing deleter call does not stop the others. The
+receipt reports the overall plan and manifest digests from
+`plan_deletion_impact`, set digests for purged and preserved artifacts, and
+counts by class. It never lists individual artifacts, paths, site identities,
+tensor values or deleter exception text.
+
+Finalization and evidence emission are gated on the purge:
+
+- `emit_federated_round_evidence()` and `finalize_federated_round()` raise
+  `FederatedPurgeBlockedError` with `purge_awaiting_trigger`, `purge_pending`
+  or `purge_failed` until every mandatory target has been deleted. The emitter
+  is not called while blocked. Best-effort failures are counted in the receipt
+  but do not block.
+- `finalize_federated_round()` promotes only a coordinator round whose purge
+  was triggered by the aggregate commitment, and still validates the lifecycle
+  transition.
+- `purge_artifact()` refuses commitments and evidence with
+  `preserved_artifact_deletion_refused` before any deleter call, and `run()`
+  never passes a preserved artifact to the deleter.
+
+Pass `state_sink` to receive digest-only resume state after every registration,
+trigger and deletion outcome. After a crash or a failed run, restore with
+`FederatedArtifactPurge.from_state_json(state, policy=policy)` and call `run()`
+again: only pending or failed targets reach the deleter, and a completed purge
+returns the same receipt without deleting anything. Resume state that does not
+match the policy digest, side, schema or allowed states is refused with
+`purge_state_invalid`. All refusals use fixed codes and never echo inputs.
+
+Data-use policy evaluation, legal holds and backups remain outside this module.
