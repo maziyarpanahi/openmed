@@ -308,11 +308,21 @@ def test_candidate_iterables_are_supported() -> None:
 
 
 def test_max_findings_truncates_but_keeps_blocking_verdict() -> None:
-    policy = SyntheticMemorizationPolicy(max_findings=1)
-    report = _audit(REFERENCE_TEXT, policy=policy)
-    assert report.truncated is True
-    assert len(report.findings) == 1
-    assert report.blocked is True
+    for signals in (
+        tuple(sorted(MemorizationSignal, key=lambda signal: signal.value)),
+        (MemorizationSignal.EXACT,),
+        (MemorizationSignal.EXPOSURE,),
+        (MemorizationSignal.FUZZY,),
+    ):
+        policy = SyntheticMemorizationPolicy(max_findings=1, blocking_signals=signals)
+        report = _audit(REFERENCE_TEXT, policy=policy)
+        assert report.truncated is True
+        assert len(report.findings) == 1
+        assert report.blocked is True
+        assert report.findings[0].signal in signals
+        assert SyntheticMemorizationReport.from_json(report.to_json()) == report
+        with pytest.raises(SyntheticMemorizationError):
+            assert_release_allowed(report)
     assert DEFAULT_MAX_FINDINGS > 1
 
 

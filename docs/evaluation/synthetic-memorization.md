@@ -103,8 +103,9 @@ the detector score. `to_dict()` and `to_json()` are canonical and round-trip
 through `from_dict()` and `from_json()`.
 
 `max_findings` (64 by default) bounds report size; a truncated report sets
-`truncated` but keeps the verdict, so truncation never turns a blocked candidate
-into a releasable one.
+`truncated` but retains a blocking finding whenever any configured signal fires.
+Even a one-finding cap with only `fuzzy` or `exposure` configured cannot turn a
+blocked candidate into a releasable one.
 
 ## Bounds
 

@@ -899,6 +899,20 @@ def audit_synthetic_memorization(
     )
     truncated = len(findings) > resolved.max_findings
     retained = tuple(findings[: resolved.max_findings])
+    blocking_finding = next(
+        (
+            finding
+            for finding in findings
+            if finding.signal in resolved.blocking_signals
+        ),
+        None,
+    )
+    if blocking_finding is not None and not any(
+        finding.signal in resolved.blocking_signals for finding in retained
+    ):
+        # The first blocking finding follows the retained prefix in sorted order.
+        # Keep a witness so the size cap cannot change the release decision.
+        retained = (*retained[:-1], blocking_finding)
     return SyntheticMemorizationReport(
         verdict=(
             MemorizationVerdict.BLOCKED
