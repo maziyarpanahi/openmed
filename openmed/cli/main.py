@@ -80,6 +80,7 @@ from .contract import (
     VALIDATION_ERROR_MESSAGE,
 )
 from .gates import add_gates_command
+from .i18n_check import add_i18n_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
 from .repro import add_repro_command
@@ -579,6 +580,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     add_agent_self_check_command(subparsers)
+    from .synthetic import add_synthetic_command
+
+    add_synthetic_command(subparsers)
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
@@ -630,6 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
 
