@@ -465,6 +465,7 @@ classification:
     - evaluation/language-uncertainty.md
     - evaluation/cross-lingual-regressions.md
     - languages/scarce-label-review.md
+    - languages/cross-lingual-consensus.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md

@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add deterministic metadata-only native-review selection with scarcity, disagreement,
   diversity ties, and simultaneous language, label and total budget caps (#2863).
 
+- Add independent-source cross-lingual pseudo-label consensus with explicit
+  adjudication for conflicting or overlapping projections (#2862).
+
 - Added a bounded, value-free synthetic memorization audit that fingerprints
   protected reference material, blocks exact, paraphrase-style and exposure
   matches on configurable signals, and renders canonical digest-only JSON
