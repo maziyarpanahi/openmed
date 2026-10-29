@@ -166,18 +166,19 @@ def test_envelope_and_payload_bounds_are_enforced() -> None:
         parse_audit_envelope(_envelope(), max_payload_bytes=4)
 
 
-@pytest.mark.parametrize("field_name", ["payload_type", "report_type"])
-def test_unhashable_metadata_uses_the_safe_error_family(field_name) -> None:
-    from openmed.compliance.audit_envelope import (
-        AuditEnvelopeError,
-        create_audit_envelope,
-        parse_audit_envelope,
-    )
+def test_unhashable_metadata_uses_the_safe_error_family(subtests) -> None:
+    for field_name in ["payload_type", "report_type"]:
+        with subtests.test(field_name=field_name):
+            from openmed.compliance.audit_envelope import (
+                AuditEnvelopeError,
+                create_audit_envelope,
+                parse_audit_envelope,
+            )
 
-    envelope = create_audit_envelope({}, signature="synthetic-signature")
-    envelope[field_name] = ["synthetic"]
-    with pytest.raises(AuditEnvelopeError):
-        parse_audit_envelope(envelope)
+            envelope = create_audit_envelope({}, signature="synthetic-signature")
+            envelope[field_name] = ["synthetic"]
+            with pytest.raises(AuditEnvelopeError):
+                parse_audit_envelope(envelope)
 
 
 def test_deep_json_and_mapping_fail_with_bounded_parser_errors() -> None:
