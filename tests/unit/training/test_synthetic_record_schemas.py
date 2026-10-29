@@ -45,19 +45,19 @@ from openmed.training.synthetic import (
 
 SCHEMA_FINGERPRINTS = {
     "burned_in_annotation": (
-        "sha256:e452da60cb8456f1274cf8bdb280d883b29f7d7e53ea3f7e894466a365cf2e9a"
+        "sha256:8484daa076df7ceb5c63d153ec5d58ef9a448ee30081344edd3e45589f06c8c4"
     ),
     "locale_phi_example": (
-        "sha256:9b26c374261b95669935f7d09afd3fe8bff2cde980eb3fc7b5768dbc1890420c"
+        "sha256:c8fcc731b5219826cd1f2c484a93a034168acdfae6a7f9fc17aa8101e539baa8"
     ),
     "section_label_record": (
         "sha256:4c4906112eb073c984dfa48d0d4b4b7a0a5172f97fbf85d131b2a19b1eff92c8"
     ),
     "social_history_example": (
-        "sha256:4402db738463152f3b3ed3e9683395d40bfc011485c0ca5524f621cfa31a93e2"
+        "sha256:c2528ecca31f7eea29e8666164e9d703189fdb1cb1d96cbb44e0221fe2208b8f"
     ),
     "translation_augmented_example": (
-        "sha256:3515babe286badf3d5fee909c2e0506891465d2435cc057df9d664417ea2e112"
+        "sha256:f17833379bc839b00e137b4d398d26d5171909b16ef8525f1aacc100a62ec1d9"
     ),
 }
 
@@ -298,11 +298,13 @@ def test_every_schema_rejects_an_undeclared_field(
     records: dict[str, dict[str, Any]],
 ) -> None:
     record = dict(records[name])
-    record["synthetic_extra"] = 1
+    marker = "PRIVATE_SYNTHETIC_PROPERTY"
+    record[marker] = 1
 
     assert not _validator(name).is_valid(record)
-    with pytest.raises(SyntheticRecordSchemaError, match="Additional properties"):
+    with pytest.raises(SyntheticRecordSchemaError) as error:
         validate_record(name, record)
+    assert marker not in str(error.value)
 
 
 def test_schemas_require_the_synthetic_markers_and_source(
@@ -337,6 +339,18 @@ def test_schemas_require_the_synthetic_markers_and_source(
     translation["metadata"].pop("provenance")
     assert not _validator("translation_augmented_example").is_valid(translation)
 
+    for name, original in records.items():
+        record = json.loads(json.dumps(original))
+        record["metadata"]["contains_real_phi"] = True
+        assert not _validator(name).is_valid(record)
+        with pytest.raises(SyntheticRecordSchemaError):
+            validate_record(name, record)
+
+    for name in ("locale_phi_example", "translation_augmented_example"):
+        record = json.loads(json.dumps(records[name]))
+        record["labels"][0]["metadata"]["contains_real_phi"] = True
+        assert not _validator(name).is_valid(record)
+
 
 @pytest.mark.parametrize(
     ("name", "mutate", "message"),
@@ -349,7 +363,7 @@ def test_schemas_require_the_synthetic_markers_and_source(
         (
             "locale_phi_example",
             lambda record: record["labels"][0].update({"start": -5}),
-            "less than the minimum",
+            "minimum",
         ),
         (
             "social_history_example",
@@ -369,7 +383,14 @@ def test_schemas_require_the_synthetic_markers_and_source(
         (
             "burned_in_annotation",
             lambda record: record.update({"bbox": [0, 0, 10, -3]}),
-            "less than the minimum",
+            "minimum",
+        ),
+        (
+            "locale_phi_example",
+            lambda record: record["metadata"].update(
+                {"PRIVATE_SYNTHETIC_PATH": {"start": 40, "end": 30}}
+            ),
+            "inverted offset",
         ),
     ],
 )
@@ -382,21 +403,26 @@ def test_rejects_inverted_and_negative_offsets(
     record = json.loads(json.dumps(records[name]))
     mutate(record)
 
-    with pytest.raises(SyntheticRecordSchemaError, match=message):
+    with pytest.raises(SyntheticRecordSchemaError, match=message) as error:
         validate_record(name, record)
+    assert "PRIVATE_SYNTHETIC_PATH" not in str(error.value)
 
 
 def test_validate_record_rejects_unknown_names(
     records: dict[str, dict[str, Any]],
 ) -> None:
-    with pytest.raises(KeyError, match="unknown synthetic record schema"):
-        validate_record("synthetic_unknown", records["locale_phi_example"])
+    marker = "PRIVATE_SYNTHETIC_SCHEMA_SELECTOR"
+    with pytest.raises(KeyError, match="unknown synthetic record schema") as error:
+        validate_record(marker, records["locale_phi_example"])
+    assert marker not in str(error.value)
 
-    with pytest.raises(KeyError, match="unknown synthetic record schema"):
-        export_record_schema("synthetic_unknown")
+    with pytest.raises(KeyError, match="unknown synthetic record schema") as error:
+        export_record_schema(marker)
+    assert marker not in str(error.value)
 
-    with pytest.raises(KeyError, match="unknown synthetic record schema"):
-        record_schema_id("synthetic_unknown")
+    with pytest.raises(KeyError, match="unknown synthetic record schema") as error:
+        record_schema_id(marker)
+    assert marker not in str(error.value)
 
 
 def test_write_record_schemas_is_deterministic_and_offline_parseable(
@@ -421,6 +447,15 @@ def test_write_record_schemas_is_deterministic_and_offline_parseable(
         assert json.loads(payload.decode("utf-8")) == export_record_schema(
             written.name.removesuffix(".schema.json").replace("-", "_")
         )
+
+    marker = "PRIVATE_SYNTHETIC_DESTINATION"
+    blocked = tmp_path / marker
+    blocked.write_text("synthetic", encoding="utf-8")
+    with pytest.raises(SyntheticRecordSchemaError) as error:
+        write_record_schemas(blocked)
+    assert marker not in str(error.value)
+    assert str(tmp_path) not in str(error.value)
+    assert error.value.__context__ is None
 
 
 @pytest.mark.parametrize("name", SYNTHETIC_RECORD_SCHEMA_NAMES)

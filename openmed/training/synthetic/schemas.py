@@ -26,10 +26,10 @@ Every schema targets JSON Schema draft 2020-12, carries a versioned ``$id``
 (:data:`SYNTHETIC_RECORD_SCHEMA_VERSION`), is closed with
 ``additionalProperties: false`` for every object whose keys this package
 controls, and only references local ``#/$defs`` entries, so it resolves without
-network access. Each one also requires the generator's synthetic markers
-(``is_synthetic``/``synthetic``), its ``contains_real_phi: false`` declaration
-and its ``synthetic_source``, which makes a record that claims real PHI fail
-validation instead of entering a training set unnoticed.
+network access. Each requires the synthetic markers and source declarations
+emitted by its record family. Existing records without a real-PHI flag may omit
+it, but an explicit ``contains_real_phi`` flag in record or span metadata is
+constrained to ``false``.
 
 Schemas describe structure only: the enums and constants are the runtime
 constants the generators use, and no generated example values are embedded.
@@ -110,9 +110,9 @@ SYNTHETIC_RECORD_SCHEMA_NAMES: Final[tuple[str, ...]] = (
 class SyntheticRecordSchemaError(ValueError):
     """Raised when a synthetic training record violates its published contract.
 
-    The message names the failing JSON pointer and the violated invariant. It
-    never repeats record values beyond the offsets that failed, so it is safe to
-    surface in a training pipeline log.
+    The message names the schema constraint or violated offset invariant. It
+    never repeats record values or caller-provided metadata keys; numeric
+    offsets and bounding-box coordinates may be reported.
     """
 
 
@@ -130,7 +130,7 @@ def record_schema_id(name: str) -> str:
         KeyError: If ``name`` is not a published record schema.
     """
     if name not in SYNTHETIC_RECORD_SCHEMA_NAMES:
-        raise KeyError(f"unknown synthetic record schema: {name!r}")
+        raise KeyError("unknown synthetic record schema")
     slug = name.replace("_", "-")
     version = SYNTHETIC_RECORD_SCHEMA_VERSION
     return f"{_SCHEMA_ID_BASE}/{slug}-v{version}.schema.json"
@@ -153,7 +153,10 @@ def _span_definition(labels: Sequence[str] | None = None) -> dict[str, Any]:
         "properties": {
             "end": {"type": "integer", "minimum": 1},
             "label": label_schema,
-            "metadata": {"type": "object"},
+            "metadata": {
+                "type": "object",
+                "properties": {"contains_real_phi": {"const": False}},
+            },
             "start": {"type": "integer", "minimum": 0},
             "text": {"type": "string", "minLength": 1},
         },
@@ -236,7 +239,10 @@ def _burned_in_annotation_schema() -> dict[str, Any]:
             "metadata": {
                 "type": "object",
                 "required": ["synthetic"],
-                "properties": {"synthetic": {"const": True}},
+                "properties": {
+                    "synthetic": {"const": True},
+                    "contains_real_phi": {"const": False},
+                },
             },
         },
     }
@@ -286,6 +292,7 @@ def _social_history_example_schema() -> dict[str, Any]:
                 "required": ["restricted_data", "source", "synthetic"],
                 "properties": {
                     "restricted_data": {"const": False},
+                    "contains_real_phi": {"const": False},
                     "source": {"const": SYNTHETIC_SOCIAL_HISTORY_SOURCE},
                     "synthetic": {"const": True},
                 },
@@ -470,7 +477,7 @@ def export_record_schema(name: str) -> dict[str, Any]:
     try:
         builder = _SCHEMA_BUILDERS[name]
     except KeyError:
-        raise KeyError(f"unknown synthetic record schema: {name!r}") from None
+        raise KeyError("unknown synthetic record schema") from None
     return builder()
 
 
@@ -526,22 +533,33 @@ def write_record_schemas(directory: str | Path) -> tuple[Path, ...]:
 
     Returns:
         The written paths, ordered like :data:`SYNTHETIC_RECORD_SCHEMA_NAMES`.
+
+    Raises:
+        SyntheticRecordSchemaError: If the destination cannot be created or
+            written. Diagnostics omit the destination and filesystem context.
     """
     destination = Path(directory)
-    destination.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for name in SYNTHETIC_RECORD_SCHEMA_NAMES:
-        schema = export_record_schema(name)
-        payload = json.dumps(
-            schema,
-            allow_nan=False,
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        )
-        path = destination / f"{name.replace('_', '-')}.schema.json"
-        path.write_bytes(f"{payload}\n".encode("utf-8"))
-        written.append(path)
+    write_failed = False
+    try:
+        destination.mkdir(parents=True, exist_ok=True)
+        for name in SYNTHETIC_RECORD_SCHEMA_NAMES:
+            schema = export_record_schema(name)
+            payload = json.dumps(
+                schema,
+                allow_nan=False,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            path = destination / f"{name.replace('_', '-')}.schema.json"
+            path.write_bytes(f"{payload}\n".encode("utf-8"))
+            written.append(path)
+    except OSError:
+        write_failed = True
+    if write_failed:
+        # Raise outside the handler so private paths cannot survive in context.
+        raise SyntheticRecordSchemaError("synthetic schema export write failed")
     return tuple(written)
 
 
@@ -573,29 +591,30 @@ def validate_record(name: str, record: Mapping[str, Any]) -> None:
     )
     if errors:
         first = errors[0]
-        location = "/".join(str(part) for part in first.absolute_path) or "<root>"
+        # Schema paths contain only this module's controlled contract keys.
+        # ValidationError.message and data paths can contain source values.
+        location = "/".join(str(part) for part in first.absolute_schema_path)
         raise SyntheticRecordSchemaError(
-            f"{name} record violates its schema at {location}: {first.message}"
+            f"{name} record violates its schema at {location or '<root>'} "
+            f"({first.validator})"
         )
     _check_offset_invariants(name, record)
 
 
 def _check_offset_invariants(name: str, record: Mapping[str, Any]) -> None:
-    for path, start, end in _iter_span_offsets(record, ""):
-        location = path or "<root>"
+    for _path, start, end in _iter_span_offsets(record, ""):
         if start < 0 or end < 0:
             raise SyntheticRecordSchemaError(
-                f"{name} record has a negative offset at {location}: {start}:{end}"
+                f"{name} record has a negative offset: {start}:{end}"
             )
         if end <= start:
             raise SyntheticRecordSchemaError(
-                f"{name} record has an inverted offset at {location}: {start}:{end}"
+                f"{name} record has an inverted offset: {start}:{end}"
             )
-    for path, x_min, y_min, x_max, y_max in _iter_boxes(record, ""):
-        location = path or "<root>"
+    for _path, x_min, y_min, x_max, y_max in _iter_boxes(record, ""):
         if x_max < x_min or y_max < y_min:
             raise SyntheticRecordSchemaError(
-                f"{name} record has an inverted bounding box at {location}: "
+                f"{name} record has an inverted bounding box: "
                 f"{x_min},{y_min},{x_max},{y_max}"
             )
 
