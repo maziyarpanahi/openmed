@@ -7535,19 +7535,20 @@ _BENGALI_PII_PATTERNS: List[PIIPattern] = [
     ),
     # The year of a dotted date such as ``২০.০৭.২০২৬`` or ``২০২৬.০৭.২০`` is not
     # a postcode. Dash-joined groups are left alone: they may be the only rule
-    # covering part of a domestic phone number.
+    # covering part of a domestic phone number. Only four-digit candidates
+    # can be date years; six-digit PIN codes keep their existing behavior.
     PIIPattern(
-        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
         rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.)"
         rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\."
-        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2}}\.)(?:"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2}}\.)"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
-        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}"
+        rf"(?!\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\."
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}])|"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
         rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{5}})"
-        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])"
-        rf"(?!\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\."
-        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
+        rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
         "postcode",
         priority=9,
         base_score=0.4,

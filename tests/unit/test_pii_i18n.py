@@ -594,6 +594,21 @@ class TestBengaliValidators:
         assert matches("ফোন ০১৬৮৩-৮৫৯৮০৬") == ["৮৫৯৮০৬"]
         assert matches("ঢাকা-১২০৬") == ["১২০৬"]
         assert matches("বাড়ি ১২/৪৫৬৭") == ["৪৫৬৭"]
+        # Six-digit PIN codes are outside the four-digit date-year grammar.
+        from openmed.core.safety_sweep import safety_sweep
+
+        for text in ("পোস্টকোড ৭০০০০১.০৭.২০", "পোস্টকোড ২০.০৭.৭০০০০১"):
+            assert matches(text) == ["৭০০০০১"]
+            assert any(
+                span.text == "৭০০০০১" and span.label == "postcode"
+                for span in safety_sweep(text, [], lang="bn")
+            )
+            assert any(
+                text[start:end] == "৭০০০০১" and label == "postcode"
+                for start, end, label, *_ in find_semantic_units(
+                    text, get_patterns_for_language("bn")
+                )
+            )
 
 
 class TestGujaratiValidators:
