@@ -65,6 +65,14 @@ _DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
 _DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 _DEFAULT_GROUNDING_SYSTEMS = ["rxnorm", "icd10cm", "loinc", "hpo"]
 KeepAliveValue = Union[int, float, str]
+# Server-owned ceilings for caller-tuned bulk and SMART job settings. Callers
+# may lower these, never raise them: they bound parallel downloads, buffered
+# resources and how often a remote FHIR server is polled.
+BULK_MAX_INFLIGHT_DOWNLOADS = 16
+BULK_MAX_BUFFERED_RESOURCES = 1000
+BULK_MIN_POLL_INTERVAL_SECONDS = 1.0
+BULK_MAX_POLL_INTERVAL_SECONDS = 300.0
+BULK_MAX_REQUEST_TIMEOUT_SECONDS = 300.0
 
 
 def _normalize_text(value: Any) -> str:
@@ -444,9 +452,17 @@ if PYDANTIC_V2:
         key_id: Optional[str] = None
         scope: str = "system/*.read"
         export_path: str = "$export"
-        max_inflight_downloads: int = Field(default=2, ge=1)
-        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        max_inflight_downloads: int = Field(
+            default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS
+        )
+        poll_interval_seconds: float = Field(
+            default=1.0,
+            ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+            le=BULK_MAX_POLL_INTERVAL_SECONDS,
+        )
+        request_timeout_seconds: float = Field(
+            default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+        )
         policy: Optional[str] = "hipaa_safe_harbor"
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
         model_name: str = _DEFAULT_PII_MODEL
@@ -816,9 +832,17 @@ else:
         key_id: Optional[str] = None
         scope: str = "system/*.read"
         export_path: str = "$export"
-        max_inflight_downloads: int = Field(default=2, ge=1)
-        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        max_inflight_downloads: int = Field(
+            default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS
+        )
+        poll_interval_seconds: float = Field(
+            default=1.0,
+            ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+            le=BULK_MAX_POLL_INTERVAL_SECONDS,
+        )
+        request_timeout_seconds: float = Field(
+            default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+        )
         policy: Optional[str] = "hipaa_safe_harbor"
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
         model_name: str = _DEFAULT_PII_MODEL
@@ -1149,10 +1173,16 @@ class FHIRBulkExportRequest(_StrictModel):
     checkpoint_path: Optional[str] = None
     policy: str = "hipaa_safe_harbor"
     method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
-    max_buffered_resources: int = Field(default=1, ge=1)
-    max_inflight_downloads: int = Field(default=2, ge=1)
-    poll_interval_seconds: float = Field(default=1.0, ge=0.0)
-    request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    max_buffered_resources: int = Field(default=1, ge=1, le=BULK_MAX_BUFFERED_RESOURCES)
+    max_inflight_downloads: int = Field(default=2, ge=1, le=BULK_MAX_INFLIGHT_DOWNLOADS)
+    poll_interval_seconds: float = Field(
+        default=1.0,
+        ge=BULK_MIN_POLL_INTERVAL_SECONDS,
+        le=BULK_MAX_POLL_INTERVAL_SECONDS,
+    )
+    request_timeout_seconds: float = Field(
+        default=30.0, gt=0.0, le=BULK_MAX_REQUEST_TIMEOUT_SECONDS
+    )
     fhir_base_url: Optional[str] = None
     token_url: Optional[str] = None
     client_id: Optional[str] = None

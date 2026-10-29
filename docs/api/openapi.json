@@ -3011,6 +3011,7 @@
           },
           "max_inflight_downloads": {
             "default": 2,
+            "maximum": 16.0,
             "minimum": 1.0,
             "title": "Max Inflight Downloads",
             "type": "integer"
@@ -3061,7 +3062,8 @@
           },
           "poll_interval_seconds": {
             "default": 1.0,
-            "minimum": 0.0,
+            "maximum": 300.0,
+            "minimum": 1.0,
             "title": "Poll Interval Seconds",
             "type": "number"
           },
@@ -3072,6 +3074,7 @@
           "request_timeout_seconds": {
             "default": 30.0,
             "exclusiveMinimum": 0.0,
+            "maximum": 300.0,
             "title": "Request Timeout Seconds",
             "type": "number"
           },

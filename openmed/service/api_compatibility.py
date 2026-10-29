@@ -37,6 +37,7 @@ _LEGACY_STABLE_ERROR_CATEGORIES = (
     "authentication_required",
     "backpressure",
     "bad_request",
+    "bulk_jobs_saturated",
     "bulk_paths_disabled",
     "circuit_breaker_open",
     "forbidden",

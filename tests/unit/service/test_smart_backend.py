@@ -584,6 +584,9 @@ class _FakeManager:
             summary=self.completed_summary,
         )
 
+    def ensure_capacity(self) -> None:
+        return None
+
     def start(self, config, *, deidentifier=None, job_id=None):
         self.started = True
         self.started_config = config
