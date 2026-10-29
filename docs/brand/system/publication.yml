@@ -415,6 +415,7 @@ classification:
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - training/synthetic/hl7v2-messages.md
+    - training/synthetic/license-lineage-manifests.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
@@ -482,6 +483,7 @@ classification:
     - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
     - evaluation/local-guardrail-bypass.md
+    - evaluation/synthetic-memorization.md
     - clinical-validation-protocol.md
     - eval/leaderboard.md
     - benchmarks/arm-latency.md
