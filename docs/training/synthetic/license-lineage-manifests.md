@@ -58,8 +58,8 @@ two runs over the same manifest produce identical JSON.
   instead of evaluated.
 - `generator`: generator identifier plus a required `sha256:` content digest
   and an optional version.
-- `model_provenance`: optional model identifier, license expression and
-  digest; can be made mandatory with
+- `model_provenance`: model identifier, license expression and optional digest;
+  required for `model_generated` data. Other source classes can require it with
   `SyntheticLicenseLineagePolicy(require_model_provenance=True)`.
 - `dependencies`: bounded, ordered records with their own source class,
   license expression, redistribution decision and optional digest.
@@ -83,7 +83,7 @@ Every reason code blocks the manifest; there is no "warning" tier.
 | `license_expression_unknown` | unlisted identifier or `LicenseRef-` value |
 | `generator_digest_missing` | generator absent or without a digest |
 | `generator_digest_malformed` | digest is not `sha256:` plus 64 lowercase hex characters |
-| `model_provenance_missing` | model provenance required by policy but absent |
+| `model_provenance_missing` | model-generated data or policy requires model provenance, but it is absent |
 | `model_digest_malformed` | model digest present but not a `sha256:` digest |
 | `dependency_lineage_missing` | dependency lacks source class, license, or redistribution decision |
 | `dependency_digest_missing` | policy requires dependency digests |
@@ -108,6 +108,9 @@ restricted and malformed identifiers always block.
   credentials cannot leak into evidence artifacts.
 - `assert_redistribution_allowed()` raises an error whose message contains only
   finding and dependency counts.
+- Report license labels must be canonical permissive identifiers even when
+  deserializing saved reports. Rejected field names and private file paths are
+  omitted from validation and file-helper errors.
 
 Validation is fully offline: it reads no license files, performs no network
 lookup, holds no registry, and adds no free-form text to its results.

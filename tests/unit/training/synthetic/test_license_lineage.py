@@ -271,9 +271,10 @@ def test_manifest_round_trips_through_json() -> None:
 
 def test_manifest_from_dict_rejects_unknown_and_missing_keys() -> None:
     payload = _payload()
-    payload["unexpected"] = True
-    with pytest.raises(SyntheticLicenseLineageError):
+    payload[SENTINEL] = True
+    with pytest.raises(SyntheticLicenseLineageError) as error:
         SyntheticDatasetLicenseManifest.from_dict(payload)
+    assert SENTINEL not in str(error.value)
 
     payload = _payload()
     del payload["generator"]
@@ -433,6 +434,12 @@ def test_model_provenance_can_be_required_by_policy() -> None:
     report = validate_license_lineage(_manifest(model_provenance=None), policy=policy)
     assert report.reason_codes == ("model_provenance_missing",)
     assert validate_license_lineage(_manifest(model_provenance=None)).ok is True
+    model_generated = _manifest(
+        source_class=LicenseLineageSourceClass.MODEL_GENERATED, model_provenance=None
+    )
+    assert validate_license_lineage(model_generated).reason_codes == (
+        "model_provenance_missing",
+    )
 
 
 def test_dependency_without_lineage_blocks_the_manifest() -> None:
@@ -626,9 +633,12 @@ def test_report_from_dict_rejects_invalid_payloads() -> None:
         LicenseLineageReport.from_dict(payload)
 
     payload = report.to_dict()
-    payload["verdict"] = "maybe"
-    with pytest.raises(SyntheticLicenseLineageError):
+    payload["verdict"] = SENTINEL
+    with pytest.raises(SyntheticLicenseLineageError) as error:
         LicenseLineageReport.from_dict(payload)
+    import traceback
+
+    assert SENTINEL not in "".join(traceback.format_exception(error.value))
 
     payload = report.to_dict()
     payload["findings"] = "none"
@@ -705,6 +715,15 @@ def test_report_invariants_are_enforced() -> None:
             findings=(finding, finding),
             dataset_id=DATASET_ID,
             dependency_count=1,
+        )
+
+    with pytest.raises(SyntheticLicenseLineageError):
+        LicenseLineageReport(
+            verdict=LicenseLineageVerdict.CLEARED,
+            findings=(),
+            dataset_id=DATASET_ID,
+            dependency_count=0,
+            license_expressions=(SENTINEL,),
         )
 
 
@@ -803,5 +822,12 @@ def test_manifest_file_helpers_round_trip(tmp_path: Path) -> None:
     validate_license_lineage(_manifest()).write_json(report_path)
     assert report_path.read_text(encoding="utf-8").endswith("\n")
 
-    with pytest.raises(SyntheticLicenseLineageError):
-        load_license_lineage_manifest(tmp_path / "missing.json")
+    import traceback
+
+    with pytest.raises(SyntheticLicenseLineageError) as error:
+        load_license_lineage_manifest(tmp_path / SENTINEL / "missing.json")
+    assert SENTINEL not in "".join(traceback.format_exception(error.value))
+    for artifact in (_manifest(), validate_license_lineage(_manifest())):
+        with pytest.raises(SyntheticLicenseLineageError) as error:
+            artifact.write_json(tmp_path / SENTINEL / "missing.json")
+        assert SENTINEL not in "".join(traceback.format_exception(error.value))

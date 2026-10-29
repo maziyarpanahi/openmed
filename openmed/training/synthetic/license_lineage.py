@@ -275,11 +275,8 @@ def _reject_unknown_keys(
     *,
     context: str,
 ) -> None:
-    unknown = sorted(set(payload) - allowed)
-    if unknown:
-        raise SyntheticLicenseLineageError(
-            f"{context} has unsupported keys: {', '.join(unknown)}"
-        )
+    if any(type(key) is not str or key not in allowed for key in payload):
+        raise SyntheticLicenseLineageError(f"{context} has unsupported keys")
 
 
 def _require_keys(
@@ -698,7 +695,12 @@ class SyntheticDatasetLicenseManifest:
 
     def write_json(self, path: Path, *, indent: int = 2) -> None:
         """Write the manifest as UTF-8 JSON with a trailing newline."""
-        path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        try:
+            path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        except OSError:
+            raise SyntheticLicenseLineageError(
+                "artifact file could not be written"
+            ) from None
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> SyntheticDatasetLicenseManifest:
@@ -755,8 +757,8 @@ class SyntheticDatasetLicenseManifest:
             raise SyntheticLicenseLineageError("manifest JSON must be text")
         try:
             payload = json.loads(text)
-        except json.JSONDecodeError as error:
-            raise SyntheticLicenseLineageError("manifest JSON is not valid") from error
+        except json.JSONDecodeError:
+            raise SyntheticLicenseLineageError("manifest JSON is not valid") from None
         return cls.from_dict(payload)
 
 
@@ -841,10 +843,10 @@ class LicenseLineageFinding:
         if type(reason) is str:
             try:
                 reason = LicenseLineageReasonCode(reason)
-            except ValueError as error:
+            except ValueError:
                 raise SyntheticLicenseLineageError(
                     "finding reason is not a known reason code"
-                ) from error
+                ) from None
         return cls(
             field=payload["field"],
             reason=reason,
@@ -897,6 +899,14 @@ class LicenseLineageReport:
         ):
             raise SyntheticLicenseLineageError(
                 "license_expressions must be a tuple of strings"
+            )
+        if any(
+            not (assessment := assess_license_expression(expression)).is_permissive
+            or assessment.normalized != expression
+            for expression in self.license_expressions
+        ):
+            raise SyntheticLicenseLineageError(
+                "report license expressions must be canonical and permissive"
             )
         if tuple(sorted(set(self.license_expressions))) != self.license_expressions:
             raise SyntheticLicenseLineageError(
@@ -964,7 +974,12 @@ class LicenseLineageReport:
 
     def write_json(self, path: Path, *, indent: int = 2) -> None:
         """Write the report as UTF-8 JSON with a trailing newline."""
-        path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        try:
+            path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        except OSError:
+            raise SyntheticLicenseLineageError(
+                "artifact file could not be written"
+            ) from None
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> LicenseLineageReport:
@@ -996,10 +1011,10 @@ class LicenseLineageReport:
         if type(verdict) is str:
             try:
                 verdict = LicenseLineageVerdict(verdict)
-            except ValueError as error:
+            except ValueError:
                 raise SyntheticLicenseLineageError(
                     "report verdict is not a known verdict"
-                ) from error
+                ) from None
         findings_payload = payload["findings"]
         if not isinstance(findings_payload, (list, tuple)):
             raise SyntheticLicenseLineageError("findings must be a list")
@@ -1028,8 +1043,8 @@ class LicenseLineageReport:
             raise SyntheticLicenseLineageError("report JSON must be text")
         try:
             payload = json.loads(text)
-        except json.JSONDecodeError as error:
-            raise SyntheticLicenseLineageError("report JSON is not valid") from error
+        except json.JSONDecodeError:
+            raise SyntheticLicenseLineageError("report JSON is not valid") from None
         return cls.from_dict(payload)
 
 
@@ -1200,7 +1215,10 @@ def validate_license_lineage(
         )
 
     if resolved.model_provenance is None:
-        if active_policy.require_model_provenance:
+        if (
+            active_policy.require_model_provenance
+            or resolved.source_class is LicenseLineageSourceClass.MODEL_GENERATED
+        ):
             findings.append(
                 LicenseLineageFinding(
                     field="model_provenance",
@@ -1327,6 +1345,6 @@ def load_license_lineage_manifest(path: Path) -> SyntheticDatasetLicenseManifest
     """Read one manifest from a UTF-8 JSON file."""
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise SyntheticLicenseLineageError("manifest file could not be read") from error
+    except OSError:
+        raise SyntheticLicenseLineageError("manifest file could not be read") from None
     return SyntheticDatasetLicenseManifest.from_json(text)
