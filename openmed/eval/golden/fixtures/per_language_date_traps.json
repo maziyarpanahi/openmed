@@ -704,17 +704,7 @@
           "start": 95,
           "end": 109,
           "label": "DATE",
-          "text": "9 Satumba 1984",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3865,
-              "reason": "native_month_name_date_not_detected"
-            }
-          }
+          "text": "9 Satumba 1984"
         }
       ],
       "metadata": {
@@ -822,17 +812,7 @@
           "start": 93,
           "end": 108,
           "label": "DATE",
-          "text": "9 Jenụwarị 1984",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3865,
-              "reason": "native_month_name_date_not_detected"
-            }
-          }
+          "text": "9 Jenụwarị 1984"
         }
       ],
       "metadata": {
@@ -881,17 +861,7 @@
           "start": 115,
           "end": 130,
           "label": "DATE",
-          "text": "9 Mutarama 1984",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3865,
-              "reason": "native_month_name_date_not_detected"
-            }
-          }
+          "text": "9 Mutarama 1984"
         }
       ],
       "metadata": {
@@ -1171,17 +1141,7 @@
           "start": 93,
           "end": 106,
           "label": "DATE",
-          "text": "9 Ṣẹ́rẹ́ 1984",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3865,
-              "reason": "native_month_name_date_not_detected"
-            }
-          }
+          "text": "9 Ṣẹ́rẹ́ 1984"
         }
       ],
       "metadata": {

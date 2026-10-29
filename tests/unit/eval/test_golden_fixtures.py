@@ -1970,10 +1970,9 @@ def test_per_language_date_traps_cover_all_wired_languages():
         if fixture.language in OM_120_WIRED_LANGUAGES:
             assert len(date_spans) == 3
         else:
-            # A three-date day-first chain, optionally followed by a dated
-            # form the pack does not detect yet (recorded as a known gap).
+            # A three-date day-first chain, optionally followed by more
+            # calendar forms. Resolved forms keep their gold without gap markers.
             assert len(date_spans) >= 3
-            assert all(_span_gap_detectors(span) for span in date_spans[3:])
             hard_negatives = fixture.metadata["hard_negatives"]
             assert len(hard_negatives) == 1
             hn = hard_negatives[0]
@@ -2171,7 +2170,8 @@ def test_per_language_trap_known_gaps_are_explicit_and_well_formed():
             if "known_gap" in hard_negative:
                 markers.append((fixture, hard_negative["known_gap"]))
 
-    assert markers
+    # A fully resolved suite may have no known gaps; every remaining marker
+    # must still satisfy the schema and strict detector checks below.
     for fixture, marker in markers:
         assert fixture.language in LOW_RESOURCE_TRAP_LANGUAGES
         assert set(marker) <= {"detectors", "issue", "reason"}
