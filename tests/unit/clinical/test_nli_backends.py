@@ -80,28 +80,30 @@ def _backend(
     return backend, loader
 
 
-@pytest.mark.parametrize(
-    ("logits", "expected"),
-    [
+def test_fake_checkpoint_produces_four_state_decisions_without_text(subtests) -> None:
+    for logits, expected in [
         ((5.0, 0.0, 0.0), "entailment"),
         ((0.0, 0.0, 5.0), "contradiction"),
         ((0.0, 0.0, 0.0), "abstention"),
-    ],
-)
-def test_fake_checkpoint_produces_four_state_decisions_without_text(
-    logits: tuple[float, float, float], expected: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fail_network(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("NLI attempted network access")
+    ]:
+        with subtests.test(logits=logits, expected=expected):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(socket, "create_connection", fail_network)
-    backend, loader = _backend(logits)
-    result = nli("synthetic source 555-0101", "synthetic claim", backend=backend)
-    assert result["label"] == expected
-    assert 0 <= result["score"] <= 1
-    assert result["backend_id"] == "local-encoder"
-    assert "555-0101" not in str(result)
-    assert loader.calls == [("synthetic-local-checkpoint", "a" * 40, "torch")]
+                def fail_network(*_args: object, **_kwargs: object) -> None:
+                    raise AssertionError("NLI attempted network access")
+
+                monkeypatch.setattr(socket, "create_connection", fail_network)
+                backend, loader = _backend(logits)
+                result = nli(
+                    "synthetic source 555-0101", "synthetic claim", backend=backend
+                )
+                assert result["label"] == expected
+                assert 0 <= result["score"] <= 1
+                assert result["backend_id"] == "local-encoder"
+                assert "555-0101" not in str(result)
+                assert loader.calls == [
+                    ("synthetic-local-checkpoint", "a" * 40, "torch")
+                ]
 
 
 def test_verify_returns_value_free_metadata_and_prechecks_before_model() -> None:

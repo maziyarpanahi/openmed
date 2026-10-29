@@ -34,35 +34,40 @@ def assert_cli_refusal(output, reason, *, expected=None, private_text=""):
         assert private_text not in output
 
 
-@pytest.mark.parametrize("interruption", [KeyboardInterrupt, asyncio.CancelledError])
 def test_cli_and_service_lookup_interruptions_share_empty_outcome(
-    tmp_path, capsys, interruption
+    subtests, tmp_path, capsys
 ):
-    value, _ = fixture_context()
+    case_root = tmp_path
+    for interruption in [KeyboardInterrupt, asyncio.CancelledError]:
+        with subtests.test(interruption=interruption):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            value, _ = fixture_context()
 
-    def provider(*_, cancellation):
-        assert isinstance(cancellation, BriefCancellation)
-        raise interruption("SYNTHETIC_PRIVATE_FAILURE")
+            def provider(*_, cancellation):
+                assert isinstance(cancellation, BriefCancellation)
+                raise interruption("SYNTHETIC_PRIVATE_FAILURE")
 
-    expected = brief_response(
-        value.original_text,
-        model="extractive",
-        review_id=REVIEW_ID,
-        context_provider=provider,
-        cancellation=BriefCancellation(),
-    )
-    assert expected["refusal_reason"] == "cancelled"
-    assert expected["summary"] == ""
-    args = cli_args(tmp_path, value.original_text)
-    assert handle_brief(args, context_provider=provider) == 1
-    assert_cli_refusal(
-        capsys.readouterr().out,
-        "cancelled",
-        expected=expected,
-        private_text=value.original_text,
-    )
-    assert not args.summary_output.exists()
-    assert not args.review_output.exists()
+            expected = brief_response(
+                value.original_text,
+                model="extractive",
+                review_id=REVIEW_ID,
+                context_provider=provider,
+                cancellation=BriefCancellation(),
+            )
+            assert expected["refusal_reason"] == "cancelled"
+            assert expected["summary"] == ""
+            args = cli_args(tmp_path, value.original_text)
+            assert handle_brief(args, context_provider=provider) == 1
+            assert_cli_refusal(
+                capsys.readouterr().out,
+                "cancelled",
+                expected=expected,
+                private_text=value.original_text,
+            )
+            assert not args.summary_output.exists()
+            assert not args.review_output.exists()
 
 
 def test_route_cancellation_stops_late_worker_before_generation(monkeypatch):

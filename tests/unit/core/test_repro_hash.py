@@ -90,17 +90,16 @@ def test_verify_reproducibility_rederives_recorded_hash_and_fails_drift() -> Non
         verify_reproducibility(drifted)
 
 
-@pytest.mark.parametrize(
-    "missing", ["rng_seeds", "data_manifest_hash", "env_lock_digest"]
-)
 def test_verify_reproducibility_fails_closed_when_required_fields_are_missing(
-    missing: str,
+    subtests,
 ) -> None:
-    provenance = _provenance()
-    provenance.pop(missing)
+    for missing in ["rng_seeds", "data_manifest_hash", "env_lock_digest"]:
+        with subtests.test(missing=missing):
+            provenance = _provenance()
+            provenance.pop(missing)
 
-    with pytest.raises(ReproducibilityVerificationError, match=missing):
-        verify_reproducibility(provenance)
+            with pytest.raises(ReproducibilityVerificationError, match=missing):
+                verify_reproducibility(provenance)
 
 
 def test_write_training_provenance_persists_verified_json(tmp_path: Path) -> None:

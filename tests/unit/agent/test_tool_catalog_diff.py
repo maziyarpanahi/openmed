@@ -200,28 +200,26 @@ def test_version_replacement_is_an_addition_and_removal() -> None:
     assert not diff.unchanged
 
 
-@pytest.mark.parametrize(
-    "forbidden_field",
-    ["endpoints", "headers", "arguments", "examples", "secrets"],
-)
-def test_content_bearing_catalog_fields_fail_closed(forbidden_field: str) -> None:
-    sentinel = "Synthetic Patient secret at https://private.example.test"
-    unsafe_record: dict[str, Any] = _record(
-        tool_id="tool:org.example/summarize"
-    ).to_dict()
-    unsafe_record[forbidden_field] = sentinel
-    candidate = {
-        "schema_version": TOOL_INVENTORY_SCHEMA_VERSION,
-        "tools": [unsafe_record],
-    }
+def test_content_bearing_catalog_fields_fail_closed(subtests) -> None:
+    for forbidden_field in ["endpoints", "headers", "arguments", "examples", "secrets"]:
+        with subtests.test(forbidden_field=forbidden_field):
+            sentinel = "Synthetic Patient secret at https://private.example.test"
+            unsafe_record: dict[str, Any] = _record(
+                tool_id="tool:org.example/summarize"
+            ).to_dict()
+            unsafe_record[forbidden_field] = sentinel
+            candidate = {
+                "schema_version": TOOL_INVENTORY_SCHEMA_VERSION,
+                "tools": [unsafe_record],
+            }
 
-    with pytest.raises(
-        ToolCatalogDiffError, match="candidate.tools: unreadable_records"
-    ) as caught:
-        diff_tool_catalogs(ToolInventory.from_records([]), candidate)
+            with pytest.raises(
+                ToolCatalogDiffError, match="candidate.tools: unreadable_records"
+            ) as caught:
+                diff_tool_catalogs(ToolInventory.from_records([]), candidate)
 
-    assert sentinel not in str(caught.value)
-    assert sentinel not in repr(caught.value)
+            assert sentinel not in str(caught.value)
+            assert sentinel not in repr(caught.value)
 
 
 def test_top_level_secrets_fail_closed_without_echoing_values() -> None:
