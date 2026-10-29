@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shift Solar Hijri, Ethiopian and Thai Buddhist-era dates within bounded native-calendar ranges (#3867).
+
 - Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
