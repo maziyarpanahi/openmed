@@ -127,22 +127,25 @@ def test_promote_and_rollback_are_reproducible_from_local_state(
     assert restored.lineage(_NER_SLOT)[-1]["to"] == _NER_A
 
 
-@pytest.mark.parametrize("decision", [None, "QUARANTINED"])
 def test_pointer_flip_requires_releasable_gate_without_mutating_state(
-    tmp_path: Path,
-    decision: str | None,
+    subtests, tmp_path
 ) -> None:
-    manifest = _write_manifest(tmp_path)
-    state = _write_v2_state(tmp_path)
-    before = state.read_bytes()
-    service = RegistryService(manifest_path=manifest, state_path=state)
-    report = None if decision is None else _ner_gate(_NER_B, decision=decision)
+    case_root = tmp_path
+    for decision in [None, "QUARANTINED"]:
+        with subtests.test(decision=decision):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            manifest = _write_manifest(tmp_path)
+            state = _write_v2_state(tmp_path)
+            before = state.read_bytes()
+            service = RegistryService(manifest_path=manifest, state_path=state)
+            report = None if decision is None else _ner_gate(_NER_B, decision=decision)
 
-    with pytest.raises(RegistryGateError, match="RELEASABLE"):
-        service.flip_pointer(_NER_SLOT, "canary", _NER_B, gate_report=report)
+            with pytest.raises(RegistryGateError, match="RELEASABLE"):
+                service.flip_pointer(_NER_SLOT, "canary", _NER_B, gate_report=report)
 
-    assert state.read_bytes() == before
-    assert service.pointers(_NER_SLOT)["canary"] is None
+            assert state.read_bytes() == before
+            assert service.pointers(_NER_SLOT)["canary"] is None
 
 
 def test_gate_coordinates_must_match_manifest_and_slot(tmp_path: Path) -> None:
@@ -232,44 +235,41 @@ def test_migration_maps_committed_v1_state_uniquely(tmp_path: Path) -> None:
     assert "pii::small::pytorch" not in migrated["slots"]
 
 
-@pytest.mark.parametrize(
-    ("mutate", "match"),
-    [
+def test_migration_failures_leave_the_file_unchanged(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for mutate, match in [
         ("drop-baseline", "no committed baseline entry"),
         ("ambiguous-baseline", "multiple baseline slots"),
         ("different-slots", "different slots"),
         ("stray-version", "without pointer-target coordinate evidence"),
-    ],
-)
-def test_migration_failures_leave_the_file_unchanged(
-    tmp_path: Path,
-    mutate: str,
-    match: str,
-) -> None:
-    manifest = _write_manifest(tmp_path)
-    rows = [json.loads(line) for line in manifest.read_text().splitlines()]
-    v1 = _v1_committed_payload()
-    baseline = _baseline_entries()
+    ]:
+        with subtests.test(mutate=mutate, match=match):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            manifest = _write_manifest(tmp_path)
+            rows = [json.loads(line) for line in manifest.read_text().splitlines()]
+            v1 = _v1_committed_payload()
+            baseline = _baseline_entries()
 
-    if mutate == "drop-baseline":
-        baseline.pop(_PII_SLOT)
-    elif mutate == "ambiguous-baseline":
-        baseline["pii::small::pytorch"] = {"repo_id": _PII_MLX}
-    elif mutate == "different-slots":
-        baseline["pii::large::pytorch"] = {"repo_id": _PII_LARGE}
-        v1["families"]["PII"]["pointers"]["last_green"] = _PII_LARGE
-        v1["families"]["PII"]["versions"][_PII_LARGE] = "1.0.0"
-    elif mutate == "stray-version":
-        v1["families"]["PII"]["versions"][_PII_LARGE] = "1.0.0"
+            if mutate == "drop-baseline":
+                baseline.pop(_PII_SLOT)
+            elif mutate == "ambiguous-baseline":
+                baseline["pii::small::pytorch"] = {"repo_id": _PII_MLX}
+            elif mutate == "different-slots":
+                baseline["pii::large::pytorch"] = {"repo_id": _PII_LARGE}
+                v1["families"]["PII"]["pointers"]["last_green"] = _PII_LARGE
+                v1["families"]["PII"]["versions"][_PII_LARGE] = "1.0.0"
+            elif mutate == "stray-version":
+                v1["families"]["PII"]["versions"][_PII_LARGE] = "1.0.0"
 
-    state = tmp_path / "registry_state.json"
-    state.write_text(json.dumps(v1), encoding="utf-8")
-    before = state.read_bytes()
+            state = tmp_path / "registry_state.json"
+            state.write_text(json.dumps(v1), encoding="utf-8")
+            before = state.read_bytes()
 
-    with pytest.raises(RegistryMigrationError, match=match):
-        migrate_registry_state(v1, rows, baseline)
+            with pytest.raises(RegistryMigrationError, match=match):
+                migrate_registry_state(v1, rows, baseline)
 
-    assert state.read_bytes() == before
+            assert state.read_bytes() == before
 
 
 def test_migrate_file_writes_v2_and_the_service_loads_it(tmp_path: Path) -> None:
