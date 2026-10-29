@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Gate multilingual corpus shard uses on declared license, consent, translation lineage and restricted user-supplied custody (#2869).
 
+- Package controlled synthetic recipes and evidence into canonical offline-verifiable release capsules (#2854).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 
