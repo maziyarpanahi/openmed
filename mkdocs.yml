@@ -367,6 +367,7 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
       - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md

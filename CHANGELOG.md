@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic clinical language-pack readiness matrices with closed
+  capability and state vocabularies, `sha256:` evidence digests, alias-normalized
+  locale folding, byte-stable JSON/Markdown rendering and registry-derived
+  entries, plus offline golden tests (#3100).
+
 - Added the offline `openmed i18n check` locale-pack conformance command
   with one independent result per component, a closed set of stable reason
   codes, deterministic text/JSON output and offline golden tests (#3103).
