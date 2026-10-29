@@ -29,15 +29,16 @@ _TARGET_MODULES = (
 
 
 @pytest.mark.doctest_examples
-@pytest.mark.parametrize("module_name", _TARGET_MODULES)
-def test_public_core_doctests(module_name: str) -> None:
+def test_public_core_doctests(subtests) -> None:
     """Run doctests for the targeted public modules."""
-    module = importlib.import_module(module_name)
-    result = doctest.testmod(
-        module,
-        optionflags=doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE,
-    )
-    assert result.failed == 0
+    for module_name in _TARGET_MODULES:
+        with subtests.test(module_name=module_name):
+            module = importlib.import_module(module_name)
+            result = doctest.testmod(
+                module,
+                optionflags=doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE,
+            )
+            assert result.failed == 0
 
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -976,19 +977,17 @@ def test_snippet_errors_do_not_echo_exception_or_source() -> None:
     assert error.value.__cause__ is None
 
 
-@pytest.mark.parametrize(
-    "text,reason",
-    [
+def test_malformed_documentation_fences_fail(subtests) -> None:
+    for text, reason in [
         ("```python\nx = 1\n", "unterminated_fence"),
         (
             "<!-- openmed-docs-fragment: unreviewed -->\nprose\n",
             "invalid_fragment_marker",
         ),
-    ],
-)
-def test_malformed_documentation_fences_fail(text: str, reason: str) -> None:
-    with pytest.raises(_SnippetError, match=reason):
-        _python_blocks(text, "synthetic.md")
+    ]:
+        with subtests.test(text=text, reason=reason):
+            with pytest.raises(_SnippetError, match=reason):
+                _python_blocks(text, "synthetic.md")
 
 
 def test_new_python_blocks_are_discovered_in_order() -> None:
@@ -1003,15 +1002,13 @@ def test_new_python_blocks_are_discovered_in_order() -> None:
     assert namespace["count"] == 2
 
 
-@pytest.mark.parametrize(
-    "page,fragment",
-    [
+def test_unreviewed_fragment_cannot_skip_a_new_block(subtests) -> None:
+    for page, fragment in [
         ("synthetic.md", "new-exception"),
         ("agent/workflow-recovery.md", "workflow-recovery-adapters"),
         ("synthetic.md", "workflow-recovery-adapters"),
-    ],
-)
-def test_unreviewed_fragment_cannot_skip_a_new_block(page: str, fragment: str) -> None:
-    block = _DocBlock(page, 1, "raise RuntimeError()\n", fragment)
-    with pytest.raises(_SnippetError, match="unreviewed_fragment"):
-        _execute_block(block, {}, [])
+    ]:
+        with subtests.test(page=page, fragment=fragment):
+            block = _DocBlock(page, 1, "raise RuntimeError()\n", fragment)
+            with pytest.raises(_SnippetError, match="unreviewed_fragment"):
+                _execute_block(block, {}, [])

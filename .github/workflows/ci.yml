@@ -5,6 +5,7 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+    types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -12,6 +13,7 @@ concurrency:
 
 jobs:
   repo-policy:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-latest
     outputs:
       run-i18n-cjk-indic: ${{ steps.i18n_changes.outputs.should_run }}
@@ -173,6 +175,7 @@ jobs:
           grounding-export-validation.md
 
   lockfile-drift:
+    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -240,16 +243,14 @@ jobs:
   test:
     needs: [repo-policy, lint]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-        exclude:
-          # Exclude some combinations to reduce CI time
-          - os: windows-latest
-            python-version: "3.10"
-          - os: macos-latest
-            python-version: "3.10"
+      fail-fast: false
+      # Pull requests run the fast tier (everything except `slow` and `fuzz`)
+      # on Linux at both ends of the supported range, plus the portability
+      # checks on Windows and macOS. Pushes to the default branches, and pull
+      # requests labelled `full-ci`, run the full suite on every platform.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.10","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"full","coverage":true},{"os":"windows-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"windows-latest","python-version":"3.12","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"full","coverage":false}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.10","tier":"fast","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"fast","coverage":true},{"os":"windows-latest","python-version":"3.12","tier":"portability","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"portability","coverage":false}]}') }}
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -288,11 +289,11 @@ jobs:
         if sys.version_info >= (3, 11)
         else importlib.util.find_spec('PIL') is None)"
 
-    - name: Windows portability regression checks
-      if: runner.os == 'Windows'
-      timeout-minutes: 10
+    - name: Portability regression checks
+      if: matrix.tier == 'portability'
+      timeout-minutes: 15
       run: >-
-        uv run --frozen pytest -q --tb=short --show-capture=no
+        uv run --frozen pytest -q -n auto --tb=short --show-capture=no
         tests/unit/test_utils.py
         tests/unit/structured/registry/test_naaccr.py
         tests/unit/release/test_agent_release_candidate.py
@@ -316,12 +317,19 @@ jobs:
         tests/fuzz/test_format_parsers_fuzz.py
 
     - name: Test with pytest
+      if: matrix.tier != 'portability'
       # Leave bounded completion time for the full Windows suite and coverage.
-      timeout-minutes: 60
+      timeout-minutes: 40
+      shell: bash
+      env:
+        TIER_MARKERS: ${{ matrix.tier == 'fast' && 'not slow and not fuzz' || '' }}
+        COVERAGE_ARGS: ${{ matrix.coverage && '--cov=openmed --cov-report=xml --cov-report=term-missing' || '' }}
       run: >-
         uv run --frozen python -c
         "import faulthandler, pytest; diagnostics = type('CiSummaryDiagnostics', (), {'pytest_sessionfinish': lambda self, session, exitstatus: faulthandler.dump_traceback_later(120, repeat=True)})(); raise SystemExit(pytest.main(plugins=[diagnostics]))"
-        --cov=openmed --cov-report=xml --cov-report=term-missing
+        -n auto
+        -m "$TIER_MARKERS"
+        $COVERAGE_ARGS
         --tb=line --show-capture=no --color=no --code-highlight=no -ra
         --junitxml=pytest-results.xml
 
@@ -336,6 +344,7 @@ jobs:
         if-no-files-found: warn
 
     - name: Upload coverage to Codecov
+      if: matrix.coverage
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
       with:
         files: ./coverage.xml
@@ -351,9 +360,10 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+      # Pull requests cover both ends of the supported Python range on Linux
+      # and the newest interpreter on Windows and macOS. Pushes to the default
+      # branches, and pull requests labelled `full-ci`, run all 12 combinations.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.10"},{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.10"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.10"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.10"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.12"}]}') }}
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -408,7 +418,7 @@ jobs:
   sdk-compatibility-gate:
     # Stable required-check name; a missing/cancelled matrix is not success.
     needs: sdk-compatibility
-    if: always()
+    if: always() && (github.event.action != 'labeled' || github.event.label.name == 'full-ci')
     runs-on: ubuntu-latest
     steps:
     - name: Require every advertised combination
