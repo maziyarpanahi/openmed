@@ -23,6 +23,7 @@ from .script_detect import (
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
     candidate_languages_for_text,
+    fold_perso_arabic_letters,
     normalizer_for_script,
     numeral_set_for_script,
     segment_by_script,
@@ -152,6 +153,7 @@ class LanguageRun:
     normalizer: str = DEFAULT_NORMALIZER
     tokenizer: str = ""
     numeral_set: str = ASCII_NUMERAL_SET
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +183,7 @@ class LanguageRouter:
         packs: Sequence[LanguagePack] | None = None,
         language_identifier: LanguageIdentifier | None = None,
         use_optional_lid: bool = True,
+        fallback_pack: str | None = None,
     ) -> None:
         """Create a router.
 
@@ -190,6 +193,8 @@ class LanguageRouter:
                 ``use_optional_lid`` is true, the lazy CLD2 adapter is used.
             use_optional_lid: Try the optional CLD2 adapter when no backend was
                 injected. Set false to force the stdlib-only path.
+            fallback_pack: Explicit pack code to permit unsupported scripts.
+                Without it, auto pipelines reject letter-bearing unsupported runs.
         """
 
         self.packs = tuple(
@@ -209,6 +214,9 @@ class LanguageRouter:
         if language_identifier is None and use_optional_lid:
             self.language_identifier = PyCLD2LanguageIdentifier()
         self._packs_by_code = {pack.code: pack for pack in self.packs}
+        if fallback_pack is not None and fallback_pack not in self._packs_by_code:
+            raise ValueError("fallback_pack must name a registered candidate pack")
+        self.fallback_pack = fallback_pack
         self._packs_by_script = {
             script: tuple(
                 sorted(
@@ -260,6 +268,11 @@ class LanguageRouter:
                     normalizer=normalizer_for_script(script),
                     tokenizer=pack.segmenter_id,
                     numeral_set=numeral_set_for_script(script),
+                    reason=(
+                        "unsupported_script"
+                        if source == "stdlib:unknown-script"
+                        else None
+                    ),
                 )
             )
 
@@ -324,7 +337,9 @@ class LanguageRouter:
     ) -> tuple[LanguagePack, float, str]:
         candidates = self._packs_by_script.get(script, ())
         if not candidates:
-            fallback = self._packs_by_code.get("en", self.packs[0])
+            fallback = self._packs_by_code.get(
+                self.fallback_pack or "en", self.packs[0]
+            )
             return fallback, 0.5, "stdlib:unknown-script"
 
         context_matches = tuple(
@@ -361,7 +376,10 @@ class LanguageRouter:
         marker_matches = [
             (
                 sum(
-                    self._routing_marker_count(text, marker)
+                    self._routing_marker_count(
+                        fold_perso_arabic_letters(text, pack.code),
+                        fold_perso_arabic_letters(marker, pack.code),
+                    )
                     for marker in pack.routing_markers
                 ),
                 pack,

@@ -653,7 +653,12 @@ class TestPersianPIIPatterns:
 
         assert persian_patterns
         assert all(
-            any(pattern is observed for observed in combined)
+            any(
+                pattern.pattern == observed.pattern
+                and pattern.entity_type == observed.entity_type
+                and pattern.validator is observed.validator
+                for observed in combined
+            )
             for pattern in persian_patterns
         )
 
@@ -3593,6 +3598,7 @@ class TestGetPatternsForLanguage:
             + len(USCC_PII_PATTERNS)
             + len(AADHAAR_PII_PATTERNS)
             + len(INDIA_HEALTH_ID_PII_PATTERNS)
+            + 1  # Shared locale-validated numeric Gregorian date pattern.
         )
 
     @pytest.mark.parametrize(
@@ -3623,7 +3629,46 @@ class TestGetPatternsForLanguage:
             not any(pattern is existing for existing in LANGUAGE_PII_PATTERNS[lang])
             for pattern in locale_patterns
         )
-        assert len(patterns) == base_count + language_count + locale_count
+        assert len(patterns) == base_count + language_count + locale_count + 1
+
+    @pytest.mark.parametrize(
+        "lang",
+        sorted(
+            SUPPORTED_LANGUAGES
+            | NATIONAL_ID_ONLY_LANGUAGES
+            | USER_SUPPLIED_MODEL_LANGUAGES
+        ),
+    )
+    def test_every_registered_language_retains_validated_dot_dates(self, lang):
+        from openmed.core.locale_formats import LOCALE_DATE_ORDER
+        from openmed.core.safety_sweep import safety_sweep
+
+        order = LOCALE_DATE_ORDER[lang]
+        value = {"dmy": "15.01.1980", "mdy": "01.15.1980", "ymd": "1980.01.15"}[order]
+        assert any(
+            e.label == "date" and e.text == value
+            for e in safety_sweep("DOB " + value, [], lang=lang)
+        )
+
+    @pytest.mark.parametrize("lang", ["fa", "ur"])
+    def test_native_and_arabic_variants_match_all_pack_context_words(self, lang):
+        from functools import partial
+
+        from openmed.core.pii_entity_merger import find_context_words
+        from openmed.core.script_detect import fold_perso_arabic_letters
+
+        native_to_arabic = str.maketrans({"ک": "ك", "ی": "ي", "ہ": "ه", "ھ": "ه"})
+        for pattern in LANGUAGE_PII_PATTERNS[lang]:
+            for word in pattern.context_words:
+                for spelling in (word, word.translate(native_to_arabic)):
+                    text = spelling + " 12345"
+                    assert find_context_words(
+                        text,
+                        len(spelling) + 1,
+                        len(text),
+                        [word],
+                        normalizer=partial(fold_perso_arabic_letters, lang=lang),
+                    )
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -5708,7 +5753,7 @@ def test_czech_format_preserving_dates_are_day_first():
         surrogate = anonymizer.format_preserving_surrogate("05/06/2020", "date")
 
     assert surrogate == "14/05/1951"
-    assert preserve.call_args.kwargs["day_first"] is True
+    assert preserve.call_args.kwargs["date_order"] == "dmy"
 
 
 def test_czech_clinical_sample_expected_spans():

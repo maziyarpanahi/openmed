@@ -21,6 +21,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from openmed.core.iso_temporal import parse_iso_datetime
+
 PROVENANCE_SCHEMA_VERSION = 1
 _SHA256_HEX_LENGTH = 64
 _CHECKSUM_CHUNK_SIZE = 1024 * 1024
@@ -99,7 +101,7 @@ def _coerce_datetime(value: object, field_name: str) -> datetime:
     elif isinstance(value, str):
         normalized = value.strip()
         try:
-            parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+            parsed = parse_iso_datetime(normalized.replace("Z", "+00:00"))
         except (TypeError, ValueError):
             raise _invalid(field_name) from None
     else:

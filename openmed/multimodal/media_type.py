@@ -39,6 +39,9 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         raise TypeError("prefix must be bytes-like")
 
     bounded = bytes(prefix[:MAX_MEDIA_TYPE_PREFIX_BYTES])
+    # Part 10 permits arbitrary application data in its 128-byte preamble.
+    if len(bounded) >= 132 and bounded[128:132] == b"DICM":
+        return "application/dicom"
     if bounded.startswith(b"%PDF-"):
         return "application/pdf"
     if bounded.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -47,10 +50,18 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
         return "image/jpeg"
     if bounded.startswith((b"II*\x00", b"MM\x00*")):
         return "image/tiff"
-    if len(bounded) >= 132 and bounded[128:132] == b"DICM":
-        return "application/dicom"
+    if bounded.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if (
+        len(bounded) >= 14
+        and bounded.startswith(b"BM")
+        and bounded[6:10] == b"\x00" * 4
+    ):
+        return "image/bmp"
     if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WAVE":
         return "audio/wav"
+    if len(bounded) >= 12 and bounded.startswith(b"RIFF") and bounded[8:12] == b"WEBP":
+        return "image/webp"
     return None
 
 

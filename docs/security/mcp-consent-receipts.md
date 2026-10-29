@@ -97,6 +97,18 @@ existing schemas and remain callable without a receipt, including local stdio
 servers created without a policy hook. A missing receipt is rejected before a
 state-changing handler runs.
 
+Real MCP calls accept a receipt object or its serialized JSON. The transport
+checks the full request against configured payload limits, parses receipt JSON
+without consuming it, and screens the resulting metadata and tool arguments.
+Only the server-added receipt field is excluded from canonical tool argument
+validation; the consent handler still verifies its signature, binding, expiry
+and single-use status. Unknown fields remain invalid. Receipts do not bypass
+remote scopes or the separate state-change permission.
+
+Governed workflow tools keep their own server-supplied consent path. Enabling
+this optional hook does not add inline receipt or authority fields to their
+schemas.
+
 Policy audit records contain only receipt and policy identifiers, the argument
 digest, the decision/outcome, and a policy version. Applications may provide
 an `audit_sink` to retain these safe fields. Do not log receipt JSON, request

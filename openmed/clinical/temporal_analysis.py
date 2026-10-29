@@ -25,6 +25,7 @@ from openmed.clinical.temporal_german import GERMAN_TIMEX_RE
 from openmed.clinical.temporal_normalizer import normalize_temporal
 from openmed.clinical.timeline import assemble_timeline
 from openmed.clinical.timeline.timex import detect_timexes
+from openmed.core.iso_temporal import parse_iso_date
 
 TEMPORAL_TASKS = ("events", "timeline")
 MAX_TEMPORAL_SPANS = 2048
@@ -364,7 +365,7 @@ def _date_interval(value):
     ):
         return None
     try:
-        dates = [date.fromisoformat(part) for part in parts]
+        dates = [parse_iso_date(part) for part in parts]
     except ValueError:
         return None
     if dates[-1] < dates[0]:

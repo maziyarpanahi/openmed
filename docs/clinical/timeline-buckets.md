@@ -1,5 +1,8 @@
 # Temporality-bucketed timelines
 
+Run the [synthetic SDOH and timeline example](../examples.md#synthetic-sdoh-and-timeline-contracts)
+for explicit temporal anchoring, authored assertion tags and output without dates.
+
 `build_timeline()` groups already-tagged clinical spans into historical,
 recent, and hypothetical lanes. It is a deterministic view for local review,
 not a clinical chronology of record. The caller must supply each span's

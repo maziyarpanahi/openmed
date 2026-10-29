@@ -169,33 +169,28 @@ def test_binding_accepts_relation_candidates_and_assertion_wrappers() -> None:
     assert bound.evidence_spans[0].offset == (18, 25)
 
 
-@pytest.mark.parametrize(
-    ("field", "message"),
-    (
+def test_incomplete_records_fail_closed_without_echoing_values(subtests) -> None:
+    for field, message in (
         ("head", "relation endpoint spans are required"),
         ("tail", "relation endpoint spans are required"),
         ("evidence_spans", "relation evidence spans are required"),
         ("assertion_state", "assertion_state is required"),
         ("document_id", "document_id is required"),
-    ),
-)
-def test_incomplete_records_fail_closed_without_echoing_values(
-    field: str,
-    message: str,
-) -> None:
-    candidate = _candidate()
-    if field == "document_id":
-        candidate.pop("document_id")
-        candidate["head"] = {"start": 0, "end": 8, "label": "MEDICATION"}
-        candidate["tail"] = {"start": 9, "end": 17, "label": "PROBLEM"}
-        candidate["evidence_spans"] = [{"start": 18, "end": 25}]
-    else:
-        candidate.pop(field)
+    ):
+        with subtests.test(field=field, message=message):
+            candidate = _candidate()
+            if field == "document_id":
+                candidate.pop("document_id")
+                candidate["head"] = {"start": 0, "end": 8, "label": "MEDICATION"}
+                candidate["tail"] = {"start": 9, "end": 17, "label": "PROBLEM"}
+                candidate["evidence_spans"] = [{"start": 18, "end": 25}]
+            else:
+                candidate.pop(field)
 
-    with pytest.raises(EvidenceBindingError, match=message) as exc_info:
-        bind_relation_evidence(candidate)
+            with pytest.raises(EvidenceBindingError, match=message) as exc_info:
+                bind_relation_evidence(candidate)
 
-    assert RAW_MARKER not in str(exc_info.value)
+            assert RAW_MARKER not in str(exc_info.value)
 
 
 def test_conflicting_span_documents_are_rejected_before_workflow_entry() -> None:
@@ -269,19 +264,17 @@ def test_input_order_does_not_change_evidence_order() -> None:
     assert [span.offset for span in forward.evidence_spans] == [(18, 25), (30, 35)]
 
 
-@pytest.mark.parametrize(
-    "state",
-    [
+def test_unknown_assertion_axes_never_become_affirmed(subtests):
+    for state in [
         {"negation": "unrecognized"},
         {"certainty": "unknown"},
         {"temporality": "unknown"},
-    ],
-)
-def test_unknown_assertion_axes_never_become_affirmed(state):
-    candidate = _candidate()
-    candidate["assertion_state"] = state
-    with pytest.raises(EvidenceBindingError):
-        bind_relation_evidence(candidate)
+    ]:
+        with subtests.test(state=state):
+            candidate = _candidate()
+            candidate["assertion_state"] = state
+            with pytest.raises(EvidenceBindingError):
+                bind_relation_evidence(candidate)
 
 
 def test_conflicting_assertion_aliases_fail_closed():

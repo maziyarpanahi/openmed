@@ -6,6 +6,13 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.version import Version
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "scripts/security/pip_audit_gate.py"
@@ -152,3 +159,80 @@ review_by = "2026-01-01"
 
     with pytest.raises(ValueError, match="expired"):
         pip_audit_gate.load_ignores(ignore_file, today=dt.date(2026, 6, 16))
+
+
+def test_reference_templates_reject_private_attribute_access(subtests) -> None:
+    for sink in ["refs", "templates", "gen"]:
+        for expression in [
+            "range.__class__.__mro__",
+            "''.__class__.__mro__",
+            '("{0.__class__.__mro__}"|attr("format"))("")',
+        ]:
+            with subtests.test(sink=sink, expression=expression):
+                import fsspec
+                from jinja2.exceptions import SecurityError
+
+                template = "{{ " + expression + " }}"
+                spec: dict = {"version": 1, "refs": {}}
+                if sink == "refs":
+                    spec["templates"] = {"root": "memory://"}
+                    spec["refs"] = {"chunk": [template]}
+                elif sink == "templates":
+                    spec["templates"] = {"target": template}
+                    spec["refs"] = {"chunk": ["{{ target }}"]}
+                else:
+                    spec["gen"] = [
+                        {
+                            "key": template,
+                            "url": "memory://chunk/{{ i }}",
+                            "offset": "0",
+                            "length": "1",
+                            "dimensions": {"i": [0]},
+                        }
+                    ]
+                with pytest.raises(SecurityError):
+                    fsspec.filesystem("reference", fo=spec, simple_templates=False)
+
+
+def test_reference_generator_retains_safe_variable_interpolation() -> None:
+    import fsspec
+
+    spec = {
+        "version": 1,
+        "refs": {},
+        "gen": [
+            {
+                "key": "chunk/{{ i }}",
+                "url": "memory://chunk/{{ i }}",
+                "offset": "0",
+                "length": "1",
+                "dimensions": {"i": [0, 1]},
+            }
+        ],
+    }
+    fs = fsspec.filesystem("reference", fo=spec, simple_templates=False)
+    assert fs.references == {
+        "chunk/0": ["memory://chunk/0", 0, 1],
+        "chunk/1": ["memory://chunk/1", 0, 1],
+    }
+
+
+@pytest.mark.parametrize("lock_type", ["FileLock", "SoftFileLock", "ReadWriteLock"])
+def test_filelock_refuses_symlink_without_modifying_target(
+    tmp_path: Path, lock_type: str
+) -> None:
+    filelock = pytest.importorskip("filelock")
+    lock_class = getattr(filelock, lock_type, None)
+    if lock_class is None:
+        pytest.skip("This lock implementation is absent from the Python 3.10 pin")
+    target = tmp_path / "synthetic-victim"
+    target.write_text("must remain intact", encoding="utf-8")
+    link = tmp_path / "lock-link"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("Creating symlinks requires privileges on this platform")
+    with pytest.raises((OSError, filelock.Timeout)):
+        with lock_class(str(link), timeout=0):
+            pytest.fail("An attacker-controlled symlink must not grant a lock")
+    assert target.read_text(encoding="utf-8") == "must remain intact"

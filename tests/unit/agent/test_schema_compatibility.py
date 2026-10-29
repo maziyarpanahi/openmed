@@ -21,15 +21,14 @@ from openmed.agent import (
 )
 
 
-@pytest.mark.parametrize(
-    (
-        "version_str",
-        "expected_major",
-        "expected_minor",
-        "expected_patch",
-        "expected_prerelease",
-    ),
-    [
+def test_semver_valid_parsing(subtests) -> None:
+    for (
+        version_str,
+        expected_major,
+        expected_minor,
+        expected_patch,
+        expected_prerelease,
+    ) in [
         ("0.0.1", 0, 0, 1, ()),
         ("1.0.0", 1, 0, 0, ()),
         ("1.2.3", 1, 2, 3, ()),
@@ -40,26 +39,24 @@ from openmed.agent import (
         ("1.0.0-x.7.z.92", 1, 0, 0, ("x", 7, "z", 92)),
         ("1.0.0+20130313144700", 1, 0, 0, ()),
         ("1.0.0-beta+exp.sha.5114f85", 1, 0, 0, ("beta",)),
-    ],
-)
-def test_semver_valid_parsing(
-    version_str: str,
-    expected_major: int,
-    expected_minor: int,
-    expected_patch: int,
-    expected_prerelease: tuple[str | int, ...],
-) -> None:
-    parsed = SemVer.parse(version_str)
-    assert parsed.major == expected_major
-    assert parsed.minor == expected_minor
-    assert parsed.patch == expected_patch
-    assert parsed.prerelease == expected_prerelease
-    assert SemVer.is_valid(version_str) is True
+    ]:
+        with subtests.test(
+            version_str=version_str,
+            expected_major=expected_major,
+            expected_minor=expected_minor,
+            expected_patch=expected_patch,
+            expected_prerelease=expected_prerelease,
+        ):
+            parsed = SemVer.parse(version_str)
+            assert parsed.major == expected_major
+            assert parsed.minor == expected_minor
+            assert parsed.patch == expected_patch
+            assert parsed.prerelease == expected_prerelease
+            assert SemVer.is_valid(version_str) is True
 
 
-@pytest.mark.parametrize(
-    "invalid_version",
-    [
+def test_semver_invalid_parsing_raises_contract_error(subtests) -> None:
+    for invalid_version in [
         "",
         "v1.0.0",
         "1.0",
@@ -79,19 +76,17 @@ def test_semver_valid_parsing(
         None,
         True,
         [],
-    ],
-)
-def test_semver_invalid_parsing_raises_contract_error(invalid_version: Any) -> None:
-    assert SemVer.is_valid(invalid_version) is False
-    with pytest.raises(SchemaCompatibilityError) as caught:
-        SemVer.parse(invalid_version)
-    assert caught.value.code == "malformed_version"
-    assert caught.value.field_name == "version"
+    ]:
+        with subtests.test(invalid_version=invalid_version):
+            assert SemVer.is_valid(invalid_version) is False
+            with pytest.raises(SchemaCompatibilityError) as caught:
+                SemVer.parse(invalid_version)
+            assert caught.value.code == "malformed_version"
+            assert caught.value.field_name == "version"
 
 
-@pytest.mark.parametrize(
-    ("lesser", "greater"),
-    [
+def test_semver_strict_precedence_ordering(subtests) -> None:
+    for lesser, greater in [
         ("1.0.0", "2.0.0"),
         ("2.0.0", "2.1.0"),
         ("2.1.0", "2.1.1"),
@@ -104,18 +99,17 @@ def test_semver_invalid_parsing_raises_contract_error(invalid_version: Any) -> N
         ("1.0.0-beta.11", "1.0.0-rc.1"),
         ("1.0.0-rc.1", "1.0.0"),
         ("1.0.0-1", "1.0.0-alpha"),
-    ],
-)
-def test_semver_strict_precedence_ordering(lesser: str, greater: str) -> None:
-    a = SemVer.parse(lesser)
-    b = SemVer.parse(greater)
-    assert a < b
-    assert a <= b
-    assert b > a
-    assert b >= a
-    assert a != b
-    assert not (a > b)
-    assert not (b < a)
+    ]:
+        with subtests.test(lesser=lesser, greater=greater):
+            a = SemVer.parse(lesser)
+            b = SemVer.parse(greater)
+            assert a < b
+            assert a <= b
+            assert b > a
+            assert b >= a
+            assert a != b
+            assert not (a > b)
+            assert not (b < a)
 
 
 def test_semver_build_metadata_ignored_in_precedence() -> None:
@@ -126,9 +120,8 @@ def test_semver_build_metadata_ignored_in_precedence() -> None:
     assert not (b < a)
 
 
-@pytest.mark.parametrize(
-    ("kind", "incoming", "min_v", "max_v", "expected_outcome", "expected_reason"),
-    [
+def test_table_driven_schema_compatibility(subtests) -> None:
+    for kind, incoming, min_v, max_v, expected_outcome, expected_reason in [
         (
             ArtifactKind.EVIDENCE,
             "1.0.0",
@@ -265,29 +258,28 @@ def test_semver_build_metadata_ignored_in_precedence() -> None:
             CompatibilityOutcome.UNSUPPORTED,
             CompatibilityReason.MALFORMED_VERSION,
         ),
-    ],
-)
-def test_table_driven_schema_compatibility(
-    kind: Any,
-    incoming: str,
-    min_v: str,
-    max_v: str,
-    expected_outcome: CompatibilityOutcome,
-    expected_reason: CompatibilityReason,
-) -> None:
-    result = check_schema_compatibility(
-        artifact_kind=kind,
-        incoming_version=incoming,
-        min_version=min_v,
-        max_version=max_v,
-    )
+    ]:
+        with subtests.test(
+            kind=kind,
+            incoming=incoming,
+            min_v=min_v,
+            max_v=max_v,
+            expected_outcome=expected_outcome,
+            expected_reason=expected_reason,
+        ):
+            result = check_schema_compatibility(
+                artifact_kind=kind,
+                incoming_version=incoming,
+                min_version=min_v,
+                max_version=max_v,
+            )
 
-    assert result.outcome == expected_outcome
-    assert result.reason_code == expected_reason.value
-    if expected_outcome == CompatibilityOutcome.COMPATIBLE:
-        assert result.is_compatible is True
-    else:
-        assert result.is_compatible is False
+            assert result.outcome == expected_outcome
+            assert result.reason_code == expected_reason.value
+            if expected_outcome == CompatibilityOutcome.COMPATIBLE:
+                assert result.is_compatible is True
+            else:
+                assert result.is_compatible is False
 
 
 def test_caller_declared_schema_range_object() -> None:

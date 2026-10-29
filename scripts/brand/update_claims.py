@@ -17,6 +17,36 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = REPO_ROOT / "docs/brand/system/claims.yml"
 GITHUB_EVIDENCE = REPO_ROOT / "docs/brand/system/evidence/github-repository.json"
 GITHUB_API_URL = "https://api.github.com/repos/maziyarpanahi/openmed"
+COMMUNITY_EVIDENCE = REPO_ROOT / "docs/brand/system/evidence/community-metrics.json"
+HF_MODELS_API_URL = (
+    "https://huggingface.co/api/models?author=OpenMed&limit=1000"
+    "&expand[]=downloads&expand[]=downloadsAllTime&expand[]=createdAt"
+)
+PYPI_JSON_URL = "https://pypi.org/pypi/openmed/json"
+PYPISTATS_RECENT_URL = "https://pypistats.org/api/packages/openmed/recent"
+PEPY_TOTAL_BADGE_URL = (
+    "https://static.pepy.tech/personalized-badge/openmed"
+    "?units=none&period=total&left_text=downloads"
+)
+GITHUB_CONTRIBUTORS_URL = (
+    "https://api.github.com/repos/maziyarpanahi/openmed/contributors"
+    "?per_page=100&anon=0"
+)
+# The six model cards on the website; their all-time download counts are
+# part of the community evidence so the cards never drift from the Hub.
+FEATURED_MODELS = (
+    "OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M",
+    "OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M",
+    "OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M",
+    "OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M",
+    "OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M",
+    "OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M",
+)
+COMMUNITY_REFRESH = {
+    "command": "python scripts/brand/update_claims.py --refresh-community-metrics",
+    "network": "explicit opt-in only",
+    "ci": "forbidden",
+}
 AS_OF = "2026-07-29"
 REVIEW_BY = "2026-10-29"
 UNVERIFIED_FOLLOW_UP_BY = "2026-10-29"
@@ -91,12 +121,175 @@ def _refresh_github_evidence() -> None:
     )
 
 
+def _floor(value: int, quantum: int) -> int:
+    return value // quantum * quantum
+
+
+def _millions(value: int, quantum: int) -> str:
+    """Floor to the quantum and print in millions: 466_265_715, 10M -> '460'."""
+    floored = _floor(value, quantum) / 1_000_000
+    return f"{floored:.0f}" if quantum >= 1_000_000 else f"{floored:.1f}"
+
+
+def _month_label(timestamp: str) -> str:
+    return dt.datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime("%B %Y")
+
+
+def _community_display(evidence: dict[str, Any]) -> dict[str, Any]:
+    """Public display values, always conservative floors of the raw counts."""
+    hf = evidence["hugging_face"]
+    pypi = evidence["pypi"]
+    return {
+        "downloads_all_time_millions": _millions(hf["downloads_all_time"], 10_000_000),
+        "downloads_30d_millions": _millions(hf["downloads_30d"], 1_000_000),
+        "installs_total_millions": _millions(pypi["installs_total"], 100_000),
+        "public_models_floor": _floor(hf["public_models"], 100),
+        "first_model_month": _month_label(hf["first_model_created_at"]),
+        "first_release_month": _month_label(pypi["first_release_at"]),
+        "captured_month": _month_label(evidence["captured_at"]),
+        "featured_models_millions": {
+            repo_id: _millions(count, 100_000)
+            for repo_id, count in evidence["featured_models"].items()
+        },
+        "method": "floor",
+    }
+
+
+def _read_community_evidence() -> dict[str, Any]:
+    evidence = json.loads(COMMUNITY_EVIDENCE.read_text(encoding="utf-8"))
+    if evidence["schema_version"] != 1 or evidence["refresh"] != COMMUNITY_REFRESH:
+        raise RuntimeError("community evidence lacks the schema-v1 offline policy")
+    if evidence["hugging_face"]["api_url"] != HF_MODELS_API_URL:
+        raise RuntimeError("community evidence Hugging Face API URL is not canonical")
+    if tuple(evidence["featured_models"]) != FEATURED_MODELS:
+        raise RuntimeError("community evidence featured models are not canonical")
+    if evidence["display"] != _community_display(evidence):
+        raise RuntimeError("community evidence display is not the conservative floor")
+    return evidence
+
+
+def _http_get(url: str) -> tuple[bytes, Any]:
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "openmed-offline-claims-refresh"}
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310
+        return response.read(), response.headers
+
+
+def _http_get_paged(url: str) -> list[Any]:
+    items: list[Any] = []
+    next_url: str | None = url
+    while next_url:
+        body, headers = _http_get(next_url)
+        items.extend(json.loads(body))
+        match = re.search(r'<([^>]+)>;\s*rel="next"', headers.get("Link") or "")
+        next_url = match.group(1) if match else None
+    return items
+
+
+def _refresh_community_evidence() -> None:
+    models = _http_get_paged(HF_MODELS_API_URL)
+    if not models:
+        raise RuntimeError("Hugging Face API returned no OpenMed models")
+    by_id = {model["id"]: model for model in models}
+    missing = [repo_id for repo_id in FEATURED_MODELS if repo_id not in by_id]
+    if missing:
+        raise RuntimeError(f"featured models are not public on the Hub: {missing}")
+
+    pypi = json.loads(_http_get(PYPI_JSON_URL)[0])
+    uploads = sorted(
+        min(item["upload_time_iso_8601"] for item in files)
+        for files in pypi["releases"].values()
+        if files
+    )
+    first = dt.datetime.fromisoformat(uploads[0].replace("Z", "+00:00"))
+    first_six_months = sum(
+        1
+        for upload in uploads
+        if dt.datetime.fromisoformat(upload.replace("Z", "+00:00"))
+        < first + dt.timedelta(days=183)
+    )
+    last_month = json.loads(_http_get(PYPISTATS_RECENT_URL)[0])["data"]["last_month"]
+    badge = _http_get(PEPY_TOTAL_BADGE_URL)[0].decode("utf-8")
+    totals = re.findall(r">([0-9]+)<", badge)
+    if not totals:
+        raise RuntimeError("pepy badge did not expose an exact total")
+    installs_total = int(totals[-1])
+
+    contributors = _http_get_paged(GITHUB_CONTRIBUTORS_URL)
+    humans = [
+        item
+        for item in contributors
+        if item.get("type") != "Bot" and not item["login"].endswith("[bot]")
+    ]
+
+    captured = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    evidence: dict[str, Any] = {
+        "schema_version": 1,
+        "captured_at": captured.isoformat().replace("+00:00", "Z"),
+        "hugging_face": {
+            "organization": "OpenMed",
+            "api_url": HF_MODELS_API_URL,
+            "method": (
+                "Sum of per-model downloadsAllTime and downloads (rolling 30 "
+                "days) over every public model the Hub API returns. Hub "
+                "counters include automated downloads; they are not users."
+            ),
+            "public_models": len(models),
+            "downloads_all_time": sum(m.get("downloadsAllTime", 0) for m in models),
+            "downloads_30d": sum(m.get("downloads", 0) for m in models),
+            "first_model_created_at": min(m["createdAt"] for m in models),
+        },
+        "featured_models": {
+            repo_id: by_id[repo_id].get("downloadsAllTime", 0)
+            for repo_id in FEATURED_MODELS
+        },
+        "pypi": {
+            "package": "openmed",
+            "json_url": PYPI_JSON_URL,
+            "release_count": len(uploads),
+            "first_release_at": uploads[0],
+            "releases_first_six_months": first_six_months,
+            "first_six_months_definition": "uploads within 183 days of the first",
+            "installs_total": installs_total,
+            "installs_total_source": PEPY_TOTAL_BADGE_URL,
+            "installs_last_month": last_month,
+            "installs_last_month_source": PYPISTATS_RECENT_URL,
+        },
+        "github": {
+            "contributors_url": GITHUB_CONTRIBUTORS_URL,
+            "human_contributors": len(humans),
+        },
+        "owner": OWNER,
+        "review_by": (captured.date() + dt.timedelta(days=31)).isoformat(),
+        "refresh": COMMUNITY_REFRESH,
+    }
+    evidence["display"] = _community_display(evidence)
+    COMMUNITY_EVIDENCE.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _read_version() -> str:
     source = (REPO_ROOT / "openmed/__about__.py").read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*"([^"]+)"', source, re.MULTILINE)
     if not match:
         raise RuntimeError("openmed/__about__.py does not declare __version__")
     return match.group(1)
+
+
+def _read_version_date(version: str) -> dt.date:
+    """Date the source-version claim from its candidate changelog entry."""
+    source = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    match = re.search(
+        rf"^## \[{re.escape(version)}\] - ([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})$",
+        source,
+        re.MULTILINE,
+    )
+    if not match:
+        raise RuntimeError("package version has no dated changelog entry")
+    return dt.date.fromisoformat(match.group(1))
 
 
 def _read_entity_types() -> list[str]:
@@ -203,7 +396,12 @@ def build_registry() -> dict[str, Any]:
     manifest = _read_model_manifest()
     entity_types = _read_entity_types()
     version = _read_version()
+    version_date = _read_version_date(version)
     github = _read_github_evidence()
+    community = _read_community_evidence()
+    community_display = community["display"]
+    community_as_of = community["captured_at"][:10]
+    community_source = "docs/brand/system/evidence/community-metrics.json"
 
     claims = {
         "package_version": _claim(
@@ -214,6 +412,8 @@ def build_registry() -> dict[str, Any]:
             source="openmed/__about__.py",
             public_wording=f"OpenMed SDK {version}",
             qualification="Package version, not proof of PyPI publication.",
+            as_of=version_date.isoformat(),
+            review_by=(version_date + dt.timedelta(days=92)).isoformat(),
         ),
         "github_stars_snapshot": _claim(
             status="verified",
@@ -233,6 +433,147 @@ def build_registry() -> dict[str, Any]:
             as_of=github["captured_at"][:10],
             review_by=github["review_by"],
             owner=github["owner"],
+        ),
+        "hugging_face_public_models": _claim(
+            status="verified",
+            value=community["hugging_face"]["public_models"],
+            display=f"{community_display['public_models_floor']:,}+ open models",
+            definition=(
+                "Public models returned by the Hub API for the OpenMed "
+                "organization, floored to the preceding 100 for display."
+            ),
+            source=community_source,
+            public_wording=f"{community_display['public_models_floor']:,}+ open models",
+            qualification=(
+                "Dated offline snapshot of the live Hub, which can differ from "
+                "the committed models.jsonl manifest."
+            ),
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
+        ),
+        "cumulative_model_downloads": _claim(
+            status="verified",
+            value=community["hugging_face"]["downloads_all_time"],
+            display=(
+                f"{community_display['downloads_all_time_millions']}M+ all-time "
+                "Hugging Face downloads"
+            ),
+            definition=(
+                "Sum of per-model downloadsAllTime over public OpenMed models, "
+                "floored to the preceding 10M for display."
+            ),
+            source=community_source,
+            public_wording=(
+                f"{community_display['downloads_all_time_millions']}M+ all-time "
+                "Hugging Face downloads"
+            ),
+            qualification=(
+                "Hub counters include automated downloads; they count "
+                "downloads, not users or deployments."
+            ),
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
+        ),
+        "monthly_model_downloads": _claim(
+            status="verified",
+            value=community["hugging_face"]["downloads_30d"],
+            display=(
+                f"{community_display['downloads_30d_millions']}M+ Hugging Face "
+                "downloads in the last 30 days"
+            ),
+            definition=(
+                "Sum of the Hub's rolling 30-day downloads over public OpenMed "
+                "models, floored to the preceding 1M for display."
+            ),
+            source=community_source,
+            public_wording=(
+                f"{community_display['downloads_30d_millions']}M+ Hugging Face "
+                "downloads in the last 30 days"
+            ),
+            qualification=(
+                "Rolling 30-day window at capture time; Hub counters include "
+                "automated downloads."
+            ),
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
+        ),
+        "cumulative_package_installs": _claim(
+            status="verified",
+            value=community["pypi"]["installs_total"],
+            display=f"{community_display['installs_total_millions']}M+ PyPI installs",
+            definition=(
+                "All-time PyPI downloads of the openmed package as reported by "
+                "pepy.tech, floored to the preceding 100K for display."
+            ),
+            source=community_source,
+            public_wording=(
+                f"{community_display['installs_total_millions']}M+ PyPI installs"
+            ),
+            qualification=(
+                "Package downloads include CI and mirrors; they are not "
+                "unique installations."
+            ),
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
+        ),
+        "release_cadence": _claim(
+            status="verified",
+            value={
+                "release_count": community["pypi"]["release_count"],
+                "first_release_at": community["pypi"]["first_release_at"],
+                "releases_first_six_months": community["pypi"][
+                    "releases_first_six_months"
+                ],
+            },
+            display=(
+                f"{community['pypi']['release_count']} releases since "
+                f"{community_display['first_release_month']}"
+            ),
+            definition=(
+                "Versions published to PyPI since the first release; the "
+                "first six months are uploads within 183 days of the first."
+            ),
+            source=community_source,
+            public_wording=(
+                f"{community['pypi']['release_count']} releases since "
+                f"{community_display['first_release_month']}"
+            ),
+            qualification="Counts PyPI versions, not GitHub releases.",
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
+        ),
+        "community_timeline": _claim(
+            status="verified",
+            value={
+                "first_model_created_at": community["hugging_face"][
+                    "first_model_created_at"
+                ],
+                "human_contributors": community["github"]["human_contributors"],
+            },
+            display=(
+                f"First models {community_display['first_model_month']}; "
+                f"{community['github']['human_contributors']} contributors"
+            ),
+            definition=(
+                "Creation date of the earliest public OpenMed model on the "
+                "Hub, and GitHub contributors to the repository excluding bots."
+            ),
+            source=community_source,
+            public_wording=(
+                f"{community['github']['human_contributors']} contributors"
+            ),
+            qualification=(
+                "GitHub counts accounts with at least one commit on the "
+                "default branch; it excludes reviewers and issue reporters."
+            ),
+            as_of=community_as_of,
+            review_by=community["review_by"],
+            owner=community["owner"],
         ),
         "repository_model_snapshot": _claim(
             status="verified",
@@ -594,11 +935,6 @@ def build_registry() -> dict[str, Any]:
     }
 
     for name, definition in {
-        "cumulative_model_downloads": "Live cumulative model downloads.",
-        "monthly_model_downloads": "Live monthly model downloads.",
-        "cumulative_package_installs": "Live cumulative package installs.",
-        "release_cadence": "Measured release cadence over a declared interval.",
-        "community_timeline": "Founding and community timeline facts.",
         "benchmark_performance": (
             "Benchmark claim with hardware, versions, method, result, and date."
         ),
@@ -623,13 +959,19 @@ def build_registry() -> dict[str, Any]:
 
     return {
         "schema_version": 2,
-        "generated_at": max(MODEL_MANIFEST_AS_OF, github["captured_at"][:10]),
+        "generated_at": max(
+            MODEL_MANIFEST_AS_OF,
+            github["captured_at"][:10],
+            community_as_of,
+            version_date.isoformat(),
+        ),
         "generation": {
             "command": "python scripts/brand/update_claims.py --write",
             "network": "forbidden",
             "network_refresh_command": (
                 "python scripts/brand/update_claims.py --refresh-github-stars"
             ),
+            "community_refresh_command": COMMUNITY_REFRESH["command"],
             "network_refresh_ci_policy": "never invoke from CI",
             "rounding": "none unless a claim definition explicitly says otherwise",
         },
@@ -664,11 +1006,24 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     compact_stars = stars["display"].split()[0]
     numeric_stars = int(compact_stars.rstrip("+").replace(",", ""))
     display_stars = f"{numeric_stars / 1000:.1f}k"
+    community = _read_community_evidence()
+    community_display = community["display"]
+    entity_type_count = claims["pii_entity_types"]["value"]
+    apache_models_floor = (
+        claims["model_license_population"]["value"]["apache-2.0"] // 100 * 100
+    )
+    open_models_floor = community_display["public_models_floor"]
+    release_count = community["pypi"]["release_count"]
+    releases_first_six_months = community["pypi"]["releases_first_six_months"]
+    first_release_month = community_display["first_release_month"]
+    first_model_month = community_display["first_model_month"]
+    captured_month = community_display["captured_month"]
+    contributor_count = community["github"]["human_contributors"]
     metadata_title = "OpenMed — local-first clinical AI"
     metadata_description = (
-        "OpenMed reads clinical text and removes 55+ PHI types on hardware "
-        "you control. Explore 2,000+ open models, on-device runtimes, and "
-        "reproducible biomedical NER benchmarks."
+        f"OpenMed reads clinical text and removes {entity_type_count} PII entity "
+        f"types on hardware you control. Explore {open_models_floor:,}+ open "
+        "models, on-device runtimes, and reproducible biomedical NER benchmarks."
     )
     identity_answer = (
         "Apache-2.0 clinical NLP and de-identification software that runs on "
@@ -764,6 +1119,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
         "softwareVersion": version,
         "url": "https://openmed.life/",
         "isAccessibleForFree": True,
+        "creator": {
+            "@type": "Person",
+            "name": "Maziyar Panahi",
+            "url": "https://maziyarpanahi.com",
+        },
     }
     faq_items = [
         (
@@ -859,11 +1219,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     </span>
 </h1>
 <p class="hero-lead">
-    OpenMed reads clinical text and removes 55+ PHI types on the
+    OpenMed reads clinical text and removes {entity_type_count} PII entity types on the
     hardware you control, so patient data never leaves the device.
-    2,000+ Apache-2.0 models, {model_backed_language_count} model-backed PII languages,
+    {apache_models_floor:,}+ Apache-2.0 models, {model_backed_language_count} model-backed PII languages,
     state of the art on 10 of 12 biomedical NER benchmarks —
-    and a new release most weeks.
+    and {release_count} releases since {first_release_month}.
 </p>
 <div class="button-row">
     <a
@@ -892,11 +1252,11 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     repository_snapshot = f"""<div class="community-grid">
     <div class="community-lead">
         <p class="mono-label">Model downloads · all-time</p>
-        <p class="community-number">340<span>M</span></p>
+        <p class="community-number">{community_display["downloads_all_time_millions"]}<span>M</span></p>
         <p>
-            One person on lunch breaks in July 2025; the largest open
-            medical-AI collection by July 2026. Founded by
-            <span class="accent-text">Maziyar Panahi</span>.
+            One person, after work, in {first_model_month}; {open_models_floor:,}+
+            open models and {contributor_count} contributors by {captured_month}.
+            Created by <span class="accent-text">Maziyar Panahi</span>.
             <a href="https://github.com/maziyarpanahi/openmed">
                 Join on GitHub <span aria-hidden="true">↗</span>
             </a>
@@ -904,15 +1264,15 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     </div>
     <div class="numbers-wall" aria-label="OpenMed community statistics">
         <div>
-            <strong>30<span>M</span></strong>
-            <small>Every month</small>
+            <strong>{community_display["downloads_30d_millions"]}<span>M</span></strong>
+            <small>Last 30 days</small>
         </div>
         <div>
-            <strong>9.4<span>M</span></strong>
+            <strong>{community_display["installs_total_millions"]}<span>M</span></strong>
             <small>PyPI installs</small>
         </div>
         <div>
-            <strong>2,000<span>+</span></strong>
+            <strong>{open_models_floor:,}<span>+</span></strong>
             <small>Open models</small>
         </div>
         <div>
@@ -924,8 +1284,8 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
 
 <div class="facts-rail">
     <div>
-        <strong>A release every week</strong>
-        <span>13 releases in the first six months</span>
+        <strong>{release_count} releases since {first_release_month}</strong>
+        <span>{releases_first_six_months} in the first six months</span>
     </div>
     <div>
         <strong>{supported_language_count} languages supported</strong>
@@ -937,12 +1297,12 @@ def _website_fragments(registry: dict[str, Any]) -> dict[str, str]:
     </div>
 </div>
 <div class="snapshot-note">
-    <span>Counted, not claimed · Hugging Face + PyPI · July 2026</span>
+    <span>Counted, not claimed · Hugging Face + PyPI + GitHub · {captured_month}</span>
     <span data-community-stars>★ {display_stars.upper()} GitHub stars · counted live</span>
 </div>"""
     privacy_contract = f"""<h2>De-identification you can audit, not just trust.</h2>
 <p class="section-lead">
-    All 18 HIPAA Safe Harbor identifiers inside a 55+ entity
+    All 18 HIPAA Safe Harbor identifiers inside a {entity_type_count}-type entity
     catalog: {model_backed_language_count} model-backed PII languages,
     {supported_language_count} supported codes,
     600+ PII models, plus validator-backed ID-only locales.
@@ -1038,7 +1398,6 @@ def _sync_website(
             "https://x.com/OpenMed_AI",
             "https://www.linkedin.com/company/openmed-ai/",
         ],
-        "founder": {"@type": "Person", "name": "Maziyar Panahi"},
     }
     errors: list[str] = []
     if organization != required_organization:
@@ -1057,10 +1416,14 @@ def main() -> int:
     mode.add_argument("--write", action="store_true")
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--refresh-github-stars", action="store_true")
+    mode.add_argument("--refresh-community-metrics", action="store_true")
     args = parser.parse_args()
 
-    if args.refresh_github_stars:
-        _refresh_github_evidence()
+    if args.refresh_github_stars or args.refresh_community_metrics:
+        if args.refresh_github_stars:
+            _refresh_github_evidence()
+        else:
+            _refresh_community_evidence()
         registry = build_registry()
         OUTPUT.write_text(
             json.dumps(registry, ensure_ascii=False, indent=2) + "\n",
@@ -1070,8 +1433,9 @@ def main() -> int:
         if website_errors:
             print("\n".join(website_errors), file=sys.stderr)
             return 1
+        refreshed = "GitHub" if args.refresh_github_stars else "community"
         print(
-            "refreshed the opt-in GitHub evidence and rebuilt "
+            f"refreshed the opt-in {refreshed} evidence and rebuilt "
             f"{OUTPUT.relative_to(REPO_ROOT)}"
         )
         return 0

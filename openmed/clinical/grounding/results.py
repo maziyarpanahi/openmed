@@ -11,7 +11,10 @@ from __future__ import annotations
 import math
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from openmed.clinical.nli import ClaimVerification
 
 from .systems import canonical_system, system_uri
 from .types import Candidate, GroundedSpan
@@ -396,6 +399,7 @@ class GroundingResult(Sequence[GroundedSpan]):
     language: str = "en"
     top_k: int = 1
     offline: bool = True
+    verification: tuple[ClaimVerification, ...] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         spans = tuple(self.spans)
@@ -406,6 +410,27 @@ class GroundingResult(Sequence[GroundedSpan]):
             raise TypeError("grounding result concepts must be GroundedConcept objects")
         if type(self.top_k) is not int or self.top_k < 1:
             raise ValueError("grounding result top_k must be a positive integer")
+        if self.verification is not None:
+            from openmed.clinical.nli import ClaimVerification, _verification_digest
+
+            checks = tuple(self.verification)
+            if len(checks) != len(concepts) or any(
+                type(check) is not ClaimVerification or check.claim_index != index
+                for index, check in enumerate(checks)
+            ):
+                raise ValueError("invalid grounding verification metadata")
+            for concept, check in zip(concepts, checks, strict=True):
+                claim = concept.display if concept.code is not None else None
+                if check.claim_digest != (
+                    _verification_digest(claim) if claim else None
+                ):
+                    raise ValueError("invalid grounding verification metadata")
+                if check.source_offset is not None and (
+                    check.source_offset != (concept.start, concept.end)
+                    or check.source_digest != _verification_digest(concept.surface_text)
+                ):
+                    raise ValueError("invalid grounding verification metadata")
+            object.__setattr__(self, "verification", checks)
         object.__setattr__(self, "spans", spans)
         object.__setattr__(self, "concepts", concepts)
         object.__setattr__(
@@ -483,7 +508,7 @@ class GroundingResult(Sequence[GroundedSpan]):
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible result with spans, codes, and provenance."""
 
-        return {
+        payload = {
             "schema_version": "openmed.grounding.v1",
             "systems": list(self.systems),
             "language": self.language,
@@ -494,6 +519,9 @@ class GroundingResult(Sequence[GroundedSpan]):
             "concepts": [concept.to_dict() for concept in self.concepts],
             "grounded_concepts": [concept.to_dict() for concept in self.concepts],
         }
+        if self.verification is not None:
+            payload["verification"] = [check.to_dict() for check in self.verification]
+        return payload
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "GroundingResult":
@@ -514,6 +542,15 @@ class GroundingResult(Sequence[GroundedSpan]):
         if not spans and concepts:
             spans = _spans_from_concepts(concepts)
         language = str(value.get("language", value.get("lang", "en")))
+        verification = None
+        if "verification" in value:
+            from openmed.clinical.nli import ClaimVerification
+
+            if not isinstance(value["verification"], (list, tuple)):
+                raise ValueError("invalid grounding verification metadata")
+            verification = tuple(
+                ClaimVerification.from_dict(item) for item in value["verification"]
+            )
         return cls(
             spans=spans,
             concepts=concepts,
@@ -521,6 +558,7 @@ class GroundingResult(Sequence[GroundedSpan]):
             language=language,
             top_k=int(value.get("top_k", 1)),
             offline=bool(value.get("offline", True)),
+            verification=verification,
         )
 
 

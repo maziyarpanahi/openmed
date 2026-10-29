@@ -7,6 +7,7 @@ import subprocess
 import sys
 import zipfile
 from email import policy as email_policy
+from email.errors import MessageError
 from email.message import EmailMessage
 from email.parser import BytesParser
 from io import BytesIO
@@ -164,9 +165,10 @@ def test_malformed_address_header_is_extracted_and_redacted_without_crashing(
     assert b"Synthetic Clinic <clinic@" not in result.email_bytes
 
 
-@pytest.mark.parametrize("value", ["a:b:;;", "Synthetic Clinic <clinic@"])
-def test_address_header_probe_returns_false_for_unparsable_values(value: str):
-    assert email_module._address_header_is_valid("From", value) is False
+def test_address_header_probe_returns_false_for_unparsable_values(subtests):
+    for value in ["a:b:;;", "Synthetic Clinic <clinic@"]:
+        with subtests.test(value=value):
+            assert email_module._address_header_is_valid("From", value) is False
 
 
 def test_address_header_probe_accepts_valid_addresses():
@@ -465,6 +467,30 @@ def test_unsupported_attachment_fails_closed_without_echoing_filename():
 
     assert "no supported clean-output handler" in str(excinfo.value)
     assert "Alice Patient" not in str(excinfo.value)
+
+
+def test_unserializable_redacted_headers_fail_closed_without_header_text(
+    monkeypatch,
+):
+    payload = (
+        b"From: Synthetic Clinic <clinic@example.test>\n"
+        b"MIME-Version: 1.0\x0bContent-Type: text/plain\n"
+        b"\n"
+        b"Synthetic body PATIENT-001.\n"
+    )
+
+    def reject_headers(_message, *args, **kwargs):
+        raise MessageError(f"folded header contains newline: {payload!r}")
+
+    monkeypatch.setattr(EmailMessage, "as_bytes", reject_headers)
+
+    with pytest.raises(UnsupportedDocumentError) as excinfo:
+        redact_email(payload, models=lambda text, **_: text)
+
+    assert "cannot be serialized" in str(excinfo.value)
+    assert "PATIENT-001" not in str(excinfo.value)
+    assert excinfo.value.__cause__ is None
+    assert excinfo.value.__suppress_context__ is True
 
 
 def test_named_memory_stream_dispatches_eml_without_multimodal_extra(monkeypatch):

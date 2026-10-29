@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmed.life/schemas/clinical_nli_verification.schema.json",
+  "title": "OpenMed clinical NLI verification record",
+  "schema_version": 1,
+  "type": "array",
+  "items": {"$ref": "#/$defs/verification"},
+  "$defs": {
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend_id", "claim_index", "contradicted", "label", "review_required",
+        "score"
+      ],
+      "properties": {
+        "backend_id": {"type": "string", "minLength": 1},
+        "claim_index": {"type": "integer", "minimum": 0},
+        "contradicted": {"type": "boolean"},
+        "label": {"enum": ["abstention", "contradiction", "entailment", "neutral"]},
+        "review_required": {"type": "boolean"},
+        "score": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "synthetic_only": true,
+  "profile": "bhc",
+  "normalization": "NFKC",
+  "cases": [
+    {
+      "case_id": "latin-en",
+      "languages": ["en"],
+      "identifier_fixture": "golden-per-language-id-trap-en",
+      "prefix": "Synthetic café 🧪 record: ",
+      "sentences": ["No fever was documented.", "The family had diabetes.", "The cough was historical."],
+      "conflicts": ["Fever was documented.", "The patient had diabetes.", "The cough is current."]
+    },
+    {
+      "case_id": "latin-fr",
+      "languages": ["fr"],
+      "identifier_fixture": "golden-per-language-id-trap-fr",
+      "prefix": "Dossier synthétique 🧪 : ",
+      "sentences": ["Aucune fièvre documentée.", "La famille avait un diabète.", "La toux était ancienne."],
+      "conflicts": ["Fièvre documentée.", "Le patient avait un diabète.", "La toux est actuelle."]
+    },
+    {
+      "case_id": "rtl-ar",
+      "languages": ["ar"],
+      "identifier_fixture": "golden-per-language-id-trap-ar",
+      "prefix": "سجل اصطناعي 🧪: ",
+      "sentences": ["لم تُوثق حمى.", "لدى العائلة مرض السكري.", "السعال كان سابقاً."],
+      "conflicts": ["وُثقت حمى.", "لدى المريض مرض السكري.", "السعال حالي."]
+    },
+    {
+      "case_id": "indic-hi",
+      "languages": ["hi"],
+      "identifier_fixture": "golden-per-language-id-trap-hi",
+      "prefix": "कृत्रिम रिकॉर्ड 🧪: ",
+      "sentences": ["बुखार दर्ज नहीं था.", "परिवार में मधुमेह था.", "खाँसी पहले थी."],
+      "conflicts": ["बुखार दर्ज था.", "रोगी में मधुमेह था.", "खाँसी अभी है."]
+    },
+    {
+      "case_id": "mixed-en-hi",
+      "languages": ["en", "hi"],
+      "identifier_fixture": "golden-per-language-id-trap-hi",
+      "prefix": "Synthetic कृत्रिम café 🧪 record: ",
+      "sentences": ["No बुखार was documented.", "The परिवार had diabetes.", "The खाँसी was historical."],
+      "conflicts": ["बुखार was documented.", "The patient had diabetes.", "The खाँसी is current."]
+    }
+  ]
+}

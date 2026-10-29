@@ -147,7 +147,7 @@ Install the service extra and start the API:
 
 ```bash
 uv pip install "openmed[hf,service]"
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+python -m openmed.service.logging --host 127.0.0.1 --port 8080
 ```
 
 Call `POST /pii/deidentify` with any HTTP client:

@@ -49,6 +49,40 @@ def test_root_dockerfile_keeps_compose_base_digest_pinned():
     assert all(PINNED_IMAGE_RE.fullmatch(image) for image in stage_images)
 
 
+def test_published_and_scanned_container_runtime_recipes_match() -> None:
+    root = ROOT_DOCKERFILE.read_text(encoding="utf-8")
+    deploy = DEPLOY_DOCKERFILE.read_text(encoding="utf-8")
+    assert [match.group("image") for match in FROM_IMAGE_RE.finditer(root)] == [
+        match.group("image") for match in FROM_IMAGE_RE.finditer(deploy)
+    ]
+    # Platform headers may differ; all runtime instructions must stay aligned.
+    assert root[root.index("ENV ") :] == deploy[deploy.index("ENV ") :]
+
+
+def test_runtime_images_omit_unrelated_sources_and_remove_installer() -> None:
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        assert "COPY . /app" not in source
+        assert "COPY openmed /app/openmed" in source
+        assert (
+            "COPY gates/baseline.json gates/registry_state.json /app/gates/" in source
+        )
+        assert "COPY eval/redteam/corpus/adversarial_phi.jsonl" in source
+        assert '"pip==26.2.0"' in source
+        assert "python -m pip check" in source
+        assert "python -m pip uninstall --yes pip" in source
+        assert source.index("python -m pip check") < source.index(
+            "python -m pip uninstall --yes pip"
+        )
+
+
+def test_runtime_uuid_pin_uses_available_repository_revision() -> None:
+    for path in (ROOT_DOCKERFILE, DEPLOY_DOCKERFILE):
+        source = path.read_text(encoding="utf-8")
+        assert '"libuuid1=2.42.4-1"' in source
+        assert "libuuid1=2.42.3-1" not in source
+
+
 def test_multiarch_workflow_builds_manifest_and_smokes_each_platform():
     content = WORKFLOW.read_text(encoding="utf-8")
 

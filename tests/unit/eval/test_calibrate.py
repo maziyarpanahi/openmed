@@ -12,6 +12,7 @@ from openmed.core.audit import AuditReport
 from openmed.core.pii import deidentify
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.calibrate import (
+    CalibrationSample,
     build_thresholds_payload,
     coerce_calibration_thresholds,
     fit_calibration_thresholds,
@@ -22,6 +23,89 @@ from openmed.eval.calibrate import (
     write_calibration_artifacts,
 )
 from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+
+def test_calibration_target_accepts_only_boolean_or_binary_numbers(subtests) -> None:
+    for key in ["target", "is_true", "matched"]:
+        for value in [True, False, 0, 1, 0.0, 1.0]:
+            with subtests.test(key=key, value=value):
+                row = {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    key: value,
+                }
+                sample = CalibrationSample.from_mapping(row)
+                assert sample.target is bool(value)
+
+
+def test_calibration_target_rejects_truthiness_and_returns_value_free_error(
+    subtests,
+) -> None:
+    for key in ["target", "is_true", "matched"]:
+        for value in [
+            "false",
+            "true",
+            "0",
+            "1",
+            "",
+            "synthetic-private-label",
+            None,
+            [],
+            {},
+            [1],
+            2,
+            -1,
+            0.5,
+            float("nan"),
+            float("inf"),
+            -float("inf"),
+        ]:
+            with subtests.test(key=key, value=value):
+                row = {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    key: value,
+                }
+                with pytest.raises(ValueError) as caught:
+                    CalibrationSample.from_mapping(row)
+                assert (
+                    str(caught.value) == "calibration target must be a boolean or 0/1"
+                )
+
+
+def test_calibration_target_defaults_and_alias_precedence_are_preserved() -> None:
+    row = {"model_id": "unit-model", "label": "NAME", "score": 0.8}
+    assert CalibrationSample.from_mapping(row).target is True
+    assert (
+        CalibrationSample.from_mapping(
+            {**row, "target": False, "is_true": True, "matched": True}
+        ).target
+        is False
+    )
+    assert (
+        CalibrationSample.from_mapping({**row, "is_true": 0, "matched": 1}).target
+        is False
+    )
+    with pytest.raises(ValueError, match="calibration target must"):
+        CalibrationSample.from_mapping({**row, "target": None, "matched": True})
+
+
+def test_calibration_fit_rejects_string_target_instead_of_fitting_positive() -> None:
+    with pytest.raises(ValueError, match="calibration target must"):
+        fit_calibration_thresholds(
+            [
+                {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "score": 0.8,
+                    "target": "false",
+                }
+            ],
+            model_id="unit-model",
+            suite="synthetic",
+        )
 
 
 def _samples() -> list[dict[str, object]]:
@@ -295,6 +379,7 @@ def test_conformal_calibration_preserves_shifted_critical_coverage() -> None:
     assert all(row["coverage_gap"] <= 0.01 for row in report.language_coverage.values())
 
 
+@pytest.mark.slow
 def test_conformal_payload_is_byte_stable_and_loadable(tmp_path: Path) -> None:
     calibration, gate = _shifted_critical_samples()
     kwargs = {

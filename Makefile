@@ -33,6 +33,7 @@ lock-check: ## Verify that uv.lock matches pyproject.toml
 lint: ## Run Ruff lint checks
 	@echo "🔎 Running Ruff lint checks..."
 	$(UV) run --frozen --extra dev ruff check .
+	$(UV) run --frozen --extra dev python scripts/security/check_effect_paths.py --check
 
 type-check: ## Type-check the annotated public-module scope
 	@echo "🔎 Running scoped mypy checks..."

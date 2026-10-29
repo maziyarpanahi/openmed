@@ -34,6 +34,32 @@ def test_current_non_dev_dependencies_are_permissive():
     } == set()
 
 
+def test_current_dependencies_pass_without_installed_metadata(monkeypatch):
+    # CI runs the policy before installing the package, so every audited
+    # dependency needs a reviewed entry rather than installed metadata.
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    results = policy.audit_pyproject(ROOT / "pyproject.toml")
+
+    assert results
+    assert [
+        f"{result.entry.group}:{result.entry.name}"
+        for result in results
+        if not result.allowed
+    ] == []
+
+
+def test_jsonschema_license_is_reviewed_without_installed_metadata(monkeypatch):
+    monkeypatch.setattr(policy, "installed_license_text", lambda _name: None)
+
+    license_text = policy.resolve_license("jsonschema")
+    allowed, reason = policy.is_allowed_license("jsonschema", license_text)
+
+    assert license_text == "MIT"
+    assert allowed is True
+    assert reason == "permissive license"
+
+
 def test_zh_and_indic_dependencies_have_reviewed_permissive_licenses():
     results = policy.audit_pyproject(ROOT / "pyproject.toml")
     language_results = {

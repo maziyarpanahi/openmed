@@ -1,5 +1,8 @@
 # SDOH Longitudinal Status Resolution
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `resolve_sdoh_longitudinal_status()` groups value-free observations into dated
 episodes. Observations recorded for the same category and effective time remain
 together, including contradictory statuses and every source reference.

@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
+from openmed.agent.workflows.dispatch import GuardedDispatchError
 from openmed.clinical.exporters.codeable_concept_simple import (
     codeable_concept,
     coding,
@@ -756,7 +757,8 @@ class WorkflowRunner:
                     break
                 except Exception as exc:  # noqa: BLE001 - retries wrap step adapters.
                     last_error_type = type(exc).__name__
-                    if attempt_count >= max_attempts:
+                    guarded = isinstance(exc, GuardedDispatchError)
+                    if guarded or attempt_count >= max_attempts:
                         duration_ms = (time.perf_counter() - started) * 1000
                         trace.append(
                             _trace_entry(
@@ -770,6 +772,8 @@ class WorkflowRunner:
                                 error_type=last_error_type,
                             )
                         )
+                        if guarded:
+                            trace[-1]["dispatch"] = exc.result.to_dict()
                         failed = True
                         break
 

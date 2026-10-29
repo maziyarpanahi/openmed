@@ -4,6 +4,11 @@ Use this guide when a coding agent is building an application that imports
 OpenMed. The repository `AGENTS.md` explains how to contribute to OpenMed; this
 page explains how to consume its public APIs safely.
 
+For permissioned clinical workflows, start with the
+[governed-agent lifecycle](agent/index.md) and its authority, approval, evidence
+and recovery contracts. The application must compose those checks around its
+dispatch boundary; using a coding agent does not authorize clinical actions.
+
 All examples below use synthetic values. Model inference runs locally after the
 first model download.
 
