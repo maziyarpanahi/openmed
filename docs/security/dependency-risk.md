@@ -178,26 +178,18 @@ This evidence supports a maintainer's allowlist review. Adding, renewing,
 removing or replacing a waiver remains a separate decision; this reporting
 change makes none of those changes.
 
-## Temporary NLTK exception for the universal lockfile
+## Retired NLTK exception for the universal lockfile
 
-On 2026-10-03, the maintainer approved a time-limited exception for
-`CVE-2026-81726` / [GHSA-8mgp-746c-j5xp](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp),
-scoped to the `nltk` package in `uv.lock` through **2026-10-17**. At review,
-upstream listed no patched release and the latest published NLTK was 3.10.3.
-The finding remains present in scanner evidence; it is not considered fixed.
+The time-limited exception for `CVE-2026-81726` /
+[GHSA-8mgp-746c-j5xp](https://github.com/nltk/nltk/security/advisories/GHSA-8mgp-746c-j5xp),
+renewed on 2026-10-20 through 2026-11-03, was retired on 2026-10-28. The
+advisory covers NLTK 3.10.3 and earlier, and the universal lock now resolves
+NLTK 3.10.4, which also fixes
+[GHSA-j456-xh4h-cpf2](https://github.com/advisories/GHSA-j456-xh4h-cpf2).
+`deploy/security/cve-allowlist.yaml` holds no waivers, and the policy remains
+at the HIGH threshold.
 
-The affected model-artifact import/export APIs can read or write outside
-configured NLTK path-security roots when given untrusted paths. OpenMed has no
-direct calls to these APIs. NLTK is not in the core dependency closure or the
-reference service image. The universal lock includes it through the optional
-`agents`, `llamaindex`, `medspacy`, `quickumls`, and `scrubadub` extras. This
-review does not prove that every downstream configuration is unexploitable:
-do not let untrusted workflows select model import/export paths in those
-integrations, and use OS-level containment when running untrusted code.
-
-The policy in `deploy/security/cve-allowlist.yaml` remains at the HIGH
-threshold. The exception cannot suppress a different package, artifact, or
-advisory. It stops applying when the scanner reports a fixed version and
-fails closed after its expiry. Upgrade to a verified patched release and
-remove the exception when available; renewal requires a fresh maintainer
-decision. Model training is unrelated to this dependency review.
+NLTK is still reachable only through the optional `agents`, `llamaindex`,
+`medspacy`, `quickumls`, and `scrubadub` extras, and the `--review-extra-only
+nltk=nltk` guard above keeps it out of the core closure. Any new waiver needs
+a fresh, time-boxed maintainer decision.

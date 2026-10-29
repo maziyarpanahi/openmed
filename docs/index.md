@@ -7,10 +7,12 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-The OpenMed `3.0.0` candidate adds versioned longitudinal Journey contracts and guarded local
-clinical interfaces, with documented Python, Swift, Kotlin/Android, JavaScript,
+The OpenMed `3.1.0` candidate extends longitudinal Journey and local clinical
+interfaces with governed approval, recovery and reviewed evidence workflows.
+It includes documented Python, Swift, Kotlin/Android, JavaScript,
 REST, and local deployment surfaces. Feature availability is platform-specific.
-Review the [2.5-to-3.0 migration guide](migration/2.5-to-3.0.md) before upgrading.
+Review the [3.0-to-3.1 migration guide](migration/3.0-to-3.1.md), including the
+two intentional privacy migrations, before upgrading.
 New-model training and checkpoint publication are optional research, not feature
 or SDK-release prerequisites. The candidate combines policy-aware de-identification,
 expanded clinical and structured-data
@@ -90,7 +92,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 3.0.0 Migration Guide](./migration/2.5-to-3.0.md) – intended post-publication coordinates, compatibility guidance and validation requirements; not a publication claim. See the [feature map](./feature-map.md) for capability and platform coverage.
+- [OpenMed 3.1.0 Migration Guide](./migration/3.0-to-3.1.md) – intended post-publication coordinates, compatibility guidance and validation requirements; not a publication claim. See the [feature map](./feature-map.md) for capability and platform coverage.
 - [OpenMed 2.5.0 Release Notes](./release/v2.5.0.md) – historical coverage and installation coordinates for the previous stable release.
 - [OpenMed 2.0.0 Release Notes](./release/v2.0.0.md) – historical major-version contract and v2 baseline.
 - [OpenMed 1.9.1 Release Notes](./release/v1.9.1.md) – historical Swift packaging, Android release hardening, and dependency-security fixes for the final 1.9 patch.
@@ -106,7 +108,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 3.0.0 Migration Guide](./migration/2.5-to-3.0.md) – review contract changes and validation requirements before upgrading.
+3. [OpenMed 3.1.0 Migration Guide](./migration/3.0-to-3.1.md) – review contract changes and validation requirements before upgrading.
 4. Core guides:
     - [Analyze Text Helper](./analyze-text.md) for single-call inference.
     - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

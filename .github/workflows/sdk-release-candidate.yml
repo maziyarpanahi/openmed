@@ -14,7 +14,7 @@ on:
       version:
         description: Stable SDK version to prepare.
         required: true
-        default: 4.0.0
+        default: 3.1.0
       api_base_ref:
         description: Previous stable SDK tag.
         required: true
@@ -22,7 +22,7 @@ on:
       migration_guide:
         description: Reviewed migration guide for this SDK candidate.
         required: true
-        default: docs/migration/3.0-to-4.0.md
+        default: docs/migration/3.0-to-3.1.md
 
 permissions:
   contents: read
@@ -37,9 +37,9 @@ jobs:
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-      REQUESTED_VERSION: ${{ inputs.version || '4.0.0' }}
+      REQUESTED_VERSION: ${{ inputs.version || '3.1.0' }}
       REQUESTED_API_BASE: ${{ inputs.api_base_ref || 'v3.0.0' }}
-      REQUESTED_MIGRATION: ${{ inputs.migration_guide || 'docs/migration/3.0-to-4.0.md' }}
+      REQUESTED_MIGRATION: ${{ inputs.migration_guide || 'docs/migration/3.0-to-3.1.md' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

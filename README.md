@@ -9,7 +9,7 @@ OpenMed's core local runtime performs extraction and de-identification after req
 
 <p>
   <a href="https://pypi.org/project/openmed/">PyPI package</a> ·
-  <a href="https://www.python.org/downloads/">Python 3.10+</a> ·
+  <a href="https://www.python.org/downloads/">Python 3.11+</a> ·
   <a href="https://huggingface.co/OpenMed">Model catalog</a> ·
   <a href="https://arxiv.org/abs/2508.01630">Research paper</a> ·
   <a href="LICENSE">Apache-2.0 SDK source</a>
@@ -142,7 +142,7 @@ On supported Apple hardware, OpenMed can use **MLX** and **[OpenMedKit](swift/Op
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.1.0"),
 ]
 ```
 
@@ -186,11 +186,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the immutable OpenMed `v3.0.0` release:
+Then use the immutable OpenMed `v3.1.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v3.0.0")
+    implementation("com.github.maziyarpanahi:openmed:v3.1.0")
 }
 ```
 
@@ -674,7 +674,7 @@ MkDocs build.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 3.0.0 Migration Guide](docs/migration/2.5-to-3.0.md) | [OpenMed 2.2.0 Release Notes](docs/release/v2.2.0.md) | [Examples](docs/examples.md) |
+| [OpenMed 3.1.0 Migration Guide](docs/migration/3.0-to-3.1.md) | [OpenMed 2.2.0 Release Notes](docs/release/v2.2.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Extension Plugin SDK](docs/plugin-sdk.md) |
 | [v1 to v2 Migration](docs/migration.md) | [MCP Client Connections](docs/mcp-clients.md) | [African Developer Onboarding](docs/africa-onboarding.md) |

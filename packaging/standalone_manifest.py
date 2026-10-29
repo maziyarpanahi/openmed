@@ -26,7 +26,7 @@ from typing import Final, Protocol, TypeVar
 MANIFEST_FORMAT: Final = "openmed-standalone-redactor"
 MANIFEST_SCHEMA_VERSION: Final = "1.0"
 STANDALONE_PACKAGE_NAME: Final = "openmed-redactor-standalone"
-STANDALONE_PACKAGE_VERSION: Final = "3.0.0"
+STANDALONE_PACKAGE_VERSION: Final = "3.1.0"
 STANDALONE_LICENSE: Final = "Apache-2.0"
 PLATFORM_ANY: Final = "any"
 _MAX_TEXT_LENGTH: Final = 512
@@ -60,7 +60,6 @@ _REQUIRED_REQUIREMENTS: Final = {
     "jsonschema": "jsonschema>=4.18,<5",
     "pysbd": "pysbd>=0.3.4,<0.4",
     "pyyaml": "pyyaml>=6.0",
-    "tomli": "tomli>=2.0; python_version < '3.11'",
 }
 _OPTIONAL_BOUNDARY: Final = {
     "huggingface-hub": ("huggingface-hub>=0.30", "Apache-2.0", True),
@@ -332,7 +331,7 @@ class StandalonePackageManifest:
     optional_dependencies: tuple[DependencySpec, ...]
     restricted_dependencies: tuple[DependencySpec, ...]
     restricted_assets: tuple[RestrictedAssetSpec, ...]
-    python_requires: str = ">=3.10"
+    python_requires: str = ">=3.11"
     platforms: tuple[str, ...] = (PLATFORM_ANY,)
     network_egress: bool = False
     schema_version: str = MANIFEST_SCHEMA_VERSION
@@ -542,7 +541,7 @@ def validate_manifest(
         issues.append(_issue("version", "package version is out of sync"))
     if manifest.license != STANDALONE_LICENSE:
         issues.append(_issue("license", "package license is out of sync"))
-    if manifest.python_requires != ">=3.10":
+    if manifest.python_requires != ">=3.11":
         issues.append(_issue("python_requires", "Python requirement is out of sync"))
     if manifest.platforms != (PLATFORM_ANY,):
         issues.append(_issue("platforms", "manifest must be platform-neutral"))
@@ -782,12 +781,6 @@ _REQUIRED_DEPENDENCIES: Final = (
         requirement=_REQUIRED_REQUIREMENTS["pyyaml"],
         license="MIT",
         purpose="Reading local policy configuration.",
-    ),
-    DependencySpec(
-        name="tomli",
-        requirement=_REQUIRED_REQUIREMENTS["tomli"],
-        license="MIT",
-        purpose="Reading local TOML metadata on Python 3.10.",
     ),
 )
 

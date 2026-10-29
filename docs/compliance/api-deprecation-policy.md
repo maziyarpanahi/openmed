@@ -57,7 +57,7 @@ against the committed baseline (`scripts/release/public_api_baseline.json`).
 
 ## Deprecation cycle
 
-The v4.0 governance types, approval and permission contracts, workflow
+The v3.1 governance types, approval and permission contracts, workflow
 operations, and FHIR/OMOP write-back APIs follow this same deprecation window.
 Their inclusion in the per-PR baseline does not grant a pre-release exception
 to the compatibility policy. New exports and optional parameters remain
@@ -115,14 +115,23 @@ removed. A declared export that is temporarily unavailable remains in the
 snapshot but is not treated as a kind or signature change, so partial installs
 never produce false breaks.
 
-## v4.0 security-remediation boundary
+## v3.1 security-remediation exception
 
-The v4.0.0 SDK candidate deliberately removes privacy-sensitive fields present
-in v3.0.0. The maintainer approved this major boundary on 2026-10-14. The
-normal warning window is waived only for these removals: keeping the original
-fields working during a minor release would preserve the exposure being fixed.
-No other API receives an exception. A major version, explicit before/after
-migration guidance and the full v3.0.0-to-candidate API diff remain required.
+The maintainer explicitly approved a narrow security exception on 2026-10-20
+for v3.1.0, superseding the proposed v4.0 boundary. This release deliberately
+removes privacy-sensitive fields present in v3.0.0. Preserving their original
+behavior would preserve the exposure being fixed. These are breaking changes,
+not backward-compatible aliases; consumers must follow the
+[3.0-to-3.1 migration guide](../migration/3.0-to-3.1.md).
+
+The exception covers only the two remediations below, including their
+constructor and serialized-record changes. It waives the normal warning window
+and major-version requirement only for this release. The release gate permits
+exactly their ten field removals, including re-exports, against v3.0.0; it
+retains the breaking count, migration hash and named exception in signed
+evidence. A missing migration entry, additional break, different baseline or
+different minor/patch target fails closed. v3.2 and all other APIs retain the
+normal compatibility policy.
 
 - `openmed.agent.approvals.ApprovalReceipt` removes `reviewer_role`,
   `consumed_at` and `expires_at` from its public constructor and receipt. These
@@ -138,7 +147,7 @@ migration guidance and the full v3.0.0-to-candidate API diff remain required.
 These contracts are also reachable through `openmed.agent.approvals.tokens`
 and `openmed.risk.aggregate_dp`; their field removals must be named in the
 release migration guide. The per-PR checker reports the two exported
-constructor locations above. Its temporary announcements cover only those
-locations and must be removed when the reviewed v4.0 baseline is captured.
+constructor locations above. Its reviewed baseline already contains the safe
+constructors, and the production allowlist is empty.
 The release-level static diff still compares against the immutable v3.0.0 tag;
 refreshing a per-PR snapshot does not erase release migration requirements.

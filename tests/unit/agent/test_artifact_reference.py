@@ -37,28 +37,28 @@ def _payload(**updates: Any) -> dict[str, Any]:
     return payload
 
 
-@pytest.mark.parametrize("kind", [kind.value for kind in ArtifactKind])
-def test_supported_kinds_round_trip_with_deterministic_json(kind: str) -> None:
-    reference = ArtifactReference.from_dict(_payload(kind=kind))
+def test_supported_kinds_round_trip_with_deterministic_json(subtests) -> None:
+    for kind in [kind.value for kind in ArtifactKind]:
+        with subtests.test(kind=kind):
+            reference = ArtifactReference.from_dict(_payload(kind=kind))
 
-    assert ArtifactReference.from_json(reference.to_json()) == reference
-    assert json.loads(reference.to_json()) == reference.to_dict()
-    assert reference.to_json() == json.dumps(
-        reference.to_dict(), sort_keys=True, separators=(",", ":")
-    )
-    assert list(reference.to_dict()) == [
-        "version",
-        "artifact_id",
-        "kind",
-        "schema_id",
-        "sha256",
-        "byte_size",
-    ]
+            assert ArtifactReference.from_json(reference.to_json()) == reference
+            assert json.loads(reference.to_json()) == reference.to_dict()
+            assert reference.to_json() == json.dumps(
+                reference.to_dict(), sort_keys=True, separators=(",", ":")
+            )
+            assert list(reference.to_dict()) == [
+                "version",
+                "artifact_id",
+                "kind",
+                "schema_id",
+                "sha256",
+                "byte_size",
+            ]
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "code"),
-    [
+def test_invalid_fields_fail_closed(subtests) -> None:
+    for field, value, code in [
         ("version", 2, "invalid_version"),
         ("version", True, "invalid_version"),
         ("artifact_id", "evidence-001", "invalid_artifact_id"),
@@ -75,45 +75,40 @@ def test_supported_kinds_round_trip_with_deterministic_json(kind: str) -> None:
         ("byte_size", True, "invalid_byte_size"),
         ("byte_size", 1.5, "invalid_byte_size"),
         ("byte_size", MAX_ARTIFACT_BYTE_SIZE + 1, "invalid_byte_size"),
-    ],
-)
-def test_invalid_fields_fail_closed(field: str, value: Any, code: str) -> None:
-    with pytest.raises(ArtifactReferenceError) as caught:
-        ArtifactReference.from_dict(_payload(**{field: value}))
+    ]:
+        with subtests.test(field=field, value=value, code=code):
+            with pytest.raises(ArtifactReferenceError) as caught:
+                ArtifactReference.from_dict(_payload(**{field: value}))
 
-    assert caught.value.code == code
-    assert repr(value) not in str(caught.value)
+            assert caught.value.code == code
+            assert repr(value) not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_paths_and_urls_fail_without_echoing_values(subtests) -> None:
+    for field, value in [
         ("artifact_id", "/tmp/report.json"),
         ("artifact_id", "C:\\patients\\report.json"),
         ("artifact_id", "https://example.test/report.json"),
         ("schema_id", "file:///tmp/schema.json"),
         ("schema_id", "https://example.test/schema.json"),
-    ],
-)
-def test_paths_and_urls_fail_without_echoing_values(field: str, value: str) -> None:
-    with pytest.raises(ArtifactReferenceError) as caught:
-        ArtifactReference.from_dict(_payload(**{field: value}))
+    ]:
+        with subtests.test(field=field, value=value):
+            with pytest.raises(ArtifactReferenceError) as caught:
+                ArtifactReference.from_dict(_payload(**{field: value}))
 
-    assert value not in str(caught.value)
+            assert value not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_missing_and_non_mapping_payloads_fail_closed(subtests) -> None:
+    for payload in [
         {},
         {"artifact_id": ARTIFACT_ID},
         "not-a-mapping",
         [ARTIFACT_ID],
-    ],
-)
-def test_missing_and_non_mapping_payloads_fail_closed(payload: Any) -> None:
-    with pytest.raises(ArtifactReferenceError):
-        ArtifactReference.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ArtifactReferenceError):
+                ArtifactReference.from_dict(payload)
 
 
 def test_unknown_inline_payload_fails_with_phi_safe_error() -> None:
@@ -128,12 +123,13 @@ def test_unknown_inline_payload_fails_with_phi_safe_error() -> None:
     assert sentinel not in rendered
 
 
-@pytest.mark.parametrize("payload", ["{", b"\xff", 42])
-def test_malformed_json_fails_closed(payload: Any) -> None:
-    with pytest.raises(ArtifactReferenceError) as caught:
-        ArtifactReference.from_json(payload)
+def test_malformed_json_fails_closed(subtests) -> None:
+    for payload in ["{", b"\xff", 42]:
+        with subtests.test(payload=payload):
+            with pytest.raises(ArtifactReferenceError) as caught:
+                ArtifactReference.from_json(payload)
 
-    assert caught.value.code == "malformed_json"
+            assert caught.value.code == "malformed_json"
 
 
 def test_duplicate_json_fields_fail_closed() -> None:

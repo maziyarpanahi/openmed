@@ -67,23 +67,21 @@ def test_evidence_is_canonical_immutable_and_invalidates_old_approval():
         )
 
 
-@pytest.mark.parametrize(
-    "evidence",
-    [
+def test_invalid_evidence_has_closed_errors(subtests):
+    for evidence in [
         "private-canary",
         {"private-canary": 1},
         (True,),
         ("private-canary",),
         (RECEIPT_DIGEST,) * 17,
-    ],
-)
-def test_invalid_evidence_has_closed_errors(evidence):
-    with pytest.raises(OmopMutationError) as exc:
-        OmopMutationBatch(
-            (OmopMutation.insert("person", {"person_id": 1}),),
-            evidence_digests=evidence,
-        )
-    assert "private-canary" not in str(exc.value)
+    ]:
+        with subtests.test(evidence=evidence):
+            with pytest.raises(OmopMutationError) as exc:
+                OmopMutationBatch(
+                    (OmopMutation.insert("person", {"person_id": 1}),),
+                    evidence_digests=evidence,
+                )
+            assert "private-canary" not in str(exc.value)
 
 
 def test_batch_is_exported_from_omop_package() -> None:
@@ -376,9 +374,8 @@ def test_commit_failure_does_not_expose_adapter_exception() -> None:
     assert private_error not in str(result.to_dict())
 
 
-@pytest.mark.parametrize(
-    ("factory", "code"),
-    [
+def test_invalid_mutations_fail_with_closed_value_free_codes(subtests) -> None:
+    for factory, code in [
         (lambda: OmopMutationBatch(()), "empty_batch"),
         (
             lambda: OmopMutation.insert("custom_table", {"id": 1}),
@@ -408,14 +405,10 @@ def test_commit_failure_does_not_expose_adapter_exception() -> None:
             ),
             "invalid_primary_key",
         ),
-    ],
-)
-def test_invalid_mutations_fail_with_closed_value_free_codes(
-    factory: Any,
-    code: str,
-) -> None:
-    with pytest.raises(OmopMutationError) as exc_info:
-        factory()
+    ]:
+        with subtests.test(factory=factory, code=code):
+            with pytest.raises(OmopMutationError) as exc_info:
+                factory()
 
-    assert exc_info.value.code == code
-    assert "synthetic" not in str(exc_info.value)
+            assert exc_info.value.code == code
+            assert "synthetic" not in str(exc_info.value)
