@@ -32,7 +32,7 @@ Preserve local-first defaults: no mandatory network calls after model download, 
 
 ## Testing and Release Gates
 
-Pytest discovers `test_*.py` and `*_test.py`. Mark external or end-to-end cases with `@pytest.mark.integration`; mark expensive checks with `@pytest.mark.slow`. Keep bundled tests offline-friendly through mocks or synthetic fixtures.
+Pytest discovers `test_*.py` and `*_test.py`. Mark external or end-to-end cases with `@pytest.mark.integration`; mark expensive checks with `@pytest.mark.slow`. Pull requests run `-m "not slow and not fuzz"`; pushes to `master` and PRs labelled `full-ci` run everything. Keep bundled tests offline-friendly through mocks or synthetic fixtures. Do not add wall-clock thresholds, exact byte budgets or assertions on the versions currently in `uv.lock`; see `docs/testing.md`.
 
 For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identifier recall, critical leakage, span integrity, deterministic safety sweeps, date shifting, surrogate consistency, multilingual IDs, and quantized-model recall deltas when touching those paths. Committed golden data must be synthetic; DUA datasets are eval-only and never committed.
 

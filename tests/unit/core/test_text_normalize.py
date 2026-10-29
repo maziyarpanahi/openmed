@@ -13,9 +13,8 @@ from openmed.core.text_normalize import (
 )
 
 
-@pytest.mark.parametrize(
-    ("native", "ascii"),
-    [
+def test_normalize_digits_folds_requested_native_digit_sets(subtests):
+    for native, ascii in [
         ("٠١٢٣٤٥٦٧٨٩", "0123456789"),  # Arabic-Indic
         ("۰۱۲۳۴۵۶۷۸۹", "0123456789"),  # Persian/Eastern Arabic-Indic
         ("०१२३४५६७८९", "0123456789"),  # Devanagari
@@ -23,10 +22,9 @@ from openmed.core.text_normalize import (
         ("০১২৩৪৫৬৭৮৯", "0123456789"),  # Bengali
         ("๐๑๒๓๔๕๖๗๘๙", "0123456789"),  # Thai
         ("０１２３４５６７８９", "0123456789"),  # Fullwidth
-    ],
-)
-def test_normalize_digits_folds_requested_native_digit_sets(native, ascii):
-    assert normalize_digits(native) == ascii
+    ]:
+        with subtests.test(native=native, ascii=ascii):
+            assert normalize_digits(native) == ascii
 
 
 def test_normalize_digits_leaves_letters_and_other_text_untouched():
