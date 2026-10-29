@@ -32,23 +32,24 @@ VALID_EXAMPLES = (
 )
 
 
-@pytest.mark.parametrize("payload", VALID_EXAMPLES)
-def test_valid_outcomes_round_trip_with_stable_json(payload):
-    outcome = WorkflowOutcome.from_dict(payload)
+def test_valid_outcomes_round_trip_with_stable_json(subtests):
+    for payload in VALID_EXAMPLES:
+        with subtests.test(payload=payload):
+            outcome = WorkflowOutcome.from_dict(payload)
 
-    assert WorkflowOutcome.from_json(outcome.to_json()) == outcome
-    assert json.loads(outcome.to_json()) == outcome.to_dict()
-    assert list(json.loads(outcome.to_json())) == sorted(outcome.to_dict())
-    assert outcome.to_json() == outcome.to_json()
-    assert outcome.to_json() == json.dumps(
-        {
-            "outcome_class": payload["outcome_class"],
-            "reason_code": payload["reason_code"],
-            "schema_version": OUTCOME_SCHEMA_VERSION,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+            assert WorkflowOutcome.from_json(outcome.to_json()) == outcome
+            assert json.loads(outcome.to_json()) == outcome.to_dict()
+            assert list(json.loads(outcome.to_json())) == sorted(outcome.to_dict())
+            assert outcome.to_json() == outcome.to_json()
+            assert outcome.to_json() == json.dumps(
+                {
+                    "outcome_class": payload["outcome_class"],
+                    "reason_code": payload["reason_code"],
+                    "schema_version": OUTCOME_SCHEMA_VERSION,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
 
 
 def test_to_dict_uses_stable_field_order():
@@ -63,9 +64,8 @@ def test_to_dict_uses_stable_field_order():
     ]
 
 
-@pytest.mark.parametrize(
-    ("outcome_class", "reason_code"),
-    [
+def test_unknown_or_mismatched_codes_fail_without_echo(subtests):
+    for outcome_class, reason_code in [
         ("success", "insufficient_evidence"),
         ("abstained", "completed"),
         ("review_required", "phi_policy"),
@@ -74,26 +74,25 @@ def test_to_dict_uses_stable_field_order():
         ("success", "looks_good"),
         ("abstained", "Patient chart is incomplete"),
         ("not-a-real-class", "completed"),
-    ],
-)
-def test_unknown_or_mismatched_codes_fail_without_echo(outcome_class, reason_code):
-    payload = {"outcome_class": outcome_class, "reason_code": reason_code}
+    ]:
+        with subtests.test(outcome_class=outcome_class, reason_code=reason_code):
+            payload = {"outcome_class": outcome_class, "reason_code": reason_code}
 
-    with pytest.raises(OutcomeError) as exc_info:
-        WorkflowOutcome.from_dict(payload)
+            with pytest.raises(OutcomeError) as exc_info:
+                WorkflowOutcome.from_dict(payload)
 
-    message = str(exc_info.value)
-    known_classes = {
-        "success",
-        "abstained",
-        "review_required",
-        "policy_denied",
-        "failed",
-    }
-    if outcome_class not in known_classes:
-        assert outcome_class not in message
-    assert reason_code not in message
-    assert exc_info.value.code in {"unknown_class", "unknown_reason"}
+            message = str(exc_info.value)
+            known_classes = {
+                "success",
+                "abstained",
+                "review_required",
+                "policy_denied",
+                "failed",
+            }
+            if outcome_class not in known_classes:
+                assert outcome_class not in message
+            assert reason_code not in message
+            assert exc_info.value.code in {"unknown_class", "unknown_reason"}
 
 
 def test_free_text_reason_field_fails_without_echo():
@@ -111,48 +110,45 @@ def test_free_text_reason_field_fails_without_echo():
     assert exc_info.value.code == "unknown_field"
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_missing_and_non_mapping_payloads_fail_closed(subtests):
+    for payload in [
         {"outcome_class": "success"},
         {"reason_code": "completed"},
         "not-a-dict",
         ["success", "completed"],
-    ],
-)
-def test_missing_and_non_mapping_payloads_fail_closed(payload):
-    with pytest.raises(OutcomeError):
-        WorkflowOutcome.from_dict(payload)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(OutcomeError):
+                WorkflowOutcome.from_dict(payload)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_invalid_field_types_fail_closed(subtests):
+    for field, value in [
         ("outcome_class", True),
         ("outcome_class", 1),
         ("reason_code", True),
         ("reason_code", 0),
         ("schema_version", "openmed.agent.outcome.v0"),
         ("schema_version", True),
-    ],
-)
-def test_invalid_field_types_fail_closed(field, value):
-    payload = {
-        "schema_version": OUTCOME_SCHEMA_VERSION,
-        "outcome_class": "success",
-        "reason_code": "completed",
-    }
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = {
+                "schema_version": OUTCOME_SCHEMA_VERSION,
+                "outcome_class": "success",
+                "reason_code": "completed",
+            }
+            payload[field] = value
 
-    with pytest.raises(OutcomeError):
-        WorkflowOutcome.from_dict(payload)
+            with pytest.raises(OutcomeError):
+                WorkflowOutcome.from_dict(payload)
 
 
-@pytest.mark.parametrize("payload", ["{", b"\xff", 42])
-def test_malformed_json_fails_closed(payload):
-    with pytest.raises(OutcomeError) as exc_info:
-        WorkflowOutcome.from_json(payload)  # type: ignore[arg-type]
-    assert exc_info.value.code == "malformed_json"
+def test_malformed_json_fails_closed(subtests):
+    for payload in ["{", b"\xff", 42]:
+        with subtests.test(payload=payload):
+            with pytest.raises(OutcomeError) as exc_info:
+                WorkflowOutcome.from_json(payload)  # type: ignore[arg-type]
+            assert exc_info.value.code == "malformed_json"
 
 
 def test_duplicate_json_fields_fail_closed_instead_of_last_value_winning():
@@ -184,17 +180,18 @@ class StringSubclass(str):
     """A string subtype that must not be retained in immutable outcomes."""
 
 
-@pytest.mark.parametrize("field", ["schema_version", "reason_code"])
-def test_string_subclasses_are_rejected_by_direct_constructor(field: str):
-    values = {
-        "outcome_class": OutcomeClass.SUCCESS,
-        "reason_code": "completed",
-        "schema_version": OUTCOME_SCHEMA_VERSION,
-    }
-    values[field] = StringSubclass(values[field])
+def test_string_subclasses_are_rejected_by_direct_constructor(subtests):
+    for field in ["schema_version", "reason_code"]:
+        with subtests.test(field=field):
+            values = {
+                "outcome_class": OutcomeClass.SUCCESS,
+                "reason_code": "completed",
+                "schema_version": OUTCOME_SCHEMA_VERSION,
+            }
+            values[field] = StringSubclass(values[field])
 
-    with pytest.raises(OutcomeError):
-        WorkflowOutcome(**values)  # type: ignore[arg-type]
+            with pytest.raises(OutcomeError):
+                WorkflowOutcome(**values)  # type: ignore[arg-type]
 
 
 def test_allowed_reason_codes_are_closed_per_class():
@@ -216,10 +213,14 @@ def test_outcome_contract_is_available_from_public_agent_api():
     assert agent.allowed_reason_codes is allowed_reason_codes
 
 
-@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "utf-16", "utf-32"])
-def test_bounded_parser_preserves_standard_json_byte_encodings(encoding):
-    original = WorkflowOutcome(OutcomeClass.SUCCESS, "completed")
-    assert WorkflowOutcome.from_json(original.to_json().encode(encoding)) == original
+def test_bounded_parser_preserves_standard_json_byte_encodings(subtests):
+    for encoding in ["utf-8", "utf-8-sig", "utf-16", "utf-32"]:
+        with subtests.test(encoding=encoding):
+            original = WorkflowOutcome(OutcomeClass.SUCCESS, "completed")
+            assert (
+                WorkflowOutcome.from_json(original.to_json().encode(encoding))
+                == original
+            )
 
 
 def test_bounded_json_distinguishes_escaped_strings_from_nesting():
@@ -233,14 +234,13 @@ def test_bounded_json_distinguishes_escaped_strings_from_nesting():
         _bounded_governance_json("[" * 65 + "0" + "]" * 65)
 
 
-@pytest.mark.parametrize(
-    "value", ['{"x":1,"x":2}', "NaN", "Infinity", "-Infinity", "1e9999"]
-)
-def test_bounded_json_rejects_ambiguous_or_nonfinite_values(value):
-    from openmed.agent.outcomes import _bounded_governance_json
+def test_bounded_json_rejects_ambiguous_or_nonfinite_values(subtests):
+    for value in ['{"x":1,"x":2}', "NaN", "Infinity", "-Infinity", "1e9999"]:
+        with subtests.test(value=value):
+            from openmed.agent.outcomes import _bounded_governance_json
 
-    with pytest.raises(ValueError):
-        _bounded_governance_json(value)
+            with pytest.raises(ValueError):
+                _bounded_governance_json(value)
 
 
 def test_issue_3779_size_limit_counts_utf8_bytes_before_decoding(monkeypatch):
@@ -308,64 +308,67 @@ _BOUNDED_GOVERNANCE_PARSERS = (
 )
 
 
-@pytest.mark.parametrize(
-    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
-)
-def test_issue_3779_deep_json_has_typed_value_free_refusal(
-    module_name, class_name, error_name
-):
-    import importlib
+def test_issue_3779_deep_json_has_typed_value_free_refusal(subtests):
+    for module_name, class_name, error_name in _BOUNDED_GOVERNANCE_PARSERS:
+        with subtests.test(
+            module_name=module_name, class_name=class_name, error_name=error_name
+        ):
+            import importlib
 
-    module = importlib.import_module(module_name)
-    with pytest.raises(getattr(module, error_name)) as caught:
-        getattr(module, class_name).from_json("[" * 100_000 + "]" * 100_000)
-    assert caught.value.__cause__ is None
-    assert caught.value.__context__ is None
-
-
-@pytest.mark.parametrize(
-    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
-)
-@pytest.mark.parametrize(
-    "payload",
-    (
-        b"synthetic-parser-private-sentinel\xff",
-        '{"synthetic-parser-private-sentinel":',
-        "synthetic-parser-private-sentinel\ud800",
-    ),
-)
-def test_issue_3779_malformed_json_retains_no_private_exception(
-    module_name, class_name, error_name, payload
-):
-    import importlib
-
-    module = importlib.import_module(module_name)
-    with pytest.raises(getattr(module, error_name)) as caught:
-        getattr(module, class_name).from_json(payload)
-    assert caught.value.__cause__ is None
-    assert caught.value.__context__ is None
-    assert "synthetic-parser-private-sentinel" not in str(caught.value)
+            module = importlib.import_module(module_name)
+            with pytest.raises(getattr(module, error_name)) as caught:
+                getattr(module, class_name).from_json("[" * 100_000 + "]" * 100_000)
+            assert caught.value.__cause__ is None
+            assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
-)
-@pytest.mark.parametrize("limit", ("depth", "bytes"))
-def test_issue_3779_bounds_run_before_the_json_decoder(
-    module_name, class_name, error_name, limit, monkeypatch
-):
-    import importlib
+def test_issue_3779_malformed_json_retains_no_private_exception(subtests):
+    for module_name, class_name, error_name in _BOUNDED_GOVERNANCE_PARSERS:
+        for payload in (
+            b"synthetic-parser-private-sentinel\xff",
+            '{"synthetic-parser-private-sentinel":',
+            "synthetic-parser-private-sentinel\ud800",
+        ):
+            with subtests.test(
+                module_name=module_name,
+                class_name=class_name,
+                error_name=error_name,
+                payload=payload,
+            ):
+                import importlib
 
-    module = importlib.import_module(module_name)
-    payload = (
-        "[" * 100_000 + "]" * 100_000
-        if limit == "depth"
-        else " " * (64 * 1024 * 1024 + 1)
-    )
+                module = importlib.import_module(module_name)
+                with pytest.raises(getattr(module, error_name)) as caught:
+                    getattr(module, class_name).from_json(payload)
+                assert caught.value.__cause__ is None
+                assert caught.value.__context__ is None
+                assert "synthetic-parser-private-sentinel" not in str(caught.value)
 
-    def forbidden_decoder(*args, **kwargs):
-        pytest.fail("unbounded governance input reached the JSON decoder")
 
-    monkeypatch.setattr(json, "loads", forbidden_decoder)
-    with pytest.raises(getattr(module, error_name)):
-        getattr(module, class_name).from_json(payload)
+def test_issue_3779_bounds_run_before_the_json_decoder(subtests):
+    for module_name, class_name, error_name in _BOUNDED_GOVERNANCE_PARSERS:
+        for limit in ("depth", "bytes"):
+            with subtests.test(
+                module_name=module_name,
+                class_name=class_name,
+                error_name=error_name,
+                limit=limit,
+            ):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    import importlib
+
+                    module = importlib.import_module(module_name)
+                    payload = (
+                        "[" * 100_000 + "]" * 100_000
+                        if limit == "depth"
+                        else " " * (64 * 1024 * 1024 + 1)
+                    )
+
+                    def forbidden_decoder(*args, **kwargs):
+                        pytest.fail(
+                            "unbounded governance input reached the JSON decoder"
+                        )
+
+                    monkeypatch.setattr(json, "loads", forbidden_decoder)
+                    with pytest.raises(getattr(module, error_name)):
+                        getattr(module, class_name).from_json(payload)

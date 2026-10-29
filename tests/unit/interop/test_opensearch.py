@@ -277,19 +277,21 @@ def test_default_loader_failure_is_value_free(monkeypatch) -> None:
     assert source not in str(error.value)
 
 
-@pytest.mark.parametrize("fatal_error", [KeyboardInterrupt, SystemExit])
-def test_process_preserves_interpreter_control_exceptions(fatal_error) -> None:
-    def aborting_deidentifier(text: str, **kwargs):
-        del text, kwargs
-        raise fatal_error
+def test_process_preserves_interpreter_control_exceptions(subtests) -> None:
+    for fatal_error in [KeyboardInterrupt, SystemExit]:
+        with subtests.test(fatal_error=fatal_error):
 
-    processor = OpenSearchRedactionProcessor(
-        field="message",
-        deidentifier=aborting_deidentifier,
-    )
+            def aborting_deidentifier(text: str, **kwargs):
+                del text, kwargs
+                raise fatal_error
 
-    with pytest.raises(fatal_error):
-        processor.process({"message": "Synthetic Person"})
+            processor = OpenSearchRedactionProcessor(
+                field="message",
+                deidentifier=aborting_deidentifier,
+            )
+
+            with pytest.raises(fatal_error):
+                processor.process({"message": "Synthetic Person"})
 
 
 def test_redaction_output_expansion_is_bounded(monkeypatch) -> None:
@@ -338,29 +340,27 @@ def test_deidentifier_options_are_deeply_snapshotted_and_fresh() -> None:
     assert len({id(options["nested"]) for options in received}) == 4
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
+def test_deidentifier_options_reject_unsafe_values(subtests) -> None:
+    for options in [
         {"callback": lambda: None},
         {"number": float("inf")},
         {"number": 1 << 80},
         {"text": "reserved"},
-    ],
-)
-def test_deidentifier_options_reject_unsafe_values(options) -> None:
-    with pytest.raises(OpenSearchRedactionError):
-        OpenSearchRedactionProcessor(
-            deidentifier=fake_deidentifier,
-            deidentify_kwargs=options,
-        )
+    ]:
+        with subtests.test(options=options):
+            with pytest.raises(OpenSearchRedactionError):
+                OpenSearchRedactionProcessor(
+                    deidentifier=fake_deidentifier,
+                    deidentify_kwargs=options,
+                )
 
-    cyclic: list[object] = []
-    cyclic.append(cyclic)
-    with pytest.raises(OpenSearchRedactionError, match="bounded data options"):
-        OpenSearchRedactionProcessor(
-            deidentifier=fake_deidentifier,
-            deidentify_kwargs={"cyclic": cyclic},
-        )
+            cyclic: list[object] = []
+            cyclic.append(cyclic)
+            with pytest.raises(OpenSearchRedactionError, match="bounded data options"):
+                OpenSearchRedactionProcessor(
+                    deidentifier=fake_deidentifier,
+                    deidentify_kwargs={"cyclic": cyclic},
+                )
 
 
 def test_default_reserved_options_are_ignored_before_snapshotting() -> None:

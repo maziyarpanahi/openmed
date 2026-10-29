@@ -96,80 +96,82 @@ def codes(result):
     return {loss.reason_code for loss in result.value.losses}
 
 
-@pytest.mark.parametrize(
-    "domain",
-    [
+def test_domains_ids_descendants_and_custody(subtests):
+    for domain in [
         "ConditionOccurrence",
         "DrugExposure",
         "Measurement",
         "Observation",
         "ProcedureOccurrence",
-    ],
-)
-def test_domains_ids_descendants_and_custody(domain):
-    value = expression()
-    value["PrimaryCriteria"]["CriteriaList"] = [{domain: {"CodesetId": 0}}]
-    imported = import_value(json.dumps(value))
-    assert imported.state is StoreState.PARTIAL
-    conversion = imported.value
-    envelope = conversion.exchange
-    assert envelope.definition.concept_sets[0].concept_ids == (900001,)
-    assert envelope.definition.concept_sets[0].include_descendants
-    assert conversion.source_digest == canonical_digest(value)
-    assert conversion.target_digest == envelope.canonical_hash
-    assert conversion.losses == envelope.losses
-    assert "domain_scope_not_enforced" in codes(imported)
-    assert "assertion_default_added" in codes(imported)
-    assert (
-        import_circe_expression(value, source_snapshot=snapshot()).state
-        is StoreState.UNSUPPORTED
-    )
-    assert (
-        import_value(value, expected_expression_digest="sha256:" + "b" * 64).state
-        is StoreState.CONFLICT
-    )
-    conversion.expression["ConceptSets"].clear()
-    assert conversion.expression == value
+    ]:
+        with subtests.test(domain=domain):
+            value = expression()
+            value["PrimaryCriteria"]["CriteriaList"] = [{domain: {"CodesetId": 0}}]
+            imported = import_value(json.dumps(value))
+            assert imported.state is StoreState.PARTIAL
+            conversion = imported.value
+            envelope = conversion.exchange
+            assert envelope.definition.concept_sets[0].concept_ids == (900001,)
+            assert envelope.definition.concept_sets[0].include_descendants
+            assert conversion.source_digest == canonical_digest(value)
+            assert conversion.target_digest == envelope.canonical_hash
+            assert conversion.losses == envelope.losses
+            assert "domain_scope_not_enforced" in codes(imported)
+            assert "assertion_default_added" in codes(imported)
+            assert (
+                import_circe_expression(value, source_snapshot=snapshot()).state
+                is StoreState.UNSUPPORTED
+            )
+            assert (
+                import_value(
+                    value, expected_expression_digest="sha256:" + "b" * 64
+                ).state
+                is StoreState.CONFLICT
+            )
+            conversion.expression["ConceptSets"].clear()
+            assert conversion.expression == value
 
 
-@pytest.mark.parametrize(
-    "kind,count,expected,excluded",
-    [
+def test_occurrence_semantics_include_zero(subtests):
+    for kind, count, expected, excluded in [
         (0, 3, (3, 3), False),
         (2, 4, (4, None), False),
         (1, 2, (3, None), True),
         (0, 0, (1, None), True),
-    ],
-)
-def test_occurrence_semantics_include_zero(kind, count, expected, excluded):
-    value = expression()
-    value["AdditionalCriteria"] = group(correlated(kind=kind, count=count))
-    result = import_value(value)
-    criterion = result.value.exchange.definition.criteria()[-1]
-    assert (criterion.occurrence.minimum, criterion.occurrence.maximum) == expected
-    node = result.value.exchange.definition.expression.children[-1]
-    assert (node.operator == "not") is excluded
+    ]:
+        with subtests.test(
+            kind=kind, count=count, expected=expected, excluded=excluded
+        ):
+            value = expression()
+            value["AdditionalCriteria"] = group(correlated(kind=kind, count=count))
+            result = import_value(value)
+            criterion = result.value.exchange.definition.criteria()[-1]
+            assert (
+                criterion.occurrence.minimum,
+                criterion.occurrence.maximum,
+            ) == expected
+            node = result.value.exchange.definition.expression.children[-1]
+            assert (node.operator == "not") is excluded
 
 
-@pytest.mark.parametrize(
-    "kind,operator", [("ALL", "and"), ("ANY", "or"), ("AT_LEAST", "or")]
-)
-def test_groups_lower_to_existing_dsl_with_unique_ids(kind, operator):
-    value = expression()
-    value["AdditionalCriteria"] = group(
-        correlated(),
-        correlated("DrugExposure"),
-        correlated("Measurement"),
-        kind=kind,
-        count=2 if kind == "AT_LEAST" else None,
-    )
-    result = import_value(value)
-    definition = result.value.exchange.definition
-    assert definition.expression.children[-1].operator == operator
-    assert len({item.id for item in definition.criteria()}) == len(
-        definition.criteria()
-    )
-    assert len(definition.criteria()) == (7 if kind == "AT_LEAST" else 4)
+def test_groups_lower_to_existing_dsl_with_unique_ids(subtests):
+    for kind, operator in [("ALL", "and"), ("ANY", "or"), ("AT_LEAST", "or")]:
+        with subtests.test(kind=kind, operator=operator):
+            value = expression()
+            value["AdditionalCriteria"] = group(
+                correlated(),
+                correlated("DrugExposure"),
+                correlated("Measurement"),
+                kind=kind,
+                count=2 if kind == "AT_LEAST" else None,
+            )
+            result = import_value(value)
+            definition = result.value.exchange.definition
+            assert definition.expression.children[-1].operator == operator
+            assert len({item.id for item in definition.criteria()}) == len(
+                definition.criteria()
+            )
+            assert len(definition.criteria()) == (7 if kind == "AT_LEAST" else 4)
 
 
 def test_start_window_anchors_to_single_primary_and_dates():
@@ -186,9 +188,8 @@ def test_start_window_anchors_to_single_primary_and_dates():
     assert "index_event_correlation_changed" in codes(result)
 
 
-@pytest.mark.parametrize(
-    "construct,path,code",
-    [
+def test_unsupported_top_level_constructs_are_reported(subtests):
+    for construct, path, code in [
         (
             {"EndStrategy": {"CustomEra": {"DrugCodesetId": 0}}},
             "/EndStrategy",
@@ -214,14 +215,14 @@ def test_start_window_anchors_to_single_primary_and_dates():
             "/fields/3",
             "field_unsupported",
         ),
-    ],
-)
-def test_unsupported_top_level_constructs_are_reported(construct, path, code):
-    value = {**expression(), **construct}
-    result = import_value(value)
-    assert any(
-        loss.path == path and loss.reason_code == code for loss in result.value.losses
-    )
+    ]:
+        with subtests.test(construct=construct, path=path, code=code):
+            value = {**expression(), **construct}
+            result = import_value(value)
+            assert any(
+                loss.path == path and loss.reason_code == code
+                for loss in result.value.losses
+            )
 
 
 def test_all_losses_collected_even_when_boolean_group_cannot_be_represented():
@@ -256,9 +257,8 @@ def test_all_losses_collected_even_when_boolean_group_cannot_be_represented():
     )
 
 
-@pytest.mark.parametrize(
-    "mutate,code",
-    [
+def test_unsupported_nested_filters_never_become_success(subtests):
+    for mutate, code in [
         (lambda x: x.update(EndWindow={}), "end_window_unsupported"),
         (lambda x: x.update(RestrictVisit=True), "visit_restriction_unsupported"),
         (
@@ -281,25 +281,25 @@ def test_all_losses_collected_even_when_boolean_group_cannot_be_represented():
             lambda x: x["Criteria"]["ConditionOccurrence"].update(Age={"Value": 50.5}),
             "field_unsupported",
         ),
-    ],
-)
-def test_unsupported_nested_filters_never_become_success(mutate, code):
-    value = expression()
-    criterion = correlated(start=2, end=3)
-    mutate(criterion)
-    value["AdditionalCriteria"] = group(criterion)
-    result = import_value(value)
-    assert code in codes(result)
-    assert not result.ok
+    ]:
+        with subtests.test(mutate=mutate, code=code):
+            value = expression()
+            criterion = correlated(start=2, end=3)
+            mutate(criterion)
+            value["AdditionalCriteria"] = group(criterion)
+            result = import_value(value)
+            assert code in codes(result)
+            assert not result.ok
 
 
-@pytest.mark.parametrize("flag", ["isExcluded", "includeMapped"])
-def test_unsupported_concept_set_operations_do_not_widen_membership(flag):
-    value = expression()
-    value["ConceptSets"][0]["expression"]["items"][0][flag] = True
-    result = import_value(value)
-    assert result.value.exchange is None
-    assert "concept_set_operation_unsupported" in codes(result)
+def test_unsupported_concept_set_operations_do_not_widen_membership(subtests):
+    for flag in ["isExcluded", "includeMapped"]:
+        with subtests.test(flag=flag):
+            value = expression()
+            value["ConceptSets"][0]["expression"]["items"][0][flag] = True
+            result = import_value(value)
+            assert result.value.exchange is None
+            assert "concept_set_operation_unsupported" in codes(result)
 
 
 def test_export_count_range_assertions_domains_and_binding():
@@ -343,9 +343,8 @@ def test_export_count_range_assertions_domains_and_binding():
     assert imported.value.exchange is not None
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_malformed_json_is_typed_and_value_free(subtests):
+    for value in [
         "{",
         "[]",
         b"\xff",
@@ -354,19 +353,17 @@ def test_export_count_range_assertions_domains_and_binding():
         {"x": float("inf")},
         {"x": object()},
         {1: "private"},
-    ],
-)
-def test_malformed_json_is_typed_and_value_free(value):
-    with pytest.raises(CirceInputError) as error:
-        import_value(value)
-    assert "private" not in str(error.value)
-    assert error.value.__context__ is None
-    assert error.value.__cause__ is None
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(CirceInputError) as error:
+                import_value(value)
+            assert "private" not in str(error.value)
+            assert error.value.__context__ is None
+            assert error.value.__cause__ is None
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
+def test_malformed_contract_references_and_integers(subtests):
+    for mutate in [
         lambda x: x["PrimaryCriteria"]["CriteriaList"][0]["ConditionOccurrence"].update(
             CodesetId=42
         ),
@@ -375,13 +372,12 @@ def test_malformed_json_is_typed_and_value_free(value):
         ),
         lambda x: x["ConceptSets"].append(deepcopy(x["ConceptSets"][0])),
         lambda x: x["PrimaryCriteria"].update(CriteriaList=[]),
-    ],
-)
-def test_malformed_contract_references_and_integers(mutate):
-    value = expression()
-    mutate(value)
-    with pytest.raises(CirceInputError):
-        import_value(value)
+    ]:
+        with subtests.test(mutate=mutate):
+            value = expression()
+            mutate(value)
+            with pytest.raises(CirceInputError):
+                import_value(value)
 
 
 def test_size_depth_mapping_cycles_and_threshold_expansion_bounded():
@@ -431,21 +427,22 @@ def test_combined_unsupported_occurrence_and_domain_both_reported():
     assert result.value.exchange is None
 
 
-@pytest.mark.parametrize(
-    "op,expected",
-    [
+def test_absolute_start_date_operators(subtests):
+    for op, expected in [
         ("gte", {"start_date": "2026-01-01"}),
         ("lte", {"end_date": "2026-01-01"}),
         ("eq", {"start_date": "2026-01-01", "end_date": "2026-01-01"}),
-    ],
-)
-def test_absolute_start_date_operators(op, expected):
-    value = expression()
-    value["PrimaryCriteria"]["CriteriaList"][0]["ConditionOccurrence"][
-        "OccurrenceStartDate"
-    ] = {"Op": op, "Value": "2026-01-01"}
-    result = import_value(value)
-    assert result.value.exchange.definition.criteria()[0].temporal.to_dict() == expected
+    ]:
+        with subtests.test(op=op, expected=expected):
+            value = expression()
+            value["PrimaryCriteria"]["CriteriaList"][0]["ConditionOccurrence"][
+                "OccurrenceStartDate"
+            ] = {"Op": op, "Value": "2026-01-01"}
+            result = import_value(value)
+            assert (
+                result.value.exchange.definition.criteria()[0].temporal.to_dict()
+                == expected
+            )
 
 
 def test_one_sided_window_and_multiple_primary_anchors_are_explicit_losses():
@@ -531,29 +528,32 @@ def test_export_source_losses_are_offset_references_not_private_paths():
     assert conversion.source_digest == source.canonical_hash
 
 
-@pytest.mark.parametrize(
-    "negation", [("affirmed",), ("negated",), ("affirmed", "negated")]
-)
-def test_every_native_negation_filter_is_an_explicit_export_loss(negation):
-    criterion = Criterion("primary", "cs", assertion=AssertionFilter(negation=negation))
-    definition = PhenotypeDefinition(
-        "synthetic",
-        "Synthetic",
-        (ConceptSet("cs", "Synthetic", (900001,)),),
-        Expression.leaf(criterion),
-    )
-    envelope = export_cohort_definition(definition, source_snapshot=snapshot()).value
-    result = export_circe_expression(
-        envelope,
-        criterion_domains={"primary": "ConditionOccurrence"},
-        primary_criterion_id="primary",
-        strict=False,
-    )
-    assert any(
-        loss.path.endswith("/assertion/negation")
-        and loss.reason_code == "assertion_filter_unsupported"
-        for loss in result.value.losses
-    )
+def test_every_native_negation_filter_is_an_explicit_export_loss(subtests):
+    for negation in [("affirmed",), ("negated",), ("affirmed", "negated")]:
+        with subtests.test(negation=negation):
+            criterion = Criterion(
+                "primary", "cs", assertion=AssertionFilter(negation=negation)
+            )
+            definition = PhenotypeDefinition(
+                "synthetic",
+                "Synthetic",
+                (ConceptSet("cs", "Synthetic", (900001,)),),
+                Expression.leaf(criterion),
+            )
+            envelope = export_cohort_definition(
+                definition, source_snapshot=snapshot()
+            ).value
+            result = export_circe_expression(
+                envelope,
+                criterion_domains={"primary": "ConditionOccurrence"},
+                primary_criterion_id="primary",
+                strict=False,
+            )
+            assert any(
+                loss.path.endswith("/assertion/negation")
+                and loss.reason_code == "assertion_filter_unsupported"
+                for loss in result.value.losses
+            )
 
 
 def test_private_date_parser_context_is_not_retained():
@@ -567,18 +567,20 @@ def test_private_date_parser_context_is_not_retained():
     assert error.value.__cause__ is None
 
 
-@pytest.mark.parametrize("controlled", [False, True])
-def test_private_mapping_failures_have_only_controlled_codes(controlled):
-    class UnreadableMapping(dict):
-        def items(self):
-            if controlled:
-                raise CirceInputError("/private/patient-token")
-            raise RuntimeError("/private/patient-token")
+def test_private_mapping_failures_have_only_controlled_codes(subtests):
+    for controlled in [False, True]:
+        with subtests.test(controlled=controlled):
 
-    with pytest.raises(CirceInputError, match="^circe_invalid$") as error:
-        import_value(UnreadableMapping(expression()))
-    assert error.value.__context__ is None
-    assert error.value.__cause__ is None
+            class UnreadableMapping(dict):
+                def items(self):
+                    if controlled:
+                        raise CirceInputError("/private/patient-token")
+                    raise RuntimeError("/private/patient-token")
+
+            with pytest.raises(CirceInputError, match="^circe_invalid$") as error:
+                import_value(UnreadableMapping(expression()))
+            assert error.value.__context__ is None
+            assert error.value.__cause__ is None
 
 
 def test_private_conversion_constructor_parser_context_is_not_retained():

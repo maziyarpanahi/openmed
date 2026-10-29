@@ -263,9 +263,8 @@ def test_recovery_reconciles_commits_and_retries_only_proven_absent_effects() ->
     assert validate_checkpoint_lineage((checkpoint, advanced))[-1] == advanced
 
 
-@pytest.mark.parametrize(
-    ("mutator", "reason"),
-    [
+def test_ambiguous_or_mismatched_effects_fail_closed(subtests) -> None:
+    for mutator, reason in [
         (
             lambda observation: EffectObservation(
                 action_id=observation.action_id,
@@ -284,30 +283,27 @@ def test_recovery_reconciles_commits_and_retries_only_proven_absent_effects() ->
             ),
             RecoveryReason.EFFECT_MISMATCH,
         ),
-    ],
-)
-def test_ambiguous_or_mismatched_effects_fail_closed(
-    mutator: Any, reason: RecoveryReason
-) -> None:
-    checkpoint = _checkpoint()
-    observations = list(
-        _observations(
-            checkpoint.effects,
-            (
-                ObservationState.COMMITTED,
-                ObservationState.ABSENT,
-                ObservationState.ABSENT,
-            ),
-        )
-    )
-    observations[1] = mutator(observations[1])
+    ]:
+        with subtests.test(mutator=mutator, reason=reason):
+            checkpoint = _checkpoint()
+            observations = list(
+                _observations(
+                    checkpoint.effects,
+                    (
+                        ObservationState.COMMITTED,
+                        ObservationState.ABSENT,
+                        ObservationState.ABSENT,
+                    ),
+                )
+            )
+            observations[1] = mutator(observations[1])
 
-    decision = recover_workflow((checkpoint,), observations, now=10)
+            decision = recover_workflow((checkpoint,), observations, now=10)
 
-    assert decision.disposition is RecoveryDisposition.REVIEW_REQUIRED
-    assert decision.reason is reason
-    assert decision.retry_effect_ids == ()
-    assert decision.compensation_effect_ids == ()
+            assert decision.disposition is RecoveryDisposition.REVIEW_REQUIRED
+            assert decision.reason is reason
+            assert decision.retry_effect_ids == ()
+            assert decision.compensation_effect_ids == ()
 
 
 def test_partial_fhir_commit_produces_only_a_compensation_proposal() -> None:
@@ -329,31 +325,37 @@ def test_partial_fhir_commit_produces_only_a_compensation_proposal() -> None:
     assert decision.retry_effect_ids == ()
 
 
-@pytest.mark.parametrize(
-    ("approval", "now", "reason"),
-    [
+def test_missing_or_expired_approval_receipts_cannot_authorize_recovery(
+    subtests,
+) -> None:
+    for approval, now, reason in [
         (False, 10, RecoveryReason.APPROVAL_MISSING),
         (True, 100, RecoveryReason.APPROVAL_EXPIRED),
         (True, 101, RecoveryReason.APPROVAL_EXPIRED),
-    ],
-)
-def test_missing_or_expired_approval_receipts_cannot_authorize_recovery(
-    approval: bool, now: int, reason: RecoveryReason
-) -> None:
-    checkpoint = _checkpoint(
-        phase=(RecoveryPhase.APPROVAL_RECORDED if approval else RecoveryPhase.PLANNED),
-        approval=approval,
-    )
-    observations = _observations(checkpoint.effects, (ObservationState.ABSENT,) * 3)
+    ]:
+        with subtests.test(approval=approval, now=now, reason=reason):
+            checkpoint = _checkpoint(
+                phase=(
+                    RecoveryPhase.APPROVAL_RECORDED
+                    if approval
+                    else RecoveryPhase.PLANNED
+                ),
+                approval=approval,
+            )
+            observations = _observations(
+                checkpoint.effects, (ObservationState.ABSENT,) * 3
+            )
 
-    decision = recover_workflow((checkpoint,), observations, now=now)
+            decision = recover_workflow((checkpoint,), observations, now=now)
 
-    assert decision.disposition is RecoveryDisposition.REVIEW_REQUIRED
-    assert decision.reason is reason
-    assert decision.retry_idempotency_keys == ()
-    review_checkpoint = advance_checkpoint(checkpoint, decision)
-    assert review_checkpoint.phase is RecoveryPhase.RECONCILING
-    assert review_checkpoint.recovery_evidence_digest == decision.evidence_digest
+            assert decision.disposition is RecoveryDisposition.REVIEW_REQUIRED
+            assert decision.reason is reason
+            assert decision.retry_idempotency_keys == ()
+            review_checkpoint = advance_checkpoint(checkpoint, decision)
+            assert review_checkpoint.phase is RecoveryPhase.RECONCILING
+            assert (
+                review_checkpoint.recovery_evidence_digest == decision.evidence_digest
+            )
 
 
 def test_committed_effect_disappearance_fails_closed() -> None:

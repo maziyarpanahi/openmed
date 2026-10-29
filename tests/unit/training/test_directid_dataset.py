@@ -151,23 +151,24 @@ def test_split_coverage_fails_closed_for_missing_label_or_subtype() -> None:
         validate_directid_split_records("train", without_one_negative_category)
 
 
-@pytest.mark.parametrize("split_name", DIRECTID_SPLITS)
-def test_existing_sampler_supplies_and_validates_each_split_batch(
-    split_name: str,
-) -> None:
-    clean_batch = ({"fixture_id": "synthetic-clean", "labels": [ID_NUM]},)
+def test_existing_sampler_supplies_and_validates_each_split_batch(subtests) -> None:
+    for split_name in DIRECTID_SPLITS:
+        with subtests.test(split_name=split_name):
+            clean_batch = ({"fixture_id": "synthetic-clean", "labels": [ID_NUM]},)
 
-    with pytest.raises(DirectIDDatasetError, match="hard negative"):
-        validate_directid_batch(split_name, clean_batch)
+            with pytest.raises(DirectIDDatasetError, match="hard negative"):
+                validate_directid_batch(split_name, clean_batch)
 
-    prepared = prepare_directid_batch(split_name, clean_batch)
-    evidence = validate_directid_batch(split_name, prepared)
+            prepared = prepare_directid_batch(split_name, clean_batch)
+            evidence = validate_directid_batch(split_name, prepared)
 
-    assert len(prepared) == 2
-    assert evidence.hard_negative_count == 1
-    assert set(evidence.hard_negative_categories) <= set(HARD_NEGATIVE_CATEGORIES)
-    assert prepared[-1]["source_id"] == "openmed_directid_synthetic"
-    assert prepared[-1]["metadata"]["contains_real_phi"] is False
+            assert len(prepared) == 2
+            assert evidence.hard_negative_count == 1
+            assert set(evidence.hard_negative_categories) <= set(
+                HARD_NEGATIVE_CATEGORIES
+            )
+            assert prepared[-1]["source_id"] == "openmed_directid_synthetic"
+            assert prepared[-1]["metadata"]["contains_real_phi"] is False
 
 
 def test_split_evidence_records_hashes_and_aggregate_coverage_only() -> None:
