@@ -411,11 +411,16 @@ classification:
     - training/federated-round-status.md
     - training/federated-scheduling.md
     - training/federated-update-metadata.md
+    - languages/parallel-corpus-governance.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
     - training/synthetic/hl7v2-messages.md
     - training/synthetic/license-lineage-manifests.md
+    - training/synthetic/split-planning.md
+    - training/synthetic/multimodal-provenance.md
+    - training/synthetic/truth-alignment.md
+    - training/synthetic/release-capsules.md
     - training/synthetic/clinical-note-grammars.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
@@ -467,6 +472,7 @@ classification:
     - evaluation/cross-lingual-regressions.md
     - languages/scarce-label-review.md
     - languages/cross-lingual-consensus.md
+    - evaluation/synthetic-fidelity.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md
