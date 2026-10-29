@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
+
 - Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
