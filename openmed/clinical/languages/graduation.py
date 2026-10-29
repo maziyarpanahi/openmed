@@ -1077,6 +1077,8 @@ def evaluate_graduation(
         failures.add("device_tiers_missing")
     if not evidence.offline_verified:
         failures.add("package_not_offline")
+    if evidence.package_bytes == 0:
+        failures.add("package_size_missing")
     if evidence.package_bytes > contract.max_package_bytes:
         failures.add("package_over_budget")
     if evidence.review_interval_days > contract.max_review_interval_days:

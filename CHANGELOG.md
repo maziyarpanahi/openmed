@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
 

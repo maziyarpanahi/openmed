@@ -327,6 +327,7 @@ def test_cross_lingual_cells_must_match_the_reference_set():
         ({"abstention_probes": 10}, "abstention_probes_insufficient"),
         ({"model_tiers": ()}, "device_tiers_missing"),
         ({"offline_verified": False}, "package_not_offline"),
+        ({"package_bytes": 0}, "package_size_missing"),
         ({"package_bytes": 1024**3 + 1}, "package_over_budget"),
         ({"review_interval_days": 400}, "maintenance_interval_too_long"),
     ],

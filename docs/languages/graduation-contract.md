@@ -20,7 +20,7 @@ yet, so all of them start `experimental` with the review role `unfilled`.
 
 ## Initial cohort
 
-| Code | Script | Region | Route today | Golden records | Limitations |
+| Code | Script | Region | Route today | Golden records at selection | Limitations |
 | ---- | ------ | ------ | ----------- | -------------- | ----------- |
 | `am` | Ethiopic | Horn of Africa | multilingual fallback | 2 | surrogate locale approximation |
 | `sw` | Latin | East Africa | multilingual fallback | 3 | none recorded |
@@ -56,7 +56,7 @@ low-resource packs (for example `xh`, `ig`, `ha`, `ml`) wait for a later cohort.
 `repository_language_inventory()` rebuilds this evidence from the language-pack
 catalog, the model manifest, the surrogate-locale report, the synthetic locale
 generators and the golden fixture metadata. It reads codes, counts and labels
-only, never fixture text. `cohort_inventory_findings()` compares it with the
+only and does not include fixture text in its output. `cohort_inventory_findings()` compares it with the
 declared cohort, and the unit tests require zero findings. A route, locale,
 script or license change, or a record that claims more evidence than the
 repository holds, fails the suite. New evidence, such as an added fixture,
@@ -112,7 +112,7 @@ and it may add critical labels but never remove one.
 | Abstention probes | 50, zero failures | at least 20 |
 | Cross-lingual regression per cell | 0.00 | at most 0.01 |
 | Trials per cross-lingual cell | 100 | at least 50 |
-| Offline package | verified offline, at least one device tier, 1 GiB | at most 2 GiB |
+| Offline package | verified offline, positive measured size, at least one device tier, 1 GiB | positive size, at most 2 GiB |
 | Maintenance review interval | 180 days | at most 365 days |
 
 Critical-identifier recall is **non-compensable**. Each critical label must
