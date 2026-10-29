@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -60,11 +61,38 @@ def test_compass_text_and_image_generation_matches_contract(variant: str) -> Non
         pytest.fail(f"missing {variant} artifact: {artifact}")
 
     from openmed.mlx import OpenMedMLXVisionLanguageModel
+    from openmed.multimodal.generated_text_guard import (
+        AssetIdentifierDigest,
+        GeneratedTextGuard,
+        PHILabel,
+        identifier_digest,
+    )
 
     model = OpenMedMLXVisionLanguageModel(artifact, strict=True)
     expected = _reference_responses(report_directory, variant)
+    # Known synthetic fixture identifiers; this detector is not qualification.
+    guard = GeneratedTextGuard(lambda _: (), detector_version="synthetic-parity-v1")
+    privacy_digest = hashlib.sha256(_PRIVACY_PROMPT.encode()).hexdigest()
+    fact_digest = hashlib.sha256(_FACT_PROMPT.encode()).hexdigest()
+    document_path = fixture_directory / "synthetic_clinical_document.png"
+    document_digest = hashlib.sha256(document_path.read_bytes()).hexdigest()
+    chart_path = fixture_directory / "synthetic_clinic_chart.png"
+    chart_digest = hashlib.sha256(chart_path.read_bytes()).hexdigest()
+    identifiers = [
+        AssetIdentifierDigest(
+            document_digest, PHILabel.NAME, identifier_digest("Alex Rivera"), 10
+        ),
+        AssetIdentifierDigest(
+            document_digest, PHILabel.MRN, identifier_digest("SYN-2048"), 8
+        ),
+    ]
     try:
-        privacy = model.generate_with_metadata(_PRIVACY_PROMPT, max_tokens=96)
+        privacy = model.generate_with_metadata(
+            _PRIVACY_PROMPT,
+            max_tokens=96,
+            release_guard=guard,
+            asset_digest=privacy_digest,
+        )
         assert privacy.prompt_tokens == 30
         privacy_text = privacy.text.casefold()
         assert "private" in privacy_text or "privacy" in privacy_text
@@ -73,35 +101,48 @@ def test_compass_text_and_image_generation_matches_contract(variant: str) -> Non
             term in privacy_text for term in ("cloud", "network", "transmit", "local")
         )
 
-        fact = model.generate_with_metadata(_FACT_PROMPT, max_tokens=32)
+        fact = model.generate_with_metadata(
+            _FACT_PROMPT,
+            max_tokens=32,
+            release_guard=guard,
+            asset_digest=fact_digest,
+        )
         assert fact.text == expected["text_fact_extraction"] == "Tuesday"
-        assert fact.token_ids == (29_445,)
+        assert fact.token_ids == ()
         assert fact.prompt_tokens == 44
 
         document = model.generate_with_metadata(
             _DOCUMENT_PROMPT,
-            image=fixture_directory / "synthetic_clinical_document.png",
+            image=document_path,
             max_tokens=96,
+            release_guard=guard,
+            asset_digest=document_digest,
+            identifiers=identifiers,
         )
         assert document.prompt_tokens == 1_161
         document_text = document.text.casefold()
         for value in (
-            "Alex Rivera",
-            "SYN-2048",
             "Metformin",
             "500",
             "twice",
             "Penicillin",
         ):
             assert value.casefold() in document_text
+        assert "alex rivera" not in document_text
+        assert "syn-2048" not in document_text
+        assert document_text.count("[redacted]") >= 2
+        assert document.release_envelope.guard_metadata["decision"] == "redact"
+        assert document.token_ids == ()
 
         chart = model.generate_with_metadata(
             _CHART_PROMPT,
-            image=fixture_directory / "synthetic_clinic_chart.png",
+            image=chart_path,
             max_tokens=32,
+            release_guard=guard,
+            asset_digest=chart_digest,
         )
         assert chart.text == expected["image_chart"] == "Screening, 42"
-        assert chart.token_ids == (198_759, 16, 225, 3_304)
+        assert chart.token_ids == ()
         assert chart.prompt_tokens == 1_053
     finally:
         del model
