@@ -157,21 +157,22 @@ def test_conflicting_metadata_aliases_fail_closed_without_echoing_values():
     assert "synthetic-sensitive-placeholder" not in repr(report.to_dict())
 
 
-@pytest.mark.parametrize("link_flag", [1, "false", None])
-def test_non_boolean_link_flags_are_invalid(link_flag: object):
-    report = inspect_archive_members(
-        [
-            {
-                "path": "records/item.txt",
-                "compressed_size": 10,
-                "uncompressed_size": 20,
-                "is_link": link_flag,
-            }
-        ]
-    )
+def test_non_boolean_link_flags_are_invalid(subtests):
+    for link_flag in [1, "false", None]:
+        with subtests.test(link_flag=link_flag):
+            report = inspect_archive_members(
+                [
+                    {
+                        "path": "records/item.txt",
+                        "compressed_size": 10,
+                        "uncompressed_size": 20,
+                        "is_link": link_flag,
+                    }
+                ]
+            )
 
-    assert report.decision is ArchiveDecision.REJECT
-    assert report.reason_counts == {"invalid_metadata": 1}
+            assert report.decision is ArchiveDecision.REJECT
+            assert report.reason_counts == {"invalid_metadata": 1}
 
 
 def test_hostile_mapping_and_iterator_failures_become_safe_rejections():
@@ -209,9 +210,8 @@ def test_maximum_invalid_metadata_count_stays_bounded_and_constructible():
     assert report.decision is ArchiveDecision.REJECT
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
+def test_cross_platform_ambiguous_paths_are_rejected(subtests):
+    for path in [
         "records/CON.txt",
         "records/CONIN$.txt",
         "records/CONOUT$.txt",
@@ -225,13 +225,12 @@ def test_maximum_invalid_metadata_count_stays_bounded_and_constructible():
         "records/line\u2028separator.txt",
         "records/paragraph\u2029separator.txt",
         "records/hidden\u202efile.txt",
-    ],
-)
-def test_cross_platform_ambiguous_paths_are_rejected(path: str):
-    report = inspect_archive_members([member(path)])
+    ]:
+        with subtests.test(path=path):
+            report = inspect_archive_members([member(path)])
 
-    assert report.decision is ArchiveDecision.REJECT
-    assert report.reason_counts == {"invalid_metadata": 1}
+            assert report.decision is ArchiveDecision.REJECT
+            assert report.reason_counts == {"invalid_metadata": 1}
 
 
 def test_path_limit_is_rechecked_after_unicode_normalization():
@@ -271,29 +270,25 @@ def test_public_report_rejects_arbitrary_reason_metadata():
     assert marker not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
+def test_public_report_rejects_unbounded_aggregates(subtests):
+    for overrides in [
         {"entry_count": 10_002},
         {"total_compressed_bytes": 10**400},
         {"total_uncompressed_bytes": 10**400},
         {"reason_counts": {"invalid_metadata": 20_002}},
-    ],
-)
-def test_public_report_rejects_unbounded_aggregates(
-    overrides: dict[str, object],
-):
-    values: dict[str, object] = {
-        "decision": ArchiveDecision.ALLOW,
-        "entry_count": 0,
-        "total_compressed_bytes": 0,
-        "total_uncompressed_bytes": 0,
-        "reason_counts": {},
-    }
-    values.update(overrides)
+    ]:
+        with subtests.test(overrides=overrides):
+            values: dict[str, object] = {
+                "decision": ArchiveDecision.ALLOW,
+                "entry_count": 0,
+                "total_compressed_bytes": 0,
+                "total_uncompressed_bytes": 0,
+                "reason_counts": {},
+            }
+            values.update(overrides)
 
-    with pytest.raises(ValueError, match="safe bounds|reasons are invalid"):
-        ArchiveSafetyReport(**values)  # type: ignore[arg-type]
+            with pytest.raises(ValueError, match="safe bounds|reasons are invalid"):
+                ArchiveSafetyReport(**values)  # type: ignore[arg-type]
 
 
 def test_public_report_bounds_hostile_reason_iteration():

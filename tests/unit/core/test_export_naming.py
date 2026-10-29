@@ -80,51 +80,47 @@ def test_metadata_report_contains_only_safe_typed_values() -> None:
     assert raw_identifier not in serialized
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_path_syntax_is_rejected_without_echoing_values(subtests) -> None:
+    for field, value in [
         ("artifact_type", "audit/report"),
         ("format", r"json\\backup"),
         ("schema_version", "v1/next"),
         ("extension", "../json"),
         ("fingerprint", "sha256:" + "b" * 63 + "/"),
-    ],
-)
-def test_path_syntax_is_rejected_without_echoing_values(field: str, value: str) -> None:
-    fields = {
-        "artifact_type": "audit-report",
-        "format": "json",
-        "schema_version": "v1",
-        "fingerprint": _FINGERPRINT,
-    }
-    fields[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            fields = {
+                "artifact_type": "audit-report",
+                "format": "json",
+                "schema_version": "v1",
+                "fingerprint": _FINGERPRINT,
+            }
+            fields[field] = value
 
-    with pytest.raises(ExportNamingError) as error:
-        build_export_filename(**fields)
+            with pytest.raises(ExportNamingError) as error:
+                build_export_filename(**fields)
 
-    assert value not in str(error.value)
-    assert field in str(error.value)
+            assert value not in str(error.value)
+            assert field in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_raw_identifier_tokens_are_rejected_without_echoing_values(subtests) -> None:
+    for value in [
         "synthetic-patient-482901",
         "synthetic-record-123456",
         "550e8400-e29b-41d4-a716-446655440000",
-    ],
-)
-def test_raw_identifier_tokens_are_rejected_without_echoing_values(value: str) -> None:
-    with pytest.raises(ExportNamingError) as error:
-        build_export_filename(
-            artifact_type=value,
-            format="json",
-            schema_version="v1",
-            fingerprint=_FINGERPRINT,
-        )
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(ExportNamingError) as error:
+                build_export_filename(
+                    artifact_type=value,
+                    format="json",
+                    schema_version="v1",
+                    fingerprint=_FINGERPRINT,
+                )
 
-    assert value not in str(error.value)
-    assert "raw identifier" in str(error.value)
+            assert value not in str(error.value)
+            assert "raw identifier" in str(error.value)
 
 
 def test_unstable_clock_components_are_absent_unless_explicitly_supplied() -> None:
@@ -243,35 +239,30 @@ def test_tampered_metadata_is_revalidated_without_echoing_values() -> None:
     assert test_marker not in str(report_error.value)
 
 
-@pytest.mark.parametrize(
-    "first,second",
-    [
+def test_mapping_aliases_conflict_even_when_one_value_is_null(subtests) -> None:
+    for first, second in [
         ("format", "format_name"),
         ("fingerprint", "provenance_fingerprint"),
         ("explicit_timestamp", "timestamp"),
-    ],
-)
-def test_mapping_aliases_conflict_even_when_one_value_is_null(
-    first: str,
-    second: str,
-) -> None:
-    fields: dict[str, Any] = {
-        "artifact_type": "audit-report",
-        "format": "json",
-        "schema_version": "v1",
-        "fingerprint": _FINGERPRINT,
-    }
-    alias_values: dict[str, Any] = {
-        "format_name": "json",
-        "provenance_fingerprint": _FINGERPRINT,
-        "explicit_timestamp": "2024-01-02",
-        "timestamp": "2024-01-02",
-    }
-    fields[first] = None
-    fields[second] = alias_values[second]
+    ]:
+        with subtests.test(first=first, second=second):
+            fields: dict[str, Any] = {
+                "artifact_type": "audit-report",
+                "format": "json",
+                "schema_version": "v1",
+                "fingerprint": _FINGERPRINT,
+            }
+            alias_values: dict[str, Any] = {
+                "format_name": "json",
+                "provenance_fingerprint": _FINGERPRINT,
+                "explicit_timestamp": "2024-01-02",
+                "timestamp": "2024-01-02",
+            }
+            fields[first] = None
+            fields[second] = alias_values[second]
 
-    with pytest.raises(ExportNamingError, match="conflicting"):
-        build_export_filename(fields)
+            with pytest.raises(ExportNamingError, match="conflicting"):
+                build_export_filename(fields)
 
 
 def test_fingerprint_input_requires_a_full_sha256_digest() -> None:

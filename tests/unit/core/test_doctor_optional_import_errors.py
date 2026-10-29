@@ -88,29 +88,36 @@ def test_exception_class_hooks_are_not_invoked(monkeypatch, parent):
     assert "SYNTHETIC_PRIVATE" not in json.dumps(checks)
 
 
-@pytest.mark.parametrize("failure", [ImportError, ModuleNotFoundError])
-def test_missing_dependency_behavior_is_preserved(monkeypatch, failure):
-    def missing(name):
-        raise failure("synthetic missing dependency")
+def test_missing_dependency_behavior_is_preserved(subtests):
+    for failure in [ImportError, ModuleNotFoundError]:
+        with subtests.test(failure=failure):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(doctor.importlib, "import_module", missing)
-    checks = []
-    doctor._check_optional_dependencies(checks)
-    assert len(checks) == len(doctor.OPTIONAL_EXTRAS)
-    assert all(
-        c["status"] == "WARN" and "not installed" in c["details"] for c in checks
-    )
-    assert all("Install with:" in c["hint"] for c in checks)
+                def missing(name):
+                    raise failure("synthetic missing dependency")
+
+                monkeypatch.setattr(doctor.importlib, "import_module", missing)
+                checks = []
+                doctor._check_optional_dependencies(checks)
+                assert len(checks) == len(doctor.OPTIONAL_EXTRAS)
+                assert all(
+                    c["status"] == "WARN" and "not installed" in c["details"]
+                    for c in checks
+                )
+                assert all("Install with:" in c["hint"] for c in checks)
 
 
-@pytest.mark.parametrize("interrupt", [KeyboardInterrupt, SystemExit])
-def test_process_control_exceptions_propagate(monkeypatch, interrupt):
-    def stop(name):
-        raise interrupt()
+def test_process_control_exceptions_propagate(subtests):
+    for interrupt in [KeyboardInterrupt, SystemExit]:
+        with subtests.test(interrupt=interrupt):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(doctor.importlib, "import_module", stop)
-    with pytest.raises(interrupt):
-        doctor._check_optional_dependencies([])
+                def stop(name):
+                    raise interrupt()
+
+                monkeypatch.setattr(doctor.importlib, "import_module", stop)
+                with pytest.raises(interrupt):
+                    doctor._check_optional_dependencies([])
 
 
 def test_healthy_dependencies_remain_passes(monkeypatch):
