@@ -179,20 +179,19 @@ def test_ray_dataset_uses_one_loaded_pipeline_per_actor():
         ray.shutdown()
 
 
-@pytest.mark.parametrize(
-    ("concurrency", "message"),
-    [
+def test_invalid_actor_pool_concurrency_is_rejected(subtests):
+    for concurrency, message in [
         (0, "at least 1"),
         ((2, 1), "1 <= min <= max"),
         ((1, 3, 4), "between min and max"),
-    ],
-)
-def test_invalid_actor_pool_concurrency_is_rejected(concurrency, message):
-    class Strategy:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
+    ]:
+        with subtests.test(concurrency=concurrency, message=message):
 
-    from openmed.integrations.ray_map_batches import _actor_pool_strategy
+            class Strategy:
+                def __init__(self, **kwargs):
+                    self.kwargs = kwargs
 
-    with pytest.raises(ValueError, match=message):
-        _actor_pool_strategy(Strategy, concurrency)
+            from openmed.integrations.ray_map_batches import _actor_pool_strategy
+
+            with pytest.raises(ValueError, match=message):
+                _actor_pool_strategy(Strategy, concurrency)

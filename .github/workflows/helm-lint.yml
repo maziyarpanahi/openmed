@@ -13,6 +13,10 @@ on:
       - "deploy/helm/openmed-service/**"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   helm-lint-template:
     runs-on: ubuntu-latest

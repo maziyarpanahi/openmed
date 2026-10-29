@@ -65,31 +65,34 @@ def _oracle_runner(fixture, model_name, device):
     ]
 
 
-@pytest.mark.parametrize("operator", _ALL_OPERATORS)
-def test_operators_are_seeded_and_reproject_spans_without_drift(operator):
-    fixture = _fixture()
+def test_operators_are_seeded_and_reproject_spans_without_drift(subtests):
+    for operator in _ALL_OPERATORS:
+        with subtests.test(operator=operator):
+            fixture = _fixture()
 
-    first = operator(fixture, random.Random(17))
-    second = operator(fixture, random.Random(17))
+            first = operator(fixture, random.Random(17))
+            second = operator(fixture, random.Random(17))
 
-    assert first.text == second.text
-    assert first.gold_spans == second.gold_spans
-    assert first.text != fixture.text
-    for span in first.gold_spans:
-        assert span.text == first.text[span.start : span.end]
-        assert span.end > span.start
-
-
-@pytest.mark.parametrize("operator", _ALL_OPERATORS)
-def test_operators_perturb_each_synthetic_gold_span(operator):
-    fixture = _fixture()
-
-    perturbed = operator(fixture, random.Random(3))
-
-    for clean_span, dirty_span in zip(fixture.gold_spans, perturbed.gold_spans):
-        assert dirty_span.text != clean_span.text
+            assert first.text == second.text
+            assert first.gold_spans == second.gold_spans
+            assert first.text != fixture.text
+            for span in first.gold_spans:
+                assert span.text == first.text[span.start : span.end]
+                assert span.end > span.start
 
 
+def test_operators_perturb_each_synthetic_gold_span(subtests):
+    for operator in _ALL_OPERATORS:
+        with subtests.test(operator=operator):
+            fixture = _fixture()
+
+            perturbed = operator(fixture, random.Random(3))
+
+            for clean_span, dirty_span in zip(fixture.gold_spans, perturbed.gold_spans):
+                assert dirty_span.text != clean_span.text
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "name",
     [

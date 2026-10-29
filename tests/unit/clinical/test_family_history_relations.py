@@ -137,15 +137,16 @@ def test_surface_patient_subject_does_not_inherit_a_family_condition():
     )
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-def test_duplicate_patient_context_always_suppresses_family_relation(reverse):
-    text = "mother has diabetes"
-    family = dict(_span(text, "diabetes", "CONDITION"), experiencer="family")
-    patient = dict(family, experiencer="patient")
-    spans = [family, patient]
-    if reverse:
-        spans.reverse()
-    assert extract_family_history_relations(text, spans) == ()
+def test_duplicate_patient_context_always_suppresses_family_relation(subtests):
+    for reverse in [False, True]:
+        with subtests.test(reverse=reverse):
+            text = "mother has diabetes"
+            family = dict(_span(text, "diabetes", "CONDITION"), experiencer="family")
+            patient = dict(family, experiencer="patient")
+            spans = [family, patient]
+            if reverse:
+                spans.reverse()
+            assert extract_family_history_relations(text, spans) == ()
 
 
 def test_nested_patient_context_cannot_be_hidden_by_top_level_family():
@@ -155,12 +156,13 @@ def test_nested_patient_context_cannot_be_hidden_by_top_level_family():
     assert extract_family_history_relations(text, [span]) == ()
 
 
-@pytest.mark.parametrize("certainty", ["unknown", "unreviewed"])
-def test_unknown_explicit_certainty_is_not_promoted(certainty):
-    text = "mother has diabetes"
-    span = dict(_span(text, "diabetes", "CONDITION"), certainty=certainty)
-    [relation] = extract_family_history_relations(text, [span])
-    assert relation.certainty == UNCERTAIN
+def test_unknown_explicit_certainty_is_not_promoted(subtests):
+    for certainty in ["unknown", "unreviewed"]:
+        with subtests.test(certainty=certainty):
+            text = "mother has diabetes"
+            span = dict(_span(text, "diabetes", "CONDITION"), certainty=certainty)
+            [relation] = extract_family_history_relations(text, [span])
+            assert relation.certainty == UNCERTAIN
 
 
 def test_conflicting_certainty_axes_preserve_uncertainty():
@@ -172,12 +174,13 @@ def test_conflicting_certainty_axes_preserve_uncertainty():
     assert relation.certainty == UNCERTAIN
 
 
-@pytest.mark.parametrize("start", [True, 11.5, "11"])
-def test_noninteger_offsets_are_not_coerced(start):
-    text = "mother has diabetes"
-    span = dict(_span(text, "diabetes", "CONDITION"), start=start)
-    with pytest.raises(ValueError):
-        extract_family_history_relations(text, [span])
+def test_noninteger_offsets_are_not_coerced(subtests):
+    for start in [True, 11.5, "11"]:
+        with subtests.test(start=start):
+            text = "mother has diabetes"
+            span = dict(_span(text, "diabetes", "CONDITION"), start=start)
+            with pytest.raises(ValueError):
+                extract_family_history_relations(text, [span])
 
 
 def test_input_iterator_errors_do_not_retain_source_text():
@@ -209,13 +212,16 @@ def test_postpositive_relative_remains_supported():
     assert relation.relative.text == "mother"
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-def test_duplicate_certainty_preserves_uncertain_in_both_orders(reverse):
-    text = "mother has diabetes"
-    a = dict(_span(text, "diabetes", "CONDITION"), certainty=CERTAIN)
-    b = dict(a, certainty=UNCERTAIN)
-    [relation] = extract_family_history_relations(text, [b, a] if reverse else [a, b])
-    assert relation.certainty == UNCERTAIN
+def test_duplicate_certainty_preserves_uncertain_in_both_orders(subtests):
+    for reverse in [False, True]:
+        with subtests.test(reverse=reverse):
+            text = "mother has diabetes"
+            a = dict(_span(text, "diabetes", "CONDITION"), certainty=CERTAIN)
+            b = dict(a, certainty=UNCERTAIN)
+            [relation] = extract_family_history_relations(
+                text, [b, a] if reverse else [a, b]
+            )
+            assert relation.certainty == UNCERTAIN
 
 
 def test_nested_context_graph_is_bounded(monkeypatch):
@@ -250,18 +256,20 @@ def test_text_and_section_inputs_are_bounded(monkeypatch):
         )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [("score", True), ("relative", None), ("advisory", "SYNTHETIC-PRIVATE-CONTENT")],
-)
-def test_direct_relation_constructor_validates_metadata(field, value):
-    from dataclasses import replace
+def test_direct_relation_constructor_validates_metadata(subtests):
+    for field, value in [
+        ("score", True),
+        ("relative", None),
+        ("advisory", "SYNTHETIC-PRIVATE-CONTENT"),
+    ]:
+        with subtests.test(field=field, value=value):
+            from dataclasses import replace
 
-    text = "mother has diabetes"
-    [relation] = extract_family_history_relations(
-        text, [_span(text, "diabetes", "CONDITION")]
-    )
-    with pytest.raises(ValueError) as caught:
-        replace(relation, **{field: value})
-    assert caught.value.__context__ is None
-    assert "SYNTHETIC" not in str(caught.value)
+            text = "mother has diabetes"
+            [relation] = extract_family_history_relations(
+                text, [_span(text, "diabetes", "CONDITION")]
+            )
+            with pytest.raises(ValueError) as caught:
+                replace(relation, **{field: value})
+            assert caught.value.__context__ is None
+            assert "SYNTHETIC" not in str(caught.value)
