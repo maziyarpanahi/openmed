@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Audit synthetic script tokenization fragmentation, unknown-token rates,
   grapheme splits and offset recovery against pinned local limits (#2856).
 
+- Added versioned, offline JSON Schemas for the synthetic training records the
+  package already emits (`locale_phi_example`, `burned_in_annotation`,
+  `social_history_example`, `section_label_record`,
+  `translation_augmented_example`), with `record_schema_id`, schema and
+  fingerprint export helpers, deterministic file writing and a `validate_record`
+  check that pairs schema validation with offset invariants and rejects records
+  claiming real PHI (#3895).
+
 - Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
   PHI truth manifest addressed by segment, field, repetition, component,
   subcomponent and raw-text offsets across encoding-character variants, escape
