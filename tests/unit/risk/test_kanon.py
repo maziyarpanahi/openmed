@@ -61,21 +61,22 @@ class TestKAnonymity:
 
 
 class TestLDiversity:
-    @pytest.mark.parametrize("value", [None, "", float("nan")])
-    def test_missing_or_nonfinite_sensitive_values_fail_closed(self, value):
-        with pytest.raises(ValueError, match="Sensitive attribute"):
-            kanon_report(
-                [{"g": "A", "disease": "flu"}, {"g": "A", "disease": value}],
-                quasi_identifiers=["g"],
-                sensitive_attributes=["disease"],
-            )
+    def test_missing_or_nonfinite_sensitive_values_fail_closed(self, subtests):
+        for value in [None, "", float("nan")]:
+            with subtests.test(value=value):
+                with pytest.raises(ValueError, match="Sensitive attribute"):
+                    kanon_report(
+                        [{"g": "A", "disease": "flu"}, {"g": "A", "disease": value}],
+                        quasi_identifiers=["g"],
+                        sensitive_attributes=["disease"],
+                    )
 
-        with pytest.raises(ValueError, match="Sensitive attribute"):
-            kanon_report(
-                [{"g": "A", "disease": "flu"}, {"g": "A"}],
-                quasi_identifiers=["g"],
-                sensitive_attributes=["disease"],
-            )
+                with pytest.raises(ValueError, match="Sensitive attribute"):
+                    kanon_report(
+                        [{"g": "A", "disease": "flu"}, {"g": "A"}],
+                        quasi_identifiers=["g"],
+                        sensitive_attributes=["disease"],
+                    )
 
     def test_distinct_is_one_when_each_class_has_single_value(self):
         records = [
@@ -373,29 +374,28 @@ def test_internal_missing_marker_cannot_be_injected_as_a_literal_qi() -> None:
     assert report["class_count"] == 2
 
 
-@pytest.mark.parametrize("value", [" ", "\t\n", " flu ", b""])
-def test_ambiguous_sensitive_values_fail_closed(value: object) -> None:
-    with pytest.raises(ValueError, match="Sensitive attribute"):
-        kanon_report(
-            [{"group": "A", "disease": value}],
-            quasi_identifiers=["group"],
-            sensitive_attributes=["disease"],
-        )
+def test_ambiguous_sensitive_values_fail_closed(subtests) -> None:
+    for value in [" ", "\t\n", " flu ", b""]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="Sensitive attribute"):
+                kanon_report(
+                    [{"group": "A", "disease": value}],
+                    quasi_identifiers=["group"],
+                    sensitive_attributes=["disease"],
+                )
 
 
-@pytest.mark.parametrize(
-    ("argument", "value"),
-    [
+def test_column_arguments_reject_bare_strings(subtests) -> None:
+    for argument, value in [
         ("quasi_identifiers", "age"),
         ("sensitive_attributes", "disease"),
-    ],
-)
-def test_column_arguments_reject_bare_strings(argument: str, value: str) -> None:
-    with pytest.raises(TypeError, match="sequence of column names"):
-        kanon_report(
-            [{"age": 30, "disease": "flu"}],
-            **{argument: value},
-        )
+    ]:
+        with subtests.test(argument=argument, value=value):
+            with pytest.raises(TypeError, match="sequence of column names"):
+                kanon_report(
+                    [{"age": 30, "disease": "flu"}],
+                    **{argument: value},
+                )
 
 
 def test_direct_dataframe_scalars_are_normalized_to_python_values() -> None:
