@@ -32,45 +32,42 @@ def test_public_page_size_keeps_normalization_contract():
     assert PageDimensions is not PageSize
 
 
-@pytest.mark.parametrize(
-    ("rotation", "point", "expected", "target_size"),
-    [
+def test_transform_point_supports_each_clockwise_quarter_turn(subtests):
+    for rotation, point, expected, target_size in [
         (0, (10.0, 20.0), (10.0, 20.0), (100.0, 200.0)),
         (90, (10.0, 20.0), (180.0, 10.0), (200.0, 100.0)),
         (180, (10.0, 20.0), (90.0, 180.0), (100.0, 200.0)),
         (270, (10.0, 20.0), (20.0, 90.0), (200.0, 100.0)),
-    ],
-)
-def test_transform_point_supports_each_clockwise_quarter_turn(
-    rotation, point, expected, target_size
-):
-    transform = PageTransform((100, 200), rotation)
+    ]:
+        with subtests.test(
+            rotation=rotation, point=point, expected=expected, target_size=target_size
+        ):
+            transform = PageTransform((100, 200), rotation)
 
-    assert transform.point(point) == expected
-    assert transform.target_size.as_tuple() == target_size
+            assert transform.point(point) == expected
+            assert transform.target_size.as_tuple() == target_size
 
 
-@pytest.mark.parametrize(
-    ("rotation", "expected"),
-    [
+def test_transform_bbox_preserves_axis_aligned_geometry(subtests):
+    for rotation, expected in [
         (0, (10.0, 20.0, 40.0, 80.0)),
         (90, (120.0, 10.0, 180.0, 40.0)),
         (180, (60.0, 120.0, 90.0, 180.0)),
         (270, (20.0, 60.0, 80.0, 90.0)),
-    ],
-)
-def test_transform_bbox_preserves_axis_aligned_geometry(rotation, expected):
-    assert transform_bbox((10, 20, 40, 80), (100, 200), rotation) == expected
+    ]:
+        with subtests.test(rotation=rotation, expected=expected):
+            assert transform_bbox((10, 20, 40, 80), (100, 200), rotation) == expected
 
 
-@pytest.mark.parametrize("rotation", list(PageRotation))
-def test_each_transform_round_trips_points_and_boxes(rotation):
-    transform = PageTransform(PageDimensions(100, 200), rotation)
-    point = (11.5, 22.25)
-    box = (11.5, 22.25, 44.75, 88.5)
+def test_each_transform_round_trips_points_and_boxes(subtests):
+    for rotation in list(PageRotation):
+        with subtests.test(rotation=rotation):
+            transform = PageTransform(PageDimensions(100, 200), rotation)
+            point = (11.5, 22.25)
+            box = (11.5, 22.25, 44.75, 88.5)
 
-    assert transform.inverse().point(transform.point(point)) == point
-    assert transform.inverse().bbox(transform.bbox(box)) == box
+            assert transform.inverse().point(transform.point(point)) == point
+            assert transform.inverse().bbox(transform.bbox(box)) == box
 
 
 def test_ocr_result_preserves_order_metadata_and_source_fields():
@@ -126,13 +123,11 @@ def test_document_transform_preserves_offsets_pages_and_provenance():
     assert transformed.spans[1] is document.spans[1]
 
 
-@pytest.mark.parametrize(
-    "rotation",
-    [None, 45, -90, "portrait", True, math.nan],
-)
-def test_rejects_ambiguous_orientation(rotation):
-    with pytest.raises(AmbiguousOrientationError, match="rotation"):
-        transform_point((10, 20), (100, 200), rotation)
+def test_rejects_ambiguous_orientation(subtests):
+    for rotation in [None, 45, -90, "portrait", True, math.nan]:
+        with subtests.test(rotation=rotation):
+            with pytest.raises(AmbiguousOrientationError, match="rotation"):
+                transform_point((10, 20), (100, 200), rotation)
 
 
 def test_rejects_conflicting_orientation_aliases():
@@ -140,43 +135,37 @@ def test_rejects_conflicting_orientation_aliases():
         transform_point((10, 20), (100, 200), 90, orientation=270)
 
 
-@pytest.mark.parametrize(
-    "page_size",
-    [
+def test_rejects_invalid_page_dimensions(subtests):
+    for page_size in [
         (0, 200),
         (100, -1),
         (math.nan, 200),
         (100, math.inf),
         (100,),
         {"width": 100},
-    ],
-)
-def test_rejects_invalid_page_dimensions(page_size):
-    with pytest.raises(InvalidPageDimensionsError, match="page"):
-        transform_point((10, 20), page_size, 0)
+    ]:
+        with subtests.test(page_size=page_size):
+            with pytest.raises(InvalidPageDimensionsError, match="page"):
+                transform_point((10, 20), page_size, 0)
 
 
-@pytest.mark.parametrize(
-    "point",
-    [(-1, 20), (10, 201), (math.nan, 20), (10, math.inf)],
-)
-def test_rejects_out_of_bounds_or_non_finite_points(point):
-    with pytest.raises((OutOfBoundsError, GeometryValidationError)):
-        transform_point(point, (100, 200), 0)
+def test_rejects_out_of_bounds_or_non_finite_points(subtests):
+    for point in [(-1, 20), (10, 201), (math.nan, 20), (10, math.inf)]:
+        with subtests.test(point=point):
+            with pytest.raises((OutOfBoundsError, GeometryValidationError)):
+                transform_point(point, (100, 200), 0)
 
 
-@pytest.mark.parametrize(
-    "box",
-    [
+def test_rejects_invalid_or_out_of_bounds_boxes(subtests):
+    for box in [
         (-1, 20, 40, 80),
         (10, 20, 101, 80),
         (40, 20, 10, 80),
         (10, 20, 40, 20),
-    ],
-)
-def test_rejects_invalid_or_out_of_bounds_boxes(box):
-    with pytest.raises(GeometryValidationError):
-        transform_bbox(box, (100, 200), 0)
+    ]:
+        with subtests.test(box=box):
+            with pytest.raises(GeometryValidationError):
+                transform_bbox(box, (100, 200), 0)
 
 
 def test_mapping_coordinates_are_supported_without_guessing_orientation():
@@ -188,17 +177,15 @@ def test_mapping_coordinates_are_supported_without_guessing_orientation():
     ) == (120.0, 10.0, 180.0, 40.0)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_partial_or_nested_coordinate_representations_rejected(subtests):
+    for value in [
         {"bbox": (1, 2, 3, 4), "x0": 9},
         {"left": 1, "top": 2, "right": 3, "bottom": 4, "x0": 9},
         {"bbox": {"1": 2, "2": 3, "3": 4, "4": 5}},
-    ],
-)
-def test_partial_or_nested_coordinate_representations_rejected(value):
-    with pytest.raises(GeometryValidationError):
-        transform_bbox(value, (100, 200), 0)
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(GeometryValidationError):
+                transform_bbox(value, (100, 200), 0)
 
 
 def test_conversion_failure_has_no_raw_context():

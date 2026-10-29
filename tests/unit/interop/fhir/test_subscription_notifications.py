@@ -83,57 +83,63 @@ def notification(
     }
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-@pytest.mark.parametrize("kind", TYPES)
-@pytest.mark.parametrize("mode", MODES)
-def test_formats_types_and_content_modes(version, kind, mode):
-    source = notification(version, kind, mode)
-    before = copy.deepcopy(source)
-    report = parse_subscription_notification(
-        source, version=version, previous_event_number=0
-    )
-    assert (
-        report.to_json()
-        == parse_subscription_notification(
-            json.dumps(source), version=version, previous_event_number=0
-        ).to_json()
-    )
-    assert source == before
-    assert report.version.value == version
-    assert report.notification_type.value == kind
-    if kind == "query-status":
-        assert report.events == ()
-    else:
-        assert report.events[0].content_mode.value == mode
-        assert report.events[0].requires_authorized_read == (mode != "full-resource")
-    assert bool(report.workflow_events) == (kind == "event-notification")
-    rendered = report.to_json() + repr(report)
-    for marker in (
-        SENTINEL,
-        "synthetic-subscription",
-        "synthetic-observation",
-        "https://synthetic.invalid",
-    ):
-        assert marker not in rendered
+def test_formats_types_and_content_modes(subtests):
+    for version in VERSIONS:
+        for kind in TYPES:
+            for mode in MODES:
+                with subtests.test(version=version, kind=kind, mode=mode):
+                    source = notification(version, kind, mode)
+                    before = copy.deepcopy(source)
+                    report = parse_subscription_notification(
+                        source, version=version, previous_event_number=0
+                    )
+                    assert (
+                        report.to_json()
+                        == parse_subscription_notification(
+                            json.dumps(source), version=version, previous_event_number=0
+                        ).to_json()
+                    )
+                    assert source == before
+                    assert report.version.value == version
+                    assert report.notification_type.value == kind
+                    if kind == "query-status":
+                        assert report.events == ()
+                    else:
+                        assert report.events[0].content_mode.value == mode
+                        assert report.events[0].requires_authorized_read == (
+                            mode != "full-resource"
+                        )
+                    assert bool(report.workflow_events) == (
+                        kind == "event-notification"
+                    )
+                    rendered = report.to_json() + repr(report)
+                    for marker in (
+                        SENTINEL,
+                        "synthetic-subscription",
+                        "synthetic-observation",
+                        "https://synthetic.invalid",
+                    ):
+                        assert marker not in rendered
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-def test_gaps_duplicates_order_and_checkpoint_history_are_explicit(version):
-    report = parse_subscription_notification(
-        notification(version, numbers=(4, 2, 2), since="6"),
-        version=version,
-        previous_event_number=1,
-    )
-    codes = [finding.code for finding in report.findings]
-    assert SubscriptionFindingCode.OUT_OF_ORDER in codes
-    assert SubscriptionFindingCode.DUPLICATE in codes
-    gaps = [f for f in report.findings if f.code is SubscriptionFindingCode.GAP]
-    assert [(f.first_missing, f.last_missing, f.count) for f in gaps] == [
-        (3, 3, 1),
-        (5, 6, 2),
-    ]
-    assert report.workflow_events == ()
-    assert report.requires_reconciliation
+def test_gaps_duplicates_order_and_checkpoint_history_are_explicit(subtests):
+    for version in VERSIONS:
+        with subtests.test(version=version):
+            report = parse_subscription_notification(
+                notification(version, numbers=(4, 2, 2), since="6"),
+                version=version,
+                previous_event_number=1,
+            )
+            codes = [finding.code for finding in report.findings]
+            assert SubscriptionFindingCode.OUT_OF_ORDER in codes
+            assert SubscriptionFindingCode.DUPLICATE in codes
+            gaps = [f for f in report.findings if f.code is SubscriptionFindingCode.GAP]
+            assert [(f.first_missing, f.last_missing, f.count) for f in gaps] == [
+                (3, 3, 1),
+                (5, 6, 2),
+            ]
+            assert report.workflow_events == ()
+            assert report.requires_reconciliation
 
 
 def test_unknown_history_does_not_invent_a_missing_prefix():
@@ -191,20 +197,25 @@ def test_query_events_and_control_history_cannot_become_new_workflows():
         assert report.workflow_events == ()
 
 
-@pytest.mark.parametrize("version", VERSIONS)
-@pytest.mark.parametrize("kind", ("heartbeat", "handshake", "query-status"))
-def test_control_counter_ahead_of_checkpoint_reports_missing_delivery(version, kind):
-    source = notification(version, kind, numbers=(), since="6")
-    report = parse_subscription_notification(
-        source, version=version, previous_event_number=2
-    )
-    gaps = [f for f in report.findings if f.code is SubscriptionFindingCode.GAP]
-    assert [(f.first_missing, f.last_missing, f.count) for f in gaps] == [(3, 6, 4)]
-    assert report.workflow_events == ()
-    unknown = parse_subscription_notification(source, version=version)
-    assert [f.code for f in unknown.findings] == [
-        SubscriptionFindingCode.HISTORY_UNKNOWN
-    ]
+def test_control_counter_ahead_of_checkpoint_reports_missing_delivery(subtests):
+    for version in VERSIONS:
+        for kind in ("heartbeat", "handshake", "query-status"):
+            with subtests.test(version=version, kind=kind):
+                source = notification(version, kind, numbers=(), since="6")
+                report = parse_subscription_notification(
+                    source, version=version, previous_event_number=2
+                )
+                gaps = [
+                    f for f in report.findings if f.code is SubscriptionFindingCode.GAP
+                ]
+                assert [(f.first_missing, f.last_missing, f.count) for f in gaps] == [
+                    (3, 6, 4)
+                ]
+                assert report.workflow_events == ()
+                unknown = parse_subscription_notification(source, version=version)
+                assert [f.code for f in unknown.findings] == [
+                    SubscriptionFindingCode.HISTORY_UNKNOWN
+                ]
 
 
 def test_query_event_history_does_not_report_missing_newer_deliveries():
@@ -217,75 +228,77 @@ def test_query_event_history_does_not_report_missing_newer_deliveries():
     assert report.workflow_events == ()
 
 
-@pytest.mark.parametrize(
-    "location", ("bundle", "entry", "status", "event", "reference", "parameter")
-)
-@pytest.mark.parametrize(
-    "field", ("extension", "modifierExtension", "implicitRules", "_type")
-)
-@pytest.mark.parametrize("value", (None, False, 0, "", [], {}))
-def test_unhandled_extensions_cannot_hide_behind_falsey_values(location, field, value):
-    source = notification("R4" if location == "parameter" else "R5")
-    status = source["entry"][0]["resource"]
-    target = {
-        "bundle": source,
-        "entry": source["entry"][0],
-        "status": status,
-    }.get(location)
-    if location == "event":
-        target = status["notificationEvent"][0]
-    elif location == "reference":
-        target = status["subscription"]
-    elif location == "parameter":
-        target = status["parameter"][0]
-    target[field] = value
-    with pytest.raises(SubscriptionNotificationError) as error:
-        parse_subscription_notification(
-            source, version="R4" if location == "parameter" else "R5"
-        )
-    assert error.value.code == "unsupported_modifier"
+def test_unhandled_extensions_cannot_hide_behind_falsey_values(subtests):
+    for location in ("bundle", "entry", "status", "event", "reference", "parameter"):
+        for field in ("extension", "modifierExtension", "implicitRules", "_type"):
+            for value in (None, False, 0, "", [], {}):
+                with subtests.test(location=location, field=field, value=value):
+                    source = notification("R4" if location == "parameter" else "R5")
+                    status = source["entry"][0]["resource"]
+                    target = {
+                        "bundle": source,
+                        "entry": source["entry"][0],
+                        "status": status,
+                    }.get(location)
+                    if location == "event":
+                        target = status["notificationEvent"][0]
+                    elif location == "reference":
+                        target = status["subscription"]
+                    elif location == "parameter":
+                        target = status["parameter"][0]
+                    target[field] = value
+                    with pytest.raises(SubscriptionNotificationError) as error:
+                        parse_subscription_notification(
+                            source, version="R4" if location == "parameter" else "R5"
+                        )
+                    assert error.value.code == "unsupported_modifier"
 
 
-@pytest.mark.parametrize("release", ("R4", "R5"))
-def test_recognized_unsuffixed_r4b_bundle_profile_rejects_other_releases(release):
-    source = notification(release)
-    source["meta"] = {
-        "profile": [
-            "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification|1.1.0"
-        ]
-    }
-    with pytest.raises(SubscriptionNotificationError, match="mixed_version"):
-        parse_subscription_notification(source, version=release)
-    source = notification("R4B")
-    source["meta"] = {
-        "profile": [
-            "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification|1.1.0"
-        ]
-    }
-    assert parse_subscription_notification(source, version="R4B").version.value == "R4B"
+def test_recognized_unsuffixed_r4b_bundle_profile_rejects_other_releases(subtests):
+    for release in ("R4", "R5"):
+        with subtests.test(release=release):
+            source = notification(release)
+            source["meta"] = {
+                "profile": [
+                    "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification|1.1.0"
+                ]
+            }
+            with pytest.raises(SubscriptionNotificationError, match="mixed_version"):
+                parse_subscription_notification(source, version=release)
+            source = notification("R4B")
+            source["meta"] = {
+                "profile": [
+                    "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification|1.1.0"
+                ]
+            }
+            assert (
+                parse_subscription_notification(source, version="R4B").version.value
+                == "R4B"
+            )
 
 
-@pytest.mark.parametrize(
-    "number", [0, -1, MAX_EVENT_NUMBER + 1, True, None, {}, "01", "+1", "1.0"]
-)
-def test_bad_counter_values_fail_with_closed_codes(number):
-    source = notification()
-    source["entry"][0]["resource"]["notificationEvent"][0]["eventNumber"] = number
-    with pytest.raises(SubscriptionNotificationError, match="invalid_counter"):
-        parse_subscription_notification(source, version="R5")
+def test_bad_counter_values_fail_with_closed_codes(subtests):
+    for number in [0, -1, MAX_EVENT_NUMBER + 1, True, None, {}, "01", "+1", "1.0"]:
+        with subtests.test(number=number):
+            source = notification()
+            source["entry"][0]["resource"]["notificationEvent"][0]["eventNumber"] = (
+                number
+            )
+            with pytest.raises(SubscriptionNotificationError, match="invalid_counter"):
+                parse_subscription_notification(source, version="R5")
 
 
-@pytest.mark.parametrize("version", ["R3", "R6", SENTINEL, 5, None, []])
-def test_unsupported_versions_do_not_echo_the_value(version):
-    with pytest.raises(SubscriptionNotificationError) as error:
-        parse_subscription_notification(notification(), version=version)
-    assert error.value.code == "unsupported_version"
-    assert SENTINEL not in str(error.value)
+def test_unsupported_versions_do_not_echo_the_value(subtests):
+    for version in ["R3", "R6", SENTINEL, 5, None, []]:
+        with subtests.test(version=version):
+            with pytest.raises(SubscriptionNotificationError) as error:
+                parse_subscription_notification(notification(), version=version)
+            assert error.value.code == "unsupported_version"
+            assert SENTINEL not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "mutation,code",
-    [
+def test_malformed_and_mixed_bundles_are_refused(subtests):
+    for mutation, code in [
         (lambda b: b.update(type="transaction"), "invalid_bundle"),
         (lambda b: b.update(entry=[]), "invalid_bundle"),
         (lambda b: b["entry"][0]["resource"].update(type=[]), "invalid_status"),
@@ -322,39 +335,35 @@ def test_unsupported_versions_do_not_echo_the_value(version):
             ),
             "mixed_version",
         ),
-    ],
-)
-def test_malformed_and_mixed_bundles_are_refused(mutation, code):
-    source = notification()
-    mutation(source)
-    with pytest.raises(SubscriptionNotificationError) as error:
-        parse_subscription_notification(source, version="R5")
-    assert error.value.code == code
-    assert SENTINEL not in str(error.value)
+    ]:
+        with subtests.test(mutation=mutation, code=code):
+            source = notification()
+            mutation(source)
+            with pytest.raises(SubscriptionNotificationError) as error:
+                parse_subscription_notification(source, version="R5")
+            assert error.value.code == code
+            assert SENTINEL not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_malformed_required_values_never_escape_as_python_type_errors(subtests):
+    for field in [
         "type",
         "status",
         "subscription",
         "notificationEvent",
         "eventsSinceSubscriptionStart",
-    ],
-)
-@pytest.mark.parametrize("value", [None, True, 0, [], {}, SENTINEL])
-def test_malformed_required_values_never_escape_as_python_type_errors(field, value):
-    source = notification()
-    source["entry"][0]["resource"][field] = value
-    with pytest.raises(SubscriptionNotificationError) as error:
-        parse_subscription_notification(source, version="R5")
-    assert SENTINEL not in str(error.value)
+    ]:
+        for value in [None, True, 0, [], {}, SENTINEL]:
+            with subtests.test(field=field, value=value):
+                source = notification()
+                source["entry"][0]["resource"][field] = value
+                with pytest.raises(SubscriptionNotificationError) as error:
+                    parse_subscription_notification(source, version="R5")
+                assert SENTINEL not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "source,code",
-    [
+def test_json_refusals_have_no_raw_decoder_context(subtests):
+    for source, code in [
         (b'{"resourceType":"Bundle","resourceType":"Bundle"}', "duplicate_json_key"),
         (b'{"resourceType":', "invalid_json"),
         (b"\xff", "invalid_json"),
@@ -368,13 +377,12 @@ def test_malformed_required_values_never_escape_as_python_type_errors(field, val
             '{"text":"' + "\u4e00" * (MAX_NOTIFICATION_BYTES // 2) + '"}',
             "payload_too_large",
         ),
-    ],
-)
-def test_json_refusals_have_no_raw_decoder_context(source, code):
-    with pytest.raises(SubscriptionNotificationError) as error:
-        parse_subscription_notification(source, version="R5")
-    assert error.value.code == code
-    assert error.value.__context__ is None
+    ]:
+        with subtests.test(source=source, code=code):
+            with pytest.raises(SubscriptionNotificationError) as error:
+                parse_subscription_notification(source, version="R5")
+            assert error.value.code == code
+            assert error.value.__context__ is None
 
 
 def test_entry_event_depth_and_node_bounds():

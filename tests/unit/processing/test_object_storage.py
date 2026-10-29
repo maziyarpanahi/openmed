@@ -91,6 +91,7 @@ def test_deidentify_bucket_rejects_overlapping_output_root() -> None:
         )
 
 
+@pytest.mark.slow
 def test_importing_processing_does_not_require_fsspec_or_cloud_backends() -> None:
     script = """
 import builtins

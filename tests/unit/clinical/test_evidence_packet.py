@@ -30,29 +30,29 @@ from openmed.clinical.review_state_machine import (
 POLICY_FINGERPRINT = fingerprint_policy({"policy": "synthetic-review", "version": 1})
 
 
-@pytest.mark.parametrize(
-    ("field", "value", "category"),
-    [
+def test_nested_reference_invariants_are_rechecked(subtests):
+    for field, value, category in [
         ("verified", False, REJECTION_UNVERIFIED),
         ("synthetic", False, REJECTION_NOT_SYNTHETIC),
         ("review_state", "queued", REJECTION_INVALID_REVIEW_STATE),
         ("start", -1, REJECTION_INVALID_SOURCE_OFFSET),
         ("end", 18, REJECTION_INVALID_REVIEW_STATE),
         ("review_transitions", (), REJECTION_INVALID_REVIEW_STATE),
-    ],
-)
-def test_nested_reference_invariants_are_rechecked(field, value, category):
-    packet = build_evidence_packet(
-        [_reference()], policy_fingerprint=POLICY_FINGERPRINT
-    )
-    reference = packet.references[0]
-    object.__setattr__(reference, field, value)
-    with pytest.raises(EvidencePacketValidationError) as caught:
-        validate_evidence_packet(packet)
-    assert caught.value.category == category
-    filtered = build_evidence_packet([reference], policy_fingerprint=POLICY_FINGERPRINT)
-    assert filtered.references == ()
-    assert filtered.rejection_counts == {category: 1}
+    ]:
+        with subtests.test(field=field, value=value, category=category):
+            packet = build_evidence_packet(
+                [_reference()], policy_fingerprint=POLICY_FINGERPRINT
+            )
+            reference = packet.references[0]
+            object.__setattr__(reference, field, value)
+            with pytest.raises(EvidencePacketValidationError) as caught:
+                validate_evidence_packet(packet)
+            assert caught.value.category == category
+            filtered = build_evidence_packet(
+                [reference], policy_fingerprint=POLICY_FINGERPRINT
+            )
+            assert filtered.references == ()
+            assert filtered.rejection_counts == {category: 1}
 
 
 def test_nested_rejection_report_invariants_are_rechecked():
