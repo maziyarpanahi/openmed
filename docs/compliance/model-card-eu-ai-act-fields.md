@@ -176,6 +176,74 @@ acceptance thresholds, results, failures, artifact hashes, device/runtime, and
 monitoring plan. Separate measured robustness from architectural claims such as
 local-only execution or signed evidence.
 
+## Differential-Privacy and Federation Disclosure
+
+Privately or federally trained models add a versioned
+`openmed.model_card.privacy_disclosure.v1` section to the artifact-backed card.
+`openmed.eval.model_card_privacy.build_privacy_disclosure` validates the
+disclosure, and `build_model_card(..., privacy_disclosure=...,
+privacy_evidence=...)` appends a `## Privacy Disclosure` Markdown section and a
+`privacy_disclosure` datasheet entry. Cards built without a disclosure are
+byte-identical to cards built before this section existed.
+
+The disclosure uses closed codes, bands, counts and digests only:
+
+| Field | Allowed values |
+|---|---|
+| `training_setting` | `centralized`, `federated` |
+| `mechanism` | `dp_sgd_gaussian`, `dp_ftrl_tree`, `dp_fedavg_gaussian` (federated only), `none` |
+| `privacy_unit` | `note`, `patient`, `site` |
+| `adjacency` | `add_remove`, `replace_one` |
+| `epsilon`, `delta` | finite `epsilon > 0`; `0 < delta < 1` |
+| `accountant` / `conversion` | `rdp` / `rdp_to_approx_dp`; `gdp` / `gdp_to_approx_dp`; `prv`, `pld` or `basic_composition` / `direct` |
+| `iteration_unit`, `iteration_count` | `steps` for centralized or `rounds` for federated; positive count |
+| `sampling`, `amplification_claimed` | `poisson`, `fixed_size_without_replacement`, `shuffled`, `full_participation`; amplification only for the first two |
+| `clipping` | `per_example_l2`, `per_unit_l2`, `per_client_update_l2`, `none` (not allowed with DP) |
+| `secure_aggregation` | `cryptographic`, `trusted_execution`, `none`; `not_applicable` when centralized |
+| `participant_band` | federated participant-count bands; `not_applicable` when centralized |
+| `tuning_cost_included` | `true` when the reported epsilon includes hyperparameter tuning |
+| `limitations` | one or more codes for risks the guarantee does not cover |
+
+Rendering is refused, with a controlled code such as `privacy_unit_missing`,
+`delta_missing` or `accountant_evidence_missing`, when:
+
+1. a DP mechanism is declared without its privacy unit, adjacency, epsilon,
+   delta, accountant, conversion, sampling, amplification or tuning-cost fields;
+2. the injected promotion evidence has no `accountant_statement_digest`, or
+   carries any value that is not a `sha256:` digest;
+3. the canonical accountant statement derived from the disclosure, covering
+   epsilon, delta, unit, adjacency, accountant, conversion, iterations,
+   sampling, clipping and tuning cost, does not match that digest
+   (`accountant_evidence_mismatch`); or
+4. the disclosure contains an unknown field, an unknown code, a DP field
+   without a DP mechanism, or a federation field on a centralized model.
+
+Use `privacy_accountant_statement_digest(disclosure)` to compute the digest
+that promotion evidence must carry. Federated or centralized training with
+`mechanism: none` renders the explicit statement "No formal
+differential-privacy guarantee applies to this model." and leaves the DP
+fields as **Not applicable**.
+
+Error messages contain only the reason code and field name. They never echo
+input values, unknown keys, site identities, per-site metrics or file paths,
+and the card renders only the consumed accountant digest and a disclosure
+digest. `validate_model_card_consistency(..., privacy_evidence=...)`
+re-derives the section and fails when the datasheet entry or Markdown section
+was edited after rendering. The CLI accepts the same inputs:
+
+```bash
+python scripts/release/build_model_card.py \
+  --repo-id OpenMed/OpenMed-PII-Tiny-44M-v1-mlx \
+  --gate-report gate-report.json \
+  --privacy-disclosure privacy-disclosure.json \
+  --privacy-evidence privacy-evidence.json \
+  --output README.md
+```
+
+A disclosure records the training-time claim; it is not a release approval and
+does not cover inference-time inputs or data outside the declared privacy
+unit.
+
 ## Relationship to Other Records
 
 The model-card block is a summary and index. Keep detailed evidence in the

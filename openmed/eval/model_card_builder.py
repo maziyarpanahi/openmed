@@ -15,6 +15,7 @@ from openmed.eval.release_gates import GateReport
 
 MODEL_CARD_DATASHEET_SCHEMA_VERSION = "openmed.model_card_datasheet.v1"
 MODEL_DATASHEET_FILENAME = "model-datasheet.json"
+_PRIVACY_HEADING = "\n## Privacy Disclosure\n"
 
 
 class ModelCardBuilderError(ValueError):
@@ -77,12 +78,36 @@ def build_model_card(
     fairness_report: Mapping[str, Any] | str | Path | None = None,
     quant_delta: Mapping[str, Any] | str | Path | None = None,
     training_provenance: Mapping[str, Any] | str | Path | None = None,
+    privacy_disclosure: Mapping[str, Any] | str | Path | None = None,
+    privacy_evidence: Mapping[str, Any] | str | Path | None = None,
 ) -> ModelCardBuildResult:
     """Build a model card plus datasheet from source artifacts.
 
     The generated datasheet is derived from the manifest row, release-gate
     report, and optional artifact payloads. Metrics copied from the release
     gate are validated field-for-field before the card is returned.
+
+    Args:
+        manifest_row: Model manifest row to render.
+        gate_report: Signed release-gate report, mapping, or JSON path.
+        calibration_report: Optional calibration report artifact.
+        calibration_thresholds: Optional calibration threshold artifact.
+        fairness_report: Optional fairness report artifact.
+        quant_delta: Optional quantized recall-delta artifact.
+        training_provenance: Optional training provenance artifact.
+        privacy_disclosure: Optional differential-privacy and federation
+            disclosure. When supplied, a validated ``privacy_disclosure``
+            datasheet entry and a ``## Privacy Disclosure`` section are added.
+            When omitted, the card and datasheet are unchanged.
+        privacy_evidence: Injected promotion-evidence digests that a DP
+            disclosure must agree with. Requires *privacy_disclosure*.
+
+    Returns:
+        The rendered card, datasheet, and normalized source payloads.
+
+    Raises:
+        ModelCardBuilderError: If artifacts disagree, or if the privacy
+            disclosure is incomplete or disagrees with its evidence.
     """
 
     row = _plain_mapping(manifest_row, "manifest_row")
@@ -107,6 +132,7 @@ def build_model_card(
         artifacts.append(provenance_artifact)
 
     _validate_gate_manifest_identity(row, gate_payload)
+    privacy_section = _privacy_section(privacy_disclosure, privacy_evidence)
     datasheet = _build_datasheet(
         row,
         gate_payload,
@@ -115,15 +141,22 @@ def build_model_card(
             provenance_artifact.payload if provenance_artifact is not None else {}
         ),
     )
-    markdown = append_model_card_sections(
-        render_model_card(row),
-        [render_datasheet_markdown(datasheet)],
-    )
+    sections = [render_datasheet_markdown(datasheet)]
+    if privacy_section is not None:
+        # Imported lazily: model_card_privacy subclasses ModelCardBuilderError.
+        from openmed.eval.model_card_privacy import (
+            render_privacy_disclosure_markdown,
+        )
+
+        datasheet["privacy_disclosure"] = privacy_section
+        sections.append(render_privacy_disclosure_markdown(privacy_section))
+    markdown = append_model_card_sections(render_model_card(row), sections)
     validate_model_card_consistency(
         markdown,
         row,
         gate_payload,
         datasheet=datasheet,
+        privacy_evidence=privacy_evidence,
     )
     return ModelCardBuildResult(
         manifest_row=row,
@@ -223,8 +256,24 @@ def validate_model_card_consistency(
     gate_report: Mapping[str, Any] | GateReport,
     *,
     datasheet: Mapping[str, Any],
+    privacy_evidence: Mapping[str, Any] | str | Path | None = None,
 ) -> None:
-    """Fail if card metadata or datasheet metrics drift from source artifacts."""
+    """Fail if card metadata or datasheet metrics drift from source artifacts.
+
+    Args:
+        markdown: Rendered model card.
+        manifest_row: Manifest row the card was rendered from.
+        gate_report: Signed release-gate report.
+        datasheet: Datasheet payload rendered with the card.
+        privacy_evidence: Optional injected promotion-evidence digests. When
+            the datasheet carries a privacy disclosure, it is re-derived and
+            checked against these digests, or against its own recorded digest
+            when omitted.
+
+    Raises:
+        ModelCardBuilderError: If the card, datasheet, privacy disclosure, or
+            gate report disagree.
+    """
 
     row = _plain_mapping(manifest_row, "manifest_row")
     gate_payload = _gate_payload(gate_report)
@@ -259,6 +308,49 @@ def validate_model_card_consistency(
             raise ModelCardBuilderError(
                 f"datasheet {key} diverges from signed gate report"
             )
+
+    _validate_privacy_disclosure(markdown, datasheet, privacy_evidence)
+
+
+def _privacy_section(
+    disclosure: Mapping[str, Any] | str | Path | None,
+    evidence: Mapping[str, Any] | str | Path | None,
+) -> dict[str, Any] | None:
+    if disclosure is None and evidence is None:
+        return None
+    from openmed.eval.model_card_privacy import (
+        PrivacyDisclosureError,
+        build_privacy_disclosure,
+    )
+
+    if disclosure is None:
+        raise PrivacyDisclosureError("privacy_disclosure_missing", "privacy_disclosure")
+    return build_privacy_disclosure(disclosure, promotion_evidence=evidence)
+
+
+def _validate_privacy_disclosure(
+    markdown: str,
+    datasheet: Mapping[str, Any],
+    evidence: Mapping[str, Any] | str | Path | None,
+) -> None:
+    section = datasheet.get("privacy_disclosure")
+    if section is None and evidence is None and _PRIVACY_HEADING not in markdown:
+        return
+    from openmed.eval.model_card_privacy import (
+        PrivacyDisclosureError,
+        render_privacy_disclosure_markdown,
+        validate_privacy_disclosure_section,
+    )
+
+    if section is None:
+        raise PrivacyDisclosureError("privacy_disclosure_missing", "privacy_disclosure")
+    rebuilt = validate_privacy_disclosure_section(
+        section,
+        promotion_evidence=evidence,
+    )
+    rendered = render_privacy_disclosure_markdown(rebuilt)
+    if not markdown.endswith(rendered) or markdown.count(_PRIVACY_HEADING) != 1:
+        raise PrivacyDisclosureError("privacy_disclosure_markdown_mismatch", "markdown")
 
 
 def _build_datasheet(
