@@ -101,7 +101,8 @@ example.metadata["date_detection_gaps"]  # {}: the Persian patterns match it
 
 Dates are sampled directly in their calendar, with no conversion. Months whose
 length depends on an astronomical or published table (Esfand, every Lunar
-Hijri month, every Bikram Sambat month) only use days 1-29. Each date span
+Hijri month, every Bikram Sambat month) only use days 1-29, with days 1-28
+for the archived 28-day Shaban 1364 AH in Umm al-Qura. Each date span
 records value-free `calendar`, `numeral_system`, `form`, `date_profile`, and
 `detection_gap` metadata, never the rendered date. `detection_gap` is `None`
 when the language's deterministic date patterns return exactly the span, and

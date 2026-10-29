@@ -127,7 +127,9 @@ def _is_valid_calendar_date(calendar: str, year: int, month: int, day: int) -> b
     if calendar == SOLAR_HIJRI_CALENDAR:
         # Esfand 30 exists only in leap years; the sampler never draws it.
         return day <= (31 if month <= 6 else 30 if month <= 11 else 29)
-    # Lunar Hijri and Bikram Sambat months always have at least 29 days.
+    # The Umm al-Qura archive has a 28-day Shaban in 1364 AH.
+    if calendar == HIJRI_CALENDAR and (year, month) == (1364, 8):
+        return day <= 28
     return day <= 29
 
 
@@ -237,6 +239,7 @@ def test_native_date_profiles_for_unknown_language_is_empty():
         (SOLAR_HIJRI_CALENDAR, 1402, 11, 30),
         (SOLAR_HIJRI_CALENDAR, 1403, 12, 29),
         (HIJRI_CALENDAR, 1447, 9, 29),
+        (HIJRI_CALENDAR, 1364, 8, 28),
         (BIKRAM_SAMBAT_CALENDAR, 2081, 3, 29),
     ),
 )
@@ -318,6 +321,7 @@ def test_render_native_date_matches_literal_references(name, components, expecte
         ("th_thai_buddhist_numeric_thai", (2566, 2, 29)),
         ("fa_solar_hijri_numeric_arabext", (1402, 7, 31)),
         ("ar_hijri_numeric_arab", (1447, 9, 31)),
+        ("ar_hijri_numeric_arab", (1364, 8, 29)),
         ("ar_gregorian_numeric_arab", (2023, 13, 1)),
         ("ne_bikram_sambat_numeric_deva", (2081, 4, 0)),
     ),
@@ -356,6 +360,15 @@ def test_sampled_dates_are_valid_in_their_calendar(name):
 
     # A follow-up date never precedes the date of birth.
     assert max(birth_years) < min(visit_years)
+
+    if profile.calendar == HIJRI_CALENDAR:
+        # This seed selected the nonexistent Shaban 29, 1364 before the fix.
+        rendered, _ = generate_native_date(
+            profile, random.Random(55860), field="date_of_birth"
+        )
+        assert _is_valid_calendar_date(
+            profile.calendar, *_parse_rendered(profile, rendered)
+        )
 
 
 def test_ethiopian_sampling_reaches_pagume_with_the_leap_rule():

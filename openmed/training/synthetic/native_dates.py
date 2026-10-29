@@ -122,6 +122,9 @@ _YEAR_RANGES: Final[Mapping[str, Mapping[str, tuple[int, int]]]] = MappingProxyT
 
 _THAI_BUDDHIST_ERA_OFFSET: Final = 543
 _LOOKUP_MONTH_MIN_DAYS: Final = 29
+# The source Umm al-Qura archive records 28 days in Shaban 1364 AH:
+# https://github.com/dralshehri/hijridate/blob/main/src/hijridate/ummalqura.py
+_HIJRI_28_DAY_MONTHS: Final = frozenset({(1364, 8)})
 
 _MONTH_NAMES: Final[Mapping[tuple[str, str], tuple[str, ...]]] = MappingProxyType(
     {
@@ -582,7 +585,7 @@ def sampled_month_length(calendar: str, year: int, month: int) -> int:
     Hijri months 1-6 have 31 days and months 7-11 have 30. Esfand's 30th day
     depends on the vernal equinox, every Lunar Hijri month on the moon, and
     every Bikram Sambat month on a published table, so those months return
-    29, a length each of them always reaches.
+    29, except for the archived 28-day Shaban 1364 AH in Umm al-Qura.
 
     Args:
         calendar: Calendar code from :data:`DATE_CALENDARS`.
@@ -615,6 +618,8 @@ def sampled_month_length(calendar: str, year: int, month: int) -> int:
             return 31
         if month <= 11:
             return 30
+    if calendar == HIJRI_CALENDAR and (year, month) in _HIJRI_28_DAY_MONTHS:
+        return 28
     return _LOOKUP_MONTH_MIN_DAYS
 
 
@@ -750,7 +755,7 @@ def _max_month_length(calendar: str, year: int, month: int) -> int:
     if calendar == SOLAR_HIJRI_CALENDAR and month == 12:
         return 30
     if calendar == HIJRI_CALENDAR:
-        return 30
+        return 28 if (year, month) in _HIJRI_28_DAY_MONTHS else 30
     if calendar == BIKRAM_SAMBAT_CALENDAR:
         return 32
     return length
