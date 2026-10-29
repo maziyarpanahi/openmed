@@ -356,6 +356,7 @@ nav:
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
       - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+      - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
       - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
@@ -424,6 +425,7 @@ nav:
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
