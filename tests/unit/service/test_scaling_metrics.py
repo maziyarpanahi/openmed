@@ -86,27 +86,25 @@ def test_reference_hpa_targets_queue_inflight_and_cpu_metrics() -> None:
     assert cpu["resource"]["target"]["averageUtilization"] == 65
 
 
-@pytest.mark.parametrize(
-    ("queue_depth", "inflight_requests", "expected"),
-    [
+def test_load_shape_maps_thresholds_to_bounded_replicas(subtests) -> None:
+    for queue_depth, inflight_requests, expected in [
         (0, 0, 2),
         (8, 8, 2),
         (9, 8, 3),
         (4, 33, 5),
         (1000, 1000, 10),
-    ],
-)
-def test_load_shape_maps_thresholds_to_bounded_replicas(
-    queue_depth: int,
-    inflight_requests: int,
-    expected: int,
-) -> None:
-    result = recommend_replicas(
-        queue_depth=queue_depth,
-        inflight_requests=inflight_requests,
-    )
+    ]:
+        with subtests.test(
+            queue_depth=queue_depth,
+            inflight_requests=inflight_requests,
+            expected=expected,
+        ):
+            result = recommend_replicas(
+                queue_depth=queue_depth,
+                inflight_requests=inflight_requests,
+            )
 
-    assert result.recommended_replicas == expected
+            assert result.recommended_replicas == expected
 
 
 def test_load_shape_uses_exact_integer_math_for_large_counters() -> None:
@@ -118,17 +116,15 @@ def test_load_shape_uses_exact_integer_math_for_large_counters() -> None:
     assert result.recommended_replicas == 10
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_load_shape_rejects_invalid_observations(subtests) -> None:
+    for kwargs in [
         {"queue_depth": -1, "inflight_requests": 0},
         {"queue_depth": True, "inflight_requests": 0},
         {"queue_depth": 0, "inflight_requests": -1},
-    ],
-)
-def test_load_shape_rejects_invalid_observations(kwargs) -> None:
-    with pytest.raises(ValueError, match="non-negative integer"):
-        recommend_replicas(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError, match="non-negative integer"):
+                recommend_replicas(**kwargs)
 
 
 def test_scaling_targets_reject_invalid_bounds() -> None:

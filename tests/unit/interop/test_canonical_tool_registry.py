@@ -7,6 +7,7 @@ import subprocess
 import sys
 from typing import Any
 
+import pytest
 from jsonschema.validators import validator_for
 
 import openmed
@@ -184,6 +185,7 @@ def test_service_requests_reuse_registry_argument_models() -> None:
     assert issubclass(ModelUnloadRequest, UnloadModelArgs)
 
 
+@pytest.mark.slow
 def test_registry_import_does_not_import_service_or_fastapi() -> None:
     code = """
 import sys
