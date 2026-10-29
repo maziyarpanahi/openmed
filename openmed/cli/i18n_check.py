@@ -525,7 +525,7 @@ def _validator_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
                     "validator",
                     FAIL,
                     "national_id_provider_invalid",
-                    f"national-ID provider entry {provider!r} is malformed",
+                    "a declared national-ID provider entry is malformed",
                 )
             )
             continue
@@ -536,7 +536,7 @@ def _validator_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
                     "validator",
                     FAIL,
                     "national_id_validator_missing",
-                    f"pii_i18n has no validate_{provider} for locale {locale!r}",
+                    "a declared national-ID provider has no installed validator",
                 )
             )
     if findings:
@@ -584,7 +584,7 @@ def _surrogate_findings(pack: LanguagePack | None) -> list[ConformanceFinding]:
             "surrogate",
             FAIL,
             "surrogate_locale_invalid",
-            f"surrogate locale {locale!r} has no installed backend",
+            "the declared surrogate locale has no installed backend",
         )
     ]
 
@@ -665,7 +665,7 @@ def _fixture_findings(
                             "fixtures",
                             FAIL,
                             "fixture_not_synthetic",
-                            f"fixture {display} declares safety {safety!r}",
+                            f"fixture {display} does not declare verified synthetic safety",
                         )
                     )
                     continue
@@ -788,13 +788,13 @@ def _span_findings(
                 continue
             try:
                 validate_span_integrity(text, spans)
-            except SpanProjectionError as exc:
+            except SpanProjectionError:
                 findings.append(
                     _finding(
                         "span_integrity",
                         FAIL,
                         "span_integrity_failed",
-                        f"span payload {display} failed integrity: {exc}",
+                        f"span payload {display} failed integrity",
                     )
                 )
                 continue

@@ -91,6 +91,10 @@ same bytes on every machine. Evidence references are derived from the path
 relative to the repository root, and a file outside the root is reported by its
 base name only, so no host path leaks into a report.
 
+Rejected provider/locale values, fixture safety declarations and span labels are
+omitted from failure details. Span validation errors retain their controlled
+reason codes without repeating the underlying payload.
+
 ## Failures
 
 `run_locale_pack_conformance` raises `ValueError` for a language code that is not

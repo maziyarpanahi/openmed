@@ -240,6 +240,7 @@ def test_validator_failure_is_isolated() -> None:
 
     assert _reasons(report, "validator") == ["national_id_validator_missing"]
     assert _status(report, "metadata") == "pass"
+    assert "does_not_exist" not in _canonical_json(report)
 
 
 def test_validator_component_skips_without_providers() -> None:
@@ -261,6 +262,7 @@ def test_surrogate_failure_is_isolated(locale: str) -> None:
 
     assert _reasons(report, "surrogate") == ["surrogate_locale_invalid"]
     assert _status(report, "metadata") == "pass"
+    assert locale not in _canonical_json(report)
 
 
 def test_missing_fixture_root_fails(tmp_path: Path) -> None:
@@ -305,7 +307,8 @@ def test_fixture_with_text_keys_fails(tmp_path: Path) -> None:
 
 def test_fixture_without_verified_safety_fails(tmp_path: Path) -> None:
     root = tmp_path / "fixtures"
-    _write(root / "unverified.json", {"language": "zh", "safety": "unverified"})
+    marker = "PRIVATE_SYNTHETIC_SAFETY"
+    _write(root / "unverified.json", {"language": "zh", "safety": marker})
 
     report = run_locale_pack_conformance(
         "zh",
@@ -314,6 +317,7 @@ def test_fixture_without_verified_safety_fails(tmp_path: Path) -> None:
     )
 
     assert _reasons(report, "fixtures") == ["fixture_not_synthetic"]
+    assert marker not in _canonical_json(report)
 
 
 def test_unreadable_fixture_fails(tmp_path: Path) -> None:
@@ -330,11 +334,12 @@ def test_unreadable_fixture_fails(tmp_path: Path) -> None:
 
 
 def test_span_mismatch_fails_integrity(tmp_path: Path) -> None:
+    marker = "PRIVATE_SYNTHETIC_LABEL"
     payload = _write(
         tmp_path / "bad_spans.json",
         {
             "text": _SPAN_TEXT,
-            "spans": [{"start": 8, "end": 17, "label": "PERSON", "text": "Zhang Wey"}],
+            "spans": [{"start": 8, "end": 17, "label": marker, "text": "Zhang Wey"}],
         },
     )
 
@@ -346,6 +351,7 @@ def test_span_mismatch_fails_integrity(tmp_path: Path) -> None:
 
     assert _reasons(report, "span_integrity") == ["span_integrity_failed"]
     assert report.ok is False
+    assert marker not in _canonical_json(report)
 
 
 @pytest.mark.parametrize(
