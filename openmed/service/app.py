@@ -138,10 +138,11 @@ from .schemas import (
     SMARTBackendIngestionRequest,
 )
 from .security_headers import (
-    SERVICE_CORS_HEADERS,
+    SERVICE_CORS_EXPOSE_HEADERS,
     SERVICE_CORS_METHODS,
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
+    service_cors_allow_headers,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .streaming import PIIDeidentifyStreamRequest, deidentify_ndjson_stream
@@ -906,18 +907,6 @@ def create_app(
     security_config = parse_service_security_config()
     app.state.security = security_config
     app.state.bulk_storage = BulkStoragePolicy.from_env()
-    if security_config.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=security_config.cors_origins,
-            allow_methods=SERVICE_CORS_METHODS,
-            allow_headers=SERVICE_CORS_HEADERS,
-        )
-    app.add_middleware(
-        ErrorEnvelopeTrustedHostMiddleware,
-        allowed_hosts=security_config.trusted_hosts,
-        www_redirect=False,
-    )
     app.state.auth = ServiceAuth(
         parse_service_auth_config(),
         error_response=_error_response,
@@ -1008,7 +997,6 @@ def create_app(
             return await call_next(request)
         return await throttle.dispatch(request, call_next)
 
-    @app.middleware("http")
     async def _auth_middleware(request: Request, call_next):
         auth = getattr(request.app.state, "auth", None)
         mtls = getattr(request.app.state, "mtls", None)
@@ -1961,6 +1949,25 @@ def create_app(
         limits=app.state.operational_limits,
     )
     app.add_middleware(WorkflowBoundaryMiddleware)
+    # Starlette runs the last-added middleware first. Host, CORS and
+    # header-only credential checks must finish before the body-limit and
+    # throttle layers registered earlier read a body or spend a token.
+    app.middleware("http")(_auth_middleware)
+    if security_config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=security_config.cors_origins,
+            allow_methods=SERVICE_CORS_METHODS,
+            allow_headers=service_cors_allow_headers(
+                auth_enabled=app.state.auth.enabled
+            ),
+            expose_headers=SERVICE_CORS_EXPOSE_HEADERS,
+        )
+    app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=security_config.trusted_hosts,
+        www_redirect=False,
+    )
     validate_route_policies(app)
     return app
 
