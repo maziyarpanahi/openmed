@@ -421,6 +421,7 @@ classification:
     - training/synthetic/multimodal-provenance.md
     - training/synthetic/truth-alignment.md
     - training/synthetic/release-capsules.md
+    - training/synthetic/dataset-recipes.md
     - training/synthetic/prior-auth-packets.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
