@@ -296,23 +296,23 @@ def test_explicit_overrides_win_over_heuristics(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_unknown_override_columns_are_rejected(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for kwargs in [
         {"role_overrides": {"not_a_column": ROLE_SAFE}},
         {"quasi_identifier_columns": ("not_a_column",)},
         {"sensitive_columns": ("not_a_column",)},
         {"privacy_unit": "not_a_column"},
-    ],
-)
-def test_unknown_override_columns_are_rejected(
-    tmp_path: Path,
-    kwargs,
-) -> None:
-    csv_path = _write_csv(tmp_path / "unknown.csv", ROWS)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            csv_path = _write_csv(tmp_path / "unknown.csv", ROWS)
 
-    with pytest.raises(ValueError, match="Unknown override columns: not_a_column"):
-        scan_table(csv_path, **kwargs)
+            with pytest.raises(
+                ValueError, match="Unknown override columns: not_a_column"
+            ):
+                scan_table(csv_path, **kwargs)
 
 
 def test_unrecognized_explicit_qi_field_is_measured(tmp_path: Path) -> None:
@@ -660,9 +660,11 @@ def test_jsonl_scan_uses_same_manifest_contract(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("suffix", "delimiter", "payload", "message"),
-    [
+def test_discovery_rejects_malformed_delimited_shapes_without_values(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for suffix, delimiter, payload, message in [
         (".csv", ",", "age,age\n30,40\n", "duplicate column names"),
         (".tsv", "\t", "age\t \n30\t40\n", "empty column name"),
         (
@@ -672,48 +674,44 @@ def test_jsonl_scan_uses_same_manifest_contract(tmp_path: Path) -> None:
             "more cells",
         ),
         (".tsv", "\t", "age\tdisease\n30\n", "fewer cells"),
-    ],
-)
-def test_discovery_rejects_malformed_delimited_shapes_without_values(
-    tmp_path: Path,
-    suffix: str,
-    delimiter: str,
-    payload: str,
-    message: str,
+    ]:
+        with subtests.test(
+            suffix=suffix, delimiter=delimiter, payload=payload, message=message
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / f"malformed{suffix}"
+            path.write_text(payload, encoding="utf-8")
+
+            with pytest.raises(ValueError, match=message) as raised:
+                scan_table(path, full_scan=True)
+
+            assert "sensitive-overflow-canary" not in str(raised.value)
+            assert delimiter not in str(raised.value)
+
+
+def test_discovery_rejects_ambiguous_or_nested_json_without_values(
+    subtests, tmp_path
 ) -> None:
-    path = tmp_path / f"malformed{suffix}"
-    path.write_text(payload, encoding="utf-8")
-
-    with pytest.raises(ValueError, match=message) as raised:
-        scan_table(path, full_scan=True)
-
-    assert "sensitive-overflow-canary" not in str(raised.value)
-    assert delimiter not in str(raised.value)
-
-
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    [
+    case_root = tmp_path
+    for payload, message in [
         ('{"age":30,"age":40}\n', "duplicate object keys"),
         ('{"profile":{"age":30,"age":40}}\n', "duplicate object keys"),
         ('{"age":NaN}\n', "row 1 is invalid"),
         ('{"age":1e9999}\n', "row 1 is invalid"),
         ('{"age":["sensitive-nested-canary"]}\n', "unsupported scalar"),
         ('{"age":{"value":"sensitive-nested-canary"}}\n', "unsupported scalar"),
-    ],
-)
-def test_discovery_rejects_ambiguous_or_nested_json_without_values(
-    tmp_path: Path,
-    payload: str,
-    message: str,
-) -> None:
-    path = tmp_path / "malformed.jsonl"
-    path.write_text(payload, encoding="utf-8")
+    ]:
+        with subtests.test(payload=payload, message=message):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "malformed.jsonl"
+            path.write_text(payload, encoding="utf-8")
 
-    with pytest.raises((TypeError, ValueError), match=message) as raised:
-        scan_table(path, full_scan=True)
+            with pytest.raises((TypeError, ValueError), match=message) as raised:
+                scan_table(path, full_scan=True)
 
-    assert "sensitive-nested-canary" not in str(raised.value)
+            assert "sensitive-nested-canary" not in str(raised.value)
 
 
 def test_discovery_profiles_typed_values_without_text_collapse(

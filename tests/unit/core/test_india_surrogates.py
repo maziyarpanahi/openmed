@@ -47,76 +47,77 @@ def _valid_aadhaar(seed: int) -> str:
     return faker.aadhaar()
 
 
-@pytest.mark.parametrize(
-    ("lang", "expected_locale"),
-    (("hi", "hi_IN"), ("te", "en_IN")),
-)
-def test_hindi_and_telugu_use_india_locale_surrogates(
-    lang: str,
-    expected_locale: str,
-) -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
-        person = anonymizer.surrogate("उदाहरण व्यक्ति", "PERSON")
-        address = anonymizer.surrogate("42 परीक्षण मार्ग 123456", "STREET_ADDRESS")
-        phone = anonymizer.surrogate("+91 98765 43210", "PHONE")
-        pin = anonymizer.surrogate("123456", "ZIPCODE")
+def test_hindi_and_telugu_use_india_locale_surrogates(subtests) -> None:
+    for lang, expected_locale in (("hi", "hi_IN"), ("te", "en_IN")):
+        with subtests.test(lang=lang, expected_locale=expected_locale):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
+                person = anonymizer.surrogate("उदाहरण व्यक्ति", "PERSON")
+                address = anonymizer.surrogate(
+                    "42 परीक्षण मार्ग 123456", "STREET_ADDRESS"
+                )
+                phone = anonymizer.surrogate("+91 98765 43210", "PHONE")
+                pin = anonymizer.surrogate("123456", "ZIPCODE")
 
-    assert resolve_locale(lang) == expected_locale
-    assert anonymizer._get_faker(expected_locale).locales == [expected_locale]
-    assert person and person != "उदाहरण व्यक्ति"
-    if lang == "hi":
-        assert re.search(r"[\u0900-\u097f]", person)
-    else:
-        assert re.search(r"[A-Za-z]", person)
+            assert resolve_locale(lang) == expected_locale
+            assert anonymizer._get_faker(expected_locale).locales == [expected_locale]
+            assert person and person != "उदाहरण व्यक्ति"
+            if lang == "hi":
+                assert re.search(r"[\u0900-\u097f]", person)
+            else:
+                assert re.search(r"[A-Za-z]", person)
 
-    address_pin = re.search(r"(?<!\d)([1-9]\d{5})(?!\d)", address)
-    assert address_pin is not None
-    assert validate_indian_pin(address_pin.group(1))
-    assert validate_indian_phone(phone)
-    assert validate_indian_pin(pin)
+            address_pin = re.search(r"(?<!\d)([1-9]\d{5})(?!\d)", address)
+            assert address_pin is not None
+            assert validate_indian_pin(address_pin.group(1))
+            assert validate_indian_phone(phone)
+            assert validate_indian_pin(pin)
 
 
-@pytest.mark.parametrize(("lang", "locale"), (("hi", "hi_IN"), ("te", "en_IN")))
-def test_indian_ids_round_trip_through_engine(lang: str, locale: str) -> None:
-    originals = {
-        "aadhaar": _valid_aadhaar(11),
-        "pan": generate_pan(rng=random.Random(12)),
-        "gstin": generate_gstin(rng=random.Random(13)),
-        "abha": generate_abha(rng=random.Random(14)),
-    }
-    validators = {
-        "aadhaar": validate_aadhaar,
-        "pan": validate_pan,
-        "gstin": validate_gstin,
-        "abha": validate_abha,
-    }
+def test_indian_ids_round_trip_through_engine(subtests) -> None:
+    for lang, locale in (("hi", "hi_IN"), ("te", "en_IN")):
+        with subtests.test(lang=lang, locale=locale):
+            originals = {
+                "aadhaar": _valid_aadhaar(11),
+                "pan": generate_pan(rng=random.Random(12)),
+                "gstin": generate_gstin(rng=random.Random(13)),
+                "abha": generate_abha(rng=random.Random(14)),
+            }
+            validators = {
+                "aadhaar": validate_aadhaar,
+                "pan": validate_pan,
+                "gstin": validate_gstin,
+                "abha": validate_abha,
+            }
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
-        generated = {
-            id_type: anonymizer.surrogate(original, id_type, locale=locale)
-            for id_type, original in originals.items()
-        }
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
+                generated = {
+                    id_type: anonymizer.surrogate(original, id_type, locale=locale)
+                    for id_type, original in originals.items()
+                }
 
-    for id_type, value in generated.items():
-        assert validators[id_type](value), f"invalid {id_type} surrogate: {value!r}"
-        assert value != originals[id_type]
+            for id_type, value in generated.items():
+                assert validators[id_type](value), (
+                    f"invalid {id_type} surrogate: {value!r}"
+                )
+                assert value != originals[id_type]
 
 
-@pytest.mark.parametrize("alias", ("in", "hi", "te", "en_IN", "hi_IN"))
 def test_indian_registry_specs_generate_values_accepted_by_their_validators(
-    alias: str,
+    subtests,
 ) -> None:
-    faker = Anonymizer(lang="te")._get_faker("en_IN")
-    faker.seed_instance(675)
-    for id_type in ("aadhaar", "pan", "gstin", "abha"):
-        spec = get_national_id(alias, id_type)
-        assert spec is not None
-        value = getattr(faker, spec.faker_method)()
-        assert spec.validate(value), f"invalid {alias}/{id_type}: {value!r}"
+    for alias in ("in", "hi", "te", "en_IN", "hi_IN"):
+        with subtests.test(alias=alias):
+            faker = Anonymizer(lang="te")._get_faker("en_IN")
+            faker.seed_instance(675)
+            for id_type in ("aadhaar", "pan", "gstin", "abha"):
+                spec = get_national_id(alias, id_type)
+                assert spec is not None
+                value = getattr(faker, spec.faker_method)()
+                assert spec.validate(value), f"invalid {alias}/{id_type}: {value!r}"
 
 
 def test_locale_coherence_report_has_no_india_id_gaps() -> None:
@@ -153,30 +154,31 @@ def test_seeded_consistent_indian_surrogates_are_stable(lang: str) -> None:
     assert generate() == generate()
 
 
-@pytest.mark.parametrize("lang", ("hi", "te"))
-def test_indian_surrogate_leakage_gate(lang: str) -> None:
-    originals = {
-        "PERSON": "उदाहरण व्यक्ति",
-        "ZIPCODE": "123456",
-        "PAN": generate_pan(rng=random.Random(31)),
-        "GSTIN": generate_gstin(rng=random.Random(32)),
-        "ABHA": generate_abha(rng=random.Random(33)),
-    }
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
-        surrogates = {
-            label: anonymizer.surrogate(original, label)
-            for label, original in originals.items()
-        }
+def test_indian_surrogate_leakage_gate(subtests) -> None:
+    for lang in ("hi", "te"):
+        with subtests.test(lang=lang):
+            originals = {
+                "PERSON": "उदाहरण व्यक्ति",
+                "ZIPCODE": "123456",
+                "PAN": generate_pan(rng=random.Random(31)),
+                "GSTIN": generate_gstin(rng=random.Random(32)),
+                "ABHA": generate_abha(rng=random.Random(33)),
+            }
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                anonymizer = Anonymizer(lang=lang, consistent=True, seed=675)
+                surrogates = {
+                    label: anonymizer.surrogate(original, label)
+                    for label, original in originals.items()
+                }
 
-    serialized = "\n".join(surrogates.values()).casefold()
-    for original in originals.values():
-        assert original.casefold() not in serialized
-    for name_token in originals["PERSON"].split():
-        assert name_token.casefold() not in surrogates["PERSON"].casefold()
-    assert originals["PAN"][5:9] not in surrogates["PAN"]
-    assert originals["GSTIN"][7:11] not in surrogates["GSTIN"]
+            serialized = "\n".join(surrogates.values()).casefold()
+            for original in originals.values():
+                assert original.casefold() not in serialized
+            for name_token in originals["PERSON"].split():
+                assert name_token.casefold() not in surrogates["PERSON"].casefold()
+            assert originals["PAN"][5:9] not in surrogates["PAN"]
+            assert originals["GSTIN"][7:11] not in surrogates["GSTIN"]
 
 
 def test_register_clinical_provider_applies_india_bundle_to_fresh_instances() -> None:

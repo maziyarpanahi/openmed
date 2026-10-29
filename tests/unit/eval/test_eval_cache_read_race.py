@@ -49,17 +49,21 @@ def test_successful_read_preserves_identity(tmp_path, monkeypatch):
     assert cache.load("synthetic-key", cache_dir=tmp_path) is report
 
 
-@pytest.mark.parametrize(
-    "error", [PermissionError("synthetic"), ValueError("synthetic")]
-)
-def test_non_missing_errors_are_not_silenced(tmp_path, monkeypatch, error):
-    def reader(path):
-        raise error
+def test_non_missing_errors_are_not_silenced(subtests, tmp_path):
+    case_root = tmp_path
+    for error in [PermissionError("synthetic"), ValueError("synthetic")]:
+        with subtests.test(error=error):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    prepare(tmp_path, monkeypatch, reader)
-    with pytest.raises(type(error)) as raised:
-        cache.load("synthetic-key", cache_dir=tmp_path)
-    assert raised.value is error
+                def reader(path):
+                    raise error
+
+                prepare(tmp_path, monkeypatch, reader)
+                with pytest.raises(type(error)) as raised:
+                    cache.load("synthetic-key", cache_dir=tmp_path)
+                assert raised.value is error
 
 
 def test_malformed_json_error_is_not_silenced(tmp_path, monkeypatch):
