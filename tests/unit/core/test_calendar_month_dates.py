@@ -1,7 +1,7 @@
 """Hijri, Ethiopian, Bikram Sambat and Hebrew month-name dates (#3866).
 
-Every input is synthetic. Detection only: these dates keep the existing shift
-placeholder until calendar-aware shifting lands.
+Every input is synthetic. Supported calendars now shift within their bounds;
+Hebrew dates retain the explicit unsupported-calendar placeholder.
 """
 
 from __future__ import annotations
@@ -350,12 +350,30 @@ def test_coalesced_clusters_keep_only_an_agreed_calendar_code() -> None:
     assert ["calendar" in entity for entity in mixed] == [False]
 
 
-@pytest.mark.parametrize(("lang", "text", "surface", "calendar"), _POSITIVE_CASES[:7])
-def test_detected_dates_keep_the_shift_placeholder(
-    lang: str, text: str, surface: str, calendar: str
+@pytest.mark.parametrize(
+    ("lang", "text", "surface", "calendar", "expected"),
+    [
+        (*case, expected)
+        for case, expected in zip(
+            _POSITIVE_CASES[:7],
+            (
+                "۱۵ شوال ۱۴۴۷",
+                "١٥ شوال ١٤٤٧ هـ",
+                "۱۵ شوال ۱۴۴۷ ہجری",
+                "15 ጥቅምት 2017",
+                "ጥቅምት 15 ቀን 2017 ዓ.ም",
+                "२०८२ साउन १३",
+                "[DATE_SHIFTED]",
+            ),
+            strict=True,
+        )
+    ],
+)
+def test_detected_dates_shift_or_keep_the_unsupported_placeholder(
+    lang: str, text: str, surface: str, calendar: str, expected: str
 ) -> None:
     assert calendar in CALENDAR_CODES
-    assert _shift_date(surface, 30, lang=lang) == "[DATE_SHIFTED]"
+    assert _shift_date(surface, 30, lang=lang) == expected
 
 
 def test_no_date_value_reaches_logs_audit_or_span_metadata(

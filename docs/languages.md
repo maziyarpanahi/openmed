@@ -106,10 +106,11 @@ for the archived 28-day Shaban 1364 AH in Umm al-Qura. Each date span
 records value-free `calendar`, `numeral_system`, `form`, `date_profile`, and
 `detection_gap` metadata, never the rendered date. `detection_gap` is `None`
 when the language's deterministic date patterns return exactly the span, and
-otherwise names the miss: `month_name_not_matched` (Ethiopian, Lunar Hijri, and
-Bikram Sambat month names), `era_marker_not_matched` (Hijri `هـ` and `ہجری`
-markers), or `gregorian_fallback_only` (Bikram Sambat numerals). Languages left
-out of `date_profiles` produce byte-identical examples.
+otherwise names the miss. The Ethiopian, Lunar Hijri, and Bikram Sambat
+month-name profiles now have exact-span deterministic detection. Remaining
+built-in gaps are `era_marker_not_matched` (numeric Hijri `هـ` and `ہجری`
+markers) and `gregorian_fallback_only` (unmarked Bikram Sambat numerals).
+Languages left out of `date_profiles` produce byte-identical examples.
 
 !!! warning "Language-ID license boundary"
     This router deliberately excludes CLD3, which is outside this roadmap

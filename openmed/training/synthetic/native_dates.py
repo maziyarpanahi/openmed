@@ -377,7 +377,6 @@ _PROFILES: Final[tuple[NativeDateProfile, ...]] = (
         form=MONTH_NAME_FORM,
         template="{day} {month_name} {year}",
         zero_pad=False,
-        detection_gap=MONTH_NAME_NOT_MATCHED,
     ),
     NativeDateProfile(
         name="ar_hijri_numeric_arab",
@@ -396,7 +395,6 @@ _PROFILES: Final[tuple[NativeDateProfile, ...]] = (
         form=MONTH_NAME_FORM,
         template="{day} {month_name} {year} هـ",
         zero_pad=False,
-        detection_gap=MONTH_NAME_NOT_MATCHED,
     ),
     NativeDateProfile(
         name="ar_gregorian_numeric_arab",
@@ -423,7 +421,6 @@ _PROFILES: Final[tuple[NativeDateProfile, ...]] = (
         form=MONTH_NAME_FORM,
         template="{day} {month_name} {year} ہجری",
         zero_pad=False,
-        detection_gap=MONTH_NAME_NOT_MATCHED,
     ),
     NativeDateProfile(
         name="ur_gregorian_numeric_arabext",
@@ -450,7 +447,6 @@ _PROFILES: Final[tuple[NativeDateProfile, ...]] = (
         form=MONTH_NAME_FORM,
         template="{day} {month_name} {year}",
         zero_pad=False,
-        detection_gap=MONTH_NAME_NOT_MATCHED,
     ),
 )
 
