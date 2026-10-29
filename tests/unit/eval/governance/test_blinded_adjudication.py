@@ -227,22 +227,18 @@ def test_recused_reviewer_fails_closed_before_packet_rendering() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("override", "reason"),
-    (
+def test_invalid_configuration_uses_closed_phi_safe_errors(subtests) -> None:
+    for override, reason in (
         ({"randomization_key": b"short"}, "randomization_key: invalid_key"),
         (
             {"submission_manifest_digests": {"submission-red": _digest("only")}},
             "submission_manifest_digests: invalid_keys",
         ),
         ({"rubric": ()}, "rubric: invalid_sequence"),
-    ),
-)
-def test_invalid_configuration_uses_closed_phi_safe_errors(
-    override: dict[str, object], reason: str
-) -> None:
-    with pytest.raises(BlindedAdjudicationError, match=reason):
-        _render(**override)
+    ):
+        with subtests.test(override=override, reason=reason):
+            with pytest.raises(BlindedAdjudicationError, match=reason):
+                _render(**override)
 
 
 def test_invalid_values_are_not_reflected_in_exceptions() -> None:

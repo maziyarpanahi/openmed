@@ -458,22 +458,24 @@ def test_conflicting_duplicate_pack_declarations_fail_closed(tmp_path: Path) -> 
         )
 
 
-@pytest.mark.parametrize("schema_version", [True, "1", 2])
-def test_compatibility_schema_version_is_an_exact_integer(
-    tmp_path: Path, schema_version: object
-) -> None:
-    skills_root, compatibility = _write_fixture(tmp_path)
-    payload = json.loads(compatibility.read_text(encoding="utf-8"))
-    payload["schema_version"] = schema_version
-    compatibility.write_text(json.dumps(payload), encoding="utf-8")
+def test_compatibility_schema_version_is_an_exact_integer(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for schema_version in [True, "1", 2]:
+        with subtests.test(schema_version=schema_version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            skills_root, compatibility = _write_fixture(tmp_path)
+            payload = json.loads(compatibility.read_text(encoding="utf-8"))
+            payload["schema_version"] = schema_version
+            compatibility.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ExportError, match="schema version"):
-        export_bundle(
-            tmp_path / "bundle.zip",
-            skills_root=skills_root,
-            compatibility_path=compatibility,
-            source_revision="synthetic-revision",
-        )
+            with pytest.raises(ExportError, match="schema version"):
+                export_bundle(
+                    tmp_path / "bundle.zip",
+                    skills_root=skills_root,
+                    compatibility_path=compatibility,
+                    source_revision="synthetic-revision",
+                )
 
 
 def test_duplicate_or_unknown_metadata_fields_fail_without_echoing_values(

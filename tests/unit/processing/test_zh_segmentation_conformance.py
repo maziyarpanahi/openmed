@@ -311,21 +311,19 @@ def test_conformance_cases_carry_gold_cuts_and_dictionary_requirements():
     }
 
 
-@pytest.mark.parametrize(
-    ("text", "gold_words"),
-    [
+def test_gold_words_that_do_not_reconstruct_the_case_are_rejected(subtests):
+    for text, gold_words in [
         # Too short: the cut stops before the end of the source.
         ("患者王芳", ("患者",)),
         # Right length, wrong content -- a length-only check would accept this.
         ("患者王芳", ("患者", "李雷")),
         ("患者", ("XX",)),
-    ],
-)
-def test_gold_words_that_do_not_reconstruct_the_case_are_rejected(text, gold_words):
-    broken = SegmentationConformanceCase(text, gold_words)
+    ]:
+        with subtests.test(text=text, gold_words=gold_words):
+            broken = SegmentationConformanceCase(text, gold_words)
 
-    with pytest.raises(ValueError, match="reconstruct"):
-        run_segmenter_conformance(_RaisingSegmenter(), [broken], backend="stub")
+            with pytest.raises(ValueError, match="reconstruct"):
+                run_segmenter_conformance(_RaisingSegmenter(), [broken], backend="stub")
 
 
 def test_an_empty_case_list_is_rejected_instead_of_reporting_a_vacuous_pass():
@@ -784,6 +782,7 @@ def test_installed_backend_passes_shared_conformance_suite(backend, record_prope
     assert report.chars_per_second > 0.0
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 def test_installed_backends_agree_on_dictionary_override_spans(record_property):
     available = []

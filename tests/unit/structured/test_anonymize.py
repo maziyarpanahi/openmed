@@ -87,30 +87,25 @@ def test_path_input_infers_supported_qis_and_writes_transformed_table(
     assert measured["k"] >= 2
 
 
-@pytest.mark.parametrize(
-    ("model", "kwargs"),
-    [
+def test_l_diversity_and_t_closeness_models_use_sensitive_attributes(subtests) -> None:
+    for model, kwargs in [
         (MODEL_L_DIVERSITY, {"l": 2}),
         (MODEL_T_CLOSENESS, {"t": 0.1}),
-    ],
-)
-def test_l_diversity_and_t_closeness_models_use_sensitive_attributes(
-    model: str,
-    kwargs: dict[str, object],
-) -> None:
-    result = anonymize_table(
-        _rows(),
-        {"age": "age"},
-        model=model,
-        k=2,
-        sensitive_attributes=["condition"],
-        text_columns=[],
-        profile_backend="native",
-        **kwargs,
-    )
+    ]:
+        with subtests.test(model=model, kwargs=kwargs):
+            result = anonymize_table(
+                _rows(),
+                {"age": "age"},
+                model=model,
+                k=2,
+                sensitive_attributes=["condition"],
+                text_columns=[],
+                profile_backend="native",
+                **kwargs,
+            )
 
-    assert result.manifest["model"] == model
-    assert result.risk_report["k_min"] >= 2
+            assert result.manifest["model"] == model
+            assert result.risk_report["k_min"] >= 2
 
 
 def test_dp_model_uses_public_bounds_and_preserves_k(

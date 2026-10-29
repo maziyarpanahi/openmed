@@ -34,39 +34,35 @@ def test_structure_oxygen_saturation_with_trailing_context():
     }
 
 
-@pytest.mark.parametrize(
-    ("text", "kind", "value", "unit"),
-    [
+def test_structure_common_vital_phrases(subtests):
+    for text, kind, value, unit in [
         ("HR 88", "heart_rate", 88, ""),
         ("heart rate: 88 bpm", "heart_rate", 88, "bpm"),
         ("Temp 37.2 C", "body_temperature", 37.2, "C"),
         ("temperature was 98.6 F", "body_temperature", 98.6, "F"),
         ("RR 18 /min", "respiratory_rate", 18, "/min"),
         ("respiratory rate: 20 breaths/min", "respiratory_rate", 20, "breaths/min"),
-    ],
-)
-def test_structure_common_vital_phrases(text, kind, value, unit):
-    assert structure_vital_sign(text) == {
-        "kind": kind,
-        "value": value,
-        "unit": unit,
-        "components": [],
-    }
+    ]:
+        with subtests.test(text=text, kind=kind, value=value, unit=unit):
+            assert structure_vital_sign(text) == {
+                "kind": kind,
+                "value": value,
+                "unit": unit,
+                "components": [],
+            }
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_unparseable_input_returns_explicit_unknown_result(subtests):
+    for text in [
         "",
         "not a vital",
         "glucose 120 mg/dL",
         "blood pressure unavailable",
         None,
         object(),
-    ],
-)
-def test_unparseable_input_returns_explicit_unknown_result(text):
-    assert structure_vital_sign(text) == empty_vital_sign_result()
+    ]:
+        with subtests.test(text=text):
+            assert structure_vital_sign(text) == empty_vital_sign_result()
 
 
 def test_output_is_stable_across_runs():
