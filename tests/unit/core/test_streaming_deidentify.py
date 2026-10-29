@@ -374,27 +374,28 @@ def test_viterbi_rejects_invalid_emissions_in_both_backends(
         )
 
 
-@pytest.mark.parametrize("bad_score", [float("nan"), math.inf])
-def test_viterbi_rejects_invalid_biases_and_incremental_state(bad_score):
-    label_info = build_label_info({0: "O", 1: "S-NAME"})
-    with pytest.raises(ValueError, match="biases"):
-        viterbi_decode(
-            [[0.0, -1.0]],
-            label_info=label_info,
-            biases={VITERBI_BIAS_KEYS[0]: bad_score},
-        )
+def test_viterbi_rejects_invalid_biases_and_incremental_state(subtests):
+    for bad_score in [float("nan"), math.inf]:
+        with subtests.test(bad_score=bad_score):
+            label_info = build_label_info({0: "O", 1: "S-NAME"})
+            with pytest.raises(ValueError, match="biases"):
+                viterbi_decode(
+                    [[0.0, -1.0]],
+                    label_info=label_info,
+                    biases={VITERBI_BIAS_KEYS[0]: bad_score},
+                )
 
-    state = IncrementalViterbiState(
-        token_count=1,
-        scores=(0.0, bad_score),
-    )
-    with pytest.raises(ValueError, match="state scores"):
-        viterbi_decode_incremental(
-            [[0.0, -1.0]],
-            label_info=label_info,
-            biases={},
-            state=state,
-        )
+            state = IncrementalViterbiState(
+                token_count=1,
+                scores=(0.0, bad_score),
+            )
+            with pytest.raises(ValueError, match="state scores"):
+                viterbi_decode_incremental(
+                    [[0.0, -1.0]],
+                    label_info=label_info,
+                    biases={},
+                    state=state,
+                )
 
 
 @pytest.mark.skipif(

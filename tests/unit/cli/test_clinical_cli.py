@@ -127,9 +127,9 @@ def test_sdoh_sections_use_same_python_scope(tmp_path, capsys):
     assert len(expected) == 1
 
 
-@pytest.mark.parametrize(
-    "language,text,mentions",
-    [
+def test_relations_match_native_python_labels_and_offsets(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for language, text, mentions in [
         (
             "en",
             "Metformin 500 mg orally twice daily.",
@@ -149,102 +149,116 @@ def test_sdoh_sections_use_same_python_scope(tmp_path, capsys):
             "निमोनिया का इलाज एमोक्सिसिलिन से किया गया।",
             [("निमोनिया", "CONDITION"), ("एमोक्सिसिलिन", "MEDICATION")],
         ),
-    ],
-)
-def test_relations_match_native_python_labels_and_offsets(
-    tmp_path, capsys, language, text, mentions
-):
-    entities = [_entity(text, surface, label) for surface, label in mentions]
-    note, spans, _ = _files(tmp_path, text, entities)
-    expected = extract_relations(
-        text, _api_spans(entities), language=None if language == "en" else language
-    )
-    code, envelope = _run(capsys, "relations", note, spans, "--language", language)
-    assert code == 0
-    records = envelope["data"]["relations"]
-    assert expected
-    assert [
-        (
-            r["head"]["start"],
-            r["head"]["end"],
-            r["head"]["label"],
-            r["tail"]["start"],
-            r["tail"]["end"],
-            r["tail"]["label"],
-            r["relation_type"],
-            r["score"],
-        )
-        for r in records
-    ] == [
-        (
-            r.head.start,
-            r.head.end,
-            r.head.label,
-            r.tail.start,
-            r.tail.end,
-            r.tail.label,
-            r.relation_type,
-            r.score,
-        )
-        for r in expected
-    ]
-    output = json.dumps(envelope, ensure_ascii=False)
-    for surface, _ in mentions:
-        assert surface not in output
+    ]:
+        with subtests.test(language=language, text=text, mentions=mentions):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            entities = [_entity(text, surface, label) for surface, label in mentions]
+            note, spans, _ = _files(tmp_path, text, entities)
+            expected = extract_relations(
+                text,
+                _api_spans(entities),
+                language=None if language == "en" else language,
+            )
+            code, envelope = _run(
+                capsys, "relations", note, spans, "--language", language
+            )
+            assert code == 0
+            records = envelope["data"]["relations"]
+            assert expected
+            assert [
+                (
+                    r["head"]["start"],
+                    r["head"]["end"],
+                    r["head"]["label"],
+                    r["tail"]["start"],
+                    r["tail"]["end"],
+                    r["tail"]["label"],
+                    r["relation_type"],
+                    r["score"],
+                )
+                for r in records
+            ] == [
+                (
+                    r.head.start,
+                    r.head.end,
+                    r.head.label,
+                    r.tail.start,
+                    r.tail.end,
+                    r.tail.label,
+                    r.relation_type,
+                    r.score,
+                )
+                for r in expected
+            ]
+            output = json.dumps(envelope, ensure_ascii=False)
+            for surface, _ in mentions:
+                assert surface not in output
 
 
-@pytest.mark.parametrize("reference", [None, "2026-06-15", "2026-06-15T12:30:00Z"])
 def test_timeline_matches_bucket_api_with_explicit_date_link(
-    tmp_path, capsys, reference
+    subtests, tmp_path, capsys
 ):
-    text = "History of asthma. Fever began 3 days ago. Plan for surgery."
-    entities = [
-        _entity(text, "asthma", "CONDITION"),
-        _entity(text, "Fever", "SYMPTOM"),
-        _entity(text, "3 days ago", "DATE"),
-        _entity(text, "surgery", "PROCEDURE"),
-    ]
-    time_span = [entities[2]["start"], entities[2]["end"]]
-    entities[1]["metadata"] = {"clinical_time_span": time_span}
-    note, spans, _ = _files(tmp_path, text, entities)
-    options = () if reference is None else ("--reference-time", reference)
-    code, envelope = _run(capsys, "timeline", note, spans, *options)
-    assert code == 0
-    result = envelope["data"]
-    tagged = assert_context(text, _api_spans(entities), language="en")
-    times = normalize_temporal(
-        text, [entities[2]], None if reference is None else date(2026, 6, 15)
-    )
-    if reference:
-        for index in (1, 2):
-            tagged[index]["normalized_time"] = times[0].value
-    for span in tagged:
-        span["certainty"] = span["uncertainty"]
-    expected = build_timeline(tagged)
-    labels = {(e["start"], e["end"]): e["label"] for e in entities}
-    assert [
-        (r["start"], r["end"], r["label"], r["assertion"]) for r in result["events"]
-    ] == [
-        (e.start, e.end, labels[(e.start, e.end)], e.assertion.to_dict())
-        for e in expected.events
-    ]
-    assert result["lanes"] == expected.to_dict()["lanes"]
-    assert result["temporal"][0]["state"] == (
-        "unanchored" if reference is None else "normalized"
-    )
-    fever = next(r for r in result["events"] if r["start"] == entities[1]["start"])
-    assert fever["time_state"] == ("unanchored" if reference is None else "anchored")
-    output = json.dumps(envelope)
-    for protected in (
-        text,
-        "asthma",
-        "Fever",
-        "surgery",
-        "3 days ago",
-        "2026-06-12",
-        "2026-06-15",
-    ):
-        assert protected not in output
+    case_root = tmp_path
+    for reference in [None, "2026-06-15", "2026-06-15T12:30:00Z"]:
+        with subtests.test(reference=reference):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            text = "History of asthma. Fever began 3 days ago. Plan for surgery."
+            entities = [
+                _entity(text, "asthma", "CONDITION"),
+                _entity(text, "Fever", "SYMPTOM"),
+                _entity(text, "3 days ago", "DATE"),
+                _entity(text, "surgery", "PROCEDURE"),
+            ]
+            time_span = [entities[2]["start"], entities[2]["end"]]
+            entities[1]["metadata"] = {"clinical_time_span": time_span}
+            note, spans, _ = _files(tmp_path, text, entities)
+            options = () if reference is None else ("--reference-time", reference)
+            code, envelope = _run(capsys, "timeline", note, spans, *options)
+            assert code == 0
+            result = envelope["data"]
+            tagged = assert_context(text, _api_spans(entities), language="en")
+            times = normalize_temporal(
+                text, [entities[2]], None if reference is None else date(2026, 6, 15)
+            )
+            if reference:
+                for index in (1, 2):
+                    tagged[index]["normalized_time"] = times[0].value
+            for span in tagged:
+                span["certainty"] = span["uncertainty"]
+            expected = build_timeline(tagged)
+            labels = {(e["start"], e["end"]): e["label"] for e in entities}
+            assert [
+                (r["start"], r["end"], r["label"], r["assertion"])
+                for r in result["events"]
+            ] == [
+                (e.start, e.end, labels[(e.start, e.end)], e.assertion.to_dict())
+                for e in expected.events
+            ]
+            assert result["lanes"] == expected.to_dict()["lanes"]
+            assert result["temporal"][0]["state"] == (
+                "unanchored" if reference is None else "normalized"
+            )
+            fever = next(
+                r for r in result["events"] if r["start"] == entities[1]["start"]
+            )
+            assert fever["time_state"] == (
+                "unanchored" if reference is None else "anchored"
+            )
+            output = json.dumps(envelope)
+            for protected in (
+                text,
+                "asthma",
+                "Fever",
+                "surgery",
+                "3 days ago",
+                "2026-06-12",
+                "2026-06-15",
+            ):
+                assert protected not in output
 
 
 def test_timeline_does_not_infer_nearby_event_date(tmp_path, capsys):
@@ -335,92 +349,105 @@ def test_actual_analyze_formatter_result_is_accepted(tmp_path, capsys):
     assert "PRIVATE_" not in json.dumps(envelope)
 
 
-@pytest.mark.parametrize("name", ["sdoh", "relations", "timeline"])
-@pytest.mark.parametrize(
-    "change,expected",
-    [
-        (lambda p: p.update(ok=False), "clinical_spans_invalid"),
-        (lambda p: p.update(command="PRIVATE_COMMAND"), "clinical_spans_invalid"),
-        (
-            lambda p: p["data"].update(text="PRIVATE_OTHER_NOTE"),
-            "clinical_source_mismatch",
-        ),
-        (lambda p: p["data"].update(entities={}), "clinical_spans_invalid"),
-        (lambda p: p["data"]["entities"][0].update(start=-1), "clinical_span_invalid"),
-        (lambda p: p["data"]["entities"][0].update(end=9999), "clinical_span_invalid"),
-        (
-            lambda p: p["data"]["entities"][0].update(start=True),
-            "clinical_span_invalid",
-        ),
-        (lambda p: p["data"]["entities"][0].update(end="5"), "clinical_span_invalid"),
-        (
-            lambda p: p["data"]["entities"][0].update(text="PRIVATE_SURFACE"),
-            "clinical_source_mismatch",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(label="PRIVATE_LABEL"),
-            "clinical_label_unsupported",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(label="PERSON张三"),
-            "clinical_label_unsupported",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(label="P/E/R/S/O/N"),
-            "clinical_label_unsupported",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(confidence=True),
-            "clinical_span_invalid",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(confidence=2),
-            "clinical_span_invalid",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(confidence=10**400),
-            "clinical_span_invalid",
-        ),
-        (lambda p: p["data"]["entities"][0].update(score=0.3), "clinical_span_invalid"),
-        (
-            lambda p: p["data"]["entities"][0].update(
-                metadata={"clinical_context": {"temporality": "PRIVATE_AXIS"}}
+def test_malformed_spans_fail_before_any_processing(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for name in ["sdoh", "relations", "timeline"]:
+        for change, expected in [
+            (lambda p: p.update(ok=False), "clinical_spans_invalid"),
+            (lambda p: p.update(command="PRIVATE_COMMAND"), "clinical_spans_invalid"),
+            (
+                lambda p: p["data"].update(text="PRIVATE_OTHER_NOTE"),
+                "clinical_source_mismatch",
             ),
-            "clinical_span_invalid",
-        ),
-        (
-            lambda p: p["data"]["entities"][0].update(
-                metadata={"clinical_time_span": [0, 5]}
+            (lambda p: p["data"].update(entities={}), "clinical_spans_invalid"),
+            (
+                lambda p: p["data"]["entities"][0].update(start=-1),
+                "clinical_span_invalid",
             ),
-            "clinical_time_link_invalid",
-        ),
-        (
-            lambda p: p["data"].update(entities=p["data"]["entities"] * 513),
-            "clinical_spans_too_many",
-        ),
-    ],
-)
-def test_malformed_spans_fail_before_any_processing(
-    tmp_path, capsys, monkeypatch, name, change, expected
-):
-    note, spans, payload = _files(
-        tmp_path, "Fever.", [_entity("Fever.", "Fever", "SYMPTOM")]
-    )
-    change(payload)
-    spans.write_text(json.dumps(payload))
-    processing = Mock(side_effect=AssertionError("must not process"))
-    monkeypatch.setattr(clinical, "_sdoh", processing)
-    monkeypatch.setattr(clinical, "_relations", processing)
-    monkeypatch.setattr(clinical, "_timeline", processing)
-    code, envelope = _run(capsys, name, note, spans)
-    assert code == 2 and envelope["error"]["code"] == expected
-    assert "PRIVATE_" not in json.dumps(envelope)
-    processing.assert_not_called()
+            (
+                lambda p: p["data"]["entities"][0].update(end=9999),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(start=True),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(end="5"),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(text="PRIVATE_SURFACE"),
+                "clinical_source_mismatch",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(label="PRIVATE_LABEL"),
+                "clinical_label_unsupported",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(label="PERSON张三"),
+                "clinical_label_unsupported",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(label="P/E/R/S/O/N"),
+                "clinical_label_unsupported",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(confidence=True),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(confidence=2),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(confidence=10**400),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(score=0.3),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(
+                    metadata={"clinical_context": {"temporality": "PRIVATE_AXIS"}}
+                ),
+                "clinical_span_invalid",
+            ),
+            (
+                lambda p: p["data"]["entities"][0].update(
+                    metadata={"clinical_time_span": [0, 5]}
+                ),
+                "clinical_time_link_invalid",
+            ),
+            (
+                lambda p: p["data"].update(entities=p["data"]["entities"] * 513),
+                "clinical_spans_too_many",
+            ),
+        ]:
+            with subtests.test(name=name, change=change, expected=expected):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                capsys.readouterr()
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    note, spans, payload = _files(
+                        tmp_path, "Fever.", [_entity("Fever.", "Fever", "SYMPTOM")]
+                    )
+                    change(payload)
+                    spans.write_text(json.dumps(payload))
+                    processing = Mock(side_effect=AssertionError("must not process"))
+                    monkeypatch.setattr(clinical, "_sdoh", processing)
+                    monkeypatch.setattr(clinical, "_relations", processing)
+                    monkeypatch.setattr(clinical, "_timeline", processing)
+                    code, envelope = _run(capsys, name, note, spans)
+                    assert code == 2 and envelope["error"]["code"] == expected
+                    assert "PRIVATE_" not in json.dumps(envelope)
+                    processing.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
+def test_invalid_json_and_encoding_have_controlled_codes(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for raw in [
         b'{"entities":[],"entities":[]}',
         b'{"entities":[],"x":NaN}',
         b'{"entities":[],"x":Infinity}',
@@ -429,22 +456,26 @@ def test_malformed_spans_fail_before_any_processing(
         b"[" * 1000 + b"]" * 1000,
         b"\xff",
         b'{"entities":[],"x":' + b"[" * 40 + b"0" + b"]" * 40 + b"}",
-    ],
-)
-def test_invalid_json_and_encoding_have_controlled_codes(tmp_path, capsys, raw):
-    note, spans, _ = _files(tmp_path, "", [])
-    spans.write_bytes(raw)
-    code, envelope = _run(capsys, "sdoh", note, spans)
-    assert code == 2
-    assert envelope["error"]["code"] in {
-        "clinical_json_invalid",
-        "clinical_input_encoding",
-    }
+    ]:
+        with subtests.test(raw=raw):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            note, spans, _ = _files(tmp_path, "", [])
+            spans.write_bytes(raw)
+            code, envelope = _run(capsys, "sdoh", note, spans)
+            assert code == 2
+            assert envelope["error"]["code"] in {
+                "clinical_json_invalid",
+                "clinical_input_encoding",
+            }
 
 
-@pytest.mark.parametrize(
-    "reference",
-    [
+def test_bad_reference_rejected_before_reading_or_processing(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for reference in [
         "PRIVATE_REFERENCE",
         "2026-02-30",
         "20260615",
@@ -453,73 +484,80 @@ def test_invalid_json_and_encoding_have_controlled_codes(tmp_path, capsys, raw):
         "٢٠٢٦-٠٦-١٥",
         "2026-06-15T12:00:00+99:00",
         "2026-06-15T12:00:00+00:60",
-    ],
-)
-def test_bad_reference_rejected_before_reading_or_processing(
-    tmp_path, capsys, monkeypatch, reference
-):
-    reader = Mock(side_effect=AssertionError("must not read"))
-    monkeypatch.setattr(clinical, "_read", reader)
-    code, envelope = _run(
-        capsys,
-        "timeline",
-        tmp_path / "absent",
-        tmp_path / "spans",
-        "--reference-time",
-        reference,
-    )
-    assert code == 2 and envelope["error"]["code"] == "clinical_reference_invalid"
-    reader.assert_not_called()
+    ]:
+        with subtests.test(reference=reference):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                reader = Mock(side_effect=AssertionError("must not read"))
+                monkeypatch.setattr(clinical, "_read", reader)
+                code, envelope = _run(
+                    capsys,
+                    "timeline",
+                    tmp_path / "absent",
+                    tmp_path / "spans",
+                    "--reference-time",
+                    reference,
+                )
+                assert (
+                    code == 2
+                    and envelope["error"]["code"] == "clinical_reference_invalid"
+                )
+                reader.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "name,language,options",
-    [
+def test_unsupported_language_or_options_never_read_inputs(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for name, language, options in [
         ("sdoh", "de", ()),
         ("timeline", "zh", ()),
         ("relations", "fr", ()),
         ("sdoh", "PRIVATE_LANGUAGE", ()),
         ("relations", "hi", ("--sections", "PRIVATE_SECTIONS")),
-    ],
-)
-def test_unsupported_language_or_options_never_read_inputs(
-    tmp_path, capsys, monkeypatch, name, language, options
-):
-    reader = Mock(side_effect=AssertionError("must not read"))
-    monkeypatch.setattr(clinical, "_read", reader)
-    code, envelope = _run(
-        capsys,
-        name,
-        tmp_path / "absent",
-        tmp_path / "spans",
-        "--language",
-        language,
-        *options,
-    )
-    assert code == 2
-    assert envelope["error"]["code"] in {
-        "clinical_language_unsupported",
-        "clinical_options_unsupported",
-    }
-    reader.assert_not_called()
+    ]:
+        with subtests.test(name=name, language=language, options=options):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                reader = Mock(side_effect=AssertionError("must not read"))
+                monkeypatch.setattr(clinical, "_read", reader)
+                code, envelope = _run(
+                    capsys,
+                    name,
+                    tmp_path / "absent",
+                    tmp_path / "spans",
+                    "--language",
+                    language,
+                    *options,
+                )
+                assert code == 2
+                assert envelope["error"]["code"] in {
+                    "clinical_language_unsupported",
+                    "clinical_options_unsupported",
+                }
+                reader.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "options",
-    [
+def test_parser_errors_never_echo_private_arguments(subtests, capsys):
+    for options in [
         ["--private-option", "PRIVATE_VALUE"],
         ["--reference-time", "PRIVATE_VALUE"],
         ["--spans"],
         [],
-    ],
-)
-def test_parser_errors_never_echo_private_arguments(capsys, options):
-    code = main(["clinical", "sdoh", "--json", *options])
-    captured = capsys.readouterr()
-    assert captured.err == ""
-    assert code == 2
-    assert json.loads(captured.out)["error"]["code"] == "clinical_arguments_invalid"
-    assert "PRIVATE" not in captured.out
+    ]:
+        with subtests.test(options=options):
+            capsys.readouterr()
+            code = main(["clinical", "sdoh", "--json", *options])
+            captured = capsys.readouterr()
+            assert captured.err == ""
+            assert code == 2
+            assert (
+                json.loads(captured.out)["error"]["code"]
+                == "clinical_arguments_invalid"
+            )
+            assert "PRIVATE" not in captured.out
 
 
 def test_non_json_errors_and_global_config_path_are_private(tmp_path, capsys):
@@ -564,26 +602,32 @@ def test_bounded_reader_rejects_unsafe_note_inputs(tmp_path, capsys, target):
     }
 
 
-@pytest.mark.parametrize(
-    "section",
-    [
+def test_invalid_sections_fail_before_processing(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for section in [
         [{"start": 1, "end": 6, "label": "social_history"}],
         [{"start": 0, "end": 5, "label": "social_history"}],
         [{"start": 0, "end": 6, "label": "PRIVATE_SECTION"}],
         [{"start": False, "end": 6, "label": "social_history"}],
-    ],
-)
-def test_invalid_sections_fail_before_processing(
-    tmp_path, capsys, monkeypatch, section
-):
-    note, spans, _ = _files(tmp_path, "Fever.", [])
-    section_file = tmp_path / "PRIVATE_SECTIONS.json"
-    section_file.write_text(json.dumps(section))
-    processing = Mock()
-    monkeypatch.setattr(clinical, "_sdoh", processing)
-    code, envelope = _run(capsys, "sdoh", note, spans, "--sections", str(section_file))
-    assert code == 2 and envelope["error"]["code"] == "clinical_sections_invalid"
-    processing.assert_not_called()
+    ]:
+        with subtests.test(section=section):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                note, spans, _ = _files(tmp_path, "Fever.", [])
+                section_file = tmp_path / "PRIVATE_SECTIONS.json"
+                section_file.write_text(json.dumps(section))
+                processing = Mock()
+                monkeypatch.setattr(clinical, "_sdoh", processing)
+                code, envelope = _run(
+                    capsys, "sdoh", note, spans, "--sections", str(section_file)
+                )
+                assert (
+                    code == 2
+                    and envelope["error"]["code"] == "clinical_sections_invalid"
+                )
+                processing.assert_not_called()
 
 
 def test_output_is_private_new_file_and_refuses_overwrite(
@@ -660,48 +704,66 @@ def test_processor_console_output_is_discarded(tmp_path, capsys, monkeypatch):
     assert "PRIVATE" not in json.dumps(envelope)
 
 
-@pytest.mark.parametrize("name", ["sdoh", "relations", "timeline"])
-def test_empty_note_and_spans_are_valid_offline(tmp_path, capsys, name):
-    note, spans, _ = _files(tmp_path, "", [])
-    code, envelope = _run(capsys, name, note, spans)
-    assert code == 0 and envelope["data"]["input_span_count"] == 0
+def test_empty_note_and_spans_are_valid_offline(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for name in ["sdoh", "relations", "timeline"]:
+        with subtests.test(name=name):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            note, spans, _ = _files(tmp_path, "", [])
+            code, envelope = _run(capsys, name, note, spans)
+            assert code == 0 and envelope["data"]["input_span_count"] == 0
 
 
-@pytest.mark.parametrize("boundary", ["read", "decode", "json", "write", "processor"])
-def test_clinical_refusals_discard_private_exception_context(
-    tmp_path, monkeypatch, boundary
-):
-    from openmed.cli._output import CliError
-    from openmed.cli.main import build_parser
+def test_clinical_refusals_discard_private_exception_context(subtests, tmp_path):
+    case_root = tmp_path
+    for boundary in ["read", "decode", "json", "write", "processor"]:
+        with subtests.test(boundary=boundary):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.cli._output import CliError
+                from openmed.cli.main import build_parser
 
-    if boundary == "read":
-        call = lambda: clinical._read(str(tmp_path / "PRIVATE_SOURCE"), 16)
-    elif boundary == "decode":
-        call = lambda: clinical._decode(b"\xffPRIVATE_SOURCE")
-    elif boundary == "json":
-        call = lambda: clinical._load_json(b'{"PRIVATE_SOURCE":')
-    elif boundary == "write":
+                if boundary == "read":
+                    call = lambda: clinical._read(str(tmp_path / "PRIVATE_SOURCE"), 16)
+                elif boundary == "decode":
+                    call = lambda: clinical._decode(b"\xffPRIVATE_SOURCE")
+                elif boundary == "json":
+                    call = lambda: clinical._load_json(b'{"PRIVATE_SOURCE":')
+                elif boundary == "write":
 
-        def fail(*args, **kwargs):
-            raise OSError("PRIVATE_OUTPUT_DETAIL")
+                    def fail(*args, **kwargs):
+                        raise OSError("PRIVATE_OUTPUT_DETAIL")
 
-        monkeypatch.setattr(clinical.json, "dump", fail)
-        call = lambda: clinical._write_new(str(tmp_path / "output.json"), {})
-    else:
-        note, spans, _ = _files(tmp_path, "", [])
-        monkeypatch.setattr(
-            clinical,
-            "_sdoh",
-            Mock(side_effect=RuntimeError("PRIVATE_PROCESSOR_DETAIL")),
-        )
-        args = build_parser().parse_args(
-            ["clinical", "sdoh", "--note", str(note), "--spans", str(spans), "--json"]
-        )
-        call = lambda: clinical._handle_clinical(args)
-    with pytest.raises(CliError) as caught:
-        call()
-    assert caught.value.__context__ is None
-    assert caught.value.__cause__ is None
+                    monkeypatch.setattr(clinical.json, "dump", fail)
+                    call = lambda: clinical._write_new(
+                        str(tmp_path / "output.json"), {}
+                    )
+                else:
+                    note, spans, _ = _files(tmp_path, "", [])
+                    monkeypatch.setattr(
+                        clinical,
+                        "_sdoh",
+                        Mock(side_effect=RuntimeError("PRIVATE_PROCESSOR_DETAIL")),
+                    )
+                    args = build_parser().parse_args(
+                        [
+                            "clinical",
+                            "sdoh",
+                            "--note",
+                            str(note),
+                            "--spans",
+                            str(spans),
+                            "--json",
+                        ]
+                    )
+                    call = lambda: clinical._handle_clinical(args)
+                with pytest.raises(CliError) as caught:
+                    call()
+                assert caught.value.__context__ is None
+                assert caught.value.__cause__ is None
 
 
 class _PrivateClinicalCode(str):

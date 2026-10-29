@@ -80,134 +80,171 @@ def test_fixture_is_digest_stable_and_accepted_by_signed_bridge() -> None:
     } == {"conformance": (0, 1), "completeness": (1, 1), "plausibility": (0, 1)}
 
 
-@pytest.mark.parametrize(
-    "sentinel", ["SYNTHETIC_PRIVATE_TEXT", "نام ساختگی", "患者架空"]
-)
 def test_free_text_and_source_identifiers_never_affect_output(
-    sentinel: str, tmp_path: Path
+    subtests, tmp_path
 ) -> None:
-    payload = _payload()
-    original = _normalize(payload, tmp_path)
-    payload["Metadata"][0]["cdmSourceName"] = sentinel
-    payload["Overview"] = {"notes": sentinel}
-    payload["privatePath"] = sentinel
-    for row in payload["CheckResults"]:
-        for field in (
-            "checkId",
-            "checkName",
-            "queryText",
-            "notes",
-            "notesValue",
-            "checkDescription",
-            "error",
-            "notApplicableReason",
-            "cdmFieldName",
-            "conceptId",
-            "unknownField",
-        ):
-            row[field] = sentinel
-    output = _normalize(payload, tmp_path)
-    assert output == original
-    assert sentinel not in canonical_json(output)
+    case_root = tmp_path
+    for sentinel in ["SYNTHETIC_PRIVATE_TEXT", "نام ساختگی", "患者架空"]:
+        with subtests.test(sentinel=sentinel):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            original = _normalize(payload, tmp_path)
+            payload["Metadata"][0]["cdmSourceName"] = sentinel
+            payload["Overview"] = {"notes": sentinel}
+            payload["privatePath"] = sentinel
+            for row in payload["CheckResults"]:
+                for field in (
+                    "checkId",
+                    "checkName",
+                    "queryText",
+                    "notes",
+                    "notesValue",
+                    "checkDescription",
+                    "error",
+                    "notApplicableReason",
+                    "cdmFieldName",
+                    "conceptId",
+                    "unknownField",
+                ):
+                    row[field] = sentinel
+            output = _normalize(payload, tmp_path)
+            assert output == original
+            assert sentinel not in canonical_json(output)
 
 
-@pytest.mark.parametrize(
-    "version", [None, "", "1.0.0", "2.8.9", "2.9.1", "3.0.0", [], {}]
-)
-def test_unknown_or_missing_versions_are_typed_unsupported(
-    version: object, tmp_path: Path
-) -> None:
-    payload = _payload()
-    payload["Metadata"][0]["dqdVersion"] = version
-    with pytest.raises(OmopQualityUnsupportedError, match="^dqd_version_unsupported$"):
-        _normalize(payload, tmp_path)
+def test_unknown_or_missing_versions_are_typed_unsupported(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for version in [None, "", "1.0.0", "2.8.9", "2.9.1", "3.0.0", [], {}]:
+        with subtests.test(version=version):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["Metadata"][0]["dqdVersion"] = version
+            with pytest.raises(
+                OmopQualityUnsupportedError, match="^dqd_version_unsupported$"
+            ):
+                _normalize(payload, tmp_path)
 
 
-@pytest.mark.parametrize("metadata", [None, {}, [], [{}, {}], [None]])
-def test_unknown_metadata_shapes_are_unsupported(
-    metadata: object, tmp_path: Path
-) -> None:
-    payload = _payload()
-    payload["Metadata"] = metadata
-    with pytest.raises(OmopQualityUnsupportedError):
-        _normalize(payload, tmp_path)
+def test_unknown_metadata_shapes_are_unsupported(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for metadata in [None, {}, [], [{}, {}], [None]]:
+        with subtests.test(metadata=metadata):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["Metadata"] = metadata
+            with pytest.raises(OmopQualityUnsupportedError):
+                _normalize(payload, tmp_path)
 
 
-@pytest.mark.parametrize("field", ["category", "cdmTableName"])
-@pytest.mark.parametrize("value", ["SYNTHETIC_PRIVATE_TEXT", "", None, [], {}])
-def test_unknown_categories_and_tables_never_leak(
-    field: str, value: object, tmp_path: Path
-) -> None:
-    payload = _payload()
-    payload["CheckResults"][0][field] = value
-    with pytest.raises(OmopQualityUnsupportedError) as caught:
-        _normalize(payload, tmp_path)
-    assert "SYNTHETIC_PRIVATE_TEXT" not in str(caught.value)
+def test_unknown_categories_and_tables_never_leak(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field in ["category", "cdmTableName"]:
+        for value in ["SYNTHETIC_PRIVATE_TEXT", "", None, [], {}]:
+            with subtests.test(field=field, value=value):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                payload = _payload()
+                payload["CheckResults"][0][field] = value
+                with pytest.raises(OmopQualityUnsupportedError) as caught:
+                    _normalize(payload, tmp_path)
+                assert "SYNTHETIC_PRIVATE_TEXT" not in str(caught.value)
 
 
-@pytest.mark.parametrize("flags", list(itertools.product((0, 1), repeat=4)))
 def test_only_unambiguous_executed_zero_violation_checks_pass(
-    flags: tuple[int, ...], tmp_path: Path
+    subtests, tmp_path
 ) -> None:
-    payload = _payload()
-    row = payload["CheckResults"][0]
-    row.update(zip(("failed", "passed", "isError", "notApplicable"), flags))
-    payload["CheckResults"] = [row]
-    check = _normalize(payload, tmp_path)["checks"][0]
-    assert (check["status"] == "pass") is (flags == (0, 1, 0, 0))
-    if flags[2] or flags[3]:
-        assert check["status"] == "unknown"
+    case_root = tmp_path
+    for flags in list(itertools.product((0, 1), repeat=4)):
+        with subtests.test(flags=flags):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            row = payload["CheckResults"][0]
+            row.update(zip(("failed", "passed", "isError", "notApplicable"), flags))
+            payload["CheckResults"] = [row]
+            check = _normalize(payload, tmp_path)["checks"][0]
+            assert (check["status"] == "pass") is (flags == (0, 1, 0, 0))
+            if flags[2] or flags[3]:
+                assert check["status"] == "unknown"
 
 
-@pytest.mark.parametrize("field", ["failed", "passed", "isError", "notApplicable"])
-@pytest.mark.parametrize("value", [None, "0", -1, 2, 0.5, {}, []])
 def test_unavailable_flags_abstain_and_invalid_flags_fail_closed(
-    field: str, value: object, tmp_path: Path
+    subtests, tmp_path
 ) -> None:
-    payload = _payload()
-    payload["CheckResults"][0][field] = value
-    if value is None:
-        assert _normalize(payload, tmp_path)["checks"][0]["status"] == "unknown"
-    else:
-        with pytest.raises(OmopQualityProtocolError, match="dqd_flags_invalid"):
-            _normalize(payload, tmp_path)
+    case_root = tmp_path
+    for field in ["failed", "passed", "isError", "notApplicable"]:
+        for value in [None, "0", -1, 2, 0.5, {}, []]:
+            with subtests.test(field=field, value=value):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                payload = _payload()
+                payload["CheckResults"][0][field] = value
+                if value is None:
+                    assert (
+                        _normalize(payload, tmp_path)["checks"][0]["status"]
+                        == "unknown"
+                    )
+                else:
+                    with pytest.raises(
+                        OmopQualityProtocolError, match="dqd_flags_invalid"
+                    ):
+                        _normalize(payload, tmp_path)
 
 
-@pytest.mark.parametrize("count", [-1, 1.5, True, "2", [], {}, 2**53, 10**400])
-def test_invalid_counts_are_typed_errors(count: object, tmp_path: Path) -> None:
-    payload = _payload()
-    payload["CheckResults"][0]["numViolatedRows"] = count
-    with pytest.raises(OmopQualityProtocolError, match="dqd_count_invalid"):
-        _normalize(payload, tmp_path)
+def test_invalid_counts_are_typed_errors(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for count in [-1, 1.5, True, "2", [], {}, 2**53, 10**400]:
+        with subtests.test(count=count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["CheckResults"][0]["numViolatedRows"] = count
+            with pytest.raises(OmopQualityProtocolError, match="dqd_count_invalid"):
+                _normalize(payload, tmp_path)
 
 
-@pytest.mark.parametrize("count", [None, 0, 0.0, 2, 2.0])
 def test_missing_counts_abstain_and_nonzero_threshold_passes_preserve_counts(
-    count: object, tmp_path: Path
+    subtests, tmp_path
 ) -> None:
-    payload = _payload()
-    payload["CheckResults"][0]["numViolatedRows"] = count
-    check = _normalize(payload, tmp_path)["checks"][0]
-    assert check["affected_rows"] == (0 if count is None else int(count))
-    assert check["status"] == ("pass" if count == 0 else "unknown")
+    case_root = tmp_path
+    for count in [None, 0, 0.0, 2, 2.0]:
+        with subtests.test(count=count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["CheckResults"][0]["numViolatedRows"] = count
+            check = _normalize(payload, tmp_path)["checks"][0]
+            assert check["affected_rows"] == (0 if count is None else int(count))
+            assert check["status"] == ("pass" if count == 0 else "unknown")
 
 
-@pytest.mark.parametrize(
-    "field", ["failed", "passed", "isError", "notApplicable", "numViolatedRows"]
-)
-def test_missing_required_fields_fail_closed(field: str, tmp_path: Path) -> None:
-    payload = _payload()
-    del payload["CheckResults"][0][field]
-    with pytest.raises(OmopQualityProtocolError, match="dqd_check_fields_missing"):
-        _normalize(payload, tmp_path)
+def test_missing_required_fields_fail_closed(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field in ["failed", "passed", "isError", "notApplicable", "numViolatedRows"]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            del payload["CheckResults"][0][field]
+            with pytest.raises(
+                OmopQualityProtocolError, match="dqd_check_fields_missing"
+            ):
+                _normalize(payload, tmp_path)
 
 
-@pytest.mark.parametrize("checks", [None, {}, [None], ["SYNTHETIC_PRIVATE_TEXT"]])
-def test_invalid_check_shapes_fail_closed(checks: object, tmp_path: Path) -> None:
-    payload = _payload()
-    payload["CheckResults"] = checks
-    with pytest.raises(OmopQualityProtocolError):
-        _normalize(payload, tmp_path)
+def test_invalid_check_shapes_fail_closed(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for checks in [None, {}, [None], ["SYNTHETIC_PRIVATE_TEXT"]]:
+        with subtests.test(checks=checks):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            payload = _payload()
+            payload["CheckResults"] = checks
+            with pytest.raises(OmopQualityProtocolError):
+                _normalize(payload, tmp_path)
 
 
 def test_empty_results_do_not_create_a_pass(tmp_path: Path) -> None:
@@ -225,9 +262,9 @@ def test_empty_results_do_not_create_a_pass(tmp_path: Path) -> None:
     assert report.requires_review
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
+def test_malformed_json_is_value_free(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for raw in [
         b'{"SYNTHETIC_PRIVATE_TEXT":',
         b"\xff",
         b"[]",
@@ -236,16 +273,19 @@ def test_empty_results_do_not_create_a_pass(tmp_path: Path) -> None:
         b'{"value":NaN}',
         b'{"value":Infinity}',
         b"[" * 2000 + b"]" * 2000,
-    ],
-)
-def test_malformed_json_is_value_free(raw: bytes, tmp_path: Path) -> None:
-    path = tmp_path / "SYNTHETIC_PRIVATE_PATH.json"
-    path.write_bytes(raw)
-    fixture = load_frozen_omop_quality_fixture(FIXTURES / "quality_reconciliation.json")
-    with pytest.raises(OmopQualityProtocolError) as caught:
-        normalize_dqd_results_file(path, quality_input=fixture.quality_input)
-    assert "SYNTHETIC_PRIVATE" not in str(caught.value)
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(raw=raw):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "SYNTHETIC_PRIVATE_PATH.json"
+            path.write_bytes(raw)
+            fixture = load_frozen_omop_quality_fixture(
+                FIXTURES / "quality_reconciliation.json"
+            )
+            with pytest.raises(OmopQualityProtocolError) as caught:
+                normalize_dqd_results_file(path, quality_input=fixture.quality_input)
+            assert "SYNTHETIC_PRIVATE" not in str(caught.value)
+            assert caught.value.__context__ is None
 
 
 def test_missing_file_and_bounds_are_value_free(
