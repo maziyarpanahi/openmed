@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).
+
 - Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add deterministic synthetic dataset partitions that preserve shared trajectory,
