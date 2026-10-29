@@ -348,9 +348,19 @@ def test_nested_record_objects_reject_text_injection(name: str) -> None:
     record = _record_payloads()[name]
     objects: list[tuple[str | int, ...]] = []
 
+    seen: set[tuple[Any, ...]] = set()
+
     def collect(value: Any, path: tuple[str | int, ...]) -> None:
         if isinstance(value, dict):
-            objects.append(path)
+            # List items with the same keys at the same place share a schema
+            # node, so one injection per node covers them.
+            shape = (
+                tuple("*" if isinstance(part, int) else part for part in path),
+                frozenset(value),
+            )
+            if shape not in seen:
+                seen.add(shape)
+                objects.append(path)
             for key, item in value.items():
                 collect(item, (*path, key))
         elif isinstance(value, list):
