@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add deterministic metadata-only native-review selection with scarcity, disagreement,
   diversity ties, and simultaneous language, label and total budget caps (#2863).
 
+- Added a bounded, value-free synthetic memorization audit that fingerprints
+  protected reference material, blocks exact, paraphrase-style and exposure
+  matches on configurable signals, and renders canonical digest-only JSON
+  evidence with offline golden tests (#2853).
+
+- Added a strict, fail-closed synthetic dataset license and lineage manifest
+  validator that binds source class, SPDX license expression, generator digest,
+  model provenance, bounded dependencies and the redistribution decision, and
+  renders canonical reason-code-only reports (#3099).
+
 - Add language coverage diffs with bounded offline contracts, synthetic controls
   and documented behavior (#3101).
 
