@@ -24,6 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check that pairs schema validation with offset invariants and rejects records
   claiming real PHI (#3895).
 
+- Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
+  PHI truth manifest addressed by segment, field, repetition, component,
+  subcomponent and raw-text offsets across encoding-character variants, escape
+  sequences, repetitions, timestamp precisions, free text and Z-segments. A
+  value-free leakage harness reports residual PHI after `redact_hl7v2()` by
+  field position and label (#3884).
+
+- Generate seeded synthetic C-CDA documents (CCD, discharge summary, progress
+  note) with element-level PHI truth, narrative-to-structured links and
+  placeholder codes, plus a value-free leakage harness over `redact_cda()`
+  that reports residuals by element path and label and rejects remote schema
+  or entity-bearing options (#3885).
+
 - Added deterministic clinical language-pack readiness matrices with closed
   capability and state vocabularies, `sha256:` evidence digests, alias-normalized
   locale folding, byte-stable JSON/Markdown rendering and registry-derived
