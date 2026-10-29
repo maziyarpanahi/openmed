@@ -17,9 +17,8 @@ from openmed.multimodal.asset_manifest import (
 VALID_DIGEST = "a" * 64
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_valid_asset_examples_round_trip_with_stable_json(subtests):
+    for payload in [
         {
             "asset_id": "img-001",
             "media_type": "image/png",
@@ -51,15 +50,14 @@ VALID_DIGEST = "a" * 64
             "byte_size": 8192,
             "duration_seconds": 3.5,
         },
-    ],
-)
-def test_valid_asset_examples_round_trip_with_stable_json(payload):
-    manifest = AssetManifest.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            manifest = AssetManifest.from_dict(payload)
 
-    assert AssetManifest.from_json(manifest.to_json()) == manifest
-    assert json.loads(manifest.to_json()) == manifest.to_dict()
-    assert list(json.loads(manifest.to_json())) == sorted(manifest.to_dict())
-    assert manifest.to_json() == manifest.to_json()
+            assert AssetManifest.from_json(manifest.to_json()) == manifest
+            assert json.loads(manifest.to_json()) == manifest.to_dict()
+            assert list(json.loads(manifest.to_json())) == sorted(manifest.to_dict())
+            assert manifest.to_json() == manifest.to_json()
 
 
 def test_to_dict_uses_stable_order_and_omits_unset_fields():
@@ -84,9 +82,8 @@ def test_to_dict_uses_stable_order_and_omits_unset_fields():
     assert "width" not in manifest.to_dict()
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_invalid_field_values_fail_closed(subtests):
+    for field, value in [
         ("sha256", "A" * 64),
         ("sha256", "abc"),
         ("sha256", "g" * 64),
@@ -110,25 +107,23 @@ def test_to_dict_uses_stable_order_and_omits_unset_fields():
         ("version", True),
         ("media_type", "text/plain"),
         ("media_type", "Image/PNG"),
-    ],
-)
-def test_invalid_field_values_fail_closed(field, value):
-    payload = {
-        "version": 1,
-        "asset_id": "asset-001",
-        "media_type": "image/png",
-        "sha256": VALID_DIGEST,
-        "byte_size": 1024,
-    }
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = {
+                "version": 1,
+                "asset_id": "asset-001",
+                "media_type": "image/png",
+                "sha256": VALID_DIGEST,
+                "byte_size": 1024,
+            }
+            payload[field] = value
 
-    with pytest.raises(AssetManifestError):
-        AssetManifest.from_dict(payload)
+            with pytest.raises(AssetManifestError):
+                AssetManifest.from_dict(payload)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_missing_unknown_and_non_mapping_payloads_fail_closed(subtests):
+    for payload in [
         {"asset_id": "asset-001", "media_type": "image/png", "byte_size": 1},
         {
             "asset_id": "asset-001",
@@ -138,11 +133,10 @@ def test_invalid_field_values_fail_closed(field, value):
             "description": "Patient note",
         },
         "not-a-dict",
-    ],
-)
-def test_missing_unknown_and_non_mapping_payloads_fail_closed(payload):
-    with pytest.raises(AssetManifestError):
-        AssetManifest.from_dict(payload)  # type: ignore[arg-type]
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(AssetManifestError):
+                AssetManifest.from_dict(payload)  # type: ignore[arg-type]
 
 
 def test_unknown_free_text_field_fails_without_echo():
@@ -160,36 +154,35 @@ def test_unknown_free_text_field_fails_without_echo():
     assert payload["description"] not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_paths_urls_and_location_like_values_fail_without_echo(subtests):
+    for field, value in [
         ("asset_id", "/tmp/patient.png"),
         ("asset_id", "s3://bucket/patient.png"),
         ("asset_id", "C:\\patient\\scan.dcm"),
         ("media_type", "https://example.test/image/png"),
         ("sha256", "/tmp/" + VALID_DIGEST),
-    ],
-)
-def test_paths_urls_and_location_like_values_fail_without_echo(field, value):
-    payload = {
-        "version": 1,
-        "asset_id": "asset-001",
-        "media_type": "image/png",
-        "sha256": VALID_DIGEST,
-        "byte_size": 1024,
-    }
-    payload[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = {
+                "version": 1,
+                "asset_id": "asset-001",
+                "media_type": "image/png",
+                "sha256": VALID_DIGEST,
+                "byte_size": 1024,
+            }
+            payload[field] = value
 
-    with pytest.raises(AssetManifestError) as exc_info:
-        AssetManifest.from_dict(payload)
+            with pytest.raises(AssetManifestError) as exc_info:
+                AssetManifest.from_dict(payload)
 
-    assert value not in str(exc_info.value)
+            assert value not in str(exc_info.value)
 
 
-@pytest.mark.parametrize("payload", ["{", b"\xff", 42])
-def test_malformed_json_fails_closed(payload):
-    with pytest.raises(AssetManifestError):
-        AssetManifest.from_json(payload)  # type: ignore[arg-type]
+def test_malformed_json_fails_closed(subtests):
+    for payload in ["{", b"\xff", 42]:
+        with subtests.test(payload=payload):
+            with pytest.raises(AssetManifestError):
+                AssetManifest.from_json(payload)  # type: ignore[arg-type]
 
 
 def test_duplicate_json_fields_fail_closed_without_echoing_values() -> None:

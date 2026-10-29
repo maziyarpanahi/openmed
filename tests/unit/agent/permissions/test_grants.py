@@ -132,48 +132,41 @@ def test_missing_grant_fails_closed_before_dispatch() -> None:
     _assert_not_dispatched(None, _request(), CapabilityGrantRequiredError)
 
 
-@pytest.mark.parametrize("now", [EXPIRES_AT, EXPIRES_AT + 1])
-def test_expired_grant_fails_closed_before_dispatch(now: int) -> None:
-    _assert_not_dispatched(
-        _manifest(), _request(), CapabilityGrantExpiredError, now=now
-    )
+def test_expired_grant_fails_closed_before_dispatch(subtests) -> None:
+    for now in [EXPIRES_AT, EXPIRES_AT + 1]:
+        with subtests.test(now=now):
+            _assert_not_dispatched(
+                _manifest(), _request(), CapabilityGrantExpiredError, now=now
+            )
 
 
-@pytest.mark.parametrize(
-    ("field", "broadened_value"),
-    [
+def test_signed_constraint_cannot_be_broadened(subtests) -> None:
+    for field, broadened_value in [
         ("tool", "tool:org.example/export@1.0.0"),
         ("resource", "resource:org.example/all-records@1.0.0"),
         ("action", "action:org.example/write@1.0.0"),
         ("policy_profile", "policy:org.example/unrestricted@1.0.0"),
-    ],
-)
-def test_signed_constraint_cannot_be_broadened(
-    field: str, broadened_value: str
-) -> None:
-    payload = _manifest().to_dict()
-    payload["constraints"][0][field] = broadened_value
+    ]:
+        with subtests.test(field=field, broadened_value=broadened_value):
+            payload = _manifest().to_dict()
+            payload["constraints"][0][field] = broadened_value
 
-    _assert_not_dispatched(payload, _request(), CapabilityGrantSignatureError)
+            _assert_not_dispatched(payload, _request(), CapabilityGrantSignatureError)
 
 
-@pytest.mark.parametrize(
-    ("field", "requested_value"),
-    [
+def test_request_outside_exact_signed_scope_is_denied(subtests) -> None:
+    for field, requested_value in [
         ("tool", "tool:org.example/export@1.0.0"),
         ("resource", "resource:org.example/other-document@1.0.0"),
         ("action", "action:org.example/write@1.0.0"),
         ("policy_profile", "policy:org.example/other-profile@1.0.0"),
-    ],
-)
-def test_request_outside_exact_signed_scope_is_denied(
-    field: str, requested_value: str
-) -> None:
-    _assert_not_dispatched(
-        _manifest(),
-        _request(**{field: requested_value}),
-        CapabilityGrantScopeError,
-    )
+    ]:
+        with subtests.test(field=field, requested_value=requested_value):
+            _assert_not_dispatched(
+                _manifest(),
+                _request(**{field: requested_value}),
+                CapabilityGrantScopeError,
+            )
 
 
 def test_invalid_signature_and_unknown_key_fail_closed() -> None:
@@ -206,9 +199,8 @@ def test_expiry_and_scope_are_not_checked_from_unsigned_metadata() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
+def test_malformed_manifests_fail_closed(subtests) -> None:
+    for mutate in [
         lambda payload: payload.pop("expires_at"),
         lambda payload: payload.update(extra="unsigned"),
         lambda payload: payload.update(schema_version="unknown"),
@@ -216,15 +208,12 @@ def test_expiry_and_scope_are_not_checked_from_unsigned_metadata() -> None:
         lambda payload: payload.update(constraints=[]),
         lambda payload: payload["constraints"][0].pop("action"),
         lambda payload: payload["constraints"][0].update(extra="unsigned"),
-    ],
-)
-def test_malformed_manifests_fail_closed(
-    mutate: Callable[[dict[str, Any]], object],
-) -> None:
-    payload = _manifest().to_dict()
-    mutate(payload)
+    ]:
+        with subtests.test(mutate=mutate):
+            payload = _manifest().to_dict()
+            mutate(payload)
 
-    _assert_not_dispatched(payload, _request(), CapabilityGrantValidationError)
+            _assert_not_dispatched(payload, _request(), CapabilityGrantValidationError)
 
 
 def test_duplicate_json_fields_fail_closed() -> None:
