@@ -279,29 +279,25 @@ def test_incomplete_and_unknown_license_manifests_fail_closed_without_values(
     assert str(package) not in str(license_error.value)
 
 
-@pytest.mark.parametrize(
-    ("field_name", "value", "code"),
-    [
+def test_mutable_or_unsafe_policy_metadata_is_rejected(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field_name, value, code in [
         ("revision", "main", "mutable_revision"),
         ("revision", "feature/branch", "mutable_revision"),
         ("offline", False, "offline_required"),
         ("human_review_required", False, "human_review_required"),
-    ],
-)
-def test_mutable_or_unsafe_policy_metadata_is_rejected(
-    tmp_path: Path,
-    field_name: str,
-    value,
-    code: str,
-) -> None:
-    _, manifest = _write_package(tmp_path)
-    payload = manifest.to_dict()
-    payload[field_name] = value
+    ]:
+        with subtests.test(field_name=field_name, value=value, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _, manifest = _write_package(tmp_path)
+            payload = manifest.to_dict()
+            payload[field_name] = value
 
-    with pytest.raises(ClinicalSLMManifestError) as raised:
-        validate_clinical_slm_manifest(payload)
-    assert raised.value.code == code
-    assert "main" not in str(raised.value)
+            with pytest.raises(ClinicalSLMManifestError) as raised:
+                validate_clinical_slm_manifest(payload)
+            assert raised.value.code == code
+            assert "main" not in str(raised.value)
 
 
 def test_manifest_digest_is_required_on_disk_and_binds_metadata(tmp_path: Path) -> None:
@@ -440,9 +436,9 @@ def test_runtime_metadata_is_immutable_digest_bound_and_round_trips(tmp_path):
     assert caught.value.code == "manifest_digest_mismatch"
 
 
-@pytest.mark.parametrize(
-    "limits",
-    [
+def test_invalid_context_metadata_has_value_free_refusal(subtests, tmp_path):
+    case_root = tmp_path
+    for limits in [
         {},
         {"max_context_tokens": 4096},
         {
@@ -452,36 +448,39 @@ def test_runtime_metadata_is_immutable_digest_bound_and_round_trips(tmp_path):
         },
         {"max_context_tokens": 4096, "max_input_tokens": 4096, "max_output_tokens": 1},
         {"max_context_tokens": 2**100, "max_input_tokens": 1, "max_output_tokens": 1},
-    ],
-)
-def test_invalid_context_metadata_has_value_free_refusal(tmp_path, limits):
-    _, old = _write_package(tmp_path)
-    with pytest.raises(ClinicalSLMManifestError) as caught:
-        replace(old, context_limits=limits, manifest_digest=None)
-    assert caught.value.code == "invalid_context_limits"
-    assert caught.value.__context__ is None
+    ]:
+        with subtests.test(limits=limits):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _, old = _write_package(tmp_path)
+            with pytest.raises(ClinicalSLMManifestError) as caught:
+                replace(old, context_limits=limits, manifest_digest=None)
+            assert caught.value.code == "invalid_context_limits"
+            assert caught.value.__context__ is None
 
 
 @requires_secure_reads
-@pytest.mark.parametrize(
-    "extra", ["extra.json", "nested/extra.json", "empty-directory"]
-)
-def test_strict_package_inventory_rejects_extra_members(tmp_path, extra):
-    root, manifest = _write_package(tmp_path)
-    extra_path = root / extra
-    if extra == "empty-directory":
-        extra_path.mkdir()
-    else:
-        extra_path.parent.mkdir(parents=True, exist_ok=True)
-        extra_path.write_text("synthetic private payload")
-    with pytest.raises(ClinicalSLMManifestError) as caught:
-        verify_clinical_slm_package(
-            root,
-            expected_manifest_digest=manifest.manifest_digest,
-            reject_undeclared_files=True,
-        )
-    assert caught.value.code == "undeclared_component"
-    assert str(root) not in str(caught.value)
+def test_strict_package_inventory_rejects_extra_members(subtests, tmp_path):
+    case_root = tmp_path
+    for extra in ["extra.json", "nested/extra.json", "empty-directory"]:
+        with subtests.test(extra=extra):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, manifest = _write_package(tmp_path)
+            extra_path = root / extra
+            if extra == "empty-directory":
+                extra_path.mkdir()
+            else:
+                extra_path.parent.mkdir(parents=True, exist_ok=True)
+                extra_path.write_text("synthetic private payload")
+            with pytest.raises(ClinicalSLMManifestError) as caught:
+                verify_clinical_slm_package(
+                    root,
+                    expected_manifest_digest=manifest.manifest_digest,
+                    reject_undeclared_files=True,
+                )
+            assert caught.value.code == "undeclared_component"
+            assert str(root) not in str(caught.value)
 
 
 @requires_secure_reads

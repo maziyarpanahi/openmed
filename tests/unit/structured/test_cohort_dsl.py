@@ -22,27 +22,25 @@ from openmed.structured.cohort import (
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "cohort" / "phenotypes"
 
 
-@pytest.mark.parametrize(
-    "fixture_name",
-    [
+def test_worked_definitions_round_trip_to_byte_stable_json(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for fixture_name in [
         "diabetes_on_metformin.json",
         "diabetes_without_metformin.json",
         "recurrent_diabetes.json",
-    ],
-)
-def test_worked_definitions_round_trip_to_byte_stable_json(
-    fixture_name: str,
-    tmp_path: Path,
-) -> None:
-    definition = PhenotypeDefinition.load(FIXTURES / fixture_name)
-    canonical = phenotype_to_json(definition)
-    reloaded = phenotype_from_json(canonical)
-    output = reloaded.write(tmp_path / fixture_name)
+    ]:
+        with subtests.test(fixture_name=fixture_name):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            definition = PhenotypeDefinition.load(FIXTURES / fixture_name)
+            canonical = phenotype_to_json(definition)
+            reloaded = phenotype_from_json(canonical)
+            output = reloaded.write(tmp_path / fixture_name)
 
-    assert reloaded == definition
-    assert reloaded.to_json() == canonical
-    assert output.read_bytes() == canonical.encode("utf-8")
-    assert reloaded.sha256 == definition.sha256
+            assert reloaded == definition
+            assert reloaded.to_json() == canonical
+            assert output.read_bytes() == canonical.encode("utf-8")
+            assert reloaded.sha256 == definition.sha256
 
 
 def test_programmatic_schema_covers_boolean_count_assertion_and_temporal_forms() -> (

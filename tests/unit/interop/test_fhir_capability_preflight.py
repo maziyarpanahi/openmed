@@ -44,9 +44,8 @@ def _plan(
     )
 
 
-@pytest.mark.parametrize(
-    ("statement", "plan"),
-    [
+def test_supported_write_plans_are_compatible(subtests) -> None:
+    for statement, plan in [
         (
             build_create_capability_statement(),
             _plan(FHIRWriteInteraction.CREATE),
@@ -67,23 +66,21 @@ def _plan(
             build_transaction_capability_statement(),
             FHIRWritePlan(FHIRWriteInteraction.TRANSACTION),
         ),
-    ],
-)
-def test_supported_write_plans_are_compatible(statement, plan) -> None:
-    result = preflight_write_plan(statement, plan)
+    ]:
+        with subtests.test(statement=statement, plan=plan):
+            result = preflight_write_plan(statement, plan)
 
-    assert result.status is FHIRPreflightStatus.COMPATIBLE
-    assert result.reason_code is FHIRPreflightReason.SUPPORTED
-    assert result.is_compatible is True
-    assert result.to_dict() == {
-        "status": "compatible",
-        "reason_code": "supported",
-    }
+            assert result.status is FHIRPreflightStatus.COMPATIBLE
+            assert result.reason_code is FHIRPreflightReason.SUPPORTED
+            assert result.is_compatible is True
+            assert result.to_dict() == {
+                "status": "compatible",
+                "reason_code": "supported",
+            }
 
 
-@pytest.mark.parametrize(
-    ("statement", "plan", "reason"),
-    [
+def test_unsupported_write_plans_are_incompatible(subtests) -> None:
+    for statement, plan, reason in [
         (
             build_read_only_capability_statement(),
             _plan(FHIRWriteInteraction.CREATE),
@@ -117,19 +114,17 @@ def test_supported_write_plans_are_compatible(statement, plan) -> None:
             FHIRWritePlan(FHIRWriteInteraction.TRANSACTION),
             FHIRPreflightReason.TRANSACTION_NOT_SUPPORTED,
         ),
-    ],
-)
-def test_unsupported_write_plans_are_incompatible(statement, plan, reason) -> None:
-    result = preflight_write_plan(statement, plan)
+    ]:
+        with subtests.test(statement=statement, plan=plan, reason=reason):
+            result = preflight_write_plan(statement, plan)
 
-    assert result.status is FHIRPreflightStatus.INCOMPATIBLE
-    assert result.reason_code is reason
-    assert result.is_compatible is False
+            assert result.status is FHIRPreflightStatus.INCOMPATIBLE
+            assert result.reason_code is reason
+            assert result.is_compatible is False
 
 
-@pytest.mark.parametrize(
-    ("field_name", "interaction", "reason"),
-    [
+def test_undeclared_conditional_support_requires_review(subtests) -> None:
+    for field_name, interaction, reason in [
         (
             "conditionalCreate",
             FHIRWriteInteraction.CREATE,
@@ -140,25 +135,22 @@ def test_unsupported_write_plans_are_incompatible(statement, plan, reason) -> No
             FHIRWriteInteraction.UPDATE,
             FHIRPreflightReason.CONDITIONAL_UPDATE_UNDECLARED,
         ),
-    ],
-)
-def test_undeclared_conditional_support_requires_review(
-    field_name,
-    interaction,
-    reason,
-) -> None:
-    statement = without_capability_field(
-        build_conditional_capability_statement(),
-        ("rest", 0, "resource", 0, field_name),
-    )
+    ]:
+        with subtests.test(
+            field_name=field_name, interaction=interaction, reason=reason
+        ):
+            statement = without_capability_field(
+                build_conditional_capability_statement(),
+                ("rest", 0, "resource", 0, field_name),
+            )
 
-    result = preflight_write_plan(
-        statement,
-        _plan(interaction, conditional=True),
-    )
+            result = preflight_write_plan(
+                statement,
+                _plan(interaction, conditional=True),
+            )
 
-    assert result.status is FHIRPreflightStatus.REVIEW
-    assert result.reason_code is reason
+            assert result.status is FHIRPreflightStatus.REVIEW
+            assert result.reason_code is reason
 
 
 def test_parser_normalizes_resource_and_system_metadata() -> None:
@@ -180,9 +172,8 @@ def test_parser_normalizes_resource_and_system_metadata() -> None:
     assert parsed.for_resource(UNSUPPORTED_RESOURCE_TYPE) is None
 
 
-@pytest.mark.parametrize(
-    "statement",
-    [
+def test_malformed_statements_require_review(subtests) -> None:
+    for statement in [
         without_capability_field(
             build_create_capability_statement(),
             ("fhirVersion",),
@@ -202,16 +193,17 @@ def test_parser_normalizes_resource_and_system_metadata() -> None:
             ("rest", 0, "mode"),
             [],
         ),
-    ],
-)
-def test_malformed_statements_require_review(statement) -> None:
-    result = preflight_write_plan(statement, _plan(FHIRWriteInteraction.CREATE))
+    ]:
+        with subtests.test(statement=statement):
+            result = preflight_write_plan(statement, _plan(FHIRWriteInteraction.CREATE))
 
-    assert result.status is FHIRPreflightStatus.REVIEW
-    assert result.reason_code is FHIRPreflightReason.CAPABILITY_STATEMENT_MALFORMED
+            assert result.status is FHIRPreflightStatus.REVIEW
+            assert (
+                result.reason_code is FHIRPreflightReason.CAPABILITY_STATEMENT_MALFORMED
+            )
 
-    with pytest.raises(CapabilityStatementError):
-        parse_capability_statement(statement)
+            with pytest.raises(CapabilityStatementError):
+                parse_capability_statement(statement)
 
 
 def test_non_r4_statement_is_incompatible() -> None:
@@ -241,9 +233,8 @@ def test_parser_rejects_capabilities_above_resource_bound() -> None:
     assert result.reason_code is FHIRPreflightReason.CAPABILITY_STATEMENT_MALFORMED
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_write_plan_rejects_ambiguous_or_incomplete_shapes(subtests) -> None:
+    for kwargs in [
         {"interaction": FHIRWriteInteraction.CREATE},
         {
             "interaction": FHIRWriteInteraction.TRANSACTION,
@@ -253,11 +244,10 @@ def test_parser_rejects_capabilities_above_resource_bound() -> None:
             "interaction": FHIRWriteInteraction.TRANSACTION,
             "conditional": True,
         },
-    ],
-)
-def test_write_plan_rejects_ambiguous_or_incomplete_shapes(kwargs) -> None:
-    with pytest.raises(ValueError):
-        FHIRWritePlan(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError):
+                FHIRWritePlan(**kwargs)
 
 
 def test_write_plan_has_no_payload_endpoint_identifier_or_credential_fields() -> None:
