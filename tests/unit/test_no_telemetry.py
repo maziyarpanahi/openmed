@@ -25,6 +25,8 @@ import ast
 import socket
 from pathlib import Path
 
+import pytest
+
 from openmed.core.config import OpenMedConfig
 from openmed.core.offline import OFFLINE_ENV_VAR
 
@@ -311,6 +313,7 @@ def _rel(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_openmed_package_has_no_telemetry_indicators():
     offenders: dict[str, list[str]] = {}
     for path in _package_files():
@@ -325,6 +328,7 @@ def test_openmed_package_has_no_telemetry_indicators():
     assert offenders == {}, f"telemetry/analytics indicators found: {offenders!r}"
 
 
+@pytest.mark.slow
 def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     """Reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
     agent_source = (PACKAGE_ROOT / "agent" / "telemetry.py").read_text(encoding="utf-8")
@@ -383,6 +387,7 @@ def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     assert _telemetry_optout_envs(source) == []
 
 
+@pytest.mark.slow
 def test_network_surface_matches_reviewed_allowlist():
     discovered: dict[str, set[str]] = {}
     for path in _package_files():

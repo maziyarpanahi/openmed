@@ -233,9 +233,8 @@ def test_span_accepts_mapping_and_object_forms():
         assert result.source_offsets == (span_tuple,)
 
 
-@pytest.mark.parametrize(
-    "span",
-    [
+def test_span_offsets_reject_lossy_non_integer_values(subtests):
+    for span in [
         (7.9, 13),
         (7.0, 13),
         (7, "13"),
@@ -245,11 +244,10 @@ def test_span_accepts_mapping_and_object_forms():
         (7, Decimal(13)),
         (Fraction(7, 1), 13),
         (7, Fraction(13, 1)),
-    ],
-)
-def test_span_offsets_reject_lossy_non_integer_values(span):
-    with pytest.raises(ValueError, match="offset must be an integer"):
-        render_redacted(_ARABIC_WITH_MASK, [span])
+    ]:
+        with subtests.test(span=span):
+            with pytest.raises(ValueError, match="offset must be an integer"):
+                render_redacted(_ARABIC_WITH_MASK, [span])
 
 
 # --- Direction override ------------------------------------------------------
@@ -321,13 +319,14 @@ def test_span_out_of_range_rejected():
         render_redacted(_ARABIC_WITH_MASK, [(0, len(_ARABIC_WITH_MASK) + 1)])
 
 
-@pytest.mark.parametrize("control", sorted(_EXPECTED_BIDI_CONTROLS))
-def test_replacement_bidi_controls_are_rejected(control):
-    text = f"المريض [NA{control}ME] زار"
-    span = _span_of(text, f"[NA{control}ME]")
+def test_replacement_bidi_controls_are_rejected(subtests):
+    for control in sorted(_EXPECTED_BIDI_CONTROLS):
+        with subtests.test(control=control):
+            text = f"المريض [NA{control}ME] زار"
+            span = _span_of(text, f"[NA{control}ME]")
 
-    with pytest.raises(ValueError, match="bidi control"):
-        render_redacted(text, [span])
+            with pytest.raises(ValueError, match="bidi control"):
+                render_redacted(text, [span])
 
 
 def test_ltr_replacement_bidi_control_is_rejected_before_noop():
@@ -338,13 +337,14 @@ def test_ltr_replacement_bidi_control_is_rejected_before_noop():
         render_redacted(text, [_span_of(text, token)])
 
 
-@pytest.mark.parametrize("separator", _PARAGRAPH_SEPARATORS)
-def test_replacement_paragraph_separators_are_rejected(separator):
-    token = f"[NA{separator}ME]"
-    text = f"المريض {token} زار"
+def test_replacement_paragraph_separators_are_rejected(subtests):
+    for separator in _PARAGRAPH_SEPARATORS:
+        with subtests.test(separator=separator):
+            token = f"[NA{separator}ME]"
+            text = f"المريض {token} زار"
 
-    with pytest.raises(ValueError, match="paragraph separator"):
-        render_redacted(text, [_span_of(text, token)])
+            with pytest.raises(ValueError, match="paragraph separator"):
+                render_redacted(text, [_span_of(text, token)])
 
 
 def test_ltr_replacement_paragraph_separator_is_rejected_before_noop():
@@ -355,13 +355,14 @@ def test_ltr_replacement_paragraph_separator_is_rejected_before_noop():
         render_redacted(text, [_span_of(text, token)])
 
 
-@pytest.mark.parametrize("separator", _PARAGRAPH_SEPARATORS)
-def test_wrap_mask_rejects_paragraph_separators(separator):
-    with pytest.raises(ValueError, match="paragraph separator"):
-        wrap_mask(f"[NA{separator}ME]")
+def test_wrap_mask_rejects_paragraph_separators(subtests):
+    for separator in _PARAGRAPH_SEPARATORS:
+        with subtests.test(separator=separator):
+            with pytest.raises(ValueError, match="paragraph separator"):
+                wrap_mask(f"[NA{separator}ME]")
 
-    with pytest.raises(ValueError, match="paragraph separator"):
-        wrap_mask(f"[NA{separator}ME]", direction="ltr")
+            with pytest.raises(ValueError, match="paragraph separator"):
+                wrap_mask(f"[NA{separator}ME]", direction="ltr")
 
 
 def test_non_bidi_zero_width_character_is_preserved_inside_replacement():
