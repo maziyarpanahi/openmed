@@ -355,6 +355,7 @@ nav:
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
       - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
@@ -368,7 +369,10 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
@@ -398,6 +402,9 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
+      - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
@@ -460,6 +467,7 @@ nav:
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
