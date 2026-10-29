@@ -209,43 +209,37 @@ def test_mapping_inputs_and_boolean_helper_use_the_same_rules() -> None:
     assert is_schema_compatible(before, after, rules_version=1) is True
 
 
-@pytest.mark.parametrize(
-    "field_metadata",
-    [
+def test_conflicting_field_aliases_are_rejected_without_echoing_values(
+    subtests,
+) -> None:
+    for field_metadata in [
         {"path": "different.path", "type": "string"},
         {"type": "string", "field_type": "integer"},
         {"type": "string", "optional": True, "required": True},
         {"type": "string", "optional": False, "nullable": True},
-    ],
-)
-def test_conflicting_field_aliases_are_rejected_without_echoing_values(
-    field_metadata: dict[str, object],
-) -> None:
-    sensitive_path = "synthetic.secret.path"
+    ]:
+        with subtests.test(field_metadata=field_metadata):
+            sensitive_path = "synthetic.secret.path"
 
-    with pytest.raises(ValueError) as exc_info:
-        SchemaSnapshot(fields={sensitive_path: field_metadata})
+            with pytest.raises(ValueError) as exc_info:
+                SchemaSnapshot(fields={sensitive_path: field_metadata})
 
-    assert sensitive_path not in str(exc_info.value)
+            assert sensitive_path not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "field_metadata",
-    [
+def test_nullable_types_cannot_contradict_requiredness_aliases(subtests) -> None:
+    for field_metadata in [
         {"type": ["null", "string"], "required": True},
         {"type": "null|string", "optional": False},
         {"type": ["null", "string"], "nullable": False},
-    ],
-)
-def test_nullable_types_cannot_contradict_requiredness_aliases(
-    field_metadata: dict[str, object],
-) -> None:
-    sensitive_path = "synthetic.secret.nullable.path"
+    ]:
+        with subtests.test(field_metadata=field_metadata):
+            sensitive_path = "synthetic.secret.nullable.path"
 
-    with pytest.raises(ValueError, match="optionality aliases") as exc_info:
-        SchemaSnapshot(fields={sensitive_path: field_metadata})
+            with pytest.raises(ValueError, match="optionality aliases") as exc_info:
+                SchemaSnapshot(fields={sensitive_path: field_metadata})
 
-    assert sensitive_path not in str(exc_info.value)
+            assert sensitive_path not in str(exc_info.value)
 
 
 def test_hostile_field_mappings_do_not_leak_caller_values() -> None:

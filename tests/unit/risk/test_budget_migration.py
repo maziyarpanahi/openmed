@@ -189,22 +189,20 @@ def test_accountant_compositions_are_verified_with_derived_policy_fingerprints()
     assert report.policy_fingerprints[0].startswith("sha256:")
 
 
-@pytest.mark.parametrize(
-    "field,before_value,after_value",
-    [
+def test_small_budget_regressions_cannot_bypass_monotonicity(subtests):
+    for field, before_value, after_value in [
         ("spent_delta", 1e-14, 0.0),
         ("spent_epsilon", 1e-14, 0.0),
         ("max_delta", 1e-8, 1e-8 + 1e-14),
         ("max_epsilon", 2.0, 2.0 + 1e-14),
-    ],
-)
-def test_small_budget_regressions_cannot_bypass_monotonicity(
-    field, before_value, after_value
-):
-    before = _entry("release-a", spent_delta=0.0)
-    after = dict(before)
-    before[field] = before_value
-    after[field] = after_value
-    report = compare_budget_migration(_snapshot(before), _snapshot(after))
-    assert not report.passed
-    assert field in {issue.field for issue in report.issues}
+    ]:
+        with subtests.test(
+            field=field, before_value=before_value, after_value=after_value
+        ):
+            before = _entry("release-a", spent_delta=0.0)
+            after = dict(before)
+            before[field] = before_value
+            after[field] = after_value
+            report = compare_budget_migration(_snapshot(before), _snapshot(after))
+            assert not report.passed
+            assert field in {issue.field for issue in report.issues}

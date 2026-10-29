@@ -46,66 +46,71 @@ def _reference_responses(directory: Path, variant: str) -> dict[str, str]:
     return {case["id"]: case["response"] for case in report["cases"]}
 
 
-@pytest.mark.parametrize("variant", _VARIANTS)
-def test_compass_text_and_image_generation_matches_contract(variant: str) -> None:
+def test_compass_text_and_image_generation_matches_contract(subtests) -> None:
     """Strictly load each precision and validate deterministic clinical tasks."""
+    for variant in _VARIANTS:
+        with subtests.test(variant=variant):
+            artifact_root = _configured_directory("OPENMED_COMPASS_MLX_ARTIFACT_ROOT")
+            fixture_directory = _configured_directory(
+                "OPENMED_COMPASS_FIXTURE_DIRECTORY"
+            )
+            report_directory = _configured_directory(
+                "OPENMED_COMPASS_REFERENCE_REPORT_DIRECTORY"
+            )
+            artifact = artifact_root / f"North-Micro-Vision-Instruct-{variant}-mlx"
+            if not artifact.is_dir():
+                pytest.fail(f"missing {variant} artifact: {artifact}")
 
-    artifact_root = _configured_directory("OPENMED_COMPASS_MLX_ARTIFACT_ROOT")
-    fixture_directory = _configured_directory("OPENMED_COMPASS_FIXTURE_DIRECTORY")
-    report_directory = _configured_directory(
-        "OPENMED_COMPASS_REFERENCE_REPORT_DIRECTORY"
-    )
-    artifact = artifact_root / f"North-Micro-Vision-Instruct-{variant}-mlx"
-    if not artifact.is_dir():
-        pytest.fail(f"missing {variant} artifact: {artifact}")
+            from openmed.mlx import OpenMedMLXVisionLanguageModel
 
-    from openmed.mlx import OpenMedMLXVisionLanguageModel
+            model = OpenMedMLXVisionLanguageModel(artifact, strict=True)
+            expected = _reference_responses(report_directory, variant)
+            try:
+                privacy = model.generate_with_metadata(_PRIVACY_PROMPT, max_tokens=96)
+                assert privacy.prompt_tokens == 30
+                privacy_text = privacy.text.casefold()
+                assert "private" in privacy_text or "privacy" in privacy_text
+                assert all(
+                    term in privacy_text for term in ("clinical", "device", "sensitive")
+                )
+                assert any(
+                    term in privacy_text
+                    for term in ("cloud", "network", "transmit", "local")
+                )
 
-    model = OpenMedMLXVisionLanguageModel(artifact, strict=True)
-    expected = _reference_responses(report_directory, variant)
-    try:
-        privacy = model.generate_with_metadata(_PRIVACY_PROMPT, max_tokens=96)
-        assert privacy.prompt_tokens == 30
-        privacy_text = privacy.text.casefold()
-        assert "private" in privacy_text or "privacy" in privacy_text
-        assert all(term in privacy_text for term in ("clinical", "device", "sensitive"))
-        assert any(
-            term in privacy_text for term in ("cloud", "network", "transmit", "local")
-        )
+                fact = model.generate_with_metadata(_FACT_PROMPT, max_tokens=32)
+                assert fact.text == expected["text_fact_extraction"] == "Tuesday"
+                assert fact.token_ids == (29_445,)
+                assert fact.prompt_tokens == 44
 
-        fact = model.generate_with_metadata(_FACT_PROMPT, max_tokens=32)
-        assert fact.text == expected["text_fact_extraction"] == "Tuesday"
-        assert fact.token_ids == (29_445,)
-        assert fact.prompt_tokens == 44
+                document = model.generate_with_metadata(
+                    _DOCUMENT_PROMPT,
+                    image=fixture_directory / "synthetic_clinical_document.png",
+                    max_tokens=96,
+                )
+                assert document.prompt_tokens == 1_161
+                document_text = document.text.casefold()
+                for value in (
+                    "Alex Rivera",
+                    "SYN-2048",
+                    "Metformin",
+                    "500",
+                    "twice",
+                    "Penicillin",
+                ):
+                    assert value.casefold() in document_text
 
-        document = model.generate_with_metadata(
-            _DOCUMENT_PROMPT,
-            image=fixture_directory / "synthetic_clinical_document.png",
-            max_tokens=96,
-        )
-        assert document.prompt_tokens == 1_161
-        document_text = document.text.casefold()
-        for value in (
-            "Alex Rivera",
-            "SYN-2048",
-            "Metformin",
-            "500",
-            "twice",
-            "Penicillin",
-        ):
-            assert value.casefold() in document_text
+                chart = model.generate_with_metadata(
+                    _CHART_PROMPT,
+                    image=fixture_directory / "synthetic_clinic_chart.png",
+                    max_tokens=32,
+                )
+                assert chart.text == expected["image_chart"] == "Screening, 42"
+                assert chart.token_ids == (198_759, 16, 225, 3_304)
+                assert chart.prompt_tokens == 1_053
+            finally:
+                del model
+                gc.collect()
+                import mlx.core as mx
 
-        chart = model.generate_with_metadata(
-            _CHART_PROMPT,
-            image=fixture_directory / "synthetic_clinic_chart.png",
-            max_tokens=32,
-        )
-        assert chart.text == expected["image_chart"] == "Screening, 42"
-        assert chart.token_ids == (198_759, 16, 225, 3_304)
-        assert chart.prompt_tokens == 1_053
-    finally:
-        del model
-        gc.collect()
-        import mlx.core as mx
-
-        mx.clear_cache()
+                mx.clear_cache()

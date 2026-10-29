@@ -211,9 +211,8 @@ def test_request_policy_cannot_be_weakened_by_a_row_argument() -> None:
     assert "555-0101" not in response.text
 
 
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    [
+def test_malformed_or_empty_batches_return_protocol_errors(subtests) -> None:
+    for payload, message in [
         ({}, "calls must be a non-empty array"),
         ({"calls": []}, "calls must be a non-empty array"),
         ({"calls": "not-an-array"}, "calls must be a non-empty array"),
@@ -235,23 +234,19 @@ def test_request_policy_cannot_be_weakened_by_a_row_argument() -> None:
             {"calls": [["synthetic"]], "userDefinedContext": []},
             "userDefinedContext must be an object",
         ),
-    ],
-)
-def test_malformed_or_empty_batches_return_protocol_errors(
-    payload: Any,
-    message: str,
-) -> None:
-    app = create_app(
-        process_batch_fn=lambda *_args, **_kwargs: pytest.fail(
-            "invalid requests must not invoke process_batch"
-        )
-    )
-    with TestClient(app, base_url="http://127.0.0.1") as client:
-        response = client.post("/", json=payload)
+    ]:
+        with subtests.test(payload=payload, message=message):
+            app = create_app(
+                process_batch_fn=lambda *_args, **_kwargs: pytest.fail(
+                    "invalid requests must not invoke process_batch"
+                )
+            )
+            with TestClient(app, base_url="http://127.0.0.1") as client:
+                response = client.post("/", json=payload)
 
-    assert response.status_code == 400
-    assert response.json() == {"errorMessage": message}
-    assert "Traceback" not in response.text
+            assert response.status_code == 400
+            assert response.json() == {"errorMessage": message}
+            assert "Traceback" not in response.text
 
 
 def test_invalid_json_returns_protocol_error_without_a_stack_trace() -> None:
