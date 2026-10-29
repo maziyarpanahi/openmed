@@ -212,8 +212,9 @@ def test_low_confidence_notes_abstain_at_the_documented_threshold() -> None:
     }
 
 
-@pytest.mark.parametrize("expected_type", DOCUMENT_TYPES)
-def test_each_document_type_has_multiple_synthetic_gold_stubs(
-    expected_type: str,
-) -> None:
-    assert sum(label == expected_type for label, _ in SYNTHETIC_LABELED_NOTES) >= 5
+def test_each_document_type_has_multiple_synthetic_gold_stubs(subtests) -> None:
+    for expected_type in DOCUMENT_TYPES:
+        with subtests.test(expected_type=expected_type):
+            assert (
+                sum(label == expected_type for label, _ in SYNTHETIC_LABELED_NOTES) >= 5
+            )

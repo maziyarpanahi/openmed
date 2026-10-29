@@ -166,6 +166,7 @@ def test_loopback_host_passes_by_default() -> None:
     assert response.json()["status"] == "ok"
 
 
+@pytest.mark.slow
 def test_configured_trusted_host_passes(monkeypatch) -> None:
     monkeypatch.setenv("OPENMED_SERVICE_TRUSTED_HOSTS", "api.example.com")
     app = create_app()

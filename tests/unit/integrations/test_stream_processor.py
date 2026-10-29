@@ -128,20 +128,16 @@ def test_offline_job_opens_once_per_subtask_and_writes_micro_batches() -> None:
     assert [len(texts) for texts, _ in probe.calls] == [2, 1]
 
 
-@pytest.mark.parametrize(
-    ("record", "error", "message"),
-    [
+def test_map_rejects_invalid_records(subtests) -> None:
+    for record, error, message in [
         ({"other": "value"}, KeyError, "missing text field"),
         ({"note": 42}, TypeError, "must be a string or None"),
-    ],
-)
-def test_map_rejects_invalid_records(
-    record: dict[str, Any], error: type[Exception], message: str
-) -> None:
-    mapper = StreamDeidentifyMapFunction("note", process_batch_fn=BatchProbe())
+    ]:
+        with subtests.test(record=record, error=error, message=message):
+            mapper = StreamDeidentifyMapFunction("note", process_batch_fn=BatchProbe())
 
-    with pytest.raises(error, match=message):
-        mapper.map(record)
+            with pytest.raises(error, match=message):
+                mapper.map(record)
 
 
 def test_batch_result_count_must_match_input_count() -> None:
