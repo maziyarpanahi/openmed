@@ -304,12 +304,19 @@ def test_arabic_and_amharic_names_do_not_reuse_source_tokens(
     lang: str,
     original: str,
 ) -> None:
+    from openmed.core.person_honorifics import peel_person_honorifics
+
+    source = peel_person_honorifics(original, lang)
     for seed in _SAMPLE_SEEDS:
         surrogate = Anonymizer(lang=lang, consistent=True, seed=seed).surrogate(
             original,
             "PERSON",
         )
-        assert set(surrogate.split()).isdisjoint(original.split())
+        # Titles are preserved; every identifying name token must be replaced.
+        replaced = peel_person_honorifics(surrogate, lang)
+        assert replaced.prefix == source.prefix
+        assert replaced.suffix == source.suffix
+        assert set(replaced.name.split()).isdisjoint(source.name.split())
 
 
 def test_arabic_street_address_does_not_reuse_source_street_or_number() -> None:
