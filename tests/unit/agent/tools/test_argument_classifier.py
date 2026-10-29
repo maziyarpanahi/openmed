@@ -257,21 +257,19 @@ def test_unclassified_and_ambiguous_leaves_fail_closed_without_values() -> None:
     assert rejected not in str(overlap.value)
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [
+def test_non_typed_or_non_json_arguments_fail_closed(subtests) -> None:
+    for arguments in [
         {"unsafe field": "synthetic-value"},
         {"field": {1: "synthetic-value"}},
         {"field": object()},
         {"field": float("nan")},
         {"field": "\ud800"},
-    ],
-)
-def test_non_typed_or_non_json_arguments_fail_closed(arguments: dict[Any, Any]) -> None:
-    classifier = _classifier((ArgumentPathRule(("field",), PUBLIC),))
+    ]:
+        with subtests.test(arguments=arguments):
+            classifier = _classifier((ArgumentPathRule(("field",), PUBLIC),))
 
-    with pytest.raises(ArgumentClassifierValidationError):
-        classifier.classify(arguments)
+            with pytest.raises(ArgumentClassifierValidationError):
+                classifier.classify(arguments)
 
 
 def test_reprs_never_expose_rules_policy_keys_arguments_or_results() -> None:

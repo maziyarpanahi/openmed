@@ -113,17 +113,15 @@ def test_metadata_repr_and_errors_do_not_expose_key_material():
     assert secret.decode("ascii") not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    ("key", "message"),
-    [
+def test_rejects_weak_or_invalid_key_material(subtests):
+    for key, message in [
         (b"short", "at least 32 bytes"),
         ("short", "at least 32 bytes"),
         (None, "str or bytes"),
-    ],
-)
-def test_rejects_weak_or_invalid_key_material(key, message):
-    with pytest.raises((TypeError, ValueError), match=message):
-        KeyLifecycle(key, prefix="audit")
+    ]:
+        with subtests.test(key=key, message=message):
+            with pytest.raises((TypeError, ValueError), match=message):
+                KeyLifecycle(key, prefix="audit")
 
 
 def test_restore_requires_versioned_ids_and_known_active_key():
