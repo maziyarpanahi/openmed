@@ -122,6 +122,67 @@ If `patient_key` is supplied with the older `date_shift_days` option, that
 value is treated as the maximum absolute offset bound; prefer
 `date_shift_max_days` for new code.
 
+#### Solar Hijri, Ethiopian and Thai Buddhist-era dates
+
+`shift_dates` shifts Solar Hijri (Jalali), Ethiopian and Thai Buddhist-era
+dates inside their own calendar. Each date is converted to an absolute day
+number, moved by the same per-patient offset as the document's Gregorian
+dates, and rendered back in the source calendar, digit system, separators,
+zero padding, era marker and month-name form:
+
+| Pack | Source span                      | `date_shift_days=1`           |
+| ---- | -------------------------------- | ----------------------------- |
+| `fa` | `۱۴۰۴/۰۷/۳۰`                     | `۱۴۰۴/۰۸/۰۱`                  |
+| `fa` | `۳۰ اردیبهشت ۱۴۰۴`               | `۳۱ اردیبهشت ۱۴۰۴`            |
+| `th` | `28 กุมภาพันธ์ 2567`              | `29 กุมภาพันธ์ 2567`           |
+| `am` | `05/13/2016` (5 Pagume 2016)     | `01/01/2017`                  |
+| `am` | `ጳጉሜ 5 ቀን 2016 ዓ.ም`              | `መስከረም 1 ቀን 2017 ዓ.ም`        |
+
+The calendar of a date span is chosen in this order:
+
+1. An era marker inside the span, such as `ه.ش` or `هجری شمسی` (Solar
+   Hijri), `พ.ศ.` or `B.E.` (Buddhist era), `ዓ.ም` or `E.C.` (Ethiopian), or a
+   Gregorian marker such as `میلادی`, `م`, `ค.ศ.`, `እ.ኤ.አ` or `G.C.`. A
+   detector or custom recognizer can instead attach a calendar code to the
+   span with `metadata={"calendar": "solar_hijri"}`.
+2. Month names that belong to one calendar: the Persian Solar Hijri months and
+   the Amharic Ethiopian months, including Pagume.
+3. The language pack's `default_calendar` (`fa`: `solar_hijri`, `am`:
+   `ethiopian`, `th`: `thai_buddhist`; every other pack: `gregorian`) when the
+   year falls inside that calendar's supported range. Otherwise a year from
+   1800 to 2299 is treated as Gregorian and shifted exactly as before.
+
+The conversions are exact standard-library arithmetic over these ranges:
+
+| Calendar          | Code            | Years     | Gregorian span      | Rule                                                        |
+| ----------------- | --------------- | --------- | ------------------- | ----------------------------------------------------------- |
+| Solar Hijri       | `solar_hijri`   | 1277–1501 | Mar 1898 – Mar 2123 | 33-year leap cycle, where it matches astronomical year lengths |
+| Ethiopian         | `ethiopian`     | 1891–2114 | Sep 1898 – Sep 2122 | Pagume has 6 days when `year % 4 == 3`, otherwise 5          |
+| Thai Buddhist era | `thai_buddhist` | 2484–2665 | 1941 – 2122         | B.E. = C.E. + 543 since 1941, when the year began on 1 January |
+
+A native-calendar date keeps the `[DATE_SHIFTED]` placeholder instead of being
+guessed when it does not exist in its calendar (`۳۰ اسفند ۱۴۰۴`, Pagume 6 of a
+common year), when its year or the shifted result is outside the supported
+range, when the year has only two digits, when the day/month order or the era
+markers conflict, or when the calendar has no converter (lunar Hijri dates
+marked `هـ` stay unshifted). The returned reason codes never contain the date.
+
+Numeric dates in Amharic text are read as Ethiopian dates. Mark Gregorian
+dates with `እ.ኤ.አ` or `G.C.`, or attach `{"calendar": "gregorian"}` from
+detection, to shift them in the Gregorian calendar. `keep_year=True` restores
+the source year in the source calendar and clamps Esfand 30 and Pagume 6 the
+same way 29 February is clamped.
+
+`replace` and `format_preserve` generate surrogates for these spans in the same
+calendar and format, drawn from the 1925–2024 window used for Gregorian date
+surrogates, so a Jalali source receives a year between 1303 and 1403.
+
+To add a calendar, subclass `openmed.core.calendars.CalendarConverter`
+(conversion to and from the shared `datetime.date.toordinal()` day number,
+month lengths, and the supported year range), register it once with
+`register_calendar(...)`, and reference its code from a pack's
+`default_calendar` or a span's `calendar` metadata.
+
 ### Reversing a de-identification: `reidentify()`
 
 Pass `keep_mapping=True` to get back a `mapping` you can hand to
