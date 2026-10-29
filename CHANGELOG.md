@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a bounded, value-free synthetic memorization audit that fingerprints
+  protected reference material, blocks exact, paraphrase-style and exposure
+  matches on configurable signals, and renders canonical digest-only JSON
+  evidence with offline golden tests (#2853).
+
 - Added a strict, fail-closed synthetic dataset license and lineage manifest
   validator that binds source class, SPDX license expression, generator digest,
   model provenance, bounded dependencies and the redistribution decision, and
