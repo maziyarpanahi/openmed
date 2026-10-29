@@ -29,7 +29,13 @@ from openmed.core.calendar_dates import (
     default_calendar_for,
     shift_calendar_date,
 )
-from openmed.core.calendars import BIKRAM_SAMBAT, GREGORIAN, LUNAR_HIJRI, get_calendar
+from openmed.core.calendars import (
+    BIKRAM_SAMBAT,
+    GREGORIAN,
+    LUNAR_HIJRI,
+    SOLAR_HIJRI,
+    get_calendar,
+)
 from openmed.core.date_shift import stable_offset_for
 from openmed.core.pii import _shift_date
 from openmed.core.pipeline import Pipeline
@@ -373,18 +379,26 @@ def test_gregorian_and_table_dates_of_one_patient_keep_their_interval(
 
 
 def test_detected_calendar_codes_select_table_calendars():
-    text = "Admit ١٥ رمضان ١٤٤٧, clinic २०८२ असार ३२, other 15/09/1447"
+    text = (
+        "Admit ١٥ رمضان ١٤٤٧, clinic २०८२ असार ३२, other 15/09/1447, "
+        "solar ۱۴۰۲/۰۶/۳۱, table २०८२/०३/३२"
+    )
 
     result = _deidentify(
         text,
         ("١٥ رمضان ١٤٤٧", "DATE", {CALENDAR_METADATA_KEY: LUNAR_HIJRI}),
         ("२०८२ असार ३२", "DATE", {CALENDAR_METADATA_KEY: BIKRAM_SAMBAT}),
         ("15/09/1447", "DATE", {CALENDAR_METADATA_KEY: "hijri_diyanet"}),
+        ("۱۴۰۲/۰۶/۳۱", "DATE", {CALENDAR_METADATA_KEY: SOLAR_HIJRI}),
+        ("२०८२/०३/३२", "DATE", {CALENDAR_METADATA_KEY: BIKRAM_SAMBAT}),
         lang="en",
         date_shift_days=1,
     )
 
-    assert result == f"Admit ١٦ رمضان ١٤٤٧, clinic २०८२ साउन १, other {PLACEHOLDER}"
+    assert result == (
+        f"Admit ١٦ رمضان ١٤٤٧, clinic २०८२ साउन १, other {PLACEHOLDER}, "
+        "solar ۱۴۰۲/۰۷/۰۱, table २०८२/०४/०१"
+    )
 
 
 def _parse_ymd(code: str, value: str) -> tuple[int, int, int]:
