@@ -23,9 +23,8 @@ P = FederatedPrivacyMechanism
 U = FederatedUncertaintyMethod
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [
+def test_metric_examples_round_trip_with_deterministic_json(subtests) -> None:
+    for arguments in [
         {
             "metric_id": "documents_processed",
             "metric_kind": K.COUNT,
@@ -64,17 +63,20 @@ U = FederatedUncertaintyMethod
             "uncertainty_upper_bound": 7.7,
             "confidence_level": 0.9,
         },
-    ],
-)
-def test_metric_examples_round_trip_with_deterministic_json(
-    arguments: dict[str, object],
-) -> None:
-    envelope = build_federated_metric_envelope(**arguments)
-    payload = envelope.to_dict()
+    ]:
+        with subtests.test(arguments=arguments):
+            envelope = build_federated_metric_envelope(**arguments)
+            payload = envelope.to_dict()
 
-    assert payload["schema_version"] == FEDERATED_METRIC_SCHEMA_VERSION
-    assert envelope.to_json() == json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    assert FederatedMetricEnvelope.from_dict(json.loads(envelope.to_json())) == envelope
+            assert payload["schema_version"] == FEDERATED_METRIC_SCHEMA_VERSION
+            assert (
+                envelope.to_json()
+                == json.dumps(payload, indent=2, sort_keys=True) + "\n"
+            )
+            assert (
+                FederatedMetricEnvelope.from_dict(json.loads(envelope.to_json()))
+                == envelope
+            )
 
 
 def test_small_group_values_are_suppressed_and_not_retained() -> None:
@@ -119,39 +121,35 @@ def test_small_group_still_rejects_non_finite_input() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("participant_count", "expected"),
-    [
+def test_participant_count_bands_follow_the_minimum_group_rule(subtests) -> None:
+    for participant_count, expected in [
         (4, FederatedParticipantCountBand.SUPPRESSED),
         (5, FederatedParticipantCountBand.MINIMUM_TO_UNDER_DOUBLE),
         (9, FederatedParticipantCountBand.MINIMUM_TO_UNDER_DOUBLE),
         (10, FederatedParticipantCountBand.DOUBLE_TO_UNDER_FOURFOLD),
         (19, FederatedParticipantCountBand.DOUBLE_TO_UNDER_FOURFOLD),
         (20, FederatedParticipantCountBand.FOURFOLD_OR_MORE),
-    ],
-)
-def test_participant_count_bands_follow_the_minimum_group_rule(
-    participant_count: int,
-    expected: FederatedParticipantCountBand,
+    ]:
+        with subtests.test(participant_count=participant_count, expected=expected):
+            envelope = build_federated_metric_envelope(
+                metric_id="documents_processed",
+                metric_kind=K.COUNT,
+                aggregate_value=18,
+                clipping_lower_bound=0,
+                clipping_upper_bound=100,
+                privacy_mechanism=P.THRESHOLD_ONLY,
+                privacy_mechanism_version="v1",
+                participant_count=participant_count,
+                minimum_group_size=5,
+            )
+
+            assert envelope.participant_count_band is expected
+
+
+def test_count_clipping_finite_number_and_group_invariants_fail_closed(
+    subtests,
 ) -> None:
-    envelope = build_federated_metric_envelope(
-        metric_id="documents_processed",
-        metric_kind=K.COUNT,
-        aggregate_value=18,
-        clipping_lower_bound=0,
-        clipping_upper_bound=100,
-        privacy_mechanism=P.THRESHOLD_ONLY,
-        privacy_mechanism_version="v1",
-        participant_count=participant_count,
-        minimum_group_size=5,
-    )
-
-    assert envelope.participant_count_band is expected
-
-
-@pytest.mark.parametrize(
-    "overrides",
-    [
+    for overrides in [
         {"aggregate_value": 101},
         {"aggregate_value": 1.5},
         {"aggregate_value": 18.0},
@@ -169,30 +167,26 @@ def test_participant_count_bands_follow_the_minimum_group_rule(
         {"metric_kind": "count"},
         {"privacy_mechanism": "custom"},
         {"privacy_mechanism_version": "latest"},
-    ],
-)
-def test_count_clipping_finite_number_and_group_invariants_fail_closed(
-    overrides: dict[str, object],
-) -> None:
-    arguments: dict[str, object] = {
-        "metric_id": "documents_processed",
-        "metric_kind": K.COUNT,
-        "aggregate_value": 18,
-        "clipping_lower_bound": 0,
-        "clipping_upper_bound": 100,
-        "privacy_mechanism": P.THRESHOLD_ONLY,
-        "privacy_mechanism_version": "v1",
-        "participant_count": 12,
-    }
-    arguments.update(overrides)
+    ]:
+        with subtests.test(overrides=overrides):
+            arguments: dict[str, object] = {
+                "metric_id": "documents_processed",
+                "metric_kind": K.COUNT,
+                "aggregate_value": 18,
+                "clipping_lower_bound": 0,
+                "clipping_upper_bound": 100,
+                "privacy_mechanism": P.THRESHOLD_ONLY,
+                "privacy_mechanism_version": "v1",
+                "participant_count": 12,
+            }
+            arguments.update(overrides)
 
-    with pytest.raises(FederatedMetricError):
-        build_federated_metric_envelope(**arguments)
+            with pytest.raises(FederatedMetricError):
+                build_federated_metric_envelope(**arguments)
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
+def test_rate_and_uncertainty_invariants_fail_closed(subtests) -> None:
+    for overrides in [
         {"aggregate_value": 1.01},
         {"clipping_lower_bound": -0.01},
         {"clipping_upper_bound": 1.01},
@@ -201,29 +195,26 @@ def test_count_clipping_finite_number_and_group_invariants_fail_closed(
         {"confidence_level": 0.0},
         {"confidence_level": 1.0},
         {"confidence_level": float("nan")},
-    ],
-)
-def test_rate_and_uncertainty_invariants_fail_closed(
-    overrides: dict[str, object],
-) -> None:
-    arguments: dict[str, object] = {
-        "metric_id": "safe_completion_rate",
-        "metric_kind": K.RATE,
-        "aggregate_value": 0.82,
-        "clipping_lower_bound": 0.0,
-        "clipping_upper_bound": 1.0,
-        "privacy_mechanism": P.LAPLACE,
-        "privacy_mechanism_version": "v1",
-        "participant_count": 12,
-        "uncertainty_method": U.CONFIDENCE_INTERVAL,
-        "uncertainty_lower_bound": 0.75,
-        "uncertainty_upper_bound": 0.88,
-        "confidence_level": 0.95,
-    }
-    arguments.update(overrides)
+    ]:
+        with subtests.test(overrides=overrides):
+            arguments: dict[str, object] = {
+                "metric_id": "safe_completion_rate",
+                "metric_kind": K.RATE,
+                "aggregate_value": 0.82,
+                "clipping_lower_bound": 0.0,
+                "clipping_upper_bound": 1.0,
+                "privacy_mechanism": P.LAPLACE,
+                "privacy_mechanism_version": "v1",
+                "participant_count": 12,
+                "uncertainty_method": U.CONFIDENCE_INTERVAL,
+                "uncertainty_lower_bound": 0.75,
+                "uncertainty_upper_bound": 0.88,
+                "confidence_level": 0.95,
+            }
+            arguments.update(overrides)
 
-    with pytest.raises(FederatedMetricError):
-        build_federated_metric_envelope(**arguments)
+            with pytest.raises(FederatedMetricError):
+                build_federated_metric_envelope(**arguments)
 
 
 def test_uncertainty_values_require_a_confidence_interval() -> None:
@@ -259,9 +250,8 @@ def test_large_integer_counts_preserve_exact_bounds_without_float_conversion() -
     assert envelope.clipping_upper_bound == lower + 2
 
 
-@pytest.mark.parametrize(
-    "forbidden_field",
-    [
+def test_unknown_and_client_level_fields_cannot_enter_the_schema(subtests) -> None:
+    for forbidden_field in [
         "site_name",
         "client_id",
         "patient_count",
@@ -270,32 +260,32 @@ def test_large_integer_counts_preserve_exact_bounds_without_float_conversion() -
         "examples",
         "endpoint",
         "per_client_metrics",
-    ],
-)
-def test_unknown_and_client_level_fields_cannot_enter_the_schema(
-    forbidden_field: str,
-) -> None:
-    envelope = build_federated_metric_envelope(
-        metric_id="safe_completion_rate",
-        metric_kind=K.RATE,
-        aggregate_value=0.82,
-        clipping_lower_bound=0.0,
-        clipping_upper_bound=1.0,
-        privacy_mechanism=P.THRESHOLD_ONLY,
-        privacy_mechanism_version="v1",
-        participant_count=12,
-    )
-    payload = envelope.to_dict()
-    payload[forbidden_field] = "North Hospital"
+    ]:
+        with subtests.test(forbidden_field=forbidden_field):
+            envelope = build_federated_metric_envelope(
+                metric_id="safe_completion_rate",
+                metric_kind=K.RATE,
+                aggregate_value=0.82,
+                clipping_lower_bound=0.0,
+                clipping_upper_bound=1.0,
+                privacy_mechanism=P.THRESHOLD_ONLY,
+                privacy_mechanism_version="v1",
+                participant_count=12,
+            )
+            payload = envelope.to_dict()
+            payload[forbidden_field] = "North Hospital"
 
-    with pytest.raises(FederatedMetricError) as error:
-        FederatedMetricEnvelope.from_dict(payload)
-    assert "North Hospital" not in str(error.value)
-    assert (
-        forbidden_field
-        not in inspect.signature(build_federated_metric_envelope).parameters
-    )
-    assert forbidden_field not in inspect.signature(FederatedMetricEnvelope).parameters
+            with pytest.raises(FederatedMetricError) as error:
+                FederatedMetricEnvelope.from_dict(payload)
+            assert "North Hospital" not in str(error.value)
+            assert (
+                forbidden_field
+                not in inspect.signature(build_federated_metric_envelope).parameters
+            )
+            assert (
+                forbidden_field
+                not in inspect.signature(FederatedMetricEnvelope).parameters
+            )
 
 
 def test_invalid_enum_errors_do_not_chain_submitted_values() -> None:

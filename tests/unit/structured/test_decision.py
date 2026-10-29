@@ -147,9 +147,8 @@ def test_all_decision_shapes_share_one_result_contract() -> None:
         validator.validate(result.to_dict())
 
 
-@pytest.mark.parametrize(
-    "request_payload,match",
-    [
+def test_empty_duplicate_and_adversarial_options_fail_predictably(subtests) -> None:
+    for request_payload, match in [
         (
             {"mode": "fixed_choice", "input_text": "synthetic", "options": []},
             "2 to",
@@ -186,14 +185,10 @@ def test_all_decision_shapes_share_one_result_contract() -> None:
             },
             "control",
         ),
-    ],
-)
-def test_empty_duplicate_and_adversarial_options_fail_predictably(
-    request_payload: dict[str, Any],
-    match: str,
-) -> None:
-    with pytest.raises(DecisionError, match=match):
-        DecisionRequest.from_dict(request_payload)
+    ]:
+        with subtests.test(request_payload=request_payload, match=match):
+            with pytest.raises(DecisionError, match=match):
+                DecisionRequest.from_dict(request_payload)
 
 
 def test_size_timeout_and_batch_limits_fail_closed() -> None:
