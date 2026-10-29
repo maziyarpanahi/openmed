@@ -469,6 +469,7 @@ nav:
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
       - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
       - Local Abbreviation Mining: languages/abbreviation-mining.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
