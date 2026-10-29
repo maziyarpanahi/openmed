@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added deterministic clinical language-pack readiness matrices with closed
+  capability and state vocabularies, `sha256:` evidence digests, alias-normalized
+  locale folding, byte-stable JSON/Markdown rendering and registry-derived
+  entries, plus offline golden tests (#3100).
+
 - Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
   numbers, context-gated citizenship-certificate and national identity card
   numbers without checksum claims, numeric Bikram Sambat dates and postal
