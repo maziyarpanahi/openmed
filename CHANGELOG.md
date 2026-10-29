@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Stratify language uncertainty and minimum-detectable-effect planning without ranking underpowered slices (#2865).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
@@ -61,8 +63,6 @@ clinical efficacy. Package publication remains a separate release action.
   without restoring the invalid classical scale (#3724).
 
 ### Added
-
-- Stratify language uncertainty and minimum-detectable-effect planning without ranking underpowered slices (#2865).
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
