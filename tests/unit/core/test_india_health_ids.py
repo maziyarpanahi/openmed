@@ -43,29 +43,28 @@ def _empty_prediction(text: str, **_kwargs) -> PredictionResult:
     )
 
 
-@pytest.mark.parametrize("seed", range(20))
-def test_abha_number_generator_passes_validator_and_mutation_fails(seed: int) -> None:
-    value = generate_abha_number(rng=random.Random(seed))
-    invalid = f"{value[:-1]}{(int(value[-1]) + 1) % 10}"
+def test_abha_number_generator_passes_validator_and_mutation_fails(subtests) -> None:
+    for seed in range(20):
+        with subtests.test(seed=seed):
+            value = generate_abha_number(rng=random.Random(seed))
+            invalid = f"{value[:-1]}{(int(value[-1]) + 1) % 10}"
 
-    assert len(value) == 14
-    assert validate_abha_number(value)
-    assert not validate_abha_number(invalid)
+            assert len(value) == 14
+            assert validate_abha_number(value)
+            assert not validate_abha_number(invalid)
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
+def test_abha_number_rejects_invalid_structure_or_checksum(subtests) -> None:
+    for value in [
         "",
         "1234567890123",
         "123456789012345",
         "00000000000000",
         "1111 1111 1111 11",
         "7604-8764-7593-82",
-    ],
-)
-def test_abha_number_rejects_invalid_structure_or_checksum(value: str) -> None:
-    assert not validate_abha_number(value)
+    ]:
+        with subtests.test(value=value):
+            assert not validate_abha_number(value)
 
 
 def test_address_upi_and_ration_validators_are_precise() -> None:
@@ -119,48 +118,40 @@ def test_non_health_at_string_requires_upi_context() -> None:
     assert all(entity_type != "upi_id" for _, _, entity_type, *_ in units)
 
 
-@pytest.mark.parametrize(
-    ("id_type", "validator"),
-    [
+def test_registry_generates_validator_compatible_india_ids(subtests) -> None:
+    for id_type, validator in [
         ("abha_number", validate_abha_number),
         ("abha_address", validate_abha_address),
         ("upi_id", validate_upi_id),
         ("ration_card", validate_indian_ration_card),
-    ],
-)
-def test_registry_generates_validator_compatible_india_ids(id_type, validator) -> None:
-    spec = get_national_id("hi_IN", id_type)
-    assert spec is not None
+    ]:
+        with subtests.test(id_type=id_type, validator=validator):
+            spec = get_national_id("hi_IN", id_type)
+            assert spec is not None
 
-    anonymizer = Anonymizer(lang="hi", consistent=True, seed=17)
-    faker = anonymizer._get_faker("hi_IN")
-    value = spec.format(getattr(faker, spec.faker_method)())
+            anonymizer = Anonymizer(lang="hi", consistent=True, seed=17)
+            faker = anonymizer._get_faker("hi_IN")
+            value = spec.format(getattr(faker, spec.faker_method)())
 
-    assert validator(value)
+            assert validator(value)
 
 
-@pytest.mark.parametrize(
-    ("original", "label", "validator"),
-    [
+def test_anonymizer_dispatches_india_health_id_surrogates(subtests) -> None:
+    for original, label, validator in [
         ("7604 8764 7593 81", "ABHA_NUMBER", validate_abha_number),
         ("patient.482901@abdm", "ABHA_ADDRESS", validate_abha_address),
         ("refund.593104@okaxis", "UPI_ID", validate_upi_id),
         ("DL-4829013756", "RATION_CARD", validate_indian_ration_card),
-    ],
-)
-def test_anonymizer_dispatches_india_health_id_surrogates(
-    original,
-    label,
-    validator,
-) -> None:
-    anonymizer = Anonymizer(lang="hi", consistent=True, seed=23)
+    ]:
+        with subtests.test(original=original, label=label, validator=validator):
+            anonymizer = Anonymizer(lang="hi", consistent=True, seed=23)
 
-    first = anonymizer.surrogate(original, label)
-    second = anonymizer.surrogate(original, label)
+            first = anonymizer.surrogate(original, label)
+            second = anonymizer.surrogate(original, label)
 
-    assert first == second
-    assert first != original
-    assert validator(first)
+            assert first == second
+            assert first != original
+            assert validator(first)
 
 
 def test_surrogate_vault_reuses_abha_and_upi_without_raw_audit_or_logs(caplog) -> None:

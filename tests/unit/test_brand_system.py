@@ -34,6 +34,7 @@ def _load_social_renderer():
     return module
 
 
+@pytest.mark.slow
 def test_brand_system_contract() -> None:
     pytest.importorskip("PIL")
     validator = _load_validator()
@@ -48,6 +49,7 @@ def test_brand_fonts_consumers_and_homepage_on_every_interpreter() -> None:
     assert errors == []
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("command", _load_validator().GENERATOR_CHECKS)
 def test_brand_generator_reproducibility(command, monkeypatch) -> None:
     if command[0] == "scripts/brand/render_social_assets.py":

@@ -70,16 +70,21 @@ def test_module_helpers_require_a_caller_key_and_round_trip() -> None:
         SurrogateVaultCrypto()  # type: ignore[call-arg]
 
 
-@pytest.mark.parametrize(
-    "key",
-    [None, b"", b"short", b"x" * (KEY_BYTES - 1), b"x" * (KEY_BYTES + 1), "text"],
-)
-def test_missing_or_malformed_key_is_rejected_without_echoing_input(key) -> None:
-    with pytest.raises(SurrogateVaultKeyError) as raised:
-        SurrogateVaultCrypto(key)
+def test_missing_or_malformed_key_is_rejected_without_echoing_input(subtests) -> None:
+    for key in [
+        None,
+        b"",
+        b"short",
+        b"x" * (KEY_BYTES - 1),
+        b"x" * (KEY_BYTES + 1),
+        "text",
+    ]:
+        with subtests.test(key=key):
+            with pytest.raises(SurrogateVaultKeyError) as raised:
+                SurrogateVaultCrypto(key)
 
-    assert "SYNTHETIC" not in str(raised.value)
-    assert "key" in str(raised.value)
+            assert "SYNTHETIC" not in str(raised.value)
+            assert "key" in str(raised.value)
 
 
 def test_tampering_and_wrong_keys_fail_without_mapping_values() -> None:

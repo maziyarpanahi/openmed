@@ -41,14 +41,15 @@ def test_fixture_rows_are_synthetic():
     assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
-@pytest.mark.parametrize("row", _load_fixture())
-def test_parser_matches_gold_row(row):
-    parsed = parse_radiology_report(row["text"])
-    gold = row["gold"]
-    for key in ("findings", "impression", "recommendation"):
-        assert _norm(parsed[f"{key}_text"]) == _norm(gold[f"{key}_text"]), key
-    assert parsed["assessment_system"] == gold["assessment_system"]
-    assert parsed["assessment_category"] == gold["assessment_category"]
+def test_parser_matches_gold_row(subtests):
+    for row in _load_fixture():
+        with subtests.test(row=row):
+            parsed = parse_radiology_report(row["text"])
+            gold = row["gold"]
+            for key in ("findings", "impression", "recommendation"):
+                assert _norm(parsed[f"{key}_text"]) == _norm(gold[f"{key}_text"]), key
+            assert parsed["assessment_system"] == gold["assessment_system"]
+            assert parsed["assessment_category"] == gold["assessment_category"]
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +137,8 @@ def test_empty_input_yields_empty_template():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "text,system,category",
-    [
+def test_captures_stated_category(subtests):
+    for text, system, category in [
         ("IMPRESSION: Suspicious mass, BI-RADS category 4.", "BI-RADS", "4"),
         ("IMPRESSION: Incomplete. BI-RADS 0.", "BI-RADS", "0"),
         ("IMPRESSION: Known malignancy, BI-RADS category 6.", "BI-RADS", "6"),
@@ -155,17 +155,15 @@ def test_empty_input_yields_empty_template():
         ("IMPRESSION: The BI-RADS category is 4.", "BI-RADS", "4"),
         ("IMPRESSION: BI-RADS final assessment category is 5.", "BI-RADS", "5"),
         ("IMPRESSION: Lung-RADS assessment category is 4A.", "Lung-RADS", "4A"),
-    ],
-)
-def test_captures_stated_category(text, system, category):
-    parsed = parse_radiology_report(text)
-    assert parsed["assessment_system"] == system
-    assert parsed["assessment_category"] == category
+    ]:
+        with subtests.test(text=text, system=system, category=category):
+            parsed = parse_radiology_report(text)
+            assert parsed["assessment_system"] == system
+            assert parsed["assessment_category"] == category
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_does_not_capture_non_stated_or_invalid_category(subtests):
+    for text in [
         "Findings are category 4 in severity.",  # no RADS token
         "We used the BI-RADS lexicon for reporting.",  # token, no number
         "ACR BI-RADS Atlas, fifth edition.",  # token + ordinal word
@@ -183,12 +181,11 @@ def test_captures_stated_category(text, system, category):
         "Lung-RADS 3 nodules noted in both lobes.",  # count
         "Legend: BI-RADS 0: incomplete, 1: negative.",  # legend entry
         "Legend: BI-RADS category 0 means incomplete.",  # qualified legend
-    ],
-)
-def test_does_not_capture_non_stated_or_invalid_category(text):
-    parsed = parse_radiology_report(text)
-    assert parsed["assessment_system"] is None
-    assert parsed["assessment_category"] is None
+    ]:
+        with subtests.test(text=text):
+            parsed = parse_radiology_report(text)
+            assert parsed["assessment_system"] is None
+            assert parsed["assessment_category"] is None
 
 
 def test_count_adjacent_to_token_does_not_shadow_real_category():
