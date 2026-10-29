@@ -402,6 +402,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
