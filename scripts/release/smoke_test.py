@@ -181,7 +181,7 @@ def run_fresh_venv_smoke(
         elif normalized_format in _MLX_FORMATS:
             install_args = [f"{root}[mlx]"]
         else:
-            install_args = [f"{root}[hf]", "torch>=2.0"]
+            install_args = [f"{root}[hf]", "torch>=2.13.0"]
         _run_captured(
             [
                 str(venv_python),

@@ -18,6 +18,10 @@ on:
       - "pyproject.toml"
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Parse uv.lock and assert that every resolved package carries:
   #   - an exact pinned version

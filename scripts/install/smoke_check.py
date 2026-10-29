@@ -412,7 +412,7 @@ def _run_brief_probe(profile: str, source_root: Path) -> SmokeReport:
                 raise AssertionError("missing runtime accepted")
             refused = build_clinical_brief(value, model="mlx", context=context)
             assert (
-                refused.refusal_reason is BriefRefusal.STAGE_FAILED
+                refused.refusal_reason is BriefRefusal.MODEL_UNAVAILABLE
                 and refused.summary == ""
             )
             for module in ("torch", "transformers", "mlx"):

@@ -105,6 +105,8 @@ content-security policy blocks the optional inline styling.
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
 | `examples/interop_fhir_export.py` | Exports synthetic grounded spans through the public `to_fhir()` facade, smoke-checks the transaction Bundle, and prints JSON; see the [FHIR and OMOP interoperability guide](./guides/fhir-omop-interoperability.md). |
 | `examples/v3_golden_journey.py` | Executes the offline five-source v3 conformance Journey and prints a compact receipt derived from real library contracts. |
+| [`examples/v30_sdoh_timeline.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_sdoh_timeline.py) | Runs section-scoped SDOH extraction, explicitly anchored temporal normalization and a timeline on embedded synthetic data; prints controlled labels, offsets and states only. |
+| [`examples/v30_nli_relations.py`](https://github.com/maziyarpanahi/openmed/blob/master/examples/v30_nli_relations.py) | Runs explicit development NLI and a synthetic calibration double, then binds diagnosis/treatment and procedure/indication candidates to evidence and human-review queue bands. |
 | `examples/datasets_walkthrough.py` | Loads one bundled synthetic golden fixture and runs the public `extract_pii`/`deidentify` API with offline-first model handling. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
@@ -144,6 +146,67 @@ provides a rendered no-download tour of both flows.
 For the full coverage map, see
 [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md).
 
+## Synthetic SDOH and timeline contracts
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_sdoh_timeline
+```
+
+The script accepts no external note input or arguments and uses no model,
+download or wall clock. It detects sections, excludes the assessment's SDOH cue,
+normalizes fixed temporal spans against an explicit synthetic reference date,
+and passes `TimeExpr` records with authored synthetic event/assertion tags to
+`build_timeline()`. An ambiguous date remains unanchored and a hypothetical
+event stays in its own lane.
+
+Printed JSONL projects only controlled labels, half-open source offsets and
+states. It omits source surfaces, SDOH values/scores, normalized dates and
+reference dates. General SDOH/temporal serializers can contain protected values;
+this projection is specific to the demonstration. The example requires human
+review and demonstrates contracts, not clinical validation or automatic event
+extraction. See the [SDOH evidence contract](clinical/sdoh-evidence.md),
+[temporal normalization](clinical/temporal-normalization.md) and
+[timeline buckets](clinical/timeline-buckets.md).
+
+All records require closed labels and exact built-in scalar types. The complete
+output is validated and serialized before printing, so malformed metadata causes
+a fixed failure without partial JSONL or provider diagnostic values.
+
+## Synthetic NLI and guarded relations
+
+With OpenMed installed locally, run from the repository root:
+
+```bash
+python -m examples.v30_nli_relations
+```
+
+The script accepts no external input or arguments and loads no model. It calls
+`verify()` with the explicit **development-only heuristic** and an injected
+**synthetic calibration double** using authored probabilities and the public
+selective NLI gate. Neither is a qualified clinical model or empirical
+calibration result. The standalone `review_required` flag denotes abstention;
+a false flag or heuristic neutral label does not authorize clinical action.
+The fixed verdict metadata is checked and every record is serialized before
+printing, so malformed scalar values or serialization drift produce one fixed
+error without source values or partial JSONL output.
+
+It generates diagnosis/treatment and procedure/indication candidates from
+explicit local cue language, binds endpoint/linking evidence with an uncertain
+assertion state, and assigns human-review queue bands. Candidate rule scores
+are not calibrated clinical probabilities. Review bands do not infer clinical
+urgency, treatment appropriateness or confirmation.
+
+Printed JSONL contains only controlled labels, scores, flags, offsets, evidence
+digests and priorities. It omits premise, claim, note and raw document identifiers.
+Hashes support correlation, not anonymization or authorization. The fixed
+demonstration requires human review and makes no clinical-validation claim.
+See [NLI verification](clinical/nli-verification.md),
+[relation evidence binding](clinical/relation-evidence-binding.md) and
+[review priority](clinical/relation-review-priority.md).
+
+
 ## v1.7 multimodal, interop, and browser recipes
 
 The v1.7 examples are grouped around the main new public surfaces:
@@ -174,7 +237,8 @@ python examples/datasets_walkthrough.py
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `2.5.0` includes release-critical Apple, Android, browser, and service entry points:
+The OpenMed `3.1.0` candidate retains release-critical Apple, Android, browser,
+and service entry points. Native feature coverage differs by platform:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

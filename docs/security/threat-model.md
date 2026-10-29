@@ -1,5 +1,10 @@
 # Redactor threat model
 
+Related models cover the [clinical brief and local generation surfaces](clinical-brief-threat-model.md),
+[Journey workflows](journey-threat-model.md), [MCP gateway](mcp-threat-model.md),
+[agent boundaries](agent-threat-model.md), and
+[multilingual ingestion](threat-model-multilingual-ingestion.md).
+
 This document is the structured threat analysis for OpenMed's de-identification
 path — the "redactor". OpenMed's security objective is to prevent supported
 de-identification paths from exposing protected health information (PHI) or

@@ -40,10 +40,11 @@ def test_deprecated_class_warns_without_replacing_class_identity():
     assert instance.value == "value"
 
 
-@pytest.mark.parametrize("keyword", ["since", "remove_in"])
-def test_deprecated_rejects_empty_version(keyword):
-    arguments = {"since": "1.9", "remove_in": "2.0"}
-    arguments[keyword] = " "
+def test_deprecated_rejects_empty_version(subtests):
+    for keyword in ["since", "remove_in"]:
+        with subtests.test(keyword=keyword):
+            arguments = {"since": "1.9", "remove_in": "2.0"}
+            arguments[keyword] = " "
 
-    with pytest.raises(ValueError, match=keyword):
-        deprecated(**arguments)
+            with pytest.raises(ValueError, match=keyword):
+                deprecated(**arguments)

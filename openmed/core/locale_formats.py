@@ -307,6 +307,9 @@ BACKLOG_LOCALES: Final = frozenset(
 LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     # Wired PII languages.
     "en": "mdy",
+    "en-gb": "dmy",
+    "en-in": "dmy",
+    "en-za": "dmy",
     "fr": "dmy",
     "de": "dmy",
     "it": "dmy",
@@ -321,6 +324,7 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "gu": "dmy",
     "kn": "dmy",
     "ml": "dmy",
+    "ne": "dmy",
     "mr": "dmy",
     "or": "dmy",
     "pa": "dmy",
@@ -579,6 +583,22 @@ LOCALE_PII_FORMATS: Final[Mapping[str, tuple[LocalePIIFormat, ...]]] = {
 }
 
 
+def date_order_for_locale(locale: str | None) -> DateOrder | None:
+    """Return the shared numeric-date order for a language or regional locale.
+
+    Args:
+        locale: Language or regional locale with a dash or underscore separator.
+
+    Returns:
+        The registered order, or ``None`` for an unknown locale.
+    """
+    normalized = str(locale or "").strip().lower().replace("_", "-")
+    code = normalized if normalized in LOCALE_DATE_ORDER else _normalize_lang(locale)
+    if code == "fil":
+        code = "tl"
+    return LOCALE_DATE_ORDER.get(code) if code else None
+
+
 def parse_date(text: str, lang: str | None = None) -> ParsedDate:
     """Parse a numeric Gregorian date using locale day/month order.
 
@@ -614,8 +634,7 @@ def parse_date(text: str, lang: str | None = None) -> ParsedDate:
             return ParsedDate(None, None, None, reason="invalid_date")
         return _parsed_date_from_candidate(candidate, (candidate,))
 
-    lang_code = _normalize_lang(lang)
-    locale_order = LOCALE_DATE_ORDER.get(lang_code) if lang_code else None
+    locale_order = date_order_for_locale(lang)
     if locale_order is not None:
         candidate = _date_candidate(parts, locale_order)
         candidates = _valid_date_candidates(parts)

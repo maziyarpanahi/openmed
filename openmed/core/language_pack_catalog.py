@@ -72,7 +72,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "en",
         "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
         "en_US",
-        ("Latin", "Cyrillic", "Greek", "Hebrew", "Thai", UNKNOWN_SCRIPT),
+        ("Latin", "Cyrillic", "Greek"),
         national_id_provider=("en_US", "ssn"),
     ),
     _pack(
@@ -256,7 +256,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "he",
         "OpenMed/privacy-filter-multilingual",
         "he_IL",
-        (UNROUTED_SCRIPT,),
+        ("Hebrew",),
         national_id_provider=("he_IL", "teudat_zehut"),
     ),
     _pack(
@@ -286,7 +286,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "th",
         "OpenMed/privacy-filter-multilingual",
         "th_TH",
-        (UNROUTED_SCRIPT,),
+        ("Thai",),
         national_id_provider=("th_TH", "thai_national_id"),
     ),
     _pack(

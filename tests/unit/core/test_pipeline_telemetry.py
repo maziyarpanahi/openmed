@@ -297,7 +297,7 @@ def test_otel_extra_contains_no_network_exporter() -> None:
         dependencies = tomllib.load(handle)["project"]["optional-dependencies"]
 
     assert dependencies["otel"] == [
-        "opentelemetry-api>=1.26,<2",
+        "opentelemetry-api>=1.45.1,<2",
         "opentelemetry-sdk>=1.26,<2",
     ]
     assert all("exporter" not in dependency for dependency in dependencies["otel"])

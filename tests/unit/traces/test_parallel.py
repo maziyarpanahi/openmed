@@ -104,6 +104,7 @@ def test_sequential_execution_uses_a_fresh_store_and_input_order(
     assert result.is_complete
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     "spawn" not in multiprocessing.get_all_start_methods(),
     reason="requires the spawn multiprocessing start method",
