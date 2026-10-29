@@ -27,6 +27,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
     normalize_bengali_assamese_digits,
@@ -119,7 +120,10 @@ def test_golden_fixtures_cover_required_categories_and_languages():
     assert set(grouped) == set(GOLDEN_CATEGORIES)
     assert SUPPORTED_LANGUAGES.issubset(multilingual_languages)
     assert multilingual_languages <= (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
 
     multilingual = grouped["multilingual"]
