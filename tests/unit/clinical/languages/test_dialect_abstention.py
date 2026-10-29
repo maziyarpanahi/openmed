@@ -550,7 +550,7 @@ PINNED_BUCKETS = [98, 132, 183, 360, 480]
 def test_hashed_ngram_scheme_is_pinned():
     profile = extract_dialect_features("ab")
 
-    # Bigrams " a", "ab", "b " and trigrams " ab", "ab " in keyed buckets. The
+    # Bigrams " a", "ab", "b " and trigrams " ab", "ab " in fixed buckets. The
     # scheme is pinned so serialized references stay comparable across
     # releases and interpreter hash seeds.
     assert [bucket for bucket, _share in profile.ngram_histogram] == PINNED_BUCKETS

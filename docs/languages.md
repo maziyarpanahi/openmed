@@ -141,11 +141,13 @@ result_metadata.update(decision.to_metadata())
   A reference built from a restricted corpus is still a derived artifact of
   that corpus and must stay where its data use agreement permits.
 - **Privacy-safe features.** Distances use script shares, character-class
-  shares, letter bigrams and trigrams hashed into 512 keyed buckets (digits
+  shares, letter bigrams and trigrams hashed into 512 fixed buckets (digits
   and punctuation never contribute), the declared BCP 47 locale, the declared
   domain code and the deterministic `LanguageRouter` result. The default
   router is stdlib-only. Pass a router with a local language-ID backend to
-  confirm Latin-script languages when no locale is declared.
+  confirm Latin-script languages when no locale is declared. Hashing uses a
+  fixed public BLAKE2 personalization string and provides no secret-key
+  protection.
 - **Distances.** Dialect distance is `0.3 * locale + 0.2 * script + 0.5 *
   n-gram` (cosine distance). Domain distance is `0.5 * declared-domain
   mismatch + 0.5 * character-class shape`. Both lie in `[0, 1]`. A different
@@ -161,7 +163,9 @@ result_metadata.update(decision.to_metadata())
   validated for the task, run on a registered pack and sit within the
   abstention distance. An ensemble needs at least two such varieties. Run every
   member and combine conservatively; for de-identification, redact the union
-  of their spans.
+  of their spans. An explicitly declared `insufficient_evidence_action="fallback"`
+  bypasses the unstable distance estimate for short inputs and always requires
+  review.
 - **Surfaced limitations.** `DialectDecision` lists controlled codes such as
   `dialect_shift`, `domain_unvalidated`, `locale_undeclared` and
   `insufficient_evidence` (see `DIALECT_LIMITATIONS`), plus `requires_review`,

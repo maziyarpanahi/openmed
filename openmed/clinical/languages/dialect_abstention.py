@@ -8,7 +8,7 @@ declared policy that accepts the route, requires a fallback or an ensemble, or
 abstains.
 
 Distances use privacy-safe features only: script shares, character-class
-shares, a keyed and hashed character n-gram histogram, the declared locale, the
+shares, a bucketed character n-gram hash histogram, the declared locale, the
 declared domain and the deterministic language route. Input text is never
 stored, logged or echoed. Input histograms exist only in memory and are never
 serialized; validated references are aggregates over several validation
@@ -371,7 +371,7 @@ class _Counts:
 
     def _add_token(self, token: str, bucket_of: dict[str, int]) -> None:
         # Digits and punctuation end a token, so identifiers and numbers never
-        # contribute n-grams. Each gram is hashed into a small keyed bucket
+        # contribute n-grams. Each gram is hashed into a small fixed bucket
         # space; the grams themselves are discarded with this call.
         padded = f" {token.casefold()} "
         for size in (2, 3):
@@ -420,7 +420,7 @@ class DialectFeatureProfile:
         letter_count: Number of letters after NFKC normalization.
         script_shares: Sorted ``(script, share)`` pairs over letters.
         char_class_shares: Shares aligned with :data:`CHAR_CLASSES`.
-        ngram_histogram: Sorted ``(bucket, share)`` pairs of keyed, hashed
+        ngram_histogram: Sorted ``(bucket, share)`` pairs of fixed, hashed
             letter bigrams and trigrams. It is used in memory only and is
             excluded from :meth:`summary`.
         declared_locale: Canonical BCP 47 tag declared by the caller.
@@ -919,7 +919,9 @@ class DialectPolicy:
         accept_domain_distance: Highest domain distance that is accepted.
         abstain_domain_distance: Domain distance above which to abstain.
         intermediate_action: ``"fallback"``, ``"ensemble"`` or ``"abstain"``.
-        insufficient_evidence_action: ``"fallback"`` or ``"abstain"``.
+        insufficient_evidence_action: ``"fallback"`` or ``"abstain"``. An explicit
+            short-input fallback skips the unstable distance check and always
+            requires review.
         fallback_variety: Variety identifier required by fallback actions.
         ensemble_size: Maximum ensemble members, between 2 and 8.
         min_letters: Letters needed for a stable distance estimate.

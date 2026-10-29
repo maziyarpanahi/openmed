@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
+
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
 
