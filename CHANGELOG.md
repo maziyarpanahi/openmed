@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
@@ -61,8 +63,6 @@ clinical efficacy. Package publication remains a separate release action.
   without restoring the invalid classical scale (#3724).
 
 ### Added
-
-- Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
 
 - Add five runnable, offline synthetic clinical workflow evidence examples,
   with deterministic digest/ID/code-only reports and fail-closed controls (#3794).
