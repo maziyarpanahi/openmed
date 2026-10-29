@@ -221,19 +221,21 @@ def test_catalog_names_dialect_and_local_references() -> None:
             assert reference.removeprefix("#/$defs/") in schema["$defs"]
 
 
-@pytest.mark.parametrize("name", SCHEMA_NAMES)
-def test_canonical_payloads_validate_without_remote_resolution(name: str) -> None:
-    _validator(name).validate(_payload(name))
+def test_canonical_payloads_validate_without_remote_resolution(subtests) -> None:
+    for name in SCHEMA_NAMES:
+        with subtests.test(name=name):
+            _validator(name).validate(_payload(name))
 
 
-@pytest.mark.parametrize("name", SCHEMA_NAMES)
-def test_schema_fields_and_required_match_serialized_payload(name: str) -> None:
-    schema = build_exchange_record_schema(name)
-    payload = _payload(name)
+def test_schema_fields_and_required_match_serialized_payload(subtests) -> None:
+    for name in SCHEMA_NAMES:
+        with subtests.test(name=name):
+            schema = build_exchange_record_schema(name)
+            payload = _payload(name)
 
-    assert schema["additionalProperties"] is False
-    assert set(schema["properties"]) == set(payload)
-    assert set(schema["required"]) == set(payload)
+            assert schema["additionalProperties"] is False
+            assert set(schema["properties"]) == set(payload)
+            assert set(schema["required"]) == set(payload)
 
 
 def test_version_constants_track_python_sources() -> None:
@@ -755,15 +757,16 @@ def test_catalog_builds_independent_mappings() -> None:
     assert build_exchange_record_schema_catalog()["approval_token"]["properties"]
 
 
-@pytest.mark.parametrize(
-    "disposition,reason",
-    [("complete", "effects_reconciled"), ("review_required", "ambiguous_effect")],
-)
-def test_terminal_decisions_reject_orphan_retry_keys(disposition, reason) -> None:
-    payload = _payload("recovery_decision")
-    payload.update(disposition=disposition, reason=reason, retry_effect_ids=[])
-    with pytest.raises(ValidationError):
-        _validator("recovery_decision").validate(payload)
+def test_terminal_decisions_reject_orphan_retry_keys(subtests) -> None:
+    for disposition, reason in [
+        ("complete", "effects_reconciled"),
+        ("review_required", "ambiguous_effect"),
+    ]:
+        with subtests.test(disposition=disposition, reason=reason):
+            payload = _payload("recovery_decision")
+            payload.update(disposition=disposition, reason=reason, retry_effect_ids=[])
+            with pytest.raises(ValidationError):
+                _validator("recovery_decision").validate(payload)
 
 
 def test_retired_recovery_decision_schema_matches_runtime_without_resume():
@@ -787,9 +790,8 @@ def test_retired_recovery_decision_schema_matches_runtime_without_resume():
     )
 
 
-@pytest.mark.parametrize(
-    "change",
-    (
+def test_retired_decision_schema_rejects_reason_or_effect_payloads(subtests):
+    for change in (
         {"reason": "safe_to_resume"},
         {"retry_effect_ids": [_ACTION_ID.serialize()]},
         {"retry_idempotency_keys": [_IDEMPOTENCY_KEY]},
@@ -802,22 +804,20 @@ def test_retired_recovery_decision_schema_matches_runtime_without_resume():
                 }
             ]
         },
-    ),
-)
-def test_retired_decision_schema_rejects_reason_or_effect_payloads(change):
-    payload = recovery.RecoveryDecision.create(
-        disposition=recovery.RecoveryDisposition.RETIRED,
-        reason=recovery.RecoveryReason.JOURNAL_RETIRED,
-        source_checkpoint_digest=_SOURCE_DIGEST,
-    ).to_dict()
-    payload.update(change)
-    with pytest.raises(ValidationError):
-        _validator("recovery_decision").validate(payload)
+    ):
+        with subtests.test(change=change):
+            payload = recovery.RecoveryDecision.create(
+                disposition=recovery.RecoveryDisposition.RETIRED,
+                reason=recovery.RecoveryReason.JOURNAL_RETIRED,
+                source_checkpoint_digest=_SOURCE_DIGEST,
+            ).to_dict()
+            payload.update(change)
+            with pytest.raises(ValidationError):
+                _validator("recovery_decision").validate(payload)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_v2_token_metadata_uses_closed_bounded_fields(subtests):
+    for field, value in [
         ("key_id", "UPPERCASE"),
         ("key_id", "key\n"),
         ("key_id", "x" * 129),
@@ -826,37 +826,35 @@ def test_retired_decision_schema_rejects_reason_or_effect_payloads(change):
         ("issued_at", 1.5),
         ("issued_at", True),
         ("issued_at", 2**63),
-    ],
-)
-def test_v2_token_metadata_uses_closed_bounded_fields(field, value):
-    payload = _payload("approval_token")
-    payload[field] = value
-    with pytest.raises(ValidationError):
-        _validator("approval_token").validate(payload)
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = _payload("approval_token")
+            payload[field] = value
+            with pytest.raises(ValidationError):
+                _validator("approval_token").validate(payload)
 
 
-@pytest.mark.parametrize("field", ["key_id", "issued_at"])
-def test_v2_token_requires_every_signed_metadata_field(field):
-    payload = _payload("approval_token")
-    del payload[field]
-    with pytest.raises(ValidationError):
-        _validator("approval_token").validate(payload)
+def test_v2_token_requires_every_signed_metadata_field(subtests):
+    for field in ["key_id", "issued_at"]:
+        with subtests.test(field=field):
+            payload = _payload("approval_token")
+            del payload[field]
+            with pytest.raises(ValidationError):
+                _validator("approval_token").validate(payload)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_v2_public_receipt_refuses_execution_authority_and_unknown_codes(subtests):
+    for field, value in [
         ("reviewer_role", _ROLE),
         ("consumed_at", _TIMESTAMP - 1),
         ("expires_at", _TIMESTAMP),
         ("code", "denied"),
-    ],
-)
-def test_v2_public_receipt_refuses_execution_authority_and_unknown_codes(field, value):
-    payload = _payload("approval_receipt")
-    payload[field] = value
-    with pytest.raises(ValidationError):
-        _validator("approval_receipt").validate(payload)
+    ]:
+        with subtests.test(field=field, value=value):
+            payload = _payload("approval_receipt")
+            payload[field] = value
+            with pytest.raises(ValidationError):
+                _validator("approval_receipt").validate(payload)
 
 
 def test_real_v2_signing_consumption_and_structure_only_boundary():
@@ -892,9 +890,10 @@ def test_real_v2_signing_consumption_and_structure_only_boundary():
         )
 
 
-@pytest.mark.parametrize("name", ["approval_token", "approval_receipt"])
-def test_current_wire_schema_refuses_legacy_v1_records(name):
-    payload = _payload(name)
-    payload["schema_version"] = "openmed.agent." + name + ".v1"
-    with pytest.raises(ValidationError):
-        _validator(name).validate(payload)
+def test_current_wire_schema_refuses_legacy_v1_records(subtests):
+    for name in ["approval_token", "approval_receipt"]:
+        with subtests.test(name=name):
+            payload = _payload(name)
+            payload["schema_version"] = "openmed.agent." + name + ".v1"
+            with pytest.raises(ValidationError):
+                _validator(name).validate(payload)

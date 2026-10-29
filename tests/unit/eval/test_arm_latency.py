@@ -221,24 +221,20 @@ def test_empty_corpus_and_unpinned_revision_fail_closed() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "document",
-    [
+def test_invalid_or_non_synthetic_documents_fail_closed(subtests) -> None:
+    for document in [
         LatencyDocument("", "Synthetic text"),
         LatencyDocument("real", "Synthetic text", synthetic=False),
         LatencyDocument("long", "x" * (MAX_SMS_CHARACTERS + 1)),
-    ],
-)
-def test_invalid_or_non_synthetic_documents_fail_closed(
-    document: LatencyDocument,
-) -> None:
-    with pytest.raises(ValueError):
-        run_arm_latency_benchmark(
-            _FakeInt8Model(),
-            model_id="OpenMed/unit-int8",
-            model_revision="a" * 40,
-            documents=[document],
-            budget=_budget(),
-            warmup_runs=0,
-            repeat=1,
-        )
+    ]:
+        with subtests.test(document=document):
+            with pytest.raises(ValueError):
+                run_arm_latency_benchmark(
+                    _FakeInt8Model(),
+                    model_id="OpenMed/unit-int8",
+                    model_revision="a" * 40,
+                    documents=[document],
+                    budget=_budget(),
+                    warmup_runs=0,
+                    repeat=1,
+                )

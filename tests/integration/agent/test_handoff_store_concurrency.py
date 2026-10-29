@@ -23,6 +23,7 @@ def _race(path, lease, barrier, queue):
         store.close()
 
 
+@pytest.mark.slow
 @pytest.mark.integration
 def test_two_process_reviewers_race_then_restart_and_correct(tmp_path):
     path = tmp_path / "handoffs.db"

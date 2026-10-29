@@ -116,6 +116,7 @@ def test_generation_is_deterministic_per_seed_and_varies_across_seeds():
     )
 
 
+@pytest.mark.slow
 def test_importing_core_and_burned_in_module_does_not_import_pillow():
     code = (
         "import sys\n"

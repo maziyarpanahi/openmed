@@ -79,17 +79,15 @@ def test_memory_namespace_requires_explicit_allowlist() -> None:
     assert store.get_bytes(_artifact().content_hash).value == CONTENT
 
 
-@pytest.mark.parametrize(
-    "root_uri",
-    (
+def test_network_and_nonlocal_protocols_are_denied_by_default(subtests) -> None:
+    for root_uri in (
         "https://example.invalid/journey",
         "s3://synthetic-bucket/journey",
         "memory://journey/root",
-    ),
-)
-def test_network_and_nonlocal_protocols_are_denied_by_default(root_uri: str) -> None:
-    with pytest.raises(ValueError, match="not explicitly allowed"):
-        ObjectStoreNamespace(root_uri)
+    ):
+        with subtests.test(root_uri=root_uri):
+            with pytest.raises(ValueError, match="not explicitly allowed"):
+                ObjectStoreNamespace(root_uri)
 
 
 def test_unbounded_local_root_is_rejected() -> None:
@@ -97,22 +95,20 @@ def test_unbounded_local_root_is_rejected() -> None:
         FsspecArtifactStore("file:///")
 
 
-@pytest.mark.parametrize(
-    "root_uri",
-    (
+def test_unsafe_namespace_forms_are_rejected(subtests) -> None:
+    for root_uri in (
         "memory://journey/../escape",
         "file:///tmp/journey/../../escape",
         "s3://synthetic-bucket/root?token=not-stored",
         "s3://user:credential@synthetic-bucket/root",
-    ),
-)
-def test_unsafe_namespace_forms_are_rejected(root_uri: str) -> None:
-    protocol = root_uri.split(":", 1)[0]
-    with pytest.raises(ValueError):
-        ObjectStoreNamespace(
-            root_uri,
-            allowed_protocols=frozenset({protocol}),
-        )
+    ):
+        with subtests.test(root_uri=root_uri):
+            protocol = root_uri.split(":", 1)[0]
+            with pytest.raises(ValueError):
+                ObjectStoreNamespace(
+                    root_uri,
+                    allowed_protocols=frozenset({protocol}),
+                )
 
 
 def test_storage_options_are_not_exposed_in_repr() -> None:
