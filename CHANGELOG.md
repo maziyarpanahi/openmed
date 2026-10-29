@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value-free leakage harness reports residual PHI after `redact_hl7v2()` by
   field position and label (#3884).
 
+- Generate seeded synthetic C-CDA documents (CCD, discharge summary, progress
+  note) with element-level PHI truth, narrative-to-structured links and
+  placeholder codes, plus a value-free leakage harness over `redact_cda()`
+  that reports residuals by element path and label and rejects remote schema
+  or entity-bearing options (#3885).
+
 - Added deterministic clinical language-pack readiness matrices with closed
   capability and state vocabularies, `sha256:` evidence digests, alias-normalized
   locale folding, byte-stable JSON/Markdown rendering and registry-derived
