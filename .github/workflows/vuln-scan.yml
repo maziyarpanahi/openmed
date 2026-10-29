@@ -41,6 +41,10 @@ env:
   IMAGE_NAME: openmed:ci
   VULN_SCAN_SEVERITY_THRESHOLD: ${{ github.event.inputs.severity-threshold || 'HIGH' }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   vulnerability-scan:
     name: Scan image and lockfile
