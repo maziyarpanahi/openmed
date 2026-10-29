@@ -198,25 +198,23 @@ def test_threshold_cannot_hide_bypassed_attack_or_abuse_bucket(
     )
 
 
-@pytest.mark.parametrize(
-    "invalid_update",
-    (
+def test_corpus_validation_fails_closed(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for invalid_update in (
         {"synthetic": False},
         {"expected_protected": []},
         {"abuse_case_id": "unknown"},
         {"id": "unsafe id with spaces"},
         {"language": "../unsafe"},
         {"unexpected_field": "not allowed"},
-    ),
-)
-def test_corpus_validation_fails_closed(
-    tmp_path: Path,
-    invalid_update: dict[str, object],
-) -> None:
-    corpus = _write_corpus(tmp_path / "corpus.jsonl", _case(**invalid_update))
+    ):
+        with subtests.test(invalid_update=invalid_update):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            corpus = _write_corpus(tmp_path / "corpus.jsonl", _case(**invalid_update))
 
-    with pytest.raises(RedTeamCorpusError):
-        load_redteam_corpus(corpus)
+            with pytest.raises(RedTeamCorpusError):
+                load_redteam_corpus(corpus)
 
 
 def test_corpus_validation_rejects_unknown_assertion_fields(tmp_path: Path) -> None:
@@ -262,27 +260,26 @@ def test_corpus_validation_rejects_non_finite_json_numbers(tmp_path: Path) -> No
         load_redteam_corpus(corpus)
 
 
-@pytest.mark.parametrize(
-    ("value", "match"),
-    (("\u200d", "normalized"), ("---", "alnum")),
-)
 def test_corpus_validation_rejects_empty_comparison_surfaces(
-    tmp_path: Path,
-    value: str,
-    match: str,
+    subtests, tmp_path
 ) -> None:
-    corpus = _write_corpus(
-        tmp_path / "corpus.jsonl",
-        _case(
-            text=f"Synthetic protected value: {value}",
-            expected_protected=[
-                {"label": "identifier", "value": value, "match": match}
-            ],
-        ),
-    )
+    case_root = tmp_path
+    for value, match in (("\u200d", "normalized"), ("---", "alnum")):
+        with subtests.test(value=value, match=match):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            corpus = _write_corpus(
+                tmp_path / "corpus.jsonl",
+                _case(
+                    text=f"Synthetic protected value: {value}",
+                    expected_protected=[
+                        {"label": "identifier", "value": value, "match": match}
+                    ],
+                ),
+            )
 
-    with pytest.raises(RedTeamCorpusError, match="becomes empty"):
-        load_redteam_corpus(corpus)
+            with pytest.raises(RedTeamCorpusError, match="becomes empty"):
+                load_redteam_corpus(corpus)
 
 
 def test_corpus_validation_rejects_repeated_assertions(tmp_path: Path) -> None:

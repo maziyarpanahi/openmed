@@ -107,25 +107,24 @@ def test_unindexed_hub_models_resolve_without_network(subtests):
             assert record.path == ""
 
 
-@pytest.mark.parametrize(
-    "config,family",
-    [
+def test_local_config_resolves_arbitrary_directory_name(subtests, tmp_path):
+    case_root = tmp_path
+    for config, family in [
         ({"model_type": "gliformer-layout"}, "gliformer"),
         ({"model_type": "gliner2", "architecture": "boundary"}, "gliner2"),
         ({"architectures": ["Gliner2ForSchemaExtraction"]}, "gliner2"),
-    ],
-)
-@pytest.mark.parametrize("filename", ["config.json", "gliner_config.json"])
-def test_local_config_resolves_arbitrary_directory_name(
-    tmp_path, config, family, filename
-):
-    directory = tmp_path / "arbitrary-export"
-    directory.mkdir()
-    (directory / filename).write_text(json.dumps(config))
-    record = resolve_model_record(str(directory))
-    assert record.family == family
-    assert record.path == str(directory)
-    assert build_index(tmp_path).models[0].family == family
+    ]:
+        for filename in ["config.json", "gliner_config.json"]:
+            with subtests.test(config=config, family=family, filename=filename):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                directory = tmp_path / "arbitrary-export"
+                directory.mkdir()
+                (directory / filename).write_text(json.dumps(config))
+                record = resolve_model_record(str(directory))
+                assert record.family == family
+                assert record.path == str(directory)
+                assert build_index(tmp_path).models[0].family == family
 
 
 def test_explicit_family_accepts_ambiguous_identifier():

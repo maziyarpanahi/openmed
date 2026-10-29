@@ -176,34 +176,48 @@ def test_sdoh_timeline_example_cli_completes_offline_under_a_minute():
     _assert_sdoh_timeline_demo_output(result.stdout)
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [["PRIVATE_ARGUMENT_SENTINEL"], ["--note", "PRIVATE_ARGUMENT_SENTINEL"]],
-)
-def test_sdoh_timeline_example_refuses_arguments_without_echo(
-    arguments, monkeypatch, capsys
-):
-    def fail():
-        pytest.fail("argument refusal ran extraction")
+def test_sdoh_timeline_example_refuses_arguments_without_echo(subtests, capsys):
+    for arguments in [
+        ["PRIVATE_ARGUMENT_SENTINEL"],
+        ["--note", "PRIVATE_ARGUMENT_SENTINEL"],
+    ]:
+        with subtests.test(arguments=arguments):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", fail)
-    assert v30_sdoh_timeline.main(arguments) == 2
-    assert capsys.readouterr() == ("", "synthetic_example_accepts_no_arguments\n")
+                def fail():
+                    pytest.fail("argument refusal ran extraction")
+
+                monkeypatch.setattr(v30_sdoh_timeline, "build_demo_records", fail)
+                assert v30_sdoh_timeline.main(arguments) == 2
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_example_accepts_no_arguments\n",
+                )
 
 
-@pytest.mark.parametrize(
-    "public_call",
-    ["detect_sections", "extract_sdoh", "normalize_temporal", "build_timeline"],
-)
 def test_sdoh_timeline_example_reports_api_failure_without_partial_output(
-    public_call, monkeypatch, capsys
+    subtests, capsys
 ):
-    def fail(*args, **kwargs):
-        raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+    for public_call in [
+        "detect_sections",
+        "extract_sdoh",
+        "normalize_temporal",
+        "build_timeline",
+    ]:
+        with subtests.test(public_call=public_call):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(v30_sdoh_timeline, public_call, fail)
-    assert v30_sdoh_timeline.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_example_contract_failed\n")
+                def fail(*args, **kwargs):
+                    raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+                monkeypatch.setattr(v30_sdoh_timeline, public_call, fail)
+                assert v30_sdoh_timeline.main([]) == 1
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_example_contract_failed\n",
+                )
 
 
 def test_sdoh_timeline_example_detects_section_scope_drift(monkeypatch, capsys):
@@ -1107,27 +1121,28 @@ def test_nli_relation_example_cli_completes_offline_without_reading_stdin():
     _assert_nli_relation_demo_output(result.stdout)
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [["PRIVATE_ARGUMENT_SENTINEL"], ["--note", "PRIVATE_ARGUMENT_SENTINEL"]],
-)
-def test_nli_relation_example_refuses_arguments_without_echo(
-    arguments, monkeypatch, capsys
-):
-    def fail():
-        pytest.fail("argument refusal ran the relation demonstration")
+def test_nli_relation_example_refuses_arguments_without_echo(subtests, capsys):
+    for arguments in [
+        ["PRIVATE_ARGUMENT_SENTINEL"],
+        ["--note", "PRIVATE_ARGUMENT_SENTINEL"],
+    ]:
+        with subtests.test(arguments=arguments):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(v30_nli_relations, "build_demo_records", fail)
-    assert v30_nli_relations.main(arguments) == 2
-    assert capsys.readouterr() == (
-        "",
-        "synthetic_relation_example_accepts_no_arguments\n",
-    )
+                def fail():
+                    pytest.fail("argument refusal ran the relation demonstration")
+
+                monkeypatch.setattr(v30_nli_relations, "build_demo_records", fail)
+                assert v30_nli_relations.main(arguments) == 2
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_relation_example_accepts_no_arguments\n",
+                )
 
 
-@pytest.mark.parametrize(
-    "public_call",
-    [
+def test_nli_relation_example_reports_failure_without_partial_output(subtests, capsys):
+    for public_call in [
         "verify",
         "evaluate_nli",
         "detect_sections",
@@ -1135,17 +1150,20 @@ def test_nli_relation_example_refuses_arguments_without_echo(
         "generate_procedure_indication_candidates",
         "bind_relation_evidence",
         "assign_review_priority",
-    ],
-)
-def test_nli_relation_example_reports_failure_without_partial_output(
-    public_call, monkeypatch, capsys
-):
-    def fail(*args, **kwargs):
-        raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+    ]:
+        with subtests.test(public_call=public_call):
+            capsys.readouterr()
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(v30_nli_relations, public_call, fail)
-    assert v30_nli_relations.main([]) == 1
-    assert capsys.readouterr() == ("", "synthetic_relation_example_contract_failed\n")
+                def fail(*args, **kwargs):
+                    raise RuntimeError("PRIVATE_PROVIDER_ERROR_SENTINEL")
+
+                monkeypatch.setattr(v30_nli_relations, public_call, fail)
+                assert v30_nli_relations.main([]) == 1
+                assert capsys.readouterr() == (
+                    "",
+                    "synthetic_relation_example_contract_failed\n",
+                )
 
 
 def test_nli_relation_example_blocks_python_network_attempts(monkeypatch, capsys):

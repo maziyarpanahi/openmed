@@ -382,39 +382,43 @@ def test_brief_probe_preserves_a_specific_controlled_failure():
     assert smoke_check._brief_probe_results(result, "core") == tuple(rows)
 
 
-@pytest.mark.parametrize("kind", ["wheel", "sdist"])
-def test_missing_resource_control_changes_only_disposable_artifact(tmp_path, kind):
-    import hashlib
-    import io
-    import tarfile
-    import zipfile
+def test_missing_resource_control_changes_only_disposable_artifact(subtests, tmp_path):
+    case_root = tmp_path
+    for kind in ["wheel", "sdist"]:
+        with subtests.test(kind=kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            import hashlib
+            import io
+            import tarfile
+            import zipfile
 
-    name = "openmed/" + smoke_check.BRIEF_RESOURCE
-    data = b'{"synthetic": true}'
-    output = tmp_path / "control"
-    output.mkdir()
-    if kind == "wheel":
-        artifact = tmp_path / "openmed-0.0.0-py3-none-any.whl"
-        with zipfile.ZipFile(artifact, "w") as archive:
-            archive.writestr(name, data)
-            archive.writestr("openmed/__init__.py", b"")
-    else:
-        artifact = tmp_path / "openmed-0.0.0.tar.gz"
-        with tarfile.open(artifact, "w:gz") as archive:
-            for path, content in [(name, data), ("openmed/__init__.py", b"")]:
-                member = tarfile.TarInfo("openmed-0.0.0/" + path)
-                member.size = len(content)
-                archive.addfile(member, io.BytesIO(content))
-    before = hashlib.sha256(artifact.read_bytes()).hexdigest()
-    damaged = smoke_check._omit_brief_resource(artifact, output)
-    assert hashlib.sha256(artifact.read_bytes()).hexdigest() == before
-    assert damaged.parent == output
-    if kind == "wheel":
-        with zipfile.ZipFile(damaged) as archive:
-            assert archive.namelist() == ["openmed/__init__.py"]
-    else:
-        with tarfile.open(damaged, "r:gz") as archive:
-            assert archive.getnames() == ["openmed-0.0.0/openmed/__init__.py"]
+            name = "openmed/" + smoke_check.BRIEF_RESOURCE
+            data = b'{"synthetic": true}'
+            output = tmp_path / "control"
+            output.mkdir()
+            if kind == "wheel":
+                artifact = tmp_path / "openmed-0.0.0-py3-none-any.whl"
+                with zipfile.ZipFile(artifact, "w") as archive:
+                    archive.writestr(name, data)
+                    archive.writestr("openmed/__init__.py", b"")
+            else:
+                artifact = tmp_path / "openmed-0.0.0.tar.gz"
+                with tarfile.open(artifact, "w:gz") as archive:
+                    for path, content in [(name, data), ("openmed/__init__.py", b"")]:
+                        member = tarfile.TarInfo("openmed-0.0.0/" + path)
+                        member.size = len(content)
+                        archive.addfile(member, io.BytesIO(content))
+            before = hashlib.sha256(artifact.read_bytes()).hexdigest()
+            damaged = smoke_check._omit_brief_resource(artifact, output)
+            assert hashlib.sha256(artifact.read_bytes()).hexdigest() == before
+            assert damaged.parent == output
+            if kind == "wheel":
+                with zipfile.ZipFile(damaged) as archive:
+                    assert archive.namelist() == ["openmed/__init__.py"]
+            else:
+                with tarfile.open(damaged, "r:gz") as archive:
+                    assert archive.getnames() == ["openmed-0.0.0/openmed/__init__.py"]
 
 
 def test_resource_control_cannot_succeed_when_resource_was_already_missing(tmp_path):

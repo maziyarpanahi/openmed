@@ -381,28 +381,33 @@ def _crash_run(tmp_path: Path, phase: str) -> tuple[bytes, object]:
     return previous, (root, result, target_name)
 
 
-@pytest.mark.parametrize("phase", CRASH_PHASES)
 def test_crash_during_shard_write_never_leaves_a_partial_output(
-    tmp_path: Path,
-    phase: str,
+    subtests, tmp_path
 ) -> None:
-    previous, (root, result, target_name) = _crash_run(tmp_path, phase)
-    expected_new = alternate_shard_handler(_plan(count=4, shard_count=1).shards[0])
+    case_root = tmp_path
+    for phase in CRASH_PHASES:
+        with subtests.test(phase=phase):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            previous, (root, result, target_name) = _crash_run(tmp_path, phase)
+            expected_new = alternate_shard_handler(
+                _plan(count=4, shard_count=1).shards[0]
+            )
 
-    persisted = (root / target_name).read_bytes()
-    # Either the old bytes or the complete new bytes -- never a partial write.
-    assert persisted in {previous, expected_new}
-    # No temporary file is left behind for anyone to mistake for an output.
-    assert not list(root.glob(f".{target_name}.*.tmp"))
-    assert not list(root.glob("*.tmp"))
-    # The interrupted shard is not counted as completed.
-    record = result.manifest.shard(0)
-    assert record.status == ShardStatus.FAILED
-    assert record.error_type == "RuntimeError"
-    assert record.output_digest is None
-    assert result.failed_shards == (0,)
-    assert not result.is_complete
-    assert validate_shard_outputs(result.manifest, root=root).all_valid
+            persisted = (root / target_name).read_bytes()
+            # Either the old bytes or the complete new bytes -- never a partial write.
+            assert persisted in {previous, expected_new}
+            # No temporary file is left behind for anyone to mistake for an output.
+            assert not list(root.glob(f".{target_name}.*.tmp"))
+            assert not list(root.glob("*.tmp"))
+            # The interrupted shard is not counted as completed.
+            record = result.manifest.shard(0)
+            assert record.status == ShardStatus.FAILED
+            assert record.error_type == "RuntimeError"
+            assert record.output_digest is None
+            assert result.failed_shards == (0,)
+            assert not result.is_complete
+            assert validate_shard_outputs(result.manifest, root=root).all_valid
 
 
 def test_crash_phase_observations_differ_across_the_rename_boundary(
@@ -1404,22 +1409,24 @@ def test_shard_task_resolves_its_output_path(tmp_path: Path) -> None:
     assert task.output_path == tmp_path / "shard-00000.jsonl"
 
 
-@pytest.mark.parametrize(
-    "relative_path",
-    ["../outside.jsonl", r"..\outside.jsonl", "/tmp/outside.jsonl"],
-)
-def test_shard_task_refuses_noncanonical_output_paths(
-    tmp_path: Path,
-    relative_path: str,
-) -> None:
-    plan = _plan(count=2, shard_count=1)
+def test_shard_task_refuses_noncanonical_output_paths(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for relative_path in [
+        "../outside.jsonl",
+        r"..\outside.jsonl",
+        "/tmp/outside.jsonl",
+    ]:
+        with subtests.test(relative_path=relative_path):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            plan = _plan(count=2, shard_count=1)
 
-    with pytest.raises(ShardExecutionError, match="canonical path"):
-        ShardTask(
-            shard=plan.shards[0],
-            root=tmp_path,
-            relative_path=relative_path,
-            handler=deterministic_shard_handler,
-        )
+            with pytest.raises(ShardExecutionError, match="canonical path"):
+                ShardTask(
+                    shard=plan.shards[0],
+                    root=tmp_path,
+                    relative_path=relative_path,
+                    handler=deterministic_shard_handler,
+                )
 
-    assert not list(tmp_path.iterdir())
+            assert not list(tmp_path.iterdir())

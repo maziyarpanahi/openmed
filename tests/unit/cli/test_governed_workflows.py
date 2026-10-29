@@ -188,15 +188,20 @@ def _run(
     return code, result
 
 
-@pytest.mark.parametrize("operation", ["plan", "preview", "inspect"])
-def test_read_only_commands_never_invoke_mutations(tmp_path, capsys, operation):
-    service = _Service()
-    before = service.view
-    code, result = _run(tmp_path, operation, capsys, service=service)
-    assert code == (4 if operation == "inspect" else 0)
-    assert service.calls == ["inspect" if operation == "inspect" else "preview"]
-    assert service.view == before and service.effects == 0
-    assert result["command"] == f"agents workflow {operation}"
+def test_read_only_commands_never_invoke_mutations(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for operation in ["plan", "preview", "inspect"]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            before = service.view
+            code, result = _run(tmp_path, operation, capsys, service=service)
+            assert code == (4 if operation == "inspect" else 0)
+            assert service.calls == ["inspect" if operation == "inspect" else "preview"]
+            assert service.view == before and service.effects == 0
+            assert result["command"] == f"agents workflow {operation}"
 
 
 def test_submit_review_only_requests_a_human_decision(tmp_path, capsys):
@@ -253,28 +258,32 @@ def test_edited_unsigned_receipt_cannot_resume(tmp_path, capsys):
     assert service.effects == 0 and "resume" not in service.calls
 
 
-@pytest.mark.parametrize(
-    "request_data,receipt,code,reason",
-    [
+def test_stale_mismatched_or_expired_custody_never_dispatches(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for request_data, receipt, code, reason in [
         (_request(action_digest=OTHER), _receipt(), 6, "receipt_conflict"),
         (_request(expected_state_digest=OTHER), _receipt(), 6, "state_conflict"),
         (_request(expected_state_digest=None), _receipt(), 6, "state_conflict"),
-    ],
-)
-def test_stale_mismatched_or_expired_custody_never_dispatches(
-    tmp_path, capsys, request_data, receipt, code, reason
-):
-    service = _Service()
-    actual, result = _run(
-        tmp_path,
-        "resume",
-        capsys,
-        service=service,
-        request=request_data,
-        receipt=receipt,
-    )
-    assert actual == code and result["error"]["code"] == reason
-    assert service.effects == 0 and "resume" not in service.calls
+    ]:
+        with subtests.test(
+            request_data=request_data, receipt=receipt, code=code, reason=reason
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            actual, result = _run(
+                tmp_path,
+                "resume",
+                capsys,
+                service=service,
+                request=request_data,
+                receipt=receipt,
+            )
+            assert actual == code and result["error"]["code"] == reason
+            assert service.effects == 0 and "resume" not in service.calls
 
 
 def test_expiry_is_rechecked_after_service_verification(tmp_path, capsys):
@@ -324,49 +333,56 @@ def test_replaying_same_request_after_success_never_repeats_an_effect(tmp_path, 
     assert service.effects == 1 and service.calls.count("resume") == 1
 
 
-@pytest.mark.parametrize("operation", ["submit-review", "cancel", "resume"])
 def test_other_run_or_action_cannot_mutate_a_service_snapshot(
-    tmp_path, capsys, operation
+    subtests, tmp_path, capsys
 ):
-    service = _Service()
-    service.view = replace(service.view, run_id=RunId("run_" + "f" * 32))
-    code, result = _run(tmp_path, operation, capsys, service=service)
-    assert code == 6 and result["error"]["code"] == "action_conflict"
-    assert service.calls == ["inspect"] and service.effects == 0
+    case_root = tmp_path
+    for operation in ["submit-review", "cancel", "resume"]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            service.view = replace(service.view, run_id=RunId("run_" + "f" * 32))
+            code, result = _run(tmp_path, operation, capsys, service=service)
+            assert code == 6 and result["error"]["code"] == "action_conflict"
+            assert service.calls == ["inspect"] and service.effects == 0
 
 
-@pytest.mark.parametrize(
-    "status,phase,expected",
-    [
+def test_service_refusals_have_stable_distinct_exit_codes(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for status, phase, expected in [
         (WorkflowCLIStatus.DENIED, ActionPhase.PREFLIGHT, 3),
         (WorkflowCLIStatus.UNAVAILABLE, ActionPhase.PREFLIGHT, 7),
         (WorkflowCLIStatus.CONFLICT, ActionPhase.PREFLIGHT, 6),
         (WorkflowCLIStatus.FAILED, ActionPhase.PREFLIGHT, 1),
-    ],
-)
-def test_service_refusals_have_stable_distinct_exit_codes(
-    tmp_path, capsys, status, phase, expected
-):
-    service = _Service()
-    service.view = replace(service.view, status=status, phase=phase)
-    code, result = _run(tmp_path, "resume", capsys, service=service)
-    assert code == expected and result["data"]["status"] == status.value
-    assert service.calls == ["inspect"] and service.effects == 0
+    ]:
+        with subtests.test(status=status, phase=phase, expected=expected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            service.view = replace(service.view, status=status, phase=phase)
+            code, result = _run(tmp_path, "resume", capsys, service=service)
+            assert code == expected and result["data"]["status"] == status.value
+            assert service.calls == ["inspect"] and service.effects == 0
 
 
-@pytest.mark.parametrize(
-    "phase,status",
-    [
+def test_terminal_runs_cannot_be_resumed(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for phase, status in [
         (ActionPhase.COMPLETED, WorkflowCLIStatus.COMPLETED),
         (ActionPhase.ABORTED, WorkflowCLIStatus.CANCELLED),
-    ],
-)
-def test_terminal_runs_cannot_be_resumed(tmp_path, capsys, phase, status):
-    service = _Service()
-    service.view = replace(service.view, phase=phase, status=status)
-    code, result = _run(tmp_path, "resume", capsys, service=service)
-    assert code == 6 and result["error"]["code"] == "terminal_state"
-    assert service.effects == 0 and service.calls == ["inspect"]
+    ]:
+        with subtests.test(phase=phase, status=status):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            service.view = replace(service.view, phase=phase, status=status)
+            code, result = _run(tmp_path, "resume", capsys, service=service)
+            assert code == 6 and result["error"]["code"] == "terminal_state"
+            assert service.effects == 0 and service.calls == ["inspect"]
 
 
 def test_cancel_of_already_cancelled_run_is_idempotent(tmp_path, capsys):
@@ -379,17 +395,29 @@ def test_cancel_of_already_cancelled_run_is_idempotent(tmp_path, capsys):
     assert service.calls == ["inspect"]
 
 
-@pytest.mark.parametrize(
-    "operation", ["plan", "preview", "inspect", "submit-review", "cancel", "resume"]
-)
-def test_no_default_adapter_is_enabled(tmp_path, capsys, operation):
-    code, result = _run(tmp_path, operation, capsys)
-    assert code == 7 and result["error"]["code"] == "adapter_unavailable"
+def test_no_default_adapter_is_enabled(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for operation in [
+        "plan",
+        "preview",
+        "inspect",
+        "submit-review",
+        "cancel",
+        "resume",
+    ]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            code, result = _run(tmp_path, operation, capsys)
+            assert code == 7 and result["error"]["code"] == "adapter_unavailable"
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_protected_request_rejects_content_or_inline_authority_fields(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for field in [
         "approval_token",
         "credential",
         "reviewer_identity",
@@ -397,25 +425,25 @@ def test_no_default_adapter_is_enabled(tmp_path, capsys, operation):
         "payload",
         "patient_id",
         "endpoint",
-    ],
-)
-def test_protected_request_rejects_content_or_inline_authority_fields(
-    tmp_path, capsys, field
-):
-    payload = {**_request().to_dict(), field: SENTINEL}
-    path = _private(tmp_path, "input.json", payload)
-    service = _Service()
-    code = run_governed_workflow_cli(
-        ["workflow", "preview", "--request", str(path)], service=service
-    )
-    result = json.loads(capsys.readouterr().out)
-    assert code == 2 and result["error"]["code"] == "input_invalid"
-    assert SENTINEL not in json.dumps(result) and service.calls == []
+    ]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            payload = {**_request().to_dict(), field: SENTINEL}
+            path = _private(tmp_path, "input.json", payload)
+            service = _Service()
+            code = run_governed_workflow_cli(
+                ["workflow", "preview", "--request", str(path)], service=service
+            )
+            result = json.loads(capsys.readouterr().out)
+            assert code == 2 and result["error"]["code"] == "input_invalid"
+            assert SENTINEL not in json.dumps(result) and service.calls == []
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_invalid_json_and_bounds_fail_before_adapter_calls(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for payload in [
         '{"run_id":"PRIVATE PATIENT", "run_id":"OTHER"}',
         '{"secret":NaN}',
         '{"secret":Infinity}',
@@ -423,34 +451,44 @@ def test_protected_request_rejects_content_or_inline_authority_fields(
         "[]",
         "x" * 65_537,
         '{"secret":' + "[" * 12 + '"PRIVATE PATIENT"' + "]" * 12 + "}",
-    ],
-)
-def test_invalid_json_and_bounds_fail_before_adapter_calls(tmp_path, capsys, payload):
-    path = _private(tmp_path, "input.json", payload)
-    service = _Service()
-    assert (
-        run_governed_workflow_cli(
-            ["workflow", "preview", "--request", str(path)], service=service
-        )
-        == 2
-    )
-    out = capsys.readouterr().out
-    assert "PRIVATE" not in out and str(path) not in out and service.calls == []
+    ]:
+        with subtests.test(payload=payload):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            path = _private(tmp_path, "input.json", payload)
+            service = _Service()
+            assert (
+                run_governed_workflow_cli(
+                    ["workflow", "preview", "--request", str(path)], service=service
+                )
+                == 2
+            )
+            out = capsys.readouterr().out
+            assert "PRIVATE" not in out and str(path) not in out and service.calls == []
 
 
-@pytest.mark.parametrize("mode", [0o644, 0o640, 0o604])
-def test_unprotected_input_permissions_are_refused(tmp_path, capsys, mode):
-    req, _ = _files(tmp_path)
-    req.chmod(mode)
-    service = _Service()
-    assert (
-        run_governed_workflow_cli(
-            ["workflow", "preview", "--request", str(req)], service=service
-        )
-        == 2
-    )
-    assert json.loads(capsys.readouterr().out)["error"]["code"] == "input_unprotected"
-    assert service.calls == []
+def test_unprotected_input_permissions_are_refused(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for mode in [0o644, 0o640, 0o604]:
+        with subtests.test(mode=mode):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            req, _ = _files(tmp_path)
+            req.chmod(mode)
+            service = _Service()
+            assert (
+                run_governed_workflow_cli(
+                    ["workflow", "preview", "--request", str(req)], service=service
+                )
+                == 2
+            )
+            assert (
+                json.loads(capsys.readouterr().out)["error"]["code"]
+                == "input_unprotected"
+            )
+            assert service.calls == []
 
 
 def test_symlink_and_fifo_inputs_are_not_followed_or_blocked(tmp_path, capsys):
@@ -471,9 +509,11 @@ def test_symlink_and_fifo_inputs_are_not_followed_or_blocked(tmp_path, capsys):
         assert str(path) not in out and service.calls == []
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
+def test_command_line_secrets_flags_and_ambiguous_options_are_refused(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for extra in [
         ["--approve", SENTINEL],
         ["--receipt", SENTINEL],
         ["--req", SENTINEL],
@@ -482,50 +522,52 @@ def test_symlink_and_fifo_inputs_are_not_followed_or_blocked(tmp_path, capsys):
         ["--json", "--json"],
         ["--reviewed"],
         ["--now", "20"],
-    ],
-)
-def test_command_line_secrets_flags_and_ambiguous_options_are_refused(
-    tmp_path, capsys, extra
+    ]:
+        with subtests.test(extra=extra):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            req, _ = _files(tmp_path)
+            service = _Service()
+            code = main(
+                ["agents", "workflow", "preview", "--request", str(req), *extra],
+                governance_service=service,
+            )
+            captured = capsys.readouterr()
+            assert code == 2 and captured.err == ""
+            assert SENTINEL not in captured.out and str(req) not in captured.out
+            assert json.loads(captured.out)["error"]["code"] == "input_invalid"
+            assert service.calls == []
+
+
+def test_global_config_does_not_become_ambient_workflow_authority(
+    subtests, tmp_path, capsys
 ):
-    req, _ = _files(tmp_path)
-    service = _Service()
-    code = main(
-        ["agents", "workflow", "preview", "--request", str(req), *extra],
-        governance_service=service,
-    )
-    captured = capsys.readouterr()
-    assert code == 2 and captured.err == ""
-    assert SENTINEL not in captured.out and str(req) not in captured.out
-    assert json.loads(captured.out)["error"]["code"] == "input_invalid"
-    assert service.calls == []
-
-
-@pytest.mark.parametrize(
-    "prefix",
-    [
+    case_root = tmp_path
+    for prefix in [
         ["--config-path", SENTINEL],
         ["--config-path=" + SENTINEL],
         ["--config-path", SENTINEL, "--config-path=" + SENTINEL],
-    ],
-)
-def test_global_config_does_not_become_ambient_workflow_authority(
-    tmp_path, capsys, prefix
-):
-    service = _Service()
-    code = main(
-        [
-            *prefix,
-            "agents",
-            "workflow",
-            "resume",
-            "--approval-token",
-            SENTINEL,
-        ],
-        governance_service=service,
-    )
-    captured = capsys.readouterr()
-    assert code == 2 and captured.err == "" and SENTINEL not in captured.out
-    assert service.calls == []
+    ]:
+        with subtests.test(prefix=prefix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            code = main(
+                [
+                    *prefix,
+                    "agents",
+                    "workflow",
+                    "resume",
+                    "--approval-token",
+                    SENTINEL,
+                ],
+                governance_service=service,
+            )
+            captured = capsys.readouterr()
+            assert code == 2 and captured.err == "" and SENTINEL not in captured.out
+            assert service.calls == []
 
 
 @pytest.mark.parametrize(
@@ -560,35 +602,50 @@ def test_other_command_data_does_not_route_to_governed_workflows(monkeypatch, pr
     assert calls == [["agents", "workflow"]] and service.calls == []
 
 
-@pytest.mark.parametrize(
-    "operation",
-    ["preview", "inspect", "submit_review", "cancel", "verify_receipt", "resume"],
-)
 def test_adapter_output_and_exception_text_are_not_cli_diagnostics(
-    tmp_path, capsys, operation
+    subtests, tmp_path, capsys
 ):
-    service = _Service()
+    case_root = tmp_path
+    for operation in [
+        "preview",
+        "inspect",
+        "submit_review",
+        "cancel",
+        "verify_receipt",
+        "resume",
+    ]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
 
-    def broken(*_args, **_kwargs):
-        print(SENTINEL)
-        print(SENTINEL, file=__import__("sys").stderr)
-        raise RuntimeError(SENTINEL)
+            def broken(*_args, **_kwargs):
+                print(SENTINEL)
+                print(SENTINEL, file=__import__("sys").stderr)
+                raise RuntimeError(SENTINEL)
 
-    setattr(service, operation, broken)
-    command = {"submit_review": "submit-review", "verify_receipt": "resume"}.get(
-        operation, operation
-    )
-    code, result = _run(tmp_path, command, capsys, service=service)
-    assert code == 1 and result["error"]["code"] == "service_failed"
-    assert service.effects == 0
+            setattr(service, operation, broken)
+            command = {
+                "submit_review": "submit-review",
+                "verify_receipt": "resume",
+            }.get(operation, operation)
+            code, result = _run(tmp_path, command, capsys, service=service)
+            assert code == 1 and result["error"]["code"] == "service_failed"
+            assert service.effects == 0
 
 
-@pytest.mark.parametrize("returned", [{"payload": SENTINEL}, True, None, SENTINEL])
-def test_untyped_service_results_cannot_reach_output(tmp_path, capsys, returned):
-    service = _Service()
-    service.preview = lambda *_: returned
-    code, result = _run(tmp_path, "preview", capsys, service=service)
-    assert code == 1 and result["error"]["code"] == "service_result_invalid"
+def test_untyped_service_results_cannot_reach_output(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for returned in [{"payload": SENTINEL}, True, None, SENTINEL]:
+        with subtests.test(returned=returned):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            service.preview = lambda *_: returned
+            code, result = _run(tmp_path, "preview", capsys, service=service)
+            assert code == 1 and result["error"]["code"] == "service_result_invalid"
 
 
 def test_fabricated_boolean_verification_cannot_authorize_resume(tmp_path, capsys):
@@ -628,9 +685,11 @@ def test_exit_status_contract_cannot_be_mutated():
         WORKFLOW_CLI_EXIT_CODES[WorkflowCLIStatus.DENIED] = 0
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_malformed_receipt_or_token_file_never_reaches_a_service(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for change in [
         {"signature": SENTINEL},
         {"nonce": SENTINEL},
         {"reviewer_identity": SENTINEL},
@@ -639,46 +698,63 @@ def test_exit_status_contract_cannot_be_mutated():
         {"expires_at": "30"},
         {"consumed_at": True},
         {"schema_version": "unknown"},
-    ],
-)
-def test_malformed_receipt_or_token_file_never_reaches_a_service(
-    tmp_path, capsys, change
-):
-    req, _ = _files(tmp_path)
-    receipt_path = _private(
-        tmp_path, "bad-receipt.json", {**_receipt().to_dict(), **change}
-    )
-    service = _Service()
-    code = run_governed_workflow_cli(
-        ["workflow", "resume", "--request", str(req), "--receipt", str(receipt_path)],
-        service=service,
-        clock=lambda: 20,
-    )
-    captured = capsys.readouterr()
-    assert code == 2 and captured.err == "" and SENTINEL not in captured.out
-    assert json.loads(captured.out)["error"]["code"] == "receipt_invalid"
-    assert service.calls == [] and service.effects == 0
+    ]:
+        with subtests.test(change=change):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            req, _ = _files(tmp_path)
+            receipt_path = _private(
+                tmp_path, "bad-receipt.json", {**_receipt().to_dict(), **change}
+            )
+            service = _Service()
+            code = run_governed_workflow_cli(
+                [
+                    "workflow",
+                    "resume",
+                    "--request",
+                    str(req),
+                    "--receipt",
+                    str(receipt_path),
+                ],
+                service=service,
+                clock=lambda: 20,
+            )
+            captured = capsys.readouterr()
+            assert code == 2 and captured.err == "" and SENTINEL not in captured.out
+            assert json.loads(captured.out)["error"]["code"] == "receipt_invalid"
+            assert service.calls == [] and service.effects == 0
 
 
-@pytest.mark.parametrize(
-    "operation",
-    ["preview", "inspect", "submit_review", "cancel", "verify_receipt", "resume"],
-)
 def test_missing_adapter_capability_is_distinct_from_adapter_failure(
-    tmp_path, capsys, operation
+    subtests, tmp_path, capsys
 ):
-    service = _Service()
+    case_root = tmp_path
+    for operation in [
+        "preview",
+        "inspect",
+        "submit_review",
+        "cancel",
+        "verify_receipt",
+        "resume",
+    ]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
 
-    def unavailable(*_args, **_kwargs):
-        raise NotImplementedError(SENTINEL)
+            def unavailable(*_args, **_kwargs):
+                raise NotImplementedError(SENTINEL)
 
-    setattr(service, operation, unavailable)
-    command = {"submit_review": "submit-review", "verify_receipt": "resume"}.get(
-        operation, operation
-    )
-    code, result = _run(tmp_path, command, capsys, service=service)
-    assert code == 7 and result["error"]["code"] == "adapter_unavailable"
-    assert service.effects == 0
+            setattr(service, operation, unavailable)
+            command = {
+                "submit_review": "submit-review",
+                "verify_receipt": "resume",
+            }.get(operation, operation)
+            code, result = _run(tmp_path, command, capsys, service=service)
+            assert code == 7 and result["error"]["code"] == "adapter_unavailable"
+            assert service.effects == 0
 
 
 def test_partial_preview_only_service_has_no_effectful_adapter(tmp_path, capsys):
@@ -714,14 +790,19 @@ def test_resume_acknowledgement_must_match_actual_bound_receipt(
     assert service.effects == 1 and service.calls.count("resume") == 1
 
 
-@pytest.mark.parametrize(
-    "clock", [lambda: True, lambda: 1.2, lambda: -1, lambda: "PRIVATE PATIENT"]
-)
-def test_invalid_clock_fails_before_authority_verification(tmp_path, capsys, clock):
-    service = _Service()
-    code, result = _run(tmp_path, "resume", capsys, service=service, clock=clock)
-    assert code == 1 and result["error"]["code"] == "service_failed"
-    assert service.calls == [] and service.effects == 0
+def test_invalid_clock_fails_before_authority_verification(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for clock in [lambda: True, lambda: 1.2, lambda: -1, lambda: "PRIVATE PATIENT"]:
+        with subtests.test(clock=clock):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            code, result = _run(
+                tmp_path, "resume", capsys, service=service, clock=clock
+            )
+            assert code == 1 and result["error"]["code"] == "service_failed"
+            assert service.calls == [] and service.effects == 0
 
 
 def test_same_action_cannot_silently_change_proposed_effect_counts(tmp_path, capsys):
@@ -786,24 +867,27 @@ def test_typer_parser_errors_also_omit_inline_values(tmp_path):
     assert service.calls == []
 
 
-@pytest.mark.parametrize(
-    "field,value,reason",
-    [("expires_at", 20, "receipt_expired"), ("consumed_at", 21, "receipt_future")],
-)
-def test_receipt_time_authority_remains_in_service_custody(
-    tmp_path, capsys, field, value, reason
-):
-    service = _Service()
-    setattr(service, field, value)
-    code, result = _run(tmp_path, "resume", capsys, service=service)
-    assert code == 4 and result["error"]["code"] == reason
-    assert service.effects == 0 and "resume" not in service.calls
-    assert set(_receipt().to_dict()) == {
-        "action_digest",
-        "token_digest",
-        "code",
-        "schema_version",
-    }
+def test_receipt_time_authority_remains_in_service_custody(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for field, value, reason in [
+        ("expires_at", 20, "receipt_expired"),
+        ("consumed_at", 21, "receipt_future"),
+    ]:
+        with subtests.test(field=field, value=value, reason=reason):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            service = _Service()
+            setattr(service, field, value)
+            code, result = _run(tmp_path, "resume", capsys, service=service)
+            assert code == 4 and result["error"]["code"] == reason
+            assert service.effects == 0 and "resume" not in service.calls
+            assert set(_receipt().to_dict()) == {
+                "action_digest",
+                "token_digest",
+                "code",
+                "schema_version",
+            }
 
 
 def test_production_parser_preserves_existing_admission_commands(subtests):
@@ -839,26 +923,33 @@ def test_callback_mutated_diagnostic_is_sanitized(tmp_path, capsys):
     assert SENTINEL not in json.dumps(result)
 
 
-@pytest.mark.parametrize("boundary", ["request", "receipt"])
-def test_public_metadata_parsers_drop_private_exception_context(monkeypatch, boundary):
-    def private_failure(*args, **kwargs):
-        raise UnicodeDecodeError("utf-8", SENTINEL.encode(), 0, 1, "invalid")
+def test_public_metadata_parsers_drop_private_exception_context(subtests):
+    for boundary in ["request", "receipt"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    if boundary == "request":
-        monkeypatch.setattr(RunId, "parse", private_failure)
-        payload = {
-            "schema_version": "openmed.cli.workflow_request.v1",
-            "run_id": "run_" + "a" * 32,
-            "workflow_id": "workflow:org.example/synthetic@1.0.0",
-            "action_digest": ACTION,
-            "expected_state_digest": STATE,
-        }
-        invoke = lambda: WorkflowCLIRequest.from_dict(payload)
-    else:
-        receipt = _receipt()
-        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
-        invoke = lambda: workflow_cli_receipt_digest(receipt)
-    with pytest.raises(WorkflowCLIError) as caught:
-        invoke()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
-    assert SENTINEL not in str(caught.value)
+                def private_failure(*args, **kwargs):
+                    raise UnicodeDecodeError(
+                        "utf-8", SENTINEL.encode(), 0, 1, "invalid"
+                    )
+
+                if boundary == "request":
+                    monkeypatch.setattr(RunId, "parse", private_failure)
+                    payload = {
+                        "schema_version": "openmed.cli.workflow_request.v1",
+                        "run_id": "run_" + "a" * 32,
+                        "workflow_id": "workflow:org.example/synthetic@1.0.0",
+                        "action_digest": ACTION,
+                        "expected_state_digest": STATE,
+                    }
+                    invoke = lambda: WorkflowCLIRequest.from_dict(payload)
+                else:
+                    receipt = _receipt()
+                    monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+                    invoke = lambda: workflow_cli_receipt_digest(receipt)
+                with pytest.raises(WorkflowCLIError) as caught:
+                    invoke()
+                assert (
+                    caught.value.__context__ is None and caught.value.__cause__ is None
+                )
+                assert SENTINEL not in str(caught.value)

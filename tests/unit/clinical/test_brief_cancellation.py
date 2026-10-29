@@ -49,40 +49,54 @@ def test_actual_cancelled_brief_validates_against_both_bundled_record_schemas():
     validate_clinical_record("brief_response", result.to_response())
 
 
-@pytest.mark.parametrize("stage", STAGES)
-@pytest.mark.parametrize("expired", [False, True])
-def test_interrupt_at_every_stage_prevents_later_work(monkeypatch, stage, expired):
-    module = importlib.import_module("openmed.clinical.brief")
-    clock_time = [0.0]
-    monkeypatch.setattr("openmed.core.budget.time.perf_counter", lambda: clock_time[0])
-    cancellation = BriefCancellation(RequestBudget(max_wall_time=1).start())
-    original = module.check_cancellation
-    entered = []
+def test_interrupt_at_every_stage_prevents_later_work(subtests):
+    for stage in STAGES:
+        for expired in [False, True]:
+            with subtests.test(stage=stage, expired=expired):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    module = importlib.import_module("openmed.clinical.brief")
+                    clock_time = [0.0]
+                    monkeypatch.setattr(
+                        "openmed.core.budget.time.perf_counter", lambda: clock_time[0]
+                    )
+                    cancellation = BriefCancellation(
+                        RequestBudget(max_wall_time=1).start()
+                    )
+                    original = module.check_cancellation
+                    entered = []
 
-    def checkpoint(context):
-        # stage() calls the checkpoint before recording each stage.
-        if len(entered) == STAGES.index(stage):
-            if expired:
-                clock_time[0] = 2.0
-            else:
-                cancellation.cancel()
-        original(context)
-        entered.append(STAGES[len(entered)])
+                    def checkpoint(context):
+                        # stage() calls the checkpoint before recording each stage.
+                        if len(entered) == STAGES.index(stage):
+                            if expired:
+                                clock_time[0] = 2.0
+                            else:
+                                cancellation.cancel()
+                        original(context)
+                        entered.append(STAGES[len(entered)])
 
-    monkeypatch.setattr(module, "check_cancellation", checkpoint)
-    value, context = fixture_context()
-    result = build_clinical_brief(
-        value, context=context, model="extractive", cancellation=cancellation
-    )
-    assert result.refusal_reason is (
-        BriefRefusal.DEADLINE_EXCEEDED if expired else BriefRefusal.CANCELLED
-    )
-    assert result.to_dict()["stages"] == list(STAGES[: STAGES.index(stage)])
-    assert result.summary == ""
-    assert result.citations == result.verdicts == ()
-    assert all(
-        sentence not in json.dumps(result.to_response()) for sentence in SENTENCES
-    )
+                    monkeypatch.setattr(module, "check_cancellation", checkpoint)
+                    value, context = fixture_context()
+                    result = build_clinical_brief(
+                        value,
+                        context=context,
+                        model="extractive",
+                        cancellation=cancellation,
+                    )
+                    assert result.refusal_reason is (
+                        BriefRefusal.DEADLINE_EXCEEDED
+                        if expired
+                        else BriefRefusal.CANCELLED
+                    )
+                    assert result.to_dict()["stages"] == list(
+                        STAGES[: STAGES.index(stage)]
+                    )
+                    assert result.summary == ""
+                    assert result.citations == result.verdicts == ()
+                    assert all(
+                        sentence not in json.dumps(result.to_response())
+                        for sentence in SENTENCES
+                    )
 
 
 @pytest.mark.parametrize("failure", [False, True])

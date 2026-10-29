@@ -981,50 +981,54 @@ def test_owned_mlx_runner_released_at_all_terminal_boundaries(
     assert owned[0].model is owned[0].tokenizer is None
 
 
-@pytest.mark.parametrize("surface", ["summary", "mlx", "brief"])
-def test_foreign_reason_property_is_not_read_or_retained(monkeypatch, surface):
-    from openmed import clinical
-    from tests.unit.clinical.test_brief import fixture_context
+def test_foreign_reason_property_is_not_read_or_retained(subtests):
+    for surface in ["summary", "mlx", "brief"]:
+        with subtests.test(surface=surface):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed import clinical
+                from tests.unit.clinical.test_brief import fixture_context
 
-    reads = []
-    marker = "".join(("SYNTHETIC", "_PRIVATE", "_REASON"))
+                reads = []
+                marker = "".join(("SYNTHETIC", "_PRIVATE", "_REASON"))
 
-    class ForeignError(backends.LocalSummarizerError):
-        def __init__(self):
-            RuntimeError.__init__(self, marker)
+                class ForeignError(backends.LocalSummarizerError):
+                    def __init__(self):
+                        RuntimeError.__init__(self, marker)
 
-        @property
-        def reason(self):
-            reads.append(1)
-            raise RuntimeError(marker)
+                    @property
+                    def reason(self):
+                        reads.append(1)
+                        raise RuntimeError(marker)
 
-    def fail(*args, **kwargs):
-        raise ForeignError()
+                def fail(*args, **kwargs):
+                    raise ForeignError()
 
-    if surface == "brief":
-        monkeypatch.setattr(clinical, "summarize_deidentified", fail)
-        value, context = fixture_context()
-        brief = clinical.build_clinical_brief(
-            value, context=context, model="extractive"
-        )
-        assert brief.refusal_reason.value == "stage_failed"
-        assert brief.summary == ""
-        assert marker not in json.dumps(brief.to_dict())
-    else:
-        if surface == "mlx":
-            monkeypatch.setattr(backends, "_require_runtime", lambda: None)
-            backend = backends.MLXSummarizerBackend()
-            monkeypatch.setattr(backend, "_generate", fail)
-            invoke = lambda: backend.summarize("Synthetic evidence.")
-        else:
-            invoke = lambda: summarize_deidentified(deidentified(), model=fail)
-        with pytest.raises(backends.LocalSummarizerError) as caught:
-            invoke()
-        assert type(caught.value) is backends.LocalSummarizerError
-        assert caught.value.reason == "execution_failed"
-        assert caught.value.__context__ is caught.value.__cause__ is None
-        assert marker not in str(caught.value)
-    assert reads == []
+                if surface == "brief":
+                    monkeypatch.setattr(clinical, "summarize_deidentified", fail)
+                    value, context = fixture_context()
+                    brief = clinical.build_clinical_brief(
+                        value, context=context, model="extractive"
+                    )
+                    assert brief.refusal_reason.value == "stage_failed"
+                    assert brief.summary == ""
+                    assert marker not in json.dumps(brief.to_dict())
+                else:
+                    if surface == "mlx":
+                        monkeypatch.setattr(backends, "_require_runtime", lambda: None)
+                        backend = backends.MLXSummarizerBackend()
+                        monkeypatch.setattr(backend, "_generate", fail)
+                        invoke = lambda: backend.summarize("Synthetic evidence.")
+                    else:
+                        invoke = lambda: summarize_deidentified(
+                            deidentified(), model=fail
+                        )
+                    with pytest.raises(backends.LocalSummarizerError) as caught:
+                        invoke()
+                    assert type(caught.value) is backends.LocalSummarizerError
+                    assert caught.value.reason == "execution_failed"
+                    assert caught.value.__context__ is caught.value.__cause__ is None
+                    assert marker not in str(caught.value)
+                assert reads == []
 
 
 def test_invalid_unicode_output_has_no_retained_decoder_input():

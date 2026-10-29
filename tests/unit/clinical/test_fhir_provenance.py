@@ -258,26 +258,28 @@ def test_governed_unknown_commit_preserves_uncertainty_explicitly() -> None:
     assert "write_failed" not in json.dumps(event)
 
 
-@pytest.mark.parametrize(
-    "outcome",
-    [GovernedWriteOutcome.POLICY_DENIED, GovernedWriteOutcome.ADMISSION_REFUSED],
-)
 def test_governed_refusal_needs_no_materialized_target_or_invented_review(
-    outcome: GovernedWriteOutcome, monkeypatch: pytest.MonkeyPatch
+    subtests,
 ) -> None:
-    import socket
+    for outcome in [
+        GovernedWriteOutcome.POLICY_DENIED,
+        GovernedWriteOutcome.ADMISSION_REFUSED,
+    ]:
+        with subtests.test(outcome=outcome):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import socket
 
-    def no_network(*args: Any, **kwargs: Any) -> Any:
-        pytest.fail("audit projection must never contact a server")
+                def no_network(*args: Any, **kwargs: Any) -> Any:
+                    pytest.fail("audit projection must never contact a server")
 
-    monkeypatch.setattr(socket, "create_connection", no_network)
-    monkeypatch.setattr(socket.socket, "connect", no_network)
-    attempt = GovernedWriteAuditAttempt("update", outcome, _SOFTWARE)
-    event = to_governed_write_audit_event(attempt, clock=lambda: _INSTANT)
-    assert event["action"] == "U" and event["outcome"] == "4"
-    assert len(event["agent"]) == 1
-    assert "entity" not in event
-    assert "role" not in event["agent"][0]
+                monkeypatch.setattr(socket, "create_connection", no_network)
+                monkeypatch.setattr(socket.socket, "connect", no_network)
+                attempt = GovernedWriteAuditAttempt("update", outcome, _SOFTWARE)
+                event = to_governed_write_audit_event(attempt, clock=lambda: _INSTANT)
+                assert event["action"] == "U" and event["outcome"] == "4"
+                assert len(event["agent"]) == 1
+                assert "entity" not in event
+                assert "role" not in event["agent"][0]
 
 
 def test_governed_audit_is_deterministic_for_fixed_clock_and_metadata() -> None:

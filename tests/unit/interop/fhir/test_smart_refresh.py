@@ -235,9 +235,8 @@ def test_due_margin_boundary_and_optional_unchanged_refresh_response():
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_invalid_tokens_revoke_and_never_retry(subtests, caplog):
+    for changes in [
         {"token_type": "MAC"},
         {"token_type": None},
         {"access_token": "private bad token"},
@@ -261,20 +260,24 @@ def test_due_margin_boundary_and_optional_unchanged_refresh_response():
             "error": "invalid_grant",
             "error_description": "private token/client/endpoint canary",
         },
-    ],
-)
-def test_invalid_tokens_revoke_and_never_retry(changes, caplog):
-    store = Custody(config())
-    calls = []
-    worker = refresher(
-        store, lambda request: calls.append(request) or response(**changes)
-    )
-    result = worker.ensure_ready(HANDLE)
-    assert result.code in {"invalid_response", "invalid_grant", "scope_expansion"}
-    assert result.revocation_confirmed and store.current is None
-    assert worker.ensure_ready(HANDLE).code == "credential_unavailable"
-    assert len(calls) == 1
-    assert "private" not in json.dumps(result.to_dict()) + caplog.text
+    ]:
+        with subtests.test(changes=changes):
+            caplog.clear()
+            store = Custody(config())
+            calls = []
+            worker = refresher(
+                store, lambda request: calls.append(request) or response(**changes)
+            )
+            result = worker.ensure_ready(HANDLE)
+            assert result.code in {
+                "invalid_response",
+                "invalid_grant",
+                "scope_expansion",
+            }
+            assert result.revocation_confirmed and store.current is None
+            assert worker.ensure_ready(HANDLE).code == "credential_unavailable"
+            assert len(calls) == 1
+            assert "private" not in json.dumps(result.to_dict()) + caplog.text
 
 
 @pytest.mark.parametrize(

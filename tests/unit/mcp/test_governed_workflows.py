@@ -296,9 +296,8 @@ def test_edited_expired_or_misbound_consent_cannot_create_review(subtests):
             assert service.calls == ["status"]
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_mcp_rejects_inline_authority_without_echo_or_logs(subtests, caplog):
+    for field in [
         "approval_token",
         "receipt",
         "consent_receipt",
@@ -307,27 +306,27 @@ def test_edited_expired_or_misbound_consent_cannot_create_review(subtests):
         "credential",
         "authorization",
         "access_token",
-    ],
-)
-@pytest.mark.parametrize("nested", [True, False])
-def test_mcp_rejects_inline_authority_without_echo_or_logs(field, nested, caplog):
-    service = _Service()
-    request_data = _request().to_dict()
-    extras = {}
-    (request_data if nested else extras)[field] = SENTINEL
-    with caplog.at_level(logging.DEBUG):
-        result = _call(
-            _server(service),
-            "openmed_workflow_request_review",
-            request_data=request_data,
-            extras=extras,
-        )
-    assert (
-        result.isError
-        and result.structuredContent["error"]["code"] == "invalid_arguments"
-    )
-    assert service.calls == [] and service.handoffs == 0
-    assert SENTINEL not in caplog.text
+    ]:
+        for nested in [True, False]:
+            with subtests.test(field=field, nested=nested):
+                caplog.clear()
+                service = _Service()
+                request_data = _request().to_dict()
+                extras = {}
+                (request_data if nested else extras)[field] = SENTINEL
+                with caplog.at_level(logging.DEBUG):
+                    result = _call(
+                        _server(service),
+                        "openmed_workflow_request_review",
+                        request_data=request_data,
+                        extras=extras,
+                    )
+                assert (
+                    result.isError
+                    and result.structuredContent["error"]["code"] == "invalid_arguments"
+                )
+                assert service.calls == [] and service.handoffs == 0
+                assert SENTINEL not in caplog.text
 
 
 def test_invalid_metadata_is_refused_before_service(subtests):
@@ -693,31 +692,30 @@ def test_legacy_optional_consent_cannot_weaken_governance_review_boundary():
     assert service.handoffs == 0
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_actual_registration_rejects_substituted_governance_catalog(subtests):
+    for changes in [
         {"version": "9.9.9"},
         {"input_schema": {"type": "object", "additionalProperties": True}},
         {"output_schema": {"type": "object", "additionalProperties": True}},
         {"parameters": ()},
         {"open_world_hint": True},
         {"idempotent_hint": False},
-    ],
-)
-def test_actual_registration_rejects_substituted_governance_catalog(
-    monkeypatch, changes
-):
-    original = TOOL_REGISTRY.latest_specs()
-    changed = [
-        replace(s, **changes) if s.name == "openmed_workflow_preflight" else s
-        for s in original
-    ]
-    monkeypatch.setattr(TOOL_REGISTRY, "latest_specs", lambda: changed)
-    service = _Service()
-    with pytest.raises(ConformanceViolation) as error:
-        _server(service)
-    assert error.value.category == "unapproved_state_change"
-    assert service.calls == [] and service.handoffs == 0
+    ]:
+        with subtests.test(changes=changes):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                original = TOOL_REGISTRY.latest_specs()
+                changed = [
+                    replace(s, **changes)
+                    if s.name == "openmed_workflow_preflight"
+                    else s
+                    for s in original
+                ]
+                monkeypatch.setattr(TOOL_REGISTRY, "latest_specs", lambda: changed)
+                service = _Service()
+                with pytest.raises(ConformanceViolation) as error:
+                    _server(service)
+                assert error.value.category == "unapproved_state_change"
+                assert service.calls == [] and service.handoffs == 0
 
 
 def test_readonly_raw_handler_cannot_select_an_effect_method():

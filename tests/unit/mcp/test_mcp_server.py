@@ -200,48 +200,49 @@ def test_real_transport_verifies_and_consumes_receipt_once(subtests) -> None:
                 assert verifier.is_consumed(receipt.receipt_id)
 
 
-@pytest.mark.parametrize(
-    ("failure", "code"),
-    [
+def test_real_transport_rejects_bad_receipts_without_effect_or_logs(
+    subtests, caplog
+) -> None:
+    for failure, code in [
         ("missing", "consent_required"),
         ("malformed", "invalid_consent_receipt"),
         ("deep_json", "invalid_consent_receipt"),
         ("signature", "consent_denied"),
         ("binding", "consent_denied"),
         ("expired", "consent_denied"),
-    ],
-)
-def test_real_transport_rejects_bad_receipts_without_effect_or_logs(
-    failure: str, code: str, caplog: pytest.LogCaptureFixture
-) -> None:
-    server, runtime, verifier, receipt = _consent_transport(
-        receipt_clock=900 if failure == "expired" else 1000
-    )
-    secret = "synthetic-consent-private-sentinel"
-    arguments: dict[str, Any] = {"model_name": "synthetic-model"}
-    supplied = receipt.to_dict()
-    if failure == "signature":
-        supplied["signature"] = "hmac-sha256:" + "0" * 64
-    elif failure == "binding":
-        arguments["model_name"] = "other-synthetic-model"
-    if failure != "missing":
-        arguments["consent_receipt"] = (
-            secret
-            if failure == "malformed"
-            else "[" * 1000 + json.dumps(secret) + "]" * 1000
-            if failure == "deep_json"
-            else supplied
-        )
+    ]:
+        with subtests.test(failure=failure, code=code):
+            caplog.clear()
+            server, runtime, verifier, receipt = _consent_transport(
+                receipt_clock=900 if failure == "expired" else 1000
+            )
+            secret = "synthetic-consent-private-sentinel"
+            arguments: dict[str, Any] = {"model_name": "synthetic-model"}
+            supplied = receipt.to_dict()
+            if failure == "signature":
+                supplied["signature"] = "hmac-sha256:" + "0" * 64
+            elif failure == "binding":
+                arguments["model_name"] = "other-synthetic-model"
+            if failure != "missing":
+                arguments["consent_receipt"] = (
+                    secret
+                    if failure == "malformed"
+                    else "[" * 1000 + json.dumps(secret) + "]" * 1000
+                    if failure == "deep_json"
+                    else supplied
+                )
 
-    with caplog.at_level(logging.DEBUG):
-        result = asyncio.run(server.call_tool("openmed_unload_model", arguments))
-    assert result.isError is True
-    assert result.structuredContent["error"]["code"] == code
-    assert json.loads(result.content[0].text) == result.structuredContent
-    assert not runtime.unloaded
-    assert not verifier.is_consumed(receipt.receipt_id)
-    assert secret not in json.dumps(result.structuredContent)
-    assert all(secret not in record.getMessage() for record in caplog.records)
+            with caplog.at_level(logging.DEBUG):
+                result = asyncio.run(
+                    server.call_tool("openmed_unload_model", arguments)
+                )
+            assert result.isError is True
+            assert result.structuredContent["error"]["code"] == code
+            assert json.loads(result.content[0].text) == result.structuredContent
+            assert not runtime.unloaded
+            assert not verifier.is_consumed(receipt.receipt_id)
+            assert secret not in json.dumps(result.structuredContent)
+            assert all(secret not in record.getMessage() for record in caplog.records)
 
 
 def test_transport_receipt_remains_subject_to_full_request_bounds(subtests) -> None:

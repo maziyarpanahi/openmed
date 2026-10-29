@@ -142,73 +142,85 @@ def test_budget_refresh_is_verified_against_the_frozen_pr_base():
     assert steps.index(step) < steps.index(size_step)
 
 
-@pytest.mark.parametrize("delta", [0, -1, 1])
-def test_budget_refresh_comparison_requires_the_exact_measured_size(
-    tmp_path, monkeypatch, delta
-):
-    steps = _load_ci()["jobs"]["build"]["steps"]
-    step = next(
-        step
-        for step in steps
-        if step.get("name") == "Verify refreshed wheel-size baseline"
-    )
-    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    wheel_dir = tmp_path / "dist"
-    wheel_dir.mkdir()
-    wheel = wheel_dir / "openmed-test-py3-none-any.whl"
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr("openmed-test.dist-info/WHEEL", "Generator: hatchling test\n")
-    measured = wheel.stat().st_size
-    expected = measured + delta
-    gates = tmp_path / "gates"
-    gates.mkdir()
-    (gates / "release_budgets.json").write_text(
-        json.dumps(
-            {
-                "entries": {
-                    "package::openmed::wheel": {
-                        "metrics": {
-                            "baseline_bytes": expected,
+def test_budget_refresh_comparison_requires_the_exact_measured_size(subtests, tmp_path):
+    case_root = tmp_path
+    for delta in [0, -1, 1]:
+        with subtests.test(delta=delta):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                steps = _load_ci()["jobs"]["build"]["steps"]
+                step = next(
+                    step
+                    for step in steps
+                    if step.get("name") == "Verify refreshed wheel-size baseline"
+                )
+                code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+                wheel_dir = tmp_path / "dist"
+                wheel_dir.mkdir()
+                wheel = wheel_dir / "openmed-test-py3-none-any.whl"
+                with zipfile.ZipFile(wheel, "w") as archive:
+                    archive.writestr(
+                        "openmed-test.dist-info/WHEEL", "Generator: hatchling test\n"
+                    )
+                measured = wheel.stat().st_size
+                expected = measured + delta
+                gates = tmp_path / "gates"
+                gates.mkdir()
+                (gates / "release_budgets.json").write_text(
+                    json.dumps(
+                        {
+                            "entries": {
+                                "package::openmed::wheel": {
+                                    "metrics": {
+                                        "baseline_bytes": expected,
+                                    }
+                                }
+                            }
                         }
-                    }
-                }
-            }
-        )
-    )
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["-", str(wheel_dir)])
-    monkeypatch.setenv("BASE_SHA", "a" * 40)
-    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "uv test\n")
-    if measured == expected:
-        exec(compile(code, "<baseline-verification>", "exec"), {})
-    else:
-        with pytest.raises(SystemExit, match="Wheel baseline mismatch"):
-            exec(compile(code, "<baseline-verification>", "exec"), {})
-    receipt = json.loads((wheel_dir / "baseline-receipt.json").read_text())
-    assert receipt["base_sha"] == "a" * 40
-    assert receipt["measured_bytes"] == measured
-    assert receipt["proposed_baseline_bytes"] == expected
-    assert receipt["uv"] == "uv test"
-    assert receipt["wheel_metadata"] == "Generator: hatchling test\n"
-    assert receipt["matches"] is (delta == 0)
+                    )
+                )
+                monkeypatch.chdir(tmp_path)
+                monkeypatch.setattr(sys, "argv", ["-", str(wheel_dir)])
+                monkeypatch.setenv("BASE_SHA", "a" * 40)
+                monkeypatch.setattr(
+                    subprocess, "check_output", lambda *args, **kwargs: "uv test\n"
+                )
+                if measured == expected:
+                    exec(compile(code, "<baseline-verification>", "exec"), {})
+                else:
+                    with pytest.raises(SystemExit, match="Wheel baseline mismatch"):
+                        exec(compile(code, "<baseline-verification>", "exec"), {})
+                receipt = json.loads((wheel_dir / "baseline-receipt.json").read_text())
+                assert receipt["base_sha"] == "a" * 40
+                assert receipt["measured_bytes"] == measured
+                assert receipt["proposed_baseline_bytes"] == expected
+                assert receipt["uv"] == "uv test"
+                assert receipt["wheel_metadata"] == "Generator: hatchling test\n"
+                assert receipt["matches"] is (delta == 0)
 
 
-@pytest.mark.parametrize("wheel_count", [0, 2])
-def test_budget_refresh_rejects_missing_or_ambiguous_wheels(
-    tmp_path, monkeypatch, wheel_count
-):
-    steps = _load_ci()["jobs"]["build"]["steps"]
-    step = next(
-        step
-        for step in steps
-        if step.get("name") == "Verify refreshed wheel-size baseline"
-    )
-    code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    for index in range(wheel_count):
-        (tmp_path / f"openmed-{index}-py3-none-any.whl").write_bytes(b"x")
-    monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
-    with pytest.raises(SystemExit, match="Expected exactly one frozen-base wheel"):
-        exec(compile(code, "<baseline-verification>", "exec"), {})
+def test_budget_refresh_rejects_missing_or_ambiguous_wheels(subtests, tmp_path):
+    case_root = tmp_path
+    for wheel_count in [0, 2]:
+        with subtests.test(wheel_count=wheel_count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                steps = _load_ci()["jobs"]["build"]["steps"]
+                step = next(
+                    step
+                    for step in steps
+                    if step.get("name") == "Verify refreshed wheel-size baseline"
+                )
+                code = step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+                for index in range(wheel_count):
+                    (tmp_path / f"openmed-{index}-py3-none-any.whl").write_bytes(b"x")
+                monkeypatch.setattr(sys, "argv", ["-", str(tmp_path)])
+                with pytest.raises(
+                    SystemExit, match="Expected exactly one frozen-base wheel"
+                ):
+                    exec(compile(code, "<baseline-verification>", "exec"), {})
 
 
 def test_sdk_compatibility_matches_advertised_python_and_os_support():

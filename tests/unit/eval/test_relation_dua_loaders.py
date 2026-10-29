@@ -48,23 +48,27 @@ from openmed.eval.datasets.n2c2_2018_track2 import (
 )
 
 
-@pytest.mark.parametrize(
-    "loader", (load_made_relation_fixtures, load_n2c2_2018_track2_relation_fixtures)
-)
 def test_relation_loader_path_refusal_does_not_echo_sensitive_filename(
-    loader,
-    tmp_path: Path,
+    subtests, tmp_path
 ) -> None:
-    source = tmp_path / "synthetic_patient_identifier_123.json"
-    repository_root = Path(__file__).resolve().parents[3]
+    case_root = tmp_path
+    for loader in (
+        load_made_relation_fixtures,
+        load_n2c2_2018_track2_relation_fixtures,
+    ):
+        with subtests.test(loader=loader):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "synthetic_patient_identifier_123.json"
+            repository_root = Path(__file__).resolve().parents[3]
 
-    for candidate in (source, repository_root / source.name):
-        with pytest.raises(DUACredentialRequired) as captured:
-            loader(candidate)
-        rendered = "".join(traceback.format_exception(captured.value))
-        assert source.name not in rendered
-        assert str(tmp_path) not in rendered
-        assert str(repository_root) not in str(captured.value)
+            for candidate in (source, repository_root / source.name):
+                with pytest.raises(DUACredentialRequired) as captured:
+                    loader(candidate)
+                rendered = "".join(traceback.format_exception(captured.value))
+                assert source.name not in rendered
+                assert str(tmp_path) not in rendered
+                assert str(repository_root) not in str(captured.value)
 
 
 def test_made_source_errors_do_not_echo_sensitive_filename(tmp_path: Path) -> None:
@@ -357,31 +361,25 @@ def test_made_bioc_loads_entities_and_document_relations(tmp_path: Path) -> None
     ]
 
 
-@pytest.mark.parametrize(
-    ("loader", "path_env", "dua_name"),
-    (
+def test_relation_dua_loaders_refuse_unconfigured_and_repo_paths(subtests) -> None:
+    for loader, path_env, dua_name in (
         (
             load_n2c2_2018_track2_relation_fixtures,
             N2C2_2018_TRACK2_PATH_ENV,
             N2C2_2018_TRACK2_DUA_NAME,
         ),
         (load_made_relation_fixtures, MADE_PATH_ENV, MADE_DUA_NAME),
-    ),
-)
-def test_relation_dua_loaders_refuse_unconfigured_and_repo_paths(
-    loader,
-    path_env: str,
-    dua_name: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(path_env, raising=False)
+    ):
+        with subtests.test(loader=loader, path_env=path_env, dua_name=dua_name):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.delenv(path_env, raising=False)
 
-    with pytest.raises(DUACredentialRequired, match=dua_name):
-        loader()
+                with pytest.raises(DUACredentialRequired, match=dua_name):
+                    loader()
 
-    repo_root = Path(__file__).resolve().parents[3]
-    with pytest.raises(DUACredentialRequired, match="repository tree"):
-        loader(repo_root)
+                repo_root = Path(__file__).resolve().parents[3]
+                with pytest.raises(DUACredentialRequired, match="repository tree"):
+                    loader(repo_root)
 
 
 def test_made_refuses_repository_file_symlink(tmp_path: Path) -> None:

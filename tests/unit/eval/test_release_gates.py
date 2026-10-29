@@ -783,31 +783,32 @@ def test_relation_golden_gate_quarantines_missing_type_baseline(
     assert check.details["violations"]["missing_baselines"] == ["TREATS"]
 
 
-@pytest.mark.parametrize("trap_kind", release_gates.RELATION_GOLDEN_TRAP_KINDS)
-def test_relation_golden_gate_hard_fails_on_any_trap_leak(
-    tmp_path: Path,
-    trap_kind: str,
-) -> None:
-    trap_counts = {"assertion_leaks": 0, "temporal_leaks": 0}
-    trap_counts[f"{trap_kind}_leaks"] = 1
-    result = _gate().evaluate(
-        _report(
-            tmp_path,
-            metadata_updates={
-                "family": "Relation",
-                "relation_golden_regression_required": True,
-            },
-            metric_updates=_relation_golden_metric(**trap_counts),
-        ),
-        _relation_golden_baseline_store(),
-    )
+def test_relation_golden_gate_hard_fails_on_any_trap_leak(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for trap_kind in release_gates.RELATION_GOLDEN_TRAP_KINDS:
+        with subtests.test(trap_kind=trap_kind):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            trap_counts = {"assertion_leaks": 0, "temporal_leaks": 0}
+            trap_counts[f"{trap_kind}_leaks"] = 1
+            result = _gate().evaluate(
+                _report(
+                    tmp_path,
+                    metadata_updates={
+                        "family": "Relation",
+                        "relation_golden_regression_required": True,
+                    },
+                    metric_updates=_relation_golden_metric(**trap_counts),
+                ),
+                _relation_golden_baseline_store(),
+            )
 
-    check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
-    assert result.decision == QUARANTINED
-    assert result.verify(SIGNING_KEY)
-    assert check.passed is False
-    assert check.reason == "zero-tolerance assertion or temporal trap leak"
-    assert check.details["violations"]["trap_leaks"] == {trap_kind: 1}
+            check = _check(result, release_gates.RELATION_GOLDEN_REGRESSION_GATE)
+            assert result.decision == QUARANTINED
+            assert result.verify(SIGNING_KEY)
+            assert check.passed is False
+            assert check.reason == "zero-tolerance assertion or temporal trap leak"
+            assert check.details["violations"]["trap_leaks"] == {trap_kind: 1}
 
 
 def test_gate_report_from_json_rejects_malformed_payload() -> None:
@@ -830,9 +831,9 @@ def test_find_open_issue_returns_none_for_malformed_gh_json(monkeypatch) -> None
     )
 
 
-@pytest.mark.parametrize(
-    ("gate_name", "metric_updates", "metadata_updates"),
-    [
+def test_release_gate_blocks_failed_gate_boundaries(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for gate_name, metric_updates, metadata_updates in [
         (
             "G1a",
             {"per_label_recall": {"PERSON": 0.989, "API_KEY": 0.995}},
@@ -871,25 +872,25 @@ def test_find_open_issue_returns_none_for_malformed_gh_json(monkeypatch) -> None
                 ]
             },
         ),
-    ],
-)
-def test_release_gate_blocks_failed_gate_boundaries(
-    tmp_path: Path,
-    gate_name: str,
-    metric_updates: dict[str, object] | None,
-    metadata_updates: dict[str, object] | None,
-) -> None:
-    result = _gate().evaluate(
-        _report(
-            tmp_path,
+    ]:
+        with subtests.test(
+            gate_name=gate_name,
             metric_updates=metric_updates,
             metadata_updates=metadata_updates,
-        ),
-        _baseline(),
-    )
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            result = _gate().evaluate(
+                _report(
+                    tmp_path,
+                    metric_updates=metric_updates,
+                    metadata_updates=metadata_updates,
+                ),
+                _baseline(),
+            )
 
-    assert result.decision == QUARANTINED
-    assert _check(result, gate_name).passed is False
+            assert result.decision == QUARANTINED
+            assert _check(result, gate_name).passed is False
 
 
 def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
@@ -968,23 +969,24 @@ def test_g10_faithfulness_gate_quarantines_fabricated_facts(
     assert check.details["violations"]["ungrounded_fact_rate"]["observed"] == 1.0
 
 
-@pytest.mark.parametrize("rate", [-0.01, 1.01])
-def test_g10_faithfulness_gate_rejects_invalid_rates(
-    tmp_path: Path,
-    rate: float,
-) -> None:
-    result = _gate().evaluate(
-        _report(
-            tmp_path,
-            metric_updates={"faithfulness": {"ungrounded_fact_rate": rate}},
-        ),
-        _baseline(),
-    )
+def test_g10_faithfulness_gate_rejects_invalid_rates(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for rate in [-0.01, 1.01]:
+        with subtests.test(rate=rate):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            result = _gate().evaluate(
+                _report(
+                    tmp_path,
+                    metric_updates={"faithfulness": {"ungrounded_fact_rate": rate}},
+                ),
+                _baseline(),
+            )
 
-    check = _check(result, "G10")
-    assert result.decision == QUARANTINED
-    assert check.passed is False
-    assert check.reason == "ungrounded-fact rate must be between zero and one"
+            check = _check(result, "G10")
+            assert result.decision == QUARANTINED
+            assert check.passed is False
+            assert check.reason == "ungrounded-fact rate must be between zero and one"
 
 
 def test_extraction_reemission_critical_identifier_forces_quarantine(
@@ -1179,37 +1181,38 @@ def test_g14_computes_gap_from_per_group_when_gap_missing(tmp_path: Path) -> Non
     assert check.details["worst_group"] == "note_type=progress_note"
 
 
-@pytest.mark.parametrize("reported_gap", (-0.1, 0.0, 1.1))
-def test_g14_rejects_invalid_or_inconsistent_reported_gap(
-    tmp_path: Path,
-    reported_gap: float,
-) -> None:
-    result = _gate().evaluate(
-        _report(
-            tmp_path,
-            metric_updates={
-                "extraction_fairness": {
-                    "extraction_f1_gap": reported_gap,
-                    "per_group": {
-                        "site=site_alpha": {"entity_f1": 0.95},
-                        "site=site_beta": {"entity_f1": 0.45},
+def test_g14_rejects_invalid_or_inconsistent_reported_gap(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for reported_gap in (-0.1, 0.0, 1.1):
+        with subtests.test(reported_gap=reported_gap):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            result = _gate().evaluate(
+                _report(
+                    tmp_path,
+                    metric_updates={
+                        "extraction_fairness": {
+                            "extraction_f1_gap": reported_gap,
+                            "per_group": {
+                                "site=site_alpha": {"entity_f1": 0.95},
+                                "site=site_beta": {"entity_f1": 0.45},
+                            },
+                        }
                     },
-                }
-            },
-        ),
-        _baseline(),
-    )
+                ),
+                _baseline(),
+            )
 
-    check = _check(result, "G14")
-    assert result.decision == QUARANTINED
-    assert check.passed is False
-    assert check.reason == "extraction-fairness metric is malformed"
-    assert check.details["computed_gap"] == pytest.approx(0.5)
+            check = _check(result, "G14")
+            assert result.decision == QUARANTINED
+            assert check.passed is False
+            assert check.reason == "extraction-fairness metric is malformed"
+            assert check.details["computed_gap"] == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize(
-    "per_group",
-    (
+def test_g14_rejects_malformed_group_evidence(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for per_group in (
         {"site=only": {"entity_f1": 0.9}},
         {
             "site=alpha": {"entity_f1": 0.9},
@@ -1219,24 +1222,22 @@ def test_g14_rejects_invalid_or_inconsistent_reported_gap(
             "site=alpha": {"entity_f1": 0.9},
             "site=beta": {"entity_f1": "unknown"},
         },
-    ),
-)
-def test_g14_rejects_malformed_group_evidence(
-    tmp_path: Path,
-    per_group: dict[str, object],
-) -> None:
-    result = _gate().evaluate(
-        _report(
-            tmp_path,
-            metric_updates={"extraction_fairness": {"per_group": per_group}},
-        ),
-        _baseline(),
-    )
+    ):
+        with subtests.test(per_group=per_group):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            result = _gate().evaluate(
+                _report(
+                    tmp_path,
+                    metric_updates={"extraction_fairness": {"per_group": per_group}},
+                ),
+                _baseline(),
+            )
 
-    check = _check(result, "G14")
-    assert result.decision == QUARANTINED
-    assert check.passed is False
-    assert check.reason == "extraction-fairness metric is malformed"
+            check = _check(result, "G14")
+            assert result.decision == QUARANTINED
+            assert check.passed is False
+            assert check.reason == "extraction-fairness metric is malformed"
 
 
 def test_g14_quarantines_from_extraction_fairness_report(tmp_path: Path) -> None:

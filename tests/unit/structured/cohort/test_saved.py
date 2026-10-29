@@ -256,43 +256,53 @@ def _legacy_execution(memberships):
     return version, payload
 
 
-@pytest.mark.parametrize(
-    "memberships", [(), (_membership(),), (_membership(first=MembershipState.UNKNOWN),)]
-)
 def test_legacy_execution_parses_into_current_view_without_rewriting_store(
-    tmp_path, memberships
+    subtests, tmp_path
 ) -> None:
-    version, payload = _legacy_execution(memberships)
-    original = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
-    schema = load_saved_cohort_schema()
-    assert not list(validator_for(schema)(schema).iter_errors(payload))
-    loaded = CohortExecution.from_json(original)
-    assert loaded.schema_version == "1.1.0"
-    assert loaded.manifest.schema_version == "1.0.0"
-    assert loaded.manifest.execution_id == payload["manifest"]["execution_id"]
-    assert loaded.coverage.source_patient_count is None
-    assert loaded.review_required is (
-        not memberships or any(item.review_required for item in memberships)
-    )
-    assert loaded.execution_digest != payload["execution_digest"]
-    assert CohortExecution.from_json(loaded.to_json_bytes()) == loaded
-    assert not list(validator_for(schema)(schema).iter_errors(loaded.to_dict()))
-    store = LocalSavedCohortStore(tmp_path)
-    assert store.put_definition(version).ok
-    path = tmp_path / "executions" / f"{loaded.manifest.execution_id}.json"
-    path.write_bytes(original)
-    result = store.get_execution(loaded.manifest.execution_id)
-    assert result.ok
-    repeated = store.put_execution(result.value)
-    assert repeated.ok and repeated.created is False
-    assert path.read_bytes() == original
-    rerun = store.rerun(loaded.manifest.execution_id, lambda _context: memberships)
-    assert rerun.ok and rerun.value == result.value
-    assert store.put_execution(rerun.value).ok
-    assert path.read_bytes() == original
-    changed = replace(result.value, coverage=CohortCoverage(source_patient_count=10))
-    assert store.put_execution(changed).state is StoreState.CONFLICT
-    assert path.read_bytes() == original
+    case_root = tmp_path
+    for memberships in [
+        (),
+        (_membership(),),
+        (_membership(first=MembershipState.UNKNOWN),),
+    ]:
+        with subtests.test(memberships=memberships):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            version, payload = _legacy_execution(memberships)
+            original = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+            schema = load_saved_cohort_schema()
+            assert not list(validator_for(schema)(schema).iter_errors(payload))
+            loaded = CohortExecution.from_json(original)
+            assert loaded.schema_version == "1.1.0"
+            assert loaded.manifest.schema_version == "1.0.0"
+            assert loaded.manifest.execution_id == payload["manifest"]["execution_id"]
+            assert loaded.coverage.source_patient_count is None
+            assert loaded.review_required is (
+                not memberships or any(item.review_required for item in memberships)
+            )
+            assert loaded.execution_digest != payload["execution_digest"]
+            assert CohortExecution.from_json(loaded.to_json_bytes()) == loaded
+            assert not list(validator_for(schema)(schema).iter_errors(loaded.to_dict()))
+            store = LocalSavedCohortStore(tmp_path)
+            assert store.put_definition(version).ok
+            path = tmp_path / "executions" / f"{loaded.manifest.execution_id}.json"
+            path.write_bytes(original)
+            result = store.get_execution(loaded.manifest.execution_id)
+            assert result.ok
+            repeated = store.put_execution(result.value)
+            assert repeated.ok and repeated.created is False
+            assert path.read_bytes() == original
+            rerun = store.rerun(
+                loaded.manifest.execution_id, lambda _context: memberships
+            )
+            assert rerun.ok and rerun.value == result.value
+            assert store.put_execution(rerun.value).ok
+            assert path.read_bytes() == original
+            changed = replace(
+                result.value, coverage=CohortCoverage(source_patient_count=10)
+            )
+            assert store.put_execution(changed).state is StoreState.CONFLICT
+            assert path.read_bytes() == original
 
 
 def test_legacy_integrity_and_same_major_policy_are_retained() -> None:
@@ -416,40 +426,51 @@ def test_unresolved_memberships_require_review_and_cannot_be_eligible(subtests) 
                 replace(membership, state=MembershipState.MET)
 
 
-@pytest.mark.parametrize("fchmod_available", [True, False])
 def test_local_store_is_immutable_idempotent_and_referential(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fchmod_available: bool
+    subtests, tmp_path
 ) -> None:
-    if not fchmod_available:
-        monkeypatch.delattr(os, "fchmod", raising=False)
-    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
-    version = save_cohort_definition(_definition())
-    execution = _execution()
+    case_root = tmp_path
+    for fchmod_available in [True, False]:
+        with subtests.test(fchmod_available=fchmod_available):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                if not fchmod_available:
+                    monkeypatch.delattr(os, "fchmod", raising=False)
+                store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+                version = save_cohort_definition(_definition())
+                execution = _execution()
 
-    first = store.put_definition(version)
-    second = store.put_definition(version)
-    saved = store.put_execution(execution)
+                first = store.put_definition(version)
+                second = store.put_definition(version)
+                saved = store.put_execution(execution)
 
-    assert first.ok and first.created
-    assert second.ok and not second.created
-    assert saved.ok and saved.created
-    assert store.get_definition(version.version_id or "").value == version
-    assert store.get_execution(execution.manifest.execution_id or "").value == execution
-    if os.name == "posix":
-        assert oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777) == "0o700"
+                assert first.ok and first.created
+                assert second.ok and not second.created
+                assert saved.ok and saved.created
+                assert store.get_definition(version.version_id or "").value == version
+                assert (
+                    store.get_execution(execution.manifest.execution_id or "").value
+                    == execution
+                )
+                if os.name == "posix":
+                    assert (
+                        oct((tmp_path / "saved-cohorts").stat().st_mode & 0o777)
+                        == "0o700"
+                    )
 
-    drifted = CohortExecution(
-        manifest=execution.manifest,
-        memberships=(_membership(second=MembershipState.NOT_MET),),
-    )
-    conflict = store.put_execution(drifted)
-    assert conflict.state is StoreState.CONFLICT
-    assert conflict.code == "immutable_record_conflict"
+                drifted = CohortExecution(
+                    manifest=execution.manifest,
+                    memberships=(_membership(second=MembershipState.NOT_MET),),
+                )
+                conflict = store.put_execution(drifted)
+                assert conflict.state is StoreState.CONFLICT
+                assert conflict.code == "immutable_record_conflict"
 
-    missing_store = LocalSavedCohortStore(tmp_path / "missing-definition")
-    missing = missing_store.put_execution(execution)
-    assert missing.state is StoreState.UNKNOWN
-    assert missing.code == "definition_not_available"
+                missing_store = LocalSavedCohortStore(tmp_path / "missing-definition")
+                missing = missing_store.put_execution(execution)
+                assert missing.state is StoreState.UNKNOWN
+                assert missing.code == "definition_not_available"
 
 
 def test_store_rejects_valid_definition_under_a_different_id(tmp_path: Path) -> None:
@@ -477,29 +498,35 @@ def test_store_rejects_valid_execution_under_a_different_id(tmp_path: Path) -> N
     assert result.code == "execution_integrity_failed"
 
 
-@pytest.mark.parametrize("operation", ["write", "read"])
 def test_execution_expression_must_match_the_named_definition(
-    tmp_path: Path, operation: str
+    subtests, tmp_path
 ) -> None:
-    store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
-    assert store.put_definition(save_cohort_definition(_definition())).ok
-    execution = _execution()
-    changed = replace(
-        execution,
-        manifest=replace(
-            execution.manifest,
-            expression=replace(execution.manifest.expression, operator="or"),
-            execution_id=None,
-        ),
-    )
-    if operation == "write":
-        result = store.put_execution(changed)
-    else:
-        path = store.root / "executions" / f"{changed.manifest.execution_id}.json"
-        path.write_bytes(changed.to_json_bytes())
-        result = store.get_execution(changed.manifest.execution_id or "")
-    assert result.state is StoreState.CONFLICT
-    assert result.code == "definition_digest_conflict"
+    case_root = tmp_path
+    for operation in ["write", "read"]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            store = LocalSavedCohortStore(tmp_path / "saved-cohorts")
+            assert store.put_definition(save_cohort_definition(_definition())).ok
+            execution = _execution()
+            changed = replace(
+                execution,
+                manifest=replace(
+                    execution.manifest,
+                    expression=replace(execution.manifest.expression, operator="or"),
+                    execution_id=None,
+                ),
+            )
+            if operation == "write":
+                result = store.put_execution(changed)
+            else:
+                path = (
+                    store.root / "executions" / f"{changed.manifest.execution_id}.json"
+                )
+                path.write_bytes(changed.to_json_bytes())
+                result = store.get_execution(changed.manifest.execution_id or "")
+            assert result.state is StoreState.CONFLICT
+            assert result.code == "definition_digest_conflict"
 
 
 def test_rerun_proves_reproducibility_and_reports_drift(tmp_path: Path) -> None:

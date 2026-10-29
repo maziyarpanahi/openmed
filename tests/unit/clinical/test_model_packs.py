@@ -345,9 +345,9 @@ def test_bounded_entry_wins_even_when_generative_has_higher_priority(
     assert result.value.alias == "classifier.deberta"
 
 
-@pytest.mark.parametrize(
-    ("task", "family"),
-    [
+def test_bounded_specialist_task_shapes_are_registered(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for task, family in [
         ("span_extraction", "gliner2_5"),
         ("classification", "deberta_v2"),
         ("pair_scoring", "modernbert"),
@@ -355,25 +355,24 @@ def test_bounded_entry_wins_even_when_generative_has_higher_priority(
         ("assertion", "modernbert"),
         ("temporality", "modernbert"),
         ("token_classification", "openmed_token_classifier"),
-    ],
-)
-def test_bounded_specialist_task_shapes_are_registered(
-    tmp_path: Path, task: str, family: str
-) -> None:
-    alias = f"specialist.{task}"
-    model = tmp_path / f"{task}.bin"
-    entry = _entry(alias=alias, task=task, family=family)
-    router = ClinicalTaskRouter(
-        _pack(entry),
-        bindings=(_file_binding(model, alias=alias),),
-        available_runtimes=("torch",),
-    )
+    ]:
+        with subtests.test(task=task, family=family):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            alias = f"specialist.{task}"
+            model = tmp_path / f"{task}.bin"
+            entry = _entry(alias=alias, task=task, family=family)
+            router = ClinicalTaskRouter(
+                _pack(entry),
+                bindings=(_file_binding(model, alias=alias),),
+                available_runtimes=("torch",),
+            )
 
-    result = router.route(_request(task=task, requested_alias=alias))
+            result = router.route(_request(task=task, requested_alias=alias))
 
-    assert result.ok
-    assert result.value is not None
-    assert result.value.task == task
+            assert result.ok
+            assert result.value is not None
+            assert result.value.task == task
 
 
 def test_default_family_capabilities_cover_bounded_specialists() -> None:

@@ -70,13 +70,17 @@ def test_user_dictionary_loader_and_custom_jieba_dictionary(tmp_path):
     assert "心脏超声" in [token.text for token in tokens]
 
 
-@pytest.mark.parametrize("frequency", ["zero 0", "negative -1", "bad nope"])
-def test_user_dictionary_rejects_invalid_frequency(tmp_path, frequency):
-    dictionary = tmp_path / "invalid.txt"
-    dictionary.write_text(f"{frequency}\n", encoding="utf-8")
+def test_user_dictionary_rejects_invalid_frequency(subtests, tmp_path):
+    case_root = tmp_path
+    for frequency in ["zero 0", "negative -1", "bad nope"]:
+        with subtests.test(frequency=frequency):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            dictionary = tmp_path / "invalid.txt"
+            dictionary.write_text(f"{frequency}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="frequency"):
-        load_user_dictionary(dictionary)
+            with pytest.raises(ValueError, match="frequency"):
+                load_user_dictionary(dictionary)
 
 
 def test_validation_rejects_wrong_offsets_overlap_and_non_whitespace_gaps():

@@ -345,25 +345,30 @@ def test_issue_3779_malformed_json_retains_no_private_exception(subtests):
                 assert "synthetic-parser-private-sentinel" not in str(caught.value)
 
 
-@pytest.mark.parametrize(
-    "module_name,class_name,error_name", _BOUNDED_GOVERNANCE_PARSERS
-)
-@pytest.mark.parametrize("limit", ("depth", "bytes"))
-def test_issue_3779_bounds_run_before_the_json_decoder(
-    module_name, class_name, error_name, limit, monkeypatch
-):
-    import importlib
+def test_issue_3779_bounds_run_before_the_json_decoder(subtests):
+    for module_name, class_name, error_name in _BOUNDED_GOVERNANCE_PARSERS:
+        for limit in ("depth", "bytes"):
+            with subtests.test(
+                module_name=module_name,
+                class_name=class_name,
+                error_name=error_name,
+                limit=limit,
+            ):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    import importlib
 
-    module = importlib.import_module(module_name)
-    payload = (
-        "[" * 100_000 + "]" * 100_000
-        if limit == "depth"
-        else " " * (64 * 1024 * 1024 + 1)
-    )
+                    module = importlib.import_module(module_name)
+                    payload = (
+                        "[" * 100_000 + "]" * 100_000
+                        if limit == "depth"
+                        else " " * (64 * 1024 * 1024 + 1)
+                    )
 
-    def forbidden_decoder(*args, **kwargs):
-        pytest.fail("unbounded governance input reached the JSON decoder")
+                    def forbidden_decoder(*args, **kwargs):
+                        pytest.fail(
+                            "unbounded governance input reached the JSON decoder"
+                        )
 
-    monkeypatch.setattr(json, "loads", forbidden_decoder)
-    with pytest.raises(getattr(module, error_name)):
-        getattr(module, class_name).from_json(payload)
+                    monkeypatch.setattr(json, "loads", forbidden_decoder)
+                    with pytest.raises(getattr(module, error_name)):
+                        getattr(module, class_name).from_json(payload)

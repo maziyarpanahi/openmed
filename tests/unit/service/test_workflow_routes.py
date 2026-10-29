@@ -279,43 +279,54 @@ def test_authenticated_caller_and_run_custody_required(subtests):
             assert service.mutations == 0
 
 
-@pytest.mark.parametrize("operation", list(WORKFLOW_ROUTE_SCOPES))
-def test_scopes_cannot_be_replaced_by_body_authority(monkeypatch, operation):
-    configure_keys(monkeypatch, ["unrelated:read"])
-    service = CustodiedService()
-    with client(service) as http:
-        response = http.post(
-            operation,
-            json={**review_payload(service), "role": "admin"},
-            headers={"X-API-Key": KEY},
-        )
-    assert response.status_code == 403
-    assert not service.calls
+def test_scopes_cannot_be_replaced_by_body_authority(subtests):
+    for operation in list(WORKFLOW_ROUTE_SCOPES):
+        with subtests.test(operation=operation):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                configure_keys(monkeypatch, ["unrelated:read"])
+                service = CustodiedService()
+                with client(service) as http:
+                    response = http.post(
+                        operation,
+                        json={**review_payload(service), "role": "admin"},
+                        headers={"X-API-Key": KEY},
+                    )
+                assert response.status_code == 403
+                assert not service.calls
 
 
-@pytest.mark.parametrize("mode", ["disabled", "exempt", "scope-override"])
-def test_weak_global_auth_policy_cannot_open_routes(monkeypatch, mode):
-    service = CustodiedService()
-    app = create_app(workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True))
-    config = app.state.auth.config
-    if mode == "disabled":
-        app.state.auth.config = replace(config, enabled=False)
-    elif mode == "exempt":
-        app.state.auth.config = replace(
-            config, exempt_paths=config.exempt_paths | {"/v1/workflows/status"}
-        )
-    else:
-        configure_keys(monkeypatch, [])
-        app = create_app(
-            workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True)
-        )
-        app.state.auth.config = replace(
-            app.state.auth.config, route_scopes={("POST", "/v1/workflows/status"): ()}
-        )
-    with TestClient(app, base_url=BASE) as http:
-        response = post(http, "status")
-    assert response.status_code == (403 if mode == "scope-override" else 401)
-    assert not service.calls
+def test_weak_global_auth_policy_cannot_open_routes(subtests):
+    for mode in ["disabled", "exempt", "scope-override"]:
+        with subtests.test(mode=mode):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                service = CustodiedService()
+                app = create_app(
+                    workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True)
+                )
+                config = app.state.auth.config
+                if mode == "disabled":
+                    app.state.auth.config = replace(config, enabled=False)
+                elif mode == "exempt":
+                    app.state.auth.config = replace(
+                        config,
+                        exempt_paths=config.exempt_paths | {"/v1/workflows/status"},
+                    )
+                else:
+                    configure_keys(monkeypatch, [])
+                    app = create_app(
+                        workflow_service=service,
+                        workflow_policy=WorkflowHTTPPolicy(True),
+                    )
+                    app.state.auth.config = replace(
+                        app.state.auth.config,
+                        route_scopes={("POST", "/v1/workflows/status"): ()},
+                    )
+                with TestClient(app, base_url=BASE) as http:
+                    response = post(http, "status")
+                assert response.status_code == (
+                    403 if mode == "scope-override" else 401
+                )
+                assert not service.calls
 
 
 def test_server_owned_enable_and_mutation_opt_ins():

@@ -209,45 +209,56 @@ def test_sink_failure_blocks_dispatch_and_does_not_retry(subtests) -> None:
             assert CANARY not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize(
-    "tamper",
-    ["value", "delete", "reorder", "duplicate", "truncate", "unknown", "partial"],
-)
 @pytest.mark.skipif(
     os.name == "nt", reason="durable access sink requires POSIX file locks"
 )
-def test_tampering_breaks_chain(tmp_path: Path, tamper: str) -> None:
-    path = tmp_path / "events.jsonl"
-    sink = LocalAccessEventSink(path)
-    verifier = AccessTicketVerifier(sink=sink)
-    for now in (97, 98, 99):
-        verifier.verify(ticket(), request(), now=now)
-    head = sink.verify_chain()
-    lines = path.read_bytes().splitlines(keepends=True)
-    if tamper == "value":
-        lines[1] = lines[1].replace(b'"timestamp":98', b'"timestamp":80')
-    elif tamper == "delete":
-        del lines[1]
-    elif tamper == "reorder":
-        lines.reverse()
-    elif tamper == "duplicate":
-        lines.insert(1, lines[0])
-    elif tamper == "truncate":
-        lines.pop()
-    elif tamper == "unknown":
-        lines[0] = lines[0].replace(b'"event":{', b'"event":{"patient":"synthetic",')
-    elif tamper == "partial":
-        lines[-1] = lines[-1][:-8]
-    path.write_bytes(b"".join(lines))
-    with pytest.raises(AccessEventError):
-        sink.verify_chain(expected_head=head)
-    if tamper != "truncate":
-        with pytest.raises(AccessEventError):
-            sink.export_counts()
-        before = path.read_bytes()
-        with pytest.raises(AccessEventError):
-            verifier.verify(ticket(), request(), now=99)
-        assert path.read_bytes() == before
+def test_tampering_breaks_chain(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for tamper in [
+        "value",
+        "delete",
+        "reorder",
+        "duplicate",
+        "truncate",
+        "unknown",
+        "partial",
+    ]:
+        with subtests.test(tamper=tamper):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "events.jsonl"
+            sink = LocalAccessEventSink(path)
+            verifier = AccessTicketVerifier(sink=sink)
+            for now in (97, 98, 99):
+                verifier.verify(ticket(), request(), now=now)
+            head = sink.verify_chain()
+            lines = path.read_bytes().splitlines(keepends=True)
+            if tamper == "value":
+                lines[1] = lines[1].replace(b'"timestamp":98', b'"timestamp":80')
+            elif tamper == "delete":
+                del lines[1]
+            elif tamper == "reorder":
+                lines.reverse()
+            elif tamper == "duplicate":
+                lines.insert(1, lines[0])
+            elif tamper == "truncate":
+                lines.pop()
+            elif tamper == "unknown":
+                lines[0] = lines[0].replace(
+                    b'"event":{', b'"event":{"patient":"synthetic",'
+                )
+            elif tamper == "partial":
+                lines[-1] = lines[-1][:-8]
+            path.write_bytes(b"".join(lines))
+            with pytest.raises(AccessEventError):
+                sink.verify_chain(expected_head=head)
+            if tamper != "truncate":
+                with pytest.raises(AccessEventError):
+                    sink.export_counts()
+                before = path.read_bytes()
+                with pytest.raises(AccessEventError):
+                    verifier.verify(ticket(), request(), now=99)
+                assert path.read_bytes() == before
 
 
 def test_private_path_and_symlink_failures_have_value_free_errors(

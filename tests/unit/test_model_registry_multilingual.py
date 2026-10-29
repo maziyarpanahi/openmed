@@ -205,16 +205,22 @@ class TestHelperFunctions:
             return
         assert model_id == DEFAULT_PII_MODELS[lang]
 
-    @pytest.mark.parametrize("lang", sorted(INDIC_NER_LANGUAGES))
-    def test_configured_indic_model_is_registered(self, monkeypatch, lang):
-        monkeypatch.setenv("OPENMED_INDIC_NER_MODEL", "/models/indic-ner")
+    def test_configured_indic_model_is_registered(self, subtests):
+        for lang in sorted(INDIC_NER_LANGUAGES):
+            with subtests.test(lang=lang):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    monkeypatch.setenv("OPENMED_INDIC_NER_MODEL", "/models/indic-ner")
 
-        models = get_pii_models_by_language(lang)
+                    models = get_pii_models_by_language(lang)
 
-        optional = models[f"pii_{lang}_indic_ner"]
-        assert optional.model_id == "/models/indic-ner"
-        assert optional.languages == [lang]
-        assert optional.entity_types == ["PERSON", "LOCATION", "ORGANIZATION"]
+                    optional = models[f"pii_{lang}_indic_ner"]
+                    assert optional.model_id == "/models/indic-ner"
+                    assert optional.languages == [lang]
+                    assert optional.entity_types == [
+                        "PERSON",
+                        "LOCATION",
+                        "ORGANIZATION",
+                    ]
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("xx")
@@ -272,17 +278,19 @@ class TestPortugueseNerRegistry:
         assert info.category == "Anatomy"
         assert info.languages == ["pt"]
 
-    @pytest.mark.parametrize("languages", (["pt", "en"], ["en"]))
-    def test_explicit_manifest_languages_are_preserved(self, monkeypatch, languages):
-        row = {**PT_ANATOMY_NER_MANIFEST_ROW, "languages": languages}
-        registry = build_registry([row])
-        info = next(iter(registry.values()))
-        monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
+    def test_explicit_manifest_languages_are_preserved(self, subtests):
+        for languages in (["pt", "en"], ["en"]):
+            with subtests.test(languages=languages):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    row = {**PT_ANATOMY_NER_MANIFEST_ROW, "languages": languages}
+                    registry = build_registry([row])
+                    info = next(iter(registry.values()))
+                    monkeypatch.setattr(model_registry, "OPENMED_MODELS", registry)
 
-        assert info.category == "Anatomy"
-        assert info.languages == languages
-        assert bool(get_ner_models_by_language("pt")) == ("pt" in languages)
-        assert get_ner_models_by_language("en")
+                    assert info.category == "Anatomy"
+                    assert info.languages == languages
+                    assert bool(get_ner_models_by_language("pt")) == ("pt" in languages)
+                    assert get_ner_models_by_language("en")
 
     def test_ner_models_by_language_excludes_english_models(self, monkeypatch):
         registry = build_registry(

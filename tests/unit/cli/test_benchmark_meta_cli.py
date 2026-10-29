@@ -115,23 +115,37 @@ def test_equal_report_deterministic(tmp_path, capsys):
     assert json.loads(first)["data"]["verdict"] == "no-regression"
 
 
-@pytest.mark.parametrize(
-    "value", [True, "CaseySecret", None, -0.1, 1.1, float("nan"), float("inf")]
-)
-def test_invalid_metric_fails_safely(value, tmp_path, capsys):
-    a = write_report(tmp_path / "a.json", {"f1": value})
-    assert main_module.main(["benchmark", "compare", str(a), str(a), "--json"]) == 2
-    output = capsys.readouterr().out
-    assert "CaseySecret" not in output
-    assert json.loads(output)["error"]["code"] == "invalid_reports"
+def test_invalid_metric_fails_safely(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for value in [True, "CaseySecret", None, -0.1, 1.1, float("nan"), float("inf")]:
+        with subtests.test(value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            a = write_report(tmp_path / "a.json", {"f1": value})
+            assert (
+                main_module.main(["benchmark", "compare", str(a), str(a), "--json"])
+                == 2
+            )
+            output = capsys.readouterr().out
+            assert "CaseySecret" not in output
+            assert json.loads(output)["error"]["code"] == "invalid_reports"
 
 
-@pytest.mark.parametrize("suite,count", [("shield", 2), ("golden", 3), ("golden", 0)])
-def test_mismatched_or_empty_reports_rejected(suite, count, tmp_path, capsys):
-    a = write_report(tmp_path / "a.json", {"f1": 1.0})
-    b = write_report(tmp_path / "b.json", {"f1": 1.0}, suite=suite, count=count)
-    assert main_module.main(["benchmark", "compare", str(a), str(b), "--json"]) == 2
-    assert not json.loads(capsys.readouterr().out)["ok"]
+def test_mismatched_or_empty_reports_rejected(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for suite, count in [("shield", 2), ("golden", 3), ("golden", 0)]:
+        with subtests.test(suite=suite, count=count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            a = write_report(tmp_path / "a.json", {"f1": 1.0})
+            b = write_report(tmp_path / "b.json", {"f1": 1.0}, suite=suite, count=count)
+            assert (
+                main_module.main(["benchmark", "compare", str(a), str(b), "--json"])
+                == 2
+            )
+            assert not json.loads(capsys.readouterr().out)["ok"]
 
 
 @pytest.mark.parametrize(

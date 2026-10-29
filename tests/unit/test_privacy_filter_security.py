@@ -155,21 +155,22 @@ class TestIsTrustedForRemoteCode:
 
                 assert is_trusted_for_remote_code(trusted) is True
 
-    @pytest.mark.parametrize(
-        "attacker",
-        [
+    def test_other_models_are_not_trusted(self, subtests):
+        for attacker in [
             "attacker/foo-privacy-filter-bar",
             "some-org/privacy-filter",
             "OpenMed/privacy-filter-mlx",  # MLX-only repo, not in HF code path
             "",
             "openai/privacy-filter-evil",  # not exact match, not in allowlist
-        ],
-    )
-    def test_other_models_are_not_trusted(self, attacker, monkeypatch):
-        monkeypatch.delenv("OPENMED_TRUSTED_REMOTE_CODE_MODELS", raising=False)
-        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+        ]:
+            with subtests.test(attacker=attacker):
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    monkeypatch.delenv(
+                        "OPENMED_TRUSTED_REMOTE_CODE_MODELS", raising=False
+                    )
+                    from openmed.torch.privacy_filter import is_trusted_for_remote_code
 
-        assert is_trusted_for_remote_code(attacker) is False
+                    assert is_trusted_for_remote_code(attacker) is False
 
     def test_env_var_extends_allowlist(self, monkeypatch):
         from openmed.torch.privacy_filter import is_trusted_for_remote_code

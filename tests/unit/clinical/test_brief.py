@@ -390,9 +390,8 @@ def test_result_views_are_defensive_copies():
     assert brief.citations[0]["source_start"] == 0
 
 
-@pytest.mark.parametrize(
-    "module,name",
-    [
+def test_required_stage_failure_is_not_skipped(subtests):
+    for module, name in [
         ("summary_section_plan", "require_summary_section_plan"),
         ("summary_length_budget", "build_summary_length_budget"),
         ("summary_profiles", "get_summary_profile"),
@@ -401,23 +400,25 @@ def test_result_views_are_defensive_copies():
         ("citation_minimality", "check_citation_minimality"),
         ("summary_temporal_order", "validate_summary_temporal_order"),
         ("guarded_provenance", "build_guarded_provenance_record"),
-    ],
-)
-def test_required_stage_failure_is_not_skipped(monkeypatch, module, name):
-    import importlib
+    ]:
+        with subtests.test(module=module, name=name):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import importlib
 
-    result, context = fixture_context()
+                result, context = fixture_context()
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("PRIVATE_STAGE_ERROR")
+                def fail(*args, **kwargs):
+                    raise RuntimeError("PRIVATE_STAGE_ERROR")
 
-    monkeypatch.setattr(
-        importlib.import_module("openmed.clinical." + module), name, fail
-    )
-    brief = build_clinical_brief(result, context=context, model="extractive")
-    assert brief.refusal_reason is BriefRefusal.STAGE_FAILED
-    assert brief.summary == ""
-    assert "PRIVATE_STAGE_ERROR" not in json.dumps(brief.to_dict())
+                monkeypatch.setattr(
+                    importlib.import_module("openmed.clinical." + module), name, fail
+                )
+                brief = build_clinical_brief(
+                    result, context=context, model="extractive"
+                )
+                assert brief.refusal_reason is BriefRefusal.STAGE_FAILED
+                assert brief.summary == ""
+                assert "PRIVATE_STAGE_ERROR" not in json.dumps(brief.to_dict())
 
 
 def test_failed_deterministic_support_check_refuses_partial_output(monkeypatch):

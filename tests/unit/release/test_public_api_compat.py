@@ -66,9 +66,11 @@ def test_governance_and_writeback_namespaces_are_in_scope_and_baseline():
         assert document["modules"][namespace]
 
 
-@pytest.mark.parametrize(
-    "namespace,symbol,old_signature,current_members",
-    [
+def test_cli_names_governance_break_and_requires_announcement(
+    subtests, tmp_path, capsys
+):
+    case_root = tmp_path
+    for namespace, symbol, old_signature, current_members in [
         ("openmed.agent.approvals", "ApprovalToken", "(workflow_id, digest=...)", ()),
         (
             "openmed.interop.omop",
@@ -76,50 +78,58 @@ def test_governance_and_writeback_namespaces_are_in_scope_and_baseline():
             "(tables, path=...)",
             (_member("write_omop_duckdb", signature="(tables, path)"),),
         ),
-    ],
-)
-@pytest.mark.parametrize("announced", [False, True])
-def test_cli_names_governance_break_and_requires_announcement(
-    tmp_path,
-    monkeypatch,
-    capsys,
-    namespace,
-    symbol,
-    old_signature,
-    current_members,
-    announced,
-):
-    baseline_path = tmp_path / "baseline.json"
-    allowlist_path = tmp_path / "allowlist.json"
-    api.write_baseline(
-        baseline_path, [_surface(namespace, _member(symbol, signature=old_signature))]
-    )
-    location = f"{namespace}.{symbol}"
-    allowlist_path.write_text(
-        json.dumps(
-            {
-                "announced_breaks": {
-                    location: "Synthetic announced major-release removal after deprecation."
-                }
-                if announced
-                else {}
-            }
-        )
-    )
-    monkeypatch.setattr(
-        api, "capture_surface", lambda: [_surface(namespace, *current_members)]
-    )
-    result = api.main(
-        ["--baseline", str(baseline_path), "--allowlist", str(allowlist_path)]
-    )
-    captured = capsys.readouterr()
-    assert result == (0 if announced else 1)
-    assert location in (captured.out if announced else captured.err)
-    assert (
-        "Allowlisted breaking changes" in captured.out
-        if announced
-        else "BREAKING" in captured.err
-    )
+    ]:
+        for announced in [False, True]:
+            with subtests.test(
+                namespace=namespace,
+                symbol=symbol,
+                old_signature=old_signature,
+                current_members=current_members,
+                announced=announced,
+            ):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                capsys.readouterr()
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    baseline_path = tmp_path / "baseline.json"
+                    allowlist_path = tmp_path / "allowlist.json"
+                    api.write_baseline(
+                        baseline_path,
+                        [_surface(namespace, _member(symbol, signature=old_signature))],
+                    )
+                    location = f"{namespace}.{symbol}"
+                    allowlist_path.write_text(
+                        json.dumps(
+                            {
+                                "announced_breaks": {
+                                    location: "Synthetic announced major-release removal after deprecation."
+                                }
+                                if announced
+                                else {}
+                            }
+                        )
+                    )
+                    monkeypatch.setattr(
+                        api,
+                        "capture_surface",
+                        lambda: [_surface(namespace, *current_members)],
+                    )
+                    result = api.main(
+                        [
+                            "--baseline",
+                            str(baseline_path),
+                            "--allowlist",
+                            str(allowlist_path),
+                        ]
+                    )
+                    captured = capsys.readouterr()
+                    assert result == (0 if announced else 1)
+                    assert location in (captured.out if announced else captured.err)
+                    assert (
+                        "Allowlisted breaking changes" in captured.out
+                        if announced
+                        else "BREAKING" in captured.err
+                    )
 
 
 def test_agent_namespace_addition_passes_cli_without_allowlisting(

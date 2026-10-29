@@ -397,22 +397,26 @@ def test_validate_policy_reports_unknown_and_uncovered_schema_paths():
     )
 
 
-@pytest.mark.parametrize("suffix", [".csv", ".parquet"])
-def test_apply_omop_file_supports_csv_and_parquet(tmp_path, suffix):
-    rows = read_table(FIXTURES / "omop_visit_occurrence.csv")
-    source = tmp_path / f"visit_occurrence{suffix}"
-    destination = tmp_path / f"deidentified{suffix}"
-    write_table(source, rows)
+def test_apply_omop_file_supports_csv_and_parquet(subtests, tmp_path):
+    case_root = tmp_path
+    for suffix in [".csv", ".parquet"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            rows = read_table(FIXTURES / "omop_visit_occurrence.csv")
+            source = tmp_path / f"visit_occurrence{suffix}"
+            destination = tmp_path / f"deidentified{suffix}"
+            write_table(source, rows)
 
-    result = apply_omop_file(
-        source,
-        destination,
-        "omop_hipaa_safe_harbor",
-        date_shift_secret=DATE_SECRET,
-        deidentifier=_fake_deidentify,
-    )
+            result = apply_omop_file(
+                source,
+                destination,
+                "omop_hipaa_safe_harbor",
+                date_shift_secret=DATE_SECRET,
+                deidentifier=_fake_deidentify,
+            )
 
-    assert result == destination
-    output = read_table(destination)
-    assert output[0]["visit_source_value"] == "Visit for Synthetic [NAME]"
-    assert output[0]["visit_start_date"] != "2024-03-20"
+            assert result == destination
+            output = read_table(destination)
+            assert output[0]["visit_source_value"] == "Visit for Synthetic [NAME]"
+            assert output[0]["visit_start_date"] != "2024-03-20"

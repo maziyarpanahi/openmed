@@ -279,26 +279,27 @@ def test_same_input_and_policy_are_byte_deterministic(subtests):
             )
 
 
-@pytest.mark.parametrize("platform,extension", PLATFORM_EXPORTS)
-def test_registered_handler_is_lazy_and_optional_dependency_free(
-    monkeypatch,
-    platform,
-    extension,
-):
-    def fail_if_called():
-        raise AssertionError("optional multimodal dependency check was called")
+def test_registered_handler_is_lazy_and_optional_dependency_free(subtests):
+    for platform, extension in PLATFORM_EXPORTS:
+        with subtests.test(platform=platform, extension=extension):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(base, "ensure_multimodal_available", fail_if_called)
-    document = redact_document(
-        FIXTURES / f"{platform}.{extension}",
-        models={"text_redactor": _synthetic_text_redactor},
-    )
+                def fail_if_called():
+                    raise AssertionError(
+                        "optional multimodal dependency check was called"
+                    )
 
-    assert isinstance(document, ExtractedDocument)
-    assert document.metadata["format"] == f"chw_form_{extension}"
-    assert document.metadata["platform"] == platform
-    assert document.metadata["row_count"] == 2
-    assert document.metadata["redaction_manifest"]
+                monkeypatch.setattr(base, "ensure_multimodal_available", fail_if_called)
+                document = redact_document(
+                    FIXTURES / f"{platform}.{extension}",
+                    models={"text_redactor": _synthetic_text_redactor},
+                )
+
+                assert isinstance(document, ExtractedDocument)
+                assert document.metadata["format"] == f"chw_form_{extension}"
+                assert document.metadata["platform"] == platform
+                assert document.metadata["row_count"] == 2
+                assert document.metadata["redaction_manifest"]
 
 
 def test_drop_policy_removes_metadata_without_disturbing_repeats():

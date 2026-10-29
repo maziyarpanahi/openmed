@@ -127,28 +127,32 @@ def test_bridge_exception_requires_the_reviewed_license(subtests) -> None:
             ]
 
 
-@pytest.mark.parametrize(
-    "declarations",
-    [
+def test_project_bridge_scope_cannot_be_forged_by_inventory(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for declarations in [
         'dependencies = ["extract-msg"]\n',
         '[project.optional-dependencies]\nother = ["extract-msg"]\n',
         'dependencies = ["extract-msg"]\n'
         '[project.optional-dependencies]\nemail-msg-gpl = ["extract-msg"]\n',
-    ],
-)
-def test_project_bridge_scope_cannot_be_forged_by_inventory(
-    tmp_path: Path, declarations: str
-) -> None:
-    path = write_markdown_inventory(
-        tmp_path,
-        "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
-    )
-    project = tmp_path / "pyproject.toml"
-    project.write_text("[project]\n" + declarations, encoding="utf-8")
+    ]:
+        with subtests.test(declarations=declarations):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = write_markdown_inventory(
+                tmp_path,
+                "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
+            )
+            project = tmp_path / "pyproject.toml"
+            project.write_text("[project]\n" + declarations, encoding="utf-8")
 
-    with pytest.raises(inventory.InventoryError, match="unreviewed project scope"):
-        inventory.audit_project(path, project)
-    assert inventory.main(["--inventory", str(path), "--pyproject", str(project)]) == 1
+            with pytest.raises(
+                inventory.InventoryError, match="unreviewed project scope"
+            ):
+                inventory.audit_project(path, project)
+            assert (
+                inventory.main(["--inventory", str(path), "--pyproject", str(project)])
+                == 1
+            )
 
 
 def test_project_bridge_exception_matches_the_actual_extra(tmp_path: Path) -> None:
@@ -273,17 +277,16 @@ def test_balanced_permissive_group_is_supported() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "entries",
-    [
+def test_mapping_cannot_silently_drop_or_rename_entries(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for entries in [
         {"known": {"license": "MIT"}, "unreviewed": "unknown"},
         {"unreviewed": {"name": "known", "license": "MIT"}},
-    ],
-)
-def test_mapping_cannot_silently_drop_or_rename_entries(
-    tmp_path: Path, entries
-) -> None:
-    path = tmp_path / "inventory.json"
-    path.write_text(json.dumps({"dependencies": entries}), encoding="utf-8")
-    with pytest.raises(inventory.InventoryError):
-        inventory.parse_inventory(path)
+    ]:
+        with subtests.test(entries=entries):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "inventory.json"
+            path.write_text(json.dumps({"dependencies": entries}), encoding="utf-8")
+            with pytest.raises(inventory.InventoryError):
+                inventory.parse_inventory(path)

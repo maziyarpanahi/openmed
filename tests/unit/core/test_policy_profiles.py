@@ -338,9 +338,8 @@ def test_africa_malabo_baseline_loads_with_conservative_defaults():
     assert compiled.proof.coverage_percent == 100.0
 
 
-@pytest.mark.parametrize(
-    ("policy_name", "locale", "text", "identifiers"),
-    [
+def test_north_africa_profiles_leave_zero_synthetic_identifier_leakage(subtests):
+    for policy_name, locale, text, identifiers in [
         (
             "eg_pdpl",
             "ar_EG",
@@ -381,41 +380,40 @@ def test_africa_malabo_baseline_loads_with_conservative_defaults():
                 "15/09/1447",
             ),
         ),
-    ],
-)
-def test_north_africa_profiles_leave_zero_synthetic_identifier_leakage(
-    monkeypatch,
-    policy_name,
-    locale,
-    text,
-    identifiers,
-):
-    _patch_extract_many(monkeypatch, [])
+    ]:
+        with subtests.test(
+            policy_name=policy_name, locale=locale, text=text, identifiers=identifiers
+        ):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                _patch_extract_many(monkeypatch, [])
 
-    result = deidentify(
-        text,
-        lang="ar",
-        locale=locale,
-        policy=policy_name,
-        use_safety_sweep=False,
-    )
+                result = deidentify(
+                    text,
+                    lang="ar",
+                    locale=locale,
+                    policy=policy_name,
+                    use_safety_sweep=False,
+                )
 
-    assert all(identifier not in result.deidentified_text for identifier in identifiers)
-    assert result.mapping is None
-    assert result.metadata["policy"]["name"] == policy_name
-    assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
-    assert result.pii_entities
-    assert all(entity.action == "mask" for entity in result.pii_entities)
-    swept_names = {
-        entity.text
-        for entity in result.pii_entities
-        if entity.canonical_label == "PERSON"
-        and (entity.metadata or {}).get("source") == "safety_sweep"
-    }
-    assert all(
-        any(name in swept_name for swept_name in swept_names)
-        for name in identifiers[:2]
-    )
+                assert all(
+                    identifier not in result.deidentified_text
+                    for identifier in identifiers
+                )
+                assert result.mapping is None
+                assert result.metadata["policy"]["name"] == policy_name
+                assert result.metadata["safety_sweep"]["source"] == "safety_sweep"
+                assert result.pii_entities
+                assert all(entity.action == "mask" for entity in result.pii_entities)
+                swept_names = {
+                    entity.text
+                    for entity in result.pii_entities
+                    if entity.canonical_label == "PERSON"
+                    and (entity.metadata or {}).get("source") == "safety_sweep"
+                }
+                assert all(
+                    any(name in swept_name for swept_name in swept_names)
+                    for name in identifiers[:2]
+                )
 
 
 def test_china_pipl_profile_covers_sensitive_personal_information():

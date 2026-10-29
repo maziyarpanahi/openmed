@@ -57,15 +57,17 @@ def test_clean_manifest_passes(tmp_path: Path) -> None:
     assert manifest_label_errors(manifest_path=manifest) == []
 
 
-@pytest.mark.parametrize(
-    "value", [[], [1], "synthetic-private-row", 42, 0.5, True, False, None]
-)
-def test_non_object_rows_report_physical_line_without_value_or_path(tmp_path, value):
-    manifest = tmp_path / "synthetic-private-path.jsonl"
-    manifest.write_text("\n{}\n\n" + json.dumps(value) + "\n", encoding="utf-8")
-    assert manifest_label_errors(manifest_path=manifest) == [
-        "manifest line 4: expected a JSON object"
-    ]
+def test_non_object_rows_report_physical_line_without_value_or_path(subtests, tmp_path):
+    case_root = tmp_path
+    for value in [[], [1], "synthetic-private-row", 42, 0.5, True, False, None]:
+        with subtests.test(value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            manifest = tmp_path / "synthetic-private-path.jsonl"
+            manifest.write_text("\n{}\n\n" + json.dumps(value) + "\n", encoding="utf-8")
+            assert manifest_label_errors(manifest_path=manifest) == [
+                "manifest line 4: expected a JSON object"
+            ]
 
 
 def test_cli_reports_non_object_as_normal_failure_without_traceback(tmp_path, capsys):
@@ -117,9 +119,9 @@ def test_runtime_registry_and_pii_defaults_derive_from_manifest() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    ("relative_path", "old", "new"),
-    (
+def test_manual_surface_mutation_is_detected(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for relative_path, old, new in (
         (Path("README.md"), "2,266 manifest entries", "9,999 manifest entries"),
         (
             Path("docs/model-registry.md"),
@@ -131,20 +133,19 @@ def test_runtime_registry_and_pii_defaults_derive_from_manifest() -> None:
             "<!-- Registry pointer:",
             "<!-- Stale registry pointer:",
         ),
-    ),
-)
-def test_manual_surface_mutation_is_detected(
-    tmp_path: Path, relative_path: Path, old: str, new: str
-) -> None:
-    _copy_catalog_inputs(tmp_path)
-    target = tmp_path / relative_path
-    current = target.read_text(encoding="utf-8")
-    assert old in current
-    target.write_text(current.replace(old, new, 1), encoding="utf-8")
+    ):
+        with subtests.test(relative_path=relative_path, old=old, new=new):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _copy_catalog_inputs(tmp_path)
+            target = tmp_path / relative_path
+            current = target.read_text(encoding="utf-8")
+            assert old in current
+            target.write_text(current.replace(old, new, 1), encoding="utf-8")
 
-    assert regenerate_surfaces.surface_errors(tmp_path)
-    regenerate_surfaces.regenerate_surfaces(tmp_path)
-    assert regenerate_surfaces.surface_errors(tmp_path) == []
+            assert regenerate_surfaces.surface_errors(tmp_path)
+            regenerate_surfaces.regenerate_surfaces(tmp_path)
+            assert regenerate_surfaces.surface_errors(tmp_path) == []
 
 
 def test_coherence_workflow_is_offline_and_diff_guarded() -> None:

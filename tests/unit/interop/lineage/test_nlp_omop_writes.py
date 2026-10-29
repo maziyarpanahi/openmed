@@ -622,35 +622,37 @@ def test_private_iterator_exceptions_do_not_remain_in_public_context(boundary):
     assert CANARY not in str(caught.value)
 
 
-@pytest.mark.parametrize("boundary", ["preview", "binding"])
-def test_private_preflight_failures_do_not_remain_in_public_context(
-    monkeypatch, boundary
-):
-    import openmed.interop.lineage.nlp_omop_writes as module
-    from openmed.interop.omop import OmopMutationBatch
+def test_private_preflight_failures_do_not_remain_in_public_context(subtests):
+    for boundary in ["preview", "binding"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import openmed.interop.lineage.nlp_omop_writes as module
+                from openmed.interop.omop import OmopMutationBatch
 
-    stage = staged()
-    packet, manifest = preview(stage)
+                stage = staged()
+                packet, manifest = preview(stage)
 
-    def failing(*args, **kwargs):
-        raise RuntimeError(CANARY)
+                def failing(*args, **kwargs):
+                    raise RuntimeError(CANARY)
 
-    if boundary == "preview":
-        monkeypatch.setattr(module, "validate_omop_rollback_manifest", failing)
-    else:
-        monkeypatch.setattr(OmopMutationBatch, "bind_approval", failing)
-    with pytest.raises(NlpOmopStagingError) as caught:
-        if boundary == "preview":
-            stage.preview(manifest)
-        else:
-            stage.bind_approval(
-                packet,
-                manifest,
-                approved_preview_digest=packet.preview_digest,
-                approval_receipt_digest=RECEIPT,
-            )
-    assert caught.value.__context__ is None
-    assert CANARY not in str(caught.value)
+                if boundary == "preview":
+                    monkeypatch.setattr(
+                        module, "validate_omop_rollback_manifest", failing
+                    )
+                else:
+                    monkeypatch.setattr(OmopMutationBatch, "bind_approval", failing)
+                with pytest.raises(NlpOmopStagingError) as caught:
+                    if boundary == "preview":
+                        stage.preview(manifest)
+                    else:
+                        stage.bind_approval(
+                            packet,
+                            manifest,
+                            approved_preview_digest=packet.preview_digest,
+                            approval_receipt_digest=RECEIPT,
+                        )
+                assert caught.value.__context__ is None
+                assert CANARY not in str(caught.value)
 
 
 def test_private_invalid_rollback_json_has_no_public_exception_context():

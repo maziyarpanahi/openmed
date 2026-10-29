@@ -371,28 +371,41 @@ def test_client_construction_and_metadata_parsing_do_not_open_sockets(monkeypatc
         )
 
 
-@pytest.mark.parametrize("boundary", ["reference", "receipt", "clock"])
-def test_pre_dispatch_errors_drop_private_exception_context(monkeypatch, boundary):
-    def private_failure(*args, **kwargs):
-        raise UnicodeDecodeError("utf-8", b"PRIVATE-CANARY", 0, 1, "invalid")
+def test_pre_dispatch_errors_drop_private_exception_context(subtests):
+    for boundary in ["reference", "receipt", "clock"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    calls = []
-    with OpenMedClient(
-        transport=httpx.MockTransport(lambda request: calls.append(request))
-    ) as client:
-        if boundary == "reference":
-            monkeypatch.setattr(WorkflowReference, "to_dict", private_failure)
-            invoke = lambda: client.workflow_status(REFERENCE)
-        elif boundary == "receipt":
-            receipt = ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
-            monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
-            invoke = lambda: client.workflow_submit_receipt(MUTATION, receipt)
-        else:
-            invoke = lambda: client.poll_workflow(REFERENCE, clock=private_failure)
-        with pytest.raises(WorkflowClientError) as caught:
-            invoke()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
-    assert calls == []
+                def private_failure(*args, **kwargs):
+                    raise UnicodeDecodeError(
+                        "utf-8", b"PRIVATE-CANARY", 0, 1, "invalid"
+                    )
+
+                calls = []
+                with OpenMedClient(
+                    transport=httpx.MockTransport(lambda request: calls.append(request))
+                ) as client:
+                    if boundary == "reference":
+                        monkeypatch.setattr(
+                            WorkflowReference, "to_dict", private_failure
+                        )
+                        invoke = lambda: client.workflow_status(REFERENCE)
+                    elif boundary == "receipt":
+                        receipt = ApprovalReceipt.from_dict(REVIEW_REQUEST["receipt"])
+                        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+                        invoke = lambda: client.workflow_submit_receipt(
+                            MUTATION, receipt
+                        )
+                    else:
+                        invoke = lambda: client.poll_workflow(
+                            REFERENCE, clock=private_failure
+                        )
+                    with pytest.raises(WorkflowClientError) as caught:
+                        invoke()
+                assert (
+                    caught.value.__context__ is None and caught.value.__cause__ is None
+                )
+                assert calls == []
 
 
 @pytest.mark.parametrize("operation", ["receipt", "cancel"])

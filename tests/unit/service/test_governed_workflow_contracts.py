@@ -209,28 +209,32 @@ def test_json_byte_limit_and_roundtrip():
     assert error.value.code == "workflow_request_too_large"
 
 
-@pytest.mark.parametrize("boundary", ["json", "reference", "receipt", "view"])
-def test_public_workflow_errors_drop_private_context(monkeypatch, boundary):
-    marker = b"synthetic-private-workflow-marker"
+def test_public_workflow_errors_drop_private_context(subtests):
+    for boundary in ["json", "reference", "receipt", "view"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                marker = b"synthetic-private-workflow-marker"
 
-    def private_failure(*args, **kwargs):
-        raise UnicodeDecodeError("utf-8", marker, 0, 1, "invalid")
+                def private_failure(*args, **kwargs):
+                    raise UnicodeDecodeError("utf-8", marker, 0, 1, "invalid")
 
-    if boundary == "json":
-        invoke = lambda: parse_workflow_json(b"\xff" + marker)
-    elif boundary == "reference":
-        payload = reference().to_dict()
-        monkeypatch.setattr(RunId, "parse", private_failure)
-        invoke = lambda: WorkflowReference.from_dict(payload)
-    elif boundary == "receipt":
-        value = ApprovalReceipt(DIGEST, STATE)
-        monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
-        invoke = lambda: workflow_receipt_digest(value)
-    else:
-        value = WorkflowView(reference(), STATE, ActionPhase.READY)
-        monkeypatch.setattr(WorkflowView, "to_dict", private_failure)
-        invoke = lambda: validate_workflow_view(value, reference())
-    with pytest.raises(WorkflowServiceError) as caught:
-        invoke()
-    assert caught.value.__context__ is None and caught.value.__cause__ is None
-    assert marker.decode() not in str(caught.value)
+                if boundary == "json":
+                    invoke = lambda: parse_workflow_json(b"\xff" + marker)
+                elif boundary == "reference":
+                    payload = reference().to_dict()
+                    monkeypatch.setattr(RunId, "parse", private_failure)
+                    invoke = lambda: WorkflowReference.from_dict(payload)
+                elif boundary == "receipt":
+                    value = ApprovalReceipt(DIGEST, STATE)
+                    monkeypatch.setattr(ApprovalReceipt, "to_dict", private_failure)
+                    invoke = lambda: workflow_receipt_digest(value)
+                else:
+                    value = WorkflowView(reference(), STATE, ActionPhase.READY)
+                    monkeypatch.setattr(WorkflowView, "to_dict", private_failure)
+                    invoke = lambda: validate_workflow_view(value, reference())
+                with pytest.raises(WorkflowServiceError) as caught:
+                    invoke()
+                assert (
+                    caught.value.__context__ is None and caught.value.__cause__ is None
+                )
+                assert marker.decode() not in str(caught.value)

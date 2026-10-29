@@ -422,29 +422,28 @@ def test_bad_entry_sequences(subtests):
                 )
 
 
-@pytest.mark.parametrize(
-    "sentinel",
-    [
+def test_metadata_and_diagnostic_leakage_sweep(subtests, caplog):
+    for sentinel in [
         "SYNTHETIC_NAME_123",
         "患者番号１２３",
         "patient@example.invalid",
         "/private/synthetic?token=secret",
-    ],
-)
-def test_metadata_and_diagnostic_leakage_sweep(sentinel, caplog):
-    for constructor in (
-        lambda: replace(APPROVAL, evidence_references=(sentinel,)),
-        lambda: replace(APPROVAL, reviewer_role=sentinel),
-        lambda: assemble([SyntheticEntry(observation(unexpected=sentinel))]),
-        lambda: assemble(
-            [SyntheticEntry(observation(), "update", "identifier=x", sentinel)]
-        ),
-    ):
-        with pytest.raises(TransactionAssemblyError) as error:
-            constructor()
-        assert sentinel not in str(error.value)
-        assert sentinel not in repr(error.value)
-        assert sentinel not in caplog.text
+    ]:
+        with subtests.test(sentinel=sentinel):
+            caplog.clear()
+            for constructor in (
+                lambda: replace(APPROVAL, evidence_references=(sentinel,)),
+                lambda: replace(APPROVAL, reviewer_role=sentinel),
+                lambda: assemble([SyntheticEntry(observation(unexpected=sentinel))]),
+                lambda: assemble(
+                    [SyntheticEntry(observation(), "update", "identifier=x", sentinel)]
+                ),
+            ):
+                with pytest.raises(TransactionAssemblyError) as error:
+                    constructor()
+                assert sentinel not in str(error.value)
+                assert sentinel not in repr(error.value)
+                assert sentinel not in caplog.text
 
 
 def test_failing_mapping_does_not_echo_exception():

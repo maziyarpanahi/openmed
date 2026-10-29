@@ -423,9 +423,9 @@ def test_privacy_filter_batch_path_runs_one_model_call():
 @pytest.mark.skipif(
     not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests"
 )
-@pytest.mark.parametrize(
-    "manifest_family,source_model_id",
-    [
+def test_dispatches_privacy_filter_pipeline(subtests, tmp_path):
+    case_root = tmp_path
+    for manifest_family, source_model_id in [
         ("openai-privacy-filter", "openai/privacy-filter"),
         # The Nemotron-PII fine-tune is the SAME architecture, just trained
         # on a different dataset. Either alias must dispatch to the existing
@@ -436,43 +436,46 @@ def test_privacy_filter_batch_path_runs_one_model_call():
         # architecture, expanded to official 16-language coverage.
         ("privacy-filter-multilingual", "OpenMed/privacy-filter-multilingual"),
         ("multilingual-privacy-filter", "OpenMed/privacy-filter-multilingual"),
-    ],
-)
-def test_dispatches_privacy_filter_pipeline(tmp_path, manifest_family, source_model_id):
-    from openmed.mlx import inference
+    ]:
+        with subtests.test(
+            manifest_family=manifest_family, source_model_id=source_model_id
+        ):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            from openmed.mlx import inference
 
-    config = _privacy_config()
-    (tmp_path / "config.json").write_text(json.dumps(config))
-    (tmp_path / "openmed-mlx.json").write_text(
-        json.dumps(
-            {
-                "format": "openmed-mlx",
-                "format_version": 2,
-                "task": "token-classification",
-                "family": manifest_family,
-                "source_model_id": source_model_id,
-                "config_path": "config.json",
-                "label_map_path": None,
-                "preferred_weights": "weights.safetensors",
-                "fallback_weights": ["weights.npz"],
-                "available_weights": [],
-                "weights_format": "safetensors",
-                "quantization": None,
-                "max_sequence_length": 32,
-                "tokenizer": {"path": ".", "files": []},
-            }
-        )
-    )
+            config = _privacy_config()
+            (tmp_path / "config.json").write_text(json.dumps(config))
+            (tmp_path / "openmed-mlx.json").write_text(
+                json.dumps(
+                    {
+                        "format": "openmed-mlx",
+                        "format_version": 2,
+                        "task": "token-classification",
+                        "family": manifest_family,
+                        "source_model_id": source_model_id,
+                        "config_path": "config.json",
+                        "label_map_path": None,
+                        "preferred_weights": "weights.safetensors",
+                        "fallback_weights": ["weights.npz"],
+                        "available_weights": [],
+                        "weights_format": "safetensors",
+                        "quantization": None,
+                        "max_sequence_length": 32,
+                        "tokenizer": {"path": ".", "files": []},
+                    }
+                )
+            )
 
-    with patch.object(
-        inference.PrivacyFilterMLXPipeline,
-        "__init__",
-        return_value=None,
-    ) as mock_init:
-        pipeline = inference.create_mlx_pipeline(str(tmp_path))
+            with patch.object(
+                inference.PrivacyFilterMLXPipeline,
+                "__init__",
+                return_value=None,
+            ) as mock_init:
+                pipeline = inference.create_mlx_pipeline(str(tmp_path))
 
-    assert isinstance(pipeline, inference.PrivacyFilterMLXPipeline)
-    mock_init.assert_called_once()
+            assert isinstance(pipeline, inference.PrivacyFilterMLXPipeline)
+            mock_init.assert_called_once()
 
 
 @pytest.mark.integration

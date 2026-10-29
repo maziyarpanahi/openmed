@@ -27,9 +27,11 @@ from tests.unit.agent.workflows.test_journal_retirement import (
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize(
-    "boundary",
-    [
+def test_interruption_always_exposes_full_lineage_or_sealed_record(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for boundary in [
         "write",
         "file_sync",
         "publish",
@@ -37,72 +39,78 @@ pytestmark = pytest.mark.integration
         "unlink0",
         "unlink1",
         "cleanup_sync",
-    ],
-)
-def test_interruption_always_exposes_full_lineage_or_sealed_record(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
-) -> None:
-    directory = tmp_path / "journal"
-    journal, final = terminal_journal(directory)
-    original = journal.load()
-    summary = exported_summary(final)
-    plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
-    assert plan is not None
-    unlink = Path.unlink
-    sync = recovery._fsync_directory
-    deleted = 0
-    sync_calls = 0
+    ]:
+        with subtests.test(boundary=boundary):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                directory = tmp_path / "journal"
+                journal, final = terminal_journal(directory)
+                original = journal.load()
+                summary = exported_summary(final)
+                plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
+                assert plan is not None
+                unlink = Path.unlink
+                sync = recovery._fsync_directory
+                deleted = 0
+                sync_calls = 0
 
-    def interrupt(*args: object, **kwargs: object) -> None:
-        raise KeyboardInterrupt
+                def interrupt(*args: object, **kwargs: object) -> None:
+                    raise KeyboardInterrupt
 
-    def interrupted_unlink(path: Path, *args: object, **kwargs: object) -> None:
-        nonlocal deleted
-        if path.name.startswith("checkpoint-"):
-            if boundary == f"unlink{deleted}":
-                raise KeyboardInterrupt
-            deleted += 1
-        unlink(path, *args, **kwargs)
+                def interrupted_unlink(
+                    path: Path, *args: object, **kwargs: object
+                ) -> None:
+                    nonlocal deleted
+                    if path.name.startswith("checkpoint-"):
+                        if boundary == f"unlink{deleted}":
+                            raise KeyboardInterrupt
+                        deleted += 1
+                    unlink(path, *args, **kwargs)
 
-    def interrupted_sync(path: Path) -> None:
-        nonlocal sync_calls
-        sync_calls += 1
-        if (boundary == "directory_sync" and sync_calls == 1) or (
-            boundary == "cleanup_sync" and sync_calls == 3
-        ):
-            raise KeyboardInterrupt
-        sync(path)
+                def interrupted_sync(path: Path) -> None:
+                    nonlocal sync_calls
+                    sync_calls += 1
+                    if (boundary == "directory_sync" and sync_calls == 1) or (
+                        boundary == "cleanup_sync" and sync_calls == 3
+                    ):
+                        raise KeyboardInterrupt
+                    sync(path)
 
-    with monkeypatch.context() as patch:
-        if boundary == "write":
-            patch.setattr(RetiredJournalRecord, "to_json", interrupt)
-        elif boundary == "file_sync":
-            patch.setattr(os, "fsync", interrupt)
-        elif boundary == "publish":
-            patch.setattr(os, "replace", interrupt)
-        patch.setattr(Path, "unlink", interrupted_unlink)
-        patch.setattr(recovery, "_fsync_directory", interrupted_sync)
-        with pytest.raises(KeyboardInterrupt):
-            journal.retire(plan, confirmation=plan.confirmation_token, now=100)
+                with monkeypatch.context() as patch:
+                    if boundary == "write":
+                        patch.setattr(RetiredJournalRecord, "to_json", interrupt)
+                    elif boundary == "file_sync":
+                        patch.setattr(os, "fsync", interrupt)
+                    elif boundary == "publish":
+                        patch.setattr(os, "replace", interrupt)
+                    patch.setattr(Path, "unlink", interrupted_unlink)
+                    patch.setattr(recovery, "_fsync_directory", interrupted_sync)
+                    with pytest.raises(KeyboardInterrupt):
+                        journal.retire(
+                            plan, confirmation=plan.confirmation_token, now=100
+                        )
 
-    plan = JournalRetirementPlan.from_json(plan.to_json())
-    restarted = CheckpointJournal(directory)
-    state = restarted.load()
-    if boundary in {"write", "file_sync", "publish"}:
-        assert state == original
-        assert len(list(directory.glob("checkpoint-*.json"))) == 2
-    else:
-        assert isinstance(state, RetiredJournalRecord)
-        assert state.verifies_summary(summary)
-        decision = recover_workflow(state, (), now=101)
-        assert decision.disposition is RecoveryDisposition.RETIRED
-        assert decision.retry_idempotency_keys == ()
-    assert (
-        restarted.retire(plan, confirmation=plan.confirmation_token, now=101)
-        == plan.record
-    )
-    assert restarted.load() == plan.record
-    assert not list(directory.glob("checkpoint-*.json"))
+                plan = JournalRetirementPlan.from_json(plan.to_json())
+                restarted = CheckpointJournal(directory)
+                state = restarted.load()
+                if boundary in {"write", "file_sync", "publish"}:
+                    assert state == original
+                    assert len(list(directory.glob("checkpoint-*.json"))) == 2
+                else:
+                    assert isinstance(state, RetiredJournalRecord)
+                    assert state.verifies_summary(summary)
+                    decision = recover_workflow(state, (), now=101)
+                    assert decision.disposition is RecoveryDisposition.RETIRED
+                    assert decision.retry_idempotency_keys == ()
+                assert (
+                    restarted.retire(
+                        plan, confirmation=plan.confirmation_token, now=101
+                    )
+                    == plan.record
+                )
+                assert restarted.load() == plan.record
+                assert not list(directory.glob("checkpoint-*.json"))
 
 
 def test_failed_cleanup_is_controlled_and_retry_checks_remaining_hashes(

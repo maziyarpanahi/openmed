@@ -301,35 +301,31 @@ def test_missing_or_invalid_credentials_return_401_without_phi(
     assert "Maria Garcia" not in invalid.text
 
 
-@pytest.mark.parametrize(
-    "path",
-    ["/pii/deidentify", "/pii/deidentify/stream"],
-)
-def test_scope_enforcement_blocks_underprivileged_api_key(
-    monkeypatch: pytest.MonkeyPatch,
-    path: str,
-) -> None:
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        _api_key_config("test-secret", scopes=["pii:read"]),
-    )
-    app = create_app()
+def test_scope_enforcement_blocks_underprivileged_api_key(subtests) -> None:
+    for path in ["/pii/deidentify", "/pii/deidentify/stream"]:
+        with subtests.test(path=path):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    _api_key_config("test-secret", scopes=["pii:read"]),
+                )
+                app = create_app()
 
-    with TestClient(
-        app,
-        base_url=LOOPBACK_BASE_URL,
-        raise_server_exceptions=False,
-    ) as client:
-        response = client.post(
-            path,
-            headers={"X-API-Key": "test-secret"},
-            json={"text": "Patient Maria Garcia", "method": "mask"},
-        )
+                with TestClient(
+                    app,
+                    base_url=LOOPBACK_BASE_URL,
+                    raise_server_exceptions=False,
+                ) as client:
+                    response = client.post(
+                        path,
+                        headers={"X-API-Key": "test-secret"},
+                        json={"text": "Patient Maria Garcia", "method": "mask"},
+                    )
 
-    payload = _assert_error_payload(response, 403, "forbidden")
-    assert payload["error"]["details"]["required_scopes"] == ["pii:write"]
-    assert "Maria Garcia" not in response.text
+                payload = _assert_error_payload(response, 403, "forbidden")
+                assert payload["error"]["details"]["required_scopes"] == ["pii:write"]
+                assert "Maria Garcia" not in response.text
 
 
 def test_jwt_hs_and_rs_signatures_and_expiry_are_validated(
@@ -454,9 +450,8 @@ def test_jwt_lifetime_and_leeway_keep_valid_tokens():
             authenticate_jwt(_jwt_hs256(claims), config, now=100)
 
 
-@pytest.mark.parametrize(
-    ("method", "path", "scope"),
-    [
+def test_all_phi_routes_deny_before_handlers(subtests):
+    for method, path, scope in [
         ("POST", "/pii/extract/stream", "pii:read"),
         ("POST", "/jobs", "jobs:write"),
         ("POST", "/fhir/bulk/exports", "bulk:write"),
@@ -467,22 +462,24 @@ def test_jwt_lifetime_and_leeway_keep_valid_tokens():
         ("POST", "/profile", "profile:write"),
         ("POST", "/cohort/resolve", "cohort:read"),
         ("GET", "/v1/journey/resources", "journey:read"),
-    ],
-)
-def test_all_phi_routes_deny_before_handlers(monkeypatch, method, path, scope):
-    monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
-    monkeypatch.setenv(
-        "OPENMED_SERVICE_AUTH_API_KEYS",
-        _api_key_config("synthetic-secret", scopes=["models:read"]),
-    )
-    app = create_app()
-    with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
-        response = client.request(
-            method, path, headers={"X-API-Key": "synthetic-secret"}, json={}
-        )
-    assert response.status_code == 403
-    assert response.json()["error"]["details"] == {"required_scopes": [scope]}
-    assert app.state.runtime._loader is None
+    ]:
+        with subtests.test(method=method, path=path, scope=scope):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "true")
+                monkeypatch.setenv(
+                    "OPENMED_SERVICE_AUTH_API_KEYS",
+                    _api_key_config("synthetic-secret", scopes=["models:read"]),
+                )
+                app = create_app()
+                with TestClient(app, base_url=LOOPBACK_BASE_URL) as client:
+                    response = client.request(
+                        method, path, headers={"X-API-Key": "synthetic-secret"}, json={}
+                    )
+                assert response.status_code == 403
+                assert response.json()["error"]["details"] == {
+                    "required_scopes": [scope]
+                }
+                assert app.state.runtime._loader is None
 
 
 def test_route_override_matches_template_and_unknown_routes_fail(monkeypatch):

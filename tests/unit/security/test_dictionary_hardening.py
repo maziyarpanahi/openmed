@@ -186,27 +186,24 @@ def test_dictionary_limit_types_fail_closed(subtests) -> None:
                 DictionaryLimits(**{name: value})
 
 
-@pytest.mark.parametrize(
-    ("entry", "rule"),
-    [
+def test_dangerous_user_entries_name_the_rejected_rule(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for entry, rule in [
         ("(a+)+$ 10 n", "executable_regex_construct"),
         ("patient\x00alias 10 n", "control_character"),
-    ],
-)
-def test_dangerous_user_entries_name_the_rejected_rule(
-    tmp_path: Path,
-    entry: str,
-    rule: str,
-) -> None:
-    path = tmp_path / "terms.txt"
-    path.write_text(f"{entry}\n", encoding="utf-8")
+    ]:
+        with subtests.test(entry=entry, rule=rule):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "terms.txt"
+            path.write_text(f"{entry}\n", encoding="utf-8")
 
-    with pytest.raises(DictionaryEntryValidationError) as exc_info:
-        load_user_dictionary(path)
+            with pytest.raises(DictionaryEntryValidationError) as exc_info:
+                load_user_dictionary(path)
 
-    assert exc_info.value.rule == rule
-    assert rule in str(exc_info.value)
-    assert entry not in str(exc_info.value)
+            assert exc_info.value.rule == rule
+            assert rule in str(exc_info.value)
+            assert entry not in str(exc_info.value)
 
 
 def test_rejection_logs_only_phi_safe_file_metadata(

@@ -173,22 +173,26 @@ def test_cli_separates_protected_content_and_private_audit(tmp_path, capsys):
             assert mode & stat.S_IWRITE
 
 
-@pytest.mark.parametrize("collision", ["existing", "same", "symlink"])
-def test_cli_never_overwrites_outputs(tmp_path, collision):
-    value, provider, _ = setup_review()
-    args = cli_args(tmp_path, value.original_text)
-    protected = tmp_path / "protected.txt"
-    protected.write_text("keep")
-    if collision == "existing":
-        args.review_output = protected
-    elif collision == "same":
-        args.review_output = args.summary_output
-    else:
-        args.review_output.symlink_to(protected)
-    with pytest.raises(CliError, match="Brief request or output failed"):
-        handle_brief(args, context_provider=provider)
-    assert protected.read_text() == "keep"
-    assert not args.summary_output.exists()
+def test_cli_never_overwrites_outputs(subtests, tmp_path):
+    case_root = tmp_path
+    for collision in ["existing", "same", "symlink"]:
+        with subtests.test(collision=collision):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            value, provider, _ = setup_review()
+            args = cli_args(tmp_path, value.original_text)
+            protected = tmp_path / "protected.txt"
+            protected.write_text("keep")
+            if collision == "existing":
+                args.review_output = protected
+            elif collision == "same":
+                args.review_output = args.summary_output
+            else:
+                args.review_output.symlink_to(protected)
+            with pytest.raises(CliError, match="Brief request or output failed"):
+                handle_brief(args, context_provider=provider)
+            assert protected.read_text() == "keep"
+            assert not args.summary_output.exists()
 
 
 def test_cli_refusal_has_nonzero_gate_exit(tmp_path):

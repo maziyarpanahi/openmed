@@ -304,23 +304,23 @@ def test_malformed_private_input_yields_only_a_controlled_error():
     assert caught.value.__context__ is None
 
 
-@pytest.mark.parametrize("identifier", ["李雷", "Li", "123456789", "अनिल"])
-def test_short_multilingual_and_numeric_identifiers_never_reach_output(
-    monkeypatch, identifier
-):
-    import tests.unit.clinical.test_brief as fixtures
+def test_short_multilingual_and_numeric_identifiers_never_reach_output(subtests):
+    for identifier in ["李雷", "Li", "123456789", "अनिल"]:
+        with subtests.test(identifier=identifier):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import tests.unit.clinical.test_brief as fixtures
 
-    monkeypatch.setattr(
-        fixtures,
-        "SENTENCES",
-        (
-            "The admission problem was dehydration.",
-            "The discharge diagnosis was dehydration.",
-            f"Symptoms improved after {identifier} fluids.",
-        ),
-    )
-    brief = make_brief(fixtures.SENTENCES)
-    assert brief.refusal_reason is None
-    assert identifier in brief.summary
-    with pytest.raises(BriefDocumentError, match="^privacy$"):
-        export(brief, original_identifiers=(identifier,))
+                monkeypatch.setattr(
+                    fixtures,
+                    "SENTENCES",
+                    (
+                        "The admission problem was dehydration.",
+                        "The discharge diagnosis was dehydration.",
+                        f"Symptoms improved after {identifier} fluids.",
+                    ),
+                )
+                brief = make_brief(fixtures.SENTENCES)
+                assert brief.refusal_reason is None
+                assert identifier in brief.summary
+                with pytest.raises(BriefDocumentError, match="^privacy$"):
+                    export(brief, original_identifiers=(identifier,))

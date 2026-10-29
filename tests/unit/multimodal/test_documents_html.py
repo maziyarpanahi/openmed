@@ -414,24 +414,23 @@ def test_writer_projects_linear_suffix_atomic_entity_and_cross_tag_ranges(
     assert cross_output.read_text(encoding="utf-8") == "<p>[PERSON]<em></em></p>"
 
 
-@pytest.mark.parametrize(
-    "replacements",
-    [
+def test_writer_rejects_invalid_ranges_before_output(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for replacements in [
         [(-1, 1, "x")],
         [(0, 0, "x")],
         [(0, 99, "x")],
         [(0, 2, "x"), (1, 3, "y")],
-    ],
-)
-def test_writer_rejects_invalid_ranges_before_output(
-    tmp_path: Path, replacements: list[tuple[int, int, str]]
-) -> None:
-    source = tmp_path / "source.html"
-    output = tmp_path / "output.html"
-    source.write_text("<p>Jane</p>", encoding="utf-8")
-    with pytest.raises(ValueError):
-        write_redacted_html(source, output, replacements)
-    assert not output.exists()
+    ]:
+        with subtests.test(replacements=replacements):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "source.html"
+            output = tmp_path / "output.html"
+            source.write_text("<p>Jane</p>", encoding="utf-8")
+            with pytest.raises(ValueError):
+                write_redacted_html(source, output, replacements)
+            assert not output.exists()
 
 
 def test_writer_deduplicates_exact_requests_and_rejects_atomic_collisions(

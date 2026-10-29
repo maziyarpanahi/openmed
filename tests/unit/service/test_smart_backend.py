@@ -295,39 +295,47 @@ def test_backpressure_caps_concurrent_file_downloads(tmp_path: Path) -> None:
     assert server.max_file_inflight <= 3
 
 
-@pytest.mark.parametrize("field", ["access_token", "token_type", "expires_in", "scope"])
-def test_rejects_missing_required_token_fields_before_export(tmp_path, field):
-    server = _FakeBulkServer(resource_counts=[1])
-    payload = {
-        "access_token": "private-access",
-        "token_type": "Bearer",
-        "expires_in": 300,
-        "scope": "system/*.read",
-    }
-    del payload[field]
-    server.token_reply = httpx.Response(200, json=payload)
-    with pytest.raises(SMARTBackendError, match="token response invalid"):
-        _run_ingestion(_config(tmp_path, server), server)
-    assert server.requests == [server.token_url]
+def test_rejects_missing_required_token_fields_before_export(subtests, tmp_path):
+    case_root = tmp_path
+    for field in ["access_token", "token_type", "expires_in", "scope"]:
+        with subtests.test(field=field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            server = _FakeBulkServer(resource_counts=[1])
+            payload = {
+                "access_token": "private-access",
+                "token_type": "Bearer",
+                "expires_in": 300,
+                "scope": "system/*.read",
+            }
+            del payload[field]
+            server.token_reply = httpx.Response(200, json=payload)
+            with pytest.raises(SMARTBackendError, match="token response invalid"):
+                _run_ingestion(_config(tmp_path, server), server)
+            assert server.requests == [server.token_url]
 
 
-@pytest.mark.parametrize("scope", ["system/Patient.rs", "system/*.r"])
-def test_narrowed_token_refuses_bulk_export(tmp_path, scope):
-    server = _FakeBulkServer(resource_counts=[1])
-    server.token_reply = httpx.Response(
-        200,
-        json={
-            "access_token": "private-access",
-            "token_type": "Bearer",
-            "expires_in": 300,
-            "scope": scope,
-        },
-    )
-    with pytest.raises(
-        SMARTBackendError, match="token scope narrowed and insufficient"
-    ):
-        _run_ingestion(_config(tmp_path, server), server)
-    assert server.requests == [server.token_url]
+def test_narrowed_token_refuses_bulk_export(subtests, tmp_path):
+    case_root = tmp_path
+    for scope in ["system/Patient.rs", "system/*.r"]:
+        with subtests.test(scope=scope):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            server = _FakeBulkServer(resource_counts=[1])
+            server.token_reply = httpx.Response(
+                200,
+                json={
+                    "access_token": "private-access",
+                    "token_type": "Bearer",
+                    "expires_in": 300,
+                    "scope": scope,
+                },
+            )
+            with pytest.raises(
+                SMARTBackendError, match="token scope narrowed and insufficient"
+            ):
+                _run_ingestion(_config(tmp_path, server), server)
+            assert server.requests == [server.token_url]
 
 
 def test_equivalent_v2_grant_allows_legacy_bulk_request(tmp_path):
@@ -344,9 +352,9 @@ def test_equivalent_v2_grant_allows_legacy_bulk_request(tmp_path):
     assert _run_ingestion(_config(tmp_path, server), server).resources_deidentified == 1
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
+def test_bulk_invalid_response_leaves_no_token_authority(subtests, tmp_path):
+    case_root = tmp_path
+    for changes in [
         {"token_type": "MAC"},
         {"expires_in": 301},
         {"expires_in": True},
@@ -357,28 +365,31 @@ def test_equivalent_v2_grant_allows_legacy_bulk_request(tmp_path):
             "error": "invalid_grant",
             "error_description": "private-endpoint-client-canary",
         },
-    ],
-)
-def test_bulk_invalid_response_leaves_no_token_authority(tmp_path, changes):
-    server = _FakeBulkServer(resource_counts=[1])
-    payload = {
-        "access_token": "private-access",
-        "token_type": "Bearer",
-        "expires_in": 300,
-        "scope": "system/*.read",
-    }
-    payload.update(changes)
-    server.token_reply = httpx.Response(200, json=payload)
-    ingestor = SMARTBackendBulkIngestor(
-        _config(tmp_path, server),
-        transport=server.transport,
-        client_assertion_builder=lambda _: "private-assertion",
-        clock=lambda: 100,
-    )
-    with pytest.raises(SMARTBackendError, match="token response invalid") as exc:
-        asyncio.run(ingestor.run())
-    assert "private" not in str(exc.value) and ingestor._token_expires_at == 0
-    assert server.requests == [server.token_url]
+    ]:
+        with subtests.test(changes=changes):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            server = _FakeBulkServer(resource_counts=[1])
+            payload = {
+                "access_token": "private-access",
+                "token_type": "Bearer",
+                "expires_in": 300,
+                "scope": "system/*.read",
+            }
+            payload.update(changes)
+            server.token_reply = httpx.Response(200, json=payload)
+            ingestor = SMARTBackendBulkIngestor(
+                _config(tmp_path, server),
+                transport=server.transport,
+                client_assertion_builder=lambda _: "private-assertion",
+                clock=lambda: 100,
+            )
+            with pytest.raises(
+                SMARTBackendError, match="token response invalid"
+            ) as exc:
+                asyncio.run(ingestor.run())
+            assert "private" not in str(exc.value) and ingestor._token_expires_at == 0
+            assert server.requests == [server.token_url]
 
 
 def test_private_assertion_builder_error_is_value_free(tmp_path):

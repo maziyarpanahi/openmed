@@ -98,19 +98,23 @@ def _write_synthetic_cmeee_split(path: Path, record_id: str) -> None:
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
-@pytest.mark.parametrize("split", ["test", "dev", "validation", "holdout"])
-def test_cmeee_named_layout_rejects_missing_requested_split(
-    tmp_path: Path, split: str
-) -> None:
-    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
+def test_cmeee_named_layout_rejects_missing_requested_split(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for split in ["test", "dev", "validation", "holdout"]:
+        with subtests.test(split=split):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _write_synthetic_cmeee_split(
+                tmp_path / "CMeEE_train.json", "synthetic-train"
+            )
 
-    with pytest.raises(ValueError) as caught:
-        load_cmeee(tmp_path, split=split, allow_repo_path=True)
+            with pytest.raises(ValueError) as caught:
+                load_cmeee(tmp_path, split=split, allow_repo_path=True)
 
-    assert str(caught.value) == (
-        "CMeEE named split directory has no requested split source"
-    )
-    assert str(tmp_path) not in str(caught.value)
+            assert str(caught.value) == (
+                "CMeEE named split directory has no requested split source"
+            )
+            assert str(tmp_path) not in str(caught.value)
 
 
 def test_cmeee_missing_split_does_not_reach_generic_loader(
@@ -128,32 +132,42 @@ def test_cmeee_missing_split_does_not_reach_generic_loader(
         load_cmeee(tmp_path, split="test", allow_repo_path=True)
 
 
-@pytest.mark.parametrize("suffix", [".json", ".JSONL", ".ndjson"])
 def test_cmeee_selects_only_requested_nested_case_insensitive_split(
-    tmp_path: Path, suffix: str
+    subtests, tmp_path
 ) -> None:
-    _write_synthetic_cmeee_split(tmp_path / "CMeEE_train.json", "synthetic-train")
-    _write_synthetic_cmeee_split(
-        tmp_path / f"nested/CMEEE-TEST{suffix}", "synthetic-test"
-    )
+    case_root = tmp_path
+    for suffix in [".json", ".JSONL", ".ndjson"]:
+        with subtests.test(suffix=suffix):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _write_synthetic_cmeee_split(
+                tmp_path / "CMeEE_train.json", "synthetic-train"
+            )
+            _write_synthetic_cmeee_split(
+                tmp_path / f"nested/CMEEE-TEST{suffix}", "synthetic-test"
+            )
 
-    result = load_cmeee(tmp_path, split="TEST", allow_repo_path=True)
+            result = load_cmeee(tmp_path, split="TEST", allow_repo_path=True)
 
-    assert [record.record_id for record in result.records] == ["synthetic-test"]
-    assert result.records[0].split == "TEST"
+            assert [record.record_id for record in result.records] == ["synthetic-test"]
+            assert result.records[0].split == "TEST"
 
 
-@pytest.mark.parametrize("requested", ["dev", "val", "validation"])
-@pytest.mark.parametrize("available", ["dev", "val", "validation"])
-def test_cmeee_validation_aliases_remain_interchangeable(
-    tmp_path: Path, requested: str, available: str
-) -> None:
-    _write_synthetic_cmeee_split(
-        tmp_path / f"CMeEE_{available}.json", "synthetic-validation"
-    )
-    result = load_cmeee(tmp_path, split=requested, allow_repo_path=True)
-    assert [record.record_id for record in result.records] == ["synthetic-validation"]
-    assert result.records[0].split == requested
+def test_cmeee_validation_aliases_remain_interchangeable(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for requested in ["dev", "val", "validation"]:
+        for available in ["dev", "val", "validation"]:
+            with subtests.test(requested=requested, available=available):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                _write_synthetic_cmeee_split(
+                    tmp_path / f"CMeEE_{available}.json", "synthetic-validation"
+                )
+                result = load_cmeee(tmp_path, split=requested, allow_repo_path=True)
+                assert [record.record_id for record in result.records] == [
+                    "synthetic-validation"
+                ]
+                assert result.records[0].split == requested
 
 
 def test_cmeee_duplicate_requested_splits_still_raise(tmp_path: Path) -> None:
@@ -479,49 +493,52 @@ def test_unreadable_local_asset_skips_instead_of_raising_oserror(
     assert "permissions" in reason
 
 
-@pytest.mark.parametrize(
-    "weight_name",
-    ["tf_model.h5", "flax_model.msgpack", "model.pt", "weights.pth", "model.ckpt"],
-)
-def test_non_pytorch_checkpoint_formats_are_accepted(
-    tmp_path: Path,
-    weight_name: str,
+def test_non_pytorch_checkpoint_formats_are_accepted(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for weight_name in [
+        "tf_model.h5",
+        "flax_model.msgpack",
+        "model.pt",
+        "weights.pth",
+        "model.ckpt",
+    ]:
+        with subtests.test(weight_name=weight_name):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            checkpoint = tmp_path / weight_name.replace(".", "-")
+            checkpoint.mkdir()
+            (checkpoint / "config.json").write_text("{}", encoding="utf-8")
+            (checkpoint / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (checkpoint / weight_name).write_bytes(b"")
+
+            asset = resolve_chinese_local_model_asset(checkpoint)
+
+            assert asset.weight_file_suffixes == (Path(weight_name).suffix,)
+
+
+def test_incomplete_local_asset_names_the_env_var_and_the_gap(
+    subtests, tmp_path
 ) -> None:
-    checkpoint = tmp_path / weight_name.replace(".", "-")
-    checkpoint.mkdir()
-    (checkpoint / "config.json").write_text("{}", encoding="utf-8")
-    (checkpoint / "tokenizer.json").write_text("{}", encoding="utf-8")
-    (checkpoint / weight_name).write_bytes(b"")
-
-    asset = resolve_chinese_local_model_asset(checkpoint)
-
-    assert asset.weight_file_suffixes == (Path(weight_name).suffix,)
-
-
-@pytest.mark.parametrize(
-    ("present", "expected"),
-    [
+    case_root = tmp_path
+    for present, expected in [
         ((), "config.json"),
         (("config.json",), "tokenizer artifact"),
         (("config.json", "tokenizer.json"), "model weights"),
-    ],
-)
-def test_incomplete_local_asset_names_the_env_var_and_the_gap(
-    tmp_path: Path,
-    present: tuple[str, ...],
-    expected: str,
-) -> None:
-    checkpoint = tmp_path / "partial"
-    checkpoint.mkdir()
-    for name in present:
-        (checkpoint / name).write_text("{}", encoding="utf-8")
+    ]:
+        with subtests.test(present=present, expected=expected):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            checkpoint = tmp_path / "partial"
+            checkpoint.mkdir()
+            for name in present:
+                (checkpoint / name).write_text("{}", encoding="utf-8")
 
-    with pytest.raises(ChineseClinicalNerAssetUnavailable) as caught:
-        resolve_chinese_local_model_asset(checkpoint)
+            with pytest.raises(ChineseClinicalNerAssetUnavailable) as caught:
+                resolve_chinese_local_model_asset(checkpoint)
 
-    message = str(caught.value)
-    assert CHINESE_CLINICAL_NER_MODEL_DIR_ENV in message
-    assert expected in message
+            message = str(caught.value)
+            assert CHINESE_CLINICAL_NER_MODEL_DIR_ENV in message
+            assert expected in message
 
 
 def test_absent_local_asset_directory_names_the_env_var(tmp_path: Path) -> None:

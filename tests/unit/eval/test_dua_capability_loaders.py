@@ -214,32 +214,27 @@ def test_mimic_iv_bhc_maps_synthetic_document_summary_pair(tmp_path: Path) -> No
     assert fixture.metadata["task"] == "summarization"
 
 
-@pytest.mark.parametrize(
-    ("loader", "authority"),
-    (
+def test_gated_loaders_refuse_without_credentialed_path(subtests) -> None:
+    for loader, authority in (
         (load_cegs_ngrid, "DBMI"),
         (load_shac, "DBMI"),
         (load_thyme, "Mayo-THYME"),
         (load_mednli, "PhysioNet"),
         (load_mimic_iv_bhc, "UW"),
-    ),
-)
-def test_gated_loaders_refuse_without_credentialed_path(
-    loader,
-    authority: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    for variable in (
-        "OPENMED_CEGS_NGRID_PATH",
-        "OPENMED_SHAC_PATH",
-        "OPENMED_THYME_PATH",
-        "OPENMED_MEDNLI_PATH",
-        "OPENMED_MIMIC_IV_BHC_PATH",
     ):
-        monkeypatch.delenv(variable, raising=False)
+        with subtests.test(loader=loader, authority=authority):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                for variable in (
+                    "OPENMED_CEGS_NGRID_PATH",
+                    "OPENMED_SHAC_PATH",
+                    "OPENMED_THYME_PATH",
+                    "OPENMED_MEDNLI_PATH",
+                    "OPENMED_MIMIC_IV_BHC_PATH",
+                ):
+                    monkeypatch.delenv(variable, raising=False)
 
-    with pytest.raises(DUACredentialRequired, match=authority):
-        loader()
+                with pytest.raises(DUACredentialRequired, match=authority):
+                    loader()
 
 
 def test_gated_loaders_refuse_repository_paths_before_reading() -> None:
@@ -266,50 +261,62 @@ def test_repository_path_refusal_does_not_echo_sensitive_filename() -> None:
     assert str(repository_root) not in str(captured.value)
 
 
-@pytest.mark.parametrize(
-    "loader",
-    (load_cegs_ngrid, load_shac, load_thyme, load_mednli, load_mimic_iv_bhc),
-)
 def test_missing_credentialed_path_does_not_echo_sensitive_filename(
-    loader,
-    tmp_path: Path,
+    subtests, tmp_path
 ) -> None:
-    source = tmp_path / "synthetic_patient_identifier_123.json"
+    case_root = tmp_path
+    for loader in (
+        load_cegs_ngrid,
+        load_shac,
+        load_thyme,
+        load_mednli,
+        load_mimic_iv_bhc,
+    ):
+        with subtests.test(loader=loader):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "synthetic_patient_identifier_123.json"
 
-    with pytest.raises(DUACredentialRequired) as captured:
-        loader(source)
+            with pytest.raises(DUACredentialRequired) as captured:
+                loader(source)
 
-    rendered = "".join(traceback.format_exception(captured.value))
-    assert source.name not in rendered
-    assert str(tmp_path) not in rendered
-
-
-@pytest.mark.parametrize("loader", (load_cegs_ngrid, load_shac, load_thyme))
-def test_missing_brat_pair_does_not_echo_sensitive_filename(
-    loader,
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "synthetic_patient_identifier_123.ann"
-    source.write_text("T1\tNAME 0 1\tX\n", encoding="utf-8")
-
-    with pytest.raises(ValueError) as captured:
-        loader(tmp_path)
-
-    assert source.name not in "".join(traceback.format_exception(captured.value))
+            rendered = "".join(traceback.format_exception(captured.value))
+            assert source.name not in rendered
+            assert str(tmp_path) not in rendered
 
 
-@pytest.mark.parametrize("loader", (load_cegs_ngrid, load_thyme))
-def test_invalid_xml_does_not_echo_sensitive_filename(
-    loader,
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "synthetic_patient_identifier_123.xml"
-    source.write_text("<broken", encoding="utf-8")
+def test_missing_brat_pair_does_not_echo_sensitive_filename(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for loader in (load_cegs_ngrid, load_shac, load_thyme):
+        with subtests.test(loader=loader):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "synthetic_patient_identifier_123.ann"
+            source.write_text("T1\tNAME 0 1\tX\n", encoding="utf-8")
 
-    with pytest.raises(ValueError) as captured:
-        loader(source)
+            with pytest.raises(ValueError) as captured:
+                loader(tmp_path)
 
-    assert source.name not in "".join(traceback.format_exception(captured.value))
+            assert source.name not in "".join(
+                traceback.format_exception(captured.value)
+            )
+
+
+def test_invalid_xml_does_not_echo_sensitive_filename(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for loader in (load_cegs_ngrid, load_thyme):
+        with subtests.test(loader=loader):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = tmp_path / "synthetic_patient_identifier_123.xml"
+            source.write_text("<broken", encoding="utf-8")
+
+            with pytest.raises(ValueError) as captured:
+                loader(source)
+
+            assert source.name not in "".join(
+                traceback.format_exception(captured.value)
+            )
 
 
 def test_shared_dua_refusals_do_not_echo_sensitive_paths(tmp_path: Path) -> None:
@@ -356,21 +363,27 @@ def test_invalid_corpus_label_error_omits_supplied_value(subtests) -> None:
             assert marker not in "".join(traceback.format_exception(captured.value))
 
 
-@pytest.mark.parametrize(
-    "loader",
-    (load_cegs_ngrid, load_shac, load_thyme, load_mednli, load_mimic_iv_bhc),
-)
-def test_gated_loaders_refuse_repository_file_symlinks(
-    loader,
-    tmp_path: Path,
-) -> None:
-    repository_root = Path(__file__).resolve().parents[3]
-    source = tmp_path / "credentialed"
-    source.mkdir()
-    (source / "payload.json").symlink_to(repository_root / "docs/api/openapi.json")
+def test_gated_loaders_refuse_repository_file_symlinks(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for loader in (
+        load_cegs_ngrid,
+        load_shac,
+        load_thyme,
+        load_mednli,
+        load_mimic_iv_bhc,
+    ):
+        with subtests.test(loader=loader):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            repository_root = Path(__file__).resolve().parents[3]
+            source = tmp_path / "credentialed"
+            source.mkdir()
+            (source / "payload.json").symlink_to(
+                repository_root / "docs/api/openapi.json"
+            )
 
-    with pytest.raises(DUACredentialRequired, match="repository"):
-        loader(source)
+            with pytest.raises(DUACredentialRequired, match="repository"):
+                loader(source)
 
 
 def test_cegs_ngrid_refuses_paired_text_symlink_into_repository(

@@ -128,9 +128,8 @@ def test_only_declared_coded_paths_are_exempt():
         assert screen_fhir_input(resource).flagged
 
 
-@pytest.mark.parametrize(
-    "media_type,data,code",
-    [
+def test_unsafe_attachment_never_reaches_decoder_or_context(subtests):
+    for media_type, data, code in [
         ("application/pdf", _encoded(_CUE), "attachment_non_text"),
         ("image/png", _encoded(_CUE), "attachment_non_text"),
         (None, _encoded(_CUE), "attachment_non_text"),
@@ -144,42 +143,42 @@ def test_only_declared_coded_paths_are_exempt():
             base64.b64encode(b"a" * (MAX_FHIR_ATTACHMENT_BYTES + 1)).decode("ascii"),
             "attachment_oversized",
         ),
-    ],
-)
-def test_unsafe_attachment_never_reaches_decoder_or_context(
-    monkeypatch, media_type, data, code
-):
-    def forbidden_decode(*args, **kwargs):
-        pytest.fail("unsafe attachment must not be decoded")
+    ]:
+        with subtests.test(media_type=media_type, data=data, code=code):
+            with pytest.MonkeyPatch.context() as monkeypatch:
 
-    monkeypatch.setattr(fhir_screening.base64, "b64decode", forbidden_decode)
-    result = screen_fhir_input(
-        _attachment(data, media_type), guard=InjectionGuard("allow")
-    )
-    assert result.value["content"][0]["attachment"] == {}
-    assert {item.pattern_id for item in result.findings} == {code}
-    assert data not in repr(result)
-    with pytest.raises(PromptInjectionDetected):
-        InjectionGuard().guard_fhir_input(_attachment(data, media_type))
+                def forbidden_decode(*args, **kwargs):
+                    pytest.fail("unsafe attachment must not be decoded")
+
+                monkeypatch.setattr(
+                    fhir_screening.base64, "b64decode", forbidden_decode
+                )
+                result = screen_fhir_input(
+                    _attachment(data, media_type), guard=InjectionGuard("allow")
+                )
+                assert result.value["content"][0]["attachment"] == {}
+                assert {item.pattern_id for item in result.findings} == {code}
+                assert data not in repr(result)
+                with pytest.raises(PromptInjectionDetected):
+                    InjectionGuard().guard_fhir_input(_attachment(data, media_type))
 
 
-@pytest.mark.parametrize(
-    "data,content_type",
-    [
+def test_undecodable_attachments_have_content_free_quarantine(subtests, caplog):
+    for data, content_type in [
         ("not-base64-sensitive-canary", "text/plain"),
         (base64.b64encode(b"\xff\xfe").decode("ascii"), "text/plain"),
         (_encoded(_CUE), "text/plain;charset=utf-16"),
-    ],
-)
-def test_undecodable_attachments_have_content_free_quarantine(
-    data, content_type, caplog
-):
-    result = screen_fhir_input(_attachment(data, content_type))
-    assert result.value["content"][0]["attachment"] == {}
-    assert {item.pattern_id for item in result.findings} == {"attachment_undecodable"}
-    assert data not in repr(result)
-    assert data not in json.dumps(result.finding_dicts())
-    assert caplog.text == ""
+    ]:
+        with subtests.test(data=data, content_type=content_type):
+            caplog.clear()
+            result = screen_fhir_input(_attachment(data, content_type))
+            assert result.value["content"][0]["attachment"] == {}
+            assert {item.pattern_id for item in result.findings} == {
+                "attachment_undecodable"
+            }
+            assert data not in repr(result)
+            assert data not in json.dumps(result.finding_dicts())
+            assert caplog.text == ""
 
 
 def test_remote_attachment_is_not_forwarded(subtests):

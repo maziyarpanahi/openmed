@@ -569,26 +569,26 @@ def test_public_issue_constructor_refuses_value_bearing_metadata(subtests) -> No
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize(
-    "severity,preview_count", [("error", 0), ("warning", 1), ("information", 1)]
-)
 def test_offline_application_checks_capability_and_validation_before_preview(
-    monkeypatch: pytest.MonkeyPatch, severity: str, preview_count: int
+    subtests,
 ) -> None:
-    for name in HF_OFFLINE_ENV_VARS:
-        monkeypatch.setenv(name, "1")
-    previews: list[str] = []
-    transport = _Transport(_outcome(severity))
-    with network_blocked_if_offline(local_only=True):
-        capability = preflight_write_plan(
-            _statement(), FHIRWritePlan("create", "Patient")
-        )
-        if capability.is_compatible:
-            validation = _run(transport)
-            if validation.is_valid:
-                previews.append("synthetic-preview")
-    assert len(previews) == preview_count
-    assert len(transport.calls) == 1
+    for severity, preview_count in [("error", 0), ("warning", 1), ("information", 1)]:
+        with subtests.test(severity=severity, preview_count=preview_count):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                for name in HF_OFFLINE_ENV_VARS:
+                    monkeypatch.setenv(name, "1")
+                previews: list[str] = []
+                transport = _Transport(_outcome(severity))
+                with network_blocked_if_offline(local_only=True):
+                    capability = preflight_write_plan(
+                        _statement(), FHIRWritePlan("create", "Patient")
+                    )
+                    if capability.is_compatible:
+                        validation = _run(transport)
+                        if validation.is_valid:
+                            previews.append("synthetic-preview")
+                assert len(previews) == preview_count
+                assert len(transport.calls) == 1
 
 
 def test_documented_fake_transport_example_runs_offline(

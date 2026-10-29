@@ -609,30 +609,28 @@ def test_publication_metadata_enforces_canonical_hreflang_and_fixture_policy(
         validate_publication_metadata(tmp_path, publication)
 
 
-@pytest.mark.parametrize(
-    "unsafe",
-    [
+def test_publication_metadata_rejects_unsafe_canonical_urls(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for unsafe in [
         "http://openmed.life/docs/",
         "https://user@openmed.life/docs/",
         "https://openmed.life/docs/?preview=1",
-    ],
-)
-def test_publication_metadata_rejects_unsafe_canonical_urls(
-    tmp_path: Path,
-    unsafe: str,
-) -> None:
-    publication = _write_metadata_fixture(tmp_path)
-    index = tmp_path / "docs" / "index.html"
-    index.write_text(
-        index.read_text(encoding="utf-8").replace(
-            "https://openmed.life/docs/",
-            unsafe,
-            1,
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(PageStagingError, match="HTTPS|does not self-match"):
-        validate_publication_metadata(tmp_path, publication)
+    ]:
+        with subtests.test(unsafe=unsafe):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            publication = _write_metadata_fixture(tmp_path)
+            index = tmp_path / "docs" / "index.html"
+            index.write_text(
+                index.read_text(encoding="utf-8").replace(
+                    "https://openmed.life/docs/",
+                    unsafe,
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with pytest.raises(PageStagingError, match="HTTPS|does not self-match"):
+                validate_publication_metadata(tmp_path, publication)
 
 
 def test_publication_metadata_rejects_fixture_in_sitemap(tmp_path: Path) -> None:
@@ -725,17 +723,21 @@ def test_search_compaction_preserves_multilingual_data_and_is_idempotent(
     assert compact_search_index(tmp_path) == 0
 
 
-@pytest.mark.parametrize("contents", [None, b"{invalid", b"\xff"])
 def test_search_compaction_fails_closed_on_missing_or_invalid_index(
-    tmp_path: Path, contents: bytes | None
+    subtests, tmp_path
 ) -> None:
-    index = tmp_path / "docs" / "search" / "search_index.json"
-    index.parent.mkdir(parents=True)
-    if contents is not None:
-        index.write_bytes(contents)
+    case_root = tmp_path
+    for contents in [None, b"{invalid", b"\xff"]:
+        with subtests.test(contents=contents):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            index = tmp_path / "docs" / "search" / "search_index.json"
+            index.parent.mkdir(parents=True)
+            if contents is not None:
+                index.write_bytes(contents)
 
-    with pytest.raises(PageStagingError, match="compact staged search index"):
-        compact_search_index(tmp_path)
+            with pytest.raises(PageStagingError, match="compact staged search index"):
+                compact_search_index(tmp_path)
 
 
 def test_search_compaction_rejects_an_index_symlink(tmp_path: Path) -> None:

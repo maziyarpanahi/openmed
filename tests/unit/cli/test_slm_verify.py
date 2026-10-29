@@ -157,26 +157,29 @@ def stubbed_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [
+def test_usage_errors_exit_two(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for arguments in [
         ["--memory-budget", "1024"],
         ["--task", "nli"],
         ["--task", "nli", "--memory-budget", "0"],
         ["--task", "nli", "--memory-budget", "-1024"],
         ["--task", "nli", "--memory-budget", "plenty"],
         ["--task", "nli", "--memory-budget", "1024", "--headroom-bytes", "-1"],
-    ],
-)
-def test_usage_errors_exit_two(tmp_path: Path, arguments: list[str]) -> None:
-    package = _write_package(tmp_path / "package")
+    ]:
+        with subtests.test(arguments=arguments):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            package = _write_package(tmp_path / "package")
 
-    exit_code, stdout, stderr = _run("models", "slm-verify", str(package), *arguments)
+            exit_code, stdout, stderr = _run(
+                "models", "slm-verify", str(package), *arguments
+            )
 
-    assert exit_code == 2
-    assert "usage: openmed models slm-verify" in stderr
-    assert stdout == ""
-    assert _MODEL_SENTINEL not in stderr
+            assert exit_code == 2
+            assert "usage: openmed models slm-verify" in stderr
+            assert stdout == ""
+            assert _MODEL_SENTINEL not in stderr
 
 
 @pytest.mark.slow
@@ -269,33 +272,33 @@ def test_human_output_is_rendered_without_json(
     assert _MODEL_SENTINEL not in stdout
 
 
-@pytest.mark.parametrize(
-    "reason_code",
-    ["component_mutated", "component_unreadable", "package_invalid"],
-)
-def test_verification_failures_are_reported_as_reason_codes(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    reason_code: str,
-) -> None:
-    monkeypatch.setattr(slm_verify, "_secure_local_reads_available", lambda: True)
-    monkeypatch.setattr(
-        slm_verify,
-        "verify_clinical_slm_package",
-        lambda *_args, **_kwargs: _stub_verification(
-            verified=False,
-            reason_codes=[reason_code],
-        ),
-    )
-    package = _write_package(tmp_path / "package")
+def test_verification_failures_are_reported_as_reason_codes(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for reason_code in ["component_mutated", "component_unreadable", "package_invalid"]:
+        with subtests.test(reason_code=reason_code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(
+                    slm_verify, "_secure_local_reads_available", lambda: True
+                )
+                monkeypatch.setattr(
+                    slm_verify,
+                    "verify_clinical_slm_package",
+                    lambda *_args, **_kwargs: _stub_verification(
+                        verified=False,
+                        reason_codes=[reason_code],
+                    ),
+                )
+                package = _write_package(tmp_path / "package")
 
-    exit_code, stdout, _ = _run(*_verify_args(package, "--json"))
+                exit_code, stdout, _ = _run(*_verify_args(package, "--json"))
 
-    report = json.loads(stdout)["data"]
-    assert exit_code == 1
-    assert report["verdict"] == "fail"
-    assert report["verification"]["verified"] is False
-    assert reason_code in report["reason_codes"]
+                report = json.loads(stdout)["data"]
+                assert exit_code == 1
+                assert report["verdict"] == "fail"
+                assert report["verification"]["verified"] is False
+                assert reason_code in report["reason_codes"]
 
 
 def test_verification_errors_become_closed_reason_codes(
