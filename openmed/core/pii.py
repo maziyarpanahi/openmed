@@ -1075,6 +1075,9 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     if entity.get("india_clinical_merge"):
         metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    if entity.get("calendar"):
+        # Value-free calendar code from a non-Gregorian month-name date rule.
+        metadata["calendar"] = str(entity["calendar"])
     return metadata or None
 
 
