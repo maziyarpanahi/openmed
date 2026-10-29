@@ -365,6 +365,7 @@ nav:
       - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
       - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
       - Synthetic Medication Courses: training/synthetic/medication-courses.md
+      - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
