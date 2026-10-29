@@ -24,6 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check that pairs schema validation with offset invariants and rejects records
   claiming real PHI (#3895).
 
+- Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
+  numbers, context-gated citizenship-certificate and national identity card
+  numbers without checksum claims, numeric Bikram Sambat dates and postal
+  codes, in Devanagari and ASCII digits. Add the `ne` number-separator entry
+  and a synthetic `ne.jsonl` golden fixture. Nepali remains a user-supplied
+  model route, and Hindi and Marathi outputs are unchanged (#3864).
+
+- Detect Hausa, Yoruba, Igbo and Kinyarwanda month-name dates in day-month-year
+  and month-day-year order from CLDR month vocabularies and common spellings.
+  Yoruba and Igbo match NFC, NFD and unmarked forms on grapheme-safe spans; a
+  month word without a day and year stays unflagged. Adds synthetic month-name
+  fixtures, including a new Kinyarwanda golden fixture (#3865).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
@@ -31,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
 ### Fixed
+
+- Keep Arabic (`ar`) and Amharic (`am`) name, city, and street surrogates in
+  the source script. Arabic-script spans use Faker's `ar_AA` names and curated
+  synthetic Egyptian place templates unless a regional locale ships
+  Arabic-script data; Ethiopic spans recombine the curated `am` values, and
+  `LocalePhiGenerator` emits native-script names and addresses for both
+  (#3863).
 
 - Load GLiNER2 checkpoints with the `gliner2[local]` package's architecture-aware
   extractor and retain native span offsets and confidence scores instead of
