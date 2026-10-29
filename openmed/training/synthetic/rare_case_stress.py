@@ -81,8 +81,8 @@ RARE_CASE_DIRECT_IDENTIFIER_FIELDS: Final[tuple[str, ...]] = (
 SYNTHETIC_REFERENCE_POPULATION: Final = 10_000_000
 DEFAULT_REFERENCE_DATE: Final = date(2025, 6, 30)
 
-#: HIPAA Safe Harbor aggregates ages over 89 and geographic units of at most
-#: 20,000 people; these thresholds only drive descriptive flags.
+#: Synthetic stress thresholds for descriptive flags only. These do not
+#: implement the HIPAA Safe Harbor geography or de-identification rules.
 SAFE_HARBOR_MAX_AGE: Final = 89
 SAFE_HARBOR_MAX_SMALL_AREA_POPULATION: Final = 20_000
 
@@ -312,11 +312,13 @@ class RareCaseProfile:
 
         Raises:
             TypeError: If ``tiers`` is not a mapping.
-            ValueError: If a tier is not one of ``PREVALENCE_TIERS``.
+            ValueError: If a dimension is unknown or a tier is not one of
+                ``PREVALENCE_TIERS``.
         """
 
         if not isinstance(tiers, Mapping):
             raise TypeError("tiers must be a mapping of dimension to tier")
+        _validated_dimensions(tiers, field_name="tiers")
         for tier in tiers.values():
             if not isinstance(tier, str) or tier not in PREVALENCE_TIERS:
                 raise ValueError("tiers must be common, uncommon, or rare")

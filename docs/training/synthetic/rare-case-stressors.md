@@ -106,9 +106,11 @@ Categories reuse the re-identification profiler vocabulary (`geography`, `age`,
 
 ## Using the set with privacy attack suites
 
-`rows(include_direct_identifiers=False)` models a release with direct
-identifiers removed and quasi-identifiers intact; `quasi_identifier_fields`
-names the linkage key.
+`rows(include_direct_identifiers=False)` removes the synthetic name and medical
+record number. Full birth dates remain in the linkage key even though the core
+label policy classifies them as direct identifiers. `quasi_identifier_fields`
+names that complete linkage key; this export is an attack fixture, not a
+de-identified release.
 
 ```python
 from openmed.eval.attacks import linkage_attack

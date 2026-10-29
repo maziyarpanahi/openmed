@@ -439,6 +439,8 @@ def test_reports_and_reprs_contain_no_generated_values() -> None:
         lambda: RareCaseProfile(rare=_CANARY),
         lambda: RareCaseProfile(rare=("age",), uncommon=("age",)),
         lambda: RareCaseProfile.from_tiers({"age": _CANARY}),
+        lambda: RareCaseProfile.from_tiers({_CANARY: "common"}),
+        lambda: RareCaseProfile.from_tiers({"age": "rare", _CANARY: "common"}),
         lambda: RareCaseProfile().tier_for(_CANARY),
         lambda: RareCaseStressConfig(profiles=(_CANARY,)),
         lambda: RareCaseStressConfig(background_classes=-1),
