@@ -23,53 +23,77 @@ def _fake_brief_cache(root, model, revision, *, main=False):
     return snapshot
 
 
-@pytest.mark.parametrize("missing", [None, "runtime", "revision", "pii"])
-def test_brief_readiness_uses_only_local_cache_metadata(monkeypatch, tmp_path, missing):
-    import socket
+def test_brief_readiness_uses_only_local_cache_metadata(subtests, tmp_path):
+    case_root = tmp_path
+    for missing in [None, "runtime", "revision", "pii"]:
+        with subtests.test(missing=missing):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                import socket
 
-    from openmed.core import model_registry
+                from openmed.core import model_registry
 
-    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
-    monkeypatch.setattr(doctor_module.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(doctor_module.platform, "machine", lambda: "arm64")
-    monkeypatch.setattr(
-        doctor_module.importlib.util,
-        "find_spec",
-        lambda _: None if missing == "runtime" else object(),
-    )
-    monkeypatch.setattr(model_registry, "get_default_nli_model", lambda: None)
+                monkeypatch.setattr(
+                    doctor_module, "_hf_cache_location", lambda: (tmp_path, "test")
+                )
+                monkeypatch.setattr(doctor_module.platform, "system", lambda: "Darwin")
+                monkeypatch.setattr(doctor_module.platform, "machine", lambda: "arm64")
+                monkeypatch.setattr(
+                    doctor_module.importlib.util,
+                    "find_spec",
+                    lambda _: None if missing == "runtime" else object(),
+                )
+                monkeypatch.setattr(
+                    model_registry, "get_default_nli_model", lambda: None
+                )
 
-    def forbidden(*args, **kwargs):
-        pytest.fail("Readiness must not import runtimes, load models or use network")
+                def forbidden(*args, **kwargs):
+                    pytest.fail(
+                        "Readiness must not import runtimes, load models or use network"
+                    )
 
-    monkeypatch.setattr(socket, "create_connection", forbidden)
-    monkeypatch.setattr(socket.socket, "connect", forbidden)
-    monkeypatch.setattr(doctor_module.importlib, "import_module", forbidden)
-    model, revision = model_registry.resolve_summarizer_model()
-    if missing != "revision":
-        _fake_brief_cache(tmp_path, model, revision)
-    if missing != "pii":
-        _fake_brief_cache(
-            tmp_path, model_registry.get_default_pii_model("en"), "a" * 40, main=True
-        )
-    before = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
-    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
-    assert checks["brief_extractive"]["status"] == "PASS"
-    assert checks["brief_mlx_platform"]["status"] == "PASS"
-    for case, key in (
-        ("runtime", "brief_mlx_runtime"),
-        ("revision", "brief_summarizer_cache"),
-        ("pii", "brief_raw_note_pii_cache"),
-    ):
-        assert checks[key]["status"] == ("WARN" if missing == case else "PASS")
-    assert checks["brief_nli_provider"]["code"] == "caller_nli_provider_required"
-    serialized = json.dumps(checks)
-    assert str(tmp_path) not in serialized
-    assert model not in serialized
-    assert "model.safetensors" not in serialized
-    assert before == sorted(
-        str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
-    )
+                monkeypatch.setattr(socket, "create_connection", forbidden)
+                monkeypatch.setattr(socket.socket, "connect", forbidden)
+                monkeypatch.setattr(doctor_module.importlib, "import_module", forbidden)
+                model, revision = model_registry.resolve_summarizer_model()
+                if missing != "revision":
+                    _fake_brief_cache(tmp_path, model, revision)
+                if missing != "pii":
+                    _fake_brief_cache(
+                        tmp_path,
+                        model_registry.get_default_pii_model("en"),
+                        "a" * 40,
+                        main=True,
+                    )
+                before = sorted(
+                    str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+                )
+                checks = {
+                    item["name"]: item
+                    for item in doctor_module.clinical_brief_readiness()
+                }
+                assert checks["brief_extractive"]["status"] == "PASS"
+                assert checks["brief_mlx_platform"]["status"] == "PASS"
+                for case, key in (
+                    ("runtime", "brief_mlx_runtime"),
+                    ("revision", "brief_summarizer_cache"),
+                    ("pii", "brief_raw_note_pii_cache"),
+                ):
+                    assert checks[key]["status"] == (
+                        "WARN" if missing == case else "PASS"
+                    )
+                assert (
+                    checks["brief_nli_provider"]["code"]
+                    == "caller_nli_provider_required"
+                )
+                serialized = json.dumps(checks)
+                assert str(tmp_path) not in serialized
+                assert model not in serialized
+                assert "model.safetensors" not in serialized
+                assert before == sorted(
+                    str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*")
+                )
 
 
 def test_brief_cache_requires_complete_safe_shards(monkeypatch, tmp_path):
@@ -557,26 +581,40 @@ def test_brief_cache_bounds_read_even_when_stat_size_is_stale(monkeypatch, tmp_p
     assert doctor_module._brief_cached_artifact(model, revision) is False
 
 
-@pytest.mark.parametrize("registered", [False, True])
 def test_readiness_reports_package_registration_separately_from_cache(
-    monkeypatch, tmp_path, registered
+    subtests, tmp_path
 ):
-    from openmed.core import model_registry
+    case_root = tmp_path
+    for registered in [False, True]:
+        with subtests.test(registered=registered):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from openmed.core import model_registry
 
-    monkeypatch.setattr(doctor_module, "_hf_cache_location", lambda: (tmp_path, "test"))
-    model, revision = model_registry.resolve_summarizer_model()
-    _fake_brief_cache(tmp_path, model, revision)
-    monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
-    if registered:
-        model_registry.register_summarizer_package(
-            "mlx", package_root=tmp_path / "private-package", manifest_digest="0" * 64
-        )
-    checks = {item["name"]: item for item in doctor_module.clinical_brief_readiness()}
-    assert checks["brief_summarizer_cache"]["status"] == "PASS"
-    package = checks["brief_summarizer_package"]
-    assert package["status"] == ("PASS" if registered else "WARN")
-    assert package["code"] == (
-        "summarizer_pin_registered" if registered else "summarizer_package_unpinned"
-    )
-    assert str(tmp_path) not in json.dumps(checks)
-    assert "private-package" not in json.dumps(checks)
+                monkeypatch.setattr(
+                    doctor_module, "_hf_cache_location", lambda: (tmp_path, "test")
+                )
+                model, revision = model_registry.resolve_summarizer_model()
+                _fake_brief_cache(tmp_path, model, revision)
+                monkeypatch.setattr(model_registry, "_SUMMARIZER_PACKAGES", {})
+                if registered:
+                    model_registry.register_summarizer_package(
+                        "mlx",
+                        package_root=tmp_path / "private-package",
+                        manifest_digest="0" * 64,
+                    )
+                checks = {
+                    item["name"]: item
+                    for item in doctor_module.clinical_brief_readiness()
+                }
+                assert checks["brief_summarizer_cache"]["status"] == "PASS"
+                package = checks["brief_summarizer_package"]
+                assert package["status"] == ("PASS" if registered else "WARN")
+                assert package["code"] == (
+                    "summarizer_pin_registered"
+                    if registered
+                    else "summarizer_package_unpinned"
+                )
+                assert str(tmp_path) not in json.dumps(checks)
+                assert "private-package" not in json.dumps(checks)
