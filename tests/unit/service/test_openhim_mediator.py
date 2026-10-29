@@ -186,25 +186,21 @@ def test_management_api_url_rejects_embedded_credentials(
         OpenHIMMediatorSettings.from_env()
 
 
-@pytest.mark.parametrize(
-    ("name", "value", "message"),
-    [
+def test_processing_and_authentication_settings_are_validated_at_startup(
+    subtests,
+) -> None:
+    for name, value, message in [
         ("OPENMED_OPENHIM_AUTH_MODE", "session", "must be one of"),
         ("OPENMED_OPENHIM_METHOD", "keep", "must be one of"),
         ("OPENMED_OPENHIM_POLICY", "not_a_policy", "bundled policy"),
-    ],
-)
-def test_processing_and_authentication_settings_are_validated_at_startup(
-    monkeypatch: pytest.MonkeyPatch,
-    name: str,
-    value: str,
-    message: str,
-) -> None:
-    _set_enabled_env(monkeypatch)
-    monkeypatch.setenv(name, value)
+    ]:
+        with subtests.test(name=name, value=value, message=message):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                _set_enabled_env(monkeypatch)
+                monkeypatch.setenv(name, value)
 
-    with pytest.raises(OpenHIMMediatorConfigurationError, match=message):
-        OpenHIMMediatorSettings.from_env()
+                with pytest.raises(OpenHIMMediatorConfigurationError, match=message):
+                    OpenHIMMediatorSettings.from_env()
 
 
 def test_recorded_token_registration_and_heartbeat_handshake_is_idempotent() -> None:

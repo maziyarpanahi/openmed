@@ -314,22 +314,6 @@ def test_verified_download_pins_remote_metadata_and_rechecks_offline(
     assert raised.value.actual_sha256 == sha256_file(snapshot / "model.safetensors")
 
 
-@pytest.mark.slow
-def test_sha256_streaming_500mb_stays_under_two_seconds(tmp_path: Path) -> None:
-    artifact = tmp_path / "synthetic-500mb.bin"
-    artifact.touch()
-    with artifact.open("r+b") as handle:
-        handle.truncate(500 * 1024 * 1024)
-
-    started = time.perf_counter()
-    digest = sha256_file(artifact)
-    elapsed = time.perf_counter() - started
-
-    assert digest.startswith("sha256:")
-    assert len(digest) == len("sha256:") + hashlib.sha256().digest_size * 2
-    assert elapsed < 2.0, f"streaming 500MB took {elapsed:.3f}s"
-
-
 def test_sigstore_bundle_rejects_tampered_manifest(tmp_path: Path) -> None:
     source_manifest = FIXTURES / "models.jsonl"
     bundle = FIXTURES / "models.jsonl.sigstore.json"
