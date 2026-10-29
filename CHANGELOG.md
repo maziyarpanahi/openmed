@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
 
