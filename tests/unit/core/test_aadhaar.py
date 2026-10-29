@@ -82,36 +82,38 @@ def test_generated_aadhaar_corpus_is_always_verhoeff_valid() -> None:
     assert all(validate_aadhaar(value) for value in generated)
 
 
-@pytest.mark.parametrize("alias", ["en", "hi", "in", "india", "en_IN", "hi_IN"])
-def test_aadhaar_registry_maps_english_hindi_and_india_aliases(alias: str) -> None:
-    spec = get_national_id(alias, "aadhaar")
+def test_aadhaar_registry_maps_english_hindi_and_india_aliases(subtests) -> None:
+    for alias in ["en", "hi", "in", "india", "en_IN", "hi_IN"]:
+        with subtests.test(alias=alias):
+            spec = get_national_id(alias, "aadhaar")
 
-    assert spec is not None
-    assert spec.faker_method == "aadhaar"
-    assert spec.validate(generate_aadhaar(rng=random.Random(42)))
+            assert spec is not None
+            assert spec.faker_method == "aadhaar"
+            assert spec.validate(generate_aadhaar(rng=random.Random(42)))
 
 
-@pytest.mark.parametrize("lang", ["en", "hi", "te"])
-def test_aadhaar_pattern_is_language_agnostic_and_strict(lang: str) -> None:
-    patterns = get_patterns_for_language(lang)
-    valid_text = "Aadhaar पहचान: 9664 8088 5109"
-    invalid_text = "UID: 919876543210"
+def test_aadhaar_pattern_is_language_agnostic_and_strict(subtests) -> None:
+    for lang in ["en", "hi", "te"]:
+        with subtests.test(lang=lang):
+            patterns = get_patterns_for_language(lang)
+            valid_text = "Aadhaar पहचान: 9664 8088 5109"
+            invalid_text = "UID: 919876543210"
 
-    valid_units = [
-        unit
-        for unit in find_semantic_units(valid_text, patterns)
-        if unit[2] == "national_id"
-    ]
-    invalid_units = [
-        unit
-        for unit in find_semantic_units(invalid_text, patterns)
-        if unit[2] == "national_id"
-    ]
+            valid_units = [
+                unit
+                for unit in find_semantic_units(valid_text, patterns)
+                if unit[2] == "national_id"
+            ]
+            invalid_units = [
+                unit
+                for unit in find_semantic_units(invalid_text, patterns)
+                if unit[2] == "national_id"
+            ]
 
-    assert len(valid_units) == 1
-    assert valid_text[valid_units[0][0] : valid_units[0][1]] == "9664 8088 5109"
-    assert valid_units[0][5] is True
-    assert invalid_units == []
+            assert len(valid_units) == 1
+            assert valid_text[valid_units[0][0] : valid_units[0][1]] == "9664 8088 5109"
+            assert valid_units[0][5] is True
+            assert invalid_units == []
 
 
 def test_safety_sweep_rejects_phone_like_random_and_masked_values() -> None:
