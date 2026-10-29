@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
+
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
 

@@ -4,7 +4,8 @@ Back-translation augmentation can return fluent text that quietly changes a
 dose, drops a negation, flips laterality, expands an abbreviation, or rewrites a
 de-identification placeholder. `openmed.training.languages.translation_guard`
 wraps a translator you supply, protects those facts during translation, checks
-them afterwards, and rejects any example that changed, with a reason code.
+the protected surfaces and configured cue counts afterwards, and rejects detected
+changes with reason codes.
 
 The guard does not translate anything itself. It calls your local translator
 once per translation leg and never opens a network connection. Frozen items
@@ -71,8 +72,8 @@ Glossary entries are terminology constraints. A term or annotated span that
 matches a glossary entry for the `(source, target)` pair is restored as the
 target term, for example `metformin` as `metformina` in the pivot text. On the
 way back every item is restored as its original source surface, so the
-back-translated example keeps the exact clinical facts. Everything else is
-restored verbatim.
+back-translated example keeps those protected surfaces. Other detected invariant
+items are restored verbatim.
 
 Disable detected kinds with `protected_kinds` when you want the translator to
 localize them. Digits that are not protected are still verified.
@@ -145,7 +146,9 @@ translator produce the same fingerprint.
 ## Limits
 
 The checks compare surface forms. They catch dropped, duplicated, or altered
-protected items and changed cue counts. They do not prove that a translation
+protected items and changed cue counts. Moving a negation or modifier from one
+fact to another can preserve those counts, so this check does not establish
+which fact each cue modifies. They do not prove that a translation
 is clinically equivalent, and an accepted example can still read badly. The
 guard is training-data tooling, not a compliance certification, and it must not
 drive clinical decisions.

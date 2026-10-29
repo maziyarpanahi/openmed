@@ -1154,13 +1154,14 @@ def _restore(
     tuple[int, ...],
 ]:
     by_index = {item.index: item for item in items}
+    canonical_indices = {str(index): index for index in by_index}
     matches = list(codec.strict.finditer(output))
     counts: Counter[int] = Counter()
     unknown = False
     for match in matches:
         raw_index = match.group(1)
-        index = int(raw_index)
-        if index not in by_index or raw_index != str(index):
+        index = canonical_indices.get(raw_index)
+        if index is None:
             unknown = True
             continue
         counts[index] += 1

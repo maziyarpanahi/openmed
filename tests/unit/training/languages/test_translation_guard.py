@@ -292,6 +292,11 @@ def _empty(*_: str) -> str:
         ),
         (_unknown_placeholder, {Reason.UNKNOWN_PLACEHOLDER}, "forward"),
         (
+            lambda text, *_: text + " __OMP" + "9" * 5000 + "__",
+            {Reason.UNKNOWN_PLACEHOLDER},
+            "forward",
+        ),
+        (
             _placeholder_residue,
             {Reason.PLACEHOLDER_RESIDUE, Reason.NUMBER_CHANGED},
             "forward",
