@@ -107,9 +107,8 @@ def test_pack_copies_collection_inputs_into_immutable_values() -> None:
         pack.code = "zz"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize(
-    ("overrides", "error", "message"),
-    (
+def test_incomplete_or_malformed_packs_fail_loudly(subtests) -> None:
+    for overrides, error, message in (
         ({"code": "EN"}, ValueError, "lowercase ISO 639-1"),
         ({"scripts": []}, ValueError, "scripts must contain"),
         ({"scripts": "Latin"}, TypeError, "iterable of strings"),
@@ -138,12 +137,7 @@ def test_pack_copies_collection_inputs_into_immutable_values() -> None:
             TypeError,
             "numeric probabilities",
         ),
-    ),
-)
-def test_incomplete_or_malformed_packs_fail_loudly(
-    overrides: dict[str, object],
-    error: type[Exception],
-    message: str,
-) -> None:
-    with pytest.raises(error, match=message):
-        _pack(**overrides)
+    ):
+        with subtests.test(overrides=overrides, error=error, message=message):
+            with pytest.raises(error, match=message):
+                _pack(**overrides)
