@@ -94,9 +94,8 @@ def test_telemetry_and_audit_surfaces_are_explicit() -> None:
     assert "UNSUPPORTED_SCOPE" in mismatched.error_codes
 
 
-@pytest.mark.parametrize(
-    ("category", "reason_code", "evidence", "expires_at"),
-    [
+def test_each_taxonomy_category_requires_its_declared_evidence(subtests) -> None:
+    for category, reason_code, evidence, expires_at in [
         (
             "local_suppression",
             "policy_exclusion",
@@ -133,25 +132,24 @@ def test_telemetry_and_audit_surfaces_are_explicit() -> None:
             ],
             "2026-08-16T00:00:00Z",
         ),
-    ],
-)
-def test_each_taxonomy_category_requires_its_declared_evidence(
-    category: str,
-    reason_code: str,
-    evidence: list[dict[str, str]],
-    expires_at: str,
-) -> None:
-    result = validate_telemetry_record(
-        _record(
+    ]:
+        with subtests.test(
             category=category,
             reason_code=reason_code,
             evidence=evidence,
             expires_at=expires_at,
-        ),
-        as_of=_AS_OF,
-    )
+        ):
+            result = validate_telemetry_record(
+                _record(
+                    category=category,
+                    reason_code=reason_code,
+                    evidence=evidence,
+                    expires_at=expires_at,
+                ),
+                as_of=_AS_OF,
+            )
 
-    assert result.valid is True
+            assert result.valid is True
 
 
 def test_missing_required_evidence_is_rejected_without_echoing_payload() -> None:

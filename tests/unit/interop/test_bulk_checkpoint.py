@@ -97,9 +97,8 @@ def test_matching_resume_context_is_accepted():
     )
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
+def test_resume_fails_closed_when_identity_changes(subtests):
+    for field, value in [
         ("resource_type", "Observation"),
         ("page_token", "synthetic-page-token-002"),
         ("policy", {"name": "different-synthetic-policy"}),
@@ -108,31 +107,30 @@ def test_matching_resume_context_is_accepted():
             {"base": "https://synthetic.example/other-fhir"},
         ),
         ("manifest_version", CHECKPOINT_MANIFEST_VERSION + 1),
-    ],
-)
-def test_resume_fails_closed_when_identity_changes(field, value):
-    checkpoint = _checkpoint()
-    context = {
-        "resource_type": "Patient",
-        "page_token": _PAGE_TOKEN,
-        "policy": _POLICY,
-        "endpoint_scope": _ENDPOINT_SCOPE,
-    }
-    if field == "manifest_version":
-        changed = BulkCheckpointManifest.from_dict(
-            {**checkpoint.to_dict(), "manifest_version": value}
-        )
-        context_checkpoint = changed
-    else:
-        context[field] = value
-        context_checkpoint = checkpoint
+    ]:
+        with subtests.test(field=field, value=value):
+            checkpoint = _checkpoint()
+            context = {
+                "resource_type": "Patient",
+                "page_token": _PAGE_TOKEN,
+                "policy": _POLICY,
+                "endpoint_scope": _ENDPOINT_SCOPE,
+            }
+            if field == "manifest_version":
+                changed = BulkCheckpointManifest.from_dict(
+                    {**checkpoint.to_dict(), "manifest_version": value}
+                )
+                context_checkpoint = changed
+            else:
+                context[field] = value
+                context_checkpoint = checkpoint
 
-    with pytest.raises(BulkCheckpointCompatibilityError) as exc_info:
-        validate_resume(context_checkpoint, **context)
+            with pytest.raises(BulkCheckpointCompatibilityError) as exc_info:
+                validate_resume(context_checkpoint, **context)
 
-    message = str(exc_info.value)
-    assert _PAGE_TOKEN not in message
-    assert "synthetic" not in message
+            message = str(exc_info.value)
+            assert _PAGE_TOKEN not in message
+            assert "synthetic" not in message
 
 
 def test_invalid_checkpoint_payload_is_rejected_without_echoing_values():

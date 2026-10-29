@@ -28,33 +28,29 @@ class RecordingModel:
         )
 
 
-@pytest.mark.parametrize(
-    ("field_name", "expected_stage"),
-    [
+def test_exact_structured_conflict_bypasses_model(subtests) -> None:
+    for field_name, expected_stage in [
         ("assertion", NliCascadeStage.ASSERTION),
         ("temporality", NliCascadeStage.TEMPORALITY),
         ("experiencer", NliCascadeStage.EXPERIENCER),
         ("numeric", NliCascadeStage.NUMERIC),
-    ],
-)
-def test_exact_structured_conflict_bypasses_model(
-    field_name: str, expected_stage: NliCascadeStage
-) -> None:
-    model = RecordingModel()
-    pair = NliCascadePair(
-        pair_id="pair-a",
-        premise="synthetic premise",
-        hypothesis="synthetic hypothesis",
-        **{field_name: NliRuleStatus.CONFLICT},
-    )
+    ]:
+        with subtests.test(field_name=field_name, expected_stage=expected_stage):
+            model = RecordingModel()
+            pair = NliCascadePair(
+                pair_id="pair-a",
+                premise="synthetic premise",
+                hypothesis="synthetic hypothesis",
+                **{field_name: NliRuleStatus.CONFLICT},
+            )
 
-    result = evaluate_nli_pair(pair, model)
+            result = evaluate_nli_pair(pair, model)
 
-    assert result.label == "contradiction"
-    assert result.deciding_stage is expected_stage
-    assert result.reason_code == f"{expected_stage.value}_conflict"
-    assert result.model_invoked is False
-    assert model.calls == []
+            assert result.label == "contradiction"
+            assert result.deciding_stage is expected_stage
+            assert result.reason_code == f"{expected_stage.value}_conflict"
+            assert result.model_invoked is False
+            assert model.calls == []
 
 
 def test_first_conflict_in_fixed_stage_order_decides() -> None:
@@ -124,20 +120,16 @@ def test_batch_invokes_model_only_for_unresolved_pairs() -> None:
     assert model.calls == [("synthetic premise b", "synthetic hypothesis b")]
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
+def test_precheck_status_adapter_uses_controlled_vocabularies(subtests) -> None:
+    for source, expected in [
         ("contradiction", NliRuleStatus.CONFLICT),
         ("incompatible", NliRuleStatus.CONFLICT),
         ({"status": "review_required"}, NliRuleStatus.UNRESOLVED),
         ({"status": "compatible"}, NliRuleStatus.COMPATIBLE),
         ({"status": "not_applicable"}, NliRuleStatus.NOT_APPLICABLE),
-    ],
-)
-def test_precheck_status_adapter_uses_controlled_vocabularies(
-    source: object, expected: NliRuleStatus
-) -> None:
-    assert NliRuleStatus.from_precheck(source) is expected
+    ]:
+        with subtests.test(source=source, expected=expected):
+            assert NliRuleStatus.from_precheck(source) is expected
 
 
 def test_cascade_is_deterministic_for_same_inputs_and_model() -> None:
@@ -195,16 +187,21 @@ def test_model_exception_is_replaced_with_value_free_error() -> None:
     assert sentinel not in str(exc.value)
 
 
-@pytest.mark.parametrize("label", ["unknown", "", "model-label-2"])
-def test_noncanonical_model_label_fails_without_echoing_value(label: str) -> None:
-    with pytest.raises(NliCascadeError, match="NLI label must be canonical") as exc:
-        evaluate_nli_pair(
-            NliCascadePair("pair-a", "synthetic premise", "synthetic hypothesis"),
-            lambda premise, hypothesis: label,
-        )
+def test_noncanonical_model_label_fails_without_echoing_value(subtests) -> None:
+    for label in ["unknown", "", "model-label-2"]:
+        with subtests.test(label=label):
+            with pytest.raises(
+                NliCascadeError, match="NLI label must be canonical"
+            ) as exc:
+                evaluate_nli_pair(
+                    NliCascadePair(
+                        "pair-a", "synthetic premise", "synthetic hypothesis"
+                    ),
+                    lambda premise, hypothesis: label,
+                )
 
-    if label:
-        assert label not in str(exc.value)
+            if label:
+                assert label not in str(exc.value)
 
 
 def test_duplicate_pair_identifiers_fail_before_any_model_call() -> None:
@@ -230,19 +227,20 @@ def test_pair_result_and_model_output_are_immutable() -> None:
         result.label = "entailment"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("score", [10**400, -(10**400)])
-def test_oversized_model_scores_fail_with_controlled_error(score: int) -> None:
-    with pytest.raises(NliCascadeError, match="model score"):
-        LocalNliModelOutput("entailment", score=score)
-    with pytest.raises(NliCascadeError, match="model score"):
-        NliCascadeResult(
-            "pair-a",
-            "entailment",
-            NliCascadeStage.MODEL,
-            True,
-            "model_decision",
-            score=score,
-        )
+def test_oversized_model_scores_fail_with_controlled_error(subtests) -> None:
+    for score in [10**400, -(10**400)]:
+        with subtests.test(score=score):
+            with pytest.raises(NliCascadeError, match="model score"):
+                LocalNliModelOutput("entailment", score=score)
+            with pytest.raises(NliCascadeError, match="model score"):
+                NliCascadeResult(
+                    "pair-a",
+                    "entailment",
+                    NliCascadeStage.MODEL,
+                    True,
+                    "model_decision",
+                    score=score,
+                )
 
 
 def test_invalid_reason_code_has_controlled_error() -> None:

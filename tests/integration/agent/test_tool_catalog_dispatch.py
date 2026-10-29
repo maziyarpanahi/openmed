@@ -122,63 +122,68 @@ def test_reload_after_final_lookup_cannot_replace_captured_callable():
     assert not catalog.check(registry).preview_valid
 
 
-@pytest.mark.parametrize("swap_phase", [None, "approval_recorded", "dispatching"])
-def test_catalog_swap_is_fenced_inside_actual_guarded_dispatch(swap_phase):
-    import json
+def test_catalog_swap_is_fenced_inside_actual_guarded_dispatch(subtests):
+    for swap_phase in [None, "approval_recorded", "dispatching"]:
+        with subtests.test(swap_phase=swap_phase):
+            import json
 
-    from openmed.agent.tool_catalog_binding import tool_spec_side_effect_class
-    from tests.fixtures.agent.guarded_dispatch import PRIVATE, DispatchHarness
+            from openmed.agent.tool_catalog_binding import tool_spec_side_effect_class
+            from tests.fixtures.agent.guarded_dispatch import PRIVATE, DispatchHarness
 
-    h = DispatchHarness()
-    tool_id = f"tool:{h.binding.tool_id.namespace}/{h.binding.tool_id.local_name}"
-    inventory = ToolInventory(
-        (
-            ToolInventoryRecord(
-                tool_id,
-                h.spec.version,
-                "capability:org.example/local-write@1.0.0",
-                tool_spec_side_effect_class(h.spec),
-                tool_spec_schema_digest(h.spec),
-            ),
-        )
-    )
-    catalog = RunToolCatalog.capture(
-        h.binding.run_id,
-        inventory,
-        h.tools.registry,
-        {(tool_id, h.spec.version): h.spec.name},
-    )
-    substituted = []
-    replacement = ToolRegistry()
-    replacement.register(h.spec, handler=lambda **args: substituted.append(args) or {})
-
-    def pin_lookup(registry):
-        # Host provider composes the existing sink/commit adapter with captured
-        # callable dispatch. implementation_binding remains the real registry API.
-        registry.handler = lambda name, version=None: (
-            lambda **args: catalog.invoke(
-                registry,
-                tool_id,
-                h.spec.version,
-                args,
+            h = DispatchHarness()
+            tool_id = (
+                f"tool:{h.binding.tool_id.namespace}/{h.binding.tool_id.local_name}"
             )
-        )
+            inventory = ToolInventory(
+                (
+                    ToolInventoryRecord(
+                        tool_id,
+                        h.spec.version,
+                        "capability:org.example/local-write@1.0.0",
+                        tool_spec_side_effect_class(h.spec),
+                        tool_spec_schema_digest(h.spec),
+                    ),
+                )
+            )
+            catalog = RunToolCatalog.capture(
+                h.binding.run_id,
+                inventory,
+                h.tools.registry,
+                {(tool_id, h.spec.version): h.spec.name},
+            )
+            substituted = []
+            replacement = ToolRegistry()
+            replacement.register(
+                h.spec, handler=lambda **args: substituted.append(args) or {}
+            )
 
-    pin_lookup(h.tools.registry)
-    pin_lookup(replacement)
-    append = h.effects.append
+            def pin_lookup(registry):
+                # Host provider composes the existing sink/commit adapter with captured
+                # callable dispatch. implementation_binding remains the real registry API.
+                registry.handler = lambda name, version=None: (
+                    lambda **args: catalog.invoke(
+                        registry,
+                        tool_id,
+                        h.spec.version,
+                        args,
+                    )
+                )
 
-    def swap_after_storage(checkpoint):
-        append(checkpoint)
-        if checkpoint.phase.value == swap_phase:
-            h.tools.registry = replacement
+            pin_lookup(h.tools.registry)
+            pin_lookup(replacement)
+            append = h.effects.append
 
-    h.effects.append = swap_after_storage
-    result = h.adapter().dispatch(h.arguments)
-    assert substituted == []
-    assert h.tools.calls == (1 if swap_phase is None else 0)
-    assert result.outcome.outcome_class.value == (
-        "success" if swap_phase is None else "review_required"
-    )
-    assert PRIVATE not in json.dumps(result.to_dict())
-    assert PRIVATE not in catalog.snapshot.to_json()
+            def swap_after_storage(checkpoint):
+                append(checkpoint)
+                if checkpoint.phase.value == swap_phase:
+                    h.tools.registry = replacement
+
+            h.effects.append = swap_after_storage
+            result = h.adapter().dispatch(h.arguments)
+            assert substituted == []
+            assert h.tools.calls == (1 if swap_phase is None else 0)
+            assert result.outcome.outcome_class.value == (
+                "success" if swap_phase is None else "review_required"
+            )
+            assert PRIVATE not in json.dumps(result.to_dict())
+            assert PRIVATE not in catalog.snapshot.to_json()
