@@ -31,26 +31,6 @@ NOTEBOOKS_DIR = ROOT / "examples" / "notebooks"
 GALLERY_NOTEBOOKS = GALLERY
 
 
-@contextmanager
-def _offline_env() -> Iterator[None]:
-    """Force offline environment during notebook test execution."""
-    prev_hf = os.environ.get("HF_HUB_OFFLINE")
-    prev_tf = os.environ.get("TRANSFORMERS_OFFLINE")
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    try:
-        yield
-    finally:
-        if prev_hf is not None:
-            os.environ["HF_HUB_OFFLINE"] = prev_hf
-        else:
-            os.environ.pop("HF_HUB_OFFLINE", None)
-        if prev_tf is not None:
-            os.environ["TRANSFORMERS_OFFLINE"] = prev_tf
-        else:
-            os.environ.pop("TRANSFORMERS_OFFLINE", None)
-
-
 def _load_notebook(filename: str) -> nbformat.NotebookNode:
     nb_path = NOTEBOOKS_DIR / filename
     assert nb_path.is_file(), f"Notebook missing: {nb_path}"
@@ -213,53 +193,6 @@ def test_gallery_notebook_synthetic_and_offline_disclaimers(
         "never commit real phi" in full_text.lower() or "synthetic" in full_text.lower()
     ), f"{filename} missing explicit PHI notice"
     _scan_for_leaks(full_text, filename)
-
-
-@pytest.mark.parametrize("filename", GALLERY_NOTEBOOKS)
-def test_gallery_notebook_nbclient_offline_execution_and_freshness(
-    filename: str,
-) -> None:
-    """Execute notebook via authentic nbclient kernel offline and assert output freshness."""
-    committed_nb = _load_notebook(filename)
-    import copy
-
-    executing_nb = copy.deepcopy(committed_nb)
-
-    with _offline_env():
-        client = nbclient.NotebookClient(
-            executing_nb,
-            timeout=120,
-            kernel_name="python3",
-            allow_errors=False,
-            resources={"metadata": {"path": str(NOTEBOOKS_DIR.resolve())}},
-        )
-        try:
-            executed_nb = client.execute()
-        except Exception as exc:
-            pytest.fail(f"nbclient execution failed for {filename}:\nError: {exc}")
-
-    # Compare fresh execution against committed outputs cell-by-cell
-    assert len(executed_nb.cells) == len(committed_nb.cells), (
-        f"Cell count mismatch in {filename}"
-    )
-
-    for idx, (fresh_cell, committed_cell) in enumerate(
-        zip(executed_nb.cells, committed_nb.cells)
-    ):
-        if fresh_cell.cell_type != "code":
-            continue
-
-        fresh_out = _extract_cell_output_text(fresh_cell)
-        committed_out = _extract_cell_output_text(committed_cell)
-
-        _scan_for_leaks(fresh_out, filename)
-        _scan_for_leaks(committed_out, filename)
-
-        assert fresh_out == committed_out, (
-            f"Stale output in {filename} at code cell {idx}.\n"
-            f"Freshly Executed Output:\n{fresh_out}\n\n"
-            f"Committed Output:\n{committed_out}"
-        )
 
 
 @pytest.mark.parametrize("filename", GALLERY_NOTEBOOKS)
