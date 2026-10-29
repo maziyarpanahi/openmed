@@ -129,8 +129,8 @@ out of `date_profiles` produce byte-identical examples.
 
 | Code   | Language   | Default PII model                                          | Faker locale | Notes                                                        |
 | ------ | ---------- | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
-| `am`   | Amharic    | `OpenMed/privacy-filter-multilingual`                      | `am_ET`      | Ethiopic patterns; `en_KE` Faker approximation warns once.   |
-| `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. |
+| `am`   | Amharic    | `OpenMed/privacy-filter-multilingual`                      | `am_ET`      | Ethiopic patterns and curated Ethiopic name/place surrogates; `en_KE` backs script-free fields and warns once. |
+| `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. Arabic-script name/place surrogates. |
 | `as`   | Assamese   | `OpenMed/privacy-filter-multilingual`                       | `as_IN`      | Bengali Faker backend; curated Assamese names; Aadhaar.      |
 | `bn`   | Bengali    | `OpenMed/OpenMed-PII-Bengali-mSuperClinical-Large-279M-v1` | `bn_BD`      | Dedicated Bengali PII registry entry.                        |
 | `da`   | Danish     | `OpenMed/privacy-filter-multilingual`                       | `da_DK`      | CPR-aware Nordic language pack.                              |
@@ -188,6 +188,31 @@ validator-backed national-ID coverage
 Urdu defaults to `ur_IN` and Faker's installed `en_IN` backend for general
 surrogate data, with a one-time approximation warning. Callers can still select
 `ur_PK` explicitly for CNIC validation.
+
+Arabic and Amharic name and place surrogates are documented approximations,
+recorded in the `surrogate_approximation` field of
+`openmed.core.anonymizer.locales.locale_coherence_report()`. Both follow the
+source span's script: an Arabic-script or Ethiopic span gets a surrogate in
+that script, and a Latin span in the same note keeps the Latin Faker fallback.
+
+- `ar`: Faker's `ar_EG` locale ships no Arabic-script person or address data.
+  `PERSON`, first-, middle-, and last-name surrogates use Faker's generic
+  `ar_AA` name inventory. `LOCATION` (including `CITY`) and `STREET_ADDRESS`
+  surrogates use synthetic curated Egyptian city names, generic street names,
+  and street templates. A regional override whose Faker locale ships
+  Arabic-script data, such as `locale="ar-DZ"`, keeps its own regional names
+  and places. `ar_EG` stays the native default and emits no warning.
+- `am`: Ethiopic name, city, and street surrogates recombine the synthetic
+  curated Amharic values (given name plus father's name; city, kebele, and
+  number). The `en_KE` backend supplies only script-free fields, and the
+  one-time `en_KE` approximation warning applies only to them.
+
+Phone and national-ID surrogates for both languages are unchanged and keep
+their existing format and validator checks.
+
+When a source exhausts a curated name or place inventory, a deterministic
+same-script synthetic letter sequence replaces it without reusing source
+tokens. Exhausting an address-number range raises a value-free error.
 
 The optional Indic NER adapter never downloads a checkpoint automatically.
 Set `OPENMED_INDIC_NER_MODEL` to a user-supplied local path or model repo, or
@@ -279,6 +304,32 @@ dates, and ages in Igbo and English-Igbo clinical text, including decomposed or
 unmarked context cues. Replacement spans expand to whole base-plus-diacritic
 clusters so dot-below vowels cannot be split or left behind.
 
+Kinyarwanda (`rw`) is available through the same deterministic path with an
+`rw_RW` surrogate locale. It recognizes Rwanda national IDs next to an
+`indangamuntu` or national-ID cue, `+250` phones, and numeric dates.
+
+### Month-name dates in Hausa, Yoruba, Igbo, and Kinyarwanda
+
+Because these four routes ship no bundled model, deterministic patterns also
+recognize Gregorian month-name dates in day-month-year (`15 Satumba 1980`) and
+month-day-year (`Satumba 15, 1980`) order, with an optional comma before the
+year. The vocabulary follows the CLDR month names plus common spellings:
+
+| Code | Month names (January to December) | Also accepted |
+|------|-----------------------------------|---------------|
+| `ha` | Janairu, Faburairu, Maris, Afirilu, Mayu, Yuni, Yuli, Agusta, Satumba, Oktoba, Nuwamba, Disamba | Fabrairu, Afrilu; `15 ga watan Satumba 1980` |
+| `yo` | Ṣẹ́rẹ́, Èrèlè, Ẹrẹ̀nà, Ìgbé, Ẹ̀bibi, Òkúdu, Agẹmọ, Ògún, Owewe, Ọ̀wàrà, Bélú, Ọ̀pẹ̀ | dot-below forms without tone marks; `15 oṣù Ṣẹ́rẹ́ ọdún 1980` |
+| `ig` | Jenụwarị, Febrụwarị, Maachị, Epreel, Mee, Jun, Julaị, Ọgọọst, Septemba, Ọktoba, Novemba, Disemba | Febụwarị, Machị, Mach, Eprel, Juun, Ọgọstụ, Nọvemba |
+| `rw` | Mutarama, Gashyantare, Werurwe, Mata, Gicurasi, Kamena, Nyakanga, Kanama, Nzeri, Ukwakira, Ugushyingo, Ukuboza | Nzeli |
+
+Yoruba and Igbo names match in precomposed (NFC), decomposed (NFD), and fully
+unmarked spellings, and spans never split a base letter from its tone or
+dot-below marks. A month word alone, such as a clinic schedule naming
+`Mutarama` or the Kinyarwanda word `mata` (milk), is not flagged: a day and a
+four-digit year from 1900 to 2099 must be attached. Hausa Ajami month names,
+Igbo ordinal month names (`ọnwa mbụ`), and native or lunar calendars are not
+covered.
+
 ## Worked examples
 
 Each example de-identifies synthetic, non-PHI text with `method="mask"`. The
@@ -290,7 +341,8 @@ canonical labels below are illustrative.
 ### Amharic — `am`
 
 - Model: `OpenMed/privacy-filter-multilingual` · locale `am_ET`
-  (`en_KE` is the documented Faker approximation)
+  (`en_KE` is the documented Faker approximation for script-free fields;
+  `method="replace"` keeps Ethiopic names and places in Ethiopic)
 
 ```text
 Before: ስም፡ ሰላም ተስፋዬ። ስልክ፡ +251 911 234 567።
@@ -300,6 +352,7 @@ After:  ስም፡ [NAME]። ስልክ፡ [PHONE]።
 ### Arabic — `ar`
 
 - Model: `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1` · locale `ar_EG`
+  (`method="replace"` keeps Arabic-script names and places in Arabic script)
 
 ```text
 Before: المريضة ليلى حسن، الهاتف +20 10 1234 5678
@@ -438,10 +491,38 @@ After:  रुग्णाचे नाव [PERSON]. जन्मतारीख
 ### Nepali — `ne`
 
 - Model: `user-supplied` · locale `ne_NP`
+- Names, places, and organizations need the user-supplied model. The first
+  worked example below assumes one is configured.
+- Deterministic Nepali patterns run on this route even with an empty model
+  detector, in Devanagari and ASCII digits:
+  - `+977` and `00977` mobile numbers (96x-98x) and landlines. The country
+    code stays inside the masked span. Domestic `0`-prefixed landlines need
+    nearby phone context such as `फोन` or `सम्पर्क`.
+  - Citizenship-certificate numbers in district-office-year-serial groups
+    such as `27-01-75-05678`. Plain or slash-split serials count only directly
+    after a number label (`नं.`, `नम्बर`) with `नागरिकता` context nearby.
+  - National identity card numbers, either ten digits grouped `3-3-3-1` or
+    ten digits after a number label, with `राष्ट्रिय परिचयपत्र` context.
+  - Numeric Bikram Sambat dates, year-first or day-first, separated by `-`,
+    `/`, or `.`. Day 32 is accepted for years 2000-2199. Earlier years must
+    also be valid Gregorian dates.
+  - Five-digit postal codes, gated on `हुलाक` or `postal code` context.
+- Limits: identifier rules check shape only. They make no checksum or
+  issuing-authority claim, and numbers without Nepali identifier context
+  (doses, lab values) are not treated as identifiers. Bikram Sambat month
+  names, calendar conversion, and Bikram Sambat-aware date shifting are not
+  covered. The synthetic `openmed/eval/golden/fixtures/i18n/ne.jsonl` fixture
+  checks spans and leakage. It is not a trained Nepali model or a
+  clinical-quality claim.
 
 ```text
 Before: सुमन थापा काठमाडौंको जीवन अस्पताल गए।
 After:  [PERSON] [LOCATION]को [ORGANIZATION] गए।
+```
+
+```text
+Before: जन्म मिति २०४५/०३/३२। मोबाइल +९७७ ९८४१२३४५६७। नागरिकता नं. २७-०१-७५-०५६७८।
+After:  जन्म मिति [DATE]। मोबाइल [PHONE]। नागरिकता नं. [ID_NUM]।
 ```
 
 ### Odia — `or`
