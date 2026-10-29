@@ -446,25 +446,24 @@ def test_fixture_texts_require_explicit_synthetic_marker() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("field", "malformed"),
-    [
+def test_error_analysis_report_rejects_malformed_nested_payloads(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for field, malformed in [
         ("confusion_matrix", {"PERSON": []}),
         ("false_negatives", {"PERSON": "not-a-list"}),
         ("false_positives", {"PERSON": ["not-an-object"]}),
-    ],
-)
-def test_error_analysis_report_rejects_malformed_nested_payloads(
-    tmp_path: Path,
-    field: str,
-    malformed: object,
-) -> None:
-    report_path, _ = _build_report_and_fixtures(tmp_path)
-    payload = json.loads(report_path.read_text(encoding="utf-8"))
-    payload[field] = malformed
+    ]:
+        with subtests.test(field=field, malformed=malformed):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            report_path, _ = _build_report_and_fixtures(tmp_path)
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            payload[field] = malformed
 
-    with pytest.raises(ValueError):
-        ErrorAnalysisReport.from_dict(payload)
+            with pytest.raises(ValueError):
+                ErrorAnalysisReport.from_dict(payload)
 
 
 def test_error_analysis_report_round_trips_missed_examples(tmp_path: Path) -> None:
