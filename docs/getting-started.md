@@ -80,6 +80,8 @@ complete de-identification or a conformance validation.
 The optional inventory refuses documents deeper than 64 levels or containing
 more than 10,000 elements with `CDA coverage limit exceeded`, before updating
 the output mapping. This bounds controlled paths and avoids partial reports.
+To measure residual PHI against seeded C-CDA documents with element-level
+truth, see [Synthetic C-CDA documents](training/synthetic/cda-documents.md).
 
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 

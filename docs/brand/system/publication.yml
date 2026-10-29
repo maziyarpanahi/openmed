@@ -415,6 +415,7 @@ classification:
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
     - training/synthetic/license-identifiers.md
+    - training/synthetic/hl7v2-messages.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
@@ -427,7 +428,9 @@ classification:
     - multimodal/audio-resampling-plans.md
     - multimodal/image-geometry.md
     - i18n/locale-tags.md
+    - i18n/language-readiness-matrix.md
     - multimodal/media-type-detection.md
+    - i18n/locale-pack-conformance.md
     - multimodal/pdf-reading-order.md
     - multimodal/pdf-geometry-preflight.md
     - multimodal/ocr-streaming.md
@@ -735,6 +738,7 @@ classification:
     - status/index.md
     - status/open-benchmark-publication.md
     - status/trust-status-contract.md
+    - training/synthetic/cda-documents.md
   excluded:
     - _hooks.py
     - __pycache__/**
