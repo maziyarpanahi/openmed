@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a strict, fail-closed synthetic dataset license and lineage manifest
+  validator that binds source class, SPDX license expression, generator digest,
+  model provenance, bounded dependencies and the redistribution decision, and
+  renders canonical reason-code-only reports (#3099).
+
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
@@ -275,10 +280,6 @@ clinical efficacy. Package publication remains a separate release action.
 - Fixed-order clinical brief composition over explicitly reviewed synthetic
   evidence, with local generation, calibrated NLI integration, exact citations,
   rendered-packet privacy checks and value-free review/provenance output.
-- Added a strict, fail-closed synthetic dataset license and lineage manifest
-  validator that binds source class, SPDX license expression, generator digest,
-  model provenance, bounded dependencies and the redistribution decision, and
-  renders canonical reason-code-only reports (#3099).
 
 - Add opt-in cooperative clinical-brief cancellation and existing-budget deadlines,
   empty interruption outcomes, CLI/service parity, and native late-result guards.
