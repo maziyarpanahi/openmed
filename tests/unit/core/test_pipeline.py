@@ -58,10 +58,11 @@ def test_explicit_pipeline_key_preserves_cross_instance_hashes():
     )
 
 
-@pytest.mark.parametrize("secret", ["", b""])
-def test_empty_pipeline_keys_fail_before_inference(secret):
-    with pytest.raises(ValueError, match="non-empty"):
-        Pipeline(hmac_secret=secret)
+def test_empty_pipeline_keys_fail_before_inference(subtests):
+    for secret in ["", b""]:
+        with subtests.test(secret=secret):
+            with pytest.raises(ValueError, match="non-empty"):
+                Pipeline(hmac_secret=secret)
 
 
 def test_normalized_offsets_remap_combining_characters_to_original_positions():

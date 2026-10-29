@@ -125,24 +125,22 @@ def test_markdown_states_clinical_and_certification_boundaries() -> None:
     assert "decline, abstention, or escalation" in markdown
 
 
-@pytest.mark.parametrize(
-    ("source_revision", "artifact_digest", "message"),
-    [
+def test_pack_rejects_non_digest_inputs(subtests) -> None:
+    for source_revision, artifact_digest, message in [
         ("patient-name", "sha256:" + ("a" * 64), "source_revision"),
         (_SOURCE_REVISION, "secret-token", "artifact_digest"),
-    ],
-)
-def test_pack_rejects_non_digest_inputs(
-    source_revision: str,
-    artifact_digest: str,
-    message: str,
-) -> None:
-    with pytest.raises(AgentAssurancePackError, match=message):
-        build_agent_assurance_pack(
+    ]:
+        with subtests.test(
             source_revision=source_revision,
             artifact_digest=artifact_digest,
-            gate_report=_fixtures().passing_report(),
-        )
+            message=message,
+        ):
+            with pytest.raises(AgentAssurancePackError, match=message):
+                build_agent_assurance_pack(
+                    source_revision=source_revision,
+                    artifact_digest=artifact_digest,
+                    gate_report=_fixtures().passing_report(),
+                )
 
 
 def test_workflow_builder_alias_has_the_same_contract() -> None:

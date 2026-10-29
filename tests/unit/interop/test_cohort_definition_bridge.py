@@ -128,10 +128,11 @@ def test_unavailable_and_digest_mismatch_fail_closed() -> None:
     )
 
 
-@pytest.mark.parametrize("timeout", [float("nan"), float("inf"), -float("inf")])
-def test_timeout_must_be_finite(timeout: float) -> None:
-    with pytest.raises(ValueError):
-        CohortDefinitionServiceBridge(timeout_seconds=timeout)
+def test_timeout_must_be_finite(subtests) -> None:
+    for timeout in [float("nan"), float("inf"), -float("inf")]:
+        with subtests.test(timeout=timeout):
+            with pytest.raises(ValueError):
+                CohortDefinitionServiceBridge(timeout_seconds=timeout)
 
 
 def test_runner_exceptions_are_sanitized() -> None:
