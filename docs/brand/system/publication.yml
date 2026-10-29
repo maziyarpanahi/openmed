@@ -528,6 +528,7 @@ classification:
     - language-packs.md
     - languages/clinical-readiness.md
     - languages/clinical-transliteration.md
+    - languages/abbreviation-mining.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
