@@ -58,23 +58,25 @@ def test_analyze_json_output_is_one_parseable_document(monkeypatch, capsys):
     assert payload["data"]["entities"][0]["label"] == "CONDITION"
 
 
-@pytest.mark.parametrize("shell", ("bash", "zsh", "fish"))
-def test_completion_emits_a_non_empty_script(shell, capsys):
-    rc = cli_main.main(["completion", shell])
-    captured = capsys.readouterr()
+def test_completion_emits_a_non_empty_script(subtests, capsys):
+    for shell in ("bash", "zsh", "fish"):
+        with subtests.test(shell=shell):
+            capsys.readouterr()
+            rc = cli_main.main(["completion", shell])
+            captured = capsys.readouterr()
 
-    assert rc == 0
-    assert captured.err == ""
-    assert captured.out.strip()
-    assert "openmed" in captured.out
-    assert "analyze" in captured.out
-    assert "init" in captured.out
-    if shell == "bash":
-        assert "complete -F _openmed_completion openmed" in captured.out
-        assert "--json" in captured.out
-    elif shell == "zsh":
-        assert "#compdef openmed" in captured.out
-        assert "compdef _openmed openmed" in captured.out
-    else:
-        assert "complete -c openmed" in captured.out
-        assert '-l "json"' in captured.out
+            assert rc == 0
+            assert captured.err == ""
+            assert captured.out.strip()
+            assert "openmed" in captured.out
+            assert "analyze" in captured.out
+            assert "init" in captured.out
+            if shell == "bash":
+                assert "complete -F _openmed_completion openmed" in captured.out
+                assert "--json" in captured.out
+            elif shell == "zsh":
+                assert "#compdef openmed" in captured.out
+                assert "compdef _openmed openmed" in captured.out
+            else:
+                assert "complete -c openmed" in captured.out
+                assert '-l "json"' in captured.out

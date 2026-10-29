@@ -9,6 +9,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 from openmed.interop import assert_redacted
@@ -96,6 +97,7 @@ def _collect_key(value: Any, target: str) -> list[Any]:
     return found
 
 
+@pytest.mark.slow
 def test_fixture_demo_round_trip_is_valid_private_and_district_only(
     tmp_path: Path,
 ) -> None:
@@ -164,6 +166,7 @@ def test_fixture_demo_round_trip_is_valid_private_and_district_only(
     assert_redacted(process.stdout, phi_mapping)
 
 
+@pytest.mark.slow
 def test_same_seed_produces_byte_identical_stage_artifacts(tmp_path: Path) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -175,6 +178,7 @@ def test_same_seed_produces_byte_identical_stage_artifacts(tmp_path: Path) -> No
     }
 
 
+@pytest.mark.slow
 def test_documented_walkthrough_matches_the_cli_surface() -> None:
     help_result = subprocess.run(
         [sys.executable, str(RUN_DEMO), "--help"],

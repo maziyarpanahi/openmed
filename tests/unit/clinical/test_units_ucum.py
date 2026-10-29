@@ -53,33 +53,29 @@ def test_normalize_to_converts_commensurable_units():
     assert converted["provenance"]["conversion"] == "dimension_checked_ucum_subset"
 
 
-@pytest.mark.parametrize(
-    ("value", "source_unit", "target_unit"),
-    [
+def test_round_trip_conversions_are_stable(subtests):
+    for value, source_unit, target_unit in [
         (1.4, "g/L", "mg/dL"),
         (25, "mg/L", "mg/dL"),
         (4.5, "10*3/uL", "10*9/L"),
         (98.6, "F", "C"),
         (120, "mmHg", "kPa"),
         (96, "%", "1"),
-    ],
-)
-def test_round_trip_conversions_are_stable(
-    value,
-    source_unit,
-    target_unit,
-):
-    forward = normalize_to(value, source_unit, target_unit)
-    assert forward["status"] == "ok"
+    ]:
+        with subtests.test(
+            value=value, source_unit=source_unit, target_unit=target_unit
+        ):
+            forward = normalize_to(value, source_unit, target_unit)
+            assert forward["status"] == "ok"
 
-    backward = normalize_to(forward["magnitude"], target_unit, source_unit)
-    assert backward["status"] == "ok"
-    assert math.isclose(
-        backward["magnitude"],
-        value,
-        rel_tol=ROUND_TRIP_REL_TOLERANCE,
-        abs_tol=ROUND_TRIP_ABS_TOLERANCE,
-    )
+            backward = normalize_to(forward["magnitude"], target_unit, source_unit)
+            assert backward["status"] == "ok"
+            assert math.isclose(
+                backward["magnitude"],
+                value,
+                rel_tol=ROUND_TRIP_REL_TOLERANCE,
+                abs_tol=ROUND_TRIP_ABS_TOLERANCE,
+            )
 
 
 def test_incommensurable_units_refuse_without_fabricating_number():

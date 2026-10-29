@@ -190,26 +190,23 @@ def test_non_assertion_values_fail_with_a_categorical_error():
         filter_patient_record([_span()], [{"experiencer": "patient"}])
 
 
-@pytest.mark.parametrize(
-    ("record_status", "exclusion_reason"),
-    [
+def test_public_result_rejects_inconsistent_decision_states(subtests):
+    for record_status, exclusion_reason in [
         (None, None),
         ("recorded", "hypothetical"),
         ("unsupported", None),
         (None, "unsupported"),
-    ],
-)
-def test_public_result_rejects_inconsistent_decision_states(
-    record_status: str | None,
-    exclusion_reason: str | None,
-):
-    with pytest.raises(ValueError):
-        PatientRecordSpan(
-            span=_span(),
-            assertion=_assertion(),
-            record_status=record_status,
-            exclusion_reason=exclusion_reason,
-        )
+    ]:
+        with subtests.test(
+            record_status=record_status, exclusion_reason=exclusion_reason
+        ):
+            with pytest.raises(ValueError):
+                PatientRecordSpan(
+                    span=_span(),
+                    assertion=_assertion(),
+                    record_status=record_status,
+                    exclusion_reason=exclusion_reason,
+                )
 
 
 def test_advisory_is_non_empty_string():

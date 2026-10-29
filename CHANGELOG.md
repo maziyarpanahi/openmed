@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Require Python 3.11 or newer for the v3.2 development line so dependency
+  security fixes can be installed. Upgrade Python 3.10 environments before
+  updating OpenMed; published v3.1.0 remains available for the older interpreter.
+  See the [dependency migration guidance](docs/security/dependency-policy.md#python-311-floor-and-the-snowflake-filelock-override).
+
 ### Added
 
 - Added deterministic clinical language-pack readiness matrices with closed
