@@ -124,6 +124,59 @@ def test_run_smoke_check_uses_offline_clean_environment(tmp_path: Path) -> None:
         assert call["cwd"] != Path.cwd()
 
 
+def test_only_the_brief_probe_gets_the_longer_child_timeout(tmp_path: Path) -> None:
+    timeouts: dict[str, float] = {}
+    python_executable = _fake_install_bin(tmp_path)
+
+    def runner(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if "--_brief-probe" in command:
+            timeouts["brief_probe"] = kwargs["timeout"]
+            return _completed(command, stdout="{}")
+        timeouts.setdefault("other", kwargs["timeout"])
+        assert kwargs["timeout"] == timeouts["other"]
+        if command[-1] == "--version":
+            return _completed(command, stdout="openmed 2.0.0\n")
+        if command[-3:] == ["models", "validate", "--json"]:
+            return _completed(
+                command,
+                stdout=json.dumps(
+                    {
+                        "ok": True,
+                        "data": {
+                            "ok": True,
+                            "violation_count": 0,
+                            "messages": ["manifest: OK (3 rows checked)"],
+                        },
+                    }
+                ),
+            )
+        return _completed(
+            command,
+            stdout=json.dumps(
+                {
+                    "change_count": 1,
+                    "document_hash": "sha256:" + "b" * 64,
+                    "entry_point_declared": True,
+                    "package_version": "2.0.0",
+                    "surface_hash": "sha256:" + "c" * 64,
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+
+    smoke_check.run_smoke_check(
+        python_executable=str(python_executable),
+        runner=runner,
+        brief_profile="core",
+    )
+
+    assert timeouts == {
+        "brief_probe": smoke_check.BRIEF_PROBE_TIMEOUT_SECONDS,
+        "other": smoke_check.COMMAND_TIMEOUT_SECONDS,
+    }
+
+
 def test_manifest_check_rejects_failure_without_echoing_child_output() -> None:
     raw_sensitive_value = "synthetic-only-value-that-must-not-be-reported"
     result = _completed(
