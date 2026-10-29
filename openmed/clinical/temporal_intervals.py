@@ -21,6 +21,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime, parse_iso_time
+
 TemporalKind = Literal["date", "time", "duration", "interval", "unknown"]
 TemporalPrecision = Literal[
     "unknown",
@@ -636,7 +638,7 @@ def _parse_datetime(value: str) -> TemporalEndpoint:
     unknown: list[str] = []
     date_value: date | None = None
     try:
-        date_value = date.fromisoformat(match.group("date"))
+        date_value = parse_iso_date(match.group("date"))
     except ValueError:
         unknown.append("date")
 
@@ -984,11 +986,9 @@ def _obvious_order_conflict(left: TemporalEndpoint, right: TemporalEndpoint) -> 
         if left.timezone_state != right.timezone_state:
             return False
         if "T" not in left.value and "T" not in right.value:
-            return time.fromisoformat(left.value) > time.fromisoformat(right.value)
+            return parse_iso_time(left.value) > parse_iso_time(right.value)
         try:
-            return datetime.fromisoformat(left.value) > datetime.fromisoformat(
-                right.value
-            )
+            return parse_iso_datetime(left.value) > parse_iso_datetime(right.value)
         except ValueError:
             return False
     return False

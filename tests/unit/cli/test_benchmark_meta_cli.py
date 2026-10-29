@@ -29,9 +29,10 @@ def test_list_all_suites_offline(monkeypatch, capsys):
     assert by_name["golden"]["access"] == "public-synthetic"
 
 
-@pytest.mark.parametrize("suite", DEFAULT_SUITES)
-def test_default_suite_task_is_explicit(suite):
-    assert suite_metadata(suite)["task"] not in (None, "", "unknown")
+def test_default_suite_task_is_explicit(subtests):
+    for suite in DEFAULT_SUITES:
+        with subtests.test(suite=suite):
+            assert suite_metadata(suite)["task"] not in (None, "", "unknown")
 
 
 def test_describe_n2c2_retains_current_adapter_map(capsys):
@@ -114,29 +115,48 @@ def test_equal_report_deterministic(tmp_path, capsys):
     assert json.loads(first)["data"]["verdict"] == "no-regression"
 
 
+def test_invalid_metric_fails_safely(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for value in [True, "CaseySecret", None, -0.1, 1.1, float("nan"), float("inf")]:
+        with subtests.test(value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            a = write_report(tmp_path / "a.json", {"f1": value})
+            assert (
+                main_module.main(["benchmark", "compare", str(a), str(a), "--json"])
+                == 2
+            )
+            output = capsys.readouterr().out
+            assert "CaseySecret" not in output
+            assert json.loads(output)["error"]["code"] == "invalid_reports"
+
+
+def test_mismatched_or_empty_reports_rejected(subtests, tmp_path, capsys):
+    case_root = tmp_path
+    for suite, count in [("shield", 2), ("golden", 3), ("golden", 0)]:
+        with subtests.test(suite=suite, count=count):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            capsys.readouterr()
+            a = write_report(tmp_path / "a.json", {"f1": 1.0})
+            b = write_report(tmp_path / "b.json", {"f1": 1.0}, suite=suite, count=count)
+            assert (
+                main_module.main(["benchmark", "compare", str(a), str(b), "--json"])
+                == 2
+            )
+            assert not json.loads(capsys.readouterr().out)["ok"]
+
+
 @pytest.mark.parametrize(
-    "value", [True, "CaseySecret", None, -0.1, 1.1, float("nan"), float("inf")]
+    "data",
+    ["{CaseySecret", "[]", "{}", '{"metrics": 1}', "x" * (8 * 1024**2 + 1)],
+    ids=["invalid-json", "wrong-root", "empty-object", "invalid-metrics", "oversized"],
 )
-def test_invalid_metric_fails_safely(value, tmp_path, capsys):
-    a = write_report(tmp_path / "a.json", {"f1": value})
-    assert main_module.main(["benchmark", "compare", str(a), str(a), "--json"]) == 2
-    output = capsys.readouterr().out
-    assert "CaseySecret" not in output
-    assert json.loads(output)["error"]["code"] == "invalid_reports"
-
-
-@pytest.mark.parametrize("suite,count", [("shield", 2), ("golden", 3), ("golden", 0)])
-def test_mismatched_or_empty_reports_rejected(suite, count, tmp_path, capsys):
-    a = write_report(tmp_path / "a.json", {"f1": 1.0})
-    b = write_report(tmp_path / "b.json", {"f1": 1.0}, suite=suite, count=count)
-    assert main_module.main(["benchmark", "compare", str(a), str(b), "--json"]) == 2
-    assert not json.loads(capsys.readouterr().out)["ok"]
-
-
-@pytest.mark.parametrize(
-    "data", ["{CaseySecret", "[]", "{}", '{"metrics": 1}', "x" * (8 * 1024**2 + 1)]
-)
-def test_malformed_or_oversized_file_rejected(data, tmp_path, capsys):
+def test_malformed_or_oversized_file_rejected(data, tmp_path, capsys, request):
+    # Pytest exports node IDs in PYTEST_CURRENT_TEST. Keep payloads out of
+    # identifiers so the 8 MiB case fits Windows' environment-variable limit.
+    assert len(request.node.nodeid) < 256
     path = tmp_path / "CaseySecret.json"
     path.write_text(data)
     assert (

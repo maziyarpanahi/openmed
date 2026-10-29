@@ -17,32 +17,27 @@ from openmed.clinical.sdoh_temporal import (
 )
 
 
-@pytest.mark.parametrize(
-    ("phrase", "expected"),
-    (
+def test_temporal_classes_require_explicit_local_cues(subtests) -> None:
+    for phrase, expected in (
         ("Currently has synthetic housing support.", CURRENT),
         ("Current synthetic housing support is recorded.", CURRENT),
         ("Formerly had synthetic housing instability.", HISTORICAL),
         ("Plans to seek synthetic housing next year.", FUTURE),
         ("synthetic housing status is not documented.", UNKNOWN),
-    ),
-)
-def test_temporal_classes_require_explicit_local_cues(
-    phrase: str,
-    expected: str,
-) -> None:
-    finding_start = phrase.index("synthetic housing")
-    finding_end = finding_start + len("synthetic housing")
+    ):
+        with subtests.test(phrase=phrase, expected=expected):
+            finding_start = phrase.index("synthetic housing")
+            finding_end = finding_start + len("synthetic housing")
 
-    [result] = qualify_sdoh_evidence(
-        phrase,
-        [{"start": finding_start, "end": finding_end}],
-    )
+            [result] = qualify_sdoh_evidence(
+                phrase,
+                [{"start": finding_start, "end": finding_end}],
+            )
 
-    assert result.temporal_class == expected
-    assert result.source_offsets == (finding_start, finding_end)
-    assert result.review_required is (expected == UNKNOWN)
-    assert result.conflicting_classes == ()
+            assert result.temporal_class == expected
+            assert result.source_offsets == (finding_start, finding_end)
+            assert result.review_required is (expected == UNKNOWN)
+            assert result.conflicting_classes == ()
 
 
 def test_adversative_boundaries_keep_temporal_cues_with_their_finding() -> None:

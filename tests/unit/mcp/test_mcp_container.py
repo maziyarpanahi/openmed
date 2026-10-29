@@ -38,13 +38,14 @@ def test_mcp_image_defaults_to_stdio_and_supports_http_override() -> None:
     assert _json_instruction(dockerfile, "CMD") == ["--transport", "stdio"]
 
 
-def test_rest_image_command_remains_unchanged() -> None:
+def test_rest_image_uses_the_safe_service_launcher() -> None:
     dockerfile = REST_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "EXPOSE 8080" in dockerfile
     assert _json_instruction(dockerfile, "CMD") == [
-        "uvicorn",
-        "openmed.service.app:app",
+        "python",
+        "-m",
+        "openmed.service.logging",
         "--host",
         "0.0.0.0",
         "--port",

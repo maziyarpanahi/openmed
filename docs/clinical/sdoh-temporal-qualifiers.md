@@ -1,5 +1,8 @@
 # SDOH temporal qualifiers
 
+Start with the [SDOH extraction guide](sdoh-extraction.md) for the
+registered determinants, cue tables and runnable synthetic examples.
+
 `openmed.clinical.sdoh_temporal` adds a small, deterministic temporal layer for
 social-determinants evidence. It is an evidence annotation and review aid, not
 a diagnosis, clinical decision, compliance certification, or medical-device

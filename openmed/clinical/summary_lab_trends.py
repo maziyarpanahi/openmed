@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 from typing import Final, Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 from .units import parse_measurement
 
 SUMMARY_LAB_TRENDS_SCHEMA_VERSION: Final = 1
@@ -331,9 +333,9 @@ def _prepare_observation(
 def _parse_observation_time(value: str) -> tuple[str, str, datetime] | None:
     try:
         if "T" not in value and " " not in value:
-            parsed_date = date.fromisoformat(value)
+            parsed_date = parse_iso_date(value)
             return value, "date", datetime.combine(parsed_date, time.min)
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
     except ValueError:
         return None
     if parsed.tzinfo is None:

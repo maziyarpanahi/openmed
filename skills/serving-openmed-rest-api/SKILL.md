@@ -30,7 +30,7 @@ work use batch processing.
 pip install "openmed[service]"          # FastAPI + uvicorn + pydantic
 
 # Launch the ASGI app (factory create_app, or the module-level `app`)
-uvicorn openmed.service.app:app --host 127.0.0.1 --port 8000
+python -m openmed.service.logging --host 127.0.0.1 --port 8000
 ```
 
 ```python
@@ -104,7 +104,7 @@ Errors use a stable envelope: `{"error": {"code", "message", "details"}}` with
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS="disease_detection_superclinical" \
 OPENMED_SERVICE_BATCHING_ENABLED=true \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8000
+python -m openmed.service.logging --host 0.0.0.0 --port 8000
 ```
 
 Preloading avoids first-request latency; the warm pool keeps hot models resident
@@ -114,7 +114,7 @@ requests when batching is enabled.
 ## Workflow
 
 1. **Install + launch.** `pip install "openmed[service]"`, then run
-   `uvicorn openmed.service.app:app` (or build with `create_app()`).
+   `python -m openmed.service.logging` (or build with `create_app()`).
 2. **Configure the runtime** via env vars before start: set
    `OPENMED_PROFILE`, preload your hot models, and decide keep-alive / max
    resident / batching to fit the box.
@@ -134,7 +134,7 @@ FROM python:3.11-slim
 RUN pip install --no-cache-dir "openmed[service]"
 ENV OPENMED_SERVICE_PRELOAD_MODELS="disease_detection_superclinical"
 EXPOSE 8000
-CMD ["uvicorn", "openmed.service.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "openmed.service.logging", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 Bake/mount the model cache so containers don't re-download on every start; the

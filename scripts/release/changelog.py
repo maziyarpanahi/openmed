@@ -179,8 +179,11 @@ def validate_release_version(
 
 
 def changelog_section_for(commit: ConventionalCommit) -> str | None:
-    """Return the Keep a Changelog section for a parsed commit."""
-    return SECTION_BY_TYPE.get(commit.type)
+    """Return the Keep a Changelog section for a parsed commit.
+
+    Breaking commits with unmapped types are included under ``Changed``.
+    """
+    return SECTION_BY_TYPE.get(commit.type, "Changed" if commit.breaking else None)
 
 
 def render_entry(commit: ConventionalCommit) -> str:

@@ -1,4 +1,10 @@
-# Migrating from OpenMed v1 to v2
+# Migration guides
+
+For the current workflow migration, see
+[OpenMed 3.0 to 3.1](migration/3.0-to-3.1.md): direct FHIR/OpenMRS and OMOP
+writers, permission contracts, staged changes and reviewed execution.
+The [2.5 to 3.0 guide](migration/2.5-to-3.0.md) covers the Journey migration.
+The v1-to-v2 contract below remains available for older installations.
 
 OpenMed v2 begins with the `2.0.0` release. This page is the durable upgrade
 contract for applications moving from the final v1 line to v2. Update it
@@ -23,9 +29,11 @@ root namespace indefinitely. These additions do not require existing v1 code
 to change.
 
 OpenMed follows [Semantic Versioning](release/semver-and-channels.md). Public
-APIs are deprecated for at least two minor releases before removal, emit a
+APIs receive at least one full minor-version warning window, emit a
 `DeprecationWarning`, name their replacement, and appear under `Deprecated` in
-the changelog.
+the changelog. Breaking removal must wait for a major release; the warning
+window does not permit a breaking change in a later minor release. See the
+[public API deprecation policy](compliance/api-deprecation-policy.md).
 
 ## Upgrade checklist
 
@@ -144,6 +152,7 @@ promoting the new version.
 - [Migrating from 2.1 to 2.2](migration/2.1-to-2.2.md)
 - [Migrating from 2.2 to 2.3](migration/2.2-to-2.3.md)
 - [Migrate from 2.3 to 2.5](migration/2.3-to-2.5.md)
+- [Migrating from 2.5 to 3.0](migration/2.5-to-3.0.md)
 - [OpenMed 2.5.0 Release Notes](release/v2.5.0.md)
 - [OpenMed 2.3.0 Release Notes](release/v2.3.0.md)
 - [OpenMed 2.2.0 Release Notes](release/v2.2.0.md)

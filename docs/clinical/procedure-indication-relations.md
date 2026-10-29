@@ -1,5 +1,8 @@
 # Procedure-to-indication relation candidates
 
+Run the [synthetic NLI and guarded-relation example](../examples.md#synthetic-nli-and-guarded-relations)
+for candidate generation, explicit evidence binding and human-review priorities.
+
 `generate_procedure_indication_candidates()` creates a candidate only when a
 procedure and condition-like span occur in the same section and sentence,
 within the configured distance, with explicit linking language such as

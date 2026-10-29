@@ -114,15 +114,14 @@ def test_models_size_does_not_treat_empty_cache_entry_as_downloaded(
     assert model["status"] == "not cached"
 
 
-@pytest.mark.parametrize("budget_mb", [-1, float("inf"), float("nan"), True])
-def test_models_size_rejects_invalid_programmatic_budget(
-    monkeypatch: pytest.MonkeyPatch,
-    budget_mb: Any,
-) -> None:
-    monkeypatch.setattr(main_module, "list_cached_models", lambda: [])
+def test_models_size_rejects_invalid_programmatic_budget(subtests) -> None:
+    for budget_mb in [-1, float("inf"), float("nan"), True]:
+        with subtests.test(budget_mb=budget_mb):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                monkeypatch.setattr(main_module, "list_cached_models", lambda: [])
 
-    with pytest.raises(ValueError, match="finite non-negative"):
-        main_module.build_models_size_report(budget_mb=budget_mb)
+                with pytest.raises(ValueError, match="finite non-negative"):
+                    main_module.build_models_size_report(budget_mb=budget_mb)
 
 
 def test_models_size_json_is_scriptable(
