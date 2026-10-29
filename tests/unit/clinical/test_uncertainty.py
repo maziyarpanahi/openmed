@@ -8,22 +8,19 @@ from openmed.clinical import CERTAIN, UNCERTAIN, resolve_uncertainty
 from openmed.clinical.context import CERTAINTY_VALUES, UNCERTAINTY_CUES
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_asserted_findings_are_certain(subtests):
+    for text in [
         "pneumonia confirmed on CT",
         "hypertension",
         "diabetes mellitus",
         "acute renal failure",
-    ],
-)
-def test_asserted_findings_are_certain(text):
-    assert resolve_uncertainty(text) == CERTAIN
+    ]:
+        with subtests.test(text=text):
+            assert resolve_uncertainty(text) == CERTAIN
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_uncertainty_cue_families_in_span_text(subtests):
+    for text in [
         "possible pneumonia",
         "probable PE",
         "likely pneumonia",
@@ -46,15 +43,13 @@ def test_asserted_findings_are_certain(text):
         "should fever return, start abx",
         "unless fever resolves, start abx",
         "in case of chest pain, give nitro",
-    ],
-)
-def test_uncertainty_cue_families_in_span_text(text):
-    assert resolve_uncertainty(text) == UNCERTAIN
+    ]:
+        with subtests.test(text=text):
+            assert resolve_uncertainty(text) == UNCERTAIN
 
 
-@pytest.mark.parametrize(
-    "modifier",
-    [
+def test_modifier_hits_carry_uncertainty_cues(subtests):
+    for modifier in [
         "possible",
         "probable",
         "likely",
@@ -66,10 +61,9 @@ def test_uncertainty_cue_families_in_span_text(text):
         "may",
         "if",
         "unless",
-    ],
-)
-def test_modifier_hits_carry_uncertainty_cues(modifier):
-    assert resolve_uncertainty("pneumonia", [modifier]) == UNCERTAIN
+    ]:
+        with subtests.test(modifier=modifier):
+            assert resolve_uncertainty("pneumonia", [modifier]) == UNCERTAIN
 
 
 def test_issue_examples_are_covered():
@@ -127,18 +121,16 @@ def test_modifier_hits_do_not_create_cues_across_fragments():
     assert resolve_uncertainty("rule", ["out sepsis"]) == CERTAIN
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_cue_matching_respects_word_boundaries(subtests):
+    for text in [
         "cardiovascular disease",
         "maybe pneumonia",
         "stiff neck",
         "ruleout typo",
         "suspiciousness alone",
-    ],
-)
-def test_cue_matching_respects_word_boundaries(text):
-    assert resolve_uncertainty(text) == CERTAIN
+    ]:
+        with subtests.test(text=text):
+            assert resolve_uncertainty(text) == CERTAIN
 
 
 def test_uncertain_spans_are_flagged_not_filtered():

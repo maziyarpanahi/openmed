@@ -203,24 +203,21 @@ def test_configured_offline_policy_is_reported_without_network_access(
     }
 
 
-@pytest.mark.parametrize(
-    "model_id",
-    [
+def test_model_id_rejects_cross_platform_path_syntax(subtests) -> None:
+    """A model id cannot escape the cache through Windows path semantics."""
+    for model_id in [
         r"OpenMed\model",
         r"OpenMed\branch\..\outside",
         "C:model",
         "OpenMed/../outside",
         "OpenMed/model/extra",
-    ],
-)
-def test_model_id_rejects_cross_platform_path_syntax(model_id: str) -> None:
-    """A model id cannot escape the cache through Windows path semantics."""
+    ]:
+        with subtests.test(model_id=model_id):
+            with pytest.raises(ValueError, match="safe string") as raised:
+                bootstrap_check.run_bootstrap_check(model_id=model_id)
 
-    with pytest.raises(ValueError, match="safe string") as raised:
-        bootstrap_check.run_bootstrap_check(model_id=model_id)
-
-    assert model_id not in str(raised.value)
-    assert raised.value.__cause__ is None
+            assert model_id not in str(raised.value)
+            assert raised.value.__cause__ is None
 
 
 def test_hostile_required_extra_iterable_has_a_value_free_error() -> None:
