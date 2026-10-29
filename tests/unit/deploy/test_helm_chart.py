@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from openmed.__about__ import __version__
+
 ROOT = Path(__file__).resolve().parents[3]
 CHART_DIR = ROOT / "deploy" / "helm" / "openmed-service"
 CI_VALUES = CHART_DIR / "ci-values.yaml"
@@ -115,7 +117,7 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
     container = deployment["spec"]["template"]["spec"]["containers"][0]
 
     assert deployment["spec"]["replicas"] == 2
-    assert container["image"] == "ghcr.io/maziyarpanahi/openmed:v2.5.0"
+    assert container["image"] == f"ghcr.io/maziyarpanahi/openmed:v{__version__}"
     assert container["resources"]["limits"]["memory"] == "8Gi"
     assert container["env"] == [
         {

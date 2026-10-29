@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
 
 from ..processing.outputs import EntityPrediction
@@ -16,6 +16,7 @@ from .pii_entity_merger import (
     iter_pattern_spans,
 )
 from .quality_gates import resolve_overlapping_entities
+from .script_detect import normalize_for_pii_detection
 
 SAFETY_SWEEP_SOURCE = "safety_sweep"
 SAFETY_SWEEP_PATTERNS_VERSION = "safety-sweep-v1"
@@ -74,9 +75,9 @@ def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
 
 def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
     if lang == "en" and locale is None:
-        from .pii_i18n import AADHAAR_PII_PATTERNS
+        from .pii_i18n import AADHAAR_PII_PATTERNS, _numeric_date_pattern
 
-        return [*PII_PATTERNS, *AADHAAR_PII_PATTERNS]
+        return [*PII_PATTERNS, *AADHAAR_PII_PATTERNS, _numeric_date_pattern("en")]
 
     from .pii_i18n import get_patterns_for_language
 
@@ -108,6 +109,7 @@ def _has_context(
             end,
             pattern.context_words,
             require_boundaries=require_boundaries,
+            normalizer=pattern.context_normalizer,
         )
     )
 
@@ -248,7 +250,31 @@ def safety_sweep(
         else _patterns_for_language(lang, locale=locale)
     )
 
-    for candidate in _collect_candidates(text, sweep_patterns):
+    normalized = normalize_for_pii_detection(
+        text, lang=lang, preserve_script_letters=True
+    )
+    candidates = [
+        (candidate, 0) for candidate in _collect_candidates(text, sweep_patterns)
+    ]
+    if normalized.text != text:
+        for candidate in _collect_candidates(normalized.text, sweep_patterns):
+            start, end = normalized.remap_span(candidate.start, candidate.end)
+            candidates.append(
+                (replace(candidate, start=start, end=end, text=text[start:end]), 1)
+            )
+    # Normalization is an additional view, never a replacement for native-script
+    # rules. Prefer a raw match on equal evidence so valid outer bidi isolates
+    # and joiner-bearing word boundaries keep their original span contract.
+    candidates.sort(
+        key=lambda item: (
+            -item[0].confidence,
+            -item[0].priority,
+            item[1],
+            item[0].start,
+            -(item[0].end - item[0].start),
+        )
+    )
+    for candidate, _view in candidates:
         if _overlaps(candidate.start, candidate.end, active_spans):
             continue
 
@@ -258,7 +284,10 @@ def safety_sweep(
             start=candidate.start,
             end=candidate.end,
             confidence=candidate.confidence,
-            metadata=_candidate_metadata(candidate),
+            metadata={
+                **_candidate_metadata(candidate),
+                "detection_normalization": normalized.to_metadata(),
+            },
         )
         selected.append(candidate)
         active_spans.append(entity)

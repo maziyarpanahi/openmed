@@ -135,6 +135,12 @@ SUPPORTED_SCRIPTS = (
     "Greek",
     "Hebrew",
     "Thai",
+    "Myanmar",
+    "Khmer",
+    "Lao",
+    "Sinhala",
+    "Thaana",
+    "Tibetan",
 )
 
 #: Normalizer identifier applied to each detected script.
@@ -584,6 +590,8 @@ class DetectionNormalization:
     chinese_variant_normalized: bool = False
     chinese_target_script: str | None = None
     opencc_available: bool | None = None
+    removed_bidi_controls: int = 0
+    folded_perso_arabic_letters: int = 0
 
     @property
     def changed(self) -> bool:
@@ -593,6 +601,8 @@ class DetectionNormalization:
             or self.stripped_combining_marks > 0
             or self.folded_confusables > 0
             or self.folded_native_digits > 0
+            or self.removed_bidi_controls > 0
+            or self.folded_perso_arabic_letters > 0
             or self.indic_changes > 0
             or self.converted_legacy_bytes > 0
             or self.chinese_variant_normalized
@@ -624,6 +634,8 @@ class DetectionNormalization:
             "chinese_variant_normalized": self.chinese_variant_normalized,
             "folded_confusables": self.folded_confusables,
             "folded_native_digits": self.folded_native_digits,
+            "removed_bidi_controls": self.removed_bidi_controls,
+            "folded_perso_arabic_letters": self.folded_perso_arabic_letters,
             "indic_changes": self.indic_changes,
             "indic_scripts": list(self.indic_scripts),
             "converted_legacy_bytes": self.converted_legacy_bytes,
@@ -774,6 +786,12 @@ _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
         ),
     ),
     ("Thai", ((0x0E00, 0x0E7F),)),
+    ("Myanmar", ((0x1000, 0x109F), (0xA9E0, 0xA9FF), (0xAA60, 0xAA7F))),
+    ("Khmer", ((0x1780, 0x17FF), (0x19E0, 0x19FF))),
+    ("Lao", ((0x0E80, 0x0EFF),)),
+    ("Sinhala", ((0x0D80, 0x0DFF), (0x111E0, 0x111FF))),
+    ("Thaana", ((0x0780, 0x07BF),)),
+    ("Tibetan", ((0x0F00, 0x0FFF),)),
 )
 
 
@@ -1139,7 +1157,7 @@ def segment_by_script(text: str) -> Iterator[ScriptRun]:
 def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     """Return candidate language codes for a detected script."""
 
-    return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
+    return SCRIPT_LANGUAGE_HINTS.get(script, ())
 
 
 def normalizer_for_script(script: str) -> str:
@@ -1412,6 +1430,8 @@ def normalize_for_pii_detection(
     width_convention: str = "cjk",
     chinese_target_script: str | None = None,
     legacy_font_map: LegacyFontMap | None = None,
+    lang: str | None = None,
+    preserve_script_letters: bool = False,
 ) -> DetectionNormalization:
     """Convert legacy Indic text, then apply offset-safe Unicode defenses.
 
@@ -1419,6 +1439,11 @@ def normalize_for_pii_detection(
     before script routing. The resulting offsets are composed back to the
     original source-byte coordinate system; ordinary Unicode text follows the
     existing normalization path unchanged.
+
+    ``preserve_script_letters`` keeps native letters, marks and orthography for
+    language-pack regexes while still folding decimal digits, width, scoped
+    keyboard variants and invisible controls. Model matching retains its
+    existing confusable/NFC defense by default.
     """
 
     from ..processing.legacy_encoding import convert_legacy_encoding
@@ -1432,6 +1457,8 @@ def normalize_for_pii_detection(
         legacy_conversion.text,
         width_convention=width_convention,
         chinese_target_script=chinese_target_script,
+        lang=lang,
+        preserve_script_letters=preserve_script_letters,
     )
     if legacy_conversion.encoding == "unicode":
         return normalized
@@ -1465,6 +1492,8 @@ def normalize_for_pii_detection(
         stripped_combining_marks=normalized.stripped_combining_marks,
         folded_confusables=normalized.folded_confusables,
         folded_native_digits=normalized.folded_native_digits,
+        removed_bidi_controls=normalized.removed_bidi_controls,
+        folded_perso_arabic_letters=normalized.folded_perso_arabic_letters,
         indic_changes=normalized.indic_changes,
         indic_scripts=normalized.indic_scripts,
         converted_legacy_bytes=len(converted_sources),
@@ -1494,11 +1523,28 @@ def _source_span_for_legacy_range(
     return anchor, anchor
 
 
+def fold_perso_arabic_letters(text: str, lang: str | None = None) -> str:
+    """Fold declared keyboard variants for Persian/Urdu matching only.
+
+    This one-code-point-to-one-code-point fold never transliterates names or
+    changes rendered text. Arabic and all other language routes are unchanged.
+    """
+    code = str(lang or "").lower().replace("-", "_").split("_", 1)[0]
+    if code not in {"fa", "ur"}:
+        return text
+    table = {ord("ك"): "ک", ord("ي"): "ی", ord("ى"): "ی"}
+    if code == "ur":
+        table.update({ord("ه"): "ہ", ord("ھ"): "ہ"})
+    return text.translate(table)
+
+
 def _normalize_unicode_for_pii_detection(
     text: str,
     *,
     width_convention: str = "cjk",
     chinese_target_script: str | None = None,
+    lang: str | None = None,
+    preserve_script_letters: bool = False,
 ) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
@@ -1515,8 +1561,9 @@ def _normalize_unicode_for_pii_detection(
 
     # Local imports keep the lightweight script helpers from importing the
     # broader processing package during module initialization.
-    from ..processing.text import INDIC_SCRIPTS, IndicNormalizer, fold_indic_digits
+    from ..processing.text import INDIC_SCRIPTS, IndicNormalizer
     from ..processing.zh_normalize import normalize_chinese_variants, normalize_width
+    from .rtl_render import BIDI_CONTROL_CHARS
 
     scripts = tuple(sorted(_script_counts(text)))
     mixed_script = detect_mixed_script(text)
@@ -1530,7 +1577,7 @@ def _normalize_unicode_for_pii_detection(
 
     for run_start, run_end, script in segment_by_script(text):
         run = text[run_start:run_end]
-        if script in INDIC_SCRIPTS:
+        if script in INDIC_SCRIPTS and not preserve_script_letters:
             normalized = indic_normalizer.normalize_with_offsets(run, script=script)
             routed_chars.extend(normalized.text)
             routed_starts.extend(
@@ -1552,7 +1599,13 @@ def _normalize_unicode_for_pii_detection(
         routed_text,
         convention=width_convention,
     )
-    digit_folding = fold_indic_digits(width_normalization.text)
+    # Unicode decimal digits have a single-code-point ASCII representation.
+    # Do not fold superscripts or other numeric symbols into identifiers.
+    folded_digits = "".join(
+        str(unicodedata.decimal(char)) if char.isdecimal() else char
+        for char in width_normalization.text
+    )
+    folded_text = fold_perso_arabic_letters(folded_digits, lang)
     output: list[str] = []
     starts: list[int] = []
     ends: list[int] = []
@@ -1573,18 +1626,22 @@ def _normalize_unicode_for_pii_detection(
     folded_native_digit_sources = {
         routed_starts[width_normalization.char_origins[index][0]]
         for index, (width_char, folded_char) in enumerate(
-            zip(width_normalization.text, digit_folding.text)
+            zip(width_normalization.text, folded_digits)
         )
         if width_char != folded_char
     }
     cluster_starts, cluster_ends = _base_mark_cluster_maps(text)
 
-    for index, char in enumerate(digit_folding.text):
+    removed_bidi_controls = 0
+    for index, char in enumerate(folded_text):
         routed_start, routed_end = width_normalization.char_origins[index]
         original_start = routed_starts[routed_start]
         original_end = routed_ends[routed_end - 1]
         if char in ZERO_WIDTH_CHARS:
             removed_zero_width += 1
+            continue
+        if char in BIDI_CONTROL_CHARS:
+            removed_bidi_controls += 1
             continue
         category = unicodedata.category(char)
         attached_ethiopic_mark = (
@@ -1594,20 +1651,31 @@ def _normalize_unicode_for_pii_detection(
             and _script_for_char(text[original_start - 1]) == "Ethiopic"
         )
         attached_indic_mark = category == "Mn" and _is_attached_indic_mark(
-            digit_folding.text,
+            folded_text,
             index,
         )
-        if category == "Mn" and not attached_indic_mark and not attached_ethiopic_mark:
+        if (
+            category == "Mn"
+            and not attached_indic_mark
+            and not attached_ethiopic_mark
+            and not preserve_script_letters
+        ):
             stripped_combining_marks += 1
             continue
 
-        replacement = _fold_confusable_char(char)
+        replacement = char if preserve_script_letters else _fold_confusable_char(char)
         if replacement != char:
             changed_source_indices.add(original_start)
         for replacement_char in replacement:
             output.append(replacement_char)
-            starts.append(cluster_starts[original_start])
-            ends.append(cluster_ends[original_end - 1])
+            span_start = cluster_starts[original_start]
+            span_end = cluster_ends[original_end - 1]
+            while span_start > 0 and text[span_start - 1] in BIDI_CONTROL_CHARS:
+                span_start -= 1
+            while span_end < len(text) and text[span_end] in BIDI_CONTROL_CHARS:
+                span_end += 1
+            starts.append(span_start)
+            ends.append(span_end)
 
     normalized_text = "".join(output)
     chinese_variant_normalized = False
@@ -1648,6 +1716,10 @@ def _normalize_unicode_for_pii_detection(
         stripped_combining_marks=stripped_combining_marks,
         folded_confusables=len(changed_source_indices),
         folded_native_digits=len(folded_native_digit_sources),
+        removed_bidi_controls=removed_bidi_controls,
+        folded_perso_arabic_letters=sum(
+            a != b for a, b in zip(folded_digits, folded_text)
+        ),
         indic_changes=indic_changes,
         indic_scripts=tuple(indic_scripts),
         scripts=scripts,

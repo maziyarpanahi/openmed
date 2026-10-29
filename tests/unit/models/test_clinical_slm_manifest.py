@@ -279,29 +279,25 @@ def test_incomplete_and_unknown_license_manifests_fail_closed_without_values(
     assert str(package) not in str(license_error.value)
 
 
-@pytest.mark.parametrize(
-    ("field_name", "value", "code"),
-    [
+def test_mutable_or_unsafe_policy_metadata_is_rejected(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field_name, value, code in [
         ("revision", "main", "mutable_revision"),
         ("revision", "feature/branch", "mutable_revision"),
         ("offline", False, "offline_required"),
         ("human_review_required", False, "human_review_required"),
-    ],
-)
-def test_mutable_or_unsafe_policy_metadata_is_rejected(
-    tmp_path: Path,
-    field_name: str,
-    value,
-    code: str,
-) -> None:
-    _, manifest = _write_package(tmp_path)
-    payload = manifest.to_dict()
-    payload[field_name] = value
+    ]:
+        with subtests.test(field_name=field_name, value=value, code=code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _, manifest = _write_package(tmp_path)
+            payload = manifest.to_dict()
+            payload[field_name] = value
 
-    with pytest.raises(ClinicalSLMManifestError) as raised:
-        validate_clinical_slm_manifest(payload)
-    assert raised.value.code == code
-    assert "main" not in str(raised.value)
+            with pytest.raises(ClinicalSLMManifestError) as raised:
+                validate_clinical_slm_manifest(payload)
+            assert raised.value.code == code
+            assert "main" not in str(raised.value)
 
 
 def test_manifest_digest_is_required_on_disk_and_binds_metadata(tmp_path: Path) -> None:
@@ -396,3 +392,123 @@ def test_platform_without_secure_reads_can_parse_but_cannot_verify(
         verify_clinical_slm_package(package, manifest)
     assert caught.value.code == "component_unreadable"
     assert caught.value.__context__ is None
+
+
+def test_optional_runtime_metadata_keeps_existing_manifest_bytes(tmp_path):
+    _, manifest = _write_package(tmp_path)
+    # Captured from the unmodified v3.0 implementation and synthetic fixture.
+    assert (
+        manifest.manifest_digest
+        == "sha256:ff675c64c675624b9341d03a408bcb7b77a11cd3f042232f600ac7144f84ce6d"
+    )
+    assert "context_limits" not in manifest.to_dict()
+    assert "required_runtime_features" not in manifest.to_dict()
+    assert (
+        ClinicalSLMArtifactManifest.from_json(manifest.to_json()).to_json()
+        == manifest.to_json()
+    )
+
+
+def test_runtime_metadata_is_immutable_digest_bound_and_round_trips(tmp_path):
+    _, old = _write_package(tmp_path)
+    limits = {
+        "max_context_tokens": 4096,
+        "max_input_tokens": 3072,
+        "max_output_tokens": 1024,
+    }
+    manifest = replace(
+        old,
+        context_limits=limits,
+        required_runtime_features=("mlx",),
+        manifest_digest=None,
+    )
+    limits["max_context_tokens"] = 8192
+    assert manifest.context_limits["max_context_tokens"] == 4096
+    with pytest.raises(TypeError):
+        manifest.context_limits["max_context_tokens"] = 8192
+    assert manifest.manifest_digest != old.manifest_digest
+    assert (
+        ClinicalSLMArtifactManifest.from_json(manifest.to_json()).to_json()
+        == manifest.to_json()
+    )
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        replace(manifest, required_runtime_features=("cpu",))
+    assert caught.value.code == "manifest_digest_mismatch"
+
+
+def test_invalid_context_metadata_has_value_free_refusal(subtests, tmp_path):
+    case_root = tmp_path
+    for limits in [
+        {},
+        {"max_context_tokens": 4096},
+        {
+            "max_context_tokens": 4096,
+            "max_input_tokens": True,
+            "max_output_tokens": 1024,
+        },
+        {"max_context_tokens": 4096, "max_input_tokens": 4096, "max_output_tokens": 1},
+        {"max_context_tokens": 2**100, "max_input_tokens": 1, "max_output_tokens": 1},
+    ]:
+        with subtests.test(limits=limits):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            _, old = _write_package(tmp_path)
+            with pytest.raises(ClinicalSLMManifestError) as caught:
+                replace(old, context_limits=limits, manifest_digest=None)
+            assert caught.value.code == "invalid_context_limits"
+            assert caught.value.__context__ is None
+
+
+@requires_secure_reads
+def test_strict_package_inventory_rejects_extra_members(subtests, tmp_path):
+    case_root = tmp_path
+    for extra in ["extra.json", "nested/extra.json", "empty-directory"]:
+        with subtests.test(extra=extra):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            root, manifest = _write_package(tmp_path)
+            extra_path = root / extra
+            if extra == "empty-directory":
+                extra_path.mkdir()
+            else:
+                extra_path.parent.mkdir(parents=True, exist_ok=True)
+                extra_path.write_text("synthetic private payload")
+            with pytest.raises(ClinicalSLMManifestError) as caught:
+                verify_clinical_slm_package(
+                    root,
+                    expected_manifest_digest=manifest.manifest_digest,
+                    reject_undeclared_files=True,
+                )
+            assert caught.value.code == "undeclared_component"
+            assert str(root) not in str(caught.value)
+
+
+@requires_secure_reads
+def test_strict_inventory_and_trusted_pin_admit_nested_package(tmp_path):
+    root, manifest = _write_package(tmp_path)
+    result = verify_clinical_slm_package(
+        root,
+        expected_manifest_digest=manifest.manifest_digest,
+        reject_undeclared_files=True,
+    )
+    assert result.verified
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        verify_clinical_slm_package(
+            root, expected_manifest_digest="0" * 64, reject_undeclared_files=True
+        )
+    assert caught.value.code == "manifest_digest_mismatch"
+
+
+@requires_secure_reads
+def test_strict_verification_binds_persisted_manifest_with_supplied_object(tmp_path):
+    root, manifest = _write_package(tmp_path)
+    altered = replace(manifest, supported_tasks=("clinical-ner",), manifest_digest=None)
+    (root / CLINICAL_SLM_MANIFEST_FILENAME).write_text(altered.to_json())
+    with pytest.raises(ClinicalSLMManifestError) as caught:
+        verify_clinical_slm_package(
+            root,
+            manifest,
+            expected_manifest_digest=manifest.manifest_digest,
+            reject_undeclared_files=True,
+        )
+    assert caught.value.code == "manifest_digest_mismatch"

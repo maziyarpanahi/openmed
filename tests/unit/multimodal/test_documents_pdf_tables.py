@@ -159,7 +159,7 @@ def test_project_structured_span_uses_cell_and_caption_bboxes(fake_structured_pd
 
 
 def test_redact_document_exposes_structured_regions_and_boxes(
-    fake_structured_pdf, monkeypatch
+    fake_structured_pdf, monkeypatch, tmp_path
 ):
     monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
 
@@ -167,8 +167,10 @@ def test_redact_document_exposes_structured_regions_and_boxes(
         start = text.index("Synthetic", text.index("Name"))
         return {"entities": [{"start": start, "end": start + 9, "label": "PERSON"}]}
 
+    source = tmp_path / "synthetic_table.pdf"
+    source.write_bytes(b"synthetic bytes parsed by fake_structured_pdf")
     document = redact_document(
-        "synthetic_table.pdf",
+        source,
         models={"detector": detector},
     )
 

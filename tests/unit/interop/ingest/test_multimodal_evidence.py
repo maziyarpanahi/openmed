@@ -178,27 +178,26 @@ def test_crop_and_ocr_rescale_round_trip_property(
     assert restored == pytest.approx(source_box, abs=1e-9)
 
 
-@pytest.mark.parametrize(
-    ("degrees", "output_dimensions"),
-    ((90, (200, 100)), (180, (100, 200)), (270, (200, 100))),
-)
-def test_all_supported_page_rotations_round_trip(
-    degrees: int,
-    output_dimensions: tuple[int, int],
-) -> None:
-    step = CoordinateTransformStep(
-        operation="rotate_clockwise",
-        input_width=100,
-        input_height=200,
-        output_width=output_dimensions[0],
-        output_height=output_dimensions[1],
-        parameters={"degrees": degrees},
-    )
-    source_box = (10.0, 20.0, 40.0, 80.0)
+def test_all_supported_page_rotations_round_trip(subtests) -> None:
+    for degrees, output_dimensions in (
+        (90, (200, 100)),
+        (180, (100, 200)),
+        (270, (200, 100)),
+    ):
+        with subtests.test(degrees=degrees, output_dimensions=output_dimensions):
+            step = CoordinateTransformStep(
+                operation="rotate_clockwise",
+                input_width=100,
+                input_height=200,
+                output_width=output_dimensions[0],
+                output_height=output_dimensions[1],
+                parameters={"degrees": degrees},
+            )
+            source_box = (10.0, 20.0, 40.0, 80.0)
 
-    observed = step.forward_box(source_box)
+            observed = step.forward_box(source_box)
 
-    assert step.inverse_box(observed) == pytest.approx(source_box, abs=1e-9)
+            assert step.inverse_box(observed) == pytest.approx(source_box, abs=1e-9)
 
 
 def test_pdf_document_bridge_preserves_text_span_and_page_geometry(

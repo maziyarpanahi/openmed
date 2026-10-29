@@ -365,6 +365,36 @@ def wrap_mask(mask: str, direction: str = _AUTO) -> str:
     return f"{FSI}{mask}{PDI}"
 
 
+def strip_unbalanced_bidi_controls(text: str) -> str:
+    """Remove unmatched bidi openers/terminators after span replacement.
+
+    Balanced embedding and isolate pairs outside redacted spans are preserved.
+    Directional marks are not paired and remain untouched by this helper.
+    """
+    stack: list[tuple[int, str]] = []
+    isolates: list[int] = []
+    removed: set[int] = set()
+    for index, char in enumerate(text):
+        if char in "\u202a\u202b\u202d\u202e":
+            stack.append((index, "embedding"))
+        elif char in "\u2066\u2067\u2068":
+            isolates.append(len(stack))
+            stack.append((index, "isolate"))
+        elif char == "\u202c":
+            if stack and stack[-1][1] == "embedding":
+                stack.pop()
+            else:
+                removed.add(index)
+        elif char == "\u2069":
+            if not isolates:
+                removed.add(index)
+            else:
+                # PDI implicitly closes embeddings inside its isolate.
+                del stack[isolates.pop() :]
+    removed.update(index for index, _ in stack)
+    return "".join(char for index, char in enumerate(text) if index not in removed)
+
+
 def strip_bidi_controls(text: str) -> str:
     """Remove bidi isolate/embedding/override controls and directional marks.
 

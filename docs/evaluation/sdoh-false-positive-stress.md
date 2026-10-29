@@ -1,5 +1,8 @@
 # SDOH false-positive stress gate
 
+For recall, status and trigger-offset scoring, see the
+[SDOH extraction benchmark](sdoh-extraction.md).
+
 `openmed.eval.sdoh_false_positive_stress` measures patient-level SDOH false
 positives on repository-authored synthetic hard negatives. The matrix covers
 five Social History categories and seven patterns per category: screening,

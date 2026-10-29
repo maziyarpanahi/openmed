@@ -222,23 +222,25 @@ def test_rejects_source_index_traversal_and_wrong_size(tmp_path):
         inspect_maple_onnx_source(safe_source)
 
 
-@pytest.mark.parametrize(
-    ("target", "provider", "io_dtype"),
-    (("mobile", "cpu", "float32"), ("webgpu", "webgpu", "float16")),
-)
-def test_plans_unified_four_bit_export(
-    tmp_path, target: str, provider: str, io_dtype: str
-):
-    source = _write_fake_source(tmp_path / "source")
+def test_plans_unified_four_bit_export(subtests, tmp_path):
+    case_root = tmp_path
+    for target, provider, io_dtype in (
+        ("mobile", "cpu", "float32"),
+        ("webgpu", "webgpu", "float16"),
+    ):
+        with subtests.test(target=target, provider=provider, io_dtype=io_dtype):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source = _write_fake_source(tmp_path / "source")
 
-    plan = plan_maple_onnx_export(source, tmp_path / "output", target=target)
+            plan = plan_maple_onnx_export(source, tmp_path / "output", target=target)
 
-    assert plan.execution_provider == provider
-    assert plan.io_dtype == io_dtype
-    assert plan.graph_filename == MAPLE_ONNX_GRAPH_FILENAME
-    assert plan.quantization == MAPLE_ONNX_QUANTIZATION
-    assert plan.qmoe_block_size == MAPLE_QMOE_BLOCK_SIZE
-    assert plan.runtime_min_version == MAPLE_ONNX_RUNTIME_MIN_VERSION
+            assert plan.execution_provider == provider
+            assert plan.io_dtype == io_dtype
+            assert plan.graph_filename == MAPLE_ONNX_GRAPH_FILENAME
+            assert plan.quantization == MAPLE_ONNX_QUANTIZATION
+            assert plan.qmoe_block_size == MAPLE_QMOE_BLOCK_SIZE
+            assert plan.runtime_min_version == MAPLE_ONNX_RUNTIME_MIN_VERSION
 
 
 def test_refuses_to_plan_over_an_existing_export_directory(tmp_path):
@@ -260,7 +262,7 @@ def test_exposes_pinned_export_requirements_and_cli(capsys):
     assert main(["requirements"]) == 0
     output = capsys.readouterr().out
     assert "onnxruntime==1.25.1" in output
-    assert "torch==2.9.1" in output
+    assert "torch==2.13.0" in output
 
 
 def test_maple_builder_adapter_selects_alternating_rope_and_fused_qmoe():

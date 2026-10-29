@@ -24,6 +24,8 @@ from datetime import date, datetime
 from types import MappingProxyType
 from typing import Literal
 
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
+
 from .medication_sig import normalize_dose
 
 MEDICATION_RECONCILIATION_SCHEMA_VERSION = 1
@@ -139,8 +141,8 @@ def _coerce_date(value: object) -> date | None:
         return None
     try:
         if "T" in text or " " in text:
-            return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
-        return date.fromisoformat(text)
+            return parse_iso_datetime(text.replace("Z", "+00:00")).date()
+        return parse_iso_date(text)
     except ValueError:
         return None
 

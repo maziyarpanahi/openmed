@@ -24,6 +24,7 @@ from openmed.clinical.temporal_intervals import TemporalInterval
 from openmed.clinical.timeline.assembler import ClinicalEvent, ClinicalEventTimeline
 from openmed.clinical.timeline.timex import TimeExpr
 from openmed.core.audit import hash_text
+from openmed.core.iso_temporal import parse_iso_date, parse_iso_datetime
 
 BUCKETED_TIMELINE_SCHEMA_VERSION = 2
 BUCKETED_TIMELINE_ADVISORY = (
@@ -275,9 +276,9 @@ def _canonical_date(value: Any) -> str | None:
         raise ValueError("timeline time must be a normalized date")
     try:
         if "T" in candidate:
-            datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+            parse_iso_datetime(candidate.replace("Z", "+00:00"))
         elif len(candidate) == 10:
-            date.fromisoformat(candidate)
+            parse_iso_date(candidate)
         elif len(candidate) == 7:
             date(int(candidate[:4]), int(candidate[5:7]), 1)
         elif int(candidate) < 1:
@@ -354,7 +355,7 @@ def _sort_key(event: ClinicalEvent, lane: str) -> tuple[Any, ...]:
     if value is None:
         return 1, "", event.start, event.end, event.entity
     if "T" in value:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = parse_iso_datetime(value.replace("Z", "+00:00"))
         if parsed.tzinfo is not None:
             value = parsed.astimezone(timezone.utc).isoformat()
     return 0, value, event.start, event.end, event.entity
