@@ -107,25 +107,28 @@ def test_trusted_head_must_be_a_canonical_digest(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("mutation", ["delete", "reorder", "head"])
 def test_deletion_reordering_and_head_tampering_fail_verification(
-    tmp_path: Path,
-    mutation: str,
+    subtests, tmp_path
 ) -> None:
-    path = tmp_path / "eval-provenance.json"
-    _append(path, seed=7)
-    _append(path, seed=8)
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    case_root = tmp_path
+    for mutation in ["delete", "reorder", "head"]:
+        with subtests.test(mutation=mutation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "eval-provenance.json"
+            _append(path, seed=7)
+            _append(path, seed=8)
+            payload = json.loads(path.read_text(encoding="utf-8"))
 
-    if mutation == "delete":
-        payload["records"].pop()
-    elif mutation == "reorder":
-        payload["records"].reverse()
-    else:
-        payload["head_hash"] = _digest("f")
-    path.write_text(json.dumps(payload), encoding="utf-8")
+            if mutation == "delete":
+                payload["records"].pop()
+            elif mutation == "reorder":
+                payload["records"].reverse()
+            else:
+                payload["head_hash"] = _digest("f")
+            path.write_text(json.dumps(payload), encoding="utf-8")
 
-    assert verify_ledger(path) is False
+            assert verify_ledger(path) is False
 
 
 def test_identical_eval_results_have_matching_result_hashes(tmp_path: Path) -> None:
@@ -180,35 +183,33 @@ def test_raw_or_identifying_result_metadata_is_rejected(tmp_path: Path) -> None:
     assert not path.exists()
 
 
-@pytest.mark.parametrize(
-    "key",
-    [
+def test_result_metadata_rejects_keys_outside_the_v1_schema(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for key in [
         "patient_mrn_score",
         "mrn_12345678_score",
         "john_smith_score",
         "custom_metric",
-    ],
-)
-def test_result_metadata_rejects_keys_outside_the_v1_schema(
-    tmp_path: Path,
-    key: str,
-) -> None:
-    path = tmp_path / "eval-provenance.json"
+    ]:
+        with subtests.test(key=key):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "eval-provenance.json"
 
-    with pytest.raises(UnsafeResultMetadataError, match="v1 schema"):
-        append_eval_result(
-            path,
-            model_digest=_digest("a"),
-            suite_id="synthetic-pii",
-            suite_version="2.1.0",
-            code_hash="abc1234",
-            seed=7,
-            config_digest=_digest("b"),
-            env_fingerprint=_digest("c"),
-            result_metadata={key: 0.99},
-        )
+            with pytest.raises(UnsafeResultMetadataError, match="v1 schema"):
+                append_eval_result(
+                    path,
+                    model_digest=_digest("a"),
+                    suite_id="synthetic-pii",
+                    suite_version="2.1.0",
+                    code_hash="abc1234",
+                    seed=7,
+                    config_digest=_digest("b"),
+                    env_fingerprint=_digest("c"),
+                    result_metadata={key: 0.99},
+                )
 
-    assert not path.exists()
+            assert not path.exists()
 
 
 def test_ledger_persists_only_digests_and_aggregate_metadata(tmp_path: Path) -> None:
