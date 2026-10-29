@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Report independent synthetic fidelity axes, Wilson intervals and aggregate
   reference distribution comparisons without retaining reference records (#2852).
 
+- Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 
