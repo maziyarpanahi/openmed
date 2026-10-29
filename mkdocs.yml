@@ -369,6 +369,7 @@ nav:
       - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
       - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
       - Synthetic FHIR Records: training/synthetic/fhir-records.md
+      - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
