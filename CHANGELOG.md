@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
 
+- Add deterministic synthetic dataset partitions that preserve shared trajectory,
+  derivation lineage and transitive ancestry, with explicit unmet-stratum export
+  refusal (#3692).
+
+- Report independent synthetic fidelity axes, Wilson intervals and aggregate
+  reference distribution comparisons without retaining reference records (#2852).
+
+- Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
+
+- Validate synthetic artifact facts, times, labels and coordinates against shared Journey truth (#3694).
+
+- Gate multilingual corpus shard uses on declared license, consent, translation lineage and restricted user-supplied custody (#2869).
+
+- Package controlled synthetic recipes and evidence into canonical offline-verifiable release capsules (#2854).
+
 - Add clinical transliteration provenance with bounded offline contracts, synthetic controls
   and documented behavior (#2857).
 
