@@ -209,6 +209,7 @@ def test_missing_rscript_and_sdcmicro_fail_closed(monkeypatch, accepted_license)
         )
 
 
+@pytest.mark.slow
 def test_import_openmed_core_never_imports_sdcmicro_bridge_or_rpy2():
     code = """
 import json

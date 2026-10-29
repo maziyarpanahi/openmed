@@ -100,29 +100,33 @@ def test_explicit_output_path_receives_exact_snapshot(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8") == _inventory().to_markdown()
 
 
-@pytest.mark.parametrize(
-    "forbidden_field",
-    ["endpoint", "credential", "arguments", "example", "clinical_data"],
-)
-def test_content_bearing_registry_fields_never_enter_output(
-    forbidden_field: str,
-    tmp_path: Path,
-) -> None:
-    sentinel = "Synthetic Patient at https://private.example.test token-secret"
-    payload = _inventory().to_dict()
-    payload["tools"][0][forbidden_field] = sentinel
-    inventory_path = tmp_path / "inventory.json"
-    inventory_path.write_text(json.dumps(payload), encoding="utf-8")
+def test_content_bearing_registry_fields_never_enter_output(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for forbidden_field in [
+        "endpoint",
+        "credential",
+        "arguments",
+        "example",
+        "clinical_data",
+    ]:
+        with subtests.test(forbidden_field=forbidden_field):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            sentinel = "Synthetic Patient at https://private.example.test token-secret"
+            payload = _inventory().to_dict()
+            payload["tools"][0][forbidden_field] = sentinel
+            inventory_path = tmp_path / "inventory.json"
+            inventory_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    result = CliRunner().invoke(
-        typer_app.build_app(),
-        ["agents", "tools", "--inventory", str(inventory_path)],
-    )
+            result = CliRunner().invoke(
+                typer_app.build_app(),
+                ["agents", "tools", "--inventory", str(inventory_path)],
+            )
 
-    assert result.exit_code == 1
-    assert result.stdout == ""
-    assert "tools: unreadable_records" in result.stderr
-    assert sentinel not in result.output
+            assert result.exit_code == 1
+            assert result.stdout == ""
+            assert "tools: unreadable_records" in result.stderr
+            assert sentinel not in result.output
 
 
 def test_inventory_command_is_offline_and_provider_independent(

@@ -37,17 +37,15 @@ def test_release_policy_accepts_unicode_spaces_and_commas() -> None:
     assert result.policy.to_dict()["quasi_identifiers"] == ["Patient Age"]
 
 
-@pytest.mark.parametrize(
-    "column",
-    (
+def test_release_policy_rejects_ambiguous_or_controlled_names(subtests) -> None:
+    for column in (
         " leading",
         "trailing ",
         "line\nbreak",
         "zero\u200bwidth",
         "line\u2028separator",
         "paragraph\u2029separator",
-    ),
-)
-def test_release_policy_rejects_ambiguous_or_controlled_names(column: str) -> None:
-    with pytest.raises(ValueError, match="column names"):
-        AnonymityPolicy(quasi_identifiers=(column,), target_k=1)
+    ):
+        with subtests.test(column=column):
+            with pytest.raises(ValueError, match="column names"):
+                AnonymityPolicy(quasi_identifiers=(column,), target_k=1)

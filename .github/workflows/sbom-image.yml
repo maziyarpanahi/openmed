@@ -17,6 +17,10 @@ env:
   IMAGE_SBOM_FILE: image-sbom.cdx.json
   IMAGE_SBOM_DIGEST_FILE: image-sbom.cdx.json.sha256
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   image-sbom:
     runs-on: ubuntu-latest
