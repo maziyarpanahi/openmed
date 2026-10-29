@@ -423,6 +423,7 @@ classification:
     - training/synthetic/release-capsules.md
     - training/synthetic/dataset-recipes.md
     - training/synthetic/lab-time-series.md
+    - training/synthetic/medication-courses.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
