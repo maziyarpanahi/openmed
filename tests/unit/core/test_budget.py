@@ -79,33 +79,29 @@ def test_budget_types_are_exported_from_public_namespaces():
     assert core.BudgetExceededError is BudgetExceededError
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_request_budget_rejects_non_positive_limits(subtests):
+    for kwargs in [
         {"max_wall_time": 0},
         {"max_wall_time": -1.0},
         {"max_wall_time": float("inf")},
         {"max_wall_time": float("nan")},
         {"max_input_chars": 0},
         {"max_input_chars": -5},
-    ],
-)
-def test_request_budget_rejects_non_positive_limits(kwargs):
-    with pytest.raises(ValueError):
-        RequestBudget(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ValueError):
+                RequestBudget(**kwargs)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_request_budget_rejects_wrong_types(subtests):
+    for kwargs in [
         {"max_input_chars": True},  # bool is not a valid int limit
         {"max_wall_time": "1.0"},
         {"max_input_chars": 1.5},
-    ],
-)
-def test_request_budget_rejects_wrong_types(kwargs):
-    with pytest.raises(TypeError):
-        RequestBudget(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(TypeError):
+                RequestBudget(**kwargs)
 
 
 def test_coerce_budget_normalizes_unlimited_to_none():

@@ -149,6 +149,7 @@ def test_onnx_backend_requests_int8_cpu_session():
     assert kwargs["session_options"].inter_op_num_threads == 1
 
 
+@pytest.mark.slow
 def test_low_resource_backend_selection_never_imports_torch_subprocess():
     script = """
 import importlib.abc
