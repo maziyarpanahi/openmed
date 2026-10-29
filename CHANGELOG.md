@@ -19,6 +19,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add independent-source cross-lingual pseudo-label consensus with explicit
   adjudication for conflicting or overlapping projections (#2862).
 
+- Add language coverage diffs with bounded offline contracts, synthetic controls
+  and documented behavior (#3101).
+
+- Add clinical language readiness with bounded offline contracts, synthetic controls
+  and documented behavior (#2855).
+
+- Audit synthetic script tokenization fragmentation, unknown-token rates,
+  grapheme splits and offset recovery against pinned local limits (#2856).
+
+- Stratify language uncertainty and minimum-detectable-effect planning without ranking underpowered slices (#2865).
+
+- Gate paired multilingual checkpoint changes against every declared last-green language/label cell (#2870).
+
 - Added versioned, offline JSON Schemas for the synthetic training records the
   package already emits (`locale_phi_example`, `burned_in_annotation`,
   `social_history_example`, `section_label_record`,
