@@ -84,25 +84,20 @@ def test_deid_audit_writes_report_and_prints_path(
     assert calls["keep_mapping"] is True
 
 
-@pytest.mark.parametrize(
-    ("argv", "message"),
-    [
+def test_deid_rejects_unknown_policy_or_method(subtests, capsys) -> None:
+    for argv, message in [
         (["deid", "--policy", "not_a_policy"], "unknown policy"),
         (["deid", "--method", "not_a_method"], "invalid choice"),
-    ],
-)
-def test_deid_rejects_unknown_policy_or_method(
-    argv: list[str],
-    message: str,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with pytest.raises(SystemExit) as exc_info:
-        main_module.main(argv)
+    ]:
+        with subtests.test(argv=argv, message=message):
+            capsys.readouterr()
+            with pytest.raises(SystemExit) as exc_info:
+                main_module.main(argv)
 
-    captured = capsys.readouterr()
+            captured = capsys.readouterr()
 
-    assert exc_info.value.code == 2
-    assert message in captured.err
+            assert exc_info.value.code == 2
+            assert message in captured.err
 
 
 def test_deid_run_does_not_emit_raw_phi_to_logs(

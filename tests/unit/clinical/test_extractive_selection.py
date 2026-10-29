@@ -46,26 +46,27 @@ def select(text, evidence, cap=160, policies=(MANDATORY, OPTIONAL), demands=None
     )
 
 
-@pytest.mark.parametrize(
-    "late", ["Start synthetic medication.", "A new finding is present."]
-)
-def test_required_fact_after_third_sentence_preserves_offsets_and_order(late):
-    text = "Admission occurred. No fever. Improved. " + late
-    evidence = (fact(text, "No fever.", 1), fact(text, late, 2))
-    selected = select(text, evidence)
-    assert selected.status == "selected"
-    assert selected.summary == "No fever. " + late
-    audit = selected.to_dict()
-    assert audit["coverage"]["recall"] == 1
-    assert audit["omission_budget"]["passed"]
-    for citation in audit["citations"]:
-        assert (
-            text[citation["source_start"] : citation["source_end"]]
-            == selected.summary[citation["output_start"] : citation["output_end"]]
-        )
-    assert late not in json.dumps(audit)
-    assert late not in repr(selected)
-    assert ExtractiveSummarizerBackend().summarize(text).endswith("Improved.")
+def test_required_fact_after_third_sentence_preserves_offsets_and_order(subtests):
+    for late in ["Start synthetic medication.", "A new finding is present."]:
+        with subtests.test(late=late):
+            text = "Admission occurred. No fever. Improved. " + late
+            evidence = (fact(text, "No fever.", 1), fact(text, late, 2))
+            selected = select(text, evidence)
+            assert selected.status == "selected"
+            assert selected.summary == "No fever. " + late
+            audit = selected.to_dict()
+            assert audit["coverage"]["recall"] == 1
+            assert audit["omission_budget"]["passed"]
+            for citation in audit["citations"]:
+                assert (
+                    text[citation["source_start"] : citation["source_end"]]
+                    == selected.summary[
+                        citation["output_start"] : citation["output_end"]
+                    ]
+                )
+            assert late not in json.dumps(audit)
+            assert late not in repr(selected)
+            assert ExtractiveSummarizerBackend().summarize(text).endswith("Improved.")
 
 
 def test_duplicates_and_alternate_ids_cannot_inflate_coverage():

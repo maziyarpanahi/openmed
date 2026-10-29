@@ -2303,25 +2303,26 @@ def test_bengali_golden_fixtures_pass_offline_zero_leakage_gate():
     assert gate.passed is True
 
 
-@pytest.mark.parametrize("digits", ["1207", "১২৩৪", "700001", "৭০০০০১"])
-def test_bengali_standalone_postcodes_remain_detectable(digits):
-    from openmed.core.pii import _apply_safety_sweep_to_result
-    from openmed.processing.outputs import PredictionResult
+def test_bengali_standalone_postcodes_remain_detectable(subtests):
+    for digits in ["1207", "১২৩৪", "700001", "৭০০০০১"]:
+        with subtests.test(digits=digits):
+            from openmed.core.pii import _apply_safety_sweep_to_result
+            from openmed.processing.outputs import PredictionResult
 
-    text = f"পোস্টকোড {digits}।"
-    empty = PredictionResult(
-        text=text,
-        entities=[],
-        model_name="offline",
-        timestamp="2026-09-28T00:00:00Z",
-        metadata={},
-    )
-    result, _ = _apply_safety_sweep_to_result(text, empty, lang="bn")
-    assert any(
-        text[entity.start : entity.end] == digits
-        and normalize_label(entity.label, "bn") == "ZIPCODE"
-        for entity in result.entities
-    )
+            text = f"পোস্টকোড {digits}।"
+            empty = PredictionResult(
+                text=text,
+                entities=[],
+                model_name="offline",
+                timestamp="2026-09-28T00:00:00Z",
+                metadata={},
+            )
+            result, _ = _apply_safety_sweep_to_result(text, empty, lang="bn")
+            assert any(
+                text[entity.start : entity.end] == digits
+                and normalize_label(entity.label, "bn") == "ZIPCODE"
+                for entity in result.entities
+            )
 
 
 def test_punjabi_i18n_fixtures_are_grapheme_safe_and_validator_equivalent():
@@ -2475,34 +2476,31 @@ def test_punjabi_pack_export_resolves():
     assert providers.PUNJABI_LANGUAGE_PACK.code == "pa"
 
 
-@pytest.mark.parametrize("separator", ["  ", "\t", "\u00a0", " \t "])
-def test_punjabi_name_offsets_survive_horizontal_spacing(separator):
-    name = "ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ"
-    text = f"ਮਰੀਜ਼ ਸ.{separator}{name}."
-    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["pa"])
-    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
-        name
-    ]
+def test_punjabi_name_offsets_survive_horizontal_spacing(subtests):
+    for separator in ["  ", "\t", "\u00a0", " \t "]:
+        with subtests.test(separator=separator):
+            name = "ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ"
+            text = f"ਮਰੀਜ਼ ਸ.{separator}{name}."
+            units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["pa"])
+            assert [
+                text[start:end] for start, end, kind, *_ in units if kind == "name"
+            ] == [name]
 
 
-@pytest.mark.parametrize(
-    "source,suffix",
-    [
+def test_punjabi_name_surrogates_are_distinct_consistent_and_keep_suffix(subtests):
+    for source, suffix in [
         ("ਜੱਸਪ੍ਰੀਤ ਸਿੰਘ", "ਸਿੰਘ"),
         ("ਗੁਰਲੀਨ ਕੌਰ", "ਕੌਰ"),
-    ],
-)
-def test_punjabi_name_surrogates_are_distinct_consistent_and_keep_suffix(
-    source, suffix
-):
-    from openmed.core.anonymizer import Anonymizer
+    ]:
+        with subtests.test(source=source, suffix=suffix):
+            from openmed.core.anonymizer import Anonymizer
 
-    anonymizer = Anonymizer(lang="pa", consistent=True, seed=1517)
-    result = anonymizer.surrogate(source, "name")
-    assert result != source
-    assert result.endswith(" " + suffix)
-    assert result == anonymizer.surrogate(source, "name")
-    assert source.split()[0] not in result
+            anonymizer = Anonymizer(lang="pa", consistent=True, seed=1517)
+            result = anonymizer.surrogate(source, "name")
+            assert result != source
+            assert result.endswith(" " + suffix)
+            assert result == anonymizer.surrogate(source, "name")
+            assert source.split()[0] not in result
 
 
 def test_urdu_i18n_fixtures_are_grapheme_safe_and_digit_equivalent():
@@ -2691,14 +2689,15 @@ def test_urdu_fixtures_pass_zero_leakage_release_gate_offline():
     assert gate.details["evaluated"] == {"ur": 0.0}
 
 
-@pytest.mark.parametrize("separator", ["\u00a0", " \u00a0 "])
-def test_urdu_name_nonbreaking_spacing_preserves_source_offsets(separator):
-    name = f"جناب{separator}عارف خان"
-    text = f"مریض {name}،"
-    units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["ur"])
-    assert [text[start:end] for start, end, kind, *_ in units if kind == "name"] == [
-        name
-    ]
+def test_urdu_name_nonbreaking_spacing_preserves_source_offsets(subtests):
+    for separator in ["\u00a0", " \u00a0 "]:
+        with subtests.test(separator=separator):
+            name = f"جناب{separator}عارف خان"
+            text = f"مریض {name}،"
+            units = find_semantic_units(text, LANGUAGE_PII_PATTERNS["ur"])
+            assert [
+                text[start:end] for start, end, kind, *_ in units if kind == "name"
+            ] == [name]
 
 
 def test_urdu_pack_does_not_claim_trained_model_coverage():

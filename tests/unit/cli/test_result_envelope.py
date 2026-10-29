@@ -235,30 +235,28 @@ def test_file_fingerprint_rejects_a_swapped_path_stat(
     assert "replacement" not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_invalid_values_are_rejected_without_echoing_them(subtests) -> None:
+    for field, value in [
         ("status", "unknown"),
         ("category", "operator note"),
         ("counters", {"processed": -1}),
         ("counters", {"free text": 1}),
         ("remediation_codes", ["unbounded instruction"]),
-    ],
-)
-def test_invalid_values_are_rejected_without_echoing_them(field, value) -> None:
-    kwargs = {
-        "status": ResultStatus.FAILURE,
-        "category": ResultCategory.RUNTIME,
-        "counters": {},
-        "artifacts": (),
-        "remediation_codes": (),
-    }
-    kwargs[field] = value
+    ]:
+        with subtests.test(field=field, value=value):
+            kwargs = {
+                "status": ResultStatus.FAILURE,
+                "category": ResultCategory.RUNTIME,
+                "counters": {},
+                "artifacts": (),
+                "remediation_codes": (),
+            }
+            kwargs[field] = value
 
-    with pytest.raises(ResultEnvelopeError) as raised:
-        ResultEnvelope(**kwargs)
+            with pytest.raises(ResultEnvelopeError) as raised:
+                ResultEnvelope(**kwargs)
 
-    assert str(value) not in str(raised.value)
+            assert str(value) not in str(raised.value)
 
 
 def test_free_text_wire_fields_are_rejected() -> None:
@@ -360,9 +358,8 @@ def test_iterator_failures_are_contained_without_echoing_values() -> None:
     assert "synthetic sensitive counter value" not in str(raised.value)
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_collection_limits_are_enforced_before_normalization(subtests) -> None:
+    for kwargs in [
         {"counters": itertools.repeat(("processed", 1), MAX_COUNTERS + 1)},
         {
             "artifacts": itertools.repeat(
@@ -370,13 +367,10 @@ def test_iterator_failures_are_contained_without_echoing_values() -> None:
                 MAX_ARTIFACTS + 1,
             )
         },
-    ],
-)
-def test_collection_limits_are_enforced_before_normalization(
-    kwargs: dict[str, Any],
-) -> None:
-    with pytest.raises(ResultEnvelopeError):
-        create_success_envelope(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ResultEnvelopeError):
+                create_success_envelope(**kwargs)
 
 
 def test_serializer_rejects_subclasses_without_dispatching_overrides() -> None:

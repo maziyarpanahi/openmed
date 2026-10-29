@@ -43,11 +43,12 @@ def test_fixture_rows_are_synthetic():
     assert all(row["metadata"]["synthetic"] is True for row in rows)
 
 
-@pytest.mark.parametrize("row", _load_fixture())
-def test_parser_matches_gold_row(row):
-    parsed = parse_tnm(row["text"])
-    for field in STAGE_FIELDS:
-        assert parsed[field] == row["gold"].get(field), field
+def test_parser_matches_gold_row(subtests):
+    for row in _load_fixture():
+        with subtests.test(row=row):
+            parsed = parse_tnm(row["text"])
+            for field in STAGE_FIELDS:
+                assert parsed[field] == row["gold"].get(field), field
 
 
 # ---------------------------------------------------------------------------
@@ -55,22 +56,20 @@ def test_parser_matches_gold_row(row):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("text", "basis"),
-    [
+def test_each_staging_basis_prefix_is_recognized(subtests):
+    for text, basis in [
         ("cT2 N0 M0", "c"),
         ("pT2 N0 M0", "p"),
         ("ycT2 N0 M0", "yc"),
         ("ypT2 N0 M0", "yp"),
         ("rT2 N0 M0", "r"),
         ("aT2 N0 M0", "a"),
-    ],
-)
-def test_each_staging_basis_prefix_is_recognized(text, basis):
-    parsed = parse_tnm(text)
-    assert parsed["staging_basis"] == basis
-    assert parsed["t_category"] == "T2"
-    assert parsed["confidence"] == "high"
+    ]:
+        with subtests.test(text=text, basis=basis):
+            parsed = parse_tnm(text)
+            assert parsed["staging_basis"] == basis
+            assert parsed["t_category"] == "T2"
+            assert parsed["confidence"] == "high"
 
 
 def test_no_prefix_yields_no_basis():

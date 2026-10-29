@@ -107,36 +107,33 @@ def test_fixture_serialization_is_metadata_only_and_stable() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    ("mutation", "error_code"),
-    [
+def test_invalid_cases_fail_with_phi_safe_errors(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for mutation, error_code in [
         ({"unexpected": "sentinel"}, "unknown_field"),
         ({"trace_digest": "sha256:not-a-digest"}, "invalid_digest"),
         ({"expected_outcome": "undeclared"}, "invalid_expected_outcome"),
         ({"expected_reason_code": "undeclared"}, "invalid_expected_outcome"),
-    ],
-)
-def test_invalid_cases_fail_with_phi_safe_errors(
-    tmp_path: Path,
-    mutation: dict[str, object],
-    error_code: str,
-) -> None:
-    sentinel = "Patient Example chart text bearer-secret tool-argument"
-    payload = _valid_payload()
-    payload.update(mutation)
-    if "unexpected" in payload:
-        payload["unexpected"] = sentinel
+    ]:
+        with subtests.test(mutation=mutation, error_code=error_code):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            sentinel = "Patient Example chart text bearer-secret tool-argument"
+            payload = _valid_payload()
+            payload.update(mutation)
+            if "unexpected" in payload:
+                payload["unexpected"] = sentinel
 
-    with pytest.raises(AgentTraceFixtureError) as caught:
-        load_governed_agent_trace_fixtures(
-            _write_jsonl(tmp_path / "invalid.jsonl", payload)
-        )
+            with pytest.raises(AgentTraceFixtureError) as caught:
+                load_governed_agent_trace_fixtures(
+                    _write_jsonl(tmp_path / "invalid.jsonl", payload)
+                )
 
-    rendered = "".join(traceback.format_exception(caught.value))
-    assert caught.value.code == error_code
-    assert sentinel not in rendered
-    assert caught.value.__cause__ is None
-    assert caught.value.__context__ is None
+            rendered = "".join(traceback.format_exception(caught.value))
+            assert caught.value.code == error_code
+            assert sentinel not in rendered
+            assert caught.value.__cause__ is None
+            assert caught.value.__context__ is None
 
 
 def test_duplicate_case_ids_are_rejected(tmp_path: Path) -> None:
