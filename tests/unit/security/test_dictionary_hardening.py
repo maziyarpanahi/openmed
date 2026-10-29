@@ -159,9 +159,8 @@ def test_blank_and_comment_records_consume_the_record_budget(tmp_path: Path) -> 
     assert exc_info.value.observed_count == 3
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
+def test_dictionary_limits_are_lower_only(subtests) -> None:
+    for name, value in [
         ("max_compressed_bytes", 16 * 1024 * 1024 + 1),
         ("max_decompressed_bytes", 64 * 1024 * 1024 + 1),
         ("max_entries", 100_001),
@@ -170,47 +169,41 @@ def test_blank_and_comment_records_consume_the_record_budget(tmp_path: Path) -> 
         ("max_term_characters", 257),
         ("max_expansion_ratio", 100.01),
         ("max_expansion_ratio", float("nan")),
-    ],
-)
-def test_dictionary_limits_are_lower_only(name: str, value: int | float) -> None:
-    with pytest.raises(ValueError):
-        DictionaryLimits(**{name: value})
+    ]:
+        with subtests.test(name=name, value=value):
+            with pytest.raises(ValueError):
+                DictionaryLimits(**{name: value})
 
 
-@pytest.mark.parametrize(
-    ("name", "value"),
-    [
+def test_dictionary_limit_types_fail_closed(subtests) -> None:
+    for name, value in [
         ("max_entries", True),
         ("max_entry_bytes", 1.5),
         ("max_expansion_ratio", "10"),
-    ],
-)
-def test_dictionary_limit_types_fail_closed(name: str, value: object) -> None:
-    with pytest.raises(TypeError):
-        DictionaryLimits(**{name: value})
+    ]:
+        with subtests.test(name=name, value=value):
+            with pytest.raises(TypeError):
+                DictionaryLimits(**{name: value})
 
 
-@pytest.mark.parametrize(
-    ("entry", "rule"),
-    [
+def test_dangerous_user_entries_name_the_rejected_rule(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for entry, rule in [
         ("(a+)+$ 10 n", "executable_regex_construct"),
         ("patient\x00alias 10 n", "control_character"),
-    ],
-)
-def test_dangerous_user_entries_name_the_rejected_rule(
-    tmp_path: Path,
-    entry: str,
-    rule: str,
-) -> None:
-    path = tmp_path / "terms.txt"
-    path.write_text(f"{entry}\n", encoding="utf-8")
+    ]:
+        with subtests.test(entry=entry, rule=rule):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "terms.txt"
+            path.write_text(f"{entry}\n", encoding="utf-8")
 
-    with pytest.raises(DictionaryEntryValidationError) as exc_info:
-        load_user_dictionary(path)
+            with pytest.raises(DictionaryEntryValidationError) as exc_info:
+                load_user_dictionary(path)
 
-    assert exc_info.value.rule == rule
-    assert rule in str(exc_info.value)
-    assert entry not in str(exc_info.value)
+            assert exc_info.value.rule == rule
+            assert rule in str(exc_info.value)
+            assert entry not in str(exc_info.value)
 
 
 def test_rejection_logs_only_phi_safe_file_metadata(
@@ -277,6 +270,7 @@ def test_dictionary_parser_fuzz_target_is_fail_closed(
         assert not any(char in r".^$*+?{}[]\|()" for char in entry.term)
 
 
+@pytest.mark.slow
 @pytest.mark.fuzz
 @pytest.mark.timeout(30)
 @settings(max_examples=FUZZ_EXAMPLES, deadline=None, derandomize=True)

@@ -132,9 +132,10 @@ def _national_id_validators(lang):
 
 
 class TestLocaleResolution:
-    @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
-    def test_every_supported_language_has_locale_entry(self, lang):
-        assert lang in LANG_TO_LOCALE, f"{lang!r} missing LANG_TO_LOCALE entry"
+    def test_every_supported_language_has_locale_entry(self, subtests):
+        for lang in sorted(REPORT_LANGUAGES):
+            with subtests.test(lang=lang):
+                assert lang in LANG_TO_LOCALE, f"{lang!r} missing LANG_TO_LOCALE entry"
 
     @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
     def test_resolved_locale_exists_in_faker(self, lang):
@@ -484,13 +485,16 @@ class TestLocaleResolution:
         assert code_mixed != "K. S. Ravi"
         assert validate_aadhaar(aadhaar)
 
-    @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
-    def test_conceptual_locale_resolves_to_installed_backend(self, locale):
-        language = CONCEPTUAL_LOCALE_LANGUAGES[locale]
+    def test_conceptual_locale_resolves_to_installed_backend(self, subtests):
+        for locale in sorted(CONCEPTUAL_BACKENDS):
+            with subtests.test(locale=locale):
+                language = CONCEPTUAL_LOCALE_LANGUAGES[locale]
 
-        assert resolve_locale(language, locale) == locale
-        assert resolve_faker_backend_locale(locale) == CONCEPTUAL_BACKENDS[locale]
-        assert CONCEPTUAL_BACKENDS[locale] in AVAILABLE_LOCALES
+                assert resolve_locale(language, locale) == locale
+                assert (
+                    resolve_faker_backend_locale(locale) == CONCEPTUAL_BACKENDS[locale]
+                )
+                assert CONCEPTUAL_BACKENDS[locale] in AVAILABLE_LOCALES
 
 
 class TestNationalIdRoundTrip:
@@ -534,29 +538,23 @@ class TestNationalIdRoundTrip:
                 f"{[v.__name__ for v in validators]}"
             )
 
-    @pytest.mark.parametrize(
-        ("lang", "locale", "id_type", "method"),
-        [
+    def test_regional_national_id_surrogates_round_trip(self, subtests):
+        for lang, locale, id_type, method in [
             ("nl", "nl_BE", "rrn", "belgian_rrn"),
             ("de", "de_CH", "ahv", "swiss_ahv"),
-        ],
-    )
-    def test_regional_national_id_surrogates_round_trip(
-        self,
-        lang,
-        locale,
-        id_type,
-        method,
-    ):
-        spec = get_national_id(locale, id_type)
-        assert spec is not None
-        assert spec.faker_method == method
-        assert _LOCALE_ID_METHODS[locale] == method
+        ]:
+            with subtests.test(
+                lang=lang, locale=locale, id_type=id_type, method=method
+            ):
+                spec = get_national_id(locale, id_type)
+                assert spec is not None
+                assert spec.faker_method == method
+                assert _LOCALE_ID_METHODS[locale] == method
 
-        anon = Anonymizer(lang=lang, consistent=True, seed=42)
-        surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
+                anon = Anonymizer(lang=lang, consistent=True, seed=42)
+                surrogate = anon.surrogate("synthetic-id", "national_id", locale=locale)
 
-        assert spec.validate(surrogate)
+                assert spec.validate(surrogate)
 
 
 class TestApproximateLocaleWarnings:
@@ -694,19 +692,22 @@ class TestLocaleCoherenceReport:
 
 
 class TestAfricanFrenchPortugueseSurrogates:
-    @pytest.mark.parametrize("locale", sorted(CONCEPTUAL_BACKENDS))
-    def test_curated_name_location_address_and_phone_surrogates(self, locale):
-        lang = CONCEPTUAL_LOCALE_LANGUAGES[locale]
-        anonymizer = Anonymizer(lang=lang, locale=locale, consistent=True, seed=866)
+    def test_curated_name_location_address_and_phone_surrogates(self, subtests):
+        for locale in sorted(CONCEPTUAL_BACKENDS):
+            with subtests.test(locale=locale):
+                lang = CONCEPTUAL_LOCALE_LANGUAGES[locale]
+                anonymizer = Anonymizer(
+                    lang=lang, locale=locale, consistent=True, seed=866
+                )
 
-        for label, key in (
-            ("NAME", "NAME"),
-            ("LOCATION", "LOCATION"),
-            ("STREET_ADDRESS", "STREET_ADDRESS"),
-            ("PHONE", "PHONE"),
-        ):
-            surrogate = anonymizer.surrogate(f"source-{key}", label)
-            assert surrogate in LOCALE_FAKE_DATA[locale][key]
+                for label, key in (
+                    ("NAME", "NAME"),
+                    ("LOCATION", "LOCATION"),
+                    ("STREET_ADDRESS", "STREET_ADDRESS"),
+                    ("PHONE", "PHONE"),
+                ):
+                    surrogate = anonymizer.surrogate(f"source-{key}", label)
+                    assert surrogate in LOCALE_FAKE_DATA[locale][key]
 
     def test_default_french_and_portuguese_outputs_are_unchanged(self):
         expected = {
@@ -736,9 +737,8 @@ class TestAfricanFrenchPortugueseSurrogates:
                 label: anonymizer.surrogate(originals[label], label) for label in values
             } == values
 
-    @pytest.mark.parametrize(
-        ("lang", "locale", "text", "model_entities", "sweep_values"),
-        [
+    def test_synthetic_clinical_fixtures_have_zero_leakage(self, subtests):
+        for lang, locale, text, model_entities, sweep_values in [
             (
                 "fr",
                 "fr_SN",
@@ -761,90 +761,91 @@ class TestAfricanFrenchPortugueseSurrogates:
                 ),
                 ("+258 84 123 4567",),
             ),
-        ],
-    )
-    def test_synthetic_clinical_fixtures_have_zero_leakage(
-        self,
-        lang,
-        locale,
-        text,
-        model_entities,
-        sweep_values,
-    ):
-        from openmed.core.pii import (
-            _apply_safety_sweep_to_result,
-            _build_deidentification_result,
-        )
-        from openmed.processing.outputs import EntityPrediction, PredictionResult
-
-        entities = []
-        for surface, label in model_entities:
-            start = text.index(surface)
-            entities.append(
-                EntityPrediction(
-                    text=surface,
-                    label=label,
-                    start=start,
-                    end=start + len(surface),
-                    confidence=0.99,
+        ]:
+            with subtests.test(
+                lang=lang,
+                locale=locale,
+                text=text,
+                model_entities=model_entities,
+                sweep_values=sweep_values,
+            ):
+                from openmed.core.pii import (
+                    _apply_safety_sweep_to_result,
+                    _build_deidentification_result,
                 )
-            )
-        prediction = PredictionResult(
-            text=text,
-            entities=entities,
-            model_name="synthetic-fixture",
-            timestamp="2026-07-18T00:00:00Z",
-            metadata={"synthetic": True},
-        )
+                from openmed.processing.outputs import (
+                    EntityPrediction,
+                    PredictionResult,
+                )
 
-        swept, added_count = _apply_safety_sweep_to_result(
-            text,
-            prediction,
-            lang=lang,
-            locale=locale,
-        )
-        result = _build_deidentification_result(
-            text,
-            swept,
-            effective_method="replace",
-            keep_year=False,
-            date_shift_days=None,
-            keep_mapping=False,
-            lang=lang,
-            consistent=True,
-            seed=866,
-            locale=locale,
-            use_safety_sweep=True,
-        )
+                entities = []
+                for surface, label in model_entities:
+                    start = text.index(surface)
+                    entities.append(
+                        EntityPrediction(
+                            text=surface,
+                            label=label,
+                            start=start,
+                            end=start + len(surface),
+                            confidence=0.99,
+                        )
+                    )
+                prediction = PredictionResult(
+                    text=text,
+                    entities=entities,
+                    model_name="synthetic-fixture",
+                    timestamp="2026-07-18T00:00:00Z",
+                    metadata={"synthetic": True},
+                )
 
-        protected_values = [surface for surface, _label in model_entities]
-        protected_values.extend(sweep_values)
-        assert added_count == len(sweep_values)
-        assert all(value not in result.deidentified_text for value in protected_values)
+                swept, added_count = _apply_safety_sweep_to_result(
+                    text,
+                    prediction,
+                    lang=lang,
+                    locale=locale,
+                )
+                result = _build_deidentification_result(
+                    text,
+                    swept,
+                    effective_method="replace",
+                    keep_year=False,
+                    date_shift_days=None,
+                    keep_mapping=False,
+                    lang=lang,
+                    consistent=True,
+                    seed=866,
+                    locale=locale,
+                    use_safety_sweep=True,
+                )
+
+                protected_values = [surface for surface, _label in model_entities]
+                protected_values.extend(sweep_values)
+                assert added_count == len(sweep_values)
+                assert all(
+                    value not in result.deidentified_text for value in protected_values
+                )
 
 
-@pytest.mark.parametrize(
-    ("source", "method", "stem", "expected"),
-    [
+def test_gujarati_surrogates_choose_gender_aligned_native_names(subtests):
+    for source, method, stem, expected in [
         ("નરેશભાઈ", "first_name_male", "વિજય", "વિજયભાઈ"),
         ("રમીલાબેન", "first_name_female", "કવિતા", "કવિતાબેન"),
         ("નરેશ પટેલભાઈ", "name_male", "વિજય શાહ", "વિજય શાહભાઈ"),
         ("રમીલા પટેલબેન", "name_female", "કવિતા શાહ", "કવિતા શાહબેન"),
-    ],
-)
-def test_gujarati_surrogates_choose_gender_aligned_native_names(
-    source, method, stem, expected
-):
-    from unittest.mock import Mock
+    ]:
+        with subtests.test(source=source, method=method, stem=stem, expected=expected):
+            from unittest.mock import Mock
 
-    from openmed.core.anonymizer.providers.script_names import generate_gujarati_name
+            from openmed.core.anonymizer.providers.script_names import (
+                generate_gujarati_name,
+            )
 
-    faker = Mock()
-    getattr(faker, method).return_value = stem
-    assert generate_gujarati_name(faker, source, locale="gu_IN") == expected
-    getattr(faker, method).assert_called_once_with()
-    faker.name.assert_not_called()
-    faker.first_name.assert_not_called()
+            faker = Mock()
+            getattr(faker, method).return_value = stem
+            assert generate_gujarati_name(faker, source, locale="gu_IN") == expected
+            getattr(faker, method).assert_called_once_with()
+            faker.name.assert_not_called()
+            faker.first_name.assert_not_called()
 
 
 def test_urdu_pack_warns_once_and_uses_bundled_names():

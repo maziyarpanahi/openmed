@@ -284,19 +284,14 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert validate_manifest_row(rows[0], line_number=1) == []
 
 
-@pytest.mark.parametrize(
-    ("repo_id", "expected"),
-    (
+def test_manifest_generator_keeps_quantization_width_out_of_param_count(subtests):
+    for repo_id, expected in (
         ("OpenMed/privacy-filter-mlx-8bit", None),
         ("OpenMed/model-135M-8bit", 135_000_000),
         ("OpenMed/model-2B-int8", 2_000_000_000),
-    ),
-)
-def test_manifest_generator_keeps_quantization_width_out_of_param_count(
-    repo_id,
-    expected,
-):
-    assert generate_manifest._param_count(repo_id) == expected
+    ):
+        with subtests.test(repo_id=repo_id, expected=expected):
+            assert generate_manifest._param_count(repo_id) == expected
 
 
 def test_manifest_generator_distinguishes_mlx_quantization_from_onnx() -> None:
@@ -379,18 +374,17 @@ def test_manifest_generator_infers_korean_from_repo_name():
     ) == ["ko"]
 
 
-@pytest.mark.parametrize(
-    ("language_name", "language_code"),
-    (("Bengali", "bn"), ("Chinese", "zh"), ("Tamil", "ta")),
-)
-def test_manifest_generator_infers_v2_languages_from_repo_name(
-    language_name,
-    language_code,
-):
-    assert generate_manifest._languages(
-        f"OpenMed/OpenMed-PII-{language_name}-Fixture-Large-279M-v1",
-        [],
-    ) == [language_code]
+def test_manifest_generator_infers_v2_languages_from_repo_name(subtests):
+    for language_name, language_code in (
+        ("Bengali", "bn"),
+        ("Chinese", "zh"),
+        ("Tamil", "ta"),
+    ):
+        with subtests.test(language_name=language_name, language_code=language_code):
+            assert generate_manifest._languages(
+                f"OpenMed/OpenMed-PII-{language_name}-Fixture-Large-279M-v1",
+                [],
+            ) == [language_code]
 
 
 def test_manifest_generator_preserves_script_coverage(tmp_path):
