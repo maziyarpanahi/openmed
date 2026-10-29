@@ -465,6 +465,8 @@ classification:
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
     - evaluation/cross-lingual-regressions.md
+    - languages/scarce-label-review.md
+    - languages/cross-lingual-consensus.md
     - evaluation/crosslingual-scorecard.md
     - evaluation/citation-support-metrics.md
     - evaluation/comparator-reports.md
@@ -528,6 +530,9 @@ classification:
     - languages.md
     - language-packs.md
     - languages/clinical-readiness.md
+    - languages/clinical-transliteration.md
+    - languages/abbreviation-mining.md
+    - languages/code-switch-projection.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
