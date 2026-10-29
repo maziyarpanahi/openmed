@@ -416,6 +416,7 @@ classification:
     - training/synthetic/license-identifiers.md
     - training/synthetic/hl7v2-messages.md
     - training/synthetic/license-lineage-manifests.md
+    - training/synthetic/split-planning.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
