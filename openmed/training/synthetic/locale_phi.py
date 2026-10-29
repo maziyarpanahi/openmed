@@ -125,6 +125,20 @@ _FIELD_LABELS: Final[Mapping[str, str]] = {
     "date": L.DATE,
 }
 
+# Arabic and Amharic name and place surrogates follow the source script. Their
+# placeholder sources are synthetic native-script values from the curated
+# language-pack data, so generated examples stay in the template's script.
+_NATIVE_SCRIPT_SOURCES: Final[Mapping[str, Mapping[str, str]]] = {
+    "am": {
+        L.PERSON: "ሰላም ተስፋዬ",
+        L.STREET_ADDRESS: "አዲስ አበባ ቦሌ 12",
+    },
+    "ar": {
+        L.PERSON: "\u0644\u064a\u0644\u0649 \u062d\u0633\u0646",
+        L.STREET_ADDRESS: "\u0634\u0627\u0631\u0639 \u0627\u0644\u0646\u064a\u0644 12",
+    },
+}
+
 _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
     "as": (
         "ক্লিনিকেল টোকা: ৰোগী ",
@@ -690,9 +704,15 @@ class LocalePhiGenerator:
         self, language: str, locale: str
     ) -> Mapping[str, tuple[str, Mapping[str, Any]]]:
         identifier, identifier_metadata = self._identifier(language)
+        sources = _NATIVE_SCRIPT_SOURCES.get(language, {})
         return {
             "person": (
-                self._surrogate(language, L.PERSON, "Example Patient", locale),
+                self._surrogate(
+                    language,
+                    L.PERSON,
+                    sources.get(L.PERSON, "Example Patient"),
+                    locale,
+                ),
                 {"field": "person"},
             ),
             "date_of_birth": (
@@ -705,7 +725,12 @@ class LocalePhiGenerator:
                 {"field": "phone"},
             ),
             "street_address": (
-                self._surrogate(language, L.STREET_ADDRESS, "", locale),
+                self._surrogate(
+                    language,
+                    L.STREET_ADDRESS,
+                    sources.get(L.STREET_ADDRESS, ""),
+                    locale,
+                ),
                 {"field": "street_address"},
             ),
             "date": (
