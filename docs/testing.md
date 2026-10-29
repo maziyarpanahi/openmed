@@ -5,22 +5,22 @@ summarizes what already exists so you can extend it confidently.
 
 ## Actively tested Python and desktop matrix
 
-The core SDK supports **CPython 3.10, 3.11, 3.12 and 3.13** on Linux, Windows
+The core SDK supports **CPython 3.11, 3.12 and 3.13** on Linux, Windows
 and macOS. These versions and OS families are declared in `pyproject.toml`'s
-classifiers. `requires-python >=3.10` is an installation floor, not a promise
+classifiers. `requires-python >=3.11` is an installation floor, not a promise
 that an unlisted future interpreter or alternative Python implementation is
 qualified. Adding one requires a reviewed metadata, CI and documentation change.
-Python 3.10 installs the MIT-licensed `tomli` backport required by the SDK's TOML
-readers; newer interpreters use the standard-library `tomllib` instead. The
-backport is a conditional core dependency, not an accidental development extra.
+Python 3.10 reached end of life in October 2026 and is no longer supported. Every
+supported interpreter provides the standard-library `tomllib`, so the SDK has no
+TOML backport dependency.
 
 | Lane | Required combinations | What it proves |
 | --- | --- | --- |
-| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all four versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (12 jobs). Other pull requests: Linux 3.10 and 3.13, Windows 3.12 and macOS 3.12 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
+| `sdk-compatibility` core contracts | Pushes and `full-ci` pull requests: all three versions × `ubuntu-latest`, `windows-latest`, `macos-latest` (9 jobs). Other pull requests: Linux 3.11 and 3.13, Windows 3.12 and macOS 3.12 (4 jobs) | Privacy sentinels, full traceback rendering, platform filesystem contracts and smoke-runner negative tests |
 | `sdk-compatibility` installed artifacts | The same jobs; both wheel and sdist; core and `[cli,service,mcp]` installs separately | Installed CLI and brief API/adapters, packaged resources, missing-resource rejection and source-tree isolation |
 | Optional-runtime absence | Both install profiles in every compatibility job | Typed missing-MLX error and fail-closed brief; no cloud fallback, weights or model downloads |
-| `test` full regression | Pushes and `full-ci` pull requests: Linux 3.10–3.12; Windows/macOS 3.11–3.12 | The complete Python regression suite, including the `slow` and `fuzz` tiers |
-| `test` pull-request tier | Linux 3.10 and 3.12 (fast tier); Windows and macOS 3.12 (portability checks) | Every test except `slow` and `fuzz` on Linux, plus the platform-sensitive portability list on Windows and macOS |
+| `test` full regression | Pushes and `full-ci` pull requests: Linux, Windows and macOS 3.11–3.12 | The complete Python regression suite, including the `slow` and `fuzz` tiers |
+| `test` pull-request tier | Linux 3.11 and 3.12 (fast tier); Windows and macOS 3.12 (portability checks) | Every test except `slow` and `fuzz` on Linux, plus the platform-sensitive portability list on Windows and macOS |
 
 Adding the `full-ci` label starts a new full CI run. Other label additions do
 not start CI jobs.

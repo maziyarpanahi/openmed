@@ -7,10 +7,9 @@ name = "openmed"
 dynamic = ["version"]
 description = "Local-first SDK for clinical extraction and de-identification workflows on hardware you control."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -41,7 +40,6 @@ dependencies = [
   "jieba>=0.42.1,<0.43",
   "pyyaml>=6.0",
   "jsonschema>=4.18,<5",
-  "tomli>=2.0; python_version < '3.11'",
 ]
 
 authors = [
@@ -50,12 +48,9 @@ authors = [
 
 [project.optional-dependencies]
 dev = [
-  # 3.20.3 predates the affected lock code; patched 4.x requires Python 3.11+.
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
-  # Patched virtualenv, used by pre-commit, needs the newer filelock branch.
-  "pre-commit>=4.0; python_version >= '3.11'",
+  "pre-commit>=4.0",
   "cryptography>=50,<51",
   "rich>=13.0",
   "typer>=0.12",
@@ -68,8 +63,8 @@ dev = [
   "mcp>=1.30,<2",
   "mypy==2.3.0",
   "opencc>=1.4.1,<2",
-  # Pillow 13 fixes the image-parser advisories but requires Python 3.11+.
-  "Pillow==13.0.0; python_version >= '3.11'",
+  # Pillow 13 fixes the image-parser advisories.
+  "Pillow==13.0.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "openpyxl>=3.1,<4",
@@ -91,7 +86,6 @@ dev = [
   "ruff==0.15.22",
   "strawberry-graphql[fastapi]>=0.327.2,<1",
   "sqlalchemy>=2.0,<3",
-  "tomli>=2.0; python_version < '3.11'",
   "nbclient>=0.8.0",
   "nbformat>=5.9.0",
   "ipykernel>=6.0",
@@ -123,8 +117,7 @@ fhir = [
 ]
 
 presidio = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "presidio-analyzer>=2.2.354,<3",
 ]
@@ -166,8 +159,7 @@ dask = [
 ]
 
 dagster = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "mako>=1.4.2",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -221,8 +213,7 @@ email-msg-gpl = [
 ]
 
 multimodal = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -259,8 +250,7 @@ zh-pkuseg = [
 ]
 
 zh-hanlp = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "hanlp>=2.1,<3",
   "fsspec>=2026.6.0",
@@ -269,8 +259,7 @@ zh-hanlp = [
 ]
 
 awq = [
-  "filelock==3.20.3; python_version < '3.11' and sys_platform == 'linux'",
-  "filelock>=4.2.1; python_version >= '3.11' and sys_platform == 'linux'",
+  "filelock>=4.2.1; sys_platform == 'linux'",
   "setuptools>=84.1.0; sys_platform == 'linux'",
   "multidict>=6.9.1; sys_platform == 'linux'",
   "aiohttp>=3.14.4; sys_platform == 'linux'",
@@ -283,8 +272,7 @@ awq = [
 ]
 
 gptq = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "multidict>=6.9.1",
   "aiohttp>=3.14.4",
@@ -346,7 +334,7 @@ beam = [
   "Pillow>=13.0.0",
   "multidict>=6.9.1",
   "apache-beam>=2.73,<3",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "h2>=4.4.1",
 ]
 
@@ -393,8 +381,7 @@ journey = [
 ]
 
 ray = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "ray[data]>=2.30,<3",
@@ -407,15 +394,13 @@ spark = [
 ]
 
 snowflake = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "snowflake-snowpark-python>=1.0,<2",
 ]
 
 hf = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -448,8 +433,7 @@ service = [
 
 # Client libraries only. OpenMed never installs Triton or KServe servers.
 triton = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "grpcio>=1.64",
@@ -466,8 +450,7 @@ operator = [
 ]
 
 gliner = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -476,8 +459,7 @@ gliner = [
 ]
 
 gliformer = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -489,8 +471,7 @@ gliformer = [
 ]
 
 gliner2 = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -499,8 +480,7 @@ gliner2 = [
 ]
 
 mlx = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "mlx>=0.22",
@@ -514,8 +494,7 @@ mlx = [
 ]
 
 coreml = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -526,8 +505,7 @@ coreml = [
 ]
 
 onnx = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
@@ -539,8 +517,7 @@ onnx = [
 ]
 
 onnx-runtime = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "huggingface-hub>=0.30",
@@ -553,8 +530,7 @@ onnx-runtime = [
 # graph-building, Torch, and Transformers dependencies; use onnx-runtime when
 # the application also needs OpenMed's Hub download path.
 edge-sbc = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "numpy>=1.26",
@@ -563,8 +539,7 @@ edge-sbc = [
 ]
 
 openvino = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "fsspec>=2026.6.0",
   "jinja2>=3.1.6",
   "openvino>=2024.0",
@@ -599,11 +574,10 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
+  "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "certifi>=2026.10.19",
-  "Pillow>=13.0.0; python_version >= '3.11'",
+  "Pillow>=13.0.0",
   "tinytag>=2.3.0",
   "mako>=1.4.2",
   "multidict>=6.9.1",
@@ -613,36 +587,40 @@ constraint-dependencies = [
   "jinja2>=3.1.6",
   "banks>=2.5.1",
   "langgraph-sdk>=0.4.4",
-  "pymongo>=4.18.2",
+  "pymongo>=4.18.3",
   "datasets>=5.0.1",
   "h2>=4.4.1",
   "oauthlib>=4.0.0",
   # Keep transitive optional model backends above the checkpoint/native-op fixes.
   "torch>=2.13.0",
-  "tornado>=6.5.9",
+  "tornado>=6.6",
   "urllib3>=2.8.0",
   "virtualenv>=21.14.9",
   "brotli>=1.2.1",
   "brotlicffi>=1.2.1.0",
+  "dnspython>=2.9.0",
+  "msgpack>=1.2.3",
+  "nltk>=3.10.4",
   "graphql-core>=3.2.12",
   "opentelemetry-api>=1.45.1",
   "gitpython>=3.2.1",
-  "betterproto==2.0.0b6; python_version >= '3.11'",
+  "betterproto==2.0.0b6",
   "pyjwt>=2.14.0",
 ]
 override-dependencies = [
-  # Snowflake 4.x caps filelock below its security fixes; validate cache locking.
-  "filelock==3.20.3; python_version < '3.11'",
-  "filelock>=4.2.1; python_version >= '3.11'",
   # Beam 2.75 caps these below their patched releases even though its
   # DirectRunner remains compatible with the secure versions.
   "cryptography>=50,<51",
   "httplib2>=0.32",
-  # Beam also caps Pillow below the patched release on Python 3.11+.
-  "Pillow>=13.0.0; python_version >= '3.11'",
+  # Beam also caps Pillow below the patched release.
+  "Pillow>=13.0.0",
   # Prefect 3.7 caps packaging below the release patched virtualenv needs, and
   # newer Prefect requires FastAPI releases that Airflow 3.3 excludes.
   "packaging>=26.3,<27",
+  # Snowflake Connector 4.x caps filelock below 4, and every Snowpark release
+  # excludes Connector 5. Its cache locks use only the FileLock API that
+  # filelock 4 keeps.
+  "filelock>=4.2.1",
 ]
 conflicts = [
   [
@@ -721,7 +699,7 @@ testpaths = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 88
 extend-exclude = [
   "examples/notebooks",
@@ -757,7 +735,7 @@ line-ending = "lf"
 # marker; it is not a strict project-wide gate. The pinned development checker,
 # local Make target, regression test, and CI lint job all use this same scope.
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 files = [
   "openmed/core/audit.py",
   "openmed/core/pipeline.py",

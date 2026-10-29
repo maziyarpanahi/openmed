@@ -22,7 +22,7 @@ GOLD_FIXTURE = (
 )
 
 # Literal synthetic vectors are also executed unchanged by the local Python
-# 3.10/3.11/3.12/3.13 conformance runner. All CI compatibility lanes run this file.
+# 3.11/3.12/3.13 conformance runner. All CI compatibility lanes run this file.
 ISO_PROFILE_CASES = [
     ("date", "2026-01-05", "2026-01-05"),
     ("date", "2024-02-29", "2024-02-29"),

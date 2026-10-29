@@ -250,7 +250,7 @@ jobs:
       # on Linux at both ends of the supported range, plus the portability
       # checks on Windows and macOS. Pushes to the default branches, and pull
       # requests labelled `full-ci`, run the full suite on every platform.
-      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.10","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"full","coverage":true},{"os":"windows-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"windows-latest","python-version":"3.12","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"full","coverage":false}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.10","tier":"fast","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"fast","coverage":true},{"os":"windows-latest","python-version":"3.12","tier":"portability","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"portability","coverage":false}]}') }}
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"full","coverage":true},{"os":"windows-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"windows-latest","python-version":"3.12","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.11","tier":"full","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"full","coverage":false}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11","tier":"fast","coverage":false},{"os":"ubuntu-latest","python-version":"3.12","tier":"fast","coverage":true},{"os":"windows-latest","python-version":"3.12","tier":"portability","coverage":false},{"os":"macos-latest","python-version":"3.12","tier":"portability","coverage":false}]}') }}
 
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -284,10 +284,8 @@ jobs:
     - name: Verify secure image dependency selection
       run: >-
         uv run --frozen python -c
-        "import importlib.util, sys; from importlib.metadata import version;
-        assert (int(version('Pillow').split('.')[0]) >= 13
-        if sys.version_info >= (3, 11)
-        else importlib.util.find_spec('PIL') is None)"
+        "from importlib.metadata import version;
+        assert int(version('Pillow').split('.')[0]) >= 13"
 
     - name: Portability regression checks
       if: matrix.tier == 'portability'
@@ -362,8 +360,8 @@ jobs:
       fail-fast: false
       # Pull requests cover both ends of the supported Python range on Linux
       # and the newest interpreter on Windows and macOS. Pushes to the default
-      # branches, and pull requests labelled `full-ci`, run all 12 combinations.
-      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.10"},{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.10"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.10"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.10"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.12"}]}') }}
+      # branches, and pull requests labelled `full-ci`, run all 9 combinations.
+      matrix: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.12"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.12"},{"os":"windows-latest","python-version":"3.13"},{"os":"macos-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.13"}]}' || '{"include":[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"ubuntu-latest","python-version":"3.13"},{"os":"windows-latest","python-version":"3.12"},{"os":"macos-latest","python-version":"3.12"}]}') }}
     env:
       OPENMED_OFFLINE: "1"
       HF_HUB_OFFLINE: "1"
@@ -568,7 +566,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.11", "3.12"]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

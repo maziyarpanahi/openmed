@@ -236,14 +236,14 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     assert jobs["lockfile-drift"]["if"] == LABEL_RUN_CONDITION
     lane = jobs["sdk-compatibility"]
     full, pull_request = _tiered_matrices(lane)
-    versions = ["3.10", "3.11", "3.12", "3.13"]
+    versions = ["3.11", "3.12", "3.13"]
     systems = ["ubuntu-latest", "windows-latest", "macos-latest"]
     assert sorted((row["os"], row["python-version"]) for row in full) == sorted(
         (system, version) for system in systems for version in versions
     )
     # Pull requests keep both ends of the range and every operating system.
     assert {row["os"] for row in pull_request} == set(systems)
-    assert {row["python-version"] for row in pull_request} >= {"3.10", "3.13"}
+    assert {row["python-version"] for row in pull_request} >= {"3.11", "3.13"}
     assert lane["strategy"]["fail-fast"] == "false"
     assert int(lane["timeout-minutes"]) <= 30
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
@@ -258,10 +258,9 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
         )
         == versions
     )
-    assert project["requires-python"] == ">=3.10"
-    # CLI imports dependency-report parsing even in a minimal installation.
-    # Development extras used to hide this missing Python 3.10 backport.
-    assert "tomli>=2.0; python_version < '3.11'" in project["dependencies"]
+    assert project["requires-python"] == ">=3.11"
+    # Every supported interpreter ships tomllib, so no TOML backport remains.
+    assert not any(value.startswith("tomli") for value in project["dependencies"])
     assert {
         "Operating System :: POSIX :: Linux",
         "Operating System :: Microsoft :: Windows",
@@ -269,7 +268,7 @@ def test_sdk_compatibility_matches_advertised_python_and_os_support():
     } <= set(project["classifiers"])
     docs = (ROOT / "docs/testing.md").read_text(encoding="utf-8")
     assert all(version in docs for version in versions)
-    assert "12 jobs" in docs and "sdk-compatibility-gate" in docs
+    assert "9 jobs" in docs and "sdk-compatibility-gate" in docs
 
 
 def test_installed_lane_is_mandatory_offline_and_covers_privacy_sentinels():
