@@ -700,10 +700,11 @@ def test_remote_config_round_trips_and_normalizes_protocol() -> None:
     assert OpenMedConfig.from_dict(config.to_dict()).to_dict() == config.to_dict()
 
 
-@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf")])
-def test_remote_timeout_must_be_positive_and_finite(timeout: float) -> None:
-    with pytest.raises(ValueError, match="positive and finite"):
-        OpenMedConfig(remote_inference_timeout_seconds=timeout)
+def test_remote_timeout_must_be_positive_and_finite(subtests) -> None:
+    for timeout in [0, -1, float("nan"), float("inf")]:
+        with subtests.test(timeout=timeout):
+            with pytest.raises(ValueError, match="positive and finite"):
+                OpenMedConfig(remote_inference_timeout_seconds=timeout)
 
 
 def test_remote_config_round_trips_through_toml(tmp_path: Path) -> None:

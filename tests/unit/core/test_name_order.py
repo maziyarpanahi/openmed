@@ -51,9 +51,8 @@ def _restore_honorifics():
 class TestSplitName:
     """split_name() returns family-first components + trailing honorific."""
 
-    @pytest.mark.parametrize(
-        "name, lang, expected",
-        [
+    def test_family_first_split_per_language(self, subtests):
+        for name, lang, expected in [
             # Japanese: space-separated full names, family-name-first.
             ("田中 太郎さん", "ja", ("田中", "太郎", "さん")),
             ("鈴木 花子様", "ja", ("鈴木", "花子", "様")),
@@ -68,10 +67,9 @@ class TestSplitName:
             ("王伟先生", "zh", ("王", "伟", "先生")),
             ("李娜女士", "zh", ("李", "娜", "女士")),
             ("张伟", "zh", ("张", "伟", "")),
-        ],
-    )
-    def test_family_first_split_per_language(self, name, lang, expected):
-        assert split_name(name, lang) == expected
+        ]:
+            with subtests.test(name=name, lang=lang, expected=expected):
+                assert split_name(name, lang) == expected
 
     def test_multichar_honorific_wins_over_prefix(self):
         # 선생님 (seonsaengnim) must not be split as 님 (nim) leaving a stray 선생.
@@ -80,10 +78,11 @@ class TestSplitName:
         assert family == "김"
         assert given == ""
 
-    @pytest.mark.parametrize("lang", ["en", "fr", "de"])
-    def test_non_cjk_passthrough(self, lang):
-        # Non-CJK languages are returned unchanged as family-only.
-        assert split_name("John Smith", lang) == ("John Smith", "", "")
+    def test_non_cjk_passthrough(self, subtests):
+        for lang in ["en", "fr", "de"]:
+            with subtests.test(lang=lang):
+                # Non-CJK languages are returned unchanged as family-only.
+                assert split_name("John Smith", lang) == ("John Smith", "", "")
 
     def test_empty_input(self):
         assert split_name("", "ja") == ("", "", "")
@@ -95,9 +94,8 @@ class TestSplitName:
 class TestNormalizePersonSpan:
     """normalize_person_span() peels the honorific for later re-attachment."""
 
-    @pytest.mark.parametrize(
-        "span, lang, expected",
-        [
+    def test_honorific_separated(self, subtests):
+        for span, lang, expected in [
             ("佐藤さん", "ja", ("佐藤", "さん")),
             ("田中 太郎様", "ja", ("田中 太郎", "様")),
             ("김민준씨", "ko", ("김민준", "씨")),
@@ -107,17 +105,17 @@ class TestNormalizePersonSpan:
             ("田中 さん", "ja", ("田中", " さん")),
             ("김민준 씨", "ko", ("김민준", " 씨")),
             ("王伟 先生", "zh", ("王伟", " 先生")),
-        ],
-    )
-    def test_honorific_separated(self, span, lang, expected):
-        assert normalize_person_span(span, lang) == expected
+        ]:
+            with subtests.test(span=span, lang=lang, expected=expected):
+                assert normalize_person_span(span, lang) == expected
 
     def test_no_honorific_returns_span_unchanged(self):
         assert normalize_person_span("田中", "ja") == ("田中", "")
 
-    @pytest.mark.parametrize("lang", ["en", "fr", "de"])
-    def test_non_cjk_returns_empty_honorific(self, lang):
-        assert normalize_person_span("Smith", lang) == ("Smith", "")
+    def test_non_cjk_returns_empty_honorific(self, subtests):
+        for lang in ["en", "fr", "de"]:
+            with subtests.test(lang=lang):
+                assert normalize_person_span("Smith", lang) == ("Smith", "")
 
     def test_honorific_only_preserves_the_full_suffix(self):
         assert normalize_person_span(" さん", "ja") == ("", " さん")
@@ -166,24 +164,22 @@ class TestHonorificsMap:
 class TestSurrogateIntegration:
     """Honorific survives surrogate replacement; only ja/ko/zh are affected."""
 
-    @pytest.mark.parametrize(
-        "lang, span, honorific",
-        [
+    def test_honorific_preserved_across_replacement(self, subtests):
+        for lang, span, honorific in [
             ("ja", "田中さん", "さん"),
             ("ja", "鈴木 花子様", "様"),
             ("ko", "김민준씨", "씨"),
             ("ko", "이순신님", "님"),
             ("zh", "王伟先生", "先生"),
             ("zh", "李娜女士", "女士"),
-        ],
-    )
-    def test_honorific_preserved_across_replacement(self, lang, span, honorific):
-        anon = Anonymizer(lang=lang, consistent=True, seed=13)
-        surrogate = anon.surrogate(span, "PERSON")
-        # The honorific survives verbatim, and the underlying name is swapped.
-        assert surrogate.endswith(honorific)
-        assert surrogate != span
-        assert surrogate[: -len(honorific)]  # a non-empty replacement name
+        ]:
+            with subtests.test(lang=lang, span=span, honorific=honorific):
+                anon = Anonymizer(lang=lang, consistent=True, seed=13)
+                surrogate = anon.surrogate(span, "PERSON")
+                # The honorific survives verbatim, and the underlying name is swapped.
+                assert surrogate.endswith(honorific)
+                assert surrogate != span
+                assert surrogate[: -len(honorific)]  # a non-empty replacement name
 
     def test_cjk_person_without_honorific_still_replaced(self):
         anon = Anonymizer(lang="ja", consistent=True, seed=13)
@@ -228,25 +224,23 @@ class TestSurrogateIntegration:
         )
         assert with_hon == f"{bare}さん"
 
-    @pytest.mark.parametrize(
-        "lang, bare_name, spaced_name, suffix",
-        [
+    def test_separator_whitespace_survives_replacement(self, subtests):
+        for lang, bare_name, spaced_name, suffix in [
             ("ja", "田中", "田中 さん", " さん"),
             ("ko", "김민준", "김민준 씨", " 씨"),
             ("zh", "王伟", "王伟 先生", " 先生"),
-        ],
-    )
-    def test_separator_whitespace_survives_replacement(
-        self, lang, bare_name, spaced_name, suffix
-    ):
-        bare = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
-            bare_name, "PERSON"
-        )
-        spaced = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
-            spaced_name, "PERSON"
-        )
+        ]:
+            with subtests.test(
+                lang=lang, bare_name=bare_name, spaced_name=spaced_name, suffix=suffix
+            ):
+                bare = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
+                    bare_name, "PERSON"
+                )
+                spaced = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
+                    spaced_name, "PERSON"
+                )
 
-        assert spaced == f"{bare}{suffix}"
+                assert spaced == f"{bare}{suffix}"
 
     def test_generator_fallback_preserves_honorific_suffix(self, monkeypatch):
         def fail_generator(*_args, **_kwargs):

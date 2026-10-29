@@ -56,6 +56,7 @@ def test_disabled_ignores_injected_sinks_and_clock(monkeypatch: Any) -> None:
     assert sink.spans == sink.metrics == []
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("enabled,absent", [(False, False), (True, True)])
 def test_fresh_process_never_imports_otel_when_disabled_or_absent(
     enabled: bool, absent: bool
@@ -131,31 +132,35 @@ def test_opt_in_uses_only_global_api_sinks(monkeypatch: Any) -> None:
     assert len(sink.spans) == 1
 
 
-@pytest.mark.parametrize("key", ["arguments", "output", "patient_name", "file_path"])
-def test_tampered_attributes_fail_before_sink_changes(key: str) -> None:
-    attributes = EventAttributes.from_mapping({})
-    object.__setattr__(
-        attributes, "values", MappingProxyType({key: "Synthetic Juniper MRN JS-1188"})
-    )
-    sink = Sink()
-    telemetry = AgentTelemetry(enabled=True, tracer=sink, meter=sink)
-    with pytest.raises(EventAttributeError) as error:
-        with telemetry.event_span("running", attributes):
-            pytest.fail("invalid event entered")
-    assert "Juniper" not in str(error.value)
-    assert sink.spans == sink.metrics == []
+def test_tampered_attributes_fail_before_sink_changes(subtests) -> None:
+    for key in ["arguments", "output", "patient_name", "file_path"]:
+        with subtests.test(key=key):
+            attributes = EventAttributes.from_mapping({})
+            object.__setattr__(
+                attributes,
+                "values",
+                MappingProxyType({key: "Synthetic Juniper MRN JS-1188"}),
+            )
+            sink = Sink()
+            telemetry = AgentTelemetry(enabled=True, tracer=sink, meter=sink)
+            with pytest.raises(EventAttributeError) as error:
+                with telemetry.event_span("running", attributes):
+                    pytest.fail("invalid event entered")
+            assert "Juniper" not in str(error.value)
+            assert sink.spans == sink.metrics == []
 
 
-@pytest.mark.parametrize("phase", ["Juniper MRN JS-1188", None, [], 1])
-def test_unknown_phase_is_value_free_and_atomic(phase: Any) -> None:
-    sink = Sink()
-    telemetry = AgentTelemetry(enabled=True, tracer=sink, meter=sink)
-    with pytest.raises(ActionPhaseError, match="unknown_phase") as error:
-        with telemetry.event_span(phase, EventAttributes.from_mapping({})):
-            pytest.fail("invalid phase entered")
-    assert "Juniper" not in str(error.value)
-    assert error.value.__context__ is None
-    assert sink.spans == sink.metrics == []
+def test_unknown_phase_is_value_free_and_atomic(subtests) -> None:
+    for phase in ["Juniper MRN JS-1188", None, [], 1]:
+        with subtests.test(phase=phase):
+            sink = Sink()
+            telemetry = AgentTelemetry(enabled=True, tracer=sink, meter=sink)
+            with pytest.raises(ActionPhaseError, match="unknown_phase") as error:
+                with telemetry.event_span(phase, EventAttributes.from_mapping({})):
+                    pytest.fail("invalid phase entered")
+            assert "Juniper" not in str(error.value)
+            assert error.value.__context__ is None
+            assert sink.spans == sink.metrics == []
 
 
 def test_mapping_is_not_an_event_contract() -> None:
@@ -164,18 +169,16 @@ def test_mapping_is_not_an_event_contract() -> None:
             pass
 
 
-@pytest.mark.parametrize(
-    "kwargs,error",
-    [
+def test_invalid_configuration_fails_closed(subtests) -> None:
+    for kwargs, error in [
         ({"enabled": "true"}, TypeError),
         ({"run_id_mode": "raw"}, ValueError),
         ({"run_id_mode": []}, ValueError),
         ({"clock": None}, TypeError),
-    ],
-)
-def test_invalid_configuration_fails_closed(kwargs: Any, error: Any) -> None:
-    with pytest.raises(error):
-        AgentTelemetry(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, error=error):
+            with pytest.raises(error):
+                AgentTelemetry(**kwargs)
 
 
 def test_measured_duration_uses_injected_clock_without_import(monkeypatch: Any) -> None:
@@ -198,15 +201,16 @@ def test_measured_duration_uses_injected_clock_without_import(monkeypatch: Any) 
     ]
 
 
-@pytest.mark.parametrize("end", [0.0, float("nan"), float("inf"), 1e20])
-def test_invalid_clock_duration_never_reaches_sink(end: float) -> None:
-    sink = Sink()
-    times = iter([1.0, end])
-    telemetry = AgentTelemetry(
-        enabled=True, tracer=sink, meter=sink, clock=lambda: next(times)
-    )
-    with pytest.raises(EventAttributeError):
-        with telemetry.event_span("running", EventAttributes.from_mapping({})):
-            pass
-    assert "openmed.agent.duration_ms" not in sink.spans[0]["attributes"]
-    assert len(sink.metrics) == 1
+def test_invalid_clock_duration_never_reaches_sink(subtests) -> None:
+    for end in [0.0, float("nan"), float("inf"), 1e20]:
+        with subtests.test(end=end):
+            sink = Sink()
+            times = iter([1.0, end])
+            telemetry = AgentTelemetry(
+                enabled=True, tracer=sink, meter=sink, clock=lambda: next(times)
+            )
+            with pytest.raises(EventAttributeError):
+                with telemetry.event_span("running", EventAttributes.from_mapping({})):
+                    pass
+            assert "openmed.agent.duration_ms" not in sink.spans[0]["attributes"]
+            assert len(sink.metrics) == 1

@@ -115,9 +115,8 @@ def test_ambiguous_selector_roles_and_swapped_roles_fail_closed():
         assert caught.value.code is code
 
 
-@pytest.mark.parametrize(
-    "fields",
-    [
+def test_closed_projection_rejects_extra_missing_and_shape_changed_fields(subtests):
+    for fields in [
         {"observations": [{"text": "synthetic finding"}], "extra": "synthetic secret"},
         {"observations": [{"text": "synthetic finding", "extra": "synthetic secret"}]},
         {"observations": [{"text": {"hidden": "synthetic secret"}}]},
@@ -132,16 +131,16 @@ def test_ambiguous_selector_roles_and_swapped_roles_fail_closed():
         {},
         {"observations": "synthetic finding"},
         {"observations": [{1: "synthetic secret"}]},
-    ],
-)
-def test_closed_projection_rejects_extra_missing_and_shape_changed_fields(fields):
-    with pytest.raises(ResultQuarantinedError):
-        authorize(lambda s: (ToolResultPage(s, (replace(record(s), fields=fields),)),))
+    ]:
+        with subtests.test(fields=fields):
+            with pytest.raises(ResultQuarantinedError):
+                authorize(
+                    lambda s: (ToolResultPage(s, (replace(record(s), fields=fields),)),)
+                )
 
 
-@pytest.mark.parametrize(
-    "output",
-    [
+def test_missing_ambiguous_or_incomplete_pagination_fails_closed(subtests):
+    for output in [
         lambda s: (),
         lambda s: [ToolResultPage(s, (record(s),))],
         lambda s: (ToolResultPage(s, (record(s),), 1, True),),
@@ -149,17 +148,15 @@ def test_closed_projection_rejects_extra_missing_and_shape_changed_fields(fields
         lambda s: (ToolResultPage(s, (record(s),), 0, False),),
         lambda s: (ToolResultPage(s, (), 0, True), ToolResultPage(s, (), 1, True)),
         lambda s: (ToolResultPage(s, (record(s),)), ToolResultPage(s, (), 2, True)),
-    ],
-)
-def test_missing_ambiguous_or_incomplete_pagination_fails_closed(output):
-    with pytest.raises(ResultQuarantinedError) as caught:
-        authorize(output)
-    assert caught.value.code is ResultQuarantineCode.INCOMPLETE_PAGES
+    ]:
+        with subtests.test(output=output):
+            with pytest.raises(ResultQuarantinedError) as caught:
+                authorize(output)
+            assert caught.value.code is ResultQuarantineCode.INCOMPLETE_PAGES
 
 
-@pytest.mark.parametrize(
-    "output,code",
-    [
+def test_evidence_and_typed_record_boundaries(subtests):
+    for output, code in [
         (
             lambda s: (ToolResultPage(s, (replace(record(s), evidence=None),)),),
             ResultQuarantineCode.MISSING_EVIDENCE,
@@ -186,12 +183,11 @@ def test_missing_ambiguous_or_incomplete_pagination_fails_closed(output):
             lambda s: (ToolResultPage(s, (replace(record(s), children=None),)),),
             ResultQuarantineCode.INVALID_RESULT,
         ),
-    ],
-)
-def test_evidence_and_typed_record_boundaries(output, code):
-    with pytest.raises(ResultQuarantinedError) as caught:
-        authorize(output)
-    assert caught.value.code is code
+    ]:
+        with subtests.test(output=output, code=code):
+            with pytest.raises(ResultQuarantinedError) as caught:
+                authorize(output)
+            assert caught.value.code is code
 
 
 def test_empty_complete_result_still_requires_page_scope():

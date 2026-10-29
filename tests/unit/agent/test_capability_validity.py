@@ -43,9 +43,8 @@ def check(grant=GRANT, *, now=INSIDE, audience=AUDIENCE, **kwargs):
     )
 
 
-@pytest.mark.parametrize(
-    "now,audience,status,reasons",
-    [
+def test_grant_validity_table(subtests) -> None:
+    for now, audience, status, reasons in [
         (INSIDE, AUDIENCE, GrantStatus.VALID, ()),
         (ISSUED, AUDIENCE, GrantStatus.VALID, ()),
         (EXPIRES, AUDIENCE, GrantStatus.VALID, ()),
@@ -57,15 +56,14 @@ def check(grant=GRANT, *, now=INSIDE, audience=AUDIENCE, **kwargs):
             ("clock_skew_exceeded", "grant_not_yet_valid"),
         ),
         (INSIDE, "other-agent", GrantStatus.REJECTED, ("audience_mismatch",)),
-    ],
-)
-def test_grant_validity_table(now, audience, status, reasons) -> None:
-    report = check(now=now, audience=audience)
-    assert report.status is status
-    assert report.reason_codes == reasons
-    assert report.is_valid is (status is GrantStatus.VALID)
-    assert report.capability_id == CAPABILITY
-    assert report.schema_version == CAPABILITY_VALIDITY_SCHEMA_VERSION
+    ]:
+        with subtests.test(now=now, audience=audience, status=status, reasons=reasons):
+            report = check(now=now, audience=audience)
+            assert report.status is status
+            assert report.reason_codes == reasons
+            assert report.is_valid is (status is GrantStatus.VALID)
+            assert report.capability_id == CAPABILITY
+            assert report.schema_version == CAPABILITY_VALIDITY_SCHEMA_VERSION
 
 
 def test_seconds_until_expiry_is_signed() -> None:
@@ -184,95 +182,116 @@ def test_grants_are_immutable() -> None:
         GRANT.expires_at = EXPIRES + 1  # type: ignore[misc]
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["", "summarize", "tool:openmed.agent/summarize", "capability:bad/NAME", 7, None],
-)
-def test_invalid_capability_identifiers_fail_closed(value) -> None:
-    with pytest.raises(
-        CapabilityValidityError, match="^capability_id: invalid_capability_id$"
-    ):
-        replace(GRANT, capability_id=value)
+def test_invalid_capability_identifiers_fail_closed(subtests) -> None:
+    for value in [
+        "",
+        "summarize",
+        "tool:openmed.agent/summarize",
+        "capability:bad/NAME",
+        7,
+        None,
+    ]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^capability_id: invalid_capability_id$"
+            ):
+                replace(GRANT, capability_id=value)
 
 
-@pytest.mark.parametrize(
-    "value", ["", "Local-Agent", "-lead", "trail-", "a" * 129, "svc/one", 7, None]
-)
-def test_invalid_audiences_fail_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^audience: invalid_audience$"):
-        replace(GRANT, audience=value)
-    with pytest.raises(
-        CapabilityValidityError, match="^expected_audience: invalid_audience$"
-    ):
-        check(audience=value)
+def test_invalid_audiences_fail_closed(subtests) -> None:
+    for value in ["", "Local-Agent", "-lead", "trail-", "a" * 129, "svc/one", 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^audience: invalid_audience$"
+            ):
+                replace(GRANT, audience=value)
+            with pytest.raises(
+                CapabilityValidityError, match="^expected_audience: invalid_audience$"
+            ):
+                check(audience=value)
 
 
-@pytest.mark.parametrize("field", ["issued_at", "expires_at"])
-@pytest.mark.parametrize("value", [True, False, 1.0, "1700000000", None])
-def test_malformed_timestamps_fail_closed(field, value) -> None:
-    with pytest.raises(CapabilityValidityError) as excinfo:
-        replace(GRANT, **{field: value})
-    assert (excinfo.value.code, excinfo.value.field_name) == (
-        "invalid_timestamp",
-        field,
-    )
+def test_malformed_timestamps_fail_closed(subtests) -> None:
+    for field in ["issued_at", "expires_at"]:
+        for value in [True, False, 1.0, "1700000000", None]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(CapabilityValidityError) as excinfo:
+                    replace(GRANT, **{field: value})
+                assert (excinfo.value.code, excinfo.value.field_name) == (
+                    "invalid_timestamp",
+                    field,
+                )
 
 
-@pytest.mark.parametrize("value", [-1, MAX_EPOCH_SECONDS + 1, 2**70])
-def test_out_of_range_timestamps_fail_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^issued_at: "):
-        replace(GRANT, issued_at=value)
-    with pytest.raises(CapabilityValidityError, match="^now: "):
-        check(now=value)
+def test_out_of_range_timestamps_fail_closed(subtests) -> None:
+    for value in [-1, MAX_EPOCH_SECONDS + 1, 2**70]:
+        with subtests.test(value=value):
+            with pytest.raises(CapabilityValidityError, match="^issued_at: "):
+                replace(GRANT, issued_at=value)
+            with pytest.raises(CapabilityValidityError, match="^now: "):
+                check(now=value)
 
 
-@pytest.mark.parametrize("value", [True, 1.0, "now", None])
-def test_a_malformed_evaluation_instant_fails_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^now: invalid_timestamp$"):
-        check(now=value)
+def test_a_malformed_evaluation_instant_fails_closed(subtests) -> None:
+    for value in [True, 1.0, "now", None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^now: invalid_timestamp$"
+            ):
+                check(now=value)
 
 
-@pytest.mark.parametrize("expires", [ISSUED, ISSUED - 1, 0])
-def test_expiry_must_follow_issue(expires) -> None:
-    with pytest.raises(
-        CapabilityValidityError, match="^expires_at: expiry_not_after_issue$"
-    ):
-        replace(GRANT, expires_at=expires)
+def test_expiry_must_follow_issue(subtests) -> None:
+    for expires in [ISSUED, ISSUED - 1, 0]:
+        with subtests.test(expires=expires):
+            with pytest.raises(
+                CapabilityValidityError, match="^expires_at: expiry_not_after_issue$"
+            ):
+                replace(GRANT, expires_at=expires)
 
 
-@pytest.mark.parametrize("value", [ISSUED - 1, EXPIRES + 1])
-def test_not_before_must_sit_inside_the_window(value) -> None:
-    with pytest.raises(
-        CapabilityValidityError, match="^not_before: not_before_out_of_window$"
-    ):
-        replace(GRANT, not_before=value)
-    assert replace(GRANT, not_before=ISSUED).not_before == ISSUED
-    assert replace(GRANT, not_before=EXPIRES).not_before == EXPIRES
+def test_not_before_must_sit_inside_the_window(subtests) -> None:
+    for value in [ISSUED - 1, EXPIRES + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^not_before: not_before_out_of_window$"
+            ):
+                replace(GRANT, not_before=value)
+            assert replace(GRANT, not_before=ISSUED).not_before == ISSUED
+            assert replace(GRANT, not_before=EXPIRES).not_before == EXPIRES
 
 
-@pytest.mark.parametrize("value", [True, 1.5, "60", None])
-def test_malformed_bounds_fail_closed(value) -> None:
-    with pytest.raises(
-        CapabilityValidityError, match="^max_clock_skew_seconds: invalid_bound$"
-    ):
-        check(max_clock_skew_seconds=value)
-    if value is not None:
-        with pytest.raises(
-            CapabilityValidityError, match="^max_lifetime_seconds: invalid_bound$"
-        ):
-            check(max_lifetime_seconds=value)
+def test_malformed_bounds_fail_closed(subtests) -> None:
+    for value in [True, 1.5, "60", None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^max_clock_skew_seconds: invalid_bound$"
+            ):
+                check(max_clock_skew_seconds=value)
+            if value is not None:
+                with pytest.raises(
+                    CapabilityValidityError,
+                    match="^max_lifetime_seconds: invalid_bound$",
+                ):
+                    check(max_lifetime_seconds=value)
 
 
-@pytest.mark.parametrize("value", [-1, MAX_CLOCK_SKEW_SECONDS + 1])
-def test_out_of_range_skew_fails_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^max_clock_skew_seconds: "):
-        check(max_clock_skew_seconds=value)
+def test_out_of_range_skew_fails_closed(subtests) -> None:
+    for value in [-1, MAX_CLOCK_SKEW_SECONDS + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^max_clock_skew_seconds: "
+            ):
+                check(max_clock_skew_seconds=value)
 
 
-@pytest.mark.parametrize("value", [-1, MAX_GRANT_LIFETIME_SECONDS + 1])
-def test_out_of_range_lifetime_bounds_fail_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^max_lifetime_seconds: "):
-        check(max_lifetime_seconds=value)
+def test_out_of_range_lifetime_bounds_fail_closed(subtests) -> None:
+    for value in [-1, MAX_GRANT_LIFETIME_SECONDS + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^max_lifetime_seconds: "
+            ):
+                check(max_lifetime_seconds=value)
 
 
 def test_a_zero_lifetime_ceiling_fails_closed() -> None:
@@ -282,10 +301,13 @@ def test_a_zero_lifetime_ceiling_fails_closed() -> None:
         check(max_lifetime_seconds=0)
 
 
-@pytest.mark.parametrize("value", [None, "grant", 7, GRANT.to_dict()])
-def test_invalid_grant_arguments_fail_closed(value) -> None:
-    with pytest.raises(CapabilityValidityError, match="^grant: invalid_grant_type$"):
-        check_capability_validity(value, now=INSIDE, expected_audience=AUDIENCE)
+def test_invalid_grant_arguments_fail_closed(subtests) -> None:
+    for value in [None, "grant", 7, GRANT.to_dict()]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                CapabilityValidityError, match="^grant: invalid_grant_type$"
+            ):
+                check_capability_validity(value, now=INSIDE, expected_audience=AUDIENCE)
 
 
 def test_invalid_schema_version_fails_closed() -> None:

@@ -167,6 +167,7 @@ def _synthetic_multiscript_name(draw):
     return lang, original
 
 
+@pytest.mark.slow
 @given(_synthetic_multiscript_name())
 def test_multiscript_name_property_never_reuses_source_codepoints(case) -> None:
     lang, original = case
