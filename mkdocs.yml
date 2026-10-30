@@ -322,6 +322,7 @@ nav:
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
+      - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
@@ -376,6 +377,10 @@ nav:
           - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
           - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
           - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+          - Synthetic FHIR Records: training/synthetic/fhir-records.md
+          - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+          - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+          - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -494,6 +499,7 @@ nav:
       - Clinical Transliteration Provenance: languages/clinical-transliteration.md
       - Local Abbreviation Mining: languages/abbreviation-mining.md
       - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md

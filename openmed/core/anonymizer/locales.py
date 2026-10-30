@@ -48,6 +48,17 @@ Notes:
   national-ID dispatch routes to the CCCD provider on the same locale.
 - Urdu uses a conceptual ``ur_IN`` locale backed by ``en_IN`` for non-name
   values; bundled name surrogates remain in Urdu script.
+- Swahili (``sw``/``sw_TZ``), Hausa, Igbo, Yoruba, and Kinyarwanda address and
+  town surrogates use curated synthetic local conventions from
+  ``providers.african_places`` because their Faker locales ship no address
+  data. isiXhosa addresses use the ``zu_ZA`` backend. The
+  ``address_approximation`` column of :func:`locale_coherence_report` records
+  each source.
+- Sinhala (``si``, an experimental user-supplied-model route) has no Faker
+  locale. The conceptual ``si_LK`` locale is a documented approximation: names,
+  cities and street addresses come from a small repository-authored synthetic
+  Sinhala inventory, script-free fields use the ``en_IN`` backend, and NIC
+  surrogates come from the structural ``sri_lanka_nic`` provider.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -94,6 +105,7 @@ _APPROXIMATE_LOCALES: Final = frozenset(
         "ms",
         "pa",
         "rw",
+        "si",
         "sr",
         "te",
         "ur",
@@ -159,6 +171,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "pt_MZ": "pt_PT",
     "pt_AO": "pt_PT",
     "rw_RW": "en_US",
+    "si_LK": "en_IN",
     "sr_RS": "hr_HR",
     "sw_TZ": "sw",
     "ur_IN": "en_IN",
@@ -353,6 +366,10 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``locale``: the default or conceptual locale.
       - ``approximate``: ``True`` when that default locale is a documented
         approximation rather than a native match.
+      - ``address_approximation``: the documented source of address and town
+        surrogates for African language packs whose Faker locale ships no
+        in-country address data, otherwise ``None``. See
+        ``openmed.core.anonymizer.providers.african_places``.
       - ``id_providers``: national-ID Faker method names whose surrogates
         round-trip the language's registered checksum validator (empty when the
         language has no checksummed national-ID surrogate provider).
@@ -370,6 +387,7 @@ def locale_coherence_report() -> list[dict[str, object]]:
         SUPPORTED_LANGUAGES,
         USER_SUPPLIED_MODEL_LANGUAGES,
     )
+    from .providers.african_places import AFRICAN_ADDRESS_APPROXIMATIONS
 
     rows: list[dict[str, object]] = []
     reported_languages = (
@@ -391,6 +409,7 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
                 "approximate": lang in _APPROXIMATE_LOCALES,
+                "address_approximation": AFRICAN_ADDRESS_APPROXIMATIONS.get(lang),
                 "id_providers": id_methods,
                 "id_types": id_types,
                 "id_locale": id_locale,
@@ -404,6 +423,7 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": locale,
                 "approximate": False,
+                "address_approximation": None,
                 # Senegal CNI and Angola BI coverage is contextual rather than
                 # checksum-backed, so no provider or validator is claimed.
                 "id_providers": [],

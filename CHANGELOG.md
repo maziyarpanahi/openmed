@@ -19,6 +19,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document existing synthetic generators, offline examples, public exports and
   dataset provenance limits in a shared navigation group (#3896).
 
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
+
+- Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
+
+- Add deterministic rare-case synthetic privacy stress records with configurable attribute tiers, value-free risk labels, and linkage-attack truth.
+
+- Add deterministic synthetic patient-intake conversations with causal turn-level PHI, assertion, revision, consent, and provenance labels.
+
+- Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
+
+- Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
+
+- Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
+
+- Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
+
+- Add an opt-in System One and Decisions server backend with loopback defaults, explicit non-PHI private-network approval, bounded responses and deadlines, and typed transport failures.
+
+- Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
+
+- Add declarative localized medical-record-number labels shared by semantic merging and safety sweeps, retaining exact identifier spans and label-free negative controls.
+
+- Detect UK postcodes through the English en_GB overlay, including bounded address context for lookalike inward codes and explicit UK detection aliases.
+
+- Add an experimental Sinhala route for user-supplied models, structural Sri Lanka NIC handling and synthetic script-aware surrogate approximations without adding bundled model support.
+
+- Recognize short Thai address lines without consuming adjacent native-script date spans.
+
+- Propagate context-gated national-ID validator rejections through semantic merging and safety sweeps while preserving unrelated and validated spans.
+
+- Keep six-digit Bengali PIN codes detectable near dotted date fragments by requiring a four-digit date year.
+
+- Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
+
+- Record surrogate-provider versions and digest-only probe receipts, and expose
+  optional strict drift checks for the seeded synthetic corpus (#3893).
+
+- Package and install signed offline language bundles with explicit resource, license, checksum and synthetic self-test gates (#2866).
+
+- Activate verified local language bundles with qualified task records, atomic registry generations and explicit rollback (#3695).
+
+- Generate seeded Devanagari and Telugu name surrogates from disjoint,
+  well-formed aksara while preserving token shape (#3892).
+
+- Generate local-convention African address and town surrogates, with mask
+  fallback when source-disjoint vocabulary is exhausted (#3891).
+
+- Add an opt-in live surrogate quality gate with deterministic per-language and per-label checks, hash-only reports, and explicit documented approximation exemptions.
+
+- Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
+
+- Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).
+
+- Detect native-calendar month-name dates with exact spans and value-free calendar tags (#3866).
+
+- Shift Solar Hijri, Ethiopian and Thai Buddhist-era dates within bounded native-calendar ranges (#3867).
+
+- Shift declared Hijri and Bikram Sambat dates through bounded, digest-verified permissive calendar tables (#3888).
+
+- Add synthetic fhir records with bounded offline contracts, synthetic controls
+  and documented behavior (#2840).
+
+- Add synthetic omop cohorts with bounded offline contracts, synthetic controls
+  and documented behavior (#2841).
+
 - Add synthetic lab time series with bounded offline contracts, synthetic controls
   and documented behavior (#2843).
 
@@ -139,6 +206,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
 ### Fixed
+
+- Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
+
+- Refresh the exact service-image timezone-data pin to the available Debian Forky release so image builds, SBOM generation and vulnerability scans can complete.
+
+- Preserve registered non-CJK honorifics and grammatical cues in person
+  surrogates, and retain Vietnamese family-first order (#3887).
 
 - Keep Arabic (`ar`) and Amharic (`am`) name, city, and street surrogates in
   the source script. Arabic-script spans use Faker's `ar_AA` names and curated
