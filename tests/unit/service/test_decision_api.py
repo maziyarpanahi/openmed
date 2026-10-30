@@ -152,7 +152,8 @@ def test_question_sets_are_identical_across_python_rest_client_and_mcp() -> None
         "flag",
         "severity",
     ]
-    assert expected["questions"][0]["choice"] == "urgent"
+    assert expected["questions"][0]["choice"] is None
+    assert expected["questions"][0]["state"] == "unsupported"
     assert expected["questions"][1]["state"] == "abstained"
     assert expected["state"] == "partial"
     Draft202012Validator(decision_result_schema()).validate(expected)

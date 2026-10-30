@@ -178,8 +178,6 @@ def _bounded_prose(value: Any, name: str, *, maximum: int) -> str | None:
         raise TypeError(f"{name} must be a string or null")
     if not value.strip() or len(value) > maximum:
         raise DecisionError(f"{name} must be bounded non-blank text or null")
-    if len(value.encode("utf-8")) > maximum * INPUT_BYTES_PER_CHAR:
-        raise DecisionError(f"{name} exceeds its byte limit")
     if any(
         (ord(char) < 32 and char not in "\n\r\t")
         or ord(char) == 127
@@ -187,6 +185,8 @@ def _bounded_prose(value: Any, name: str, *, maximum: int) -> str | None:
         for char in value
     ):
         raise DecisionError(f"{name} contains control characters")
+    if len(value.encode("utf-8")) > maximum * INPUT_BYTES_PER_CHAR:
+        raise DecisionError(f"{name} exceeds its byte limit")
     return value
 
 
@@ -825,6 +825,17 @@ class DecisionQuestionSetBackend(DecisionBackend, Protocol):
         """Return one backend output per question identifier."""
 
 
+def _require_legacy_question_context(request: DecisionRequest) -> None:
+    """Refuse prose that a lexical or three-argument scorer cannot receive."""
+
+    if request.instructions is not None or any(
+        item is not None for item in request.option_descriptions or ()
+    ):
+        raise DecisionUnsupportedError(
+            "question instructions and descriptions require a request-aware backend"
+        )
+
+
 class DeterministicDecisionBackend:
     """Conservative dependency-free fallback for explicit lexical choices."""
 
@@ -841,6 +852,7 @@ class DeterministicDecisionBackend:
     def score(self, request: DecisionRequest) -> DecisionBackendOutput:
         if request.mode is DecisionMode.QUESTION_SET:
             raise DecisionUnsupportedError("question sets are scored per question")
+        _require_legacy_question_context(request)
         if request.mode is DecisionMode.SCALAR_SCORE and request.levels:
             return DecisionBackendOutput(
                 option_scores=tuple(
@@ -884,6 +896,7 @@ class CallableDecisionBackend:
         self._scorer = scorer
 
     def score(self, request: DecisionRequest) -> DecisionBackendOutput:
+        _require_legacy_question_context(request)
         # Levelled scalar questions are scored like options over their levels.
         return _normalize_backend_output(
             self._scorer(
@@ -2895,13 +2908,13 @@ def _bounded_input(
         raise TypeError("input_text must be a string")
     if not value.strip():
         raise DecisionError("input_text must not be blank")
+    if "\x00" in value or any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+        raise DecisionError("input_text contains invalid characters")
     if (
         len(value) > maximum
         or len(value.encode("utf-8")) > maximum * INPUT_BYTES_PER_CHAR
     ):
         raise DecisionError("input_text exceeds the decision input limit")
-    if "\x00" in value or any(0xD800 <= ord(char) <= 0xDFFF for char in value):
-        raise DecisionError("input_text contains invalid characters")
     if input_format is DecisionInputFormat.JSON:
         try:
             parsed = json.loads(value, parse_constant=_reject_json_constant)
@@ -2928,13 +2941,16 @@ def _bounded_option(value: Any) -> str:
     normalized = value.strip()
     if not normalized:
         raise DecisionError("decision options must not be blank")
+    if any(
+        ord(char) < 32 or ord(char) == 127 or 0xD800 <= ord(char) <= 0xDFFF
+        for char in normalized
+    ):
+        raise DecisionError("decision options cannot contain control characters")
     if (
         len(normalized) > MAX_OPTION_CHARS
         or len(normalized.encode("utf-8")) > MAX_OPTION_BYTES
     ):
         raise DecisionError("a decision option exceeds its size limit")
-    if any(ord(char) < 32 or ord(char) == 127 for char in normalized):
-        raise DecisionError("decision options cannot contain control characters")
     return normalized
 
 

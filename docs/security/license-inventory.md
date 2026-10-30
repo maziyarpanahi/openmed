@@ -51,12 +51,13 @@ a dependency also declared in another extra.
 | `faker` | `default` | `MIT` |
 | `fastapi` | `service` | `MIT` |
 | `filelock` | Optional locking profiles; 3.20.3 uses Unlicense, 4.x MIT | `MIT OR Unlicense` |
-| `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
+| `fsspec` | `agents`, `airflow`, `awq`, `cloud`, `coreml`, `dagster`, `dask`, `edge-sbc`, `gliclass`, `gliner`, `gptq`, `hf`, `journey`, `llamaindex`, `mlx`, `multimodal`, `onnx`, `onnx-runtime`, `openvino`, `prefect`, `ray`, `triton`, `zh-hanlp` | `BSD-3-Clause` |
 | `jinja2` | Same optional profiles as `fsspec`; never part of the base SDK | `BSD-3-Clause` |
 | `langgraph-sdk` | `agents, langgraph` | `MIT` |
 | `pymongo` | `beam` | `Apache-2.0` |
 | `gcsfs` | `cloud` | `BSD-3-Clause` |
 | `gitpython` | `docs` | `BSD-3-Clause` |
+| `gliclass` | `gliclass` | `Apache-2.0` |
 | `gliner` | `gliner`, `gliformer` | `Apache-2.0` |
 | `gliformer` | `gliformer`; reviewed wheel LICENSE (0.1.3) | `Apache-2.0` |
 | `gliner2` | `gliner2`; reviewed wheel LICENSE (2.1.0) | `Apache-2.0` |
@@ -67,7 +68,7 @@ a dependency also declared in another extra.
 | `haystack-ai` | `haystack` | `Apache-2.0` |
 | `hnswlib` | `grounding` | `Apache-2.0` |
 | `httpx` | `openmrs, service` | `BSD-3-Clause` |
-| `huggingface-hub` | `coreml, hf, mlx, onnx-runtime` | `Apache-2.0` |
+| `huggingface-hub` | `coreml, gliclass, hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `indic-nlp-library` | `indic` | `MIT` |
 | `jieba` | `default, zh` | `MIT` |
 | `jsonschema` | `default` | `MIT` |
@@ -132,6 +133,7 @@ a dependency also declared in another extra.
 | `rich` | `cli` | `MIT` |
 | `s3fs` | `cloud` | `BSD-3-Clause` |
 | `safetensors` | `mlx` | `Apache-2.0` |
+| `scikit-learn` | `gliclass` | `BSD-3-Clause` |
 | `scispacy` | `scispacy` | `Apache-2.0` |
 | `scrubadub` | `scrubadub` | `Apache-2.0` |
 | `setuptools` | Optional integration tooling; not core | `MIT` |
@@ -141,8 +143,8 @@ a dependency also declared in another extra.
 | `strawberry-graphql` | `service` | `MIT` |
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
-| `torch` | `awq, coreml, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
-| `transformers` | `awq, coreml, hf, mlx, onnx, openvino` | `Apache-2.0` |
+| `torch` | `awq, coreml, gliclass, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
+| `transformers` | `awq, coreml, gliclass, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |
 | `yasbd-lib` | `yasbd` | `MPL-2.0` |
