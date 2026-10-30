@@ -9,6 +9,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
+from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -27,16 +28,36 @@ from openmed.core.labels import (
     STREET_ADDRESS,
     ZIPCODE,
 )
+from openmed.training.synthetic.provider_versions import (
+    ProviderDriftReport,
+    build_provider_manifest,
+    compare_provider_manifests,
+    digest_payload,
+)
 
 CORPUS_ID = "openmed-synth"
 CORPUS_VERSION = "1.0.0"
 DEFAULT_SEED = 2352
 DEFAULT_CORPUS_SIZE = 14
 CORPUS_LICENSE = "Apache-2.0"
+PROVIDER_RECEIPT_RESOURCE = "data/openmed_synth_provider_receipt.json"
+SYNTH_CORPUS_TABLE_COMPONENT = "openmed.synth_corpus"
 
 _DATE_START = date(1935, 1, 1)
 _DATE_END = date(2000, 12, 31)
 _PLACEHOLDER_RE = re.compile(r"\{([A-Z_]+)\}")
+# Locale-shaped postcode draws: (minimum, maximum, zero-padded width).
+_POSTCODE_RULES: Mapping[str, tuple[int, int, int]] = {
+    "de_DE": (1_000, 99_999, 5),
+    "en_US": (10_000, 99_999, 5),
+    "es_ES": (1_000, 52_999, 5),
+    "fr_FR": (1_000, 98_999, 5),
+    "hi_IN": (110_000, 999_999, 6),
+    "pt_PT": (1_000_000, 9_999_999, 7),
+    "zh_CN": (100_000, 999_999, 6),
+}
+# Postcodes rendered with a hyphen after this many digits.
+_POSTCODE_SPLITS: Mapping[str, int] = {"pt_PT": 4}
 
 
 @dataclass(frozen=True)
@@ -125,20 +146,12 @@ def _single_line(value: Any) -> str:
 def _stable_postcode(faker: Faker, locale: str) -> str:
     """Generate a locale-shaped postcode from Faker's seeded integer stream."""
 
-    if locale == "pt_PT":
-        digits = f"{faker.random_int(min=1_000_000, max=9_999_999):07d}"
-        return f"{digits[:4]}-{digits[4:]}"
-
-    bounds = {
-        "de_DE": (1_000, 99_999, 5),
-        "en_US": (10_000, 99_999, 5),
-        "es_ES": (1_000, 52_999, 5),
-        "fr_FR": (1_000, 98_999, 5),
-        "hi_IN": (110_000, 999_999, 6),
-        "zh_CN": (100_000, 999_999, 6),
-    }
-    minimum, maximum, width = bounds[locale]
-    return f"{faker.random_int(min=minimum, max=maximum):0{width}d}"
+    minimum, maximum, width = _POSTCODE_RULES[locale]
+    digits = f"{faker.random_int(min=minimum, max=maximum):0{width}d}"
+    split = _POSTCODE_SPLITS.get(locale)
+    if split is None:
+        return digits
+    return f"{digits[:split]}-{digits[split:]}"
 
 
 def _build_values(faker: Faker, *, locale: str) -> dict[str, str]:
@@ -313,6 +326,129 @@ def label_distribution(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def corpus_locales() -> tuple[str, ...]:
+    """Return the Faker locales the corpus generator draws from, sorted."""
+
+    return tuple(sorted(profile.locale for profile in _LOCALE_PROFILES))
+
+
+def provider_table_digests() -> dict[str, dict[str, str]]:
+    """Digest the repository-authored tables behind each corpus locale.
+
+    The digest covers the note template, the date-of-birth range, and the
+    locale postcode rule. It never covers generated values.
+
+    Returns:
+        Per-locale mapping from table owner to ``sha256:`` digest.
+    """
+
+    digests: dict[str, dict[str, str]] = {}
+    for profile in _LOCALE_PROFILES:
+        table = {
+            "date_of_birth_range": [_DATE_START.isoformat(), _DATE_END.isoformat()],
+            "language": profile.language,
+            "postcode_rule": list(_POSTCODE_RULES[profile.locale]),
+            "postcode_split": _POSTCODE_SPLITS.get(profile.locale),
+            "template": profile.template,
+        }
+        digests[profile.locale] = {SYNTH_CORPUS_TABLE_COMPONENT: digest_payload(table)}
+    return dict(sorted(digests.items()))
+
+
+def locale_output_digests(rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """Return one canonical-JSONL ``sha256:`` digest per generated locale.
+
+    Args:
+        rows: Corpus rows from :func:`generate_corpus`.
+
+    Returns:
+        Mapping from Faker locale to the digest of that locale's rows.
+    """
+
+    by_locale: dict[str, list[Mapping[str, Any]]] = {}
+    for row in rows:
+        locale = str(row.get("metadata", {}).get("locale", ""))
+        by_locale.setdefault(locale, []).append(row)
+    return {
+        locale: corpus_content_hash(locale_rows)
+        for locale, locale_rows in sorted(by_locale.items())
+    }
+
+
+def corpus_provider_manifest(
+    *,
+    seed: int = DEFAULT_SEED,
+    size: int = DEFAULT_CORPUS_SIZE,
+    rows: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Return the value-free surrogate-provider manifest for a corpus.
+
+    Args:
+        seed: Corpus seed.
+        size: Corpus record count.
+        rows: Optional rows already generated for ``seed`` and ``size``.
+
+    Returns:
+        Faker version, per-locale provider probe digests, repository table
+        digests, per-locale output digests, and the corpus content hash.
+    """
+
+    corpus_rows = (
+        list(rows) if rows is not None else generate_corpus(seed=seed, size=size)
+    )
+    return build_provider_manifest(
+        corpus_locales(),
+        table_digests=provider_table_digests(),
+        output_digests=locale_output_digests(corpus_rows),
+        corpus={
+            "content_hash": corpus_content_hash(corpus_rows),
+            "dataset": CORPUS_ID,
+            "record_count": len(corpus_rows),
+            "seed": seed,
+            "version": CORPUS_VERSION,
+        },
+    )
+
+
+def load_published_provider_receipt() -> dict[str, Any]:
+    """Load the provider manifest recorded for the published corpus.
+
+    Returns:
+        The manifest captured in the locked environment for the default seed
+        and size, matching the dataset card.
+    """
+
+    resource = resources.files("openmed.eval").joinpath(PROVIDER_RECEIPT_RESOURCE)
+    return json.loads(resource.read_text(encoding="utf-8"))
+
+
+def check_provider_drift(
+    *,
+    seed: int = DEFAULT_SEED,
+    size: int = DEFAULT_CORPUS_SIZE,
+    rows: Sequence[Mapping[str, Any]] | None = None,
+    receipt: Mapping[str, Any] | None = None,
+) -> ProviderDriftReport:
+    """Regenerate the corpus and compare it with the published receipt.
+
+    Provider versions and probe digests are always compared. Output digests
+    and the content hash are compared only for the published seed and size.
+
+    Args:
+        seed: Corpus seed.
+        size: Corpus record count.
+        rows: Optional rows already generated for ``seed`` and ``size``.
+        receipt: Optional recorded manifest; defaults to the published one.
+
+    Returns:
+        A drift report naming each changed provider, locale, or table.
+    """
+
+    recorded = receipt if receipt is not None else load_published_provider_receipt()
+    current = corpus_provider_manifest(seed=seed, size=size, rows=rows)
+    return compare_provider_manifests(recorded, current)
+
+
 def write_corpus(
     path: str | Path,
     *,
@@ -348,9 +484,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="print only the content hash instead of JSONL rows",
     )
+    parser.add_argument(
+        "--provider-manifest",
+        action="store_true",
+        help=(
+            "print the value-free surrogate-provider manifest (Faker version, "
+            "probe, table, and output digests) instead of JSONL rows"
+        ),
+    )
     args = parser.parse_args(argv)
     rows = generate_corpus(seed=args.seed, size=args.size)
-    if args.hash_only:
+    if args.provider_manifest:
+        manifest = corpus_provider_manifest(seed=args.seed, size=args.size, rows=rows)
+        print(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
+    elif args.hash_only:
         print(corpus_content_hash(rows))
     elif args.output is not None:
         path = write_corpus(args.output, seed=args.seed, size=args.size)
@@ -366,10 +513,18 @@ __all__ = [
     "CORPUS_VERSION",
     "DEFAULT_CORPUS_SIZE",
     "DEFAULT_SEED",
+    "PROVIDER_RECEIPT_RESOURCE",
+    "SYNTH_CORPUS_TABLE_COMPONENT",
+    "check_provider_drift",
     "corpus_content_hash",
+    "corpus_locales",
+    "corpus_provider_manifest",
     "generate_corpus",
     "label_distribution",
+    "load_published_provider_receipt",
+    "locale_output_digests",
     "main",
+    "provider_table_digests",
     "render_corpus",
     "write_corpus",
 ]
