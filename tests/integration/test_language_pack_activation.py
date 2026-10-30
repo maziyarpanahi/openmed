@@ -23,6 +23,8 @@ import importlib.metadata
 import json
 import socket
 import sys
+import tempfile
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 
@@ -62,7 +64,7 @@ REFERENCE = "/synthetic-models/sl-pii"
 class Verifier:
     def verify(self, payload, *, scheme, key_id, signature):
         expected = hmac.new(KEY, payload, hashlib.sha256).hexdigest()
-        return key_id == "synthetic" and hmac.compare_digest(expected, signature)
+        return scheme == "hmac-sha256" and key_id == "synthetic" and hmac.compare_digest(expected, signature)
 
 
 manifest = {
@@ -102,6 +104,75 @@ def readiness(age):
     )
 
 
+# Carry the signed activation manifest as policy data in the signed archive.
+# The two schemas have separate purposes and each verifies its own signature.
+from openmed.clinical.languages.offline_bundle import (
+    HostResources, OfflineBundleComponent, OfflineBundleDescriptor,
+    ResourceRequirements, package_offline_bundle, install_offline_bundle,
+)
+from openmed.core.model_integrity import sha256_file
+
+workspace = tempfile.TemporaryDirectory()
+build_root = Path(workspace.name)
+payloads = {
+    "model/model.onnx": b"synthetic model",
+    "lexicons/public.tsv": b"homa\tCONDITION\n",
+    "policy/activation.json": json.dumps(manifest).encode(),
+    "evidence/readiness.json": json.dumps([readiness(timedelta(days=1)).to_dict()]).encode(),
+    "selftests/cases.jsonl": json.dumps({
+        "case_id": "sl-001", "synthetic": True, "text": "homa",
+        "expected": [{"start": 0, "end": 4, "label": "CONDITION"}],
+    }).encode() + b"\n",
+}
+sources = {}
+for relative, payload in payloads.items():
+    path = build_root / "sources" / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    sources[relative] = path
+components = tuple(
+    OfflineBundleComponent(
+        component_id=kind.replace("_", "-"), kind=kind, files=(relative,),
+        license="Apache-2.0", source="synthetic:openmed/activation",
+        data_classification="synthetic" if kind == "self_test" else "public",
+    )
+    for kind, relative in (
+        ("model", "model/model.onnx"), ("lexicon", "lexicons/public.tsv"),
+        ("policy", "policy/activation.json"), ("evidence", "evidence/readiness.json"),
+        ("self_test", "selftests/cases.jsonl"),
+    )
+)
+descriptor = OfflineBundleDescriptor(
+    bundle_id=manifest["bundle_id"], bundle_version=manifest["bundle_version"],
+    language="sl", scripts=("Latin",),
+    capabilities=tuple(manifest["packs"][0]["tasks"]),
+    resources=ResourceRequirements(1, 1024 * 1024), components=components,
+)
+packaged = package_offline_bundle(
+    descriptor, sources, build_root / "portable", signature_key=KEY,
+)
+installation = install_offline_bundle(
+    packaged.path, build_root / "installed", host=HostResources(1024 * 1024, 8 * 1024 * 1024),
+    signature_key=KEY, self_test_runner=lambda root, text: [(0, 4, "CONDITION")],
+)
+assert installation.installed and installation.install_path is not None
+installed_root = installation.install_path
+documents = {}
+for relative in ("policy/activation.json", "evidence/readiness.json"):
+    data = (installed_root / relative).read_bytes()
+    assert "sha256:" + hashlib.sha256(data).hexdigest() == installation.verification.file_digests[relative]
+    documents[relative] = json.loads(data)
+manifest = documents["policy/activation.json"]
+readiness_rows = documents["evidence/readiness.json"]
+assert installation.verification.bundle_id == manifest["bundle_id"]
+assert installation.verification.bundle_version == manifest["bundle_version"]
+assert installation.verification.language == manifest["packs"][0]["language"]
+model_file = installed_root / "model/model.onnx"
+REFERENCE = str(model_file)
+MODEL = sha256_file(model_file)
+assert MODEL == installation.verification.file_digests["model/model.onnx"]
+
+
 def view():
     return {
         "supported": "sl" in SUPPORTED_LANGUAGES,
@@ -122,7 +193,7 @@ except LanguageBundleActivationError as error:
     result["stale"] = error.reason.value
 result["after_stale"] = view()
 
-record = activator.activate(manifest, [readiness(timedelta(days=1))], handles)
+record = activator.activate(manifest, readiness_rows, handles)
 result["active"] = view()
 result["tasks"] = list(activator.qualified_tasks("sl"))
 result["claim"] = activator.clinical_claim("sl")
@@ -131,6 +202,16 @@ result["record"] = json.loads(record.to_json())
 activator.rollback(record.activation_id)
 result["rolled_back"] = view()
 result["builtin_preserved"] = LANGUAGE_PACK_REGISTRY.get("en") is builtin_en
+result["installed"] = installation.installed
+result["paths_hidden"] = REFERENCE not in record.to_json()
+model_file.write_bytes(b"tampered model")
+try:
+    activator.activate(manifest, readiness_rows, {
+        "sl-pii": LocalModelHandle(REFERENCE, sha256_file(model_file)),
+    })
+except LanguageBundleActivationError as error:
+    result["tampered"] = error.reason.value
+result["after_tamper"] = view()
 print(json.dumps(result, sort_keys=True))
 """
 
@@ -169,3 +250,7 @@ def test_signed_bundle_activates_and_rolls_back_through_live_adapters() -> None:
     assert "/synthetic-models" not in json.dumps(result["record"])
     assert result["rolled_back"] == before
     assert result["builtin_preserved"] is True
+    assert result["installed"] is True
+    assert result["paths_hidden"] is True
+    assert result["tampered"] == "artifact_digest_mismatch"
+    assert result["after_tamper"] == before

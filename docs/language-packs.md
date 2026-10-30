@@ -147,6 +147,57 @@ activator.qualified_tasks("lt")  # ("deidentification", "ner")
 activator.clinical_claim("lt")  # "supported" or "preview"
 ```
 
+### Handoff from the offline installer
+
+The [offline installer](low-bandwidth-install.md#install-an-offline-clinical-language-bundle)
+uses the signed archive manifest to bind every file. Activation uses the
+separate signed manifest described below to bind pack declarations and model
+aliases. Store that activation manifest as `policy/activation.json` in a
+`policy` component, and the readiness rows as `evidence/readiness.json` in an
+`evidence` component. Sign the activation manifest with
+`language_bundle_signing_payload()` before packaging; the archive signature
+then also covers both files. No schema conversion or signing-key inference
+happens during installation.
+
+After a successful installation, read the declared files from
+`installation.install_path`, bind each read to the verified archive digest,
+and pass the resulting activation inputs explicitly:
+
+```python
+import hashlib
+import json
+from openmed.core.model_integrity import sha256_file
+
+root = installation.install_path
+verification = installation.verification
+if not installation.installed or root is None or not verification.valid:
+    raise ValueError("bundle_not_installed")
+root = root.resolve()
+documents = {}
+for relative in ("policy/activation.json", "evidence/readiness.json"):
+    payload = (root / relative).read_bytes()
+    if "sha256:" + hashlib.sha256(payload).hexdigest() != verification.file_digests[relative]:
+        raise ValueError("bundle_content_changed")
+    documents[relative] = json.loads(payload)
+manifest = documents["policy/activation.json"]
+if (manifest["bundle_id"], manifest["bundle_version"]) != (verification.bundle_id, verification.bundle_version):
+    raise ValueError("bundle_identity_mismatch")
+model_path = root / "model/model.onnx"  # explicit layout and alias chosen at build time
+record = activator.activate(
+    manifest,
+    documents["evidence/readiness.json"],
+    {"lt-pii": LocalModelHandle(str(model_path), sha256_file(model_path))},
+)
+```
+
+Match the descriptor's language and capability declarations to the activation
+manifest during the build. The example's model filename and alias are explicit
+application choices; OpenMed performs no discovery. The measured model digest
+must equal the signed activation declaration, so changed model bytes refuse
+activation. Keep installed files protected from later edits. The existing
+offline integration check exercises packaging, signature verification,
+installation, activation, rollback and refusal after model tampering.
+
 ### Manifest contract
 
 The schema `1.0` manifest is a JSON object with `schema_version`, `bundle_id`,
@@ -192,8 +243,9 @@ Only tasks that are both declared by the bundle and qualified by the evidence
 are activated. Declared tasks without evidence are listed as `withheld_tasks`
 in the record; evidence for tasks the bundle does not declare is ignored.
 
-All packs in a bundle are committed as one registry generation, so live
-adapters see either the previous state or the complete bundle. A refusal
+All packs in a bundle are committed as one registry generation. Registry
+readers see a committed table, and live adapters refresh once for the bundle.
+Callbacks may read the pending table but cannot register packs during refresh. A refusal
 raises `LanguageBundleActivationError` with a controlled `reason`, such as
 `signature_invalid`, `readiness_stale`, `unknown_critical_field`, or
 `pack_identity_conflict`, and leaves the previous registry state unchanged.

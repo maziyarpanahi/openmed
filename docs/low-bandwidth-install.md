@@ -316,10 +316,10 @@ existing installation is never replaced (`install_target_exists`). Pass
 
 `to_dict()` reports contain reason codes, counts, bundle-relative paths,
 digests, license records, capabilities, and resource requirements. They never
-contain self-test text, key material, or absolute paths. The
-`OfflineBundleVerification` result is the input for activating the language;
-installing a bundle does not register it with the
-[language-pack registry](language-packs.md).
+contain self-test text, key material, or absolute paths. Installing a bundle does not register it with the language-pack registry.
+Carry a separately signed activation manifest in a policy component and
+readiness rows in an evidence component, then use the explicit
+[installer-to-activation handoff](language-packs.md#handoff-from-the-offline-installer).
 
 A bundle is a deployment artifact. Passing verification and self-tests shows
 that the files are intact and the packaged model runs offline. It is not a
