@@ -14,7 +14,9 @@ U+1004 U+103A U+1039 kinzi sequence, dot below before asat, and code points
 the Zawgyi layout never assigns). The smoothed share of Zawgyi evidence is the
 reported confidence. Text is converted only when that confidence reaches
 :data:`ZAWGYI_CONFIDENCE_THRESHOLD` *and* at least two structural Zawgyi
-signals are present. Zawgyi presentation forms (U+1060-U+1097 and friends)
+signals are present and no opposing Unicode signal exists. Mixed encoding
+evidence stays undetermined regardless of which encoding dominates. Zawgyi
+presentation forms (U+1060-U+1097 and friends)
 only add weak evidence, because Mon, Shan, Karen and other Myanmar-script
 languages use the same code points for their own letters in Unicode.
 
@@ -367,7 +369,11 @@ def detect_zawgyi(
         zawgyi_score + unicode_signals + 2 * _SMOOTHING
     )
     decision: ZawgyiDecision
-    if zawgyi_signals >= _MIN_STRUCTURAL_SIGNALS and confidence >= threshold:
+    if zawgyi_signals and unicode_signals:
+        # A dominant encoding must never rewrite a minority Unicode run.
+        # Conversion is document-wide, so conflicting evidence abstains.
+        decision = "undetermined"
+    elif zawgyi_signals >= _MIN_STRUCTURAL_SIGNALS and confidence >= threshold:
         decision = "zawgyi"
     elif 1.0 - confidence >= threshold:
         decision = "unicode"

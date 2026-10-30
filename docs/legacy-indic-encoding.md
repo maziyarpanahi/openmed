@@ -126,6 +126,9 @@ half. Text converts only when the confidence reaches
 `ZAWGYI_CONFIDENCE_THRESHOLD` (0.85) and at least two structural signals are
 present, so at least three independent signals are needed when there is no
 Unicode evidence.
+Any conflicting structural Zawgyi and Unicode evidence makes the whole
+document `undetermined`, even when one encoding dominates. This prevents
+auto-conversion from rewriting a minority Unicode name or identifier.
 
 | Decision | Meaning | Text | `reason` |
 | --- | --- | --- | --- |
@@ -154,6 +157,10 @@ in these languages is reported as `undetermined` or `unicode` and left
 unchanged. The detector and rule table cover Zawgyi Burmese only: legacy Mon
 and Shan fonts and Zawgyi-styled text in those languages are not converted.
 For known non-Burmese Myanmar-script input, pass `encoding="unicode"`.
+The [Unicode Myanmar FAQ](https://www.unicode.org/faq/myanmar.html) cautions
+that rule-based detection can mistake other Myanmar-script languages for
+Zawgyi. These conservative rules and synthetic controls do not establish
+complete language coverage or guarantee encoding identification.
 Typing substitutions that also occur in Unicode text, such as digit zero for
 WA or digit seven for RA, are left unchanged so numeric identifiers are never
 altered.
@@ -168,7 +175,7 @@ and license; OpenMed does not redistribute them.
 
 The Zawgyi rule table and detector were written for OpenMed from the publicly
 documented Zawgyi-One code-point layout, the Unicode Myanmar block chart and
-the storage order in Unicode Technical Note #11. No third-party converter
+the storage order in [Unicode Technical Note #11](https://www.unicode.org/notes/tn11/). No third-party converter
 code, rule file or detector model is copied or bundled, and no dependency is
 added. `ZAWGYI_RULE_PROVENANCE` records the rule-set name, version, license
 (Apache-2.0) and sources.

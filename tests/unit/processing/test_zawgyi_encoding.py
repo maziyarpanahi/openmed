@@ -238,6 +238,8 @@ def test_text_outside_myanmar_runs_keeps_identity_offsets():
         pytest.param(_cp(0x1000, 0x1031, 0x101C), id="valid-in-both"),
         pytest.param(_ZG_NAME[:5], id="short-zawgyi-word"),
         pytest.param(f"{_ZG_SENTENCE} {_UNI_SENTENCE}", id="mixed-encodings"),
+        pytest.param((_ZG_NAME + " ") * 10 + _UNI_NAME, id="mostly-zawgyi"),
+        pytest.param((_UNI_NAME + " ") * 10 + _ZG_NAME, id="mostly-unicode"),
     ],
 )
 def test_short_or_ambiguous_myanmar_is_undetermined_and_unchanged(text):
