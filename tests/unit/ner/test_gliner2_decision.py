@@ -202,13 +202,25 @@ def test_multi_label_returns_every_score_and_uses_the_profile_threshold() -> Non
     assert result.choices == ("diabetes", "renal")
 
 
-def test_scalar_score_is_the_affirmative_probability() -> None:
+@pytest.mark.parametrize("levels", [(), ("low", "medium", "high")])
+def test_scalar_score_is_the_affirmative_probability(levels) -> None:
     backend, model = _backend({"yes": 0.12, "no": 0.88})
 
     result = decide(
-        _request(DecisionMode.SCALAR_SCORE, (), "Synthetic note shows no concern."),
+        DecisionRequest(
+            mode=DecisionMode.SCALAR_SCORE,
+            input_text="Synthetic note shows no concern.",
+            levels=levels,
+        ),
         backend=backend,
     )
+
+    if levels:
+        assert result.state is DecisionState.UNSUPPORTED
+        assert result.code == "backend_unsupported"
+        assert result.scalar_score is None
+        assert model.calls == []
+        return
 
     assert model.calls[0]["tasks"]["decision"]["labels"] == ["yes", "no"]
     assert result.state is DecisionState.SUCCESS

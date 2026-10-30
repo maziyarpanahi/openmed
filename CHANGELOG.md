@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
+
 - Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
 
 - Add an opt-in System One and Decisions server backend with loopback defaults, explicit non-PHI private-network approval, bounded responses and deadlines, and typed transport failures.

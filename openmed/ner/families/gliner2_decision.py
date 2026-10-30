@@ -189,6 +189,10 @@ class GLiNER2DecisionBackend(EncoderDecisionBackend):
             if mode is DecisionMode.MULTI_LABEL:
                 return self._multi_label_scores(input_text, options)
             if mode is DecisionMode.SCALAR_SCORE:
+                if options:
+                    raise DecisionUnsupportedError(
+                        "GLiNER2 scalar scoring does not support declared levels"
+                    )
                 return self._scalar_score(input_text)
         except GLiNER2OutputError:
             raise DecisionConflictError(
