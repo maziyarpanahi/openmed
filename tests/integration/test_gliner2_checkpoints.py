@@ -1,6 +1,6 @@
 """Opt-in GLiNER2.5 checkpoint tests through ``gliner2.AutoExtractor``.
 
-The tests download public Apache-2.0 checkpoints once (296 MB and 1.15 GB of
+The tests download public Apache-2.0 checkpoints once (296 MB, 774 MB and 1.15 GB of
 safetensors), reload them from the local cache with every socket blocked, and
 run inference with every socket blocked. Set
 ``OPENMED_RUN_GLINER2_CHECKPOINT_TESTS=1`` with ``openmed[gliner2]`` installed
@@ -14,6 +14,7 @@ import os
 import socket
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -156,3 +157,62 @@ def test_multilingual_decide_checkpoint_scores_a_spanish_decision_offline() -> N
     assert result.ranking[0] == "book_appointment"
     assert result.autonomous_action is False
     assert result.review["required"] is True
+
+
+def test_openmed_disease_checkpoint_runs_through_public_ner_apis_offline() -> None:
+    _require_runtime()
+    from huggingface_hub import snapshot_download
+
+    from openmed import ModelLoader, OpenMedConfig, analyze_text
+    from openmed.ner import NerRequest, infer
+    from openmed.ner.indexing import GLINER2_DISEASE_MODEL_ID
+
+    revision = "fccb29669b847cd6ca6384660d06c750c55366e2"
+    snapshot = Path(
+        snapshot_download(
+            GLINER2_DISEASE_MODEL_ID,
+            revision=revision,
+            token=False,
+            allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model"],
+        )
+    )
+    config = OpenMedConfig(
+        device="cpu", cache_dir=str(snapshot.parents[2]), local_only=True
+    )
+    text = (
+        "65-year-old man with type 2 diabetes mellitus, stage 3 "
+        "chronic kidney disease and atrial fibrillation, "
+        "admitted with community-acquired pneumonia."
+    )
+    expected = {
+        "type 2 diabetes mellitus",
+        "stage 3 chronic kidney disease",
+        "atrial fibrillation",
+        "community-acquired pneumonia",
+    }
+    clear_gliner2_cache()
+    with _no_network():
+        result = analyze_text(
+            text,
+            model_id=GLINER2_DISEASE_MODEL_ID,
+            revision=revision,
+            threshold=0.7,
+            config=config,
+        )
+        assert {entity.text for entity in result.entities} == expected
+        assert all(entity.label == "DISEASE" for entity in result.entities)
+        assert all(text[e.start : e.end] == e.text for e in result.entities)
+        assert all(0.7 <= e.confidence <= 1 for e in result.entities)
+
+        local = infer(
+            NerRequest(model_id=str(snapshot), text=text, threshold=0.7),
+            config=config,
+        )
+        assert {entity.text for entity in local.entities} == expected
+        assert local.meta["labels_used"] == ["disease"]
+        assert all(text[e.start : e.end] == e.text for e in local.entities)
+
+        pipeline = ModelLoader(config).create_pipeline(str(snapshot), threshold=0.7)
+        assert {item["word"] for item in pipeline(text)} == expected
+        negative = "Started metformin and lisinopril; follow up in four weeks."
+        assert pipeline(negative) == []

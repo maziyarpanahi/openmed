@@ -240,6 +240,10 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 
 ### Fixed
 
+- Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
+  default and recognize saved GLiNER2.5 boundary-extractor configurations for
+  offline local loading.
+
 - Retain the `openmed.service.schemas.DECISION_SCHEMA_VERSION` compatibility
   export while adding the decision 1.1 question-set contract.
 

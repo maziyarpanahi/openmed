@@ -14,6 +14,7 @@ infer_module = importlib.import_module("openmed.ner.infer")
 from openmed.core.config import OpenMedConfig
 from openmed.ner.indexing import (
     GLIFORMER_DISEASE_MODEL_ID,
+    GLINER2_DISEASE_MODEL_ID,
     GLINER_BIOMED_MODEL_ID,
     ModelIndex,
     ModelRecord,
@@ -285,19 +286,23 @@ def native_inference(monkeypatch):
     return calls, loads
 
 
-def test_gliformer_infer_defaults_offsets_and_confidence(native_inference):
+@pytest.mark.parametrize(
+    "model_id,family",
+    [(GLIFORMER_DISEASE_MODEL_ID, "gliformer"), (GLINER2_DISEASE_MODEL_ID, "gliner2")],
+)
+def test_disease_infer_defaults_offsets_and_confidence(
+    native_inference, model_id, family
+):
     calls, loads = native_inference
     text = "asthma; diabetes; asthma"
-    response = infer(
-        NerRequest(model_id=GLIFORMER_DISEASE_MODEL_ID, text=text, threshold=0.7)
-    )
+    response = infer(NerRequest(model_id=model_id, text=text, threshold=0.7))
     assert [(e.text, e.start, e.end, e.label) for e in response.entities] == [
         ("asthma", 0, 6, "DISEASE"),
         ("asthma", 18, 24, "DISEASE"),
     ]
     assert calls[0]["labels"] == ["disease"]
-    assert response.meta["family"] == "gliformer"
-    assert loads[0][0] == GLIFORMER_DISEASE_MODEL_ID
+    assert response.meta["family"] == family
+    assert loads[0][0] == model_id
 
 
 @pytest.mark.parametrize(
