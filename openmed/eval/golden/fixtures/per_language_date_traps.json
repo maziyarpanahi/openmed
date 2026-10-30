@@ -536,16 +536,7 @@
           "end": 102,
           "label": "DATE",
           "text": "9 ጥር 1976",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3866,
-              "reason": "non_gregorian_month_name_date_not_detected"
-            }
-          }
+          "metadata": {}
         }
       ],
       "metadata": {
@@ -646,16 +637,7 @@
           "end": 106,
           "label": "DATE",
           "text": "۱۰ محرم ۱۴۰۶",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3866,
-              "reason": "non_gregorian_month_name_date_not_detected"
-            }
-          }
+          "metadata": {}
         }
       ],
       "metadata": {
@@ -754,16 +736,7 @@
           "end": 97,
           "label": "DATE",
           "text": "12 בתשרי 5747",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3866,
-              "reason": "non_gregorian_month_name_date_not_detected"
-            }
-          }
+          "metadata": {}
         }
       ],
       "metadata": {
@@ -1040,16 +1013,7 @@
           "end": 101,
           "label": "DATE",
           "text": "۱۰ محرم ۱۴۰۶",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "issue": 3866,
-              "reason": "non_gregorian_month_name_date_not_detected"
-            }
-          }
+          "metadata": {}
         }
       ],
       "metadata": {

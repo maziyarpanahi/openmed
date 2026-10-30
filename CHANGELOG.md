@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
+
 - Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
 
 - Record surrogate-provider versions and digest-only probe receipts, and expose
