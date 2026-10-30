@@ -188,7 +188,9 @@ class LanguageRouter:
         """Create a router.
 
         Args:
-            packs: Candidate packs. Built-in packs are used when omitted.
+            packs: Candidate packs. When omitted, the registered built-in packs
+                are used together with the unregistered user-supplied-model
+                route packs, such as Sinhala, which carry no bundled model.
             language_identifier: Injected local LID backend. When omitted and
                 ``use_optional_lid`` is true, the lazy CLD2 adapter is used.
             use_optional_lid: Try the optional CLD2 adapter when no backend was
@@ -198,7 +200,7 @@ class LanguageRouter:
         """
 
         self.packs = tuple(
-            LANGUAGE_PACK_ADAPTERS.registry.iter_packs() if packs is None else packs
+            LANGUAGE_PACK_ADAPTERS.routing_packs() if packs is None else packs
         )
         if not self.packs:
             raise ValueError("packs must contain at least one LanguagePack")

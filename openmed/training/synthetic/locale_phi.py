@@ -58,6 +58,7 @@ from openmed.training.synthetic.native_dates import (
     generate_native_date,
     resolve_native_date_profiles,
 )
+from openmed.training.synthetic.provider_versions import surrogate_provider_stamp
 
 SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "as",
@@ -706,6 +707,7 @@ class LocalePhiGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "locale_phi",
+            "surrogate_providers": surrogate_provider_stamp(locale),
             **self._date_profile_metadata(language, spans),
         }
         return LocalePhiExample(
