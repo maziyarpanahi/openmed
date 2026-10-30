@@ -740,6 +740,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     ):
         import ssl
 
+        self._deadline = time.monotonic() + timeout
         context = ssl.create_default_context()
         super().__init__(addresses[0], port, timeout=timeout, context=context)
         self._addresses = addresses
@@ -747,8 +748,15 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         self._tls_context = context
 
     def connect(self) -> None:
-        sock = _open_tcp(self._addresses, self.port, self.timeout)
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError()
+        sock = _open_tcp(self._addresses, self.port, remaining)
         try:
+            remaining = self._deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError()
+            sock.settimeout(remaining)
             self.sock = self._tls_context.wrap_socket(
                 sock, server_hostname=self._server_hostname
             )
@@ -818,11 +826,15 @@ def _connection(target: _Target, timeout: float) -> http.client.HTTPConnection:
     return _PinnedHTTPConnection(target.addresses, target.port, timeout)
 
 
-def _open_tcp(addresses: tuple[str, ...], port: int, timeout: Any) -> socket.socket:
+def _open_tcp(addresses: tuple[str, ...], port: int, timeout: float) -> socket.socket:
+    deadline = time.monotonic() + timeout
     last_error: OSError | None = None
     for address in addresses:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError()
         try:
-            sock = socket.create_connection((address, port), timeout)
+            sock = socket.create_connection((address, port), remaining)
         except OSError as error:
             last_error = error
             continue

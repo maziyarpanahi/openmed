@@ -621,14 +621,33 @@ def test_score_answers_with_only_an_expected_level_are_scalar(start_server) -> N
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("phase", ["response", "connect"])
 def test_a_server_slower_than_the_timeout_fails_without_an_answer(
-    start_server,
+    start_server, phase: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     server = start_server()
     server.default = sleep_then(1.5, reply_json(SYSTEM_ONE_RESPONSE))
+    if phase == "connect":
+        port = server.origin.rsplit(":", 1)[1]
+        backend = _backend(
+            f"http://localhost:{port}",
+            resolver=lambda host, port: [f"127.0.0.{i}" for i in range(2, 10)],
+        )
+
+        def stall(address, timeout):
+            time.sleep(timeout)
+            raise TimeoutError()
+
+        monkeypatch.setattr(socket, "create_connection", stall)
+    else:
+        backend = _backend(server.origin)
+    started = time.monotonic()
+    with pytest.raises(DecisionServerTimeoutError):
+        backend.score_questions(_question_set(timeout_ms=250))
+    assert time.monotonic() - started < 1.2
     started = time.monotonic()
 
-    result = decide(_question_set(timeout_ms=250), backend=_backend(server.origin))
+    result = decide(_question_set(timeout_ms=250), backend=backend)
 
     assert time.monotonic() - started < 1.2
     assert result.state is DecisionState.FAILURE
