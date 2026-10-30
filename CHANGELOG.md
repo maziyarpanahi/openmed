@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add fail-closed required audit for declared service operations: durable intent/commit receipts on the action ledger, denied or reconcile-required outcomes when audit storage fails, and exactly-once reconciliation that never re-runs a committed effect (#3708).
+
 - Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
 
 - Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.

@@ -570,6 +570,7 @@ classification:
     - privacy/trace-recovery.md
     - security/tamper-evident-audit-log.md
     - security/audit-retention.md
+    - security/required-audit.md
     - security/redaction-diff.md
     - security/policy-composition.md
     - security/evidence-integrity.md

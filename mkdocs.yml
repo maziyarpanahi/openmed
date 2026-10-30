@@ -512,6 +512,7 @@ nav:
       - Transactional Trace Recovery: privacy/trace-recovery.md
       - Tamper-evident Audit Log: security/tamper-evident-audit-log.md
       - Audit-artifact Retention: security/audit-retention.md
+      - Fail-closed Required Audit: security/required-audit.md
       - Policy-aware Redaction Diffs: security/redaction-diff.md
       - Privacy Policy Composition: security/policy-composition.md
       - Evidence-bundle Integrity: security/evidence-integrity.md
