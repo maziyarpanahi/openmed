@@ -71,6 +71,7 @@ DOCUMENTED_APPROXIMATE = {
     "ms",
     "pa",
     "rw",
+    "si",
     "sr",
     "te",
     "ur",
