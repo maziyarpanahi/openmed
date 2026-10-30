@@ -18,6 +18,9 @@ from openmed.training.synthetic import (
     LocalePhiGenerator,
     generate_locale_phi_examples,
 )
+from openmed.training.synthetic.locale_phi import (
+    AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES,
+)
 from openmed.training.synthetic.native_dates import (
     BIKRAM_SAMBAT_CALENDAR,
     DATE_CALENDARS,
@@ -57,7 +60,8 @@ _SPAN_METADATA_KEYS = {
 _GENERATED_PROFILES = tuple(
     name
     for name, profile in NATIVE_DATE_PROFILES.items()
-    if profile.language in SUPPORTED_LOCALE_PHI_LANGUAGES
+    if profile.language
+    in (*SUPPORTED_LOCALE_PHI_LANGUAGES, *AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES)
 )
 _BIDI_CONTROLS = frozenset("؜‎‏‪‫‬‭‮⁦⁧⁨⁩")
 _ZERO_DIGIT = {"latn": "0", "arab": "٠", "arabext": "۰", "thai": "๐", "deva": "०"}
