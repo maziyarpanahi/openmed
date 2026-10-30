@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Activate verified local language bundles with qualified task records, atomic registry generations and explicit rollback (#3695).
+
 - Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
 
 - Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).

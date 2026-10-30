@@ -645,12 +645,17 @@ def test_readiness_freshness_window_is_configurable(env: _Fixture) -> None:
     assert record.languages[0].tasks == ("deidentification", "ner")
 
 
-def test_listener_failure_restores_previous_registry(env: _Fixture) -> None:
+@pytest.mark.parametrize("mutating_listener", [False, True])
+def test_listener_failure_restores_previous_registry(
+    env: _Fixture, mutating_listener: bool
+) -> None:
     failures = {"remaining": 1}
 
     def flaky() -> None:
         if failures["remaining"]:
             failures["remaining"] -= 1
+            if mutating_listener:
+                env.registry.register(_user_pack("fi", surrogate_locale="fi_FI"))
             raise RuntimeError("synthetic adapter failure")
 
     env.registry._add_listener(flaky, replay=False)
@@ -661,6 +666,7 @@ def test_listener_failure_restores_previous_registry(env: _Fixture) -> None:
 
     assert _refusal(excinfo) == "registry_refresh_failed"
     assert dict(env.registry._snapshot()[1]) == dict(packs_before)
+    assert env.registry.generation == _generation
     assert env.activator.active_activations() == ()
     assert env.notifications[-1] == ("en",)
 

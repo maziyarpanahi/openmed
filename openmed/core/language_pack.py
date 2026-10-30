@@ -243,6 +243,7 @@ class LanguagePackRegistry:
         self._listeners: list[Callable[[], None]] = []
         self._lock = RLock()
         self._generation = 0
+        self._committing_generation = False
 
     @property
     def generation(self) -> int:
@@ -276,6 +277,8 @@ class LanguagePackRegistry:
             raise TypeError("pack must be a LanguagePack")
 
         with self._lock:
+            if self._committing_generation:
+                raise RuntimeError("registry generation refresh in progress")
             if pack.code in self._packs and not replace:
                 raise ValueError(f"language pack {pack.code!r} is already registered")
             self._packs[pack.code] = pack
@@ -300,9 +303,9 @@ class LanguagePackRegistry:
         """Atomically replace every pack when the registry is still unchanged.
 
         Listeners are notified once for the whole replacement. If a listener
-        fails, the previous table is restored (unless another change has been
-        committed meanwhile), listeners are refreshed again, and the original
-        error propagates.
+        fails, the previous table and generation are restored, listeners are
+        refreshed again, and the original error propagates. Concurrent writers
+        wait for completion; reentrant callback mutations are refused.
 
         Args:
             packs: Complete replacement table keyed by language code.
@@ -326,29 +329,29 @@ class LanguagePackRegistry:
             table[code] = pack
 
         with self._lock:
-            if self._generation != expected_generation:
+            if self._committing_generation or self._generation != expected_generation:
                 return None
             previous = self._packs
             self._packs = table
             self._generation += 1
             committed = self._generation
             listeners = tuple(self._listeners)
-        try:
-            for listener in listeners:
-                listener()
-        except BaseException:
-            with self._lock:
-                restored = self._generation == committed
-                if restored:
-                    self._packs = previous
-                    self._generation += 1
-            if restored:
-                # Best effort: the original listener error is the one raised.
+            self._committing_generation = True
+            try:
+                for listener in listeners:
+                    listener()
+            except BaseException:
+                self._packs = previous
+                self._generation = expected_generation
+                # Readers in other threads cannot observe the pending table.
+                # Callbacks may read it, but cannot commit reentrant mutations.
                 for listener in listeners:
                     with suppress(Exception):
                         listener()
-            raise
-        return committed
+                raise
+            finally:
+                self._committing_generation = False
+            return committed
 
     def _add_listener(
         self,
