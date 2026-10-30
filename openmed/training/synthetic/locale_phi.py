@@ -921,6 +921,8 @@ class LocalePhiGenerator:
             "seed": self.seed,
             "synthetic": True,
             "synthetic_source": "locale_phi",
+            "surrogate_providers": surrogate_provider_stamp(locale),
+            **self._date_profile_metadata(language, spans),
         }
         return LocalePhiExample(
             text=text,

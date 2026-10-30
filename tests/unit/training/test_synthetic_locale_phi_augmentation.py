@@ -59,6 +59,7 @@ _LEGACY_EXAMPLE_METADATA_KEYS = {
     "seed",
     "synthetic",
     "synthetic_source",
+    "surrogate_providers",
 }
 
 _PLACEHOLDER = re.compile(r"\[[A-Z_]+\]")
