@@ -549,6 +549,7 @@ classification:
     - languages/clinical-transliteration.md
     - languages/abbreviation-mining.md
     - languages/code-switch-projection.md
+    - languages/translation-guard.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md

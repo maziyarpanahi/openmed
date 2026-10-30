@@ -491,6 +491,7 @@ nav:
       - Clinical Transliteration Provenance: languages/clinical-transliteration.md
       - Local Abbreviation Mining: languages/abbreviation-mining.md
       - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
