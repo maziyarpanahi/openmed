@@ -640,6 +640,7 @@ nav:
       - No-PHI Exception Taxonomy: security/exception-taxonomy.md
       - Differential-Privacy Budget Migrations: security/budget-migrations.md
       - Privacy-policy Simulation Matrix: security/policy-simulation.md
+      - Federated Accountant Checkpoints: training/federated-accountant-checkpoints.md
       - Privacy Exception Budgets: security/exception-budgets.md
       - Export Filename Policy: security/export-naming.md
       - Security & Disclosure: security/disclosure-policy.md
