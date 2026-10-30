@@ -381,6 +381,7 @@ classification:
     - structured/schema-guided-extraction.md
     - medical-tokenizer.md
     - indic-normalization.md
+    - languages/morphology-projection.md
     - configuration.md
     - configuration/precedence-audit.md
     - profiles.md
@@ -548,6 +549,7 @@ classification:
     - languages/clinical-transliteration.md
     - languages/abbreviation-mining.md
     - languages/code-switch-projection.md
+    - languages/translation-guard.md
     - runtimes/browser-extension.md
     - india-health-id-deidentification.md
     - security/policy-as-data.md
