@@ -359,8 +359,20 @@ def run_dataset_recipe(
         raise ValueError("synthetic recipe generation or validation failed") from None
 
 
-def builtin_recipe_generators() -> dict[str, RecipeGenerator]:
-    """Return existing local social-history and burned-in-image generator adapters."""
+def builtin_recipe_generators(
+    *, font_fallback: bool = False
+) -> dict[str, RecipeGenerator]:
+    """Return local social-history and burned-in-image generator adapters.
+
+    Args:
+        font_fallback: Explicitly allow checked fallback fonts for the English
+            image adapter. The default preserves strict font availability.
+
+    Returns:
+        Adapters whose provenance binds the image fallback policy.
+    """
+    if not isinstance(font_fallback, bool):
+        raise ValueError("font_fallback must be a boolean")
 
     def social(seed, count, dependencies):
         from openmed.training.synthetic.social_history import (
@@ -378,9 +390,9 @@ def builtin_recipe_generators() -> dict[str, RecipeGenerator]:
             raise ValueError("burned-in recipe count exceeds bounded rendering limit")
         artifacts = {}
         for index in range(count):
-            example = BurnedInGenerator(seed=seed + index).generate(
-                "en", background="solid"
-            )
+            example = BurnedInGenerator(
+                seed=seed + index, font_fallback=font_fallback
+            ).generate("en", background="solid")
             buffer = io.BytesIO()
             example.image.save(buffer, format="PNG")
             item = example.to_training_item()
@@ -413,6 +425,7 @@ def builtin_recipe_generators() -> dict[str, RecipeGenerator]:
                 {
                     "adapter_source_digest": adapter_digest,
                     "generator_source_digest": generator_digest,
+                    **({"font_fallback": font_fallback} if code == "burned_in" else {}),
                 }
             )
         ).hexdigest()

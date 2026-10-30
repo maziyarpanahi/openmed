@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- Burned-in synthetic rendering now requires covering fonts and complex-script shaping; missing default fonts require explicit `font_fallback=True` (#3868).
+  Dataset-recipe callers can opt into checked image fallback through
+  `builtin_recipe_generators(font_fallback=True)`; the policy is provenance-bound.
+
 - Require Python 3.11 or newer for the v3.2 development line so dependency
   security fixes can be installed. Upgrade Python 3.10 environments before
   updating OpenMed; published v3.1.0 remains available for the older interpreter.
@@ -17,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Validate synthetic releases against disclosure, lineage, licenses, withdrawals, benchmark contamination and subgroup utility evidence (#3214).
+
+- Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
+
+- Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
+
+- Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+  The live inventory includes explicit augmentation-only generators independently of model-backed language support.
+
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
+
+- Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
+
+- Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
+
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
 
 - Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
 
