@@ -155,6 +155,7 @@ nav:
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md
+      - v3.4 Reference Deployment Declaration: deploy/reference-deployment.md
       - ModelLoader & Pipelines: model-loader.md
       - Bundled Offline Model Bootstrap: models/bundled-offline.md
       - Guarded Clinical Intelligence:

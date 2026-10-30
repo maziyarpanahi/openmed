@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Declare the v3.4 reference deployment, supported transports with their security posture, replica modes, durable components with recovery objectives, and unsupported deployments in a schema-validated file with a matching docs page (#3919).
+
 - Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
 
 - Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.

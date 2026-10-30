@@ -224,6 +224,7 @@ classification:
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
+    - deploy/reference-deployment.md
     - model-loader.md
     - models/bundled-offline.md
     - clinical/clinical-brief.md
