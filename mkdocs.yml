@@ -371,6 +371,7 @@ nav:
       - Synthetic FHIR Records: training/synthetic/fhir-records.md
       - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
       - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+      - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
