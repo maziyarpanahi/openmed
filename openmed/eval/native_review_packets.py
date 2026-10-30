@@ -1050,8 +1050,8 @@ def _provenance_commitment(
 ) -> str:
     # The commitment binds the private source mapping to the packet, so a
     # swapped or edited manifest entry fails verification. Source references
-    # are hashed together with unpublished provenance digests and are not
-    # recoverable from the packet.
+    # are hashed together with provenance digests. This integrity commitment
+    # is not encryption; callers must use opaque references and protect it.
     return canonical_digest(
         {
             "domain": _PROVENANCE_DOMAIN,
@@ -1081,7 +1081,7 @@ def build_native_review_packet(
 ) -> tuple[NativeReviewPacket, NativeReviewManifest]:
     """Build a deterministic native-review packet and its private manifest.
 
-    Items are ordered by a seeded keyed hash of their source reference, so the
+    Items are ordered by a seeded hash of their source reference, so the
     same inputs and seed produce byte-identical packets and manifests in any
     input order. Opaque item IDs are derived from the packet reference, seed,
     position, and reviewed content; they never encode the source reference.
