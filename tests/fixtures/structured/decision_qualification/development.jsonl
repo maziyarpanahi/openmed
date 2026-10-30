@@ -1,0 +1,26 @@
+{"id": "synthetic-dev-01", "mode": "fixed_choice", "input_text": "Synthetic review priority is clearly urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-dev-02", "mode": "fixed_choice", "input_text": "Synthetic triage queue is clearly urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-dev-03", "mode": "fixed_choice", "input_text": "Synthetic review priority is clearly routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-04", "mode": "fixed_choice", "input_text": "Synthetic triage queue is clearly routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-05", "mode": "fixed_choice", "input_text": "Synthetic review priority is likely urgent.", "options": ["urgent", "routine"], "expected_choices": ["urgent"]}
+{"id": "synthetic-dev-06", "mode": "fixed_choice", "input_text": "Synthetic review priority is likely routine.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-07", "mode": "fixed_choice", "input_text": "Synthetic queue lists urgent and routine items.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-08", "mode": "fixed_choice", "input_text": "Synthetic queue lists routine and urgent items.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-09", "mode": "fixed_choice", "input_text": "Synthetic evidence remains unclear.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-10", "mode": "fixed_choice", "input_text": "Synthetic queue status is unclear.", "options": ["urgent", "routine"], "expected_choices": ["routine"]}
+{"id": "synthetic-dev-11", "mode": "boolean_choice", "input_text": "Synthetic eligibility flag is clearly yes.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-dev-12", "mode": "boolean_choice", "input_text": "Synthetic consent field is clearly yes.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-dev-13", "mode": "boolean_choice", "input_text": "Synthetic eligibility flag is clearly no.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-dev-14", "mode": "boolean_choice", "input_text": "Synthetic consent field is clearly no.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-dev-15", "mode": "boolean_choice", "input_text": "Synthetic eligibility flag is likely yes.", "options": ["yes", "no"], "expected_choices": ["yes"]}
+{"id": "synthetic-dev-16", "mode": "boolean_choice", "input_text": "Synthetic consent field is likely no.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-dev-17", "mode": "boolean_choice", "input_text": "Synthetic form shows yes and no marks.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-dev-18", "mode": "boolean_choice", "input_text": "Synthetic form answer is blank.", "options": ["yes", "no"], "expected_choices": ["no"]}
+{"id": "synthetic-dev-19", "mode": "multi_label", "input_text": "Synthetic intake clearly lists fever and cough.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever", "cough"]}
+{"id": "synthetic-dev-20", "mode": "multi_label", "input_text": "Synthetic intake clearly lists rash.", "options": ["fever", "cough", "rash"], "expected_choices": ["rash"]}
+{"id": "synthetic-dev-21", "mode": "multi_label", "input_text": "Synthetic intake clearly lists cough.", "options": ["fever", "cough", "rash"], "expected_choices": ["cough"]}
+{"id": "synthetic-dev-22", "mode": "multi_label", "input_text": "Synthetic intake clearly lists fever and rash.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever", "rash"]}
+{"id": "synthetic-dev-23", "mode": "multi_label", "input_text": "Synthetic intake likely lists fever.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever"]}
+{"id": "synthetic-dev-24", "mode": "multi_label", "input_text": "Synthetic intake likely lists cough and rash.", "options": ["fever", "cough", "rash"], "expected_choices": ["cough", "rash"]}
+{"id": "synthetic-dev-25", "mode": "multi_label", "input_text": "Synthetic intake mentions no listed finding.", "options": ["fever", "cough", "rash"], "expected_choices": ["rash"]}
+{"id": "synthetic-dev-26", "mode": "multi_label", "input_text": "Synthetic intake lists fever only.", "options": ["fever", "cough", "rash"], "expected_choices": ["fever"]}
