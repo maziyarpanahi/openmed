@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
 - Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
 
 - Add deterministic rare-case synthetic privacy stress records with configurable attribute tiers, value-free risk labels, and linkage-attack truth.
