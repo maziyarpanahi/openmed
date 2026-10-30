@@ -27,9 +27,10 @@ by the caller.
 
 Responses parse into one :class:`~openmed.structured.decision.DecisionBackendOutput`
 per question, so OpenMed applies its own calibration and abstention instead of
-trusting a server's choice. OpenMed results render back into either shape; a
-question that did not succeed is rendered with a ``null`` answer plus its
-OpenMed ``state`` and ``code`` and is never given a fabricated answer.
+trusting a server's choice. OpenMed results render back into either shape.
+Non-success questions carry their OpenMed ``state`` and ``code``; choice and
+expected-level selections are ``null``, while available probabilities remain
+available for review.
 
 Nothing here performs network I/O, and error messages never echo the input,
 instructions, option values or descriptions.

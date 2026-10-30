@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -202,25 +203,17 @@ def test_each_question_uses_the_shared_calibration_profile() -> None:
 def test_per_question_fallback_scores_each_question_independently() -> None:
     seen: list[tuple[tuple[str, ...], DecisionMode]] = []
 
-    def scorer(
-        _text: str,
-        options: tuple[str, ...],
-        mode: DecisionMode,
-    ) -> list[float]:
-        seen.append((options, mode))
-        if mode is DecisionMode.BOOLEAN_CHOICE:
+    def scorer(request: DecisionRequest) -> DecisionBackendOutput:
+        seen.append((request.options or request.levels, request.mode))
+        if request.mode is DecisionMode.BOOLEAN_CHOICE:
             raise RuntimeError("synthetic failure")
-        if mode is DecisionMode.SCALAR_SCORE:
-            return [0.05, 0.05, 0.9]
-        return [0.9, 0.05, 0.05]
+        if request.mode is DecisionMode.SCALAR_SCORE:
+            return _output(0.05, 0.05, 0.9)
+        assert request.instructions == INSTRUCTION_SENTINEL
+        assert request.option_descriptions == (DESCRIPTION_SENTINEL, None, None)
+        return _output(0.9, 0.05, 0.05)
 
-    backend = EncoderDecisionBackend(
-        backend_id="synthetic.encoder.v1",
-        model_id="synthetic/encoder",
-        revision="abc123",
-        license_id="Apache-2.0",
-        scorer=scorer,
-    )
+    backend = SimpleNamespace(identity=IDENTITY, score=scorer)
     result = decide(_request(), backend=backend)
 
     assert seen == [
@@ -317,7 +310,15 @@ def test_question_set_timeout_budget_covers_the_whole_set(
     monkeypatch.setattr(
         "openmed.structured.decision.time.monotonic", lambda: next(ticks)
     )
-    result = decide(_request(timeout_ms=5))
+    questions = [
+        {
+            key: value
+            for key, value in question.items()
+            if key not in {"instructions", "option_descriptions"}
+        }
+        for question in _questions()
+    ]
+    result = decide(_request(timeout_ms=5, questions=questions))
 
     assert [(item.state, item.code) for item in result.questions][1:] == [
         (DecisionState.FAILURE, "backend_timeout"),
@@ -337,6 +338,27 @@ def test_question_set_timeout_budget_covers_the_whole_set(
         (lambda q: [{**q[2], "levels": ["Low", " low "]}], "unique"),
         (lambda q: [{**q[0], "instructions": "   "}], "non-blank"),
         (lambda q: [{**q[0], "instructions": "bad\x00text"}], "control"),
+        (
+            lambda q: [{**q[0], "instructions": INSTRUCTION_SENTINEL + "\ud800"}],
+            "control",
+        ),
+        (
+            lambda q: [
+                {
+                    **q[0],
+                    "option_descriptions": [
+                        DESCRIPTION_SENTINEL + "\ud800",
+                        None,
+                        None,
+                    ],
+                }
+            ],
+            "control",
+        ),
+        (
+            lambda q: [{**q[2], "levels": ["Low", DESCRIPTION_SENTINEL + "\ud800"]}],
+            "bounded text",
+        ),
         (lambda q: [{**q[0], "unexpected": True}], "unsupported"),
         (lambda q: [], "1 to"),
         (lambda q: [dict(q[0], question_id=f"q{i}") for i in range(33)], "1 to"),
@@ -354,8 +376,11 @@ def test_question_set_timeout_budget_covers_the_whole_set(
     ],
 )
 def test_invalid_question_sets_fail_closed(change: Any, match: str) -> None:
-    with pytest.raises((DecisionError, TypeError), match=match):
+    with pytest.raises((DecisionError, TypeError), match=match) as caught:
         _request(questions=change(_questions()))
+    for marker in (INPUT_SENTINEL, INSTRUCTION_SENTINEL, DESCRIPTION_SENTINEL):
+        assert marker not in str(caught.value)
+        assert marker not in repr(caught.value.args)
 
 
 def test_question_set_rejects_top_level_question_fields() -> None:

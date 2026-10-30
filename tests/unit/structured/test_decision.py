@@ -260,6 +260,16 @@ def test_backend_families_preserve_identity_and_require_permissive_license() -> 
         "specialist",
     ]
 
+    for changes in (
+        {"instructions": "Choose the option absent from the synthetic note."},
+        {"option_descriptions": ("Synthetic same-day review", None)},
+    ):
+        for backend in [*backends, None]:
+            result = decide(_request(**changes), backend=backend)
+            assert result.state is DecisionState.UNSUPPORTED
+            assert result.code == "backend_unsupported"
+            assert result.choice is None
+
     with pytest.raises(DecisionError, match="permissive"):
         DecisionBackendIdentity(
             backend_id="synthetic.restricted.v1",
@@ -452,6 +462,22 @@ def test_input_bound_is_configurable_and_json_inputs_are_checked() -> None:
     for invalid in ("not json", '"a string"', '{"value": NaN}'):
         with pytest.raises(DecisionError, match="JSON object or array"):
             _request(input_text=invalid, input_format="json")
+
+    marker = "SYNTHETIC-PRIVATE-MARKER"
+    malformed = marker + "\ud800"
+    for changes in (
+        {"input_text": malformed},
+        {"options": (malformed, "routine")},
+        {
+            "mode": DecisionMode.SCALAR_SCORE,
+            "options": (),
+            "levels": ("Low", malformed),
+        },
+    ):
+        with pytest.raises(DecisionError) as caught:
+            _request(**changes)
+        assert marker not in str(caught.value)
+        assert marker not in repr(caught.value.args)
 
 
 def test_levelled_scalar_reports_expected_level_and_abstains_when_flat() -> None:

@@ -219,6 +219,14 @@ when every question succeeds, the shared state when all questions agree, and
 code. A backend that implements `score_questions` scores the whole set in one
 call; any other backend receives one single-question request per question.
 
+Instructions and option descriptions require a request-aware backend that
+reads the complete `DecisionRequest`. The built-in lexical fallback and legacy
+three-argument scorers return `unsupported` for that context instead of
+silently ignoring it. The GLiClass adapter in this release keeps prompts,
+examples and score levels as backend settings and refuses per-request
+overrides; `decide_with_gliclass` uses ordinary per-question results for a set
+without attaching the last question's one-shot metadata to the whole set.
+
 For levelled scores, a backend returns one score per level. OpenMed normalizes
 them, reports `level_scores`, the `expected_level` index, a `scalar_score`
 equal to the expected level divided by the highest index, and a confidence
@@ -263,9 +271,10 @@ answers into one backend output per question, so OpenMed applies its own
 calibration and abstention instead of trusting a server's choice or
 confidence. Answers that do not match the declared questions, options, levels,
 or probability bounds raise `DecisionConflictError`. `to_system_one_response`
-and `to_openai_decisions_response` render OpenMed results; a question that did
-not succeed carries a `null` answer plus its OpenMed `state` and `code` and is
-never given a fabricated answer.
+and `to_openai_decisions_response` render OpenMed results. Non-success
+questions carry their OpenMed `state` and `code`; choice and expected-level
+selections are `null`, while available probabilities remain available for
+review.
 
 ## MCP
 
