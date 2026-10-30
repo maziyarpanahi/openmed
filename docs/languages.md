@@ -54,8 +54,11 @@ otherwise Hindi-first Devanagari route. Install
 runs. The adapter and its CLD2 implementation are Apache-2.0, import only when
 routing is first requested, and do not download or bundle model weights.
 
-Thai and Hebrew script runs select `th` and `he`. Myanmar, Khmer, Lao,
-Sinhala, Thaana, Tibetan and other unregistered scripts are reported with
+Thai and Hebrew script runs select `th` and `he`. Sinhala script runs select
+the experimental [`si` user-supplied-model route](#sinhala-si) instead of
+English; it ships no weights, so automatic routing still needs an explicit
+`model_name`. Myanmar, Khmer, Lao, Thaana, Tibetan and other unregistered
+scripts are reported with
 `source="stdlib:unknown-script"`, `reason="unsupported_script"` and low
 confidence. `Pipeline(lang="auto")` rejects letter-bearing unsupported runs
 before model inference. If a caller has independently qualified a fallback,
@@ -162,6 +165,7 @@ Languages left out of `date_profiles` produce byte-identical examples.
 | `pt`   | Portuguese | `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1` | `pt_PT`     | `pt_BR` IDs; `pt_MZ` and `pt_AO` locale overlays.            |
 | `ro`   | Romanian   | `OpenMed/privacy-filter-multilingual`                      | `ro_RO`      | Served by the multilingual privacy filter; CNP-aware.        |
 | `ru`   | Russian    | `OpenMed/privacy-filter-multilingual`                      | `ru_RU`      | Default-model placeholder; SNILS-aware. Dedicated weights are not bundled. |
+| `si`   | Sinhala    | `user-supplied`                                             | `si_LK`      | Experimental; no bundled weights — pass `model_name`. Sri Lanka NIC and `+94` patterns; synthetic Sinhala surrogates. |
 | `sv`   | Swedish    | `OpenMed/privacy-filter-multilingual`                       | `sv_SE`      | Personnummer Luhn validation and surrogates.                 |
 | `sw`   | Swahili    | `OpenMed/privacy-filter-multilingual`                      | `sw`         | Bilingual patterns with Kenya ID and Maisha-aware surrogates. |
 | `ta`   | Tamil      | `OpenMed/privacy-filter-multilingual`                       | `ta_IN`      | Public placeholder; dedicated weights are not bundled.       |
@@ -228,10 +232,10 @@ Malayalam route has a different fallback contract:
 
 - `ml` now has a built-in multilingual fallback. The optional Indic NER adapter
   remains available when the caller supplies its weights explicitly.
-- `ne` reads `user-supplied`. It has no adapter and no env-var path,
-  so omitting `model_name` raises `ValueError: Language '<code>' has no bundled
-  OpenMed PII model; pass an explicit model_name (user-supplied-model
-  languages: ne)`.
+- `ne` and `si` read `user-supplied`. They have no adapter and no env-var
+  path, so omitting `model_name` raises `ValueError: Language '<code>' has no
+  bundled OpenMed PII model; pass an explicit model_name (user-supplied-model
+  languages: ne, si)`.
 
 The `user-supplied` column value is a registry placeholder rather than a
 loadable repository. Passing it back as `model_name` raises the same error as
@@ -239,6 +243,37 @@ omitting it, so a value copied from `openmed_list_pii_languages` never becomes a
 download attempt.
 `SUPPORTED_LANGUAGES` includes registered fallback packs such as `pa` but excludes
 the route that requires user-supplied weights.
+
+### Synthetic notes for routes without a bundled model
+
+`openmed.training.synthetic.locale_phi.LocalePhiGenerator` also renders
+repository-authored clinical note templates for the national-ID-only routes
+`ha`, `ig`, `yo`, `rw`, and `tl`, and for the user-supplied-model route `ne`
+(`AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES`). These codes are listed explicitly;
+other national-ID-only codes such as `af` or `ms` still raise
+`unsupported locale PHI language` until they get a reviewed template.
+
+```python
+from openmed.training.synthetic.locale_phi import LocalePhiGenerator
+
+example = LocalePhiGenerator(seed=7).generate("ha")
+example.metadata["bundled_model"]   # False
+example.metadata["language_route"]  # "national_id_only"
+```
+
+- Templates hold only clinical vocabulary and context cues. Every name, date,
+  phone, address, and identifier comes from the surrogate or identifier
+  providers, and every gold span equals its text slice.
+- Nigerian NINs (`ha`, `ig`, `yo`), Rwanda IDs (`rw`), and PhilSys PSNs (`tl`)
+  pass their `pii_i18n` validators. `ne` has no national-ID provider, so it
+  uses the Luhn fallback. The `ID_NUM` span metadata records which provider
+  and validator were used.
+- Examples carry `augmentation_only=True` and `bundled_model=False`. Use them
+  for augmentation, not as evidence of model coverage.
+- `generate_all()` still returns only the model-backed languages; pass
+  `include_augmentation_only=True` to append these six.
+- Names and addresses come from each route's existing surrogate locale, so
+  `rw` values follow its documented `en_US` Faker backend.
 
 ## Indian-English and code-mixed clinical notes
 
@@ -421,6 +456,17 @@ After:  Ασθενής [NAME], ΑΜΚΑ [ID]
 Before: Patient John Doe was seen on 03/14/2025; call 555-0142
 After:  Patient [NAME] was seen on [DATE]; call [PHONE]
 ```
+
+Pass `locale="en_GB"` for UK clinical text; with `lang="en"`, the `gb` and `uk`
+aliases select the same detection overlay. The UK overlay adds deterministic NHS
+Number, National Insurance number, and postcode rules. Postcodes are matched
+without context, in every Royal Mail outward-code shape plus `GIR 0AA`, with a
+single space, no space, or lowercase, and are labelled `ZIPCODE`. A full UK
+postcode covers about 15 addresses, so the rule does not wait for the model.
+Tokens whose inward code reads as a data size or an ordinal, such as `8GB` or
+`2ND`, count only near address words, including common street types such as
+Close, Drive and Way. Other locales, including plain `en`, keep
+the US ZIP rule alone.
 
 ### Spanish — `es`
 
@@ -696,6 +742,45 @@ Before: Пациент Иван Петров, СНИЛС 112-233-445 95
 After:  Пациент [NAME], СНИЛС [ID]
 ```
 
+### Sinhala — `si`
+
+- Model: `user-supplied` · locale `si_LK`. This route is experimental and
+  ships no weights: pass `model_name`, including with `lang="auto"`.
+- Sinhala script runs route to `si` rather than to English. Names, places,
+  and organizations need the user-supplied model. Tamil-script Sri Lankan
+  text still routes to `ta`, which does not run the patterns below.
+- Deterministic Sinhala patterns run on this route even with an empty model
+  detector:
+  - `+94` and `0094` numbers, with the country code inside the masked span,
+    and domestic `070`-`078` mobiles. Domestic landlines need nearby phone
+    context such as `දුරකථන`.
+  - Sri Lanka National Identity Card (NIC) numbers in both layouts, nine
+    digits plus `V` or `X` and twelve digits, only near NIC context such as
+    `ජාතික හැඳුනුම්පත`, `ජා.හැ.අ` or `NIC`. Values whose day field is outside
+    001-366 and 501-866, or whose twelve-digit birth year is before 1900 or
+    after the current year, are rejected. No check digit is claimed.
+  - Numeric dates in the shared day-first order, house-numbered Sinhala
+    street addresses ending in a road word such as `පාර` or `මාවත` near
+    address context, and five-digit postal codes after `තැපැල් කේතය`.
+- The NIC layout adds 500 to the day field for one sex. That offset is a
+  structural rule of the identifier. OpenMed accepts both ranges and never
+  derives, reports, or carries a sex over to a surrogate.
+- `si_LK` is a documented approximation that warns once. Names, cities, and
+  street addresses come from a small repository-authored synthetic Sinhala
+  inventory, other fields use the `en_IN` Faker backend, and NIC surrogates
+  keep only the source layout while every embedded field is drawn at random.
+- Limits: Sinhala month names are not covered. `lang="auto"` picks the
+  dominant script run, so a mostly English note with a few Sinhala words
+  routes to `en` and skips these patterns; pass `lang="si"` for such notes.
+  The synthetic `openmed/eval/golden/fixtures/i18n/si.jsonl` fixture checks
+  spans and leakage. It is not a trained Sinhala model or a clinical-quality
+  claim.
+
+```text
+Before: උපන් දිනය 14/03/1985. ජාතික හැඳුනුම්පත් අංකය 657546289V. ජංගම +94 71 234 5678.
+After:  උපන් දිනය [DATE]. ජාතික හැඳුනුම්පත් අංකය [ID_NUM]. ජංගම [PHONE].
+```
+
 ### Swedish — `sv`
 
 - Model: `OpenMed/privacy-filter-multilingual` · locale `sv_SE`
@@ -843,9 +928,58 @@ print([(span.start, span.end, span.metadata["calendar"]) for span in spans])
 # [(15, 31, 'hijri')]
 ```
 
-Detection does not convert or shift these dates. `method="shift_dates"`
-replaces them with the `[DATE_SHIFTED]` placeholder, and `method="replace"`
-uses the existing date surrogate. Latin transliterations such as `Ramadan`,
+Detection supplies offsets and calendar metadata. `method="shift_dates"`
+uses that metadata for supported calendar-aware shifts, with a placeholder
+fallback for unsupported values; see [Anonymization](anonymization.md).
+Latin transliterations such as `Ramadan`,
 `Meskerem` or `Asar`, dates written out in words, and lunisolar Vikram Samvat
 dates written with a tithi are not covered. Persian solar-calendar month names
 are matched by the Persian pack without a calendar code.
+
+## Localized medical-record-number labels
+
+Record numbers are direct identifiers, so the deterministic layer recognizes
+them after localized record, file, patient, hospital and admission-number
+labels, not only after the English `MRN`. The labels live in one declarative
+table,
+[`openmed.core.medical_record_labels.MEDICAL_RECORD_LABELS`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/medical_record_labels.py),
+which compiles into context-gated `medical_record_number` patterns shared by
+semantic merging and the safety sweep. With an empty model detector, the
+number is still masked and its label stays readable:
+
+```text
+Before: ผู้ป่วย HN: 6501234 นัดตรวจซ้ำ
+After:  ผู้ป่วย HN: [medical_record_number] นัดตรวจซ้ำ
+
+Before: No. RM: 12.34.56, Hb 11,2 g/dL
+After:  No. RM: [medical_record_number], Hb 11,2 g/dL
+```
+
+The table covers Amharic (`የካርድ ቁጥር`), Arabic (`رقم الملف الطبي`), Chinese
+(`病历号` and `住院号` followed by decimal digits), Hausa (`Lambar fayil`),
+Hebrew (`מספר תיק`), Hindi (`पंजीकरण संख्या`, `UHID`), Indonesian (`No. RM`),
+Persian (`شماره پرونده`), Swahili (`Namba ya faili`), Thai (`HN`, `AN`),
+Urdu (`ایم آر نمبر`) and Vietnamese (`Mã bệnh nhân`), plus related spellings.
+English keeps its built-in `MRN` rule.
+
+- **Label required.** A number is relabelled only when a listed label sits
+  next to it, so unlabelled numbers, doses, lab values and phone numbers keep
+  their existing handling. Count phrases such as Hindi `कुल रोगी संख्या` are
+  deliberately not labels, and the Thai `HN`/`AN` abbreviations are
+  case-sensitive.
+- **Tolerated forms.** Any Unicode decimal digits (Thai, Devanagari,
+  Arabic-Indic, Persian), 4–20 digits with single `-`, `/` or `.` separators,
+  label punctuation `:`, `：`, `፡` and `#`, bidi controls between label and
+  number, NFC, NFD and unaccented Latin spellings, and, for right-to-left
+  scripts, a visual-order number written before its label (`1234567 :מספר תיק`).
+- **Reports.** `medical_record_label_matches(text, lang)` returns offsets and
+  the canonical table label for each match, never the number.
+  `medical_record_label_coverage().to_dict()` returns language codes, label
+  counts and the registered packs that still have no labels.
+
+Adding a language needs one table entry and one synthetic row in
+`tests/fixtures/pii/medical_record_labels_synthetic.jsonl` with labelled
+numbers and negative controls; no detector code changes.
+`tests/unit/core/test_medical_record_labels.py` fails until both exist and
+pins the list of registered packs without labels. Institution-specific number
+formats and checksums are out of scope.

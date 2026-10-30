@@ -234,8 +234,9 @@ def test_stamp_requires_a_locale() -> None:
         surrogate_provider_stamp()
 
 
-def test_locale_phi_metadata_records_provider_stamp_without_values() -> None:
-    example = LocalePhiGenerator(seed=41).generate("fr")
+@pytest.mark.parametrize("language", ["fr", "ha", "ne"])
+def test_locale_phi_metadata_records_provider_stamp_without_values(language) -> None:
+    example = LocalePhiGenerator(seed=41).generate(language)
     stamp = example.metadata["surrogate_providers"]
 
     assert stamp == surrogate_provider_stamp(example.locale)
