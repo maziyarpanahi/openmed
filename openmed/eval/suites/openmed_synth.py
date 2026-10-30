@@ -14,9 +14,12 @@ from openmed.eval.synth_corpus import (
     DEFAULT_CORPUS_SIZE,
     DEFAULT_SEED,
     corpus_content_hash,
+    corpus_provider_manifest,
     generate_corpus,
     label_distribution,
+    load_published_provider_receipt,
 )
+from openmed.training.synthetic.provider_versions import compare_provider_manifests
 
 OPENMED_SYNTH = CORPUS_ID
 OPENMED_SYNTH_REFERENCE_MODEL = "openmed-synth-reference"
@@ -46,12 +49,21 @@ def openmed_synth_suite_metadata(
     corpus_size: int = DEFAULT_CORPUS_SIZE,
     size: int | None = None,
 ) -> dict[str, Any]:
-    """Return raw-text-free provenance and distribution metadata."""
+    """Return raw-text-free provenance and distribution metadata.
+
+    ``surrogate_providers`` records the Faker version, per-locale provider
+    probe digests, repository table digests, and per-locale output digests.
+    ``provider_drift`` compares them with the published receipt and carries
+    the ``provider_version_drift`` reason when the regenerated corpus or its
+    providers differ. Neither field contains generated values.
+    """
 
     effective_size = corpus_size if size is None else size
     rows = generate_corpus(seed=seed, size=effective_size)
     labels = label_distribution(rows)
     languages = sorted({str(row["language"]) for row in rows})
+    providers = corpus_provider_manifest(seed=seed, size=effective_size, rows=rows)
+    drift = compare_provider_manifests(load_published_provider_receipt(), providers)
     return {
         "suite": OPENMED_SYNTH,
         "dataset": CORPUS_ID,
@@ -67,6 +79,8 @@ def openmed_synth_suite_metadata(
         "license": CORPUS_LICENSE,
         "redistribution": "public synthetic corpus; no credentialing required",
         "provenance": "Faker and OpenMed clinical-ID providers",
+        "surrogate_providers": providers,
+        "provider_drift": drift.to_dict(),
         "synthetic": True,
         "contains_real_phi": False,
         "requires_credentials": False,
