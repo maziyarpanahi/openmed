@@ -1,0 +1,1113 @@
+{
+  "schema_version": "openmed.reference_deployment.v1",
+  "release": "3.4",
+  "objective_evidence": "unmeasured_targets",
+  "reference_topology": "compose_single_host",
+  "topologies": [
+    {
+      "id": "compose_single_host",
+      "status": "reference",
+      "summary": "Offline single-host Compose bundle: bundled PostgreSQL, one-shot migration, Journey worker, REST API, optional smoke and MCP profiles on an internal network. Only the REST port is published, bound to loopback by default.",
+      "services": [
+        "postgres",
+        "journey_migrate",
+        "journey_worker",
+        "rest_api",
+        "journey_golden",
+        "mcp_server"
+      ],
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "postgres",
+              "journey-migrate",
+              "journey-worker",
+              "openmed",
+              "journey-golden",
+              "mcp"
+            ],
+            "compose_volumes": [
+              "openmed-cache",
+              "openmed-models",
+              "openmed-postgres"
+            ]
+          },
+          {
+            "path": "deploy/docker/Dockerfile.distroless"
+          }
+        ],
+        "docs": [
+          "docs/deploy/self-hosted-compose.md",
+          "docs/deploy/hardened-image.md"
+        ]
+      }
+    },
+    {
+      "id": "helm_kubernetes",
+      "status": "supported",
+      "summary": "Helm chart for one namespace: one REST replica by default, opt-in Journey profile with a migration Job, a worker Deployment, an artifact claim, and an operator-provided external PostgreSQL referenced through a Secret.",
+      "services": [
+        "rest_api",
+        "journey_migrate",
+        "journey_worker",
+        "postgres"
+      ],
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/helm/openmed-service/Chart.yaml"
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "replicaCount",
+              "persistence.enabled",
+              "journey.enabled",
+              "journey.worker.replicas",
+              "journey.database.secretName",
+              "journey.networkPolicy.enabled"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/deployment.yaml"
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/network-policy.yaml"
+          }
+        ],
+        "docs": [
+          "docs/deploy/helm.md"
+        ]
+      }
+    },
+    {
+      "id": "kubernetes_autoscaled",
+      "status": "supported",
+      "summary": "Horizontal autoscaling of the REST Deployment from queue depth, in-flight requests and CPU. Supported for synchronous routes only; process-local job state does not follow a request across replicas.",
+      "services": [
+        "rest_api"
+      ],
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/k8s/hpa.yaml"
+          }
+        ],
+        "docs": [
+          "docs/deploy/autoscaling.md"
+        ]
+      }
+    },
+    {
+      "id": "kubernetes_model_operator",
+      "status": "supported",
+      "summary": "Operator that pins the served model version of an existing REST Deployment and rolls it out or back. It changes no storage, transport or autoscaling behavior.",
+      "services": [
+        "rest_api"
+      ],
+      "references": {
+        "modules": [
+          "deploy.operator.openmed_operator"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/operator/kustomization.yaml"
+          },
+          {
+            "path": "deploy/operator/crd/openmedmodel.yaml"
+          }
+        ],
+        "docs": [
+          "docs/deploy/operator.md"
+        ]
+      }
+    },
+    {
+      "id": "development_compose",
+      "status": "unsupported",
+      "summary": "Repository-root Compose file for local development. It publishes the REST port on every interface without authentication, has no Journey store, and is not a production topology.",
+      "services": [
+        "rest_api",
+        "mcp_server"
+      ],
+      "references": {
+        "manifests": [
+          {
+            "path": "docker-compose.yml",
+            "compose_services": [
+              "app",
+              "mcp"
+            ]
+          },
+          {
+            "path": "Dockerfile"
+          },
+          {
+            "path": "Dockerfile.mcp"
+          }
+        ]
+      }
+    }
+  ],
+  "services": [
+    {
+      "id": "rest_api",
+      "summary": "FastAPI REST service started through the PHI-safe logging launcher, with the GraphQL router mounted on the same listener.",
+      "replica_modes": [
+        {
+          "mode": "single",
+          "status": "reference",
+          "constraint_codes": []
+        },
+        {
+          "mode": "horizontal",
+          "status": "restricted",
+          "constraint_codes": [
+            "synchronous_routes_only",
+            "per_replica_warm_pool",
+            "per_replica_rate_limits",
+            "per_replica_job_state"
+          ],
+          "references": {
+            "manifests": [
+              {
+                "path": "deploy/k8s/hpa.yaml"
+              }
+            ]
+          }
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.service.app:create_app",
+          "openmed.service.logging:main"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "GET",
+            "path": "/livez"
+          },
+          {
+            "surface": "rest",
+            "method": "GET",
+            "path": "/readyz"
+          },
+          {
+            "surface": "rest",
+            "method": "GET",
+            "path": "/health"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/analyze"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/pii/extract"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/pii/deidentify"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/pii/deidentify/stream"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "openmed"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/deployment.yaml"
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/service.yaml"
+          }
+        ],
+        "docs": [
+          "docs/rest-service.md"
+        ]
+      }
+    },
+    {
+      "id": "journey_worker",
+      "summary": "Journey readiness worker. It refreshes value-free store and artifact probes and serves them over an internal health listener; it does not process jobs.",
+      "replica_modes": [
+        {
+          "mode": "single",
+          "status": "reference",
+          "constraint_codes": [
+            "health_probe_only"
+          ]
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.deploy.journey:main",
+          "openmed.deploy.journey:probe_deployment"
+        ],
+        "routes": [
+          {
+            "surface": "journey_worker",
+            "method": "GET",
+            "path": "/livez"
+          },
+          {
+            "surface": "journey_worker",
+            "method": "GET",
+            "path": "/readyz"
+          },
+          {
+            "surface": "journey_worker",
+            "method": "GET",
+            "path": "/healthz"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "journey-worker"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/journey-worker.yaml"
+          }
+        ]
+      }
+    },
+    {
+      "id": "journey_migrate",
+      "summary": "One-shot, checksum-verified additive Journey schema migration that gates the worker and API start.",
+      "replica_modes": [
+        {
+          "mode": "one_shot",
+          "status": "reference",
+          "constraint_codes": [
+            "single_migration_runner",
+            "completes_before_api_and_worker"
+          ]
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.deploy.journey:run_migrations"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "journey-migrate"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/journey-migration-job.yaml"
+          }
+        ]
+      }
+    },
+    {
+      "id": "journey_golden",
+      "summary": "One-shot synthetic golden journey used as a post-start and post-restore smoke check.",
+      "replica_modes": [
+        {
+          "mode": "one_shot",
+          "status": "supported",
+          "constraint_codes": [
+            "smoke_profile_only",
+            "synthetic_content_only"
+          ]
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.deploy.journey:run_golden_journey"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "journey-golden"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mcp_server",
+      "summary": "MCP server. Standard input and output is the default; the Compose profile runs stateless streamable HTTP on the internal network only.",
+      "replica_modes": [
+        {
+          "mode": "single",
+          "status": "supported",
+          "constraint_codes": [
+            "optional_profile"
+          ]
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.mcp.server:create_mcp_server",
+          "openmed.mcp.server:main"
+        ],
+        "routes": [
+          {
+            "surface": "mcp",
+            "method": "POST",
+            "path": "/mcp"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "mcp"
+            ]
+          },
+          {
+            "path": "Dockerfile.mcp"
+          }
+        ],
+        "docs": [
+          "docs/mcp-clients.md"
+        ]
+      }
+    },
+    {
+      "id": "postgres",
+      "summary": "PostgreSQL holding the Journey store. Bundled as one instance in Compose; provided and operated outside the chart for Kubernetes.",
+      "replica_modes": [
+        {
+          "mode": "single",
+          "status": "reference",
+          "constraint_codes": [
+            "bundled_single_instance"
+          ]
+        },
+        {
+          "mode": "external",
+          "status": "supported",
+          "constraint_codes": [
+            "operator_managed_database",
+            "replication_not_managed_by_openmed"
+          ]
+        }
+      ],
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "postgres"
+            ],
+            "compose_volumes": [
+              "openmed-postgres"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "journey.database.secretName",
+              "journey.database.secretKey"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "grpc_server",
+      "summary": "Library gRPC servicer and server factory. No console entry point, image, Compose service, chart template or health service starts it.",
+      "replica_modes": [
+        {
+          "mode": "single",
+          "status": "unsupported",
+          "constraint_codes": [
+            "no_deployment_wiring"
+          ]
+        }
+      ],
+      "references": {
+        "modules": [
+          "openmed.service.grpc_server:create_grpc_server",
+          "openmed.service.grpc_server:serve"
+        ],
+        "docs": [
+          "docs/serving/grpc.md"
+        ]
+      }
+    }
+  ],
+  "transports": [
+    {
+      "id": "rest_http",
+      "status": "supported",
+      "summary": "HTTP on the REST listener, including chunked streaming de-identification. TLS is available through the launcher flags or a terminating proxy; API key, JWT and mTLS authentication are opt-in.",
+      "services": [
+        "rest_api"
+      ],
+      "security_posture": {
+        "encryption": "optional_tls",
+        "authentication": "optional",
+        "default_exposure": "loopback",
+        "constraint_codes": [
+          "authentication_disabled_by_default",
+          "non_loopback_requires_authentication",
+          "non_loopback_requires_tls",
+          "non_loopback_requires_trusted_hosts",
+          "cluster_ip_service_in_helm"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.service.logging:main",
+          "openmed.service.auth:parse_service_auth_config",
+          "openmed.service.mtls"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/pii/deidentify"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/pii/deidentify/stream"
+          }
+        ],
+        "docs": [
+          "docs/serving/authentication.md",
+          "docs/serving/mtls.md"
+        ]
+      }
+    },
+    {
+      "id": "graphql_http",
+      "status": "supported",
+      "summary": "GraphQL over HTTP on the same listener as REST, so it inherits the REST TLS, authentication and exposure posture.",
+      "services": [
+        "rest_api"
+      ],
+      "security_posture": {
+        "encryption": "optional_tls",
+        "authentication": "optional",
+        "default_exposure": "loopback",
+        "constraint_codes": [
+          "shares_rest_listener",
+          "authentication_disabled_by_default"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.service.graphql_app:mount_graphql"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/graphql"
+          }
+        ],
+        "docs": [
+          "docs/serving/graphql.md"
+        ]
+      }
+    },
+    {
+      "id": "mcp_stdio",
+      "status": "supported",
+      "summary": "MCP over standard input and output of a client-spawned process. No network listener is opened.",
+      "services": [
+        "mcp_server"
+      ],
+      "security_posture": {
+        "encryption": "not_applicable",
+        "authentication": "not_applicable",
+        "default_exposure": "local_process",
+        "constraint_codes": [
+          "client_spawned_process"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.mcp.server:main"
+        ],
+        "manifests": [
+          {
+            "path": "Dockerfile.mcp"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mcp_streamable_http",
+      "status": "restricted",
+      "summary": "Stateless MCP streamable HTTP in the optional Compose profile. Plaintext, no published port, insecure-loopback authorization mode enabled; reachable only from the internal network.",
+      "services": [
+        "mcp_server"
+      ],
+      "security_posture": {
+        "encryption": "none",
+        "authentication": "optional",
+        "default_exposure": "internal_network",
+        "constraint_codes": [
+          "internal_network_only",
+          "no_published_port",
+          "authorization_disabled_by_default",
+          "insecure_loopback_mode_enabled"
+        ]
+      },
+      "references": {
+        "routes": [
+          {
+            "surface": "mcp",
+            "method": "POST",
+            "path": "/mcp"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "mcp"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "journey_worker_health_http",
+      "status": "restricted",
+      "summary": "Plaintext, unauthenticated health listener of the Journey worker. It returns only controlled states and codes and is reachable only from the internal network.",
+      "services": [
+        "journey_worker"
+      ],
+      "security_posture": {
+        "encryption": "none",
+        "authentication": "none",
+        "default_exposure": "internal_network",
+        "constraint_codes": [
+          "value_free_health_only",
+          "internal_network_only"
+        ]
+      },
+      "references": {
+        "routes": [
+          {
+            "surface": "journey_worker",
+            "method": "GET",
+            "path": "/readyz"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "journey-worker"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "postgresql_wire",
+      "status": "restricted",
+      "summary": "PostgreSQL protocol between Journey processes and the database. Password authenticated; the shipped manifests do not require verified TLS, so the connection must stay on the internal network.",
+      "services": [
+        "postgres",
+        "journey_migrate",
+        "journey_worker",
+        "rest_api"
+      ],
+      "security_posture": {
+        "encryption": "none",
+        "authentication": "required",
+        "default_exposure": "internal_network",
+        "constraint_codes": [
+          "tls_not_enforced_by_manifests",
+          "internal_network_only",
+          "credentials_from_operator_secret"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.structured.store.postgres:PostgresJourneyStore"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "postgres"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "journey.database.secretName"
+            ]
+          }
+        ],
+        "docs": [
+          "docs/structured/postgres-object-journey-store.md"
+        ]
+      }
+    },
+    {
+      "id": "job_webhook_outbound",
+      "status": "restricted",
+      "summary": "Outbound signed job-completion webhooks. Either HTTP or HTTPS targets are accepted, and the reference network has no egress, so remote receivers need a separately declared network.",
+      "services": [
+        "rest_api"
+      ],
+      "security_posture": {
+        "encryption": "optional_tls",
+        "authentication": "required",
+        "default_exposure": "outbound_only",
+        "constraint_codes": [
+          "hmac_signed_payloads",
+          "https_not_enforced",
+          "no_egress_on_reference_network"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.service.webhooks:deliver_webhook"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/jobs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "grpc",
+      "status": "unsupported",
+      "summary": "gRPC contract with unary and server-streaming methods. The server factory opens an insecure port on every interface by default, has no TLS, authentication or health service, and no deployment manifest wires it.",
+      "services": [
+        "grpc_server"
+      ],
+      "security_posture": {
+        "encryption": "none",
+        "authentication": "none",
+        "default_exposure": "not_wired",
+        "constraint_codes": [
+          "no_deployment_wiring",
+          "insecure_port_only",
+          "binds_all_interfaces_by_default",
+          "no_health_service"
+        ]
+      },
+      "references": {
+        "modules": [
+          "openmed.service.grpc_server:serve"
+        ],
+        "grpc_methods": [
+          "OpenMedService/Analyze",
+          "OpenMedService/Extract",
+          "OpenMedService/Deidentify",
+          "OpenMedService/StreamDeidentify"
+        ],
+        "docs": [
+          "docs/serving/grpc.md"
+        ]
+      }
+    }
+  ],
+  "durable_components": [
+    {
+      "id": "journey_database",
+      "summary": "Journey records, revisions and migration state in PostgreSQL. Recovered together with the artifact namespace as one application-consistent recovery point.",
+      "storage": "postgresql",
+      "replica_mode": "single_primary",
+      "owner_services": [
+        "postgres",
+        "journey_migrate",
+        "journey_worker",
+        "rest_api"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "declared",
+        "target_seconds": 86400,
+        "basis": "daily_application_consistent_backup"
+      },
+      "recovery_time_objective": {
+        "status": "declared",
+        "target_seconds": 14400,
+        "basis": "isolated_restore_then_migrate_and_golden_journey"
+      },
+      "references": {
+        "modules": [
+          "openmed.structured.store.postgres:PostgresJourneyStore",
+          "openmed.deploy.journey:run_migrations"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "postgres"
+            ],
+            "compose_volumes": [
+              "openmed-postgres"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "journey.database.secretName"
+            ]
+          }
+        ],
+        "docs": [
+          "docs/deploy/self-hosted-compose.md",
+          "docs/structured/postgres-object-journey-store.md"
+        ]
+      }
+    },
+    {
+      "id": "journey_artifacts",
+      "summary": "Content-addressed Journey artifact bytes. A database backup alone does not contain them; they share the database recovery point.",
+      "storage": "filesystem_object_store",
+      "replica_mode": "single_writer_volume",
+      "owner_services": [
+        "journey_worker",
+        "rest_api"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "declared",
+        "target_seconds": 86400,
+        "basis": "paired_with_journey_database_recovery_point"
+      },
+      "recovery_time_objective": {
+        "status": "declared",
+        "target_seconds": 14400,
+        "basis": "isolated_restore_then_migrate_and_golden_journey"
+      },
+      "references": {
+        "modules": [
+          "openmed.structured.store.objects:FsspecArtifactStore"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_volumes": [
+              "openmed-cache"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/journey-pvc.yaml"
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "journey.artifacts.accessModes"
+            ]
+          }
+        ],
+        "docs": [
+          "docs/structured/postgres-object-journey-store.md"
+        ]
+      }
+    },
+    {
+      "id": "model_cache",
+      "summary": "Downloaded or pre-staged model artifacts. Contents are derived from verified model bundles, so loss is recovered by re-provisioning rather than restore.",
+      "storage": "filesystem_cache",
+      "replica_mode": "single_writer_volume",
+      "owner_services": [
+        "rest_api",
+        "mcp_server"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "declared",
+        "target_seconds": 0,
+        "basis": "derived_from_verified_model_artifacts"
+      },
+      "recovery_time_objective": {
+        "status": "declared",
+        "target_seconds": 14400,
+        "basis": "reprovision_from_offline_model_bundle"
+      },
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_volumes": [
+              "openmed-cache",
+              "openmed-models"
+            ]
+          },
+          {
+            "path": "deploy/helm/openmed-service/templates/pvc.yaml"
+          },
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "persistence.enabled",
+              "persistence.accessModes"
+            ]
+          }
+        ],
+        "docs": [
+          "docs/offline-install.md"
+        ]
+      }
+    },
+    {
+      "id": "service_job_metadata",
+      "summary": "Async de-identification job metadata in a local JSON file owned by one process. Submitted payloads stay in process memory, so queued or running jobs do not survive a restart, and the file is not shared between replicas.",
+      "storage": "local_json_file",
+      "replica_mode": "single_process",
+      "owner_services": [
+        "rest_api"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "unsupported",
+        "reason_code": "payloads_held_in_process_memory"
+      },
+      "recovery_time_objective": {
+        "status": "unsupported",
+        "reason_code": "single_process_job_store"
+      },
+      "references": {
+        "modules": [
+          "openmed.service.jobs:LocalJobStore",
+          "openmed.service.jobs:DeidentifyJobQueue"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/jobs"
+          },
+          {
+            "surface": "rest",
+            "method": "GET",
+            "path": "/jobs/{job_id}"
+          }
+        ],
+        "docs": [
+          "docs/serving/async-jobs.md"
+        ]
+      }
+    },
+    {
+      "id": "service_bulk_job_state",
+      "summary": "FHIR Bulk Data and SMART backend ingestion job state. Held in process memory per replica and lost on restart.",
+      "storage": "process_memory",
+      "replica_mode": "per_replica_memory",
+      "owner_services": [
+        "rest_api"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "unsupported",
+        "reason_code": "in_memory_job_state"
+      },
+      "recovery_time_objective": {
+        "status": "unsupported",
+        "reason_code": "in_memory_job_state"
+      },
+      "references": {
+        "modules": [
+          "openmed.service.bulk_data:FHIRBulkJobManager",
+          "openmed.service.smart_backend:SMARTBackendJobManager"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/fhir/bulk/exports"
+          },
+          {
+            "surface": "rest",
+            "method": "GET",
+            "path": "/fhir/bulk/exports/{job_id}"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/fhir/smart-backend/ingestions"
+          }
+        ]
+      }
+    },
+    {
+      "id": "database_credentials",
+      "summary": "Database role credentials. Supplied from the operator secret source at start-up and never rendered by the chart or persisted by OpenMed.",
+      "storage": "operator_secret_store",
+      "replica_mode": "external_operator_owned",
+      "owner_services": [
+        "postgres",
+        "journey_migrate",
+        "journey_worker",
+        "rest_api"
+      ],
+      "topologies": [
+        "compose_single_host",
+        "helm_kubernetes"
+      ],
+      "recovery_point_objective": {
+        "status": "unsupported",
+        "reason_code": "operator_owned_secret_store"
+      },
+      "recovery_time_objective": {
+        "status": "unsupported",
+        "reason_code": "operator_owned_secret_store"
+      },
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/helm/openmed-service/values.yaml",
+            "helm_values": [
+              "journey.database.secretName",
+              "journey.database.secretKey"
+            ]
+          }
+        ],
+        "docs": [
+          "docs/deploy/helm.md"
+        ]
+      }
+    }
+  ],
+  "unsupported_deployments": [
+    {
+      "id": "grpc_network_service",
+      "reason_code": "no_deployment_wiring",
+      "summary": "Serving gRPC as a network service. Nothing in the images, Compose bundle or chart starts it, and its default listener is plaintext and unauthenticated.",
+      "references": {
+        "modules": [
+          "openmed.service.grpc_server:serve"
+        ]
+      }
+    },
+    {
+      "id": "multi_replica_async_jobs",
+      "reason_code": "single_process_job_store",
+      "summary": "Running async jobs, FHIR Bulk Data or SMART ingestion behind more than one REST replica. Job state is process-local, so status polls can miss the owning replica.",
+      "references": {
+        "modules": [
+          "openmed.service.jobs:LocalJobStore"
+        ],
+        "routes": [
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/jobs"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/fhir/bulk/exports"
+          },
+          {
+            "surface": "rest",
+            "method": "POST",
+            "path": "/fhir/smart-backend/ingestions"
+          }
+        ],
+        "manifests": [
+          {
+            "path": "deploy/k8s/hpa.yaml"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unauthenticated_non_loopback_rest",
+      "reason_code": "authentication_and_tls_required_off_loopback",
+      "summary": "Publishing the REST or GraphQL listener beyond loopback without authentication, TLS and an explicit trusted-host policy.",
+      "references": {
+        "modules": [
+          "openmed.service.auth:parse_service_auth_config"
+        ],
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "openmed"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "public_mcp_streamable_http",
+      "reason_code": "insecure_loopback_mode",
+      "summary": "Publishing the Compose MCP streamable HTTP listener. The profile enables the insecure-loopback authorization mode and has no TLS.",
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "mcp"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "openmed_managed_database_replication",
+      "reason_code": "replication_not_managed_by_openmed",
+      "summary": "Relying on OpenMed for PostgreSQL replication, failover or multi-primary writes. High availability of the database is an operator responsibility.",
+      "references": {
+        "manifests": [
+          {
+            "path": "deploy/openmed-compose.yaml",
+            "compose_services": [
+              "postgres"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "development_compose_in_production",
+      "reason_code": "all_interface_publish_without_authentication",
+      "summary": "Using the repository-root development Compose file for production. It publishes the REST port on every interface without authentication.",
+      "references": {
+        "manifests": [
+          {
+            "path": "docker-compose.yml",
+            "compose_services": [
+              "app"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
