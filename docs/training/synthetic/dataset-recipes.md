@@ -2,7 +2,9 @@
 
 `openmed synthetic build recipe.json new-output-directory --json` runs an actual
 bounded offline recipe. Built-in adapters reuse existing social-history and
-burned-in-image generators; images require the optional Pillow dependency. No
+burned-in-image generators; images require the optional Pillow dependency. The
+default DejaVu fonts must also be available unless fallback is explicitly
+requested through the Python adapter factory below. No
 models, private datasets, generator services or publication are downloaded or
 invoked. CLI output contains only digests/counts/completion status.
 
@@ -45,9 +47,25 @@ Path("recipe.json").write_text(json.dumps(recipe))
 openmed synthetic build recipe.json synthetic-demo-output --json
 ```
 
-The output reports `complete: true`, two records and three generated artifacts.
+With the required fonts installed, the output reports `complete: true`, two
+records and three generated artifacts.
 The directory contains social-history JSONL, one PNG, its label JSON, derivation
 metadata and a completion marker. Choose a new destination for each run.
+
+For portable English examples, Python callers may explicitly opt into checked
+fallback without changing the CLI or generator defaults:
+
+```python
+from openmed.training.synthetic.dataset_recipe import (
+    builtin_recipe_generators, run_dataset_recipe,
+)
+
+registry = builtin_recipe_generators(font_fallback=True)
+result = run_dataset_recipe(recipe, "synthetic-python-output", registry=registry)
+```
+
+The burned-in adapter provenance binds this option. It still refuses missing
+glyphs or required shaping; fallback does not make unsupported scripts valid.
 
 The runner rejects unavailable generators, wrong versions, missing dependencies,
 cycles and output-limit violations. It reserves a new destination, writes into an

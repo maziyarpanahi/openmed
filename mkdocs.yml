@@ -381,6 +381,7 @@ nav:
           - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
           - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
           - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
+          - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -463,6 +464,7 @@ nav:
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
+      - Language Adapter Distillation: languages/adapter-distillation.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
