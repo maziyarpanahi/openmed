@@ -2,7 +2,9 @@
 
 `openmed.eval.reviewer_disagreement` measures whether pseudonymous clinical
 reviewers agree and whether disagreements receive adjudication. It runs locally,
-uses no network service, and emits only aggregate counts and rates.
+uses no network service, and emits only aggregate counts and rates. To collect
+decisions from native-language experts without exposing reviewer identity, see
+[Native-language review packets](#native-language-review-packets).
 
 ## Input contract
 
@@ -47,6 +49,136 @@ with unanimous decisions. The adjudication denominator is disagreement cases;
 its numerator is the number marked adjudicated. Per-reason cells report the
 same adjudication rate within a typed reason.
 
+## Adjudicating native-review labels
+
+`openmed.training.native_review_adjudication` merges native-language reviewer
+decisions into accepted training and evaluation labels. Nothing is accepted
+without an explicit `AdjudicationPolicy`, and every merge returns a new
+immutable `AdjudicationRevision` that names the revision it follows. The merge
+runs locally, makes no network calls, and raises errors that carry only field
+names and closed codes.
+
+### Inputs
+
+- A `LabelProjection` per source item: an opaque `source_ref`, the language and
+  task codes, the current reviewed text, and the proposed spans. The text stays
+  in memory to compute its digest and to revalidate offsets; it is never
+  serialized. Use source references that are not derived from patient
+  identifiers.
+- Reviewer decisions in the `openmed.eval.native_review.decision.v1` shape, as
+  mappings or objects exposing `to_dict()`. Each becomes a `DecisionOverlay`
+  carrying the reviewer-role code, packet and submission digests, and the text
+  and projection digests the reviewer saw. The `decision_id` must match its
+  packet, item and submission lineage. Fields that look like reviewer identity
+  fail with `reviewer_identity_forbidden`, and comment, snippet or concordance
+  fields fail with `free_text_forbidden`.
+- Optional `AdjudicationEvent` records and the parent revision.
+
+```python
+from openmed.training.native_review_adjudication import (
+    AdjudicationPolicy,
+    LabelProjection,
+    LabelState,
+    ReviewSpan,
+    build_adjudication_event,
+    merge_native_review_labels,
+)
+
+policy = AdjudicationPolicy(
+    policy_id="sw_label_review",
+    policy_version="1",
+    label_codes=("CONDITION", "MEDICATION"),
+    adjudicator_roles=("clinical_linguist",),
+)
+projection = LabelProjection(
+    source_ref="projection-batch-7:item-0001",
+    language="sw",
+    task_code="label_check",
+    text="Mgonjwa ana homa kali tangu jana.",
+    spans=(ReviewSpan(start=12, end=16, label="CONDITION"),),
+)
+
+# decisions: imported native-review decision documents for this item.
+revision = merge_native_review_labels([projection], decisions, policy=policy)
+item = revision.item("projection-batch-7:item-0001")
+if item.state is LabelState.UNRESOLVED:
+    event = build_adjudication_event(
+        item,
+        policy=policy,
+        adjudicator_role="clinical_linguist",
+        outcome="accept_spans",
+        spans=(ReviewSpan(start=12, end=21, label="CONDITION"),),
+    )
+    revision = merge_native_review_labels(
+        [projection], decisions, policy=policy, events=[event], previous=revision
+    )
+```
+
+### Resolution rules
+
+Accept, reject and revise decision codes are disjoint policy vocabularies; any
+other code, such as `unsure`, is an abstention. A revise decision must carry
+corrections, which are the reviewer's complete label set. Each item then
+resolves in this order:
+
+1. Ambiguous duplicate decisions, language or task mismatches, invalid
+   corrections, unknown labels, and offsets that are out of range or split a
+   grapheme cluster set the state to `invalidated`. So does an item whose
+   decisions all refer to other text or another projection.
+2. One valid adjudication event decides the item. Two valid event heads leave
+   it `unresolved` with `conflicting_adjudication`.
+3. Without an event, disagreeing or abstaining reviewers leave the item
+   `unresolved`. Fewer than `minimum_reviewers` counted assignments leave it
+   `pending`. Unanimous reviewers resolve it to `accepted` or `rejected` only
+   when `resolve_unanimous` is true; otherwise it waits with
+   `adjudication_required`.
+
+An adjudication event is valid only when its policy digest matches, its
+adjudicator role is in `adjudicator_roles`, and its basis, text and projection
+digests match the current item. `build_adjudication_event()` copies those
+digests from the revision entry the adjudicator reviewed, so a new decision or
+an edited projection makes the event stale and returns the item to review. A
+later event replaces an earlier one only by naming it in `supersedes_event_id`.
+
+### Supersession and invalidation
+
+Decisions sharing a `(packet_ref, item_id)` assignment are resubmissions. A
+newer decision replaces an older one only through `supersedes_decision_id`, for
+example `DecisionOverlay.from_decision(resubmission, supersedes_decision_id=...)`.
+Two current decisions for one assignment, a supersession cycle, or one
+`decision_id` with different content mark the item `duplicate_decision`.
+Decisions about changed text (`text_changed`) or a regenerated projection
+(`stale_projection`) are excluded from the evidence. Fresh decisions can then
+resolve the item again. When the parent revision accepted labels that no longer
+stand for the same text, the item sets `prior_acceptance_revoked`.
+
+Re-importing identical decisions does not change the revision. Input order does
+not change the output.
+
+### Exports
+
+- `revision.export_labels()` lists accepted items with their spans,
+  `source_ref`, text and projection digests, and decision lineage: decision
+  identifiers, reviewer-role codes, decision codes, the applied event and its
+  adjudicator role, superseded and excluded identifiers, and the policy and
+  revision identifiers. It contains no reviewer identity, assignment reference
+  or text.
+- `revision.to_audit_dict()` reports state and reason counts and one entry per
+  item keyed by a subject digest instead of `source_ref`.
+- `export_adjudicated_annotations(revision, projections, hash_secret=...)`
+  returns an annotation-interchange envelope of `entity` records with keyed
+  surface hashes, lowercased labels, and the revision identifier as `batch_id`.
+  It fails if the text changed since the revision.
+- `revision.to_reviewer_decisions()` produces `ReviewerDecision` records for
+  `reviewer_disagreement_report`, with subject digests as case identifiers and
+  decision identifiers as reviewer identifiers.
+
+`revision.to_json()` and `AdjudicationRevision.from_dict()` round-trip a
+revision and revalidate its identifiers and digests, so a stored revision can
+be passed back as `previous`. Treat stored revisions as protected evaluator
+records because they hold source references. Adjudication curates language
+labels only. It does not retrain models or make or trigger clinical decisions.
+
 ## Minimum-cell protection
 
 The default minimum cell size is five. A rate is suppressed when its denominator
@@ -69,3 +201,149 @@ and for protecting process memory.
 
 This metric supports review-quality monitoring. It is not a compliance
 certification and does not make or trigger clinical decisions.
+
+## Native-language review packets
+
+Language validation needs native experts, but a review package can leak PHI or
+show more institutional text than the review needs.
+`openmed.eval.native_review_packets` builds minimal packets for native-language
+reviewers and imports their decisions back through opaque item identifiers.
+Building, verifying and importing run locally and make no network calls.
+
+### Build a packet
+
+Every `NativeReviewItem` must declare `privacy_status="synthetic"` or
+`privacy_status="deidentified"` together with a SHA-256 digest of its generator
+or de-identification provenance record. Any other status is refused when the
+item is constructed. Item text is capped by `max_item_characters` (1,000 code
+points by default, 4,000 at most), so reviewers see short segments rather than
+whole notes. Proposed labels use half-open Unicode code-point offsets, the
+annotation-interchange `unicode_codepoint` convention, and must come from the
+task's closed label vocabulary. Offsets that would split a combining mark, an
+Indic vowel sign, or a joiner sequence are rejected.
+
+```python
+from openmed.eval.native_review_packets import (
+    NativeReviewItem,
+    NativeReviewSpan,
+    NativeReviewTask,
+    build_native_review_packet,
+)
+
+task = NativeReviewTask(
+    task_code="label_check",
+    instructions=(
+        "Confirm whether each highlighted span carries the stated label in "
+        "natural Swahili clinical usage."
+    ),
+    decision_codes=("accept", "reject", "revise", "unsure"),
+    label_codes=("CONDITION", "MEDICATION"),
+    reason_codes=("boundary", "label", "morphology"),
+    correction_decision_code="revise",
+)
+items = [
+    NativeReviewItem(
+        source_ref="projection-batch-7:item-0001",
+        task_code="label_check",
+        privacy_status="synthetic",
+        provenance_digest="sha256:" + "a" * 64,
+        text="Mgonjwa ana homa kali tangu jana.",
+        spans=(NativeReviewSpan(start=12, end=16, label="CONDITION"),),
+    ),
+]
+
+packet, manifest = build_native_review_packet(
+    items,
+    packet_ref="sw-assignment-0001",
+    language="sw",
+    tasks=(task,),
+    seed=20261024,
+)
+```
+
+`packet.to_json()` is the reviewer artifact. It contains the task instructions
+and closed vocabularies, the allowed reviewer-role codes, a short reviewer
+notice, the items in a seeded randomized order, and a provenance commitment.
+Items are named only by `nri_...` identifiers derived from the packet
+reference, seed, position and reviewed content. The packet never contains
+source references, provenance digests, the seed or reviewer identity. The same
+items, tasks and seed produce byte-identical packets in any input order.
+
+`manifest.to_json()` is the evaluator-private binding from each opaque item to
+its `source_ref`, provenance digest, text digest and projection digest. Store
+it apart from the packet and never send it to reviewers.
+`verify_native_review_manifest(packet, manifest)` checks that the manifest
+describes exactly the distributed packet; the packet's provenance commitment
+also binds the source mapping, so an edited or swapped manifest entry fails
+with a closed reason code.
+
+Issue one packet per reviewer assignment, each with its own `packet_ref` and
+`seed`. The assignment reference then separates reviewers without naming them.
+
+### Import reviewer decisions
+
+`packet.submission_template()` returns the document a reviewer completes:
+
+```json
+{
+  "schema_version": "openmed.eval.native_review.submission.v1",
+  "packet_ref": "sw-assignment-0001",
+  "packet_digest": "sha256:...",
+  "reviewer_role": "native_clinician",
+  "decisions": [
+    {
+      "item_id": "nri_...",
+      "decision": "revise",
+      "reason_code": "boundary",
+      "corrections": [{"start": 12, "end": 21, "label": "CONDITION"}]
+    }
+  ]
+}
+```
+
+```python
+from openmed.eval.native_review_packets import import_native_review_decisions
+
+imported = import_native_review_decisions(
+    submission_json,
+    packet=packet,
+    manifest=manifest,
+)
+```
+
+Import first verifies the packet against the manifest, then requires the
+submission to name the same packet reference and digest. The reviewer role must
+be one of the packet's role codes, and decision, reason and correction label
+codes must come from the task's closed vocabularies. Corrections are a complete
+replacement span set, required for the task's correction decision and refused
+for every other decision. Unknown or duplicate item identifiers, duplicate JSON
+keys and non-finite numbers are rejected. Fields that look like reviewer
+identity, such as `reviewer_name`, `email` or `annotator_id`, fail with
+`reviewer_identity_forbidden`, and comment or note fields fail with
+`free_text_forbidden`, so neither can reach an imported record.
+
+Completeness is checked against the manifest. A `null` decision or a missing
+row leaves the item undecided, and by default import raises
+`NativeReviewIncompleteError`, whose `completeness` attribute lists the missing
+opaque item identifiers. Pass `require_complete=False` to keep the decided
+subset with the same completeness summary.
+
+Each imported `NativeReviewDecision` carries the reviewer-role code, decision
+and reason codes, corrections, and lineage: packet reference and digest,
+submission digest, source reference, language, privacy status, and the
+provenance, text and projection digests the reviewer saw. It holds no reviewer
+identity, free text or source text. `decision_id` is derived from the packet
+digest, item identifier and submission digest, so re-importing the same
+submission is idempotent, while a changed resubmission yields a new decision
+that shares the `(packet_ref, item_id)` assignment key. `to_dict()` and
+`from_dict()` round-trip each record and revalidate that lineage. Adjudication
+of conflicting decisions is a separate, explicit step; to measure agreement,
+map decisions to `ReviewerDecision` records keyed by `source_ref`, with
+`packet_ref` as the pseudonymous reviewer identifier.
+
+The privacy status is a declaration bound to a provenance digest; this module
+cannot prove that text is synthetic or de-identified. Treat packets as protected
+review artifacts, keep their text out of logs and general reports, and remember
+that the grapheme check is a conservative guard, not full Unicode segmentation.
+Errors carry only field names and closed codes. Native review supports language
+validation only and does not make or trigger clinical decisions.
