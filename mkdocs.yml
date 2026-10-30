@@ -382,6 +382,8 @@ nav:
           - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
           - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
           - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+          - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
+      - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -480,6 +482,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md

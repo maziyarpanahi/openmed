@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Document existing synthetic generators, offline examples, public exports and
   dataset provenance limits in a shared navigation group (#3896).
 
+- Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
+
+- Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.
+
+- Generate structured multilingual synthetic dialogue with grapheme-safe spans, Journey fact evidence and explicit adjudication truth (#2846).
+
+- Validate synthetic releases against disclosure, lineage, licenses, withdrawals, benchmark contamination and subgroup utility evidence (#3214).
+
 - Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
 
 - Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.

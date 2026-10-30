@@ -440,6 +440,8 @@ classification:
     - training/synthetic/rare-case-stressors.md
     - training/synthetic/intake-conversations.md
     - training/synthetic/burned-in-font-coverage.md
+    - training/synthetic-release-controls.md
+    - training/synthetic/code-switched-dialogues.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
@@ -537,6 +539,7 @@ classification:
     - api/deidentification.md
     - api/errors.md
     - api/compatibility-gate.md
+    - decision-models.md
     - api/fixed-option-decisions.md
     - api/journey-resources.md
     - guides/file-redaction.md
