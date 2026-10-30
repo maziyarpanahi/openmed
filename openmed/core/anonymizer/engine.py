@@ -46,6 +46,7 @@ from ..labels import normalize_label
 from ..language_pack import get_language_pack
 from ..locale_formats import date_order_for_locale
 from ..name_order import CJK_LANGUAGES, normalize_person_span
+from ..person_honorifics import peel_person_honorifics
 from ..script_detect import detect_script
 from .digit_systems import detect_source_digit_style
 from .format_preserve import (
@@ -56,6 +57,7 @@ from .format_preserve import (
     preserve_phone_format,
 )
 from .locales import resolve_faker_backend_locale, resolve_locale
+from .person_surrogates import shape_person_surrogate
 from .providers import register_clinical_providers
 from .registry import _DAY_FIRST_LOCALES as _FORMAT_PRESERVE_DAY_FIRST_LOCALES
 from .registry import resolve_label_generator
@@ -257,7 +259,10 @@ class Anonymizer:
         # the name is swapped while the honorific is re-attached verbatim.
         # Only ja/ko/zh PERSON spans take this path; all other languages and
         # labels are unaffected. See ``openmed.core.name_order`` (OM-291).
+        honorific_prefix = ""
         honorific_suffix = ""
+        person_gender = None
+        shape_person = False
         seed_value = original
         generator_input = original
         if canonical == L.PERSON and effective_lang in CJK_LANGUAGES:
@@ -271,6 +276,22 @@ class Anonymizer:
                 # map to the same core surrogate in deterministic mode.
                 seed_value = core_name
                 generator_input = core_name
+        elif canonical == L.PERSON:
+            # Other PERSON spans: peel registered honorifics (Thai นางสาว,
+            # Swahili Bi., Hindi श्रीमती, ...) and keep their gender cue so the
+            # generated name can be shaped to match it, then re-attach the
+            # honorific verbatim. See ``openmed.core.person_honorifics``.
+            shape_person = True
+            peeled = peel_person_honorifics(original, effective_lang)
+            person_gender = peeled.gender
+            if peeled.has_honorific:
+                if not peeled.name:
+                    # Never replace an honorific-only span with a bare title.
+                    return f"[{label}]"
+                honorific_prefix = peeled.prefix
+                honorific_suffix = peeled.suffix
+                seed_value = peeled.name
+                generator_input = peeled.name
 
         script = detect_script(generator_input)
         # Generators and validators see ASCII digits; a native-digit span is
@@ -307,9 +328,20 @@ class Anonymizer:
 
         try:
             generated = generator(faker, generator_input, locale=effective_locale)
+            if shape_person and isinstance(generated, str):
+                # Drop titles the generator added, keep family-first order and
+                # match the source's gender cue (no-op for most spans).
+                generated = shape_person_surrogate(
+                    generated,
+                    source_name=generator_input,
+                    lang=effective_lang,
+                    gender=person_gender,
+                    faker=faker,
+                    preserve_unknown_gender=is_script_specific,
+                )
             if digit_style is not None:
                 generated = digit_style.render(str(generated))
-            return f"{generated}{honorific_suffix}"
+            return f"{honorific_prefix}{generated}{honorific_suffix}"
         except Exception as exc:  # noqa: BLE001 — never let a single label kill the doc
             warnings.warn(
                 f"Anonymizer fallback for label {label!r} (canonical "
@@ -317,7 +349,7 @@ class Anonymizer:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return f"[{label}]{honorific_suffix}"
+            return f"{honorific_prefix}[{label}]{honorific_suffix}"
 
     def anonymize_aadhaar(
         self,
