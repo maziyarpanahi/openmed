@@ -212,6 +212,7 @@ classification:
     - install/standalone.md
     - install/smoke-check.md
     - serving/async-jobs.md
+    - serving/continuation-authorization.md
     - serving/request-signing.md
     - serving/grpc.md
     - serving/graphql.md
