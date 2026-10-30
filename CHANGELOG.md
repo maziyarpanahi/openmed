@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Propagate context-gated national-ID validator rejections through semantic merging and safety sweeps while preserving unrelated and validated spans.
 
+- Keep six-digit Bengali PIN codes detectable near dotted date fragments by requiring a four-digit date year.
+
 - Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
 
 - Record surrogate-provider versions and digest-only probe receipts, and expose

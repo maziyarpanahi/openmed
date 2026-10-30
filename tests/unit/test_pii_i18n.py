@@ -556,6 +556,60 @@ class TestBengaliValidators:
     def test_bengali_postcode_rejects_invalid_formats(self, value):
         assert not validate_bengali_postcode(value)
 
+    @pytest.mark.parametrize("date_text", ("২০.০৭.২০২৬", "20.07.2026"))
+    def test_dotted_date_year_is_not_a_bengali_postcode(self, date_text):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = f"কৃত্রিম নোট: ফলো-আপ {date_text}, পোস্টকোড ১২১৬।"
+        date_start = text.index(date_text)
+        postcode_start = text.index("১২১৬")
+        expected = {
+            (date_start, date_start + len(date_text), "date"),
+            (postcode_start, postcode_start + 4, "postcode"),
+        }
+
+        units = find_semantic_units(text, get_patterns_for_language("bn"))
+        swept = safety_sweep(text, [], lang="bn")
+
+        assert {(unit[0], unit[1], unit[2]) for unit in units if unit[5]} == expected
+        assert {(span.start, span.end, span.label) for span in swept} == expected
+
+    def test_bengali_postcode_skips_only_dotted_date_years(self):
+        postcode = next(
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["bn"]
+            if pattern.entity_type == "postcode"
+        )
+
+        def matches(text):
+            return [
+                match.group(0)
+                for match in re.finditer(postcode.pattern, text, postcode.flags)
+            ]
+
+        for dotted_date in ("২০.০৭.২০২৬", "৫.৭.২০২৬", "২০২৬.০৭.২০", "20.07.2026"):
+            assert matches(dotted_date) == []
+        # Dash- and slash-joined groups keep their match: they may be the only
+        # rule covering part of a domestic phone number or a reference.
+        assert matches("ফোন ০১৬৮৩-৮৫৯৮০৬") == ["৮৫৯৮০৬"]
+        assert matches("ঢাকা-১২০৬") == ["১২০৬"]
+        assert matches("বাড়ি ১২/৪৫৬৭") == ["৪৫৬৭"]
+        # Six-digit PIN codes are outside the four-digit date-year grammar.
+        from openmed.core.safety_sweep import safety_sweep
+
+        for text in ("পোস্টকোড ৭০০০০১.০৭.২০", "পোস্টকোড ২০.০৭.৭০০০০১"):
+            assert matches(text) == ["৭০০০০১"]
+            assert any(
+                span.text == "৭০০০০১" and span.label == "postcode"
+                for span in safety_sweep(text, [], lang="bn")
+            )
+            assert any(
+                text[start:end] == "৭০০০০১" and label == "postcode"
+                for start, end, label, *_ in find_semantic_units(
+                    text, get_patterns_for_language("bn")
+                )
+            )
+
 
 class TestGujaratiValidators:
     """Validator and fused-name coverage for the Gujarati language pack."""
