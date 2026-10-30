@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
+
 - Record surrogate-provider versions and digest-only probe receipts, and expose
   optional strict drift checks for the seeded synthetic corpus (#3893).
 
