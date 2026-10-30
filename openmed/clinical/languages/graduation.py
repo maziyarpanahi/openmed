@@ -1309,7 +1309,10 @@ def repository_language_inventory(
         USER_SUPPLIED_MODEL_LANGUAGES,
     )
     from openmed.core.model_registry import load_manifest_rows
-    from openmed.training.synthetic.locale_phi import SUPPORTED_LOCALE_PHI_LANGUAGES
+    from openmed.training.synthetic.locale_phi import (
+        AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES,
+        SUPPORTED_LOCALE_PHI_LANGUAGES,
+    )
 
     codes = _codes(languages, pattern=_LANGUAGE)
     root = _GOLDEN_FIXTURE_ROOT if fixture_root is None else Path(fixture_root)
@@ -1359,7 +1362,10 @@ def repository_language_inventory(
             evidence.add("on_device_mlx_variant")
         if code in NATIONAL_ID_PROVIDERS:
             evidence.add("national_id_validator")
-        if code in SUPPORTED_LOCALE_PHI_LANGUAGES:
+        if (
+            code in SUPPORTED_LOCALE_PHI_LANGUAGES
+            or code in AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES
+        ):
             evidence.add("locale_phi_generator")
         records, labels = _golden_summary(code, root)
         if records:

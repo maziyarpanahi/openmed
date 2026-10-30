@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+  The live inventory includes explicit augmentation-only generators independently of model-backed language support.
 
 - Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
 

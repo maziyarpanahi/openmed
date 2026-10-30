@@ -62,6 +62,11 @@ script or license change, or a record that claims more evidence than the
 repository holds, fails the suite. New evidence, such as an added fixture,
 leaves the record conservative until it is refreshed.
 
+The table and cohort records preserve selection-time evidence. The current
+inventory also records the explicit augmentation-only generators for `ha`,
+`ig`, `yo`, `rw`, `tl` and `ne`. That generator evidence does not add bundled
+model routes, fill native-review roles or graduate a language.
+
 ## Status and fail-closed tasks
 
 Only `deidentification` has a graduation contract. Every other task in the

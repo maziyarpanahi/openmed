@@ -146,6 +146,10 @@ def test_cohort_selection_matches_repository_evidence():
     assert COHORT.get("ne").fixture_plan.golden_records == 0
     assert "PERSON" in COHORT.get("yo").fixture_plan.missing_labels
     assert "tokenizer_script_unclaimed" in COHORT.get("pa").limitations
+    # Experimental augmentation exists independently of bundled model routes.
+    augmentation = repository_language_inventory(("ha", "ig", "yo", "rw", "tl", "ne"))
+    for row in augmentation.values():
+        assert "locale_phi_generator" in row["repository_evidence"]
 
 
 def test_inventory_findings_flag_overstated_or_contradicted_records():
