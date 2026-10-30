@@ -1,0 +1,106 @@
+{
+  "corpus": {
+    "content_hash": "sha256:56f7bab49f18143fb4acedaac701eab9b3d43856b79b634a0f4d330285d4fb54",
+    "dataset": "openmed-synth",
+    "record_count": 14,
+    "seed": 2352,
+    "version": "1.0.0"
+  },
+  "locales": {
+    "de_DE": {
+      "backend_locale": "de_DE",
+      "output": "sha256:3206f7174036700504ea3e398c83e8520428b6d29f335dfbb2ae25460db5727e",
+      "providers": {
+        "faker": "sha256:34a4751be83a111e9ec728b8edf6c23782e4a4faa142207f3a9f8a75e81e01d4",
+        "openmed.clinical_ids": "sha256:8f9cd07bf3a7b3db037bb4ca09b19c0c699b17c7ec18299be3f5e8c8350c110e"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:f4725c36d1258aa8db73ff5495517afff5a82a73824d285cd0a2666a7dcbc357"
+      }
+    },
+    "en_US": {
+      "backend_locale": "en_US",
+      "output": "sha256:d3ec09ffd190e49a30da42c48f71d46c760f4e1ddb66694af24a3d396642466a",
+      "providers": {
+        "faker": "sha256:15fa5e25141e781c5a935a7d834aafc258f19b87dd219104d2e80a9757c4316e",
+        "openmed.clinical_ids": "sha256:ce2ecaf68ec2deddf71df3753235660a2cf81f8fc44ae52f2cede79a44df7e88"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:10b42dc8651ec15e2fcce7fd5c9e631fcfabced9ca361f9119e941e0c50a9479"
+      }
+    },
+    "es_ES": {
+      "backend_locale": "es_ES",
+      "output": "sha256:e0e33db08871ffa5ce075d22ed5a4da7627133eff4f15301c26ae8a252d453ff",
+      "providers": {
+        "faker": "sha256:cbde1ff015e5c015e6c1887d6f6db69eb59e17197121dbd542001a9ba60e0c24",
+        "openmed.clinical_ids": "sha256:05b1311bab636183108e7e91b96a6753a619b467101f6875017cc4b68da59479"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:05487ba84c3286b38587254f510d2392535f356250da76c3dbc7f2c3047222f1"
+      }
+    },
+    "fr_FR": {
+      "backend_locale": "fr_FR",
+      "output": "sha256:3ffc47ac97f23dd5d177e3fe81ae3e9d00a4b1d094e8d51d74125644a5838b48",
+      "providers": {
+        "faker": "sha256:dbe86cd8814519d4203790995bf885b789be7766dd28f54f2c9a3fc87da589b4",
+        "openmed.clinical_ids": "sha256:87755676a8187b0f5eb46cb2c79fb8194fed6154d7d1fd71bfb97aa7f634c0e4"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:99a59c50b0464f0d4ab35d8922a30dc4b956e203e2be77a8a29c3d6c3c8ed134"
+      }
+    },
+    "hi_IN": {
+      "backend_locale": "hi_IN",
+      "output": "sha256:820f6acd4152cc3bcda7e6465ca20f2978482e23ed29d565fbfb435852312863",
+      "providers": {
+        "faker": "sha256:5f51b8772e46f970e4c3ccfde9f39e36c92c7105e6608a390b4271de52e34b80",
+        "openmed.clinical_ids": "sha256:7d90d2e8893398069bf9bbc851c879550817c476ef5e21318eb4b38b13d403dd"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:a6039680ce56934a34b74ad7e10abdf8f1d508b3f90d4efea688bccd22e754b0"
+      }
+    },
+    "pt_PT": {
+      "backend_locale": "pt_PT",
+      "output": "sha256:058c5f65544d8e9719e3f325725fc82bf61e8631ee151057dc63c8bc5c3e1735",
+      "providers": {
+        "faker": "sha256:f7899501005682ecca7acce1259ce3104110e88c0bd888e1f25666cd8931b9aa",
+        "openmed.clinical_ids": "sha256:cc439b0d0b526a2bb3dd5fef789c7d9faea1aed2c5b1e1076a4700ac7a992463"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:1a8cdcf4458159713b0641fbbbd002a1b4a82d9d3344346c365b0040d0e878b0"
+      }
+    },
+    "zh_CN": {
+      "backend_locale": "zh_CN",
+      "output": "sha256:7da3ec6f1be16e58cbb76f234a5c8dab9a8dacdd8a9ce5865739877775106f2b",
+      "providers": {
+        "faker": "sha256:3ef24da5efe69bf398ddd3681a47f6fd4d4d27b4fca6a78bb2e3f9ab441d048b",
+        "openmed.clinical_ids": "sha256:4840c3298f995578402ef4a500e0bd4d680731bd0d80db782218e1f573f653a2"
+      },
+      "tables": {
+        "openmed.synth_corpus": "sha256:c7f848e1839c11e6c217eb06b5986666b6b4efb7ec1afd6299a4eaa7be808a6e"
+      }
+    }
+  },
+  "probe": {
+    "digest": "sha256:f6aa2b0086133cad85c6939e0b66b18469be38524cafee59fe1755964fdaad75",
+    "draws": 3,
+    "methods": [
+      "city",
+      "email",
+      "medical_record_number",
+      "name",
+      "phone_number",
+      "random_int",
+      "street_address"
+    ],
+    "seed": 7919
+  },
+  "providers": {
+    "faker": "40.15.0"
+  },
+  "schema_version": "openmed.surrogate-providers.v1"
+}
