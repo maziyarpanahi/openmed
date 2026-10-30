@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Generate deterministic, value-free private-learning threat reports that map a closed federated or synthetic-data deployment declaration to update-inversion, poisoning, collusion, membership, memorization, retention, transport, replay, and metric-disclosure findings with OpenMed control references and no certification claims (#2879).
+
 - Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
 
 - Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.

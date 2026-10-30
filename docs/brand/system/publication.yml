@@ -702,6 +702,7 @@ classification:
     - security/threat-model.md
     - security/clinical-brief-threat-model.md
     - security/journey-threat-model.md
+    - compliance/assurance/private-learning-threats.md
     - security/threat-model-multilingual-ingestion.md
     - security/red-team-corpus.md
     - security/no-telemetry.md
