@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
   The live inventory includes explicit augmentation-only generators independently of model-backed language support.
 
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
+
 - Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
 
 - Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
