@@ -843,9 +843,10 @@ print([(span.start, span.end, span.metadata["calendar"]) for span in spans])
 # [(15, 31, 'hijri')]
 ```
 
-Detection does not convert or shift these dates. `method="shift_dates"`
-replaces them with the `[DATE_SHIFTED]` placeholder, and `method="replace"`
-uses the existing date surrogate. Latin transliterations such as `Ramadan`,
+Detection supplies offsets and calendar metadata. `method="shift_dates"`
+uses that metadata for supported calendar-aware shifts, with a placeholder
+fallback for unsupported values; see [Anonymization](anonymization.md).
+Latin transliterations such as `Ramadan`,
 `Meskerem` or `Asar`, dates written out in words, and lunisolar Vikram Samvat
 dates written with a tithi are not covered. Persian solar-calendar month names
 are matched by the Persian pack without a calendar code.
