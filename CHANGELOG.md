@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
+
 - Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
 
 - Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
