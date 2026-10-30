@@ -804,6 +804,21 @@ class TestEastAfricanNationalIds:
         assert not validate_tanzania_nida("19850712-1234-567890-12")
         assert not validate_tanzania_nida(None)
 
+    @pytest.mark.parametrize("separator", ["", "-", " "])
+    def test_swahili_nida_rule_validates_every_grouping(self, separator):
+        from openmed.core.safety_sweep import safety_sweep
+
+        valid = separator.join(["19850712", "12345", "67890", "12"])
+        invalid = separator.join(["19851312", "12345", "67890", "12"])
+
+        for value, expected in ((valid, [valid]), (invalid, [])):
+            text = f"Namba ya NIDA {value} imerekodiwa."
+            assert [
+                span.text
+                for span in safety_sweep(text, [], lang="sw")
+                if span.label == "national_id"
+            ] == expected
+
     def test_uganda_nin_validator_checks_class_gender_and_length(self):
         assert validate_uganda_nin("CM123456789ABC")
         assert validate_uganda_nin("cf123456789abc")
@@ -3296,6 +3311,52 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Thai address pattern should match"
 
+    @pytest.mark.parametrize(
+        "date_text",
+        [
+            "15/03/2567",
+            "15-03-67",
+            "๑๕/๐๓/๒๕๖๗",
+            "2024-03-15",
+            "15 มกราคม 2567",
+            "15 ม.ค. 2567",
+        ],
+    )
+    def test_thai_address_tail_stops_before_a_following_date(self, date_text):
+        from openmed.core.safety_sweep import safety_sweep
+
+        for address in (
+            "12 ถนนสุขุมวิท แขวงคลองเตย วันที่",
+            "12 ซอย 5",
+            "12 ซอย5",
+            "12 ถนน ก",
+        ):
+            text = f"ที่อยู่ {address} {date_text} ติดตามผล"
+            address_start = text.index(address)
+            date_start = text.index(date_text, address_start + len(address))
+            expected = {
+                (address_start, address_start + len(address), "street_address"),
+                (date_start, date_start + len(date_text), "date"),
+            }
+
+            swept = safety_sweep(text, [], lang="th")
+            units = find_semantic_units(text, get_patterns_for_language("th"))
+
+            assert {(span.start, span.end, span.label) for span in swept} == expected
+            assert {(unit[0], unit[1], unit[2]) for unit in units} == expected
+
+    def test_thai_address_keeps_house_number_ranges_in_its_tail(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = "ที่อยู่ 99 ซอย 3/12-14 แขวงคลองเตย"
+        address = "99 ซอย 3/12-14 แขวงคลองเตย"
+
+        swept = safety_sweep(text, [], lang="th")
+
+        assert [(span.text, span.label) for span in swept] == [
+            (address, "street_address")
+        ]
+
     def test_thai_postcode_pattern(self):
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "postcode"
@@ -4092,9 +4153,15 @@ class TestVietnameseLanguagePack:
         )
         negative_entities = safety_sweep(hard_negative, [], lang="vi")
         assert not any(
-            entity.text in {"003203123456", "123456789", "10000", "02838221234"}
+            entity.text in {"123456789", "10000", "02838221234"}
             for entity in negative_entities
         )
+        # "Mã bệnh án" labels a medical record number, never a CCCD.
+        assert {
+            entity.label
+            for entity in negative_entities
+            if entity.text == "003203123456"
+        } == {"medical_record_number"}
 
     def test_replace_surrogates_render_vietnamese_dates_day_first(self):
         """`method="replace"` must honour the `dmy` locale contract for `vi`.
@@ -6334,6 +6401,26 @@ class TestNigerianIdentifiers:
     )
     def test_nin_validator_rejects_trivial_or_malformed_values(self, value):
         assert not validate_nigeria_nin(value)
+
+    @pytest.mark.parametrize("lang", ["ha", "ig", "yo"])
+    @pytest.mark.parametrize(
+        ("value", "masked"),
+        [
+            ("36787753186", True),
+            ("٣٦٧٨٧٧٥٣١٨٦", True),
+            ("11111111111", False),
+            ("١١١١١١١١١١١", False),
+            ("98765432109", False),
+        ],
+    )
+    def test_language_pack_nin_rules_apply_nin_validation(self, lang, value, masked):
+        from openmed.core.safety_sweep import safety_sweep
+
+        text = f"NIN {value}."
+
+        assert [span.text for span in safety_sweep(text, [], lang=lang)] == (
+            [value] if masked else []
+        )
 
     def test_bvn_validator_accepts_non_trivial_eleven_digit_values(self):
         assert validate_nigeria_bvn("24107152688")
