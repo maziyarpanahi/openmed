@@ -352,9 +352,24 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
       - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+      - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+      - Synthetic Split Planning: training/synthetic/split-planning.md
+      - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+      - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+      - Synthetic Release Capsules: training/synthetic/release-capsules.md
+      - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
+      - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
+      - Synthetic Medication Courses: training/synthetic/medication-courses.md
+      - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
+      - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+      - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+      - Synthetic FHIR Records: training/synthetic/fhir-records.md
+      - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -368,7 +383,9 @@ nav:
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
       - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
@@ -398,6 +415,12 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
+      - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
+      - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
@@ -417,6 +440,7 @@ nav:
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -460,6 +484,10 @@ nav:
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
+      - Code-switch Span Projection: languages/code-switch-projection.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
