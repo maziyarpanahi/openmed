@@ -356,26 +356,34 @@ nav:
       - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
-      - SPDX License Identifiers: training/synthetic/license-identifiers.md
-      - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
-      - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
-      - Synthetic Split Planning: training/synthetic/split-planning.md
-      - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
-      - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
-      - Synthetic Release Capsules: training/synthetic/release-capsules.md
-      - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
-      - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
-      - Synthetic Medication Courses: training/synthetic/medication-courses.md
-      - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
-      - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
-      - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
-      - Synthetic FHIR Records: training/synthetic/fhir-records.md
-      - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
-      - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
-      - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
-      - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+      - Synthetic Data:
+          - Overview: training/synthetic/index.md
+          - Locale PHI Notes: training/synthetic/locale-phi.md
+          - Burned-in PHI Images: training/synthetic/burned-in.md
+          - Social-history Sections: training/synthetic/social-history.md
+          - Section-label Datasets: training/synthetic/section-labels.md
+          - Span Offset Projection: training/synthetic/offset-projection.md
+          - Translation Augmentation: training/synthetic/translation-augmentation.md
+          - SPDX License Identifiers: training/synthetic/license-identifiers.md
+          - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+          - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+          - Synthetic Split Planning: training/synthetic/split-planning.md
+          - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+          - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+          - Synthetic Release Capsules: training/synthetic/release-capsules.md
+          - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
+          - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
+          - Synthetic Medication Courses: training/synthetic/medication-courses.md
+          - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
+          - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+          - Synthetic FHIR Records: training/synthetic/fhir-records.md
+          - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+          - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+          - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
+          - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+          - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
       - Synthetic Release Controls: training/synthetic-release-controls.md
-      - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md

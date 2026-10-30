@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document existing synthetic generators, offline examples, public exports and
+  dataset provenance limits in a shared navigation group (#3896).
+
 - Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
 
 - Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.

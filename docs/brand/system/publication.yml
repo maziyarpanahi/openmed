@@ -415,6 +415,13 @@ classification:
     - languages/parallel-corpus-governance.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
+    - training/synthetic/index.md
+    - training/synthetic/locale-phi.md
+    - training/synthetic/burned-in.md
+    - training/synthetic/social-history.md
+    - training/synthetic/section-labels.md
+    - training/synthetic/offset-projection.md
+    - training/synthetic/translation-augmentation.md
     - training/synthetic/license-identifiers.md
     - training/synthetic/hl7v2-messages.md
     - training/synthetic/license-lineage-manifests.md
@@ -433,8 +440,8 @@ classification:
     - training/synthetic/rare-case-stressors.md
     - training/synthetic/intake-conversations.md
     - training/synthetic/burned-in-font-coverage.md
-    - training/synthetic-release-controls.md
     - training/synthetic/code-switched-dialogues.md
+    - training/synthetic-release-controls.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
