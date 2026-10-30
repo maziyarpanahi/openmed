@@ -65,7 +65,13 @@ The linked guide or schema section owns their contract.
   [`HL7V2MessageGenerator`](hl7v2-messages.md),
   [`HL7V2ResidualPosition`](hl7v2-messages.md),
   [`HL7V2TruthValue`](hl7v2-messages.md),
-  [`SyntheticHL7V2Message`](hl7v2-messages.md).
+  [`SyntheticHL7V2Message`](hl7v2-messages.md),
+  [`HL7V2_SURROGATE_PROVIDERS`](hl7v2-messages.md),
+  [`HL7V2LeakageError`](hl7v2-messages.md),
+  [`HL7V2SynthesisConfig`](hl7v2-messages.md),
+  [`HL7V2SynthesisError`](hl7v2-messages.md),
+  [`evaluate_hl7v2_leakage`](hl7v2-messages.md),
+  [`generate_hl7v2_messages`](hl7v2-messages.md).
 - Synthetic license and lineage validation:
   [`DEFAULT_LICENSE_LINEAGE_POLICY`](license-lineage-manifests.md),
   [`DEFAULT_MAX_DEPENDENCIES`](license-lineage-manifests.md),
@@ -82,7 +88,18 @@ The linked guide or schema section owns their contract.
   [`LicenseLineageVerdict`](license-lineage-manifests.md),
   [`SyntheticLicenseLineageError`](license-lineage-manifests.md),
   [`SyntheticModelProvenance`](license-lineage-manifests.md),
-  [`load_license_lineage_manifest`](license-lineage-manifests.md).
+  [`load_license_lineage_manifest`](license-lineage-manifests.md),
+  [`MAX_DEPENDENCIES`](license-lineage-manifests.md),
+  [`LicenseLineageSourceClass`](license-lineage-manifests.md),
+  [`RedistributionDecision`](license-lineage-manifests.md),
+  [`SyntheticDatasetDependency`](license-lineage-manifests.md),
+  [`SyntheticDatasetLicenseManifest`](license-lineage-manifests.md),
+  [`SyntheticGeneratorProvenance`](license-lineage-manifests.md),
+  [`SyntheticLicenseLineagePolicy`](license-lineage-manifests.md),
+  [`assess_license_expression`](license-lineage-manifests.md),
+  [`assert_redistribution_allowed`](license-lineage-manifests.md),
+  [`manifest_digest`](license-lineage-manifests.md),
+  [`validate_license_lineage`](license-lineage-manifests.md).
 - Synthetic record schemas:
   [`SYNTHETIC_RECORD_SCHEMA_IDS`](#record-schemas),
   [`SYNTHETIC_RECORD_SCHEMA_NAMES`](#record-schemas),

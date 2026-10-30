@@ -11,12 +11,17 @@ Pillow is imported only when an image is rendered. Install it with
 `pip install "openmed[multimodal]"`; without it, `generate` raises
 `ImportError`, while importing `openmed.training.synthetic` still works.
 
+These portable English examples request `font_fallback=True` explicitly.
+Missing fonts otherwise raise a typed error. The selected font must still cover
+every rendered character and support required shaping; see the
+[font coverage guide](burned-in-font-coverage.md) for licensed script fonts.
+
 ## Generate one image
 
 ```python
 from openmed.training.synthetic import BurnedInGenerator
 
-generator = BurnedInGenerator(seed=3)
+generator = BurnedInGenerator(seed=3, font_fallback=True)
 example = generator.generate("en")
 
 print(example.image.size)            # (640, 320)
@@ -38,7 +43,9 @@ For a one-off example with default variation, use the helper:
 ```python
 from openmed.training.synthetic import generate_burned_in_example
 
-example = generate_burned_in_example(seed=3, language="en", canvas_size=(640, 320))
+example = generate_burned_in_example(
+    seed=3, language="en", canvas_size=(640, 320), font_fallback=True,
+)
 ```
 
 ## Layout controls
@@ -60,8 +67,10 @@ print(example.gold_boxes[0].bbox)
 - `background` is one of `BACKGROUND_MODES`: `solid`, `gradient`, `phantom`.
 - Constructor pools default to `DEFAULT_CANVAS_SIZE` (640 × 320),
   `DEFAULT_FONT_SIZES` (18, 22, 26) and `DEFAULT_FONT_NAMES` (three DejaVu
-  fonts). If a named font is missing on the machine, Pillow's bundled default
-  font is used instead and the image still renders.
+  fonts). Missing fonts are refused by default. Explicit `font_fallback=True`
+  permits checked fallback for the default font pool, including Pillow's
+  bundled font when it covers the text. Missing glyphs or required shaping
+  still refuse the render.
 - Invalid controls (wrong count, non-positive size, unknown background, text
   that cannot fit the canvas) raise `ValueError`.
 
@@ -76,15 +85,17 @@ print(sorted(item))
 
 The Pillow image stays in memory in the dictionary; saving it (for example
 `item["image"].save("sample.png")`) is up to the caller. `metadata` records
-the seed, background mode, canvas size, and `contains_real_phi: False`.
+the seed, background mode, canvas size, and `contains_real_phi: False`, plus
+font digests, license declarations and fallback provenance.
 
 ## Seeds and determinism
 
-The same seed and settings give the same text and boxes:
+Within the same provider, font and Pillow environment, the same seed and
+settings give the same text and boxes:
 
 ```python
-a = BurnedInGenerator(seed=3).generate("en")
-b = BurnedInGenerator(seed=3).generate("en")
+a = BurnedInGenerator(seed=3, font_fallback=True).generate("en")
+b = BurnedInGenerator(seed=3, font_fallback=True).generate("en")
 assert a.text == b.text and a.gold_boxes == b.gold_boxes
 ```
 
