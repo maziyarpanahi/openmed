@@ -1811,9 +1811,9 @@ PER_LANGUAGE_TRAP_LANGUAGES = OM_120_WIRED_LANGUAGES | LOW_RESOURCE_TRAP_LANGUAG
 
 # Registered packs that still have no per-language date and ID traps. The list
 # is explicit so the coverage test fails when a trapped pack loses its traps and
-# when a newly registered pack ships without them. Sinhala is not a registered
-# pack yet (its NIC detection is #3890); registering it must add traps here or
-# list it.
+# when a newly registered pack ships without them. The experimental Sinhala
+# caller-supplied-model route is registered but still lacks this paired date/ID
+# trap set, so it is explicitly listed.
 PACKS_WITHOUT_PER_LANGUAGE_TRAPS = frozenset(
     {
         "af",
@@ -1841,6 +1841,7 @@ PACKS_WITHOUT_PER_LANGUAGE_TRAPS = frozenset(
         "pl",
         "ro",
         "ru",
+        "si",
         "sk",
         "sr",
         "sv",

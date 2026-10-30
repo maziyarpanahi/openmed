@@ -82,8 +82,9 @@ structure (Kenya ID, Tanzania NIDA, Nigeria NIN, Rwanda ID, Bangladesh NID)
 mark gold `validation: format_only` and use a `fails_format` hard negative.
 Hard negatives are never gold spans and stay unchanged in the expected output.
 
-A detection gap that a trap exposes stays in the gold and is marked on the span
-or hard negative instead of being skipped:
+A future detection gap that a trap exposes stays in the gold and may be marked
+on the span or hard negative instead of being skipped. The following is a schema
+example; the committed traps currently have no unresolved gap markers:
 
 ```json
 "known_gap": {

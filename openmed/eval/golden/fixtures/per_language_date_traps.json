@@ -574,14 +574,7 @@
           "end": 50,
           "label": "DATE",
           "text": "২০.০৭.২০২৬",
-          "metadata": {
-            "known_gap": {
-              "detectors": [
-                "language_patterns"
-              ],
-              "reason": "dotted_date_year_claimed_as_postcode"
-            }
-          }
+          "metadata": {}
         },
         {
           "start": 72,

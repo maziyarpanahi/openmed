@@ -448,14 +448,7 @@
             "end": 76,
             "text": "384726195057",
             "identifier_type": "ethiopian_fayda",
-            "reason": "fails_checksum",
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "reason": "accepted_by_unvalidated_national_id_pattern"
-            }
+            "reason": "fails_checksum"
           }
         ],
         "expected_output": {
@@ -526,13 +519,7 @@
             "end": 64,
             "text": "۲۹۳۵۰۷۱۶۴۷",
             "identifier_type": "iran_national_id",
-            "reason": "fails_checksum",
-            "known_gap": {
-              "detectors": [
-                "safety_sweep"
-              ],
-              "reason": "rejected_id_masked_as_phone"
-            }
+            "reason": "fails_checksum"
           }
         ],
         "expected_output": {
@@ -568,13 +555,7 @@
             "end": 78,
             "text": "11111111111",
             "identifier_type": "nin",
-            "reason": "fails_format",
-            "known_gap": {
-              "detectors": [
-                "safety_sweep"
-              ],
-              "reason": "accepted_by_unvalidated_national_id_pattern"
-            }
+            "reason": "fails_format"
           }
         ],
         "expected_output": {
@@ -645,13 +626,7 @@
             "end": 67,
             "text": "11111111111",
             "identifier_type": "nin",
-            "reason": "fails_format",
-            "known_gap": {
-              "detectors": [
-                "safety_sweep"
-              ],
-              "reason": "accepted_by_unvalidated_national_id_pattern"
-            }
+            "reason": "fails_format"
           }
         ],
         "expected_output": {
@@ -734,14 +709,7 @@
             "end": 147,
             "text": "19871332-41205-00017-26",
             "identifier_type": "tanzania_nida_nin",
-            "reason": "fails_format",
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "reason": "accepted_by_unvalidated_national_id_pattern"
-            }
+            "reason": "fails_format"
           }
         ],
         "expected_output": {
@@ -811,14 +779,7 @@
             "end": 99,
             "text": "3-1005-01234-56-4",
             "identifier_type": "thai_national_id",
-            "reason": "fails_checksum",
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "reason": "rejected_id_segment_masked_as_postcode"
-            }
+            "reason": "fails_checksum"
           }
         ],
         "expected_output": {
@@ -924,14 +885,7 @@
             "end": 69,
             "text": "11111111111",
             "identifier_type": "nin",
-            "reason": "fails_format",
-            "known_gap": {
-              "detectors": [
-                "language_patterns",
-                "safety_sweep"
-              ],
-              "reason": "accepted_by_unvalidated_national_id_pattern"
-            }
+            "reason": "fails_format"
           }
         ],
         "expected_output": {
