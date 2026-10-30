@@ -1271,8 +1271,12 @@ def create_app(
     ) -> Dict[str, Any]:
         """Evaluate a bounded local decision and return a typed review result."""
 
+        # Only caller-set fields reach the core contract, so a request without
+        # 1.1.0 fields still resolves to schema 1.0.0.
         body = (
-            payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload.dict(exclude_unset=True)
         )
         try:
             decision_request = CoreDecisionRequest.from_dict(body)
