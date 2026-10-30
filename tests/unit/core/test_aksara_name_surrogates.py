@@ -438,7 +438,9 @@ def test_aksara_generators_are_registered_only_for_hindi_and_telugu() -> None:
 
 
 @pytest.mark.parametrize("group", sorted(_REGRESSION_CASES))
-def test_han_gujarati_and_latin_fallback_outputs_match_reviewed_baselines(group: str) -> None:
+def test_han_gujarati_and_latin_fallback_outputs_match_reviewed_baselines(
+    group: str,
+) -> None:
     assert _surrogate_digest(_REGRESSION_CASES[group]) == _REGRESSION_DIGESTS[group]
 
 
