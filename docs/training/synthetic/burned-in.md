@@ -95,7 +95,7 @@ assert a.text == b.text and a.gold_boxes == b.gold_boxes
 - Text is drawn horizontally with simple backgrounds. Real scans have noise,
   skew, compression, and layouts these images do not model.
 - Values come from the locale PHI generator and Faker, so the
-  [Gregorian-ASCII-date and Faker-version caveats](locale-phi.md#known-limits)
+  [default-date and Faker-version caveats](locale-phi.md#known-limits)
   apply here too. Rendered pixels can differ slightly between Pillow or font
   versions even when the seed is unchanged.
 - The images are augmentation data, not clinical ground truth.

@@ -24,8 +24,8 @@ for example in examples:
 The first example is an English (`en_US`) note; its `PERSON`,
 `DATE_OF_BIRTH`, `ID_NUM`, `PHONE`, `STREET_ADDRESS`, and `DATE` spans each
 satisfy `text[start:end] == span.text`. `generate_locale_phi_examples` takes
-keyword-only `languages` and `seed`; with no `languages` it covers every
-supported language.
+keyword-only `languages`, `seed` and optional `date_profiles`; with no
+`languages` it retains the default model-backed language set.
 
 For a stateful generator that yields one example per call, use the class:
 
@@ -34,8 +34,15 @@ from openmed.training.synthetic import LocalePhiGenerator
 
 generator = LocalePhiGenerator(seed=7)
 english = generator.generate("en")
-everything = generator.generate_all()   # one example per supported language
+everything = generator.generate_all()   # the default model-backed set
 ```
+
+The six explicit augmentation-only routes (`ha`, `ig`, `yo`, `rw`, `tl`,
+`ne`) are also available through `generate(code)` or an explicit `languages`
+list. Use `generator.generate_all(include_augmentation_only=True)` to append
+them to the default set. Their examples record `bundled_model: False` and
+`language_route`; synthetic generation does not add bundled models or
+graduate language support.
 
 ## Training items
 
@@ -60,9 +67,10 @@ rules were applied.
 
 - `LOCALE_PHI_LABELS` lists the six labels: `PERSON`, `DATE_OF_BIRTH`,
   `ID_NUM`, `PHONE`, `STREET_ADDRESS`, `DATE`.
-- `SUPPORTED_LOCALE_PHI_LANGUAGES` lists the language codes the generator
-  accepts. Any other code raises `ValueError` and the message lists the
-  supported codes.
+- `SUPPORTED_LOCALE_PHI_LANGUAGES` lists the default model-backed template
+  set. `AUGMENTATION_ONLY_LOCALE_PHI_LANGUAGES` in
+  `openmed.training.synthetic.locale_phi` lists the six explicit extra routes.
+  Codes outside both sets raise `ValueError` with the available code lists.
 
 ```python
 from openmed.training.synthetic import LocalePhiGenerator
@@ -90,14 +98,20 @@ not reproducible. `metadata["seed"]` records which of the two was used.
 
 ## Known limits
 
-- **Dates are Gregorian and ASCII.** Dates of birth and follow-up dates are
-  rendered as ISO `YYYY-MM-DD` digits in every language, including languages
-  that normally use other numerals or calendars. A model trained only on this
-  data has not seen locale-native date writing.
+- **Default dates are Gregorian and ASCII.** Without `date_profiles=`, dates
+  of birth and follow-up dates stay ISO `YYYY-MM-DD` in every language. Opt-in
+  native-digit and native-calendar profiles are documented in the
+  [language guide](../../languages.md). Profiles carry value-free calendar,
+  numeral and detection-gap metadata; generating them does not establish
+  detector coverage or clinical validity. For example,
+  `LocalePhiGenerator(seed=7, date_profiles={"fa": "fa_solar_hijri_month_name"})`
+  opts Persian examples into that profile while other languages keep defaults.
 - **Faker-dependent values.** Names, phone numbers, and street addresses come
   from Faker locale providers, so they depend on the installed Faker version
   and on how complete that provider is for the language. Identifiers use the
   repository's checksum validators where one exists.
+  `metadata["surrogate_providers"]` records the provider stamp for later drift
+  checks; reproducibility assumes the same providers and date profiles.
 - **Approximated Faker fields.** Some language packs use a neighboring Faker
   backend for fields such as phones or generic addresses and emit a
   `UserWarning`. Script-specific providers can still generate native names
