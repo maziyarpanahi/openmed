@@ -843,9 +843,58 @@ print([(span.start, span.end, span.metadata["calendar"]) for span in spans])
 # [(15, 31, 'hijri')]
 ```
 
-Detection does not convert or shift these dates. `method="shift_dates"`
-replaces them with the `[DATE_SHIFTED]` placeholder, and `method="replace"`
-uses the existing date surrogate. Latin transliterations such as `Ramadan`,
+Detection supplies offsets and calendar metadata. `method="shift_dates"`
+uses that metadata for supported calendar-aware shifts, with a placeholder
+fallback for unsupported values; see [Anonymization](anonymization.md).
+Latin transliterations such as `Ramadan`,
 `Meskerem` or `Asar`, dates written out in words, and lunisolar Vikram Samvat
 dates written with a tithi are not covered. Persian solar-calendar month names
 are matched by the Persian pack without a calendar code.
+
+## Localized medical-record-number labels
+
+Record numbers are direct identifiers, so the deterministic layer recognizes
+them after localized record, file, patient, hospital and admission-number
+labels, not only after the English `MRN`. The labels live in one declarative
+table,
+[`openmed.core.medical_record_labels.MEDICAL_RECORD_LABELS`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/medical_record_labels.py),
+which compiles into context-gated `medical_record_number` patterns shared by
+semantic merging and the safety sweep. With an empty model detector, the
+number is still masked and its label stays readable:
+
+```text
+Before: ผู้ป่วย HN: 6501234 นัดตรวจซ้ำ
+After:  ผู้ป่วย HN: [medical_record_number] นัดตรวจซ้ำ
+
+Before: No. RM: 12.34.56, Hb 11,2 g/dL
+After:  No. RM: [medical_record_number], Hb 11,2 g/dL
+```
+
+The table covers Amharic (`የካርድ ቁጥር`), Arabic (`رقم الملف الطبي`), Chinese
+(`病历号` and `住院号` followed by decimal digits), Hausa (`Lambar fayil`),
+Hebrew (`מספר תיק`), Hindi (`पंजीकरण संख्या`, `UHID`), Indonesian (`No. RM`),
+Persian (`شماره پرونده`), Swahili (`Namba ya faili`), Thai (`HN`, `AN`),
+Urdu (`ایم آر نمبر`) and Vietnamese (`Mã bệnh nhân`), plus related spellings.
+English keeps its built-in `MRN` rule.
+
+- **Label required.** A number is relabelled only when a listed label sits
+  next to it, so unlabelled numbers, doses, lab values and phone numbers keep
+  their existing handling. Count phrases such as Hindi `कुल रोगी संख्या` are
+  deliberately not labels, and the Thai `HN`/`AN` abbreviations are
+  case-sensitive.
+- **Tolerated forms.** Any Unicode decimal digits (Thai, Devanagari,
+  Arabic-Indic, Persian), 4–20 digits with single `-`, `/` or `.` separators,
+  label punctuation `:`, `：`, `፡` and `#`, bidi controls between label and
+  number, NFC, NFD and unaccented Latin spellings, and, for right-to-left
+  scripts, a visual-order number written before its label (`1234567 :מספר תיק`).
+- **Reports.** `medical_record_label_matches(text, lang)` returns offsets and
+  the canonical table label for each match, never the number.
+  `medical_record_label_coverage().to_dict()` returns language codes, label
+  counts and the registered packs that still have no labels.
+
+Adding a language needs one table entry and one synthetic row in
+`tests/fixtures/pii/medical_record_labels_synthetic.jsonl` with labelled
+numbers and negative controls; no detector code changes.
+`tests/unit/core/test_medical_record_labels.py` fails until both exist and
+pins the list of registered packs without labels. Institution-specific number
+formats and checksums are out of scope.
