@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field
 from threading import RLock
 from types import MappingProxyType
@@ -227,7 +228,13 @@ class LanguagePack:
 
 
 class LanguagePackRegistry:
-    """Store language packs in a thread-safe, process-local registry."""
+    """Store language packs in a thread-safe, process-local registry.
+
+    Every committed change advances :attr:`generation`. Callers that validate
+    against a snapshot can commit a complete replacement table only when no
+    other change happened in between, so a multi-pack update is observed as
+    one generation rather than as a sequence of partial registrations.
+    """
 
     def __init__(self) -> None:
         """Create an empty registry."""
@@ -235,6 +242,15 @@ class LanguagePackRegistry:
         self._packs: dict[str, LanguagePack] = {}
         self._listeners: list[Callable[[], None]] = []
         self._lock = RLock()
+        self._generation = 0
+        self._committing_generation = False
+
+    @property
+    def generation(self) -> int:
+        """Return a counter that increases with every committed change."""
+
+        with self._lock:
+            return self._generation
 
     def register(
         self,
@@ -261,13 +277,81 @@ class LanguagePackRegistry:
             raise TypeError("pack must be a LanguagePack")
 
         with self._lock:
+            if self._committing_generation:
+                raise RuntimeError("registry generation refresh in progress")
             if pack.code in self._packs and not replace:
                 raise ValueError(f"language pack {pack.code!r} is already registered")
             self._packs[pack.code] = pack
+            self._generation += 1
             listeners = tuple(self._listeners)
         for listener in listeners:
             listener()
         return pack
+
+    def _snapshot(self) -> tuple[int, Mapping[str, LanguagePack]]:
+        """Return the current generation and a read-only copy of its packs."""
+
+        with self._lock:
+            return self._generation, MappingProxyType(dict(self._packs))
+
+    def _commit_generation(
+        self,
+        packs: Mapping[str, LanguagePack],
+        *,
+        expected_generation: int,
+    ) -> int | None:
+        """Atomically replace every pack when the registry is still unchanged.
+
+        Listeners are notified once for the whole replacement. If a listener
+        fails, the previous table and generation are restored, listeners are
+        refreshed again, and the original error propagates. Concurrent writers
+        wait for completion; reentrant callback mutations are refused.
+
+        Args:
+            packs: Complete replacement table keyed by language code.
+            expected_generation: Generation the caller validated against.
+
+        Returns:
+            The new generation, or ``None`` when the registry changed after
+            ``expected_generation`` and nothing was committed.
+
+        Raises:
+            TypeError: If a value is not a :class:`LanguagePack`.
+            ValueError: If a key does not match its pack's code.
+        """
+
+        table: dict[str, LanguagePack] = {}
+        for code, pack in packs.items():
+            if not isinstance(pack, LanguagePack):
+                raise TypeError("pack must be a LanguagePack")
+            if code != pack.code:
+                raise ValueError("registry keys must match language-pack codes")
+            table[code] = pack
+
+        with self._lock:
+            if self._committing_generation or self._generation != expected_generation:
+                return None
+            previous = self._packs
+            self._packs = table
+            self._generation += 1
+            committed = self._generation
+            listeners = tuple(self._listeners)
+            self._committing_generation = True
+            try:
+                for listener in listeners:
+                    listener()
+            except BaseException:
+                self._packs = previous
+                self._generation = expected_generation
+                # Readers in other threads cannot observe the pending table.
+                # Callbacks may read it, but cannot commit reentrant mutations.
+                for listener in listeners:
+                    with suppress(Exception):
+                        listener()
+                raise
+            finally:
+                self._committing_generation = False
+            return committed
 
     def _add_listener(
         self,
