@@ -315,7 +315,8 @@
     "user_supplied_model_languages": {
       "status": "verified",
       "value": [
-        "ne"
+        "ne",
+        "si"
       ],
       "display": null,
       "definition": "Script-routable language codes requiring a user-configured model; not built-in model support.",
