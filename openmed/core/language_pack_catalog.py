@@ -14,6 +14,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from .calendars import (
+    ETHIOPIAN,
+    GREGORIAN,
+    LUNAR_HIJRI,
+    SOLAR_HIJRI,
+    THAI_BUDDHIST,
+)
 from .language_pack import LANGUAGE_PACK_REGISTRY, LanguagePack, LanguagePackRegistry
 from .language_packs import (
     CHINESE_LANGUAGE_PACK,
@@ -49,6 +56,7 @@ def _pack(
     national_id_provider: tuple[str, str] | None = None,
     context_scripts: Sequence[str] = (),
     routing_markers: Sequence[str] = (),
+    default_calendar: str = GREGORIAN,
 ) -> LanguagePack:
     providers: dict[str, str] = {}
     if national_id_provider is not None:
@@ -64,6 +72,7 @@ def _pack(
         national_id_providers=providers,
         context_scripts=tuple(context_scripts),
         routing_markers=tuple(routing_markers),
+        default_calendar=default_calendar,
     )
 
 
@@ -214,6 +223,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "am_ET",
         ("Ethiopic",),
         national_id_provider=("am_ET", "ethiopia_fayda"),
+        default_calendar=ETHIOPIAN,
     ),
     _pack(
         "pt",
@@ -222,11 +232,16 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Latin",),
         national_id_provider=("pt_BR", "cpf"),
     ),
+    # Lunar Hijri years (1356-1450 in the bundled table) never overlap the
+    # Gregorian years 1800-2299, so unmarked Arabic and Urdu dates in the
+    # table's years are read as Umm al-Qura Hijri dates and others stay
+    # Gregorian.
     _pack(
         "ar",
         "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
         "ar_EG",
         ("Arabic",),
+        default_calendar=LUNAR_HIJRI,
     ),
     _pack(
         "fa",
@@ -243,6 +258,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
             "فروردین",
             "اسفند",
         ),
+        default_calendar=SOLAR_HIJRI,
     ),
     _pack(
         "ur",
@@ -251,6 +267,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         ("Arabic",),
         national_id_provider=("ur_IN", "aadhaar"),
         routing_markers=("مریض", "آدھار", "پتہ", "جناب", "محترمہ"),
+        default_calendar=LUNAR_HIJRI,
     ),
     _pack(
         "he",
@@ -288,6 +305,7 @@ BUILTIN_LANGUAGE_PACKS: tuple[LanguagePack, ...] = (
         "th_TH",
         ("Thai",),
         national_id_provider=("th_TH", "thai_national_id"),
+        default_calendar=THAI_BUDDHIST,
     ),
     _pack(
         "ko",
@@ -679,8 +697,7 @@ class LanguagePackAdapters:
         self.script_language_hints: dict[str, tuple[str, ...]] = {}
         registry._add_listener(self.refresh)
 
-    def _ordered_codes(self) -> tuple[str, ...]:
-        codes = tuple(self.registry.iter_codes())
+    def _ordered_codes(self, codes: Sequence[str]) -> tuple[str, ...]:
         known = set(codes)
         ordered = [code for code in self._builtin_order if code in known]
         ordered.extend(code for code in codes if code not in self._builtin_order)
@@ -711,8 +728,11 @@ class LanguagePackAdapters:
     def refresh(self) -> None:
         """Refresh every public projection from one registry snapshot."""
 
-        codes = self._ordered_codes()
-        packs = tuple(self.registry.get(code) for code in codes)
+        # Read packs once: an atomic generation may remove codes, so separate
+        # code and pack lookups could otherwise observe two generations.
+        snapshot = {pack.code: pack for pack in self.registry.iter_packs()}
+        codes = self._ordered_codes(tuple(snapshot))
+        packs = tuple(snapshot[code] for code in codes)
         route_packs = self._unregistered_route_packs(set(codes))
 
         self.supported_languages.clear()

@@ -422,6 +422,13 @@ classification:
     - training/synthetic/truth-alignment.md
     - training/synthetic/release-capsules.md
     - training/synthetic/dataset-recipes.md
+    - training/synthetic/lab-time-series.md
+    - training/synthetic/medication-courses.md
+    - training/synthetic/prior-auth-packets.md
+    - training/synthetic/clinical-note-grammars.md
+    - training/synthetic/longitudinal-trajectories.md
+    - training/synthetic/fhir-records.md
+    - training/synthetic/omop-cohorts.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
