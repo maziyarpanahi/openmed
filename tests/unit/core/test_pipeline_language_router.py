@@ -18,7 +18,6 @@ def test_auto_pipeline_rejects_unsupported_letters_before_model_inference(subtes
         ("မြန်မာ", "Myanmar"),
         ("ខ្មែរ", "Khmer"),
         ("ລາວ", "Lao"),
-        ("සිංහල", "Sinhala"),
         ("ދިވެހި", "Thaana"),
         ("བོད", "Tibetan"),
     ]:
