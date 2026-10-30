@@ -579,6 +579,21 @@ def test_backend_is_an_encoder_with_a_valid_result_contract() -> None:
     with pytest.raises(TypeError):
         decide_with_gliclass(_request(), backend=object())  # type: ignore[arg-type]
 
+    request_set = DecisionRequest.from_dict(
+        {
+            "mode": "question_set",
+            "input_text": TEXT,
+            "questions": [
+                {"question_id": name, "mode": "fixed_choice", "options": list(LABELS)}
+                for name in ("first", "second")
+            ],
+        }
+    )
+    grouped = decide_with_gliclass(request_set, backend=backend)
+    assert grouped.to_dict() == decide(request_set, backend=backend).to_dict()
+    assert grouped.state is DecisionState.SUCCESS
+    assert "gliclass" not in grouped.extensions
+
 
 def test_backend_settings_are_validated() -> None:
     with pytest.raises(DecisionError, match="score levels"):
@@ -609,6 +624,19 @@ def test_backend_settings_are_validated() -> None:
             constructor()
         assert marker not in str(caught.value)
         assert marker not in repr(caught.value.args)
+
+    backend = _torch_backend()
+    for request in (
+        _request(instructions="Synthetic per-request instruction."),
+        _request(option_descriptions=("Synthetic description", None, None)),
+        _request(DecisionMode.SCALAR_SCORE, options=(), levels=("Low", "High")),
+    ):
+        for run in (decide, decide_with_gliclass):
+            result = run(request, backend=backend)
+            assert result.state is DecisionState.UNSUPPORTED
+            assert result.code == "backend_unsupported"
+            assert "gliclass" not in result.extensions
+    assert backend.runner._pipe.calls == []
 
 
 def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
