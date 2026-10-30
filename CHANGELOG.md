@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Validate synthetic releases against disclosure, lineage, licenses, withdrawals, benchmark contamination and subgroup utility evidence (#3214).
+
 - Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
 
 - Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.

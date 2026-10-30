@@ -374,6 +374,7 @@ nav:
       - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
       - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
       - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+      - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md

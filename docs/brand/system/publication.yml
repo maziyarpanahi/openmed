@@ -433,6 +433,7 @@ classification:
     - training/synthetic/rare-case-stressors.md
     - training/synthetic/intake-conversations.md
     - training/synthetic/burned-in-font-coverage.md
+    - training/synthetic-release-controls.md
     - reference/preference-schema.md
     - multimodal/bmp-header-preflight.md
     - multimodal/gif-header-preflight.md
