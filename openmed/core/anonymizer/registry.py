@@ -547,6 +547,10 @@ def _gen_phone(faker, original, *, locale):
             if african_surrogate is not None:
                 return african_surrogate
         return preserve_phone_format(original, rng=faker.random)
+    if not hasattr(faker, "phone_number") and hasattr(faker, "mobile_number"):
+        # Faker's Philippine locales (fil_PH, tl_PH, en_PH) ship carrier mobile
+        # and landline providers but no generic ``phone_number`` method.
+        return faker.mobile_number()
     return faker.phone_number()
 
 
@@ -820,6 +824,7 @@ _LOCALE_ID_METHODS = {
     "el_GR": "ssn",
     "vi_VN": "vietnamese_cccd",
     "rw_RW": "rwanda_id",
+    "si_LK": "sri_lanka_nic",
     "sw_TZ": "tanzania_nida",
     "ur_PK": "cnic",
 }
@@ -1032,6 +1037,13 @@ def _gen_id_num(faker, original, *, locale):
 
         if validate_chinese_resident_id(original.strip()):
             return _generate_distinct_chinese_resident_id(faker, original)
+    if locale == "si_LK" and hasattr(faker, "sri_lanka_nic") and original:
+        from openmed.core.pii_i18n import validate_sri_lanka_nic
+
+        # Checked before the generic shapes: a nine-digit NIC with an
+        # upper-case V or X also looks like an M-Pesa transaction code.
+        if validate_sri_lanka_nic(original):
+            return faker.sri_lanka_nic(original)
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
