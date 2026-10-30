@@ -63,6 +63,7 @@ from .locale_formats import (
     date_order_for_locale,
     parse_date,
 )
+from .medical_record_labels import MEDICAL_RECORD_LABELS, medical_record_label_patterns
 from .registry_service import manifest_pii_languages
 
 # ---------------------------------------------------------------------------
@@ -110,8 +111,8 @@ USER_SUPPLIED_PII_MODEL = "user-supplied"
 DEFAULT_PII_MODELS = dict(DEFAULT_PII_MODELS)
 for _language in INDIC_NER_LANGUAGES - {"bn", "hi", "ta", "te"}:
     DEFAULT_PII_MODELS.setdefault(_language, OPTIONAL_PII_MODEL)
-# Remaining user-supplied routes (Nepali and Urdu) have neither bundled weights
-# nor an optional Indic NER adapter, so they take the explicit sentinel. This
+# Remaining user-supplied routes (Nepali and Sinhala) have neither bundled
+# weights nor an optional Indic NER adapter, so they take the explicit sentinel. This
 # only touches the compatibility copy; the language-pack catalog keeps claiming
 # no default model for them.
 for _language in USER_SUPPLIED_MODEL_LANGUAGES:
@@ -138,6 +139,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ne": "Nepali",
     "or": "Odia",
     "pa": "Punjabi",
+    "si": "Sinhala",
     "ta": "Tamil",
     "te": "Telugu",
     "ur": "Urdu",
@@ -184,6 +186,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ne": "Nepali-",
     "or": "Odia-",
     "pa": "Punjabi-",
+    "si": "Sinhala-",
     "ta": "Tamil-",
     "te": "Telugu-",
     "ur": "Urdu-",
@@ -2087,6 +2090,11 @@ def validate_tanzania_nida(text: str) -> bool:
     except ValueError:
         return False
     return date(1900, 1, 1) <= birth_date <= date.today()
+
+
+def _validate_grouped_tanzania_nida(text: str) -> bool:
+    """Validate a NIDA number printed compact, dash-grouped or space-grouped."""
+    return isinstance(text, str) and validate_tanzania_nida(text.replace(" ", ""))
 
 
 def validate_uganda_nin(text: str) -> bool:
@@ -4861,6 +4869,24 @@ _EGYPT_NATIONAL_ID_PII_PATTERNS = _locale_patterns_named(
 _MOROCCO_CIN_PII_PATTERNS = _locale_patterns_named("ar_ma", "moroccan_cin")
 
 NIGERIA_NIN_PATTERN = r"(?<!\d)\d{11}(?!\d)"
+
+
+def _validate_nigeria_nin_any_digits(text: str) -> bool:
+    """Apply NIN placeholder rules to a value in any decimal digit script.
+
+    Language-pack NIN rules match ``\\d`` so Ajami spans keep their native
+    digits; each digit is read by its decimal value only for validation.
+    """
+    if not isinstance(text, str):
+        return False
+    return validate_nigeria_nin(
+        "".join(
+            str(unicodedata.decimal(char)) if char.isdecimal() else char
+            for char in text
+        )
+    )
+
+
 _NIGERIA_INTERNATIONAL_PHONE_BODY = (
     r"(?:234|٢٣٤|۲۳۴)[\s.-]?[789٧٨٩۷۸۹]\d{2}[\s.-]?\d{3}[\s.-]?\d{4}"
 )
@@ -4975,6 +5001,7 @@ _HAUSA_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=["nin", "lambar nin", "lambar shaida", "lambar ƙasa", "lamba"],
         context_boost=0.4,
+        validator=_validate_nigeria_nin_any_digits,
         flags=re.IGNORECASE,
     ),
 ]
@@ -5054,6 +5081,7 @@ _YORUBA_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.45,
         context_words=_YORUBA_NIN_CONTEXT,
         context_boost=0.5,
+        validator=_validate_nigeria_nin_any_digits,
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
@@ -5160,6 +5188,7 @@ _IGBO_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.45,
         context_words=_IGBO_NIN_CONTEXT,
         context_boost=0.5,
+        validator=_validate_nigeria_nin_any_digits,
         safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
@@ -5435,6 +5464,80 @@ _IRISH_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# UK postcodes follow the Royal Mail outward/inward grammar. The outward code
+# has one of six shapes (A9, A99, A9A, AA9, AA99, AA9A): Q, V and X never open
+# it, only ABCDEFGHJKPSTUW close an A9A district and only ABEHMNPRVWXY close an
+# AA9A district. Royal Mail never puts I, J or Z second; Z is accepted there
+# for synthetic ZZ-area fixtures. NHS pseudo-postcodes with excluded inward
+# letters remain outside this grammar. The inward code is a digit and two
+# letters, never C, I, K, M, O or V. GIR 0AA is
+# the one code outside this grammar.
+_UK_POSTCODE_SEPARATOR = r"[ \u00a0]?"
+_UK_POSTCODE_OUTWARD = (
+    r"[A-PR-UWYZ](?:[0-9][0-9A-HJKPSTUW]?|[A-HK-Z][0-9][0-9ABEHMNPRVWXY]?)"
+)
+_UK_POSTCODE_INWARD = r"[0-9][ABD-HJLNP-UW-Z]{2}"
+_UK_POSTCODE_RE = re.compile(
+    rf"GIR{_UK_POSTCODE_SEPARATOR}0AA"
+    rf"|{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}{_UK_POSTCODE_INWARD}"
+)
+# Inward codes that also read as a data size (8GB, 1TB) or an English ordinal
+# (1ST, 2ND), as in product specs and ward or floor labels. Only nearby
+# address context makes these count as postcodes.
+_UK_POSTCODE_LOOKALIKE_INWARD = r"(?:[0-9][GPT]B|1ST|2ND|3RD|[04-9]TH)"
+# A postcode is a standalone token: not glued to a word character, not
+# hyphen-joined to a product or reference code, and not followed by a dotted
+# version continuation.
+_UK_POSTCODE_START = r"(?<!\w)(?<!\w-)"
+_UK_POSTCODE_END = r"(?!\w)(?!-\w)(?!\.\d)"
+_UK_POSTCODE_CONTEXT = [
+    "postcode",
+    "post code",
+    "postal code",
+    "postal",
+    "address",
+    "street",
+    "road",
+    "lane",
+    "avenue",
+    "close",
+    "drive",
+    "way",
+    "crescent",
+    "court",
+    "place",
+    "gardens",
+    "terrace",
+    "grove",
+    "mews",
+    "square",
+]
+
+
+def validate_uk_postcode(text: str) -> bool:
+    """Return whether ``text`` is a well-formed UK postcode.
+
+    Checks the Royal Mail format only: the six outward-code shapes with their
+    positional letter rules, the inward code with C, I, K, M, O and V
+    excluded, and the special ``GIR 0AA``. It does not check that a postcode
+    is allocated. The outward and inward codes may be separated by one space
+    or by nothing. Letters must be all uppercase or all lowercase, so
+    mixed-case tokens such as ``B4 2nd`` are rejected.
+
+    Args:
+        text: Candidate postcode surface.
+
+    Returns:
+        ``True`` when ``text`` is one complete, well-formed UK postcode.
+    """
+    if not text.replace("\u00a0", " ").isascii():
+        return False
+    letters = "".join(char for char in text if char.isalpha())
+    if not (letters.isupper() or letters.islower()):
+        return False
+    return _UK_POSTCODE_RE.fullmatch(text.upper()) is not None
+
+
 _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
     # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
     PIIPattern(
@@ -5466,6 +5569,40 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_uk_nino,
+        flags=re.IGNORECASE,
+    ),
+    # UK postcode. A full unit postcode covers about 15 addresses, so it is
+    # matched without context; address words only raise the score.
+    PIIPattern(
+        _UK_POSTCODE_START
+        + rf"(?:GIR{_UK_POSTCODE_SEPARATOR}0AA"
+        + rf"|{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}"
+        + rf"(?!{_UK_POSTCODE_LOOKALIKE_INWARD}){_UK_POSTCODE_INWARD})"
+        + _UK_POSTCODE_END,
+        "postcode",
+        priority=7,
+        base_score=0.6,
+        context_words=_UK_POSTCODE_CONTEXT,
+        context_boost=0.3,
+        validator=validate_uk_postcode,
+        reject_on_validation_failure=True,
+        flags=re.IGNORECASE,
+    ),
+    # Postcode-shaped tokens whose inward code reads as a data size or an
+    # ordinal (``S23 8GB``, ``B4 2ND``) need nearby address context.
+    PIIPattern(
+        _UK_POSTCODE_START
+        + rf"{_UK_POSTCODE_OUTWARD}{_UK_POSTCODE_SEPARATOR}"
+        + rf"(?={_UK_POSTCODE_LOOKALIKE_INWARD}){_UK_POSTCODE_INWARD}"
+        + _UK_POSTCODE_END,
+        "postcode",
+        priority=7,
+        base_score=0.6,
+        context_words=_UK_POSTCODE_CONTEXT,
+        context_boost=0.3,
+        requires_context=True,
+        validator=validate_uk_postcode,
+        reject_on_validation_failure=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -7533,10 +7670,19 @@ _BENGALI_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=0,
     ),
+    # The year of a dotted date such as ``২০.০৭.২০২৬`` or ``২০২৬.০৭.২০`` is not
+    # a postcode. Dash-joined groups are left alone: they may be the only rule
+    # covering part of a domestic phone number. Only four-digit candidates
+    # can be date years; six-digit PIN codes keep their existing behavior.
     PIIPattern(
         rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}])(?:"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]\.)"
+        rf"(?<![{_BENGALI_ASSAMESE_DIGIT_CLASS}]\."
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{2}}\.)"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
-        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}|"
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{3}}"
+        rf"(?!\.[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{1,2}}\."
+        rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}])|"
         rf"[{_BENGALI_NONZERO_DIGIT_CLASS}]"
         rf"[{_BENGALI_ASSAMESE_DIGIT_CLASS}]{{5}})"
         rf"(?![{_BENGALI_ASSAMESE_DIGIT_CLASS}])",
@@ -8494,8 +8640,8 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
         safety_sweep_requires_context=True,
         flags=0,
     ),
-    # Fayda recognition is format-only: exactly 12 decimal digits. No checksum
-    # or validity claim is made because none is publicly specified.
+    # Fayda FAN: exactly 12 decimal digits with the MOSIP UIN leading-digit
+    # rule and Verhoeff check digit, as in ``_ETHIOPIA_FAYDA_PII_PATTERNS``.
     PIIPattern(
         r"(?<!\w)[0-9]{12}(?!\w)",
         "national_id",
@@ -8503,6 +8649,7 @@ _AMHARIC_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=_AMHARIC_ID_CONTEXT,
         context_boost=0.45,
+        validator=validate_ethiopia_fayda,
         requires_context=True,
         safety_sweep_requires_context=True,
         flags=0,
@@ -8957,6 +9104,191 @@ _URDU_PII_PATTERNS: List[PIIPattern] = [
         validator=validate_urdu_belt_pin,
         reject_on_validation_failure=True,
         safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+# Sinhala (``si``) deterministic coverage for the user-supplied-model route.
+# Modern Sinhala clinical text writes numbers with ASCII digits; the archaic
+# Sinhala Lith digits are folded to ASCII by detection normalization before
+# these patterns run. No checksum is claimed for any Sri Lankan identifier.
+_SINHALA_LETTER = r"[\u0D80-\u0DE5\u0DF0-\u0DFF\u200D]"
+_SINHALA_WORD = rf"{_SINHALA_LETTER}+"
+_SRI_LANKA_NUMBER_END = r"(?![0-9]|[-/][0-9])"
+_SRI_LANKA_NIC_OLD_LAYOUT = re.compile(r"[0-9]{2}([0-9]{3})[0-9]{4}[VvXx]")
+_SRI_LANKA_NIC_NEW_LAYOUT = re.compile(r"([0-9]{4})([0-9]{3})[0-9]{5}")
+_SRI_LANKA_NIC_MIN_BIRTH_YEAR = 1900
+# The NIC layout adds this offset to the day-of-year field for one sex. It is
+# a structural rule of the identifier; OpenMed never derives a sex from it.
+_SRI_LANKA_NIC_DAY_OFFSET = 500
+
+
+def _valid_sri_lanka_nic_day(day: int) -> bool:
+    """Return whether a NIC day field is 001-366, with or without +500."""
+
+    return any(1 <= day - offset <= 366 for offset in (0, _SRI_LANKA_NIC_DAY_OFFSET))
+
+
+def validate_sri_lanka_nic(text: str, *, reference_year: int | None = None) -> bool:
+    """Validate the structure of a Sri Lanka National Identity Card number.
+
+    The older layout is nine digits and a ``V`` or ``X``: a two-digit birth
+    year, a three-digit day of the year, then serial and check digits. The
+    twelve-digit layout has a four-digit birth year, the same day field, and
+    five serial and check digits. The layout adds 500 to the day field for one
+    sex, so day values 001-366 and 501-866 are valid. That offset is a
+    structural rule of the identifier: this validator accepts both ranges and
+    never reports or infers anything about a person. Day 366 is accepted for
+    every year, and no check-digit algorithm is claimed.
+
+    Args:
+        text: Candidate NIC. Surrounding whitespace is ignored.
+        reference_year: Latest birth year accepted for the twelve-digit
+            layout. Defaults to the current calendar year.
+
+    Returns:
+        True when the value matches either layout and its embedded day field,
+        and for the twelve-digit layout its birth year, are in range.
+    """
+
+    if not isinstance(text, str):
+        return False
+    value = text.strip()
+    old_layout = _SRI_LANKA_NIC_OLD_LAYOUT.fullmatch(value)
+    if old_layout is not None:
+        return _valid_sri_lanka_nic_day(int(old_layout.group(1)))
+    new_layout = _SRI_LANKA_NIC_NEW_LAYOUT.fullmatch(value)
+    if new_layout is None:
+        return False
+    latest_year = date.today().year if reference_year is None else reference_year
+    birth_year = int(new_layout.group(1))
+    return _SRI_LANKA_NIC_MIN_BIRTH_YEAR <= birth_year <= latest_year and (
+        _valid_sri_lanka_nic_day(int(new_layout.group(2)))
+    )
+
+
+_SINHALA_PHONE_CONTEXT = [
+    "දුරකථන",
+    "දුරකථන අංකය",
+    "ජංගම",
+    "ජංගම දුරකථන",
+    "phone",
+    "mobile",
+    "telephone",
+    "contact",
+]
+_SRI_LANKA_NIC_CONTEXT = [
+    "ජාතික හැඳුනුම්පත",
+    "ජාතික හැඳුනුම්පත් අංකය",
+    "හැඳුනුම්පත",
+    "හැඳුනුම්පත් අංකය",
+    "ජා.හැ.අ",
+    "nic",
+    "n.i.c",
+    "national identity card",
+    "identity card",
+]
+_SINHALA_ADDRESS_CONTEXT = [
+    "ලිපිනය",
+    "පදිංචි ලිපිනය",
+    "නිවස",
+    "address",
+    "residence",
+]
+_SINHALA_POSTCODE_CONTEXT = [
+    "තැපැල් කේතය",
+    "තැපැල් අංකය",
+    "postal code",
+    "postcode",
+]
+_SINHALA_STREET_SUFFIX = r"(?:පාර|මාවත|වීදිය|පටුමඟ|පටුමග|පෙදෙස)"
+
+_SINHALA_PII_PATTERNS: List[PIIPattern] = [
+    # +94 or 0094 numbers keep the country code inside the span. Sri Lankan
+    # numbers have nine national digits after the country code.
+    PIIPattern(
+        r"(?<![0-9+])(?:\+|00)94[ -]?(?:\(0\)[ -]?)?[1-9][0-9](?:[ -]?[0-9]){7}"
+        + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.7,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # Domestic mobile numbers: 070-078 followed by seven digits.
+    PIIPattern(
+        r"(?<![0-9+])07[0-8](?:[ -]?[0-9]){7}" + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.65,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # Domestic landlines share the ten-digit shape with many other numbers, so
+    # the sweep needs nearby phone context.
+    PIIPattern(
+        r"(?<![0-9+])0(?!7[0-8])[1-9][0-9](?:[ -]?[0-9]){7}" + _SRI_LANKA_NUMBER_END,
+        "phone_number",
+        priority=10,
+        base_score=0.5,
+        context_words=_SINHALA_PHONE_CONTEXT,
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # NIC, nine-digit layout with the V/X letter. Context-gated: the day and
+    # year fields are validated, but no check digit is claimed.
+    PIIPattern(
+        r"(?<![0-9A-Za-z])[0-9]{9}[VvXx](?![0-9A-Za-z])",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_SRI_LANKA_NIC_CONTEXT,
+        context_boost=0.4,
+        requires_context=True,
+        validator=validate_sri_lanka_nic,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    # NIC, twelve-digit layout. The shape collides with other twelve-digit
+    # numbers, so it is context-gated as well.
+    PIIPattern(
+        r"(?<![0-9])(?<![0-9][-/.])[0-9]{12}" + _SRI_LANKA_NUMBER_END,
+        "national_id",
+        priority=13,
+        base_score=0.5,
+        context_words=_SRI_LANKA_NIC_CONTEXT,
+        context_boost=0.45,
+        requires_context=True,
+        validator=validate_sri_lanka_nic,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    # House-numbered Sinhala street addresses ending in a road word such as
+    # පාර (road), මාවත (avenue), වීදිය (street) or පටුමඟ (lane).
+    PIIPattern(
+        rf"(?<![\w/])[0-9]{{1,4}}(?:/[0-9A-Za-z]{{1,3}})?,?[ \t]+"
+        rf"(?:{_SINHALA_WORD}[ \t]+){{1,3}}{_SINHALA_STREET_SUFFIX}"
+        rf"(?!{_SINHALA_LETTER})",
+        "street_address",
+        priority=9,
+        base_score=0.7,
+        context_words=_SINHALA_ADDRESS_CONTEXT,
+        context_boost=0.25,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Sri Lankan postal codes are five digits; context-gated like other packs.
+    PIIPattern(
+        r"(?<![0-9])[0-9]{5}(?![0-9])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_SINHALA_POSTCODE_CONTEXT,
+        context_boost=0.5,
+        requires_context=True,
         flags=0,
     ),
 ]
@@ -9510,6 +9842,18 @@ _THAI_MONTH_PATTERN = (
     r"พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\."
 )
 
+# The address tail accepts Thai letters, digits, dots, slashes and dashes, so
+# it must stop before a following date instead of swallowing it. Only shapes
+# that an unvalidated date rule always emits stop the tail (the Thai day-first
+# and month-name rules and the English ISO rule), so a truncated tail never
+# leaves a date unmasked. Day-first dates must repeat their separator, which
+# keeps house-number ranges such as ``3/12-14`` inside the address.
+_THAI_ADDRESS_TAIL_DATE_STOP = (
+    r"\s*(?:(?<!\d)\d{1,2}(?:/\d{1,2}/|-\d{1,2}-)\d{2,4}(?!\d)"
+    rf"|(?<!\d)\d{{1,2}}\s+(?:{_THAI_MONTH_PATTERN})\s+(?:พ\.ศ\.\s*)?\d{{4}}(?!\d)"
+    r"|(?<!\w)\d{4}-\d{2}-\d{2}(?!\w))"
+)
+
 _THAI_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-](?:25\d{2}|\d{2,4})(?!\d)",
@@ -9589,7 +9933,10 @@ _THAI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
     ),
     PIIPattern(
-        r"(?<!\w)\d{1,5}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)[\u0E00-\u0E7F0-9\s./-]{3,80}",
+        # A month abbreviation such as ม.ค. must not start a second address.
+        rf"(?<!\w)(?!{_THAI_ADDRESS_TAIL_DATE_STOP})\d{{1,5}}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)"
+        # One-character alley numbers/names must survive before a date, too.
+        rf"(?:(?!{_THAI_ADDRESS_TAIL_DATE_STOP})[\u0E00-\u0E7F0-9\s./-]){{1,80}}",
         "street_address",
         priority=7,
         base_score=0.65,
@@ -10635,8 +10982,9 @@ _SWAHILI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         safety_sweep_requires_context=True,
     ),
-    # Tanzanian NIDA NIN: format-only recognition of the 20-digit value,
-    # including its commonly grouped 8-5-5-2 rendering. No checksum is claimed.
+    # Tanzanian NIDA NIN: the 20-digit value, including its commonly grouped
+    # 8-5-5-2 rendering. No checksum is claimed; the embedded birth date must
+    # be a real Gregorian date, as in ``_TANZANIA_NIDA_PII_PATTERNS``.
     PIIPattern(
         r"(?<!\d)\d{8}(?P<nida_sep>[ -]?)\d{5}(?P=nida_sep)"
         r"\d{5}(?P=nida_sep)\d{2}(?!\d)",
@@ -10645,6 +10993,7 @@ _SWAHILI_PII_PATTERNS: List[PIIPattern] = [
         base_score=0.5,
         context_words=_SWAHILI_ID_CONTEXT,
         context_boost=0.45,
+        validator=_validate_grouped_tanzania_nida,
         safety_sweep_requires_context=True,
     ),
     PIIPattern(
@@ -12231,6 +12580,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
+    # Sri Lanka is not India: the India-only multi-ID pack is deliberately absent.
+    "si": _SINHALA_PII_PATTERNS,
     "lv": _LATVIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
@@ -12258,6 +12609,18 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "vi": _VIETNAMESE_PII_PATTERNS,
     "ur": _URDU_PII_PATTERNS,
 }
+
+# Localized medical-record-number labels are table data compiled in
+# ``medical_record_labels``; append them without mutating shared pack lists.
+LANGUAGE_PII_PATTERNS.update(
+    {
+        language: [
+            *LANGUAGE_PII_PATTERNS.get(language, []),
+            *medical_record_label_patterns(language),
+        ]
+        for language in MEDICAL_RECORD_LABELS
+    }
+)
 
 
 AFRICAN_FR_PT_PHONE_PREFIXES: Dict[str, str] = {
@@ -12510,6 +12873,58 @@ LOCALE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "FIRST_NAME_FEMALE": ["अनघा", "मृणाल", "गौरी", "ईशा"],
         "FIRST_NAME_MALE": ["अमोल", "नितीन", "रोहन", "विवेक"],
         "LAST_NAME": ["कुलकर्णी", "गोखले", "जाधव", "शिंदे", "भोसले", "आपटे"],
+    },
+    "si_LK": {
+        # Repository-authored synthetic values used because Faker has no
+        # Sinhala locale. Each NAME pairs a common given name with a common
+        # family name; the pairs are invented, not people. Places are public
+        # city names and generic road names.
+        "NAME": [
+            "නිමල් පෙරේරා",
+            "චමිලා සිල්වා",
+            "කසුන් ජයසූරිය",
+            "දිලානි බණ්ඩාර",
+            "රුවන් රත්නායක",
+            "සඳුනි විජේසිංහ",
+            "ලහිරු ගුණසේකර",
+            "අමාලි දිසානායක",
+        ],
+        "FIRST_NAME": [
+            "නිමල්",
+            "චමිලා",
+            "කසුන්",
+            "දිලානි",
+            "රුවන්",
+            "සඳුනි",
+            "ලහිරු",
+            "අමාලි",
+        ],
+        "LAST_NAME": [
+            "පෙරේරා",
+            "සිල්වා",
+            "ජයසූරිය",
+            "බණ්ඩාර",
+            "රත්නායක",
+            "විජේසිංහ",
+            "ගුණසේකර",
+            "දිසානායක",
+        ],
+        "LOCATION": [
+            "කොළඹ",
+            "මහනුවර",
+            "ගාල්ල",
+            "කුරුණෑගල",
+            "මාතර",
+            "බදුල්ල",
+            "රත්නපුර",
+            "අනුරාධපුරය",
+        ],
+        "STREET_ADDRESS": [
+            "18, පන්සල් පාර",
+            "27/3, මල් වීදිය",
+            "64, පොල් මාවත",
+            "9, ගංගා පටුමඟ",
+        ],
     },
     "fr_SN": {
         "NAME": ["Awa Ndiaye", "Mamadou Diop", "Fatou Sarr", "Ibrahima Fall"],
@@ -12834,7 +13249,7 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LAST_NAME": ["ተስፋዬ", "ከበደ", "አለሙ", "ገብረ"],
         "EMAIL": ["takami@example.et", "contact@example.org"],
         "PHONE": ["+251 911 234 567", "0911 765 432"],
-        "ID_NUM": ["123456789012", "987654321098"],
+        "ID_NUM": ["234567890124", "987654321096"],
         "STREET_ADDRESS": ["አዲስ አበባ ቦሌ 12", "ባሕር ዳር ቀበሌ 5"],
         "URL_PERSONAL": ["https://example.et"],
         "USERNAME": ["takami123", "fayda456"],
@@ -13633,10 +14048,23 @@ def _normalize_pattern_locale(locale: str) -> str:
     return locale.strip().replace("-", "_").casefold()
 
 
+# Country aliases that select the ``en_gb`` overlay for English text, matching
+# the ``gb``/``uk`` aliases the national-ID registry uses for NHS numbers and
+# NINOs. Bare ``uk`` is also the Ukrainian language code, so the aliases apply
+# only when the language is English.
+_ENGLISH_LOCALE_PATTERN_ALIASES: Dict[str, str] = {
+    "gb": "en_gb",
+    "uk": "en_gb",
+    "en_uk": "en_gb",
+}
+
+
 def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
     keys: list[str] = [_normalize_pattern_locale(lang)]
     if locale:
         keys.insert(0, _normalize_pattern_locale(locale))
+    if _normalize_pattern_language(lang) == "en":
+        keys = [_ENGLISH_LOCALE_PATTERN_ALIASES.get(key, key) for key in keys]
 
     deduped: list[str] = []
     seen: set[str] = set()
@@ -13690,8 +14118,9 @@ def get_patterns_for_language(
     English patterns (email, URL, IP, etc.) are universal and always
     included. Language-specific patterns (dates, phones, national IDs,
     addresses) are added on top. Locale-specific overlays, such as
-    ``en_GB`` UK identifiers, are appended when ``locale`` is provided or
-    when ``lang`` includes a region code.
+    ``en_GB`` UK identifiers and postcodes, are appended when ``locale`` is
+    provided or when ``lang`` includes a region code. For English, the
+    ``gb`` and ``uk`` country aliases also select the ``en_GB`` overlay.
 
     Args:
         lang: ISO 639-1 language code, optionally with a region suffix for
@@ -13746,6 +14175,12 @@ def get_patterns_for_language(
             for pattern in language_patterns
             if not any(pattern is existing for existing in combined)
         ]
+
+    # Non-Gregorian month-name dates (Hijri, Ethiopian, Bikram Sambat and
+    # Hebrew) compile from their own declarative tables.
+    from .calendar_month_dates import calendar_month_date_patterns
+
+    combined = combined + calendar_month_date_patterns(base_lang)
 
     for locale_key in _locale_pattern_keys(lang, locale):
         combined = combined + [
