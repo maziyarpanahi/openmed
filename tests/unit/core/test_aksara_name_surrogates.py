@@ -67,8 +67,8 @@ _INDEPENDENT_VOWEL_BLOCKS = {
 }
 
 # SHA-256 of seeded surrogates recorded on master before this generator
-# existed. Han, Gujarati, and Latin-script spans in Hindi and Telugu
-# documents must not change.
+# existed. Han and Gujarati stay unchanged. Latin fallback includes the
+# independently verified title-stripping fix from the honorific integration.
 _REGRESSION_CASES = {
     "han": (
         ("zh", "PERSON", "欧阳明"),
@@ -91,7 +91,7 @@ _REGRESSION_DIGESTS = {
     "han": "c37ce028012927fd4909cf7b83d15f5e771ca367491e204f0b39743f28535a28",
     "gujarati": "056820856553f1bf55660c8b369edb6d5ff9cd691a14e2e9f3f047e5f47ce29c",
     "latin_fallback": (
-        "59409432b8307a259b382289c4852710e687072525856522f95e478bf4051d8d"
+        "31007488320bf67f27060165b220072160cc4fc7b9f442282e186a0eb1680cad"
     ),
 }
 
@@ -438,7 +438,7 @@ def test_aksara_generators_are_registered_only_for_hindi_and_telugu() -> None:
 
 
 @pytest.mark.parametrize("group", sorted(_REGRESSION_CASES))
-def test_han_gujarati_and_latin_fallback_outputs_are_unchanged(group: str) -> None:
+def test_han_gujarati_and_latin_fallback_outputs_match_reviewed_baselines(group: str) -> None:
     assert _surrogate_digest(_REGRESSION_CASES[group]) == _REGRESSION_DIGESTS[group]
 
 
