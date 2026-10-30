@@ -1977,6 +1977,31 @@ def _register_marathi_name_generators() -> None:
 _register_marathi_name_generators()
 
 
+def _register_aksara_name_generators() -> None:
+    """Install pronounceable aksara name generators for Hindi and Telugu.
+
+    They replace the letter-inventory generators installed for the ``hi``
+    Devanagari and ``te`` Telugu name labels by
+    :func:`_register_builtin_script_name_generators`. Marathi keeps its native
+    three-part generators.
+    """
+
+    from .providers.aksara_names import AKSARA_NAME_PACKS
+
+    name_labels = (L.PERSON, L.FIRST_NAME, L.LAST_NAME, L.MIDDLE_NAME)
+    for language_pack, script, generator in AKSARA_NAME_PACKS:
+        for canonical_label in name_labels:
+            register_label_generator(
+                canonical_label,
+                generator,
+                language_pack=language_pack,
+                script=script,
+            )
+
+
+_register_aksara_name_generators()
+
+
 def register_india_label_generators() -> None:
     """Install locale-gated India surrogate generators in the label registry."""
 
@@ -1995,6 +2020,33 @@ def register_india_label_generators() -> None:
 
 
 register_india_label_generators()
+
+
+def _register_african_place_generators() -> None:
+    """Route African language-pack address and town surrogates to local shapes.
+
+    Faker ships no address data for the ``sw``, ``ha_NG``, ``ig_NG`` and
+    ``yo_NG`` locales, and ``rw_RW`` is backed by ``en_US``, so the generic
+    path emitted US street, unit and city templates. Each dispatcher keeps the
+    previously registered generator as its fallback for every other locale.
+    """
+
+    from .providers.african_places import (
+        AFRICAN_PLACE_GENERATORS,
+        AfricanPlaceDispatcher,
+    )
+
+    for canonical_label, generator in AFRICAN_PLACE_GENERATORS.items():
+        register_label_generator(
+            canonical_label,
+            AfricanPlaceDispatcher(
+                generator=generator,
+                fallback=LABEL_GENERATORS[canonical_label],
+            ),
+        )
+
+
+_register_african_place_generators()
 
 
 __all__ = [
