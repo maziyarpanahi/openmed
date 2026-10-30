@@ -61,30 +61,29 @@ def clear_service_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-@pytest.mark.parametrize(
-    ("contents", "message"),
-    [
+def test_job_store_rejects_damaged_existing_file_without_overwriting_it(
+    subtests, tmp_path
+) -> None:
+    case_root = tmp_path
+    for contents, message in [
         ("{broken", "invalid JSON"),
         ("[]", "JSON object"),
         ("{}", "jobs object"),
         ('{"jobs": []}', "jobs object"),
         ('{"jobs": {"synthetic": null}}', "invalid job record"),
-    ],
-)
-def test_job_store_rejects_damaged_existing_file_without_overwriting_it(
-    tmp_path,
-    contents: str,
-    message: str,
-) -> None:
-    from openmed.service import jobs
+    ]:
+        with subtests.test(contents=contents, message=message):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            from openmed.service import jobs
 
-    path = tmp_path / "jobs.json"
-    path.write_text(contents, encoding="utf-8")
+            path = tmp_path / "jobs.json"
+            path.write_text(contents, encoding="utf-8")
 
-    with pytest.raises(ValueError, match=message):
-        jobs.LocalJobStore(path)
+            with pytest.raises(ValueError, match=message):
+                jobs.LocalJobStore(path)
 
-    assert path.read_text(encoding="utf-8") == contents
+            assert path.read_text(encoding="utf-8") == contents
 
 
 def test_job_store_propagates_existing_file_read_failure(
@@ -439,45 +438,53 @@ def test_missing_job_returns_standard_404(
     assert response.json()["error"]["code"] == "bad_request"
 
 
-@pytest.mark.parametrize("operation", ["create", "update", "cleanup"])
-@pytest.mark.parametrize("failure_point", ["serialize", "replace"])
 def test_job_store_failed_publication_preserves_memory_and_disk(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    operation: str,
-    failure_point: str,
+    subtests, tmp_path
 ) -> None:
-    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
-    path = tmp_path / "jobs.json"
-    store = jobs.LocalJobStore(path, clock=lambda: now[0])
-    store.create(
-        {
-            "id": "synthetic-existing",
-            "status": "done",
-            "expires_at": "2026-01-01T00:00:10Z",
-        }
-    )
-    original_records = json.loads(path.read_text(encoding="utf-8"))["jobs"]
-    original_bytes = path.read_bytes()
-    if operation != "update":
-        now[0] += timedelta(seconds=11)
+    case_root = tmp_path
+    for operation in ["create", "update", "cleanup"]:
+        for failure_point in ["serialize", "replace"]:
+            with subtests.test(operation=operation, failure_point=failure_point):
+                tmp_path = case_root / str(len(list(case_root.iterdir())))
+                tmp_path.mkdir()
+                with pytest.MonkeyPatch.context() as monkeypatch:
+                    now = [datetime(2026, 1, 1, tzinfo=timezone.utc)]
+                    path = tmp_path / "jobs.json"
+                    store = jobs.LocalJobStore(path, clock=lambda: now[0])
+                    store.create(
+                        {
+                            "id": "synthetic-existing",
+                            "status": "done",
+                            "expires_at": "2026-01-01T00:00:10Z",
+                        }
+                    )
+                    original_records = json.loads(path.read_text(encoding="utf-8"))[
+                        "jobs"
+                    ]
+                    original_bytes = path.read_bytes()
+                    if operation != "update":
+                        now[0] += timedelta(seconds=11)
 
-    def fail(*_args: Any, **_kwargs: Any) -> None:
-        raise OSError("synthetic publication failure")
+                    def fail(*_args: Any, **_kwargs: Any) -> None:
+                        raise OSError("synthetic publication failure")
 
-    with monkeypatch.context() as patched:
-        if failure_point == "serialize":
-            patched.setattr(jobs.json, "dump", fail)
-        else:
-            patched.setattr(jobs.os, "replace", fail)
-        with pytest.raises(OSError, match="synthetic publication failure"):
-            if operation == "create":
-                store.create({"id": "synthetic-new", "status": "queued"})
-            elif operation == "update":
-                store.update("synthetic-existing", status="running")
-            else:
-                store.cleanup_expired()
+                    with monkeypatch.context() as patched:
+                        if failure_point == "serialize":
+                            patched.setattr(jobs.json, "dump", fail)
+                        else:
+                            patched.setattr(jobs.os, "replace", fail)
+                        with pytest.raises(
+                            OSError, match="synthetic publication failure"
+                        ):
+                            if operation == "create":
+                                store.create(
+                                    {"id": "synthetic-new", "status": "queued"}
+                                )
+                            elif operation == "update":
+                                store.update("synthetic-existing", status="running")
+                            else:
+                                store.cleanup_expired()
 
-    assert store._records == original_records
-    assert path.read_bytes() == original_bytes
-    assert list(tmp_path.iterdir()) == [path]
+                    assert store._records == original_records
+                    assert path.read_bytes() == original_bytes
+                    assert list(tmp_path.iterdir()) == [path]

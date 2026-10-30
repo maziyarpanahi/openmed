@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-20",
+  "generated_at": "2026-10-30",
   "generation": {
     "command": "python scripts/brand/update_claims.py --write",
     "network": "forbidden",
@@ -158,7 +158,7 @@
       "public_wording": "",
       "qualification": "Do not publish a count until a source is committed.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     },
     "supported_pii_languages": {
       "status": "verified",
@@ -166,11 +166,11 @@
       "display": "42 supported PII routes",
       "definition": "Exact keys in DEFAULT_PII_MODELS, including named placeholder routes; no locale aliases.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "42 supported PII language routes",
       "qualification": "Supported routes include the separately identified placeholder route; do not call every route model-backed.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "supported_pii_language_codes": {
@@ -222,11 +222,11 @@
       "display": null,
       "definition": "Sorted exact keys in DEFAULT_PII_MODELS.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fa, fr, gu, he, hi, id, it, ja, kn, ko, ml, mr, nl, no, or, pa, pl, pt, ro, ru, sv, sw, ta, te, th, tr, uk, ur, vi, xh, zh, zu",
       "qualification": "Use codes only where the definition is visible.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "model_backed_pii_languages": {
@@ -235,11 +235,11 @@
       "display": "35 model-backed PII languages",
       "definition": "DEFAULT_PII_MODELS keys minus DEFAULT_MODEL_PLACEHOLDER_LANGUAGES.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "35 model-backed PII languages",
       "qualification": "Excludes placeholder and user-supplied routes.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "model_backed_pii_language_codes": {
@@ -284,11 +284,11 @@
       "display": null,
       "definition": "Sorted DEFAULT_PII_MODELS keys after removing placeholder languages.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "am, ar, as, bn, cs, da, de, el, en, es, fr, gu, he, hi, id, it, ja, kn, ko, mr, nl, no, or, pt, ro, sv, sw, te, th, tr, uk, vi, xh, zh, zu",
       "qualification": "Codes are model-backed, not benchmark equivalence.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "placeholder_pii_languages": {
@@ -305,26 +305,27 @@
       "display": null,
       "definition": "Named built-in routes using a placeholder model.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "",
       "qualification": "Never advertise as trained/model-backed coverage.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "user_supplied_model_languages": {
       "status": "verified",
       "value": [
-        "ne"
+        "ne",
+        "si"
       ],
       "display": null,
       "definition": "Script-routable language codes requiring a user-configured model; not built-in model support.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "",
       "qualification": "Call these optional user-configured routes.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "national_id_only_languages": {
@@ -349,11 +350,11 @@
       "display": null,
       "definition": "Compatibility declarations with deterministic national-ID recognition but no complete default PII language pack.",
       "source": "openmed/core/language_pack_catalog.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "",
       "qualification": "Do not include in model-backed language totals.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "pii_family_manifest_entries": {
@@ -380,7 +381,7 @@
       "public_wording": "",
       "qualification": "Do not treat PII-family manifest rows as distinct checkpoints.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     },
     "dataset_count": {
       "status": "unverified",
@@ -393,7 +394,7 @@
       "public_wording": "",
       "qualification": "Do not publish a dataset total until the governed inventory and inclusion rules are reviewed.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     },
     "mlx_manifest_entries": {
       "status": "verified",
@@ -414,11 +415,11 @@
       "display": "50 PII entity labels",
       "definition": "Exact unique labels in model_registry._PII_ENTITY_TYPES; not HIPAA Safe Harbor identifier classes.",
       "source": "openmed/core/model_registry.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "50 PII entity labels",
       "qualification": "Entity-label coverage varies by selected model.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "pii_entity_type_codes": {
@@ -478,11 +479,11 @@
       "display": null,
       "definition": "Ordered model-registry PII label vocabulary.",
       "source": "openmed/core/model_registry.py",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "",
       "qualification": "Do not imply every model detects every label.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "model_license_population": {
@@ -509,7 +510,7 @@
       "display": "Apache-2.0 SDK",
       "definition": "License of the OpenMed repository software.",
       "source": "LICENSE",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "Apache-2.0 SDK",
       "qualification": "Applies to the SDK source, not every model, dataset, Agent, Welna, or external product.",
@@ -522,11 +523,11 @@
       "display": "local-first",
       "definition": "Core inference can run on controlled hardware after required artifacts are present; adapters and downloads may use a network.",
       "source": "README.md and openmed runtime configuration",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "Local-first clinical AI on hardware you control.",
       "qualification": "Do not promise no network calls for download, remote-provider, telemetry-enabled, or user-configured integration paths.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "runtime_behavior_by_surface": {
@@ -540,11 +541,11 @@
       "display": "runtime-specific local and network boundaries",
       "definition": "Approved locality and network behavior for each published runtime surface.",
       "source": "README.md, docs/configuration.md, docs/security/no-telemetry.md, and docs/demo/web/README.md",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "Core processing is local after required artifacts are present; downloads and explicitly configured integrations may use a network.",
       "qualification": "Describe the selected runtime and configuration; never turn local-first into an unconditional no-network promise.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "compliance_wording": {
@@ -553,11 +554,11 @@
       "display": null,
       "definition": "Approved boundary for compliance language.",
       "source": "docs/compliance.md and docs/security/no-telemetry.md",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "OpenMed can support a deployment's de-identification controls.",
       "qualification": "The SDK does not make a deployment HIPAA/GDPR compliant and does not replace expert review.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "product_maturity": {
@@ -566,11 +567,11 @@
       "display": null,
       "definition": "OpenMed is a software library and research toolkit.",
       "source": "README.md and docs",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "Software library and research toolkit.",
       "qualification": "Not a medical device; must not auto-trigger clinical decisions.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "dataset_access": {
@@ -579,11 +580,11 @@
       "display": null,
       "definition": "Dataset access and licenses are source-specific.",
       "source": "NOTICE and documentation dataset references",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "Dataset access and terms vary by source.",
       "qualification": "DUA-, credential-, UMLS-, SNOMED-, CPT-, MIMIC-, i2b2-, and n2c2-gated data is not bundled.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "license_by_product_surface": {
@@ -599,11 +600,11 @@
       "display": "surface-specific terms",
       "definition": "The approved license boundary for each named product or dependency surface.",
       "source": "LICENSE, models.jsonl, NOTICE, README.md, and documentation",
-      "as_of": "2026-07-29",
+      "as_of": "2026-10-30",
       "owner": "repository-owner",
       "public_wording": "The OpenMed SDK source is Apache-2.0; model, dataset, OpenMed Agent, Welna, and integration terms are separate.",
       "qualification": "Never inherit the SDK license onto a model, dataset, product, or external integration.",
-      "review_by": "2026-10-29",
+      "review_by": "2026-11-30",
       "follow_up_by": null
     },
     "benchmark_performance": {
@@ -617,7 +618,7 @@
       "public_wording": "",
       "qualification": "Do not publish until evidence is reviewed.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     },
     "research_sota": {
       "status": "unverified",
@@ -630,7 +631,7 @@
       "public_wording": "",
       "qualification": "Do not publish until evidence is reviewed.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     },
     "competitive_matrix": {
       "status": "unverified",
@@ -643,7 +644,7 @@
       "public_wording": "",
       "qualification": "Do not publish until evidence is reviewed.",
       "review_by": null,
-      "follow_up_by": "2026-10-29"
+      "follow_up_by": "2026-11-30"
     }
   }
 }
