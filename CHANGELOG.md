@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
+
 - Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
 
 - Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
