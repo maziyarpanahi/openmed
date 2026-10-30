@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Generate local-convention African address and town surrogates, with mask
   fallback when source-disjoint vocabulary is exhausted (#3891).
 
+- Add an opt-in live surrogate quality gate with deterministic per-language and per-label checks, hash-only reports, and explicit documented approximation exemptions.
+
 - Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
 
 - Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).
