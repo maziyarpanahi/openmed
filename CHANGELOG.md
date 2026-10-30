@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Flag ASR hypotheses over silence, noise or music and repeated-phrase loops against an injected voice-activity timeline and versioned, digest-bound thresholds; missing statistics give `insufficient_evidence`, and a draft guard keeps non-final segments out of cited evidence (#3815).
+
 - Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
 
 - Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
