@@ -563,6 +563,15 @@ def test_supersession_cycles_and_cross_assignment_pointers_fail_closed():
     assert cycle.state is LabelState.INVALIDATED
     assert cycle.reason_codes == ("duplicate_decision",)
 
+    # A detached cycle stays ambiguous even beside an apparent current head.
+    apparent_head = decision(base, submission="4")
+    independent = decision(base, packet="sw-assignment-0003")
+    hidden_cycle = only(
+        merge([base], [cyclic_first, second, apparent_head, independent])
+    )
+    assert hidden_cycle.state is LabelState.INVALIDATED
+    assert hidden_cycle.reason_codes == ("duplicate_decision",)
+
     other = decision(base, packet="sw-assignment-0002")
     crossing = decision(base, submission="3", supersedes=other["decision_id"])
     crossed = only(merge([base], [other, crossing]))

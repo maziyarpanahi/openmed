@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
+
 - Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
 
 - Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).

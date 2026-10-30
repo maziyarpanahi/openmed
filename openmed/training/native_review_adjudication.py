@@ -1658,9 +1658,18 @@ def _current_decisions(
         }
         superseded |= pointers
         heads = [overlay for overlay in group if overlay.decision_id not in pointers]
-        if len(heads) != 1:
-            # Two current answers for one assignment, or a supersession cycle,
-            # leave no unambiguous reviewer decision.
+        chain_is_complete = False
+        if len(heads) == 1:
+            by_id = {overlay.decision_id: overlay for overlay in group}
+            visited: set[str] = set()
+            cursor = heads[0].decision_id
+            while cursor in by_id and cursor not in visited:
+                visited.add(cursor)
+                cursor = by_id[cursor].supersedes_decision_id
+            chain_is_complete = cursor not in visited and len(visited) == len(group)
+        if not chain_is_complete:
+            # Every provided decision must belong to one acyclic chain.
+            # A detached cycle cannot hide behind an apparent current head.
             reasons.add(REASON_DUPLICATE_DECISION)
             invalid = True
         current.extend(heads)
