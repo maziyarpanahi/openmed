@@ -1254,7 +1254,7 @@ def _checked_text(
         raise TypeError(f"{name} must be a string")
     if not value.strip():
         raise DecisionError(f"{name} must not be blank")
-    if len(value) > maximum_chars or len(value.encode("utf-8")) > maximum_bytes:
+    if len(value) > maximum_chars:
         raise DecisionError(f"{name} exceeds its size limit")
     allowed = {"\n", "\r", "\t"} if multiline else set()
     if any(
@@ -1264,6 +1264,8 @@ def _checked_text(
         for char in value
     ):
         raise DecisionError(f"{name} contains invalid characters")
+    if len(value.encode("utf-8")) > maximum_bytes:
+        raise DecisionError(f"{name} exceeds its size limit")
     if _has_control_marker(value):
         raise DecisionError(f"{name} cannot contain GLiClass control tokens")
     return value

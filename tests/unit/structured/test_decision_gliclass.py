@@ -596,6 +596,20 @@ def test_backend_settings_are_validated() -> None:
     mapped = _torch_backend(examples=({"text": "Synthetic.", "labels": ["a"]},))
     assert mapped.example_count == 1
 
+    marker = "SYNTHETIC-PRIVATE-MARKER"
+    malformed = marker + "\ud800"
+    constructors = (
+        lambda: _torch_backend(prompt=malformed),
+        lambda: GLiClassExample(text=malformed, labels=("yes",)),
+        lambda: GLiClassExample(text="Synthetic note.", labels=(malformed,)),
+        lambda: _torch_backend(score_levels=("low", malformed)),
+    )
+    for constructor in constructors:
+        with pytest.raises(DecisionError, match="invalid characters") as caught:
+            constructor()
+        assert marker not in str(caught.value)
+        assert marker not in repr(caught.value.args)
+
 
 def _block_network(monkeypatch: pytest.MonkeyPatch) -> None:
     def blocked(*args: Any, **kwargs: Any) -> None:
