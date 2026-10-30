@@ -544,6 +544,7 @@ classification:
     - chw-form-deid.md
     - indic-name-matching.md
     - languages.md
+    - languages/graduation-contract.md
     - language-packs.md
     - languages/clinical-readiness.md
     - languages/clinical-transliteration.md

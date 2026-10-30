@@ -486,6 +486,7 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
       - Clinical Language Readiness: languages/clinical-readiness.md
       - Clinical Transliteration Provenance: languages/clinical-transliteration.md
