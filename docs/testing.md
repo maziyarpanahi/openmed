@@ -23,7 +23,9 @@ TOML backport dependency.
 | `test` pull-request tier | Linux 3.11 and 3.12 (fast tier); Windows and macOS 3.12 (portability checks) | Every test except `slow` and `fuzz` on Linux, plus the platform-sensitive portability list on Windows and macOS |
 
 Adding the `full-ci` label starts a new full CI run. Other label additions do
-not start CI jobs.
+not start CI jobs or cancel the active PR run. Those skipped label events use
+their own concurrency group; commits and `full-ci` requests still supersede
+older CI for the same PR.
 
 The stable `sdk-compatibility-gate` requires every compatibility job in the run to succeed
 and is a dependency of the existing `build` gate. Failed, skipped or cancelled

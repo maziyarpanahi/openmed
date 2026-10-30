@@ -78,6 +78,14 @@ the slot `approximated` rather than silently presenting it as native support.
 Script-aware surrogate providers can still preserve names in the source script,
 as the Telugu reference pack does while generic fields use `en_IN`.
 
+`default_calendar` is optional and defaults to `gregorian`. Set it to a
+registered calendar code, such as `solar_hijri`, `ethiopian`,
+`thai_buddhist`, `hijri` or `bikram_sambat`, when unmarked numeric dates in the
+language use that calendar; date shifting and date surrogates then stay in it
+(see [PII Anonymization](anonymization.md)). The `ar` and `ur` packs declare
+`hijri`, which only applies to years inside the bundled Umm al-Qura table
+(1356–1450 AH) and so never captures Gregorian years.
+
 `national_id_providers` is optional. Declare it only when the matching
 deterministic provider dispatch and checksum validator already exist. The
 coherence gate generates synthetic values and requires every declared provider
