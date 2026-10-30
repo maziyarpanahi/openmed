@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
+
+- Add an opt-in System One and Decisions server backend with loopback defaults, explicit non-PHI private-network approval, bounded responses and deadlines, and typed transport failures.
+
 - Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
 
 - Add declarative localized medical-record-number labels shared by semantic merging and safety sweeps, retaining exact identifier spans and label-free negative controls.

@@ -888,6 +888,18 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
             score_levels=self._score_levels if score_levels is None else score_levels,
         )
 
+    def score(self, request: DecisionRequest) -> DecisionBackendOutput:
+        """Score a request without silently discarding its question settings.
+
+        Args:
+            request: Validated decision request.
+
+        Returns:
+            Calibrated backend scores.
+        """
+
+        return self.score_details(request).backend_output(request.calibration_id)
+
     def score_details(self, request: DecisionRequest) -> GLiClassDecisionScores:
         """Score one request and keep calibrated and initial scores.
 
@@ -907,6 +919,14 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
 
         if not isinstance(request, DecisionRequest):
             raise TypeError("request must be a DecisionRequest")
+        if (
+            request.instructions is not None
+            or any(item is not None for item in request.option_descriptions or ())
+            or request.levels
+        ):
+            raise DecisionUnsupportedError(
+                "GLiClass question settings must be configured on the backend"
+            )
         return self._details(request.input_text, request.options, request.mode)
 
     def _score_payload(
@@ -1033,6 +1053,15 @@ def decide_with_gliclass(
         if isinstance(request, DecisionRequest)
         else DecisionRequest.from_dict(request)
     )
+    if normalized.mode is DecisionMode.QUESTION_SET:
+        # A one-shot capture would attach only the last question's metadata to
+        # the whole set. Ordinary per-question results retain calibrated scores.
+        return decide(
+            normalized,
+            backend=backend,
+            policy=policy,
+            calibration_profiles=calibration_profiles,
+        )
     capture = _CapturingBackend(backend)
     result = decide(
         normalized,
