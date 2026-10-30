@@ -13,7 +13,9 @@ from .pii_entity_merger import (
     PII_PATTERNS,
     PIIPattern,
     find_context_words,
+    is_labelled_value,
     iter_pattern_spans,
+    within_labelled_rejection,
 )
 from .quality_gates import resolve_overlapping_entities
 from .script_detect import normalize_for_pii_detection
@@ -130,20 +132,34 @@ def _candidate_metadata(candidate: _Candidate) -> dict[str, Any]:
     }
     if id_subtype is not None:
         safety_sweep_metadata["id_subtype"] = id_subtype
+    # A value-free calendar code lets shifting and surrogate stages select a
+    # non-Gregorian calendar without re-reading the matched date.
+    calendar = getattr(candidate.pattern, "calendar", None)
+    if calendar is not None:
+        safety_sweep_metadata["calendar"] = calendar
     return {
         "source": SAFETY_SWEEP_SOURCE,
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "safety_sweep": safety_sweep_metadata,
         **({"id_subtype": id_subtype} if id_subtype is not None else {}),
+        **({"calendar": calendar} if calendar is not None else {}),
     }
 
 
 def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Candidate]:
     candidates: list[_Candidate] = []
+    labelled_rejections: list[tuple[int, int, int]] = []
     for pattern in patterns:
         for start, end in iter_pattern_spans(text, pattern):
             matched_text = text[start:end]
             if not _validated(pattern, matched_text):
+                if is_labelled_value(
+                    text,
+                    start,
+                    pattern.context_words,
+                    normalizer=pattern.context_normalizer,
+                ):
+                    labelled_rejections.append((start, end, pattern.priority))
                 continue
             if pattern.requires_context and not _has_context(
                 text,
@@ -214,6 +230,20 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
                     pattern=pattern,
                 )
             )
+
+    if labelled_rejections:
+        # A value labelled as one identifier that fails its validator is not
+        # relabelled, whole or in part, by a lower-priority pattern.
+        candidates = [
+            candidate
+            for candidate in candidates
+            if not within_labelled_rejection(
+                candidate.start,
+                candidate.end,
+                candidate.priority,
+                labelled_rejections,
+            )
+        ]
 
     candidates.sort(
         key=lambda candidate: (

@@ -66,7 +66,7 @@ def test_amharic_context_detects_structured_pii_between_ethiopic_boundaries(subt
         ("የትውልድ ቀን፡ 14/05/1988።", "date", "14/05/1988"),
         ("ዕድሜ፡ ፴፭።", "age", "፴፭"),
         ("ዕድሜ፡ 42።", "age", "42"),
-        ("የፋይዳ መለያ ቁጥር፡ 123456789012።", "national_id", "123456789012"),
+        ("የፋይዳ መለያ ቁጥር፡ 234567890124።", "national_id", "234567890124"),
         ("መለያ ቁጥር፡ ፩፪፫፬፭፮፯፰፱።", "national_id", "፩፪፫፬፭፮፯፰፱"),
         ("ስልክ፡ +251 911 234 567።", "phone_number", "+251 911 234 567"),
         ("ስልክ፡ 0911 765 432።", "phone_number", "0911 765 432"),
@@ -95,7 +95,7 @@ def test_ethiopic_native_patterns_do_not_request_case_insensitive_matching():
 
 def test_fayda_format_requires_identity_context_and_exactly_twelve_digits():
     for text in (
-        "የላብራቶሪ ውጤት 123456789012 ተመዝግቧል።",
+        "የላብራቶሪ ውጤት 234567890124 ተመዝግቧል።",
         "የፋይዳ መለያ ቁጥር፡ 12345678901።",
         "የፋይዳ መለያ ቁጥር፡ 1234567890123።",
     ):
@@ -112,6 +112,7 @@ def test_synthetic_amharic_registers_have_exact_offsets():
     assert [fixture.metadata["register"] for fixture in fixtures] == [
         "amharic_only",
         "amharic_latin_mixed",
+        "amharic_ethiopian_calendar",
     ]
 
     for fixture in fixtures:
