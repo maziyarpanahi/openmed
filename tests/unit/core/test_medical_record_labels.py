@@ -76,6 +76,7 @@ PACKS_WITHOUT_RECORD_LABELS = (
     "ro",
     "ru",
     "rw",
+    "si",
     "sk",
     "sr",
     "sv",
