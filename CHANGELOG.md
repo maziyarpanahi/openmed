@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Generate seeded Devanagari and Telugu name surrogates from disjoint,
+  well-formed aksara while preserving token shape (#3892).
+
 - Generate local-convention African address and town surrogates, with mask
   fallback when source-disjoint vocabulary is exhausted (#3891).
 
