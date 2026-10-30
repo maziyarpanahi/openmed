@@ -263,7 +263,7 @@ def test_burned_in_metadata_records_name_and_mrn_provider_locales() -> None:
     pytest.importorskip("PIL")
     from openmed.training.synthetic.burned_in import BurnedInGenerator
 
-    example = BurnedInGenerator(seed=1790).generate("de")
+    example = BurnedInGenerator(seed=1790, font_fallback=True).generate("de")
     stamp = example.metadata["surrogate_providers"]
 
     assert stamp == surrogate_provider_stamp("de_DE", "en_US")
