@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Package and install signed offline language bundles with explicit resource, license, checksum and synthetic self-test gates (#2866).
+
 - Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
 
 - Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).

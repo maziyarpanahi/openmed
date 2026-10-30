@@ -535,7 +535,9 @@ def test_unsigned_manifest_fields_are_rejected(tmp_path: Path) -> None:
     assert result.reason == REASON_MANIFEST_FIELDS_UNSUPPORTED
 
 
-def test_missing_manifest_and_entry_point_mismatch(tmp_path: Path) -> None:
+def test_missing_manifest_and_entry_point_mismatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     missing = verify_offline_bundle(tmp_path / "absent", host=_HOST)
     bundle = _package(tmp_path)
     _resign(bundle, manifest_updates={"entry_points": []})
@@ -544,6 +546,23 @@ def test_missing_manifest_and_entry_point_mismatch(tmp_path: Path) -> None:
 
     assert missing.reason == REASON_MANIFEST_MISSING
     assert mismatch.reason == REASON_ENTRY_POINT_MISMATCH
+
+    # A manifest swap must not bless entry points that were never signed.
+    path = bundle / MANIFEST_FILENAME
+    signed_bytes = path.read_bytes()
+    forged = json.loads(signed_bytes)
+    forged["entry_points"] = [DESCRIPTOR_FILENAME]
+    path.write_text(json.dumps(forged), encoding="utf-8")
+    verify = offline_bundle.verify_bundle
+
+    def swap_manifest(*args: Any, **kwargs: Any):
+        path.write_bytes(signed_bytes)
+        return verify(*args, **kwargs)
+
+    monkeypatch.setattr(offline_bundle, "verify_bundle", swap_manifest)
+    swapped = verify_offline_bundle(bundle, host=_HOST, signature_key=_HMAC_KEY)
+    assert not swapped.valid
+    assert swapped.reason == REASON_HASH_MISMATCH
 
 
 def test_undeclared_file_is_rejected(tmp_path: Path) -> None:

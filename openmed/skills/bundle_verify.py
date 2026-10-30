@@ -317,6 +317,7 @@ class BundleVerifier:
         *,
         signature_key: bytes | None = None,
         signature_public_key: bytes | None = None,
+        expected_manifest: SkillBundleManifest | None = None,
     ) -> BundleVerificationResult:
         """Verify a skill bundle directory against its manifest.
 
@@ -328,6 +329,9 @@ class BundleVerifier:
             signature_public_key: Optional Ed25519 public key (raw 32 bytes).
                 Required when the manifest declares signature_scheme
                 ``"ed25519"``. Ignored when ``"none"`` or ``"hmac-sha256"``.
+
+            expected_manifest: Optional exact manifest snapshot to bind to
+                verification. A changed manifest fails closed.
 
         Returns:
             Deterministic verification result. Failures are represented in the
@@ -369,6 +373,14 @@ class BundleVerifier:
                 "",
                 REASON_MANIFEST_MALFORMED,
                 "manifest failed validation",
+            )
+
+        if expected_manifest is not None and manifest != expected_manifest:
+            return _build_failure(
+                manifest.bundle_id,
+                manifest.manifest_version,
+                REASON_HASH_MISMATCH,
+                "manifest changed before verification",
             )
 
         if manifest.manifest_version not in self._supported_versions:
@@ -688,6 +700,7 @@ def verify_bundle(
     signature_key: bytes | None = None,
     signature_public_key: bytes | None = None,
     supported_versions: frozenset[str] = SUPPORTED_MANIFEST_VERSIONS,
+    expected_manifest: SkillBundleManifest | None = None,
 ) -> BundleVerificationResult:
     """Verify a skill bundle and return a deterministic result.
 
@@ -700,6 +713,7 @@ def verify_bundle(
         signature_public_key: Optional Ed25519 public key (raw 32 bytes) for
             Ed25519-signed bundles.
         supported_versions: Override the set of accepted manifest versions.
+        expected_manifest: Optional exact snapshot that must be verified.
 
     Returns:
         Deterministic verification result with structured failure categories.
@@ -709,6 +723,7 @@ def verify_bundle(
         bundle_dir,
         signature_key=signature_key,
         signature_public_key=signature_public_key,
+        expected_manifest=expected_manifest,
     )
 
 

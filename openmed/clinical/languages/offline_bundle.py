@@ -1376,6 +1376,7 @@ def _verify_integrity(
             root,
             signature_key=signature_key,
             signature_public_key=signature_public_key,
+            expected_manifest=manifest,
         )
     except OSError:
         raise _CheckFailure(REASON_MANIFEST_MISSING) from None
