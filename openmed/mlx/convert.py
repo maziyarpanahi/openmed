@@ -16,7 +16,9 @@ from openmed.core.export_provenance import (
     assert_source_unchanged,
     context_from_metadata,
     resolve_source_context,
+    validate_observation_path,
     write_canonical_manifest,
+    write_observation_report,
 )
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
@@ -683,6 +685,11 @@ def write_quant_recall_delta_report(
     _guard_quant_report_destinations(
         artifact_dir, report_path, bundled_report_path, manifest
     )
+    artifact_root = artifact_dir.resolve()
+    observations_path = validate_observation_path(
+        artifact_root.parent / f"{artifact_root.name}_mlx_observations.json",
+        report_path=report_path,
+    )
     generated_at = _utc_now()
     fixtures = load_fixtures(eval_suite_path)
 
@@ -778,13 +785,7 @@ def write_quant_recall_delta_report(
     if bundled_report_path.resolve() != report_path.resolve():
         bundled_report_path.parent.mkdir(parents=True, exist_ok=True)
         bundled_report_path.write_text(report_bytes, encoding="utf-8")
-    artifact_root = artifact_dir.resolve()
-    observations_path = (
-        artifact_root.parent / f"{artifact_root.name}_mlx_observations.json"
-    )
-    observations_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    write_observation_report(observations_path, payload)
 
     _apply_quant_recall_certification(
         artifact_dir,

@@ -10,11 +10,13 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 from .model_integrity import sha256_file
 
@@ -393,6 +395,161 @@ def write_canonical_manifest(
     manifest = root / name
     manifest.write_bytes(_canonical_bytes(result))
     return manifest
+
+
+def validate_observation_path(
+    path: str | Path, *, report_path: str | Path | None = None
+) -> Path:
+    """Reject unsafe managed observation targets before producing any output.
+
+    Args:
+        path: Managed sibling observation file.
+        report_path: Optional recall report that must use a distinct destination.
+
+    Returns:
+        The validated observation path.
+
+    Raises:
+        ValueError: The target is a symlink, non-file, or report collision.
+        PermissionError: An existing target is not writable.
+    """
+    path = Path(path)
+    if report_path is not None and Path(report_path).resolve() == path.resolve():
+        raise ValueError("report output collision with managed observations")
+    with _observation_descriptor(path):
+        pass
+    return path
+
+
+def write_observation_report(
+    path: str | Path, payload: Mapping[str, Any], *, allow_nan: bool = True
+) -> None:
+    """Write observations without following links or replacing existing inodes.
+
+    Existing single-link regular files are updated in place, preserving their
+    permissions and ACLs. New files use exclusive creation with the previous
+    writer's 0666-and-umask/default-ACL semantics. Like the previous text writer,
+    updates are not atomic. Serialization finishes before any file is opened.
+
+    Args:
+        path: Managed sibling observation file, checked again before writing.
+        payload: Observation data to serialize as indented, sorted UTF-8 JSON.
+        allow_nan: Preserve the producer's existing non-finite JSON policy.
+    """
+    content = json.dumps(payload, indent=2, sort_keys=True, allow_nan=allow_nan) + "\n"
+    with _observation_descriptor(Path(path), create=True) as descriptor:
+        assert descriptor is not None
+        os.ftruncate(descriptor, 0)
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as handle:
+            handle.write(content)
+
+
+@contextmanager
+def _observation_descriptor(
+    path: Path, *, create: bool = False
+) -> Iterator[int | None]:
+    try:
+        expected = path.lstat()
+    except FileNotFoundError:
+        expected = None
+    if expected is None and not create:
+        yield None
+        return
+    error = "managed observations must remain the same single-link regular file"
+    if expected is not None and (
+        not stat.S_ISREG(expected.st_mode) or expected.st_nlink != 1
+    ):
+        raise ValueError(error)
+    flags = os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    if expected is None:
+        flags |= os.O_CREAT | os.O_EXCL
+    descriptor = os.open(path, flags, 0o666)
+    created = expected is None
+    opened: os.stat_result | None = None
+    succeeded = False
+    try:
+        opened = os.fstat(descriptor)
+        current = path.lstat()
+        identity = opened.st_dev, opened.st_ino
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or not stat.S_ISREG(current.st_mode)
+            or current.st_nlink != 1
+            or (current.st_dev, current.st_ino) != identity
+            or (expected is not None and (expected.st_dev, expected.st_ino) != identity)
+        ):
+            raise ValueError(error)
+        yield descriptor
+        succeeded = True
+    finally:
+        close_first = sys.platform == "win32"
+        cleanup_generation = None
+        if close_first and created and not succeeded and opened is not None:
+            try:
+                failed = os.fstat(descriptor)
+                current = path.lstat()
+                generation = _observation_cleanup_generation(failed)
+                if (
+                    generation is not None
+                    and _observation_cleanup_generation(current) == generation
+                    and (failed.st_dev, failed.st_ino)
+                    == (current.st_dev, current.st_ino)
+                    == (opened.st_dev, opened.st_ino)
+                    and failed.st_nlink == current.st_nlink == 1
+                ):
+                    cleanup_generation = generation
+            except OSError:
+                pass
+        if close_first:
+            try:
+                os.close(descriptor)
+            except OSError:
+                if succeeded:
+                    raise
+        try:
+            if created and not succeeded and opened is not None:
+                try:
+                    remaining = path.lstat()
+                    if (remaining.st_dev, remaining.st_ino) == (
+                        opened.st_dev,
+                        opened.st_ino,
+                    ) and (
+                        not close_first
+                        or (
+                            cleanup_generation is not None
+                            and _observation_cleanup_generation(remaining)
+                            == cleanup_generation
+                        )
+                    ):
+                        path.unlink()
+                except OSError:
+                    # Preserve the original write/validation error if cleanup fails.
+                    pass
+        finally:
+            if not close_first:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    if succeeded:
+                        raise
+
+
+def _observation_cleanup_generation(
+    info: os.stat_result,
+) -> tuple[int, int, int, int | None] | None:
+    changed = getattr(info, "st_ctime_ns", None)
+    modified = getattr(info, "st_mtime_ns", None)
+    born = getattr(info, "st_birthtime_ns", None)
+    if (
+        type(changed) is not int
+        or changed <= 0
+        or type(modified) is not int
+        or modified <= 0
+        or (born is not None and (type(born) is not int or born <= 0))
+    ):
+        return None
+    return changed, modified, info.st_size, born
 
 
 def _canonical_bytes(payload: Any) -> bytes:

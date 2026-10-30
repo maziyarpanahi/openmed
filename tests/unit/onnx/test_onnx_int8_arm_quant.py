@@ -303,6 +303,47 @@ def test_int8_report_uses_private_reference_and_separates_observations(
     assert outputs[0] == outputs[1]
 
 
+@pytest.mark.parametrize("explicit_report", [False, True])
+@pytest.mark.parametrize("observation_kind", ["symlink", "dangling", "directory"])
+def test_int8_observations_reject_unsafe_targets_before_evaluation(
+    tmp_path: Path, explicit_report: bool, observation_kind: str
+) -> None:
+    module = _quant_module()
+    artifact = _write_stub_onnx_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    observations = tmp_path / "artifact_onnx_observations.json"
+    target = artifact / "config.json"
+    if observation_kind == "directory":
+        observations.mkdir()
+    else:
+        if observation_kind == "dangling":
+            target = tmp_path / "absent.json"
+        try:
+            observations.symlink_to(target)
+        except (NotImplementedError, OSError):
+            pytest.skip("symlinks unavailable")
+    before = {path.name: path.read_bytes() for path in artifact.iterdir()}
+    report = tmp_path / "reports" / "custom.json" if explicit_report else None
+
+    def forbidden_runner(*args, **kwargs):
+        pytest.fail("unsafe observations must be rejected before evaluation")
+
+    with pytest.raises(ValueError, match="observations"):
+        module.write_int8_recall_delta_report(
+            source_model_id="OpenMed/stub-token-classifier",
+            source_context=SourceContext("OpenMed/stub-token-classifier", ""),
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=report,
+            parent_runner=forbidden_runner,
+            candidate_runner=forbidden_runner,
+        )
+    assert {path.name: path.read_bytes() for path in artifact.iterdir()} == before
+    assert report is None or not report.exists()
+    if observation_kind == "dangling":
+        assert not target.exists()
+
+
 def test_int8_report_requires_real_local_load_reference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

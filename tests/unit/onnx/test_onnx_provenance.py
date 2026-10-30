@@ -138,10 +138,13 @@ def test_explicit_verifier_checks_whole_onnx_output(tmp_path, mutation):
 def test_variable_latency_is_retained_outside_canonical_manifest(tmp_path):
     module = importlib.import_module("openmed.onnx.convert")
     payloads = []
-    for name, latency in [("a", 1.0), ("b", 2.0)]:
+    for name, latency in [("a", 1.0), ("b", 2.0), ("a", 3.0)]:
         root = tmp_path / name
-        root.mkdir()
+        root.mkdir(exist_ok=True)
         (root / "model.onnx").write_bytes(b"graph")
+        observation_path = tmp_path / f"{name}_onnx_observations.json"
+        if not observation_path.exists():
+            observation_path.write_text('{"int8_recall": {"certified": true}}')
         path = module.write_export_manifest(
             root,
             source_model_id="fixture/tiny",
@@ -153,11 +156,45 @@ def test_variable_latency_is_retained_outside_canonical_manifest(tmp_path):
             },
         )
         payloads.append(path.read_bytes())
-        observation = json.loads(
-            (tmp_path / f"{name}_onnx_observations.json").read_text()
-        )
+        observation = json.loads(observation_path.read_text())
         assert observation["validation"]["latency"]["optimized_ms"] == latency
-    assert payloads[0] == payloads[1]
+        assert observation["int8_recall"]["certified"] is True
+    assert payloads[0] == payloads[1] == payloads[2]
+
+
+@pytest.mark.parametrize("observation_kind", ["symlink", "dangling", "directory"])
+def test_latency_observations_reject_unsafe_targets_without_changing_artifact(
+    tmp_path, observation_kind
+):
+    module = importlib.import_module("openmed.onnx.convert")
+    root = tmp_path / "artifact"
+    root.mkdir()
+    (root / "model.onnx").write_bytes(b"synthetic graph")
+    (root / "config.json").write_text('{"model_type": "bert"}')
+    observations = tmp_path / "artifact_onnx_observations.json"
+    target = root / "config.json"
+    if observation_kind == "directory":
+        observations.mkdir()
+    else:
+        if observation_kind == "dangling":
+            target = tmp_path / "absent.json"
+        try:
+            observations.symlink_to(target)
+        except (NotImplementedError, OSError):
+            pytest.skip("symlinks unavailable")
+    before = {path.name: path.read_bytes() for path in root.iterdir()}
+
+    with pytest.raises(ValueError, match="observations"):
+        module.write_export_manifest(
+            root,
+            source_model_id="fixture/tiny",
+            config={"model_type": "bert"},
+            artifacts=[module.ExportArtifact("onnx", root / "model.onnx", "float32")],
+            validation={"passed": True, "latency": {"optimized_ms": 1.0}},
+        )
+    assert {path.name: path.read_bytes() for path in root.iterdir()} == before
+    if observation_kind == "dangling":
+        assert not target.exists()
 
 
 def test_resolved_snapshot_is_shared_by_model_config_and_tokenizer(

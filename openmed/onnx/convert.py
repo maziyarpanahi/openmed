@@ -28,7 +28,9 @@ from openmed.core.export_provenance import (
     assert_source_unchanged,
     context_from_metadata,
     resolve_source_context,
+    validate_observation_path,
     write_canonical_manifest,
+    write_observation_report,
 )
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
@@ -801,8 +803,8 @@ def write_export_manifest(
     # artifact inventory. Retain deterministic validation results in the bundle.
     if "latency" in manifest["validation"]:
         artifact_root = output_dir.resolve()
-        observation_path = artifact_root.with_name(
-            f"{artifact_root.name}_onnx_observations.json"
+        observation_path = validate_observation_path(
+            artifact_root.with_name(f"{artifact_root.name}_onnx_observations.json")
         )
         observations = (
             json.loads(observation_path.read_text(encoding="utf-8"))
@@ -810,10 +812,7 @@ def write_export_manifest(
             else {}
         )
         observations["validation"] = dict(validation or {})
-        observation_path.write_text(
-            json.dumps(observations, indent=2, sort_keys=True, allow_nan=False) + "\n",
-            encoding="utf-8",
-        )
+        write_observation_report(observation_path, observations, allow_nan=False)
         manifest["validation"].pop("latency")
     manifest_path = write_canonical_manifest(
         output_dir, MANIFEST_FILENAME, manifest, source=source_context, backend="onnx"

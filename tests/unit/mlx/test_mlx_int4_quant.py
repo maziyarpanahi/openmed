@@ -288,6 +288,71 @@ def test_external_custom_quant_report_can_update_its_declared_report(
     assert json.loads((artifact / "config.json").read_text())["num_labels"] == 2
 
 
+@pytest.mark.parametrize("explicit_report", [False, True])
+@pytest.mark.parametrize("observation_kind", ["symlink", "dangling", "directory"])
+def test_quant_observations_reject_unsafe_targets_before_evaluation(
+    tmp_path: Path, explicit_report: bool, observation_kind: str
+) -> None:
+    from openmed.mlx.convert import write_quant_recall_delta_report
+
+    artifact = _write_stub_int4_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    observations = tmp_path / "artifact_mlx_observations.json"
+    target = artifact / "config.json"
+    if observation_kind == "directory":
+        observations.mkdir()
+    else:
+        if observation_kind == "dangling":
+            target = tmp_path / "absent.json"
+        try:
+            observations.symlink_to(target)
+        except (NotImplementedError, OSError):
+            pytest.skip("symlinks unavailable")
+    before = {path.name: path.read_bytes() for path in artifact.iterdir()}
+    report = tmp_path / "reports" / "custom.json" if explicit_report else None
+
+    def forbidden_runner(*args, **kwargs):
+        pytest.fail("unsafe observations must be rejected before evaluation")
+
+    with pytest.raises(ValueError, match="observations"):
+        write_quant_recall_delta_report(
+            source_model_id="OpenMed/stub-token-classifier",
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=report,
+            parent_runner=forbidden_runner,
+            candidate_runner=forbidden_runner,
+        )
+    assert {path.name: path.read_bytes() for path in artifact.iterdir()} == before
+    assert report is None or not report.exists()
+    if observation_kind == "dangling":
+        assert not target.exists()
+
+
+def test_quant_report_cannot_overwrite_managed_observations(tmp_path: Path) -> None:
+    from openmed.mlx.convert import write_quant_recall_delta_report
+
+    artifact = _write_stub_int4_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    observations = tmp_path / "artifact_mlx_observations.json"
+    before = {path.name: path.read_bytes() for path in artifact.iterdir()}
+
+    def forbidden_runner(*args, **kwargs):
+        pytest.fail("colliding outputs must be rejected before evaluation")
+
+    with pytest.raises(ValueError, match="observations"):
+        write_quant_recall_delta_report(
+            source_model_id="OpenMed/stub-token-classifier",
+            artifact_dir=artifact,
+            eval_suite_path=fixture_path,
+            output_path=observations,
+            parent_runner=forbidden_runner,
+            candidate_runner=forbidden_runner,
+        )
+    assert {path.name: path.read_bytes() for path in artifact.iterdir()} == before
+    assert not observations.exists()
+
+
 def test_report_update_rejects_partial_report_shaped_json(tmp_path: Path) -> None:
     from openmed.mlx.convert import write_quant_recall_delta_report
 

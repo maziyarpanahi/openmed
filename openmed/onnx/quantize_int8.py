@@ -13,7 +13,9 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from openmed.core.export_provenance import (
     SourceContext,
     assert_source_unchanged,
+    validate_observation_path,
     write_canonical_manifest,
+    write_observation_report,
 )
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
@@ -179,8 +181,7 @@ def write_int8_recall_delta_report(
     )
     if source_context is not None:
         _validate_report_projection(artifact_dir, report_relpath, manifest)
-        if report_path.resolve() == observation_path:
-            raise ValueError("report output collision with managed observations")
+        validate_observation_path(observation_path, report_path=report_path)
     check_local_source = bool(
         source_context is not None
         and source_context.source_digest
@@ -282,10 +283,7 @@ def write_int8_recall_delta_report(
             _read_json(observation_path) if observation_path.is_file() else {}
         )
         observations["int8_recall"] = payload
-        observation_path.write_text(
-            json.dumps(observations, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        write_observation_report(observation_path, observations)
         stable_payload = {
             key: value for key, value in payload.items() if key != "generated_at"
         }

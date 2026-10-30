@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
 import sys
 import types
 from fnmatch import fnmatch
@@ -522,3 +524,580 @@ def test_remote_snapshot_patterns_select_checkpoint_inputs_only(
         "flax_model.msgpack",
     ):
         assert not selected(name), name
+
+
+def test_observation_open_failure_keeps_previous_file_without_creating_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    observation.write_text('{"validation": {"passed": true}}\n')
+    before = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+
+    def failed_open(*args, **kwargs):
+        raise OSError("synthetic open failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(export_provenance.os, "open", failed_open)
+        with pytest.raises(OSError, match="synthetic open failure"):
+            export_provenance.write_observation_report(observation, {"updated": True})
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == before
+
+
+def test_observations_reject_hardlinks_without_changing_either_file(
+    tmp_path: Path,
+) -> None:
+    from openmed.core.export_provenance import write_observation_report
+
+    runtime = tmp_path / "config.json"
+    original = b'{"model_type": "bert"}\n'
+    runtime.write_bytes(original)
+    observation = tmp_path / "artifact_mlx_observations.json"
+    try:
+        observation.hardlink_to(runtime)
+    except (NotImplementedError, OSError):
+        pytest.skip("hard links unavailable")
+    with pytest.raises(ValueError, match="observations"):
+        write_observation_report(observation, {"generated_at": "2026-01-01T00:00:00Z"})
+    assert runtime.read_bytes() == original
+    assert observation.read_bytes() == original
+
+
+def test_observation_json_policy_preserves_previous_file_on_serialization_error(
+    tmp_path: Path,
+) -> None:
+    from openmed.core.export_provenance import write_observation_report
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    payload = {"label": "synthetic λ", "latency": float("nan")}
+    write_observation_report(observation, payload)
+    before = observation.read_bytes()
+    assert b"\\u03bb" in before
+    assert b"NaN" in before
+    assert before.endswith(b"\n")
+    with pytest.raises(ValueError):
+        write_observation_report(observation, payload, allow_nan=False)
+    assert observation.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [observation]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission and umask semantics")
+@pytest.mark.parametrize(
+    ("existing_mode", "mask"),
+    [
+        (None, 0o022),
+        (None, 0o002),
+        (None, 0o077),
+        (None, 0o027),
+        (0o640, 0o022),
+        (0o640, 0o077),
+        (0o664, 0o022),
+        (0o664, 0o077),
+        (0o600, 0o022),
+        (0o600, 0o077),
+    ],
+)
+def test_observation_permissions_match_legacy_writes_in_child_process(
+    tmp_path: Path, existing_mode: int | None, mask: int
+) -> None:
+    # Keep the pytest process and any concurrent threads' umask unchanged.
+    script = """
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+
+from openmed.core.export_provenance import write_observation_report
+
+root = Path(sys.argv[1])
+mask, existing_mode = json.loads(sys.argv[2])
+os.umask(mask)
+paths = [root / name for name in ("observation.json", "pathlib.json", "open.json")]
+if existing_mode is not None:
+    for path in paths:
+        path.write_text('{}')
+        path.chmod(existing_mode)
+    original_ids = [(path.stat().st_uid, path.stat().st_gid) for path in paths]
+write_observation_report(paths[0], {"updated": True})
+paths[1].write_text('{"updated": true}')
+with paths[2].open('w') as handle:
+    handle.write('{"updated": true}')
+if existing_mode is not None:
+    assert [(path.stat().st_uid, path.stat().st_gid) for path in paths] == original_ids
+print(json.dumps([stat.S_IMODE(path.stat().st_mode) for path in paths]))
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(tmp_path),
+            json.dumps([mask, existing_mode]),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    actual, pathlib_mode, open_mode = json.loads(result.stdout)
+    expected = existing_mode if existing_mode is not None else 0o666 & ~mask
+    assert pathlib_mode == open_mode == expected
+    assert actual == expected
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "observation.json",
+        "open.json",
+        "pathlib.json",
+    ]
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="non-root POSIX write-permission semantics",
+)
+def test_readonly_observations_refuse_replacement_without_changing_file(
+    tmp_path: Path,
+) -> None:
+    from openmed.core.export_provenance import write_observation_report
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    original = b'{"validation": {"passed": true}}\n'
+    observation.write_bytes(original)
+    observation.chmod(0o440)
+    with pytest.raises(PermissionError):
+        observation.write_text('{"updated": true}')
+    with pytest.raises(PermissionError):
+        write_observation_report(observation, {"updated": True})
+    assert observation.read_bytes() == original
+    assert observation.stat().st_mode & 0o777 == 0o440
+    assert list(tmp_path.iterdir()) == [observation]
+
+
+@pytest.mark.parametrize("target_kind", ["file", "symlink", "dangling"])
+def test_new_observations_reject_target_created_after_preflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target_kind: str
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    original = b"synthetic racing writer"
+    runtime = tmp_path / "config.json"
+    runtime.write_bytes(b'{"model_type": "bert"}\n')
+    runtime_before = runtime.read_bytes()
+    absent = tmp_path / "absent.json"
+    native_open = os.open
+
+    def racing_open(path, flags, mode=0o777):
+        if target_kind == "file":
+            observation.write_bytes(original)
+        else:
+            try:
+                observation.symlink_to(runtime if target_kind == "symlink" else absent)
+            except (NotImplementedError, OSError):
+                pytest.skip("symlinks unavailable")
+        return native_open(path, flags, mode)
+
+    monkeypatch.setattr(export_provenance.os, "open", racing_open)
+    with pytest.raises(FileExistsError):
+        export_provenance.write_observation_report(observation, {"updated": True})
+    assert runtime.read_bytes() == runtime_before
+    assert not absent.exists()
+    if target_kind == "file":
+        assert observation.read_bytes() == original
+    else:
+        assert observation.is_symlink()
+
+
+@pytest.mark.parametrize("same_target", [False, True])
+def test_observations_reject_a_symlink_swap_without_nofollow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_target: bool
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    original = b'{"validation": {"passed": true}}\n'
+    observation.write_bytes(original)
+    saved = tmp_path / "original-observation.json"
+    runtime = tmp_path / "config.json"
+    runtime.write_bytes(b'{"model_type": "bert"}\n')
+    runtime_before = runtime.read_bytes()
+    native_open = os.open
+    opened = []
+
+    def racing_open(path, flags, mode=0o777):
+        observation.rename(saved)
+        try:
+            observation.symlink_to(saved if same_target else runtime)
+        except (NotImplementedError, OSError):
+            pytest.skip("symlinks unavailable")
+        descriptor = native_open(path, flags, mode)
+        opened.append(descriptor)
+        return descriptor
+
+    with monkeypatch.context() as patch:
+        patch.delattr(export_provenance.os, "O_NOFOLLOW", raising=False)
+        patch.setattr(export_provenance.os, "open", racing_open)
+        with pytest.raises(ValueError, match="observations"):
+            export_provenance.write_observation_report(observation, {"updated": True})
+    assert saved.read_bytes() == original
+    assert runtime.read_bytes() == runtime_before
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO unavailable")
+def test_observation_fifo_swap_is_rejected_without_blocking(tmp_path: Path) -> None:
+    script = """
+import errno
+import os
+from pathlib import Path
+import sys
+from unittest.mock import patch
+
+from openmed.core import export_provenance
+
+root = Path(sys.argv[1])
+observation = root / 'observation.json'
+saved = root / 'original.json'
+observation.write_text('{}')
+native_open = os.open
+def swap_to_fifo(path, flags, mode=0o777):
+    observation.rename(saved)
+    os.mkfifo(observation)
+    return native_open(path, flags, mode)
+with patch.object(export_provenance.os, 'open', swap_to_fifo):
+    try:
+        export_provenance.write_observation_report(observation, {'updated': True})
+    except OSError as error:
+        assert error.errno in {errno.ENXIO, errno.EAGAIN}
+    else:
+        raise AssertionError('FIFO must be rejected')
+assert saved.read_text() == '{}'
+"""
+    subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
+    )
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_observation_write_failure_closes_descriptor_and_cleans_new_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    if existing:
+        observation.write_text("{}")
+    primary = OSError("synthetic full device")
+    opened = []
+
+    class FailedWriter:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write(self, content):
+            raise primary
+
+    def failing_writer(descriptor, *args, **kwargs):
+        opened.append(descriptor)
+        return FailedWriter()
+
+    monkeypatch.setattr(export_provenance.os, "fdopen", failing_writer)
+    with pytest.raises(OSError, match="synthetic full device") as caught:
+        export_provenance.write_observation_report(observation, {"updated": True})
+    assert caught.value is primary
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+    if existing:
+        # Match legacy open('w'): a subsequent write failure may leave truncation.
+        assert observation.read_bytes() == b""
+    elif os.name == "nt" and observation.exists():
+        # Closing a Windows handle may refresh generation metadata; retain it safely.
+        assert observation.read_bytes() == b""
+    else:
+        assert not observation.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX unlink of an open file")
+def test_new_observation_write_failure_does_not_delete_racing_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    replacement = b"synthetic racing replacement"
+    opened = []
+
+    class RacingWriter:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write(self, content):
+            observation.unlink()
+            observation.write_bytes(replacement)
+            raise OSError("synthetic write interruption")
+
+    def failing_writer(descriptor, *args, **kwargs):
+        opened.append(descriptor)
+        return RacingWriter()
+
+    monkeypatch.setattr(export_provenance.os, "fdopen", failing_writer)
+    with pytest.raises(OSError, match="synthetic write interruption"):
+        export_provenance.write_observation_report(observation, {"updated": True})
+    assert observation.read_bytes() == replacement
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+
+
+@pytest.mark.parametrize(
+    ("platform", "cleanup_case"),
+    [
+        pytest.param(
+            "linux",
+            "normal",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="requires POSIX unlink of an open file"
+            ),
+        ),
+        ("win32", "normal"),
+        pytest.param(
+            "linux",
+            "denied",
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="POSIX cleanup-order simulation"
+            ),
+        ),
+        ("win32", "denied"),
+        ("win32", "replacement"),
+        ("win32", "partial"),
+        ("win32", "unknown_generation"),
+    ],
+)
+def test_observation_failure_cleanup_preserves_primary_error_and_closes_descriptor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str, cleanup_case: str
+) -> None:
+    from openmed.core import export_provenance
+
+    observation = tmp_path / "artifact_onnx_observations.json"
+    primary = OSError("synthetic full device")
+    replacement = b"synthetic racing replacement"
+    opened = []
+    failed = []
+    native_close = os.close
+    native_unlink = Path.unlink
+    native_fstat = os.fstat
+
+    class FailedWriter:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write(self, content):
+            if cleanup_case == "partial":
+                os.write(opened[0], b"partial")
+            failed.append(True)
+            raise primary
+
+    def failing_writer(descriptor, *args, **kwargs):
+        opened.append(descriptor)
+        return FailedWriter()
+
+    def close_descriptor(descriptor):
+        native_close(descriptor)
+        if cleanup_case == "replacement" and descriptor == opened[0]:
+            native_unlink(observation, missing_ok=True)
+            observation.write_bytes(replacement)
+
+    def file_state(descriptor):
+        info = native_fstat(descriptor)
+        if failed and cleanup_case == "unknown_generation":
+            return types.SimpleNamespace(
+                st_dev=info.st_dev,
+                st_ino=info.st_ino,
+                st_mode=info.st_mode,
+                st_nlink=info.st_nlink,
+                st_size=info.st_size,
+            )
+        return info
+
+    def platform_unlink(path, *args, **kwargs):
+        if path == observation:
+            if cleanup_case == "denied":
+                raise PermissionError("synthetic cleanup permission denial")
+            try:
+                os.fstat(opened[0])
+            except OSError:
+                descriptor_open = False
+            else:
+                descriptor_open = True
+            if platform == "win32" and descriptor_open:
+                raise PermissionError("simulated Windows file sharing violation")
+            if platform == "linux":
+                assert descriptor_open, "POSIX cleanup must keep the inode pinned"
+        return native_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(export_provenance.sys, "platform", platform)
+        patch.setattr(export_provenance.os, "fdopen", failing_writer)
+        patch.setattr(export_provenance.os, "close", close_descriptor)
+        patch.setattr(export_provenance.os, "fstat", file_state)
+        patch.setattr(Path, "unlink", platform_unlink)
+        with pytest.raises(OSError) as caught:
+            export_provenance.write_observation_report(observation, {"updated": True})
+    assert caught.value is primary
+    assert len(opened) == 1
+    with pytest.raises(OSError):
+        os.fstat(opened[0])
+    if cleanup_case == "replacement":
+        assert observation.read_bytes() == replacement
+    elif cleanup_case in {"denied", "unknown_generation"}:
+        assert observation.read_bytes() == b""
+    elif os.name == "nt" and observation.exists():
+        # Only real Windows may refresh its own file's metadata during close.
+        assert observation.read_bytes() == (
+            b"partial" if cleanup_case == "partial" else b""
+        )
+    else:
+        assert not observation.exists()
+
+
+@pytest.fixture
+def posix_observation_acl():
+    """Use libacl only for synthetic fixtures; do not require ACL command tools."""
+    import ctypes
+    import ctypes.util
+    import errno
+
+    if sys.platform != "linux":
+        pytest.skip("Linux POSIX ACL fixture")
+    library = ctypes.util.find_library("acl")
+    if library is None:
+        pytest.skip("libacl unavailable")
+    api = ctypes.CDLL(library, use_errno=True)
+    api.acl_from_text.argtypes = [ctypes.c_char_p]
+    api.acl_from_text.restype = ctypes.c_void_p
+    api.acl_set_file.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p]
+    api.acl_set_file.restype = ctypes.c_int
+    api.acl_get_file.argtypes = [ctypes.c_char_p, ctypes.c_int]
+    api.acl_get_file.restype = ctypes.c_void_p
+    api.acl_to_text.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ssize_t)]
+    api.acl_to_text.restype = ctypes.c_void_p
+    api.acl_free.argtypes = [ctypes.c_void_p]
+    api.acl_free.restype = ctypes.c_int
+
+    def set_acl(path, text, *, default=False):
+        handle = api.acl_from_text(text.encode())
+        if not handle:
+            raise OSError(ctypes.get_errno(), "acl_from_text failed")
+        try:
+            if api.acl_set_file(
+                os.fsencode(path), 0x4000 if default else 0x8000, handle
+            ):
+                code = ctypes.get_errno()
+                if code in {errno.ENOTSUP, errno.EOPNOTSUPP}:
+                    pytest.skip("fixture filesystem lacks POSIX ACLs")
+                raise OSError(code, "acl_set_file failed")
+        finally:
+            api.acl_free(handle)
+
+    def get_acl(path):
+        handle = api.acl_get_file(os.fsencode(path), 0x8000)
+        if not handle:
+            raise OSError(ctypes.get_errno(), "acl_get_file failed")
+        try:
+            length = ctypes.c_ssize_t()
+            text = api.acl_to_text(handle, ctypes.byref(length))
+            if not text:
+                raise OSError(ctypes.get_errno(), "acl_to_text failed")
+            try:
+                return ctypes.string_at(text, length.value)
+            finally:
+                api.acl_free(text)
+        finally:
+            api.acl_free(handle)
+
+    return set_acl, get_acl
+
+
+@pytest.mark.parametrize(
+    "case", ["existing_acl", "existing_parent_acl", "new_parent_acl"]
+)
+def test_observation_acl_matches_legacy_writes(
+    tmp_path: Path, posix_observation_acl, case: str
+) -> None:
+    from openmed.core.export_provenance import write_observation_report
+
+    set_acl, get_acl = posix_observation_acl
+    observation, legacy = (
+        tmp_path / name for name in ("observation.json", "legacy.json")
+    )
+    existing = case != "new_parent_acl"
+    if existing:
+        for path in (observation, legacy):
+            path.write_text("{}")
+            path.chmod(0o640)
+    if case == "existing_acl":
+        for path in (observation, legacy):
+            set_acl(
+                path,
+                f"user::rw-,user:{os.getuid()}:r--,group::---,mask::r--,other::---",
+            )
+    else:
+        set_acl(
+            tmp_path,
+            f"user::rwx,user:{os.getuid()}:r--,group::r--,mask::r--,other::---",
+            default=True,
+        )
+    before = observation.stat() if existing else None
+    original_acl = get_acl(observation) if existing else None
+    legacy.write_text('{"updated": true}\n')
+    write_observation_report(observation, {"updated": True})
+    assert get_acl(observation) == get_acl(legacy)
+    assert observation.stat().st_mode == legacy.stat().st_mode
+    if existing:
+        assert get_acl(observation) == original_acl
+        assert (observation.stat().st_dev, observation.stat().st_ino) == (
+            before.st_dev,
+            before.st_ino,
+        )
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="non-root POSIX directory permissions",
+)
+def test_observations_update_writable_file_in_readonly_parent(tmp_path: Path) -> None:
+    from openmed.core.export_provenance import write_observation_report
+
+    observation = tmp_path / "observation.json"
+    legacy = tmp_path / "legacy.json"
+    for path in (observation, legacy):
+        path.write_text("{}")
+        path.chmod(0o640)
+    before = observation.stat()
+    tmp_path.chmod(0o550)
+    try:
+        legacy.write_text('{"updated": true}\n')
+        write_observation_report(observation, {"updated": True})
+        assert json.loads(observation.read_text()) == json.loads(legacy.read_text())
+        assert (observation.stat().st_dev, observation.stat().st_ino) == (
+            before.st_dev,
+            before.st_ino,
+        )
+    finally:
+        tmp_path.chmod(0o700)
