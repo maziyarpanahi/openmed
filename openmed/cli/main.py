@@ -80,6 +80,7 @@ from .contract import (
     VALIDATION_ERROR_MESSAGE,
 )
 from .gates import add_gates_command
+from .i18n_check import add_i18n_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
 from .repro import add_repro_command
@@ -579,6 +580,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     add_agent_self_check_command(subparsers)
+    from .synthetic import add_synthetic_command
+
+    add_synthetic_command(subparsers)
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
@@ -630,6 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
 
@@ -2879,6 +2884,14 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help=(
             "Stable repository or publication link to --checkpoint-manifest, "
             "recorded in the BenchmarkReport."
+        ),
+    )
+    pii_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Exit non-zero when the seeded openmed-synth corpus or its "
+            "surrogate providers drift from the published receipt."
         ),
     )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
@@ -6246,6 +6259,28 @@ def _handle_eval_load_test(args: argparse.Namespace) -> int:
     return emit(args, data, human=json.dumps(data, indent=2))
 
 
+def _report_synthetic_provider_drift(
+    metadata: Mapping[str, Any], *, strict: bool
+) -> None:
+    """Warn, or fail in strict mode, when a seeded suite's providers drift."""
+    from openmed.training.synthetic.provider_versions import PROVIDER_VERSION_DRIFT
+
+    drift = metadata.get("provider_drift")
+    if not isinstance(drift, MappingABC) or drift.get("status") != "drift":
+        return
+    changed = ", ".join(str(label) for label in drift.get("changed", ()))
+    message = (
+        f"{PROVIDER_VERSION_DRIFT}: the regenerated openmed-synth corpus or its "
+        f"surrogate providers differ from the published receipt "
+        f"({changed or 'unspecified'}). Results are not comparable with the "
+        "published corpus; reproduce it with the locked dependency set "
+        "(uv sync --frozen)."
+    )
+    if strict:
+        raise CliError(message, code=PROVIDER_VERSION_DRIFT, exit_code=EXIT_ERROR)
+    sys.stderr.write(f"Warning: {message}\n")
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -6329,6 +6364,10 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     metadata = dict(metadata)
     metadata.setdefault("benchmark_domain", "pii")
     metadata.setdefault("source_suite", suite)
+    if suite == OPENMED_SYNTH:
+        _report_synthetic_provider_drift(
+            metadata, strict=bool(getattr(args, "strict", False))
+        )
 
     if args.checkpoint_manifest is not None:
         try:

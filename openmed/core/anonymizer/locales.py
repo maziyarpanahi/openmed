@@ -12,8 +12,9 @@ Notes:
   ``en_IN`` and surface a one-time ``UserWarning``. Native Telugu name
   surrogates bypass that approximate path and therefore do not warn.
 - Amharic (``am``) has no Faker locale; the conceptual ``am_ET`` locale uses
-  ``en_KE`` as its runtime backend while curated Ethiopic surrogate data stays
-  available through the language pack.
+  ``en_KE`` as its runtime backend only for script-free fields. Ethiopic name,
+  city, and street surrogates recombine the synthetic curated values in the
+  language pack (see :data:`SCRIPT_SURROGATE_APPROXIMATIONS`).
 - Punjabi (``pa``) has no Faker locale in Faker 40.x; the conceptual ``pa_IN``
   locale uses ``en_IN`` for generic fields while the language pack supplies
   gender-aware Gurmukhi name surrogates.
@@ -24,7 +25,11 @@ Notes:
   while delegating unsupported Faker methods to ``fr_FR`` or ``pt_PT``.
 - Arabic defaults to ``ar_EG``. Region tags ``ar-DZ`` and ``ar-MA`` select an
   installed regional Faker backend, or fall back to ``ar_EG`` with a one-time
-  warning when that backend is unavailable.
+  warning when that backend is unavailable. ``ar_EG`` ships no Arabic-script
+  person or address data, so Arabic-script name surrogates use Faker's generic
+  ``ar_AA`` inventory and place surrogates use curated Egyptian templates,
+  unless the selected regional locale ships its own Arabic-script data (see
+  :data:`SCRIPT_SURROGATE_APPROXIMATIONS`).
 - Chinese resolves to ``zh_CN`` so PERSON/FIRST_NAME/LAST_NAME dispatch uses
   the surname-aware, Han-only surrogate generators rather than a Latin fallback.
 - Assamese resolves conceptually to ``as_IN`` with Faker's ``bn_BD`` backend;
@@ -43,6 +48,12 @@ Notes:
   national-ID dispatch routes to the CCCD provider on the same locale.
 - Urdu uses a conceptual ``ur_IN`` locale backed by ``en_IN`` for non-name
   values; bundled name surrogates remain in Urdu script.
+- Swahili (``sw``/``sw_TZ``), Hausa, Igbo, Yoruba, and Kinyarwanda address and
+  town surrogates use curated synthetic local conventions from
+  ``providers.african_places`` because their Faker locales ship no address
+  data. isiXhosa addresses use the ``zu_ZA`` backend. The
+  ``address_approximation`` column of :func:`locale_coherence_report` records
+  each source.
 
 Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
@@ -95,6 +106,24 @@ _APPROXIMATE_LOCALES: Final = frozenset(
         "xh",
     }
 )
+
+
+# Languages whose source-script name and place surrogates bypass the default
+# Faker locale. Bare ``ar`` keeps its native ``ar_EG`` locale and never warns;
+# ``am`` keeps its existing ``am_ET`` approximation warning for script-free
+# fields only. Each value is recorded verbatim in ``locale_coherence_report``.
+SCRIPT_SURROGATE_APPROXIMATIONS: Final[Mapping[str, str]] = {
+    "am": (
+        "Ethiopic names, cities, and streets recombine synthetic curated values; "
+        "en_KE backs only script-free fields"
+    ),
+    "ar": (
+        "Arabic-script names use Faker's ar_AA inventory and places use synthetic "
+        "curated Egyptian templates, unless a regional override ships "
+        "Arabic-script Faker data"
+    ),
+}
+"""Documented script-surrogate approximations, keyed by language code."""
 
 
 # Conceptual locale -> OpenMed model language. These locales deliberately do
@@ -330,6 +359,10 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``locale``: the default or conceptual locale.
       - ``approximate``: ``True`` when that default locale is a documented
         approximation rather than a native match.
+      - ``address_approximation``: the documented source of address and town
+        surrogates for African language packs whose Faker locale ships no
+        in-country address data, otherwise ``None``. See
+        ``openmed.core.anonymizer.providers.african_places``.
       - ``id_providers``: national-ID Faker method names whose surrogates
         round-trip the language's registered checksum validator (empty when the
         language has no checksummed national-ID surrogate provider).
@@ -337,6 +370,9 @@ def locale_coherence_report() -> list[dict[str, object]]:
       - ``id_locale``: the Faker locale those providers are drawn from, or
         ``None``. Usually equals ``locale``; differs when the registered
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
+      - ``surrogate_approximation``: the documented source of source-script
+        name and place surrogates when they bypass the default Faker locale
+        (see :data:`SCRIPT_SURROGATE_APPROXIMATIONS`), otherwise ``None``.
     """
     from ..pii_i18n import (  # lazy: avoid import cycle
         INDIC_NER_LANGUAGES,
@@ -344,6 +380,7 @@ def locale_coherence_report() -> list[dict[str, object]]:
         SUPPORTED_LANGUAGES,
         USER_SUPPLIED_MODEL_LANGUAGES,
     )
+    from .providers.african_places import AFRICAN_ADDRESS_APPROXIMATIONS
 
     rows: list[dict[str, object]] = []
     reported_languages = (
@@ -365,9 +402,11 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
                 "approximate": lang in _APPROXIMATE_LOCALES,
+                "address_approximation": AFRICAN_ADDRESS_APPROXIMATIONS.get(lang),
                 "id_providers": id_methods,
                 "id_types": id_types,
                 "id_locale": id_locale,
+                "surrogate_approximation": SCRIPT_SURROGATE_APPROXIMATIONS.get(lang),
             }
         )
 
@@ -377,11 +416,13 @@ def locale_coherence_report() -> list[dict[str, object]]:
                 "language": lang,
                 "locale": locale,
                 "approximate": False,
+                "address_approximation": None,
                 # Senegal CNI and Angola BI coverage is contextual rather than
                 # checksum-backed, so no provider or validator is claimed.
                 "id_providers": [],
                 "id_types": [],
                 "id_locale": None,
+                "surrogate_approximation": None,
             }
         )
     return rows
@@ -393,6 +434,7 @@ __all__ = [
     "LANG_TO_LOCALE",
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
+    "SCRIPT_SURROGATE_APPROXIMATIONS",
     "URDU_FAMILY_NAMES",
     "URDU_GIVEN_NAMES",
     "ZH_CN_ADDRESS_LOCALE",
