@@ -178,6 +178,11 @@ question-like name can sharpen decisions. Results stay assistive review
 artifacts: they always require human review, and clinical uses go through
 `GuardedSuggestion`.
 
+The native scorer maps the five 1.0 scoring modes described above. System One
+1.1 per-request instructions, option descriptions and ordered scalar levels
+that this scorer cannot represent return `unsupported` before inference. The
+backend constructor's `task` remains the model-facing question prompt.
+
 ### Multilingual language-decision evaluation
 
 `openmed.eval.language_decisions` measures whether
