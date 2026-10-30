@@ -232,6 +232,13 @@ def test_convert_orchestrates_artifacts_and_multi_format_publish(
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(module, "publish_artifact", fake_publish_artifact)
 
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: module.SourceContext(
+            model_id, model_id, revision="a" * 40
+        ),
+    )
     result = module.convert(
         "OpenMed/test-model",
         tmp_path / "artifact",
@@ -500,6 +507,13 @@ def test_convert_optimizes_before_webgpu_and_records_validation(
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
 
+    monkeypatch.setattr(
+        module,
+        "resolve_source_context",
+        lambda model_id, **kwargs: module.SourceContext(
+            model_id, model_id, revision="a" * 40
+        ),
+    )
     result = module.convert(
         "OpenMed/test-model",
         tmp_path / "artifact",

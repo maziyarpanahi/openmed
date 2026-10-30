@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Record resolved source identity, available source license, toolchain versions
+  and exact file inventories for MLX, ONNX and CoreML exports, with an explicit
+  offline provenance verifier.
+
 - Document existing synthetic generators, offline examples, public exports and
   dataset provenance limits in a shared navigation group (#3896).
 
@@ -229,6 +233,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
   device-isolated caches, offline loading, exact spans, and disease-label
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
+
+### Changed
+
+- Write independent CoreML package manifests using schema v2 while retaining
+  schema v1 conversion observations and sibling labels outside packages. Keep
+  v1/v2 segmenter validation compatible; move variable export observations out
+  of canonical artifact metadata. See [export provenance](docs/export-matrix.md#producer-provenance-and-offline-verification).
 
 ### Fixed
 
