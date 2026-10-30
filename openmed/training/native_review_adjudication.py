@@ -1662,8 +1662,8 @@ def _current_decisions(
         if len(heads) == 1:
             by_id = {overlay.decision_id: overlay for overlay in group}
             visited: set[str] = set()
-            cursor = heads[0].decision_id
-            while cursor in by_id and cursor not in visited:
+            cursor: str | None = heads[0].decision_id
+            while cursor is not None and cursor in by_id and cursor not in visited:
                 visited.add(cursor)
                 cursor = by_id[cursor].supersedes_decision_id
             chain_is_complete = cursor not in visited and len(visited) == len(group)
