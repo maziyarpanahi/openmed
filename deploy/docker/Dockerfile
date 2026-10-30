@@ -33,7 +33,7 @@ RUN apt-get update \
         "openssl=3.6.5-1" \
         "openssl-provider-legacy=3.6.5-1" \
         "readline-common=8.3-4" \
-        "tzdata=2026e-1" \
+        "tzdata=2026f-1" \
         "zlib1g=1:1.3.dfsg+really1.3.2-3" \
     && rm -rf /var/lib/apt/lists/*
 
