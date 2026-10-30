@@ -183,6 +183,90 @@ The native scorer maps the five 1.0 scoring modes described above. System One
 that this scorer cannot represent return `unsupported` before inference. The
 backend constructor's `task` remains the model-facing question prompt.
 
+### Multilingual language-decision evaluation
+
+`openmed.eval.language_decisions` measures whether
+`fastino/GLiNER2.5-multi-Decide` decisions could supply a fallback or
+abstention signal for language routing. It is an evaluation only: routing
+defaults and language-pack activation do not change.
+
+The evaluation set is built from the synthetic language-pack fixtures
+(`openmed/eval/golden/fixtures/i18n/`, the regional checksum fixtures and the
+code-mixed Hinglish fixture). Gold answers come from fixture declarations only:
+the record language and locale, annotated script runs, declared code-mixing and
+the script a pack declares. Each sample is asked one question:
+
+| Kind | Question | Options |
+| --- | --- | --- |
+| `language` | Which language is this? | every pack and fixture language (58) |
+| `language_in_script` | Same question | languages natively written in the scripts the text contains |
+| `script` | Which script is this? | scripts that packs declare (19) |
+| `dialect` | Which regional variety? | the pack's default locale plus fixture locales |
+| `code_switch` | Does this mix languages? | yes / no |
+
+The baseline is the stdlib `LanguageRouter` (optional CLD2 disabled),
+`detect_script` for scripts, and the pack's default locale for dialects. A
+router answer counts as evidence-backed when script, marker, context or cue
+evidence decided it rather than the pack-priority fallback; script answers
+always do, and default-locale dialect answers never do. The model side runs
+through `decide()` with the default calibration (confidence 0.70, margin 0.15).
+Five policies are compared: always trust the router, trust only
+evidence-backed router answers, trust the model, accept the router answer only
+when the model confidently agrees, and fall back to the model's confident
+answer when the router has no evidence. A silent error is an accepted wrong
+answer.
+
+Results for the pinned revision `e173bca1f0c4217d7a55b3b0c705d5ece8a0218d`
+(514 samples, CPU), remeasured on 2026-10-30 with Torch 2.13.0, GLiNER2 2.1.0
+and Transformers 5.12.1, seed 0 and four CPU threads. The checkpoint was cached
+and every socket was blocked. The dataset digest is
+`sha256:af23c29f96904705fc1e22f506703e96efff33668d5705c882ea27e15f4c95b5`.
+
+| Kind | n | Router accuracy | Evidence-backed router: coverage / accuracy | Model top-1 | Model coverage / accuracy | Model fallback: coverage / silent errors |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `language` | 151 | 43.0% | 27.2% / 100.0% | 22.5% | 8.0% / 66.7% | 34.4% / 2.0% |
+| `language_in_script` | 129 | 34.1% | 16.3% / 100.0% | 41.9% | 36.4% / 72.3% | 48.1% / 8.5% |
+| `script` | 85 | 100.0% | 100.0% / 100.0% | 11.8% | 1.2% / 0.0% | 100.0% / 0.0% |
+| `dialect` | 17 | 58.8% | 0.0% / n/a | 70.6% | 70.6% / 91.7% | 70.6% / 5.9% |
+| `code_switch` | 132 | 90.9% | 16.7% / 100.0% | 69.7% | 65.1% / 75.6% | 69.7% / 15.9% |
+
+On these synthetic fixtures, every evidence-backed router answer was correct,
+and deterministic script detection matched all 85 script questions. The
+coverage figures above bound that result; it is not a guarantee for new text.
+On the 129 script-conditioned language questions, model top-1 was 54/129; its
+confidence-gated fallback accepted 62 answers, including 11 wrong answers.
+
+The model abstained on 139 of 151 open-set language questions with 58 options.
+It identified declared code-mixing on 3 of 28 mixed notes and gave a confident
+wrong answer on its only accepted script question. On dialects it matched
+12 of 17 labels against the default locale's 10 of 17, with one confident error.
+Those 17 synthetic locale tags follow identifier locales and provide too little
+evidence for a routing change. These results measure routing decisions only;
+they do not measure extraction or de-identification accuracy or establish
+clinical qualification. Routing and activation defaults remain unchanged.
+
+Per-language and low-resource counts are in
+[`benchmarks/gliner2-language-decisions.json`](benchmarks/gliner2-language-decisions.json).
+The report holds counts, rates, codes and a dataset digest, never fixture text.
+Sinhala fixture coverage is included; it does not add a bundled Sinhala model.
+
+After caching the pinned checkpoint, reproduce the summary with
+`openmed[gliner2]` installed:
+
+```bash
+python scripts/benchmarks/gliner2_language_decisions.py \
+  --revision e173bca1f0c4217d7a55b3b0c705d5ece8a0218d \
+  --local-files-only \
+  --output docs/benchmarks/gliner2-language-decisions.json
+```
+
+`--check docs/benchmarks/gliner2-language-decisions.json` compares a fresh run
+with the committed summary instead; router counts must match exactly and model
+counts may drift by two samples. The opt-in integration test
+`tests/integration/test_gliner2_language_decisions.py` runs the same check
+with every socket blocked after the first download
+(`OPENMED_RUN_GLINER2_CHECKPOINT_TESTS=1`).
+
 ## Inference API
 
 Programmatic usage:
