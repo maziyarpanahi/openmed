@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add poisoning-resistant federated adapter aggregation with deterministic
+  coordinate-wise trimmed mean and median-norm clipped mean strategies, strict
+  adapter compatibility checks, a declared suspected-adversary bound that fails
+  closed below `2f + 1` updates, stable reason codes and aggregate-only
+  diagnostics with banded norm quantiles and digests (#2832).
+
 - Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
 
 - Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
