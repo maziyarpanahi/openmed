@@ -18,15 +18,20 @@ from openmed.interop.tools import (
 )
 from openmed.structured.decision import (
     DECISION_COMPATIBILITY_POLICY,
-    DECISION_SCHEMA_VERSION,
     DEFAULT_CALIBRATION_ID,
     decision_request_schema,
+)
+from openmed.structured.decision import (
+    MAX_CONFIGURABLE_INPUT_CHARS as DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
 )
 from openmed.structured.decision import (
     MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
 )
 from openmed.structured.decision import (
     MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_QUESTIONS as DECISION_MAX_QUESTIONS,
 )
 from openmed.structured.decision import (
     MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
@@ -1038,23 +1043,47 @@ DecisionModeValue = Literal[
     "ordered_preference",
     "scalar_score",
     "multi_label",
+    "question_set",
 ]
 
 
-def _decision_options_field() -> Any:
-    constraints = (
-        {"max_length": DECISION_MAX_OPTIONS}
-        if PYDANTIC_V2
-        else {"max_items": DECISION_MAX_OPTIONS}
-    )
+def _decision_list_field(maximum: int, *, optional: bool = False) -> Any:
+    constraints = {"max_length": maximum} if PYDANTIC_V2 else {"max_items": maximum}
+    if optional:
+        return Field(default=None, **constraints)
     return Field(default_factory=list, **constraints)
 
 
+def _decision_options_field() -> Any:
+    return _decision_list_field(DECISION_MAX_OPTIONS)
+
+
+def _check_decision_input_bound(input_text: Any, max_input_chars: Any) -> None:
+    """Keep the 1.0.0 input bound unless a request raises it explicitly."""
+
+    if (
+        max_input_chars is None
+        and isinstance(input_text, str)
+        and len(input_text) > DECISION_MAX_INPUT_CHARS
+    ):
+        raise ValueError(
+            f"input_text exceeds {DECISION_MAX_INPUT_CHARS} characters; "
+            "set max_input_chars to raise the bound"
+        )
+
+
 class FixedOptionDecisionRequest(_StrictModel):
-    """Canonical bounded request for ``POST /v1/decisions``."""
+    """Canonical bounded request for ``POST /v1/decisions``.
+
+    The OpenAPI component is the canonical decision request schema; the core
+    contract performs the full validation, including question sets.
+    """
 
     mode: DecisionModeValue
-    input_text: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS)
+    input_text: str = Field(
+        min_length=1,
+        max_length=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
     options: list[str] = _decision_options_field()
     namespace: str = "default"
     purpose: str = "care_review"
@@ -1064,19 +1093,47 @@ class FixedOptionDecisionRequest(_StrictModel):
         ge=DECISION_MIN_TIMEOUT_MS,
         le=DECISION_MAX_TIMEOUT_MS,
     )
-    schema_version: Literal["1.0.0"] = DECISION_SCHEMA_VERSION
+    schema_version: Optional[Literal["1.0.0", "1.1.0"]] = None
     compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+    question_id: Optional[str] = None
+    instructions: Optional[str] = None
+    option_descriptions: Optional[list[Optional[str]]] = _decision_list_field(
+        DECISION_MAX_OPTIONS,
+        optional=True,
+    )
+    levels: list[str] = _decision_list_field(DECISION_MAX_OPTIONS)
+    questions: list[dict[str, Any]] = _decision_list_field(DECISION_MAX_QUESTIONS)
+    input_format: Literal["text", "json"] = "text"
+    max_input_chars: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
 
     if PYDANTIC_V2:
         model_config = ConfigDict(
             extra="forbid",
             json_schema_extra=decision_request_schema(),
         )
+
+        @model_validator(mode="after")
+        def _validate_input_bound(self) -> "FixedOptionDecisionRequest":
+            _check_decision_input_bound(self.input_text, self.max_input_chars)
+            return self
+
     else:  # pragma: no cover
 
         class Config:
             extra = "forbid"
             schema_extra = decision_request_schema()
+
+        @root_validator
+        def _validate_input_bound(cls, values: dict[str, Any]) -> dict[str, Any]:
+            _check_decision_input_bound(
+                values.get("input_text"),
+                values.get("max_input_chars"),
+            )
+            return values
 
 
 class GroundCandidateResponse(_StrictModel):

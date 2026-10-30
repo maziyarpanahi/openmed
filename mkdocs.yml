@@ -370,6 +370,8 @@ nav:
       - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
       - Synthetic FHIR Records: training/synthetic/fhir-records.md
       - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+      - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+      - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
       - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
