@@ -105,7 +105,7 @@ def _section_record(tmp_path: Path) -> dict[str, Any]:
 
 
 def _records(tmp_path: Path) -> dict[str, dict[str, Any]]:
-    burned_in = generate_burned_in_example(seed=7)
+    burned_in = generate_burned_in_example(seed=7, font_fallback=True)
     return {
         "burned_in_annotation": burned_in.gold_boxes[0].to_dict(),
         "locale_phi_example": generate_locale_phi_examples(
@@ -475,7 +475,7 @@ def test_schema_exports_do_not_depend_on_generated_records(tmp_path: Path) -> No
     before = export_record_schemas_json()
 
     generate_locale_phi_examples(languages=("fr",), seed=99)
-    generate_burned_in_example(seed=99)
+    generate_burned_in_example(seed=99, font_fallback=True)
     generate_social_history_examples(3, seed=99)
     build_section_dataset(seed=99, n=2, output_path=tmp_path / "other.jsonl")
     augment_span_annotated_examples(

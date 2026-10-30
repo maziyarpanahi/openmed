@@ -11,6 +11,7 @@ import pytest
 from openmed.training.synthetic.dataset_recipe import (
     GeneratedArtifacts,
     RecipeGenerator,
+    builtin_recipe_generators,
     run_dataset_recipe,
 )
 
@@ -59,8 +60,19 @@ def python_path():
 
 def test_actual_multimodal_builtin_recipe_reproduces_all_artifact_identities(tmp_path):
     value = recipe([node(), node("images", "burned_in", ["notes"])])
-    first = run_dataset_recipe(value, tmp_path / "first")
-    second = run_dataset_recipe(value, tmp_path / "second")
+    registry = builtin_recipe_generators(font_fallback=True)
+    strict = builtin_recipe_generators()
+    assert (
+        registry["burned_in"].provenance_digest != strict["burned_in"].provenance_digest
+    )
+    assert (
+        registry["social_history"].provenance_digest
+        == strict["social_history"].provenance_digest
+    )
+    with pytest.raises(ValueError, match="boolean"):
+        builtin_recipe_generators(font_fallback="yes")
+    first = run_dataset_recipe(value, tmp_path / "first", registry=registry)
+    second = run_dataset_recipe(value, tmp_path / "second", registry=registry)
     assert first == second
     left = {
         path.relative_to(tmp_path / "first"): path.read_bytes()
@@ -74,6 +86,14 @@ def test_actual_multimodal_builtin_recipe_reproduces_all_artifact_identities(tmp
     }
     assert left == right
     assert any(path.suffix == ".png" for path in left)
+    labels = [
+        json.loads(data)
+        for path, data in left.items()
+        if path.name.startswith("labels_")
+    ]
+    assert labels and all(
+        item["metadata"]["font_fallback_allowed"] is True for item in labels
+    )
     manifest = json.loads((tmp_path / "first" / "derivation.json").read_bytes())
     assert manifest["generator_order"] == ["notes", "images"]
     assert manifest["split_manifest_digest"] == "0" * 64
