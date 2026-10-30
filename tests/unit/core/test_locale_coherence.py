@@ -25,6 +25,7 @@ from faker.config import AVAILABLE_LOCALES
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer import locales as L
+from openmed.core.anonymizer.digit_systems import detect_digit_system, fold_digits
 from openmed.core.anonymizer.locales import (
     CONCEPTUAL_LOCALE_LANGUAGES,
     FAKER_BACKEND_LOCALE,
@@ -34,6 +35,7 @@ from openmed.core.anonymizer.locales import (
     resolve_faker_backend_locale,
     resolve_locale,
 )
+from openmed.core.anonymizer.person_surrogates import URDU_MASCULINE_GIVEN_NAMES
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.labels import ID_NUM, normalize_label
@@ -256,7 +258,9 @@ class TestLocaleResolution:
         assert any(
             surname in person for surname in LOCALE_FAKE_DATA["as_IN"]["LAST_NAME"]
         )
-        assert validate_aadhaar(aadhaar)
+        # Native-digit sources keep their digit system (#3871).
+        assert detect_digit_system(aadhaar).name == "bengali"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_odia_pack_uses_native_locale_model_and_aadhaar_provider(self):
         pack = get_language_pack("or")
@@ -302,7 +306,8 @@ class TestLocaleResolution:
         ]
         assert re.fullmatch(r"[\u0B00-\u0B7F ]+", person)
         assert person != "ଅରୁଣ ଦାସ"
-        assert validate_aadhaar(aadhaar)
+        assert detect_digit_system(aadhaar).name == "oriya"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_gujarati_pack_uses_native_locale_and_gender_suffixes(self):
         pack = get_language_pack("gu")
@@ -487,7 +492,8 @@ class TestLocaleResolution:
         assert re.fullmatch(r"[A-Za-z]+\.[ \t]*[A-Za-z]+\.[ \t]*[A-Za-z]+", code_mixed)
         assert native != "ಕೆ. ಎಸ್. ರವಿ"
         assert code_mixed != "K. S. Ravi"
-        assert validate_aadhaar(aadhaar)
+        assert detect_digit_system(aadhaar).name == "kannada"
+        assert validate_aadhaar(fold_digits(aadhaar))
 
     def test_conceptual_locale_resolves_to_installed_backend(self, subtests):
         for locale in sorted(CONCEPTUAL_BACKENDS):
@@ -645,6 +651,7 @@ class TestLocaleCoherenceReport:
                 "language",
                 "locale",
                 "approximate",
+                "address_approximation",
                 "id_providers",
                 "id_types",
                 "id_locale",
@@ -704,6 +711,7 @@ class TestLocaleCoherenceReport:
                 "language",
                 "locale",
                 "approximate",
+                "address_approximation",
                 "id_providers",
                 "id_types",
                 "id_locale",
@@ -923,10 +931,16 @@ def test_urdu_pack_warns_once_and_uses_bundled_names():
         warning for warning in caught if issubclass(warning.category, UserWarning)
     ]
     assert len(user_warnings) == 1
-    assert name in {
+    # The honorifics ``جناب`` and ``صاحب`` are kept verbatim around a bundled
+    # Urdu name whose given name matches their masculine gender (#3887).
+    assert name.startswith("جناب ")
+    assert name.endswith(" صاحب")
+    core = name.removeprefix("جناب ").removesuffix(" صاحب")
+    assert core in {
         f"{given} {family}"
         for given in L.URDU_GIVEN_NAMES
         for family in L.URDU_FAMILY_NAMES
     }
+    assert core.split()[0] in URDU_MASCULINE_GIVEN_NAMES
     assert name != "جناب سیّد علی خان صاحب"
     assert validate_aadhaar(aadhaar)
