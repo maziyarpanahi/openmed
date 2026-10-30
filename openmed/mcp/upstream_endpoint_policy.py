@@ -93,6 +93,10 @@ _CLOUD_METADATA_NETWORKS = (
     ipaddress.ip_network("100.100.100.200/32"),
     ipaddress.ip_network("fd00:ec2::254/128"),
 )
+_PRIVATE_NETWORKS = tuple(
+    ipaddress.ip_network(value)
+    for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")
+)
 _RESOLUTION_FAILED = object()
 _ADDRESS_REASON_CODES = {
     ResolvedAddressClass.CLOUD_METADATA: "cloud_metadata_address",
@@ -340,6 +344,15 @@ def _normalize_allowed_origin(origin: Any) -> str:
     return parsed.origin
 
 
+def _is_private_network_address(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    candidate = getattr(address, "ipv4_mapped", None) or address
+    return _address_class(address) is ResolvedAddressClass.PRIVATE and any(
+        candidate in network for network in _PRIVATE_NETWORKS
+    )
+
+
 def _normalize_private_origin(origin: Any) -> str:
     try:
         parsed = _parse_endpoint(origin)
@@ -353,7 +366,7 @@ def _normalize_private_origin(origin: Any) -> str:
         raise UpstreamEndpointConfigurationError("invalid_allowed_origin_path")
     if _is_loopback_host(parsed.host, parsed.ip_address) or (
         parsed.ip_address is not None
-        and _address_class(parsed.ip_address) is not ResolvedAddressClass.PRIVATE
+        and not _is_private_network_address(parsed.ip_address)
     ):
         raise UpstreamEndpointConfigurationError("invalid_private_origin")
     return parsed.origin
@@ -597,7 +610,7 @@ class UpstreamEndpointPolicy:
         addresses = _resolve_addresses(parsed, self.resolver)
         classes = tuple(_address_class(address) for address in addresses)
         if private_origin:
-            if set(classes) != {ResolvedAddressClass.PRIVATE}:
+            if not all(_is_private_network_address(address) for address in addresses):
                 raise UpstreamEndpointResolutionError("private_only_violation")
         else:
             _validate_address_classes(classes, loopback_only=loopback_host)

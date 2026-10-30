@@ -670,11 +670,15 @@ class DecisionServerBackend:
         }
         if self._bearer_token is not None:
             headers["Authorization"] = f"Bearer {self._bearer_token}"
+        response: http.client.HTTPResponse | None = None
         try:
             connection.connect()
             remaining = deadline - time.monotonic()
             if watchdog.fired or remaining <= 0 or connection.sock is None:
                 raise DecisionServerTimeoutError()
+            # Keep the socket even when getresponse() transfers ownership to
+            # a Connection: close response and clears connection.sock.
+            watchdog.watch_socket(connection.sock)
             # Reads after a slow connect get only the time left in the budget.
             connection.sock.settimeout(remaining)
             connection.request("POST", request_target, body=payload, headers=headers)
@@ -705,6 +709,8 @@ class DecisionServerBackend:
             raise DecisionServerError("decision_server_unreachable") from None
         finally:
             watchdog.cancel()
+            if response is not None:
+                response.close()
             connection.close()
         if watchdog.fired:
             raise DecisionServerTimeoutError()
@@ -779,13 +785,19 @@ class _Watchdog:
     def __init__(self, connection: http.client.HTTPConnection, seconds: float):
         self.fired = False
         self._connection = connection
+        self._socket: socket.socket | None = None
         self._timer = threading.Timer(seconds, self._fire)
         self._timer.daemon = True
         self._timer.start()
 
+    def watch_socket(self, sock: socket.socket) -> None:
+        self._socket = sock
+        if self.fired:
+            self._fire()
+
     def _fire(self) -> None:
         self.fired = True
-        sock = getattr(self._connection, "sock", None)
+        sock = self._socket or getattr(self._connection, "sock", None)
         if sock is not None:
             try:
                 sock.shutdown(socket.SHUT_RDWR)

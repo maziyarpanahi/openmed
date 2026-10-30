@@ -243,12 +243,21 @@ def sleep_then(seconds: float, then: Action) -> Action:
     return act
 
 
-def drip(interval: float, count: int) -> Action:
-    """Send a status line, then one header byte per interval."""
+def drip(
+    interval: float, count: int, *, body: bool = False, close: bool = False
+) -> Action:
+    """Trickle header or body bytes, with either response connection policy."""
 
     def act(handler: BaseHTTPRequestHandler) -> None:
         try:
-            handler.wfile.write(b"HTTP/1.1 200 OK\r\nX-Slow: ")
+            if body:
+                handler.send_response(200)
+                handler.send_header("Content-Length", str(count))
+                if close:
+                    handler.send_header("Connection", "close")
+                handler.end_headers()
+            else:
+                handler.wfile.write(b"HTTP/1.1 200 OK\r\nX-Slow: ")
             handler.wfile.flush()
             for _ in range(count):
                 time.sleep(interval)
@@ -627,9 +636,12 @@ def test_a_server_slower_than_the_timeout_fails_without_an_answer(
     _assert_no_answers(result)
 
 
-def test_a_trickling_server_is_cut_off_at_the_deadline(start_server) -> None:
+@pytest.mark.parametrize("body,close", [(False, False), (True, False), (True, True)])
+def test_a_trickling_server_is_cut_off_at_the_deadline(
+    start_server, body: bool, close: bool
+) -> None:
     server = start_server()
-    server.default = drip(0.05, 60)
+    server.default = drip(0.05, 60, body=body, close=close)
     backend = _backend(server.origin)
     started = time.monotonic()
 

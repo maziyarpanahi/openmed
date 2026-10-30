@@ -202,6 +202,10 @@ def test_private_network_origins_require_exact_operator_approval() -> None:
     assert approval.to_safe_dict()["private_network"] is True
     assert policy.validate("https://10.24.8.10/v1").is_private_network is True
     assert calls == [(host, 8000)]
+    for private in ("172.16.2.3", "192.168.1.2", "[fd12:3456::1]", "[::ffff:10.1.2.3]"):
+        endpoint = f"http://{private}:8000"
+        approved = UpstreamEndpointPolicy(allowed_private_origins={endpoint})
+        assert approved.validate(endpoint).is_private_network
 
     for endpoint, reason_code in (
         (f"http://{host}:8001/v1/systemone", "non_https_origin"),
@@ -223,6 +227,9 @@ def test_private_network_origins_require_exact_operator_approval() -> None:
         [PUBLIC_ADDRESS],
         ["10.24.8.9", PUBLIC_ADDRESS],
         ["10.24.8.9", "127.0.0.1"],
+        ["192.0.2.10"],
+        ["240.0.0.1"],
+        ["2001:db8::1"],
     ],
 )
 def test_private_network_origins_reject_non_private_resolution(
@@ -248,6 +255,9 @@ def test_private_network_origins_reject_non_private_resolution(
         ({"http://localhost:8000"}, "invalid_private_origin"),
         ({"http://93.184.216.34"}, "invalid_private_origin"),
         ({"http://169.254.169.254"}, "invalid_private_origin"),
+        ({"http://192.0.2.10"}, "invalid_private_origin"),
+        ({"http://240.0.0.1"}, "invalid_private_origin"),
+        ({"http://[2001:db8::1]"}, "invalid_private_origin"),
         ({"ftp://10.0.0.5"}, "invalid_private_origin"),
         ({"http://10.0.0.5/v1"}, "invalid_allowed_origin_path"),
         ("http://10.0.0.5", "invalid_private_origin"),
