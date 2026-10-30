@@ -1075,6 +1075,9 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     if entity.get("india_clinical_merge"):
         metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    if entity.get("calendar"):
+        # Value-free calendar code from a non-Gregorian month-name date rule.
+        metadata["calendar"] = str(entity["calendar"])
     return metadata or None
 
 
@@ -2983,18 +2986,36 @@ def _redact_entity(
         if _is_mixed_label_union(entity):
             return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(
+            from .anonymizer.digit_systems import render_in_source_digits
+
+            # Shift the ASCII fold and render the result in the source span's
+            # digit system and date separators.
+            return render_in_source_digits(
                 entity.text,
-                date_shift_days,
-                keep_year,
-                lang=lang,
-                require_dateutil=require_dateutil,
+                lambda source: _shift_date(
+                    source,
+                    date_shift_days,
+                    keep_year,
+                    lang=lang,
+                    require_dateutil=require_dateutil,
+                    calendar=_entity_calendar_hint(entity),
+                ),
             )
         else:
             # Non-date entities get masked
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _entity_calendar_hint(entity: PIIEntity) -> Optional[Any]:
+    """Return the detection-stage calendar code attached to a date span."""
+    from .calendar_dates import CALENDAR_METADATA_KEY
+
+    metadata = getattr(entity, "metadata", None)
+    if isinstance(metadata, Mapping):
+        return metadata.get(CALENDAR_METADATA_KEY)
+    return None
 
 
 def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
@@ -3373,6 +3394,7 @@ def _shift_date(
     lang: str = "en",
     *,
     require_dateutil: bool = False,
+    calendar: Optional[Any] = None,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -3382,6 +3404,9 @@ def _shift_date(
     - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
     - Month DD, YYYY / DD Month YYYY (with localized month names)
+    - Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and
+      Bikram Sambat dates, shifted within their own calendar (see
+      :mod:`openmed.core.calendar_dates`)
 
     Args:
         date_str: Date string to shift
@@ -3391,10 +3416,24 @@ def _shift_date(
         require_dateutil: Raise a clear optional-dependency error when
             python-dateutil is unavailable. When false, fall back to the basic
             regex shifter.
+        calendar: Optional detection-stage calendar code for the span, such
+            as ``"solar_hijri"``, ``"hijri"`` or ``"bikram_sambat"``.
 
     Returns:
         Shifted date string in the same format as input
     """
+    from .calendar_dates import shift_calendar_date
+
+    native = shift_calendar_date(
+        date_str,
+        shift_days,
+        lang=lang,
+        calendar=calendar,
+        keep_year=keep_year,
+    )
+    if native.handled:
+        return native.text if native.text is not None else "[DATE_SHIFTED]"
+
     localized = _parse_localized_month_date(date_str, lang)
     if localized is not None:
         try:
