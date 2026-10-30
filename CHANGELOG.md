@@ -16,9 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
-
 - Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
+
+- Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
 
 - Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
 
