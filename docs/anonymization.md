@@ -392,6 +392,50 @@ For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
 default PII model, Faker locale, and a before/after example — see
 [Per-Language De-identification](languages.md).
 
+### Devanagari and Telugu name surrogates
+
+Hindi and Telugu names written in their own script are replaced with
+pronounceable names built from aksara, the written syllables of both scripts.
+This covers the `PERSON`, `FIRST_NAME`, `MIDDLE_NAME`, and `LAST_NAME`
+labels. Each aksara is a consonant or a virama conjunct, an optional
+dependent vowel sign, and an occasional anusvara or visarga. A name may also
+start with an independent vowel. The consonants, vowel signs, and conjuncts
+come from small inventories in
+`openmed.core.anonymizer.providers.aksara_names`. OpenMed bundles no list of
+real names for these scripts.
+
+Every surrogate:
+
+- has the same number of space-separated tokens as the source, in the same
+  order. An initial such as `ए.` stays a one-aksara initial, and hyphens are
+  kept;
+- gives each token the source token's aksara count, between 2 and 4 for
+  Devanagari or 2 and 5 for Telugu;
+- reuses none of the source's code points in that script: consonants,
+  vowels, vowel signs, virama, anusvara, or visarga. A surrogate therefore
+  never equals its source;
+- splits, under the grapheme rules in `openmed.core.decoding.spans`, into
+  aksara that are each well formed; and
+- is reproducible for a fixed `seed`.
+
+```python
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.providers.aksara_names import (
+    is_well_formed_aksara_name,
+)
+
+anonymizer = Anonymizer(lang="hi", consistent=True, seed=11)
+surrogate = anonymizer.surrogate("अनीता शर्मा", "PERSON")
+# -> "पजूग वके": two tokens, no consonant shared with the source
+assert is_well_formed_aksara_name(surrogate, script="Devanagari")
+```
+
+Latin-script names in Hindi or Telugu notes still use Faker. Marathi keeps
+its own generator, which handles honorifics and three-part names. Other
+language packs that use Devanagari can register
+`generate_devanagari_aksara_name` with `register_label_generator(...,
+language_pack=pack, script="Devanagari")`.
+
 ### Determinism
 
 Three modes:
@@ -503,6 +547,47 @@ deidentify("Born 01/15/1970", method="replace", consistent=True, seed=1)
 deidentify("Email: john@hospital.org", method="replace", lang="en")
 #  -> "Email: alice@hospital.org"  (domain kept, local part faked)
 ```
+
+### Person names: honorifics, gender cues and name order
+
+PERSON surrogates keep the shape of the source name instead of dropping its
+title or swapping in a name that contradicts the surrounding grammar:
+
+- **No inserted titles.** Faker's name formats randomly add titles and
+  post-nominals (`Bi.`, `Chị`, `Univ.Prof.`, `جناب آقای`, `MBA.`). A
+  surrogate never carries a title the source name lacked, in any language.
+  Surname particles such as `de`, `du` or Thai `ณ <place>` are kept.
+- **Source honorifics are kept verbatim.** For Thai, Amharic, Swahili,
+  Arabic, Persian, Urdu, Hindi, Vietnamese, Indonesian, Yoruba and Hausa a
+  registered honorific prefix or suffix is peeled off, only the name is
+  replaced, and the honorific is re-attached with its original spacing.
+- **Gender comes only from the span itself.** When that honorific (or a
+  Vietnamese `Thị`/`Văn` middle name) marks gender, the surrogate's given name
+  has the same gender. OpenMed never infers gender from a name.
+- **Order follows the language.** Vietnamese surrogates are family name first.
+- **An honorific-only span is masked** (`"Bi."` becomes `[PERSON]`), never
+  replaced by a bare title.
+
+```python
+from openmed.core.anonymizer import Anonymizer
+
+Anonymizer(lang="th", consistent=True, seed=0).surrogate(
+    "นางสาวสมหญิง ใจดี", "PERSON"
+)
+#  -> "นางสาวธัชญา ศรีวงค์"  (title kept, female given name)
+
+Anonymizer(lang="vi", consistent=True, seed=1).surrogate("Lê Thu Hà", "PERSON")
+#  -> "Nguyễn Mai"  (family name first, no title added)
+```
+
+Words that also work as names stay part of the name: a title is recognized
+only as a whole token at the start or end of the span (Thai titles, which are
+written attached, must be followed by a valid syllable start), so Urdu
+`سید`/`بیگم`, a trailing Arabic `السيد` or Hindi `श्रीकांत` are replaced like
+any other name. Japanese, Korean and Chinese keep their own honorific handling
+in `openmed.core.name_order`. Add a title for another language with
+`openmed.core.person_honorifics.register_person_honorific(lang, text,
+gender="female")`.
 
 ### Native digit systems
 
