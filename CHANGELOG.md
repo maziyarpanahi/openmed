@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
-
 ### Breaking Changes
 
 - Require Python 3.11 or newer for the v3.2 development line so dependency
@@ -17,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   See the [dependency migration guidance](docs/security/dependency-policy.md#python-311-floor-and-the-snowflake-filelock-override).
 
 ### Added
+
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
 
 - Add synthetic fhir records with bounded offline contracts, synthetic controls
   and documented behavior (#2840).
