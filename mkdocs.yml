@@ -98,6 +98,7 @@ nav:
           - FHIR Transaction Compensation: interop/fhir-transaction-compensation.md
           - FHIR Subscription Checkpoints: interop/fhir-subscription-checkpoints.md
           - Durable Workflow Recovery: agent/workflow-recovery.md
+          - Restore Authority Reconciliation: agent/restore-authority-reconciliation.md
           - OMOP Rollback Manifests: interop/omop-rollback-manifests.md
           - OMOP Rollback Manifest Schema: interop/omop-rollback-schema.md
       - Evaluation:

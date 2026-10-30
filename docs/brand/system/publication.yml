@@ -170,6 +170,7 @@ classification:
     - interop/fhir-transaction-compensation.md
     - interop/fhir-subscription-checkpoints.md
     - agent/workflow-recovery.md
+    - agent/restore-authority-reconciliation.md
     - interop/omop-rollback-manifests.md
     - interop/omop-rollback-schema.md
     - evaluation/governed-agent-fixtures.md
