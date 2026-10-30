@@ -87,7 +87,9 @@ def test_telugu_non_native_fallback_keeps_approximation_warning() -> None:
         ("en", "Alice", "FIRST_NAME", "Ethan"),
         ("en", "Example", "LAST_NAME", "Martin"),
         ("fr", "Marie Dupont", "PERSON", "Lucas Clément Le Mercier"),
-        ("de", "Erika Muster", "PERSON", "Univ.Prof. Dorothea Gotthard"),
+        # Faker's de_DE format added "Univ.Prof."; surrogates no longer gain a
+        # title the source lacked (#3887), the name itself is unchanged.
+        ("de", "Erika Muster", "PERSON", "Dorothea Gotthard"),
     ),
 )
 def test_latin_faker_outputs_are_unchanged(
@@ -302,12 +304,19 @@ def test_arabic_and_amharic_names_do_not_reuse_source_tokens(
     lang: str,
     original: str,
 ) -> None:
+    from openmed.core.person_honorifics import peel_person_honorifics
+
+    source = peel_person_honorifics(original, lang)
     for seed in _SAMPLE_SEEDS:
         surrogate = Anonymizer(lang=lang, consistent=True, seed=seed).surrogate(
             original,
             "PERSON",
         )
-        assert set(surrogate.split()).isdisjoint(original.split())
+        # Titles are preserved; every identifying name token must be replaced.
+        replaced = peel_person_honorifics(surrogate, lang)
+        assert replaced.prefix == source.prefix
+        assert replaced.suffix == source.suffix
+        assert set(replaced.name.split()).isdisjoint(source.name.split())
 
 
 def test_arabic_street_address_does_not_reuse_source_street_or_number() -> None:
