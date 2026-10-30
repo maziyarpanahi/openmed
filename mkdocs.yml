@@ -552,6 +552,7 @@ nav:
       - Privacy Report Field Linting: compliance/report-lint.md
       - Privacy-policy Coverage Matrix: compliance/policy-coverage.md
       - 21 CFR Part 11 Audit Trail: compliance/21-cfr-part-11-audit-trail.md
+      - Privacy-safe Contribution Ledger: compliance/governance/contribution-ledger.md
       - Reproducible Release Provenance: compliance/reproducible-release.md
       - v3.1 Clinician Review Protocol: compliance/v3.1-clinician-review.md
       - Access-scope Minimization Evidence: compliance/access-scope.md
