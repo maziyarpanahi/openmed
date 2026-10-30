@@ -198,7 +198,7 @@ the script a pack declares. Each sample is asked one question:
 
 | Kind | Question | Options |
 | --- | --- | --- |
-| `language` | Which language is this? | every pack and fixture language (55) |
+| `language` | Which language is this? | every pack and fixture language (58) |
 | `language_in_script` | Same question | languages natively written in the scripts the text contains |
 | `script` | Which script is this? | scripts that packs declare (19) |
 | `dialect` | Which regional variety? | the pack's default locale plus fixture locales |
@@ -217,35 +217,46 @@ answer when the router has no evidence. A silent error is an accepted wrong
 answer.
 
 Results for the pinned revision `e173bca1f0c4217d7a55b3b0c705d5ece8a0218d`
-(462 samples, CPU):
+(514 samples, CPU), remeasured on 2026-10-30 with Torch 2.13.0, GLiNER2 2.1.0
+and Transformers 5.12.1, seed 0 and four CPU threads. The checkpoint was cached
+and every socket was blocked. The dataset digest is
+`sha256:af23c29f96904705fc1e22f506703e96efff33668d5705c882ea27e15f4c95b5`.
 
 | Kind | n | Router accuracy | Evidence-backed router: coverage / accuracy | Model top-1 | Model coverage / accuracy | Model fallback: coverage / silent errors |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `language` | 133 | 42.9% | 25.6% / 100% | 23.3% | 9.8% / 76.9% | 34.6% / 1.5% |
-| `language_in_script` | 114 | 34.2% | 14.9% / 100% | 45.6% | 34.2% / 84.6% | 43.9% / 5.3% |
-| `script` | 81 | 100% | 100% / 100% | 9.9% | 1.2% / 0% | 100% / 0% |
-| `dialect` | 17 | 58.8% | 0% / n/a | 70.6% | 70.6% / 91.7% | 70.6% / 5.9% |
-| `code_switch` | 117 | 91.5% | 15.4% / 100% | 68.4% | 64.1% / 76.0% | 67.5% / 15.4% |
+| `language` | 151 | 43.0% | 27.2% / 100.0% | 22.5% | 8.0% / 66.7% | 34.4% / 2.0% |
+| `language_in_script` | 129 | 34.1% | 16.3% / 100.0% | 41.9% | 36.4% / 72.3% | 48.1% / 8.5% |
+| `script` | 85 | 100.0% | 100.0% / 100.0% | 11.8% | 1.2% / 0.0% | 100.0% / 0.0% |
+| `dialect` | 17 | 58.8% | 0.0% / n/a | 70.6% | 70.6% / 91.7% | 70.6% / 5.9% |
+| `code_switch` | 132 | 90.9% | 16.7% / 100.0% | 69.7% | 65.1% / 75.6% | 69.7% / 15.9% |
 
-Evidence-backed router answers were never wrong, and Unicode script detection
-was exact, so the deterministic path already has a zero-silent-error abstention
-signal; its limit is coverage. The model helps only when its options are
-limited to the text's script candidates, where it recovers Latin- and
-Cyrillic-script languages the router sends to the pack-priority fallback, at
-the cost of confident errors between close languages. It is unusable for
-script detection, collapses toward abstention over 55 open-set options, and
-answers "no" for most declared code-mixed notes (3 of 25 correct). On dialects
-it beats the default locale (12 of 17 against 10 of 17), but the set has 17
-notes whose locale tags follow the identifier locale and includes one confident
-error, which is too little evidence for a routing change. Per-language and
-low-resource counts are in
-[`benchmarks/gliner2-language-decisions.json`](benchmarks/gliner2-language-decisions.json);
-the report holds counts, rates, codes and a dataset digest, never fixture text.
+On these synthetic fixtures, every evidence-backed router answer was correct,
+and deterministic script detection matched all 85 script questions. The
+coverage figures above bound that result; it is not a guarantee for new text.
+On the 129 script-conditioned language questions, model top-1 was 54/129; its
+confidence-gated fallback accepted 62 answers, including 11 wrong answers.
 
-Reproduce the summary with `openmed[gliner2]` installed:
+The model abstained on 139 of 151 open-set language questions with 58 options.
+It identified declared code-mixing on 3 of 28 mixed notes and gave a confident
+wrong answer on its only accepted script question. On dialects it matched
+12 of 17 labels against the default locale's 10 of 17, with one confident error.
+Those 17 synthetic locale tags follow identifier locales and provide too little
+evidence for a routing change. These results measure routing decisions only;
+they do not measure extraction or de-identification accuracy or establish
+clinical qualification. Routing and activation defaults remain unchanged.
+
+Per-language and low-resource counts are in
+[`benchmarks/gliner2-language-decisions.json`](benchmarks/gliner2-language-decisions.json).
+The report holds counts, rates, codes and a dataset digest, never fixture text.
+Sinhala fixture coverage is included; it does not add a bundled Sinhala model.
+
+After caching the pinned checkpoint, reproduce the summary with
+`openmed[gliner2]` installed:
 
 ```bash
 python scripts/benchmarks/gliner2_language_decisions.py \
+  --revision e173bca1f0c4217d7a55b3b0c705d5ece8a0218d \
+  --local-files-only \
   --output docs/benchmarks/gliner2-language-decisions.json
 ```
 
