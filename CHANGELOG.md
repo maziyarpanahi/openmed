@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
 
+- Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
+
 - Add declarative localized medical-record-number labels shared by semantic merging and safety sweeps, retaining exact identifier spans and label-free negative controls.
 
 - Detect UK postcodes through the English en_GB overlay, including bounded address context for lookalike inward codes and explicit UK detection aliases.
