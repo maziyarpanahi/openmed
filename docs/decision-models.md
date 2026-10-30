@@ -16,7 +16,7 @@ and which public models work through which path. The backend sections it links
 to hold the installation steps and API details.
 
 Model sizes, licenses and inputs were checked against the Hugging Face model
-repositories on **2026-10-24**. Check the repository again before you rely on
+repositories on **2026-10-30**. Check the repository again before you rely on
 a figure.
 
 ## Question types
@@ -57,7 +57,9 @@ Two differences matter when you bring an existing client:
    backend's family.
 2. The backend returns scores only: one probability per option, one per level
    for a levelled score, or a single value for an unlevelled score. A choice or
-   confidence reported by a model server is not used.
+   confidence reported by a model server does not override probability-based
+   decisions. An expected-level-only score needs server confidence; otherwise
+   OpenMed abstains.
 3. The calibration profile named by `calibration_id` turns the scores into a
    result. A request whose confidence or margin is below the profile's
    thresholds returns `state: abstained`. Backend problems return typed
@@ -166,8 +168,16 @@ else:
 | Local decision server | `DecisionServerBackend` | base package | the model in its own process; OpenMed connects over loopback by default | [Local decision servers](api/fixed-option-decisions.md) |
 | MedDecider-4B-NLI | `EncoderNLIBackend` (an NLI verifier, not a decision backend) | `openmed[hf]` | in process, CPU | [MedDecider-4B-NLI recipe](clinical/local-backends.md#recipe-meddecider-4b-nli) |
 
-**GLiNER2.5.** Each request becomes one GLiNER2 `classify_text` task over the
-caller's options; all six public GLiNER2.5 checkpoints load through the
+Request-aware scorers and the server bridge receive the full question
+definition. Legacy three-argument scorers, including the deterministic baseline,
+refuse per-request instructions and non-empty option descriptions rather than
+dropping them. Native GLiNER2.5 and GLiClass backends also refuse those fields;
+configure GLiClass prompts and examples on its backend settings instead.
+Levelled scalar questions require a backend that implements their ordered
+levels; the native GLiNER2.5 and GLiClass paths return `unsupported`.
+
+**GLiNER2.5.** Each supported question becomes one GLiNER2 `classify_text`
+task over the caller's options; all six public GLiNER2.5 checkpoints load through the
 `gliner2` package with no remote code. The
 [GLiNER2.5 checkpoints](zero-shot-ner.md) table lists
 them. For language routing, the
@@ -184,8 +194,9 @@ profile for each runtime.
 
 **Local decision servers.** Most 4B to 9B decision models need a CUDA serving
 stack, a custom head or a pinned runtime, so OpenMed does not load them in
-process. Serve the model with the server its model card documents, on the same
-machine, and connect `DecisionServerBackend` to it. The server must answer the
+process. Use a documented compatible server on the same machine, or provide
+a local HTTP adapter for a model whose package only exposes an in-process API. Then
+connect `DecisionServerBackend` to that endpoint. The server must answer the
 System One route `POST /v1/systemone` or the OpenAI-compatible
 `POST /v1/decisions`; OpenMed does not ship a server for any model. The bridge
 sends text or JSON text only, parses the server's probabilities, and lets
@@ -226,7 +237,7 @@ measured them on your own held-out data.
 
 ## Support matrix
 
-Checked against each model repository on 2026-10-24. Sizes are parameter
+Checked against each model repository on 2026-10-30. Sizes are parameter
 counts from the repository metadata. Inputs are what the model card documents;
 OpenMed passes text only.
 
@@ -243,11 +254,11 @@ OpenMed passes text only.
 | `vllm-sr/d3-edge` | 0.59B | Apache-2.0 | text or JSON, images, video | Local server through the bridge (text only) |
 | `vllm-sr/d3-mini` | 4.5B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
 | `vllm-sr/d3-flash` | 8.4B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
-| `perplexity-ai/pplx-decider-flash-v1.2` | 4.5B | Apache-2.0 | text, images | Local server through the bridge (text only) |
+| `perplexity-ai/pplx-decider-flash-v1.2` | 4.5B | Apache-2.0 | text, images | Compatible local HTTP adapter required (text only) |
 | `sky7350/Mica-v0.5-4B` | 4.7B | Apache-2.0 | text or JSON, up to 32k tokens | Local server through the bridge |
 | `h2oai/h2o-lightning-4b` | 4.7B | Apache-2.0 | text, images | Local server through the bridge (text only) |
 | `Cloudflare/clef-flash` | 9.4B | Apache-2.0 | text or JSON, images, video | Local server through the bridge (text only) |
-| `baselabs/elephant-1` | 9.4B | MIT | text, images | Local server through the bridge (text only) |
+| `baselabs/elephant-1` | 9.4B | MIT | text, images | Compatible local HTTP endpoint required (text only) |
 | `LiquidAI/d1-omni-600M` | 587M | LFM Open License 1.0 | text, images, English audio up to 30 s | Not supported by default (license) |
 | `LiquidAI/d1-3B` | 3.1B | LFM Open License 1.0 | text, images | Not supported by default (license) |
 
@@ -259,16 +270,16 @@ What the bridge models need on the serving side, from their model cards:
 | Model | Serving requirements |
 | --- | --- |
 | `vllm-sr/d3-edge`, `vllm-sr/d3-mini`, `vllm-sr/d3-flash` | Remote code and an exact `transformers` pin, with a server script (`d3_server.py`) shipped next to the weights. The remote code and pin are also why `d3-edge` is not loaded in process. |
-| `perplexity-ai/pplx-decider-flash-v1.2` | A CUDA GPU (about 9 GiB) and the package bundled with the weights |
+| `perplexity-ai/pplx-decider-flash-v1.2` | Python 3.12+, a CUDA GPU with about 9 GiB for weights plus working memory, and the bundled package; its card demonstrates an in-process API, so provide a compatible HTTP adapter ([model card](https://huggingface.co/perplexity-ai/pplx-decider-flash-v1.2)) |
 | `sky7350/Mica-v0.5-4B` | A CUDA INT8 server, or the GGUF files on llama.cpp (Apple silicon or CPU) |
 | `h2oai/h2o-lightning-4b` | vLLM with the shim bundled with the weights; GGUF builds are also published |
 | `Cloudflare/clef-flash` | CUDA, a joint head loaded from the repository, and SGLang |
-| `baselabs/elephant-1` | One CUDA GPU and the patched serving runtime set up by the repository's script |
+| `baselabs/elephant-1` | One CUDA GPU and the patched OneJev runtime installed by `setup.sh`; supply a compatible local HTTP endpoint ([model card](https://huggingface.co/baselabs/elephant-1)) |
 
 **LiquidAI d1.** `LiquidAI/d1-omni-600M` and `LiquidAI/d1-3B` use the LFM
-Open License 1.0, which does not license commercial use by an organization
-above its USD 10 million annual-revenue threshold. It is not a permissive
-license, so OpenMed rejects these models as decision backends, in process and
+Open License 1.0, whose commercial-use grant contains a USD 10 million
+annual-revenue condition ([license](https://huggingface.co/LiquidAI/d1-3B/blob/main/LICENSE)).
+It is not a permissive license, so OpenMed rejects these models as decision backends, in process and
 through the bridge. Do not declare a different license to get past the check.
 
 MedDecider-4B-NLI is Apache-2.0. The larger MedDecider models (9B, 27B and

@@ -116,7 +116,7 @@ def test_support_matrix_states_the_check_date_and_license_rule() -> None:
     from openmed.structured.decision import PERMISSIVE_LICENSES
 
     markdown = GUIDE.read_text(encoding="utf-8")
-    assert "Checked against each model repository on 2026-10-24." in _section(
+    assert "Checked against each model repository on 2026-10-30." in _section(
         markdown, "## Support matrix\n"
     )
     rows = _support_rows(markdown)

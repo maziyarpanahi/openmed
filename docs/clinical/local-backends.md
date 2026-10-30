@@ -184,7 +184,7 @@ classifier. It loads through the existing `runtime="torch"` path of
 `ModelLoader.load_local_sequence_classifier()` unchanged, with no new runtime,
 remote code or third-party package, and works with
 `openmed nli-qualify --runtime torch`. These facts were checked against the
-model repository on 2026-10-24:
+model repository on 2026-10-30:
 
 | Property | Value |
 | --- | --- |
