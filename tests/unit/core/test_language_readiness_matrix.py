@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import re
+from pathlib import Path
 
 import pytest
 
@@ -548,3 +550,213 @@ def test_builtin_catalog_derivation_is_bounded_and_normalized():
         for entry in derived
         if entry.state == COMPLETE
     )
+
+
+# ---------------------------------------------------------------------------
+# Golden Markdown fixtures (#3122)
+# ---------------------------------------------------------------------------
+
+_GOLDEN_FIXTURE = (
+    Path(__file__).resolve().parents[3]
+    / "tests"
+    / "fixtures"
+    / "language_readiness_expected.md"
+)
+_SCENARIO_MARKER = re.compile(r"^<!-- scenario: ([a-z_]+) -->\n", re.MULTILINE)
+_HEBREW_ALIAS = {"iw": "he"}
+_REGION_ALIAS = {"en_GB": "en-GB"}
+
+
+def _digest(character: str) -> str:
+    return "sha256:" + character * 64
+
+
+# Compact synthetic registries, one per readiness shape. The fixture file holds
+# their renders in this order, each under a ``<!-- scenario: name -->`` marker.
+_GOLDEN_SCENARIOS: dict[str, tuple[str, list[LanguageReadinessEntry]]] = {
+    "empty": ("2026.10", []),
+    "complete": (
+        "2026.10",
+        [
+            LanguageReadinessEntry("en-GB", capability, COMPLETE, _digest(character))
+            for capability, character in zip(READINESS_CAPABILITIES, "01234")
+        ],
+    ),
+    "partial": (
+        "2026.10",
+        [
+            LanguageReadinessEntry("de", "detection", PARTIAL),
+            LanguageReadinessEntry("de", "surrogates", PARTIAL),
+            LanguageReadinessEntry("de", "validation", COMPLETE, _digest("5")),
+        ],
+    ),
+    "blocked": (
+        "2026.10",
+        [
+            LanguageReadinessEntry("fa", "detection", COMPLETE, _digest("6")),
+            LanguageReadinessEntry("fa", "validation", BLOCKED),
+            LanguageReadinessEntry("am", "validation", BLOCKED),
+            LanguageReadinessEntry("am", "release_evidence", BLOCKED),
+        ],
+    ),
+    "aliased": (
+        "2026.10",
+        [
+            LanguageReadinessEntry.from_tag(
+                "iw", "detection", COMPLETE, _digest("7"), aliases=_HEBREW_ALIAS
+            ),
+            LanguageReadinessEntry.from_tag(
+                "iw", "surrogates", PARTIAL, aliases=_HEBREW_ALIAS
+            ),
+            LanguageReadinessEntry.from_tag(
+                "en_GB", "validation", BLOCKED, aliases=_REGION_ALIAS
+            ),
+        ],
+    ),
+    "missing_evidence": (
+        "2026.10",
+        [
+            LanguageReadinessEntry("sw", "fixtures", MISSING_EVIDENCE),
+            LanguageReadinessEntry("sw", "release_evidence", MISSING_EVIDENCE),
+        ],
+    ),
+    "ordering_and_escaping": (
+        "``2026.10`-rc|1",
+        [
+            LanguageReadinessEntry("zh-Hant-TW", "detection", COMPLETE, _digest("8")),
+            LanguageReadinessEntry("sr-Latn", "surrogates", PARTIAL),
+            LanguageReadinessEntry("es-419", "validation", BLOCKED),
+            LanguageReadinessEntry("en-GB", "fixtures", MISSING_EVIDENCE),
+            LanguageReadinessEntry("en", "release_evidence", COMPLETE, _digest("9")),
+            LanguageReadinessEntry("am", "detection", COMPLETE, _digest("a")),
+        ],
+    ),
+}
+_PLAIN_CELLS = frozenset(
+    {"Locale", "Capability", "Digest", "State", "Count", "---", *READINESS_CAPABILITIES}
+)
+
+
+def _golden_sections() -> dict[str, str]:
+    parts = _SCENARIO_MARKER.split(_GOLDEN_FIXTURE.read_text(encoding="utf-8"))
+    assert parts[0] == ""
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
+def _table_cells(markdown: str) -> list[str]:
+    cells = []
+    for line in markdown.splitlines():
+        if line.startswith("| "):
+            cells.extend(cell.strip() for cell in line.strip("|").split("|"))
+    return cells
+
+
+def _assert_metadata_only_cells(
+    markdown: str, entries: list[LanguageReadinessEntry]
+) -> None:
+    locales = {entry.locale for entry in entries}
+    digests = {entry.evidence_digest for entry in entries} - {None}
+    allowed = {*READINESS_STATES, NOT_REPORTED, *locales, *digests}
+    for cell in _table_cells(markdown):
+        if cell in _PLAIN_CELLS or cell.isdigit():
+            continue
+        assert cell.startswith("`") and cell.endswith("`"), cell
+        assert cell.strip("`") in allowed, cell
+
+
+def test_golden_fixture_holds_every_scenario_once_in_order():
+    assert list(_golden_sections()) == list(_GOLDEN_SCENARIOS)
+
+
+@pytest.mark.parametrize("scenario", list(_GOLDEN_SCENARIOS))
+def test_scenario_renders_the_golden_markdown(scenario):
+    version, entries = _GOLDEN_SCENARIOS[scenario]
+
+    assert (
+        render_language_readiness_markdown(entries, version=version)
+        == (_golden_sections()[scenario])
+    )
+
+
+@pytest.mark.parametrize("scenario", list(_GOLDEN_SCENARIOS))
+def test_equivalent_orderings_render_byte_identical_markdown(scenario):
+    version, entries = _GOLDEN_SCENARIOS[scenario]
+    expected = _golden_sections()[scenario].encode("utf-8")
+    orderings = [list(reversed(entries))]
+    for seed in range(5):
+        shuffled = list(entries)
+        random.Random(seed).shuffle(shuffled)
+        orderings.append(shuffled)
+
+    for ordering in orderings:
+        rendered = render_language_readiness_markdown(ordering, version=version)
+        assert rendered.encode("utf-8") == expected
+
+
+def test_aliased_registry_matches_its_canonical_golden():
+    canonical = [
+        LanguageReadinessEntry("he", "detection", COMPLETE, _digest("7")),
+        LanguageReadinessEntry("he", "surrogates", PARTIAL),
+        LanguageReadinessEntry("en-GB", "validation", BLOCKED),
+    ]
+
+    assert (
+        render_language_readiness_markdown(canonical, version="2026.10")
+        == (_golden_sections()["aliased"])
+    )
+
+
+@pytest.mark.parametrize("scenario", list(_GOLDEN_SCENARIOS))
+def test_golden_cells_carry_only_locale_and_evidence_metadata(scenario):
+    _, entries = _GOLDEN_SCENARIOS[scenario]
+
+    _assert_metadata_only_cells(_golden_sections()[scenario], entries)
+
+
+def test_registry_derived_markdown_carries_no_pack_values():
+    derived = list(readiness_entries_from_packs(registry=_degraded_registry()))
+    rendered = render_language_readiness_markdown(derived, version="packs")
+
+    _assert_metadata_only_cells(rendered, derived)
+    assert "/" not in rendered
+    for pack_value in (
+        "OpenMed/synthetic-pii",
+        "synthetic-pii",
+        "unicode-sentence",
+        "not-a-real-segmenter",
+        "en_US",
+        "fr_FR",
+        "Latin",
+        "strict_no_leak",
+        "PERSON",
+    ):
+        assert pack_value not in rendered
+
+
+@pytest.mark.parametrize(
+    ("version", "line"),
+    [
+        ("2026.10", "Version: `2026.10`"),
+        ("a|b", "Version: `a|b`"),
+        ("v`1|x", "Version: ``v`1|x``"),
+        ("``rc``", "Version: ``` ``rc`` ```"),
+        ("`rc", "Version: `` `rc ``"),
+        (" padded", "Version: `  padded `"),
+    ],
+)
+def test_version_renders_as_one_code_span(version, line):
+    rendered = render_language_readiness_markdown(
+        _GOLDEN_SCENARIOS["partial"][1], version=version
+    )
+
+    assert rendered.splitlines()[4] == line
+
+
+@pytest.mark.parametrize("version", ["2026.10\n# injected", "2026\r10", "a\tb"])
+def test_versions_that_could_break_markdown_are_rejected(version):
+    message = "version must be a single printable line"
+
+    with pytest.raises(LanguageReadinessError, match=message):
+        render_language_readiness_markdown([], version=version)
+    with pytest.raises(LanguageReadinessError, match=message):
+        render_language_readiness_json([], version=version)
