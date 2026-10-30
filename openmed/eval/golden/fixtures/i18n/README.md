@@ -74,7 +74,9 @@ in the same shape:
 
 1. Write 3-5 distinct synthetic notes. Across the file, include **at least one**
    span of each family: a date, a phone number, a national ID, a street address,
-   and a postcode, using invented values only.
+   and a postcode, using invented values only. Kinyarwanda (`rw`) is exempt
+   from the address and postcode families: Rwanda has no national postcode
+   system and the pack ships no address pattern.
 2. Make the national-ID a **checksum-valid** value — generate it with the
    language's surrogate provider / validator rather than typing digits by hand,
    and set `checksum_status` accordingly (`unvalidated` only if the pack has no
