@@ -2,7 +2,7 @@ name: Edge SBC benchmark
 
 on:
   pull_request:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/edge-benchmark.yml"
       - "openmed/eval/budgets/edge_sbc.json"
@@ -16,7 +16,7 @@ on:
       - "tests/unit/eval/test_footprint_gate.py"
       - "uv.lock"
   push:
-    branches: [master]
+    branches: [master, 'release/v*' ]
     paths:
       - ".github/workflows/edge-benchmark.yml"
       - "openmed/eval/budgets/edge_sbc.json"

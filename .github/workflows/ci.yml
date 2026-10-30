@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, 'release/v*' ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, 'release/v*' ]
     types: [opened, synchronize, reopened, labeled]
 
 concurrency:

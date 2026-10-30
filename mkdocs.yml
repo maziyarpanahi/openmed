@@ -12,6 +12,8 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 3.2.0 Release Notes: release/v3.2.0.md
+      - Migrate from 3.1 to 3.2: migration/3.1-to-3.2.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md

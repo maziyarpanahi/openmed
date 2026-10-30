@@ -2,12 +2,12 @@ name: Helm Chart
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/helm-lint.yml"
       - "deploy/helm/openmed-service/**"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/helm-lint.yml"
       - "deploy/helm/openmed-service/**"
