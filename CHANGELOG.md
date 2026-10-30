@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
+
 - Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.
 
 - Generate structured multilingual synthetic dialogue with grapheme-safe spans, Journey fact evidence and explicit adjudication truth (#2846).
