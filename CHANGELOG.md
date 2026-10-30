@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add poisoning-resistant federated adapter aggregation with deterministic
+  coordinate-wise trimmed mean and median-norm clipped mean strategies, strict
+  adapter compatibility checks, a declared suspected-adversary bound that fails
+  closed below `2f + 1` updates, stable reason codes and aggregate-only
+  diagnostics with banded norm quantiles and digests (#2832).
+
 - Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
 
 - Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
