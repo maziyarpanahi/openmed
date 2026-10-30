@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Record surrogate-provider versions and digest-only probe receipts, and expose
+  optional strict drift checks for the seeded synthetic corpus (#3893).
+
 - Package and install signed offline language bundles with explicit resource, license, checksum and synthetic self-test gates (#2866).
 
 - Activate verified local language bundles with qualified task records, atomic registry generations and explicit rollback (#3695).
