@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
 
+- Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
+
+- Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+  The live inventory includes explicit augmentation-only generators independently of model-backed language support.
+
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
+
+- Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
+
+- Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
+
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
+
 - Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
 
 - Add deterministic rare-case synthetic privacy stress records with configurable attribute tiers, value-free risk labels, and linkage-attack truth.

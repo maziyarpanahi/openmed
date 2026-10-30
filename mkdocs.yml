@@ -322,6 +322,7 @@ nav:
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
+      - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
@@ -486,11 +487,13 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
       - Clinical Language Readiness: languages/clinical-readiness.md
       - Clinical Transliteration Provenance: languages/clinical-transliteration.md
       - Local Abbreviation Mining: languages/abbreviation-mining.md
       - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
