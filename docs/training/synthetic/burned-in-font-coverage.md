@@ -66,6 +66,9 @@ Pillow's embedded Aileron Regular (`PillowDefault`, `CC0-1.0`). The
 replacement is still coverage-checked, so it can render basic Latin text but
 refuses scripts it cannot draw. The `generate_burned_in_example` helper
 accepts the same `script_fonts` and `font_fallback` arguments.
+The English dataset-recipe adapter keeps fallback disabled by default; Python
+callers can request `builtin_recipe_generators(font_fallback=True)`, with the
+choice bound into its provenance. See [dataset recipes](dataset-recipes.md).
 
 ## Provenance in metadata
 
