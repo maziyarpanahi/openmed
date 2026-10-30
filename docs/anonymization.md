@@ -392,6 +392,50 @@ For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
 default PII model, Faker locale, and a before/after example — see
 [Per-Language De-identification](languages.md).
 
+### Devanagari and Telugu name surrogates
+
+Hindi and Telugu names written in their own script are replaced with
+pronounceable names built from aksara, the written syllables of both scripts.
+This covers the `PERSON`, `FIRST_NAME`, `MIDDLE_NAME`, and `LAST_NAME`
+labels. Each aksara is a consonant or a virama conjunct, an optional
+dependent vowel sign, and an occasional anusvara or visarga. A name may also
+start with an independent vowel. The consonants, vowel signs, and conjuncts
+come from small inventories in
+`openmed.core.anonymizer.providers.aksara_names`. OpenMed bundles no list of
+real names for these scripts.
+
+Every surrogate:
+
+- has the same number of space-separated tokens as the source, in the same
+  order. An initial such as `ए.` stays a one-aksara initial, and hyphens are
+  kept;
+- gives each token the source token's aksara count, between 2 and 4 for
+  Devanagari or 2 and 5 for Telugu;
+- reuses none of the source's code points in that script: consonants,
+  vowels, vowel signs, virama, anusvara, or visarga. A surrogate therefore
+  never equals its source;
+- splits, under the grapheme rules in `openmed.core.decoding.spans`, into
+  aksara that are each well formed; and
+- is reproducible for a fixed `seed`.
+
+```python
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.providers.aksara_names import (
+    is_well_formed_aksara_name,
+)
+
+anonymizer = Anonymizer(lang="hi", consistent=True, seed=11)
+surrogate = anonymizer.surrogate("अनीता शर्मा", "PERSON")
+# -> "पजूग वके": two tokens, no consonant shared with the source
+assert is_well_formed_aksara_name(surrogate, script="Devanagari")
+```
+
+Latin-script names in Hindi or Telugu notes still use Faker. Marathi keeps
+its own generator, which handles honorifics and three-part names. Other
+language packs that use Devanagari can register
+`generate_devanagari_aksara_name` with `register_label_generator(...,
+language_pack=pack, script="Devanagari")`.
+
 ### Determinism
 
 Three modes:
@@ -504,6 +548,47 @@ deidentify("Email: john@hospital.org", method="replace", lang="en")
 #  -> "Email: alice@hospital.org"  (domain kept, local part faked)
 ```
 
+### Person names: honorifics, gender cues and name order
+
+PERSON surrogates keep the shape of the source name instead of dropping its
+title or swapping in a name that contradicts the surrounding grammar:
+
+- **No inserted titles.** Faker's name formats randomly add titles and
+  post-nominals (`Bi.`, `Chị`, `Univ.Prof.`, `جناب آقای`, `MBA.`). A
+  surrogate never carries a title the source name lacked, in any language.
+  Surname particles such as `de`, `du` or Thai `ณ <place>` are kept.
+- **Source honorifics are kept verbatim.** For Thai, Amharic, Swahili,
+  Arabic, Persian, Urdu, Hindi, Vietnamese, Indonesian, Yoruba and Hausa a
+  registered honorific prefix or suffix is peeled off, only the name is
+  replaced, and the honorific is re-attached with its original spacing.
+- **Gender comes only from the span itself.** When that honorific (or a
+  Vietnamese `Thị`/`Văn` middle name) marks gender, the surrogate's given name
+  has the same gender. OpenMed never infers gender from a name.
+- **Order follows the language.** Vietnamese surrogates are family name first.
+- **An honorific-only span is masked** (`"Bi."` becomes `[PERSON]`), never
+  replaced by a bare title.
+
+```python
+from openmed.core.anonymizer import Anonymizer
+
+Anonymizer(lang="th", consistent=True, seed=0).surrogate(
+    "นางสาวสมหญิง ใจดี", "PERSON"
+)
+#  -> "นางสาวธัชญา ศรีวงค์"  (title kept, female given name)
+
+Anonymizer(lang="vi", consistent=True, seed=1).surrogate("Lê Thu Hà", "PERSON")
+#  -> "Nguyễn Mai"  (family name first, no title added)
+```
+
+Words that also work as names stay part of the name: a title is recognized
+only as a whole token at the start or end of the span (Thai titles, which are
+written attached, must be followed by a valid syllable start), so Urdu
+`سید`/`بیگم`, a trailing Arabic `السيد` or Hindi `श्रीकांत` are replaced like
+any other name. Japanese, Korean and Chinese keep their own honorific handling
+in `openmed.core.name_order`. Add a title for another language with
+`openmed.core.person_honorifics.register_person_honorific(lang, text,
+gender="female")`.
+
 ### Native digit systems
 
 `replace`, `format_preserve` and `shift_dates` render their output in the digit
@@ -585,6 +670,81 @@ def my_first_name(faker, original, *, locale):
 
 register_label_generator("FIRST_NAME", my_first_name)
 ```
+
+### Live surrogate quality
+
+`openmed.eval.surrogate_quality` grades committed fixture records.
+`openmed.eval.surrogate_quality_live` grades the surrogates the registered
+providers generate today. It reads the language-pack registry when it runs, so
+a pack registered later is scored without code changes. National-ID-only
+languages are scored as well.
+
+For each language it builds seeded synthetic originals in the language's
+expected script and generates surrogates for six labels: `name`, `address`,
+`city`, `phone`, `id` and `date`. Each sample is scored on the fixture
+scorer's dimensions:
+
+| Dimension     | Live check                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `script`      | Letters in names, addresses and cities fall in the scripts the pack declares.                            |
+| `format`      | Dates follow the locale date order. Addresses and cities do not reuse the US Faker template. Phones outside NANP regions do not take a NANP shape. |
+| `checksum`    | National-ID surrogates pass the language's registered validators.                                        |
+| `consistency` | A fresh provider with the same seed reproduces the value, which neither equals nor retains the original. |
+| `naturalness` | No fallback placeholders, digits in names or cities, inserted honorifics, or implausible name shapes.    |
+
+Script expectations come from each pack's declared scripts. Packs routed
+without a script claim (`id`, `ro`) and national-ID-only languages use
+`LIVE_SURROGATE_SCRIPT_FALLBACKS`. A cell that cannot be scored is reported as
+`unscored` with a reason code such as `no_script_expectation` or
+`no_national_id_provider` instead of being skipped.
+
+```python
+from openmed.eval.release_gates import evaluate_live_surrogate_quality_gate
+from openmed.eval.surrogate_quality_live import evaluate_live_surrogate_quality
+
+report = evaluate_live_surrogate_quality()  # every registered pack, offline
+report.matrix()["fr"]    # {"name": "pass", "address": "pass", ...}
+report.failing_cells     # ("<language>/<label>", ...) below the floor
+report.unscored_cells    # cells the live scorer could not grade
+
+gate = evaluate_live_surrogate_quality_gate(report)
+gate.details["failing_cells"]  # rates and reason counts per failing cell
+```
+
+Each cell passes when at least 90% of its seeded samples pass every applicable
+dimension. The gate fails closed: it passes only when every language and label
+is covered and every cell passes or carries an exemption. A cell can be
+exempted only for a locale with a documented surrogate-locale approximation
+(a pack's `surrogate_locale_approximation`, or a documented locale
+approximation such as Telugu's `en_IN` backend), and the exemption must record
+a reason:
+
+```python
+report = evaluate_live_surrogate_quality(
+    exemptions=[
+        {
+            "language": "te",
+            "labels": ["address", "city"],
+            "reason": "Telugu generic fields use the en_IN backend",
+        }
+    ]
+)
+```
+
+Reports and gate details contain status codes, counts, rates and truncated
+SHA-256 digests of generated values. They never contain an original or a
+surrogate value. To run the gate from the command line:
+
+```bash
+python -m openmed.eval.release_gates --live-surrogate-quality \
+  --output live-surrogate-quality.json
+```
+
+The command exits with `1` when any cell fails or is unscored. A release
+benchmark report opts in with `surrogate_quality_live: true` in its metrics or
+metadata, and `surrogate_quality_live_required: true` makes that evidence
+mandatory. Release evidence may add exemptions, but it can only raise the
+pass-rate floor and the sample count, and the seed is fixed.
 
 ## Chinese word segmentation
 
