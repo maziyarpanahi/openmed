@@ -897,7 +897,7 @@
         "consent_receipt_required": false,
         "state_changing": false
       },
-      "description": "Score bounded caller-supplied choices locally, apply calibrated abstention, and return an explicitly review-only decision result.",
+      "description": "Score bounded caller-supplied choices, or a named question set over one input, locally; apply calibrated abstention per question, and return an explicitly review-only decision result.",
       "input_schema": {
         "additionalProperties": false,
         "allOf": [
@@ -954,6 +954,148 @@
                 }
               }
             }
+          },
+          {
+            "else": {
+              "not": {
+                "required": [
+                  "levels"
+                ]
+              }
+            },
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "scalar_score"
+                }
+              }
+            }
+          },
+          {
+            "else": {
+              "not": {
+                "required": [
+                  "questions"
+                ]
+              }
+            },
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "question_set"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "question_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "instructions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "option_descriptions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "levels"
+                    ]
+                  }
+                ]
+              },
+              "properties": {
+                "options": {
+                  "maxItems": 0
+                }
+              },
+              "required": [
+                "questions"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "schema_version": {
+                  "const": "1.0.0"
+                }
+              },
+              "required": [
+                "schema_version"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "question_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "instructions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "option_descriptions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "levels"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "questions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "input_format"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "max_input_chars"
+                    ]
+                  }
+                ]
+              },
+              "properties": {
+                "mode": {
+                  "not": {
+                    "const": "question_set"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "not": {
+                "required": [
+                  "max_input_chars"
+                ]
+              }
+            },
+            "then": {
+              "properties": {
+                "input_text": {
+                  "maxLength": 8192
+                }
+              }
+            }
           }
         ],
         "properties": {
@@ -967,10 +1109,48 @@
             "default": "same_major",
             "type": "string"
           },
+          "input_format": {
+            "default": "text",
+            "enum": [
+              "text",
+              "json"
+            ],
+            "type": "string"
+          },
           "input_text": {
-            "maxLength": 8192,
+            "maxLength": 131072,
             "minLength": 1,
             "type": "string"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional question wording passed to the backend."
+          },
+          "levels": {
+            "description": "Ordered scalar_score levels, lowest first.",
+            "items": {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 2,
+            "type": "array"
+          },
+          "max_input_chars": {
+            "description": "Input character bound; 8192 when omitted.",
+            "maximum": 131072,
+            "minimum": 1,
+            "type": "integer"
           },
           "mode": {
             "enum": [
@@ -978,7 +1158,8 @@
               "boolean_choice",
               "ordered_preference",
               "scalar_score",
-              "multi_label"
+              "multi_label",
+              "question_set"
             ],
             "type": "string"
           },
@@ -986,6 +1167,23 @@
             "default": "default",
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
+          },
+          "option_descriptions": {
+            "description": "Optional descriptions aligned with options; null marks an option without a description.",
+            "items": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "type": "array"
           },
           "options": {
             "default": [],
@@ -1002,9 +1200,169 @@
             "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
             "type": "string"
           },
+          "question_id": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+            "type": "string"
+          },
+          "questions": {
+            "description": "Named questions scored against the one input.",
+            "items": {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "scalar_score"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "options": {
+                        "maxItems": 0
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "boolean_choice"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "options": {
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "enum": [
+                          "fixed_choice",
+                          "ordered_preference",
+                          "multi_label"
+                        ]
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "options": {
+                        "maxItems": 64,
+                        "minItems": 2
+                      }
+                    }
+                  }
+                },
+                {
+                  "else": {
+                    "not": {
+                      "required": [
+                        "levels"
+                      ]
+                    }
+                  },
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "scalar_score"
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "instructions": {
+                  "anyOf": [
+                    {
+                      "maxLength": 2048,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Optional question wording passed to the backend."
+                },
+                "levels": {
+                  "description": "Ordered scalar_score levels, lowest first.",
+                  "items": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 64,
+                  "minItems": 2,
+                  "type": "array"
+                },
+                "mode": {
+                  "enum": [
+                    "fixed_choice",
+                    "boolean_choice",
+                    "ordered_preference",
+                    "scalar_score",
+                    "multi_label"
+                  ],
+                  "type": "string"
+                },
+                "option_descriptions": {
+                  "description": "Optional descriptions aligned with options; null marks an option without a description.",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "maxLength": 1024,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "options": {
+                  "default": [],
+                  "items": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "question_id": {
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "question_id",
+                "mode"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
           "schema_version": {
-            "const": "1.0.0",
-            "default": "1.0.0",
+            "description": "Omitted, it resolves to 1.1.0 when a 1.1.0 field is present and to 1.0.0 otherwise.",
+            "enum": [
+              "1.0.0",
+              "1.1.0"
+            ],
             "type": "string"
           },
           "timeout_ms": {
@@ -1022,9 +1380,97 @@
       },
       "name": "openmed_decide",
       "output_schema": {
-        "$id": "https://openmed.dev/schemas/decision-result/1.0.0",
+        "$id": "https://openmed.dev/schemas/decision-result/1.1.0",
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
+        "allOf": [
+          {
+            "else": {
+              "required": [
+                "questions",
+                "level_scores",
+                "expected_level"
+              ]
+            },
+            "if": {
+              "properties": {
+                "schema_version": {
+                  "const": "1.0.0"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "questions"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "level_scores"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "expected_level"
+                    ]
+                  }
+                ]
+              },
+              "properties": {
+                "mode": {
+                  "not": {
+                    "const": "question_set"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "else": {
+              "properties": {
+                "questions": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "question_set"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "questions": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "else": {
+              "properties": {
+                "expected_level": {
+                  "type": "null"
+                },
+                "level_scores": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "scalar_score"
+                }
+              }
+            }
+          }
+        ],
         "properties": {
           "access": {
             "additionalProperties": false,
@@ -1220,8 +1666,44 @@
               "null"
             ]
           },
+          "expected_level": {
+            "maximum": 63,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "extensions": {
             "type": "object"
+          },
+          "level_scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "level": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "index",
+                "level",
+                "score"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
           },
           "margin": {
             "maximum": 1,
@@ -1237,7 +1719,8 @@
               "boolean_choice",
               "ordered_preference",
               "scalar_score",
-              "multi_label"
+              "multi_label",
+              "question_set"
             ],
             "type": "string"
           },
@@ -1267,6 +1750,236 @@
               "type": "object"
             },
             "maxItems": 64,
+            "type": "array"
+          },
+          "questions": {
+            "items": {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "else": {
+                    "properties": {
+                      "expected_level": {
+                        "type": "null"
+                      },
+                      "level_scores": {
+                        "maxItems": 0
+                      }
+                    }
+                  },
+                  "if": {
+                    "properties": {
+                      "mode": {
+                        "const": "scalar_score"
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "choice": {
+                  "maxLength": 256,
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "choices": {
+                  "items": {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "code": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "confidence": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "expected_level": {
+                  "maximum": 63,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "level_scores": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "index": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "level": {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      "score": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "level",
+                      "score"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "margin": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "mode": {
+                  "enum": [
+                    "fixed_choice",
+                    "boolean_choice",
+                    "ordered_preference",
+                    "scalar_score",
+                    "multi_label"
+                  ],
+                  "type": "string"
+                },
+                "option_scores": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "index": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "option": {
+                        "maxLength": 256,
+                        "type": "string"
+                      },
+                      "score": {
+                        "maximum": 1,
+                        "minimum": 0,
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "option",
+                      "score"
+                    ],
+                    "type": "object"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "question_id": {
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+                  "type": "string"
+                },
+                "ranking": {
+                  "items": {
+                    "maxLength": 256,
+                    "type": "string"
+                  },
+                  "maxItems": 64,
+                  "type": "array"
+                },
+                "review": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "reasons": {
+                      "items": {
+                        "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                        "type": "string"
+                      },
+                      "maxItems": 32,
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "required": {
+                      "const": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "required",
+                    "reasons"
+                  ],
+                  "type": "object"
+                },
+                "scalar_score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "success",
+                    "abstained",
+                    "partial",
+                    "unknown",
+                    "conflict",
+                    "unsupported",
+                    "denied",
+                    "failure"
+                  ],
+                  "type": "string"
+                },
+                "warnings": {
+                  "items": {
+                    "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                    "type": "string"
+                  },
+                  "maxItems": 32,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "question_id",
+                "mode",
+                "state",
+                "code",
+                "option_scores",
+                "choice",
+                "choices",
+                "ranking",
+                "scalar_score",
+                "confidence",
+                "margin",
+                "level_scores",
+                "expected_level",
+                "warnings",
+                "review"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
             "type": "array"
           },
           "ranking": {
@@ -1310,7 +2023,10 @@
             ]
           },
           "schema_version": {
-            "const": "1.0.0",
+            "enum": [
+              "1.0.0",
+              "1.1.0"
+            ],
             "type": "string"
           },
           "state": {
@@ -1362,7 +2078,7 @@
         "type": "object"
       },
       "stability": "stable",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "annotations": {
