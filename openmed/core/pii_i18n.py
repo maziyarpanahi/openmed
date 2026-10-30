@@ -1577,6 +1577,41 @@ def validate_marathi_indian_phone(text: str) -> bool:
     )
 
 
+def validate_nepali_numeric_date(text: str) -> bool:
+    """Validate a numeric Bikram Sambat or Gregorian date shape for Nepali.
+
+    Bikram Sambat months have 29 to 32 days, so days past the Gregorian month
+    length (up to 32) are accepted for years 2000-2199, where Bikram Sambat
+    dates dominate. Years 1900-1999 must also form a valid Gregorian date. This
+    is a shape check only: it does not convert between calendars or prove that
+    the day exists in a specific Bikram Sambat year.
+
+    Args:
+        text: Year-first or day-first numeric date in ASCII or Devanagari
+            digits, separated by ``-``, ``/`` or ``.``.
+
+    Returns:
+        True when the month is in 1-12 and the day is in 1-32, and the year is
+        either in 2000-2199 or a 1900-1999 year forming a Gregorian date.
+    """
+    if not isinstance(text, str):
+        return False
+    parts = re.split(r"[-/.]", normalize_devanagari_digits(text.strip()))
+    if len(parts) != 3 or not all(part.isascii() and part.isdigit() for part in parts):
+        return False
+    if len(parts[0]) == 4 and all(1 <= len(part) <= 2 for part in parts[1:]):
+        year, month, day = (int(part) for part in parts)
+    elif len(parts[2]) == 4 and all(1 <= len(part) <= 2 for part in parts[:2]):
+        day, month, year = (int(part) for part in parts)
+    else:
+        return False
+    if not (1 <= month <= 12 and 1 <= day <= 32):
+        return False
+    if 2000 <= year <= 2199:
+        return True
+    return 1900 <= year <= 1999 and _is_valid_calendar_date(year, month, day)
+
+
 def validate_assamese_aadhaar(text: str) -> bool:
     """Validate Aadhaar after folding Bengali-Assamese digits to ASCII."""
 
@@ -3951,6 +3986,66 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Novemba",
         "Disemba",
     ],
+    # Hausa, Igbo, Kinyarwanda and Yoruba use the CLDR gregorian wide names.
+    # Yoruba drops CLDR's leading "Oṣù" ("month"), which the date patterns
+    # accept as an optional particle. Detection-only spelling variants live in
+    # ``_MONTH_NAME_VARIANTS`` so this table keeps one name per month.
+    "ha": [
+        "Janairu",
+        "Faburairu",
+        "Maris",
+        "Afirilu",
+        "Mayu",
+        "Yuni",
+        "Yuli",
+        "Agusta",
+        "Satumba",
+        "Oktoba",
+        "Nuwamba",
+        "Disamba",
+    ],
+    "ig": [
+        "Jenụwarị",
+        "Febrụwarị",
+        "Maachị",
+        "Epreel",
+        "Mee",
+        "Jun",
+        "Julaị",
+        "Ọgọọst",
+        "Septemba",
+        "Ọktoba",
+        "Novemba",
+        "Disemba",
+    ],
+    "rw": [
+        "Mutarama",
+        "Gashyantare",
+        "Werurwe",
+        "Mata",
+        "Gicurasi",
+        "Kamena",
+        "Nyakanga",
+        "Kanama",
+        "Nzeri",
+        "Ukwakira",
+        "Ugushyingo",
+        "Ukuboza",
+    ],
+    "yo": [
+        "Ṣẹ́rẹ́",
+        "Èrèlè",
+        "Ẹrẹ̀nà",
+        "Ìgbé",
+        "Ẹ̀bibi",
+        "Òkúdu",
+        "Agẹmọ",
+        "Ògún",
+        "Owewe",
+        "Ọ̀wàrà",
+        "Bélú",
+        "Ọ̀pẹ̀",
+    ],
     "sv": [
         "januari",
         "februari",
@@ -4837,13 +4932,15 @@ _NIGERIAN_PII_PATTERNS: List[PIIPattern] = [
 # NINs, and Nigerian/Nigerien phone numbers are recognized in Western,
 # Arabic-Indic, and Eastern Arabic-Indic digits. No Ajami lexical matching or
 # transliteration is claimed; those require a separately reviewed lexicon.
+_HAUSA_DATE_CONTEXT = ["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"]
+
 _HAUSA_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?!\d)",
         "date",
         priority=9,
         base_score=0.6,
-        context_words=["ranar haihuwa", "haihuwa", "ranar", "kwanan wata"],
+        context_words=_HAUSA_DATE_CONTEXT,
         context_boost=0.3,
         flags=re.IGNORECASE,
     ),
@@ -5088,6 +5185,137 @@ _IGBO_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Hausa, Yoruba, Igbo and Kinyarwanda month-name dates
+# ---------------------------------------------------------------------------
+
+# Attested spellings accepted in addition to each ``LANGUAGE_MONTH_NAMES``
+# entry. Yoruba entries keep dot-below vowels without tone marks; NFC, NFD and
+# fully unmarked forms of every name are added by the diacritic helper.
+_MONTH_NAME_VARIANTS: Dict[str, Dict[str, tuple[str, ...]]] = {
+    "ha": {"Faburairu": ("Fabrairu",), "Afirilu": ("Afrilu",)},
+    "ig": {
+        "Febrụwarị": ("Febụwarị",),
+        "Maachị": ("Machị", "Mach"),
+        "Epreel": ("Eprel",),
+        "Jun": ("Juun",),
+        "Ọgọọst": ("Ọgọstụ",),
+        "Novemba": ("Nọvemba",),
+    },
+    "rw": {"Nzeri": ("Nzeli",)},
+    "yo": {
+        "Ṣẹ́rẹ́": ("Ṣẹrẹ",),
+        "Ẹrẹ̀nà": ("Ẹrẹna",),
+        "Ẹ̀bibi": ("Ẹbibi",),
+        "Ọ̀wàrà": ("Ọwara",),
+        "Ọ̀pẹ̀": ("Ọpẹ",),
+    },
+}
+
+_KINYARWANDA_DATE_CONTEXT = [
+    "itariki y'amavuko",
+    "itariki y’amavuko",
+    "itariki",
+    "amavuko",
+    "yavutse",
+    "date of birth",
+    "dob",
+    "born",
+]
+
+_DAY_OF_MONTH_PATTERN = r"(?:0?[1-9]|[12][0-9]|3[01])"
+_MONTH_NAME_YEAR_PATTERN = r"(?:19|20)[0-9]{2}"
+
+
+def _diacritic_alternation(values: Iterable[str]) -> str:
+    """Return a longest-first regex alternation over diacritic variants."""
+
+    return "|".join(
+        re.escape(value)
+        for value in sorted(
+            _diacritic_context_variants(*values),
+            key=len,
+            reverse=True,
+        )
+    )
+
+
+def _month_name_date_patterns(
+    lang: str,
+    context_words: List[str],
+    *,
+    month_particles: tuple[str, ...] = (),
+    year_particles: tuple[str, ...] = (),
+) -> List[PIIPattern]:
+    """Compile day-month-year and month-day-year patterns for ``lang``.
+
+    A month word only matches with both a day and a year attached, so month
+    names that are also ordinary words or place names stay unflagged in prose.
+    Optional particles cover native phrasing such as Hausa "15 ga watan" and
+    Yoruba "oṣù ... ọdún".
+    """
+
+    variants = _MONTH_NAME_VARIANTS.get(lang, {})
+    month_names = [
+        name
+        for month in LANGUAGE_MONTH_NAMES[lang]
+        for name in (month, *variants.get(month, ()))
+    ]
+    months = _diacritic_alternation(month_names)
+    month_prefix = (
+        rf"(?:(?:{_diacritic_alternation(month_particles)})\s+)?"
+        if month_particles
+        else ""
+    )
+    year_prefix = (
+        rf"(?:(?:{_diacritic_alternation(year_particles)})\s+)?"
+        if year_particles
+        else ""
+    )
+    return [
+        PIIPattern(
+            rf"(?<!\d){_DAY_OF_MONTH_PATTERN}\s+{month_prefix}(?:{months}),?\s+"
+            rf"{year_prefix}{_MONTH_NAME_YEAR_PATTERN}(?!\d)",
+            "date",
+            priority=8,
+            base_score=0.7,
+            context_words=context_words,
+            context_boost=0.25,
+            flags=re.IGNORECASE,
+        ),
+        # The look-behind also rejects a preceding combining mark so a match
+        # never starts inside another grapheme cluster.
+        PIIPattern(
+            rf"(?<![\w\u0300-\u036f])(?:{months})\s+{_DAY_OF_MONTH_PATTERN},?\s+"
+            rf"{_MONTH_NAME_YEAR_PATTERN}(?!\d)",
+            "date",
+            priority=8,
+            base_score=0.7,
+            context_words=context_words,
+            context_boost=0.25,
+            flags=re.IGNORECASE,
+        ),
+    ]
+
+
+_HAUSA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "ha",
+    _HAUSA_DATE_CONTEXT,
+    month_particles=("ga watan", "ga"),
+)
+_YORUBA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "yo",
+    _YORUBA_DATE_CONTEXT,
+    month_particles=("oṣù",),
+    year_particles=("ọdún",),
+)
+_IGBO_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns("ig", _IGBO_DATE_CONTEXT)
+_KINYARWANDA_MONTH_DATE_PII_PATTERNS = _month_name_date_patterns(
+    "rw",
+    _KINYARWANDA_DATE_CONTEXT,
+)
 
 
 _GHANA_CARD_PII_PATTERNS: List[PIIPattern] = [
@@ -6625,6 +6853,196 @@ _MARATHI_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.5,
         validator=validate_maharashtra_pin,
         reject_on_validation_failure=True,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+]
+
+
+# Nepali (Devanagari) deterministic coverage for the user-supplied-model route.
+# Shapes only: no checksum is claimed for any Nepali identifier, and Bikram
+# Sambat month names and calendar conversion are out of scope.
+_NEPALI_DIGIT_CLASS = r"0-9\u0966-\u096F"
+_NEPALI_DIGIT = rf"[{_NEPALI_DIGIT_CLASS}]"
+_NEPALI_COUNTRY_CODE = r"(?:\+|00)[9\u096F][7\u096D][7\u096D]"
+_NEPALI_NUMBER_END = rf"(?!{_NEPALI_DIGIT}|[-/]{_NEPALI_DIGIT})"
+_NEPALI_LANDLINE_BODY = (
+    rf"(?:[1\u0967][ -]?{_NEPALI_DIGIT}{{7}}"
+    rf"|[2-9\u0968-\u096F]{_NEPALI_DIGIT}[ -]?{_NEPALI_DIGIT}{{6}})"
+)
+# Plain or slash-split identifier digits must directly follow a number label so
+# that lab values near an identifier cue are never read as identifiers.
+_NEPALI_NUMBER_LABEL = (
+    "(?:"
+    + "|".join(
+        f"(?<={re.escape(label)})"
+        for label in (
+            "नं. ",
+            "नं.",
+            "नं ",
+            "नं: ",
+            "नं.: ",
+            "नम्बर ",
+            "नम्बर: ",
+            "no. ",
+            "no: ",
+            "number ",
+            "number: ",
+        )
+    )
+    + ")"
+)
+_NEPALI_YEAR = rf"[12\u0967\u0968]{_NEPALI_DIGIT}{{3}}"
+
+_NEPALI_PHONE_CONTEXT = [
+    "फोन",
+    "मोबाइल",
+    "टेलिफोन",
+    "ल्यान्डलाइन",
+    "सम्पर्क",
+    "सम्पर्क नम्बर",
+    "phone",
+    "mobile",
+    "telephone",
+    "landline",
+    "contact",
+]
+_NEPALI_CITIZENSHIP_CONTEXT = [
+    "नागरिकता",
+    "नागरिकता प्रमाणपत्र",
+    "ना.प्र.नं",
+    "ना. प्र. नं",
+    "citizenship",
+    "citizenship certificate",
+]
+_NEPALI_NATIONAL_ID_CONTEXT = [
+    "राष्ट्रिय परिचयपत्र",
+    "राष्ट्रिय परिचय पत्र",
+    "राष्ट्रिय परिचय नम्बर",
+    "national identity card",
+    "national id",
+]
+_NEPALI_DATE_CONTEXT = [
+    "जन्म मिति",
+    "जन्ममिति",
+    "मिति",
+    "जन्म",
+    "भर्ना",
+    "वि.सं.",
+    "बि.सं.",
+    "date of birth",
+    "date",
+]
+_NEPALI_POSTCODE_CONTEXT = [
+    "हुलाक",
+    "हुलाक कोड",
+    "पोस्ट कोड",
+    "पोस्टल कोड",
+    "postal code",
+    "postcode",
+]
+
+_NEPALI_PII_PATTERNS: List[PIIPattern] = [
+    # Nepal mobile numbers: 96x-98x, optional +977 or 00977 country code kept
+    # inside the span so the whole number is masked.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}+])"
+        rf"(?:{_NEPALI_COUNTRY_CODE}[ -]?)?"
+        rf"[9\u096F][6-8\u096C-\u096E]"
+        rf"(?:[ -]?{_NEPALI_DIGIT}){{8}}"
+        rf"{_NEPALI_NUMBER_END}",
+        "phone_number",
+        priority=10,
+        base_score=0.7,
+        context_words=_NEPALI_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # International landline: +977 then a one- or two-digit area code.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}+])"
+        rf"{_NEPALI_COUNTRY_CODE}[ -]?{_NEPALI_LANDLINE_BODY}"
+        rf"{_NEPALI_NUMBER_END}",
+        "phone_number",
+        priority=10,
+        base_score=0.7,
+        context_words=_NEPALI_PHONE_CONTEXT,
+        context_boost=0.3,
+        flags=0,
+    ),
+    # Domestic landline with the 0 trunk prefix, gated on phone context.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}+])"
+        rf"[0\u0966]{_NEPALI_LANDLINE_BODY}"
+        rf"{_NEPALI_NUMBER_END}",
+        "phone_number",
+        priority=10,
+        base_score=0.5,
+        context_words=_NEPALI_PHONE_CONTEXT,
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        flags=0,
+    ),
+    # Citizenship-certificate numbers: district-office-year-serial groups, or
+    # plain and slash-split serials directly after a number label.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}/-])"
+        rf"(?:{_NEPALI_DIGIT}{{1,3}}(?P<ne_cz_sep>[-/]){_NEPALI_DIGIT}{{1,3}}"
+        rf"(?P=ne_cz_sep){_NEPALI_DIGIT}{{2,4}}(?P=ne_cz_sep)"
+        rf"{_NEPALI_DIGIT}{{3,6}}"
+        rf"|{_NEPALI_NUMBER_LABEL}"
+        rf"(?:{_NEPALI_DIGIT}{{4,8}}/{_NEPALI_DIGIT}{{2,5}}"
+        rf"|{_NEPALI_DIGIT}{{5,11}}))"
+        rf"{_NEPALI_NUMBER_END}",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_NEPALI_CITIZENSHIP_CONTEXT,
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+    ),
+    # National identity card numbers: ten digits, grouped 3-3-3-1 or written
+    # directly after a number label.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}-])"
+        rf"(?:{_NEPALI_DIGIT}{{3}}(?P<ne_nid_sep>[- ]){_NEPALI_DIGIT}{{3}}"
+        rf"(?P=ne_nid_sep){_NEPALI_DIGIT}{{3}}(?P=ne_nid_sep){_NEPALI_DIGIT}"
+        rf"|{_NEPALI_NUMBER_LABEL}{_NEPALI_DIGIT}{{10}})"
+        rf"{_NEPALI_NUMBER_END}",
+        "national_id",
+        priority=13,
+        base_score=0.6,
+        context_words=_NEPALI_NATIONAL_ID_CONTEXT,
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+    ),
+    # Numeric Bikram Sambat (or Gregorian) dates, year-first or day-first.
+    PIIPattern(
+        rf"(?<![\w.])"
+        rf"(?:{_NEPALI_YEAR}(?P<ne_ymd_sep>[-/.]){_NEPALI_DIGIT}{{1,2}}"
+        rf"(?P=ne_ymd_sep){_NEPALI_DIGIT}{{1,2}}"
+        rf"|{_NEPALI_DIGIT}{{1,2}}(?P<ne_dmy_sep>[-/.]){_NEPALI_DIGIT}{{1,2}}"
+        rf"(?P=ne_dmy_sep){_NEPALI_YEAR})"
+        rf"(?!{_NEPALI_DIGIT}|[-/.]{_NEPALI_DIGIT})",
+        "date",
+        priority=9,
+        base_score=0.85,
+        context_words=_NEPALI_DATE_CONTEXT,
+        context_boost=0.15,
+        validator=validate_nepali_numeric_date,
+        reject_on_validation_failure=True,
+        flags=0,
+    ),
+    # Nepal postal codes are five digits; context-gated like other PIN packs.
+    PIIPattern(
+        rf"(?<![{_NEPALI_DIGIT_CLASS}])"
+        rf"[1-5\u0967-\u096B]{_NEPALI_DIGIT}{{4}}"
+        rf"(?![{_NEPALI_DIGIT_CLASS}])",
+        "postcode",
+        priority=9,
+        base_score=0.45,
+        context_words=_NEPALI_POSTCODE_CONTEXT,
+        context_boost=0.5,
         safety_sweep_requires_context=True,
         flags=0,
     ),
@@ -11732,9 +12150,21 @@ _ETHIOPIA_FAYDA_PII_PATTERNS = [
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "af": _AFRIKAANS_PII_PATTERNS,
     "am": [*_AMHARIC_PII_PATTERNS, *_ETHIOPIA_FAYDA_PII_PATTERNS],
-    "ha": [*_NIGERIAN_PII_PATTERNS, *_HAUSA_PII_PATTERNS],
-    "ig": [*_NIGERIAN_PII_PATTERNS, *_IGBO_PII_PATTERNS],
-    "yo": [*_NIGERIAN_PII_PATTERNS, *_YORUBA_PII_PATTERNS],
+    "ha": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_HAUSA_PII_PATTERNS,
+        *_HAUSA_MONTH_DATE_PII_PATTERNS,
+    ],
+    "ig": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_IGBO_PII_PATTERNS,
+        *_IGBO_MONTH_DATE_PII_PATTERNS,
+    ],
+    "yo": [
+        *_NIGERIAN_PII_PATTERNS,
+        *_YORUBA_PII_PATTERNS,
+        *_YORUBA_MONTH_DATE_PII_PATTERNS,
+    ],
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
@@ -11752,6 +12182,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
         *_MARATHI_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
     ],
+    # Nepal is not India: the India-only multi-ID pack is deliberately absent.
+    "ne": _NEPALI_PII_PATTERNS,
     "as": [
         *_ASSAMESE_PII_PATTERNS,
         *INDIAN_MULTI_ID_PII_PATTERNS,
@@ -11805,7 +12237,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
-    "rw": _RWANDA_ID_PII_PATTERNS,
+    "rw": [*_RWANDA_ID_PII_PATTERNS, *_KINYARWANDA_MONTH_DATE_PII_PATTERNS],
     "sw": [*_SWAHILI_AND_KENYA_PII_PATTERNS, *_TANZANIA_NIDA_PII_PATTERNS],
     "zu": _NGUNI_PII_PATTERNS,
     "xh": _NGUNI_PII_PATTERNS,
@@ -13314,6 +13746,12 @@ def get_patterns_for_language(
             for pattern in language_patterns
             if not any(pattern is existing for existing in combined)
         ]
+
+    # Non-Gregorian month-name dates (Hijri, Ethiopian, Bikram Sambat and
+    # Hebrew) compile from their own declarative tables.
+    from .calendar_month_dates import calendar_month_date_patterns
+
+    combined = combined + calendar_month_date_patterns(base_lang)
 
     for locale_key in _locale_pattern_keys(lang, locale):
         combined = combined + [

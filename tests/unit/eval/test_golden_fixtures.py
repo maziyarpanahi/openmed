@@ -27,6 +27,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
     get_patterns_for_language,
     normalize_arabic_indic_digits,
     normalize_bengali_assamese_digits,
@@ -119,7 +120,10 @@ def test_golden_fixtures_cover_required_categories_and_languages():
     assert set(grouped) == set(GOLDEN_CATEGORIES)
     assert SUPPORTED_LANGUAGES.issubset(multilingual_languages)
     assert multilingual_languages <= (
-        SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES | INDIC_NER_LANGUAGES
+        SUPPORTED_LANGUAGES
+        | NATIONAL_ID_ONLY_LANGUAGES
+        | INDIC_NER_LANGUAGES
+        | USER_SUPPLIED_MODEL_LANGUAGES
     )
 
     multilingual = grouped["multilingual"]
@@ -1269,8 +1273,8 @@ def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    fixture = GoldenFixture.from_mapping(rows[0])
+    row = next(row for row in rows if row["id"] == "golden-i18n-he-rtl-pii")
+    fixture = GoldenFixture.from_mapping(row)
     assert fixture.language == "he"
 
     gold_by_label = {span.label: span.text for span in fixture.gold_spans}
