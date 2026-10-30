@@ -184,6 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
+
 - Refresh the exact service-image timezone-data pin to the available Debian Forky release so image builds, SBOM generation and vulnerability scans can complete.
 
 - Preserve registered non-CJK honorifics and grammatical cues in person
