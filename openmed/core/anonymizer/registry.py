@@ -712,13 +712,19 @@ _DAY_FIRST_LOCALES = frozenset(
 
 def _gen_date(faker, original, *, locale):
     return preserve_date_format(
-        original, date_order=date_order_for_locale(locale), rng=faker.random
+        original,
+        date_order=date_order_for_locale(locale),
+        rng=faker.random,
+        locale=locale,
     )
 
 
 def _gen_date_of_birth(faker, original, *, locale):
     return preserve_date_format(
-        original, date_order=date_order_for_locale(locale), rng=faker.random
+        original,
+        date_order=date_order_for_locale(locale),
+        rng=faker.random,
+        locale=locale,
     )
 
 
