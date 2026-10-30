@@ -143,6 +143,7 @@ nav:
       - Standalone Local Redactor Manifest: install/standalone.md
       - Offline Install Smoke Check: install/smoke-check.md
       - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - Continuation Authorization: serving/continuation-authorization.md
       - HMAC Request Signing: serving/request-signing.md
       - gRPC Service: serving/grpc.md
       - GraphQL Service: serving/graphql.md
