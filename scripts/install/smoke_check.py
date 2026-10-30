@@ -19,6 +19,9 @@ from typing import Any, Callable, Mapping, Sequence
 
 SCHEMA_VERSION = 1
 COMMAND_TIMEOUT_SECONDS = 30
+# The brief probe is the first child to import the service and adapter stack,
+# so a fresh environment byte-compiles it there; slow runners need longer.
+BRIEF_PROBE_TIMEOUT_SECONDS = 120
 
 _OFFLINE_FLAGS = {
     "OPENMED_OFFLINE": "1",
@@ -607,6 +610,7 @@ def _run_captured(
     cwd: Path,
     environment: Mapping[str, str],
     runner: CommandRunner,
+    timeout: float = COMMAND_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str] | None:
     """Run a child command without exposing its stdout or stderr."""
     try:
@@ -617,7 +621,7 @@ def _run_captured(
             cwd=cwd,
             env=dict(environment),
             text=True,
-            timeout=COMMAND_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -828,6 +832,7 @@ def run_smoke_check(
                 cwd=workdir,
                 environment=environment,
                 runner=runner,
+                timeout=BRIEF_PROBE_TIMEOUT_SECONDS,
             )
             checks.extend(_brief_probe_results(result, brief_profile))
             status = "passed" if all(c.status == "passed" for c in checks) else "failed"
