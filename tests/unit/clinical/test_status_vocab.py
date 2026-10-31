@@ -13,9 +13,8 @@ from openmed.clinical import (
 )
 
 
-@pytest.mark.parametrize(
-    ("phrase", "expected"),
-    [
+def test_normalize_substance_status_from_surface_cues(subtests):
+    for phrase, expected in [
         ("smoker", "current"),
         ("active use", "current"),
         ("drinks daily", "current"),
@@ -26,10 +25,9 @@ from openmed.clinical import (
         ("denies alcohol", "never"),
         ("never smoker", "never"),
         ("non-smoker", "never"),
-    ],
-)
-def test_normalize_substance_status_from_surface_cues(phrase, expected):
-    assert normalize_substance_status(phrase) == expected
+    ]:
+        with subtests.test(phrase=phrase, expected=expected):
+            assert normalize_substance_status(phrase) == expected
 
 
 def test_normalize_substance_status_folds_negation_axis_to_never():
@@ -41,14 +39,14 @@ def test_normalize_substance_status_folds_historical_current_cue_to_former():
     assert normalize_substance_status("smoker", temporality="historical") == "former"
 
 
-@pytest.mark.parametrize("phrase", ["", None, "social history not discussed"])
-def test_normalize_substance_status_returns_unknown_without_cue(phrase):
-    assert normalize_substance_status(phrase) == "unknown"
+def test_normalize_substance_status_returns_unknown_without_cue(subtests):
+    for phrase in ["", None, "social history not discussed"]:
+        with subtests.test(phrase=phrase):
+            assert normalize_substance_status(phrase) == "unknown"
 
 
-@pytest.mark.parametrize(
-    ("phrase", "expected"),
-    [
+def test_normalize_employment_status_from_table(subtests):
+    for phrase, expected in [
         ("retired", "retired"),
         ("retired teacher", "retired"),
         ("currently employed", "employed"),
@@ -57,19 +55,17 @@ def test_normalize_substance_status_returns_unknown_without_cue(phrase):
         ("on disability", "disabled"),
         ("student", "student"),
         ("never employed", "never"),
-    ],
-)
-def test_normalize_employment_status_from_table(phrase, expected):
-    assert normalize_employment_status(phrase) == expected
+    ]:
+        with subtests.test(phrase=phrase, expected=expected):
+            assert normalize_employment_status(phrase) == expected
 
 
 def test_normalize_employment_status_folds_historical_current_cue():
     assert normalize_employment_status("employed", temporality="historical") == "former"
 
 
-@pytest.mark.parametrize(
-    ("phrase", "expected"),
-    [
+def test_normalize_living_status_from_table(subtests):
+    for phrase, expected in [
         ("homeless x2 years", "homeless"),
         ("formerly homeless", "former"),
         ("lives alone", "lives_alone"),
@@ -77,10 +73,9 @@ def test_normalize_employment_status_folds_historical_current_cue():
         ("assisted living", "assisted_living"),
         ("stable housing", "housed"),
         ("denies homelessness", "never"),
-    ],
-)
-def test_normalize_living_status_from_table(phrase, expected):
-    assert normalize_living_status(phrase) == expected
+    ]:
+        with subtests.test(phrase=phrase, expected=expected):
+            assert normalize_living_status(phrase) == expected
 
 
 def test_status_vocab_includes_provenance_and_advisory_disclaimer():
