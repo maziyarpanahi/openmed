@@ -309,6 +309,7 @@ class TestOutputFormatter:
                 self.in_source_paragraph = False
                 self.visible_source = []
                 self.highlights = []
+                self.highlight_titles = []
                 self.active = []
                 self.elements = []
 
@@ -323,6 +324,7 @@ class TestOutputFormatter:
                 if tag == "span" and "entity" in attributes.get("class", "").split():
                     self.active.append(len(self.highlights))
                     self.highlights.append("")
+                    self.highlight_titles.append(attributes["title"])
 
             def handle_endtag(self, tag):
                 if tag == "p":
@@ -345,6 +347,11 @@ class TestOutputFormatter:
             ("🙂 & 李雷", [(4, 6)], ["李雷"]),
             ("AliceBob", [(0, 5), (5, 8)], ["Alice", "Bob"]),
             ("A & B", [(0, 5), (2, 3)], ["A & B", "&"]),
+            ("ABCDE", [(0, 3), (2, 5)], ["ABC", "C", "DE"]),
+            ("A&B<C>D", [(0, 5), (2, 7)], ["A&B<C", "B<C", ">D"]),
+            ("ABCDEFG", [(0, 4), (2, 6), (3, 7)], ["ABCD", "CD", "D", "EF", "EF", "G"]),
+            ("ABCDE", [(0, 5), (0, 3), (2, 5)], ["ABCDE", "ABC", "C", "DE"]),
+            ("ABCDE", [(0, 5), (0, 5)], ["ABCDE", "ABCDE"]),
             ("Prefix: Alice", [(8, 13)], ["Alice"]),
             ('A < B > "C"', [(2, 11)], ['< B > "C"']),
             ("\nAlice\n", [(1, 6)], ["Alice"]),
@@ -358,18 +365,29 @@ class TestOutputFormatter:
                 entities = [
                     EntityPrediction(
                         text=text[start:end] + hostile,
-                        label="PERSON" + hostile,
+                        label=f"PERSON{index}" + hostile,
                         confidence=0.9,
                         start=start,
                         end=end,
                     )
-                    for start, end in ranges
+                    for index, (start, end) in enumerate(ranges)
                 ]
                 result = PredictionResult(text, entities, hostile, hostile)
                 parsed = ParsedOutput()
                 parsed.feed(OutputFormatter().to_html(result))
                 assert "".join(parsed.visible_source) == text
                 assert parsed.highlights == expected
+                for index, (start, end) in enumerate(ranges):
+                    if 0 <= start < end <= len(text):
+                        title = f"Label: PERSON{index}{hostile}, Confidence: 0.900"
+                        rendered = "".join(
+                            value
+                            for value, actual_title in zip(
+                                parsed.highlights, parsed.highlight_titles
+                            )
+                            if actual_title == title
+                        )
+                        assert rendered == text[start:end]
                 assert [(e.start, e.end) for e in entities] == ranges
                 assert all(
                     tag not in {"script", "img", "svg"} for tag, _ in parsed.elements

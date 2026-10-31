@@ -243,6 +243,7 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 - Shift Chinese, Japanese and Korean marker-based dates without dateutil, retaining numeric field widths, whitespace, two-digit years and source digit systems (#4328).
 
 - Keep HTML entity highlights aligned with original source offsets across escaped characters, preserving source text and metadata escaping (#4326).
+  Crossing, nested and adjacent spans retain each label's exact source coverage.
 
 - Make security-support guidance version independent and distinguish published stable releases from candidates (#4131, #4133).
 
