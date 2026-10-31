@@ -107,27 +107,24 @@ def test_mapping_xywh_is_explicit_and_batch_order_is_stable():
     ]
 
 
-@pytest.mark.parametrize(
-    ("box", "kwargs", "message"),
-    [
+def test_rejects_invalid_boxes_without_echoing_input(subtests):
+    for box, kwargs, message in [
         ((10, 20, 10, 40), {"unit": "pixel", "page_size": (100, 100)}, "inverted"),
         ((10, math.nan, 30, 40), {"unit": "pixel", "page_size": (100, 100)}, "NaN"),
         ((-1, 20, 30, 40), {"unit": "pixel", "page_size": (100, 100)}, "out-of-bounds"),
         ((10, 20, 30, 40), {"unit": "pixel"}, "page_size"),
-    ],
-)
-def test_rejects_invalid_boxes_without_echoing_input(box, kwargs, message):
-    with pytest.raises(
-        (BoxValidationError, AmbiguousBoxError), match=message
-    ) as excinfo:
-        normalize_box(box, source_ref="opaque-source-1", **kwargs)
+    ]:
+        with subtests.test(box=box, kwargs=kwargs, message=message):
+            with pytest.raises(
+                (BoxValidationError, AmbiguousBoxError), match=message
+            ) as excinfo:
+                normalize_box(box, source_ref="opaque-source-1", **kwargs)
 
-    assert "opaque-source-1" not in str(excinfo.value)
+            assert "opaque-source-1" not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "box",
-    [
+def test_rejects_ambiguous_coordinate_interpretations(subtests):
+    for box in [
         (0.1, 0.2, 0.3, 0.4),
         {"bbox": (0.1, 0.2, 0.3, 0.4)},
         {"bbox": (0.1, 0.2, 0.3, 0.4), "box": (0.1, 0.2, 0.3, 0.4)},
@@ -139,11 +136,10 @@ def test_rejects_invalid_boxes_without_echoing_input(box, kwargs, message):
             "y1": 0.4,
             "unit": "normalized",
         },
-    ],
-)
-def test_rejects_ambiguous_coordinate_interpretations(box):
-    with pytest.raises(AmbiguousBoxError, match="ambiguous|required"):
-        normalize_box(box)
+    ]:
+        with subtests.test(box=box):
+            with pytest.raises(AmbiguousBoxError, match="ambiguous|required"):
+                normalize_box(box)
 
 
 def test_rejects_conflicting_embedded_and_explicit_options():
@@ -195,17 +191,18 @@ def test_result_serialization_is_coordinate_only_and_deterministic():
     }
 
 
-@pytest.mark.parametrize("serialized", [False, True])
-def test_normalized_provenance_roundtrip_does_not_transform_twice(serialized):
-    result = normalize_box(
-        (10, 20, 40, 50),
-        unit="pixel",
-        origin="bottom-left",
-        page_size=(100, 200),
-        page=2,
-    )
-    source = result.to_dict() if serialized else result
-    assert normalize_box(source, page=2) == result
+def test_normalized_provenance_roundtrip_does_not_transform_twice(subtests):
+    for serialized in [False, True]:
+        with subtests.test(serialized=serialized):
+            result = normalize_box(
+                (10, 20, 40, 50),
+                unit="pixel",
+                origin="bottom-left",
+                page_size=(100, 200),
+                page=2,
+            )
+            source = result.to_dict() if serialized else result
+            assert normalize_box(source, page=2) == result
 
 
 def test_nested_metadata_is_not_silently_ignored():

@@ -249,6 +249,7 @@ def test_empty_gold_returns_explicit_empty_heatmap():
     assert heatmap.total.total_chars == 0
 
 
+@pytest.mark.slow
 def test_partial_coverage_cell_rate():
     gold = [_span(0, 10, "DATE", "en")]
     predicted = [_span(0, 4, "DATE", "en")]

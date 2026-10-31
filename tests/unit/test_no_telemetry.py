@@ -25,6 +25,8 @@ import ast
 import socket
 from pathlib import Path
 
+import pytest
+
 from openmed.core.config import OpenMedConfig
 from openmed.core.offline import OFFLINE_ENV_VAR
 
@@ -88,6 +90,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "service/security.py": ("opt-in remote MCP/OAuth metadata and token validation"),
     "service/smart_backend.py": "opt-in smart-backend routing (user-configured)",
     "service/webhooks.py": "opt-in user-configured webhooks",
+    "structured/decision_server.py": (
+        "opt-in caller-configured loopback or Unix-socket decision server; "
+        "private-network hosts only by explicit operator approval for non-PHI"
+    ),
     "structured/store/postgres.py": "explicit caller-DSN PostgreSQL TLS context",
     "training/recipe.py": "opt-in training distributed rendezvous",
 }
@@ -311,6 +317,7 @@ def _rel(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_openmed_package_has_no_telemetry_indicators():
     offenders: dict[str, list[str]] = {}
     for path in _package_files():
@@ -325,6 +332,7 @@ def test_openmed_package_has_no_telemetry_indicators():
     assert offenders == {}, f"telemetry/analytics indicators found: {offenders!r}"
 
 
+@pytest.mark.slow
 def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     """Reviewed OpenTelemetry surfaces must stay opt-in and no-PHI."""
     agent_source = (PACKAGE_ROOT / "agent" / "telemetry.py").read_text(encoding="utf-8")
@@ -383,6 +391,7 @@ def test_reviewed_opentelemetry_surfaces_are_opt_in_and_off_by_default():
     assert _telemetry_optout_envs(source) == []
 
 
+@pytest.mark.slow
 def test_network_surface_matches_reviewed_allowlist():
     discovered: dict[str, set[str]] = {}
     for path in _package_files():

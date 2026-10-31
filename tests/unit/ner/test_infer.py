@@ -14,6 +14,7 @@ infer_module = importlib.import_module("openmed.ner.infer")
 from openmed.core.config import OpenMedConfig
 from openmed.ner.indexing import (
     GLIFORMER_DISEASE_MODEL_ID,
+    GLINER2_DISEASE_MODEL_ID,
     GLINER_BIOMED_MODEL_ID,
     ModelIndex,
     ModelRecord,
@@ -232,12 +233,13 @@ def test_malformed_gliner_offset_error_does_not_echo_entity_text() -> None:
     assert marker not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize("offset", [True, 1.5, "private-offset", -1])
-def test_gliner_offsets_are_not_silently_coerced(offset) -> None:
-    with pytest.raises(ValueError, match="offsets must"):
-        infer_module._convert_gliner_entity(
-            {"text": "synthetic", "start": offset, "end": 4, "label": "Drug"}
-        )
+def test_gliner_offsets_are_not_silently_coerced(subtests) -> None:
+    for offset in [True, 1.5, "private-offset", -1]:
+        with subtests.test(offset=offset):
+            with pytest.raises(ValueError, match="offsets must"):
+                infer_module._convert_gliner_entity(
+                    {"text": "synthetic", "start": offset, "end": 4, "label": "Drug"}
+                )
 
 
 @pytest.fixture
@@ -284,19 +286,23 @@ def native_inference(monkeypatch):
     return calls, loads
 
 
-def test_gliformer_infer_defaults_offsets_and_confidence(native_inference):
+@pytest.mark.parametrize(
+    "model_id,family",
+    [(GLIFORMER_DISEASE_MODEL_ID, "gliformer"), (GLINER2_DISEASE_MODEL_ID, "gliner2")],
+)
+def test_disease_infer_defaults_offsets_and_confidence(
+    native_inference, model_id, family
+):
     calls, loads = native_inference
     text = "asthma; diabetes; asthma"
-    response = infer(
-        NerRequest(model_id=GLIFORMER_DISEASE_MODEL_ID, text=text, threshold=0.7)
-    )
+    response = infer(NerRequest(model_id=model_id, text=text, threshold=0.7))
     assert [(e.text, e.start, e.end, e.label) for e in response.entities] == [
         ("asthma", 0, 6, "DISEASE"),
         ("asthma", 18, 24, "DISEASE"),
     ]
     assert calls[0]["labels"] == ["disease"]
-    assert response.meta["family"] == "gliformer"
-    assert loads[0][0] == GLIFORMER_DISEASE_MODEL_ID
+    assert response.meta["family"] == family
+    assert loads[0][0] == model_id
 
 
 @pytest.mark.parametrize(
@@ -424,24 +430,22 @@ def test_native_pipeline_handles_empty_batch(native_inference):
     assert pipeline(["synthetic", "asthma"])[0] == []
 
 
-@pytest.mark.parametrize(
-    "entity",
-    [
+def test_native_malformed_predictions_fail_closed(subtests):
+    for entity in [
         {"text": "asthma", "start": 0, "end": 99, "score": 0.9},
         {"text": "asthma", "start": 4, "end": 2, "score": 0.9},
         {"text": "wrong", "start": 0, "end": 6, "score": 0.9},
         {"text": "asthma", "start": 0, "end": 6, "score": float("nan")},
         {"text": "asthma", "start": 0, "end": 6, "score": 1.1},
-    ],
-)
-def test_native_malformed_predictions_fail_closed(entity):
-    handle = SimpleNamespace(
-        predict_entities=lambda *_a, **_k: [{**entity, "label": "disease"}]
-    )
-    with pytest.raises(ValueError):
-        infer_module._native_predictions(
-            handle, "asthma", ["disease"], 0.5, True, OpenMedConfig()
-        )
+    ]:
+        with subtests.test(entity=entity):
+            handle = SimpleNamespace(
+                predict_entities=lambda *_a, **_k: [{**entity, "label": "disease"}]
+            )
+            with pytest.raises(ValueError):
+                infer_module._native_predictions(
+                    handle, "asthma", ["disease"], 0.5, True, OpenMedConfig()
+                )
 
 
 def test_native_offline_loading_and_prediction_block_network(

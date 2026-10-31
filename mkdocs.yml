@@ -12,6 +12,8 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 3.2.0 Release Notes: release/v3.2.0.md
+      - Migrate from 3.1 to 3.2: migration/3.1-to-3.2.md
       - OpenMed 2.5.0 Release Notes: release/v2.5.0.md
       - OpenMed 2.2.0 Release Notes: release/v2.2.0.md
       - OpenMed 2.2 Tested Standards Matrix: release/v2.2-standards-matrix.md
@@ -322,6 +324,7 @@ nav:
       - Schema-Guided JSON Extraction: structured/schema-guided-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Indic Unicode Normalization: indic-normalization.md
+      - Morphology-aware Label Projection: languages/morphology-projection.md
       - Configuration & Validation: configuration.md
       - Configuration Precedence Audit: configuration/precedence-audit.md
       - Configuration Profiles: profiles.md
@@ -352,9 +355,37 @@ nav:
       - Federated Round Status: training/federated-round-status.md
       - Federated Round Scheduling: training/federated-scheduling.md
       - Federated Update Metadata: training/federated-update-metadata.md
+      - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
-      - SPDX License Identifiers: training/synthetic/license-identifiers.md
+      - Synthetic Data:
+          - Overview: training/synthetic/index.md
+          - Locale PHI Notes: training/synthetic/locale-phi.md
+          - Burned-in PHI Images: training/synthetic/burned-in.md
+          - Social-history Sections: training/synthetic/social-history.md
+          - Section-label Datasets: training/synthetic/section-labels.md
+          - Span Offset Projection: training/synthetic/offset-projection.md
+          - Translation Augmentation: training/synthetic/translation-augmentation.md
+          - SPDX License Identifiers: training/synthetic/license-identifiers.md
+          - Synthetic HL7 v2 Messages: training/synthetic/hl7v2-messages.md
+          - Synthetic License Lineage Manifests: training/synthetic/license-lineage-manifests.md
+          - Synthetic Split Planning: training/synthetic/split-planning.md
+          - Synthetic Multimodal Provenance: training/synthetic/multimodal-provenance.md
+          - Cross-artifact Truth Alignment: training/synthetic/truth-alignment.md
+          - Synthetic Release Capsules: training/synthetic/release-capsules.md
+          - Synthetic Dataset Recipes: training/synthetic/dataset-recipes.md
+          - Synthetic Lab Time Series: training/synthetic/lab-time-series.md
+          - Synthetic Medication Courses: training/synthetic/medication-courses.md
+          - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
+          - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
+          - Synthetic FHIR Records: training/synthetic/fhir-records.md
+          - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
+          - Rare-case Privacy Stressors: training/synthetic/rare-case-stressors.md
+          - Synthetic Intake Conversations: training/synthetic/intake-conversations.md
+          - Burned-in Font Coverage: training/synthetic/burned-in-font-coverage.md
+          - Code-switched Synthetic Dialogues: training/synthetic/code-switched-dialogues.md
+      - Synthetic Release Controls: training/synthetic-release-controls.md
       - Preference Pair Schema: reference/preference-schema.md
       - BMP Header Preflight: multimodal/bmp-header-preflight.md
       - GIF Header Preflight: multimodal/gif-header-preflight.md
@@ -367,7 +398,10 @@ nav:
       - Audio Resampling Plans: multimodal/audio-resampling-plans.md
       - Image Geometry Derivation: multimodal/image-geometry.md
       - Locale Tag Normalization: i18n/locale-tags.md
+      - Language Readiness Matrix: i18n/language-readiness-matrix.md
+      - Language Coverage Diffs: i18n/language-coverage-diffs.md
       - Bounded Media Type Detection: multimodal/media-type-detection.md
+      - Locale-Pack Conformance Checks: i18n/locale-pack-conformance.md
       - PDF Reading Order: multimodal/pdf-reading-order.md
       - PDF Page Geometry Preflight: multimodal/pdf-geometry-preflight.md
       - OCR Through Memory: multimodal/ocr-streaming.md
@@ -397,6 +431,12 @@ nav:
       - RTF Extraction: multimodal/rtf-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Script Tokenization Audit: evaluation/script-tokenization.md
+      - Language-slice Uncertainty: evaluation/language-uncertainty.md
+      - Cross-lingual Regression Gate: evaluation/cross-lingual-regressions.md
+      - Scarce-label Native Review: languages/scarce-label-review.md
+      - Cross-lingual Pseudo-label Consensus: languages/cross-lingual-consensus.md
+      - Synthetic Fidelity Evidence: evaluation/synthetic-fidelity.md
       - Cross-lingual Extraction Scorecard: evaluation/crosslingual-scorecard.md
       - Claim-level Citation Support: evaluation/citation-support-metrics.md
       - Comparator Reports: evaluation/comparator-reports.md
@@ -416,6 +456,7 @@ nav:
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
+      - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
       - Public Benchmark Leaderboard: eval/leaderboard.md
       - ARM SMS Latency Budget: benchmarks/arm-latency.md
@@ -427,6 +468,7 @@ nav:
       - AWQ Grounding Embedder: runtimes/awq-grounding.md
       - GGUF Grounding Runtime: runtimes/gguf-grounding.md
       - Device Tiers & SLOs: tiers.md
+      - Language Adapter Distillation: languages/adapter-distillation.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
       - GGUF Embedding Export: export-gguf.md
@@ -442,6 +484,7 @@ nav:
       - De-identification API: api/deidentification.md
       - Structured Public Errors: api/errors.md
       - Service API Compatibility Gate: api/compatibility-gate.md
+      - Local Decision Models: decision-models.md
       - Fixed-option Decision API: api/fixed-option-decisions.md
       - Versioned Journey Resources: api/journey-resources.md
       - Offline File Redaction CLI: guides/file-redaction.md
@@ -458,7 +501,13 @@ nav:
       - CHW Form Export De-identification: chw-form-deid.md
       - Indic Name Matching: indic-name-matching.md
       - Per-Language De-identification: languages.md
+      - Low-Resource Language Cohort: languages/graduation-contract.md
       - Language Pack Plugins: language-packs.md
+      - Clinical Language Readiness: languages/clinical-readiness.md
+      - Clinical Transliteration Provenance: languages/clinical-transliteration.md
+      - Local Abbreviation Mining: languages/abbreviation-mining.md
+      - Code-switch Span Projection: languages/code-switch-projection.md
+      - Clinical Translation Guard: languages/translation-guard.md
       - Browser Extension PHI Guard: runtimes/browser-extension.md
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md

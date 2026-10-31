@@ -4,7 +4,7 @@ on:
   push:
     branches: ["master"]
   pull_request:
-    branches: ["master"]
+    branches: ["master", "release/v*"]
     paths:
       - ".github/workflows/pages.yml"
       - "Makefile"

@@ -99,30 +99,30 @@ def denied(payload, code, resolver=None):
     return caught.value
 
 
-@pytest.mark.parametrize(
-    "reference",
-    ["Patient/patient-a", BASE + "/Patient/patient-a", "Patient/patient-a/_history/7"],
-)
-def test_in_scope_create_and_update_pass_unchanged(reference):
-    payload = observation()
-    payload["subject"]["reference"] = reference
-    before = copy.deepcopy(payload)
-    assert verify(payload) is None
-    assert payload == before
+def test_in_scope_create_and_update_pass_unchanged(subtests):
+    for reference in [
+        "Patient/patient-a",
+        BASE + "/Patient/patient-a",
+        "Patient/patient-a/_history/7",
+    ]:
+        with subtests.test(reference=reference):
+            payload = observation()
+            payload["subject"]["reference"] = reference
+            before = copy.deepcopy(payload)
+            assert verify(payload) is None
+            assert payload == before
 
 
-@pytest.mark.parametrize(
-    "field,reference",
-    [
+def test_direct_wrong_scope_is_rejected(subtests):
+    for field, reference in [
         ("subject", "Patient/patient-b"),
         ("encounter", "Encounter/encounter-b"),
-    ],
-)
-def test_direct_wrong_scope_is_rejected(field, reference):
-    payload = observation()
-    payload[field] = {"reference": reference}
-    error = denied(payload, "selector_out_of_scope")
-    assert error.findings[0].path == "Resource." + field
+    ]:
+        with subtests.test(field=field, reference=reference):
+            payload = observation()
+            payload[field] = {"reference": reference}
+            error = denied(payload, "selector_out_of_scope")
+            assert error.findings[0].path == "Resource." + field
 
 
 def test_wrong_patient_has_member_is_rejected():
@@ -136,9 +136,8 @@ def test_wrong_patient_has_member_is_rejected():
     assert error.findings[0].path == "Resource.hasMember[0]"
 
 
-@pytest.mark.parametrize(
-    "node,code",
-    [
+def test_reference_failure_codes(subtests):
+    for node, code in [
         (
             {
                 "identifier": {
@@ -166,17 +165,15 @@ def test_wrong_patient_has_member_is_rejected():
             {"reference": "Patient/patient-a", "type": "Encounter"},
             "ambiguous_reference",
         ),
-    ],
-)
-def test_reference_failure_codes(node, code):
-    payload = observation()
-    payload["subject"] = node
-    denied(payload, code)
+    ]:
+        with subtests.test(node=node, code=code):
+            payload = observation()
+            payload["subject"] = node
+            denied(payload, code)
 
 
-@pytest.mark.parametrize(
-    "result,code",
-    [
+def test_noncompartment_resolver_fails_closed(subtests):
+    for result, code in [
         ([], "unresolvable_reference"),
         ([authority()[0].record_selectors] * 2, "ambiguous_reference"),
         ([()], "scope_evidence_missing"),
@@ -188,12 +185,11 @@ def test_reference_failure_codes(node, code):
         ([(selector("patient-a"), selector("patient-b"))], "scope_evidence_missing"),
         ([("synthetic-private",)], "scope_evidence_missing"),
         ({"synthetic-private": "bad"}, "scope_evidence_missing"),
-    ],
-)
-def test_noncompartment_resolver_fails_closed(result, code):
-    payload = observation()
-    payload["basedOn"] = [{"reference": "ServiceRequest/synthetic-order"}]
-    denied(payload, code, Resolver(result))
+    ]:
+        with subtests.test(result=result, code=code):
+            payload = observation()
+            payload["basedOn"] = [{"reference": "ServiceRequest/synthetic-order"}]
+            denied(payload, code, Resolver(result))
 
 
 def transaction():
@@ -230,17 +226,21 @@ def test_transaction_internal_urns_pass_with_resolved_scope():
     assert resolver.calls[0][1] is payload["entry"][0]["resource"]
 
 
-@pytest.mark.parametrize("duplicate", [False, True])
-def test_transaction_missing_or_ambiguous_urn_fails_closed(duplicate):
-    payload = transaction()
-    payload["entry"][1]["resource"]["subject"] = {
-        "reference": "urn:uuid:00000000-0000-4000-8000-000000000001"
-    }
-    if duplicate:
-        payload["entry"].append(copy.deepcopy(payload["entry"][0]))
-    else:
-        payload["entry"].pop(0)
-    denied(payload, "ambiguous_reference" if duplicate else "unresolvable_reference")
+def test_transaction_missing_or_ambiguous_urn_fails_closed(subtests):
+    for duplicate in [False, True]:
+        with subtests.test(duplicate=duplicate):
+            payload = transaction()
+            payload["entry"][1]["resource"]["subject"] = {
+                "reference": "urn:uuid:00000000-0000-4000-8000-000000000001"
+            }
+            if duplicate:
+                payload["entry"].append(copy.deepcopy(payload["entry"][0]))
+            else:
+                payload["entry"].pop(0)
+            denied(
+                payload,
+                "ambiguous_reference" if duplicate else "unresolvable_reference",
+            )
 
 
 def test_contained_reference_and_nested_wrong_patient():
@@ -317,27 +317,26 @@ def test_expired_ticket_denied_before_resolving():
     assert not resolver.calls
 
 
-@pytest.mark.parametrize(
-    "mutation", ["cycle", "deep", "bad-entry", "bad-request", "non-write"]
-)
-def test_malformed_payload_fails_with_controlled_codes(mutation):
-    payload = observation()
-    if mutation == "cycle":
-        payload["private"] = payload
-    elif mutation == "deep":
-        current = payload
-        for _ in range(66):
-            current["private"] = {}
-            current = current["private"]
-    else:
-        payload = transaction()
-        if mutation == "bad-entry":
-            payload["entry"] = [None]
-        elif mutation == "bad-request":
-            payload["entry"][0]["request"] = None
-        else:
-            payload["entry"][0]["request"]["method"] = "DELETE"
-    denied(payload, "invalid_payload")
+def test_malformed_payload_fails_with_controlled_codes(subtests):
+    for mutation in ["cycle", "deep", "bad-entry", "bad-request", "non-write"]:
+        with subtests.test(mutation=mutation):
+            payload = observation()
+            if mutation == "cycle":
+                payload["private"] = payload
+            elif mutation == "deep":
+                current = payload
+                for _ in range(66):
+                    current["private"] = {}
+                    current = current["private"]
+            else:
+                payload = transaction()
+                if mutation == "bad-entry":
+                    payload["entry"] = [None]
+                elif mutation == "bad-request":
+                    payload["entry"][0]["request"] = None
+                else:
+                    payload["entry"][0]["request"]["method"] = "DELETE"
+            denied(payload, "invalid_payload")
 
 
 def test_internal_patient_identity_cannot_be_overridden_by_resolver():
@@ -362,14 +361,16 @@ def test_known_field_names_in_unrelated_datatypes_are_not_references():
     verify(payload)
 
 
-@pytest.mark.parametrize(
-    "reference",
-    ["urn:uuid:invalid", "Patient/patient-a#fragment", "Patient/patient-a/extra"],
-)
-def test_malformed_reference_syntax_rejected(reference):
-    payload = observation()
-    payload["subject"] = {"reference": reference}
-    denied(payload, "invalid_reference")
+def test_malformed_reference_syntax_rejected(subtests):
+    for reference in [
+        "urn:uuid:invalid",
+        "Patient/patient-a#fragment",
+        "Patient/patient-a/extra",
+    ]:
+        with subtests.test(reference=reference):
+            payload = observation()
+            payload["subject"] = {"reference": reference}
+            denied(payload, "invalid_reference")
 
 
 def test_repeated_contained_identity_is_ambiguous():
@@ -379,11 +380,12 @@ def test_repeated_contained_identity_is_ambiguous():
     denied(payload, "ambiguous_reference")
 
 
-@pytest.mark.parametrize("method", [[], {}, None, 123])
-def test_malformed_transaction_method_is_a_value_free_denial(method):
-    payload = transaction()
-    payload["entry"][0]["request"]["method"] = method
-    denied(payload, "invalid_payload")
+def test_malformed_transaction_method_is_a_value_free_denial(subtests):
+    for method in [[], {}, None, 123]:
+        with subtests.test(method=method):
+            payload = transaction()
+            payload["entry"][0]["request"]["method"] = method
+            denied(payload, "invalid_payload")
 
 
 def test_internal_encounter_and_has_member_urns_pass_unchanged():

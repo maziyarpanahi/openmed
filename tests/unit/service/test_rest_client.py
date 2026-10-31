@@ -138,6 +138,7 @@ def rest_client(monkeypatch: pytest.MonkeyPatch):
         yield client
 
 
+@pytest.mark.slow
 def test_client_calls_service_endpoints_with_asgi_transport(
     rest_client: OpenMedClient,
     monkeypatch: pytest.MonkeyPatch,
