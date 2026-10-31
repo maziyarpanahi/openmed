@@ -10,7 +10,7 @@ The package provides three products:
 - `OpenMedExtensionSupport` contains the item handler, span result, local model
   guard, and memory budget.
 - `OpenMedShareExtension` contains `RedactionShareViewController` and a policy
-  picker backed by `Policy.bundledProfileNames`.
+  menu backed by `Policy.bundledProfileNames`.
 - `OpenMedActionExtension` contains `RedactionActionRequestHandler` for a non-UI
   Action extension.
 
@@ -67,6 +67,36 @@ back to a download.
 The controller reads `NSExtensionItem` plain-text attachments, displays the
 selected text and every bundled policy profile, runs the Nano model after the
 user confirms, and completes the request with a new plain-text attachment.
+
+`Localizable.xcstrings` supplies English (`en`), Chinese (`zh`), and Hindi
+(`hi`) controls, policy names, messages, and accessibility labels/hints.
+Declare these languages in the app and extension's localization configuration
+or `CFBundleLocalizations`. Hosts needing independent resource-bundle language
+selection can use `CFBundleAllowMixedLocalizations`; see Apple's
+[language selection guide](https://developer.apple.com/library/archive/qa/qa1828/_index.html).
+
+Live Dynamic Type changes preserve policy selection. The scrollable screen
+contains a 160-point minimum, internally scrolling preview, a policy menu with
+an option count and selection checkmark, and stacked full-width actions:
+filled **Redact and Return** and outlined **Cancel**. Buttons support wrapping
+labels and at least 52-point touch targets. VoiceOver exposes the selected policy;
+static hints never include shared text. Localized errors omit underlying error
+payloads, filenames, paths, and source text, including when Nano assets are missing.
+
+Run localization checks from `swift/OpenMedKit`:
+
+```bash
+swift test --filter ShareExtensionLocalizationTests
+xcodebuild -scheme OpenMedKit-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -parallel-testing-enabled NO \
+  -only-testing:ExtensionTests/ShareExtensionLocalizationTests test
+```
+
+Choose an installed simulator. Manually check every language and policy using
+synthetic text, change Text Size while open, and verify VoiceOver labels/hints
+and both actions at the largest accessibility size. Inference requires the
+bundled Nano assets above.
 
 ## Add the Action extension
 
