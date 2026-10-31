@@ -7,9 +7,8 @@ import pytest
 from openmed.processing.outputs import OutputFormatter
 
 
-@pytest.mark.parametrize(
-    "raw,expected",
-    [
+def test_normalization_removes_only_one_leading_bio_marker(subtests):
+    for raw, expected in [
         ("HLA-B-27", "HLA-B-27"),
         ("MULTI-MORBIDITY", "MULTI-MORBIDITY"),
         ("B-HLA-B-27", "HLA-B-27"),
@@ -22,13 +21,12 @@ from openmed.processing.outputs import OutputFormatter
         ("B-", "B-"),
         ("I-", "I-"),
         ("b-DISEASE", "b-DISEASE"),
-    ],
-)
-def test_normalization_removes_only_one_leading_bio_marker(raw, expected):
-    result = OutputFormatter().format_predictions(
-        [{"entity": raw, "word": "synthetic", "score": 0.9}], ""
-    )
-    assert result.entities[0].label == expected
+    ]:
+        with subtests.test(raw=raw, expected=expected):
+            result = OutputFormatter().format_predictions(
+                [{"entity": raw, "word": "synthetic", "score": 0.9}], ""
+            )
+            assert result.entities[0].label == expected
 
 
 def test_entity_group_precedence_and_inputs_are_preserved():

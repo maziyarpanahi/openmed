@@ -89,28 +89,26 @@ def test_planning_never_opens_a_socket(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _plan().resource_type == "Observation"
 
 
-@pytest.mark.parametrize(
-    "parameters",
-    [
+def test_invalid_predicates_fail_closed_without_echoing_values(subtests) -> None:
+    for parameters in [
         {},
         {"_count": "1"},
         {"identifier": ""},
         {"identifier": "one,two"},
         {"identifier": "a\nb"},
         {"bad?name": "value"},
-    ],
-)
-def test_invalid_predicates_fail_closed_without_echoing_values(parameters) -> None:
-    with pytest.raises(ValueError) as error:
-        build_conditional_write_plan(
-            ConditionalWriteKind.CREATE,
-            "Observation",
-            parameters,
-            operation_id=OPERATION_ID,
-            secret=SECRET,
-        )
-    assert "one,two" not in str(error.value)
-    assert "a\nb" not in str(error.value)
+    ]:
+        with subtests.test(parameters=parameters):
+            with pytest.raises(ValueError) as error:
+                build_conditional_write_plan(
+                    ConditionalWriteKind.CREATE,
+                    "Observation",
+                    parameters,
+                    operation_id=OPERATION_ID,
+                    secret=SECRET,
+                )
+            assert "one,two" not in str(error.value)
+            assert "a\nb" not in str(error.value)
 
 
 def test_duplicate_parameters_are_rejected() -> None:
@@ -169,9 +167,8 @@ def test_repr_and_decisions_never_expose_predicate_values() -> None:
     assert "private-marker" not in repr(decision)
 
 
-@pytest.mark.parametrize(
-    ("kind", "count", "complete", "disposition", "reason"),
-    [
+def test_match_decisions(subtests) -> None:
+    for kind, count, complete, disposition, reason in [
         (
             ConditionalWriteKind.CREATE,
             0,
@@ -222,22 +219,28 @@ def test_repr_and_decisions_never_expose_predicate_values() -> None:
             MatchDisposition.REVIEW,
             "search_incomplete",
         ),
-    ],
-)
-def test_match_decisions(kind, count, complete, disposition, reason) -> None:
-    decision = assess_matches(_plan(kind), count, search_complete=complete)
-    assert (decision.disposition, decision.reason_code) == (disposition, reason)
-    if disposition is MatchDisposition.READY:
-        decision.require_ready()
-    else:
-        with pytest.raises(ValueError):
-            decision.require_ready()
+    ]:
+        with subtests.test(
+            kind=kind,
+            count=count,
+            complete=complete,
+            disposition=disposition,
+            reason=reason,
+        ):
+            decision = assess_matches(_plan(kind), count, search_complete=complete)
+            assert (decision.disposition, decision.reason_code) == (disposition, reason)
+            if disposition is MatchDisposition.READY:
+                decision.require_ready()
+            else:
+                with pytest.raises(ValueError):
+                    decision.require_ready()
 
 
-@pytest.mark.parametrize("count", [-1, True, 1.5, "1"])
-def test_invalid_match_counts_fail_closed(count) -> None:
-    with pytest.raises(ValueError, match="match count is invalid"):
-        assess_matches(_plan(), count, search_complete=True)
+def test_invalid_match_counts_fail_closed(subtests) -> None:
+    for count in [-1, True, 1.5, "1"]:
+        with subtests.test(count=count):
+            with pytest.raises(ValueError, match="match count is invalid"):
+                assess_matches(_plan(), count, search_complete=True)
 
 
 def test_match_decision_cannot_hold_a_free_form_reason() -> None:

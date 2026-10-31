@@ -69,9 +69,8 @@ def test_execute_once_and_bind_approval_effect_outcome():
     assert harness.tools.calls == 1
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [
+def test_independent_corruption_never_invokes(subtests):
+    for mutation in [
         "missing_grant",
         "signature",
         "grant_expiry",
@@ -95,153 +94,163 @@ def test_execute_once_and_bind_approval_effect_outcome():
         "extra_argument",
         "argument_type",
         "nan",
-    ],
-)
-def test_independent_corruption_never_invokes(mutation):
-    h = DispatchHarness()
-    a = h.authority
-    if mutation == "missing_grant":
-        a = replace(a, grant=None)
-    elif mutation == "signature":
-        a = replace(a, grant=replace(a.grant, signature="hmac-sha256:" + "0" * 64))
-    elif mutation == "grant_expiry":
-        a = replace(
-            a,
-            grant=CapabilityGrantSigner(KEY).issue(
-                [a.grant_request.as_constraint()], expires_at=10
-            ),
-        )
-    elif mutation == "grant_scope":
-        request = replace(a.grant_request, action="action:org.example/other@1.0.0")
-        a = replace(
-            a,
-            grant=CapabilityGrantSigner(KEY).issue(
-                [request.as_constraint()], expires_at=100
-            ),
-        )
-    elif mutation == "grant_request":
-        a = replace(
-            a,
-            grant_request=replace(a.grant_request, tool="tool:org.example/other@1.0.0"),
-        )
-    elif mutation == "missing_ticket":
-        a = replace(a, ticket=None)
-    elif mutation == "ticket_expiry":
-        a = replace(a, ticket=replace(a.ticket, expires_at=10))
-    elif mutation == "run":
-        a = replace(a, ticket=replace(a.ticket, run_id=RunId("run_" + "c" * 32)))
-    elif mutation == "purpose":
-        a = replace(
-            a, ticket=replace(a.ticket, purpose="purpose:org.example/other@1.0.0")
-        )
-    elif mutation == "data":
-        a = replace(
-            a,
-            ticket=replace(
-                a.ticket, permitted_data_classes=("data:org.example/other@1.0.0",)
-            ),
-        )
-    elif mutation == "selector":
-        a = replace(
-            a,
-            ticket=replace(
-                a.ticket,
-                record_selectors=(
-                    RecordSelector(
-                        a.ticket.record_selectors[0].kind, "hmac-sha256:" + "2" * 64
+    ]:
+        with subtests.test(mutation=mutation):
+            h = DispatchHarness()
+            a = h.authority
+            if mutation == "missing_grant":
+                a = replace(a, grant=None)
+            elif mutation == "signature":
+                a = replace(
+                    a, grant=replace(a.grant, signature="hmac-sha256:" + "0" * 64)
+                )
+            elif mutation == "grant_expiry":
+                a = replace(
+                    a,
+                    grant=CapabilityGrantSigner(KEY).issue(
+                        [a.grant_request.as_constraint()], expires_at=10
                     ),
-                ),
-            ),
-        )
-    elif mutation == "tool_action":
-        a = replace(
-            a,
-            ticket=replace(
-                a.ticket,
-                permitted_tool_actions=(
-                    ToolAction("tool:org.example/other@1.0.0", ACTION),
-                ),
-            ),
-        )
-    elif mutation == "ticket_request":
-        a = replace(
-            a,
-            ticket_request=replace(
-                a.ticket_request, purpose="purpose:org.example/other@1.0.0"
-            ),
-        )
-    elif mutation == "projection":
-        # A valid plan from another schema still cannot authorize this tool.
-        other = DispatchHarness(
-            schema={
-                **h.spec.input_schema,
-                "properties": {"other": h.spec.input_schema["properties"]["text"]},
-                "required": ["other"],
-            }
-        )
-        a = replace(a, projection=other.authority.projection)
-    elif mutation == "registered_identity":
-        h.tools.get = lambda name: replace(h.spec, version="2.0.0")
-    elif mutation == "missing_approval":
-        a = replace(a, approval=None)
-    elif mutation == "approval_signature":
-        a = replace(
-            a, approval=replace(a.approval, signature="hmac-sha256:" + "0" * 64)
-        )
-    elif mutation in {"approval_expiry", "approval_role"}:
-        a = replace(
-            a,
-            approval=ApprovalTokenSigner(
-                KEY, clock=lambda: 9 if mutation == "approval_expiry" else 10
-            ).issue(
-                action_digest=a.approval.action_digest,
-                reviewer_role=ROLE
-                if mutation == "approval_expiry"
-                else "role:org.example/operator@1.0.0",
-                expires_at=10 if mutation == "approval_expiry" else 100,
-                nonce_source=lambda n: b"z" * n,
-            ),
-        )
-    elif mutation == "approval_arguments":
-        h.arguments = {"text": PRIVATE + " changed"}
-    elif mutation == "extra_argument":
-        h.arguments[PRIVATE] = PRIVATE
-    elif mutation == "argument_type":
-        h.arguments["text"] = 42
-    elif mutation == "nan":
-        h.arguments["text"] = float("nan")
-    result = h.adapter(authority=a).dispatch(h.arguments)
-    assert h.tools.calls == 0
-    assert result.outcome.outcome_class is not OutcomeClass.SUCCESS
-    assert_private_free(result)
+                )
+            elif mutation == "grant_scope":
+                request = replace(
+                    a.grant_request, action="action:org.example/other@1.0.0"
+                )
+                a = replace(
+                    a,
+                    grant=CapabilityGrantSigner(KEY).issue(
+                        [request.as_constraint()], expires_at=100
+                    ),
+                )
+            elif mutation == "grant_request":
+                a = replace(
+                    a,
+                    grant_request=replace(
+                        a.grant_request, tool="tool:org.example/other@1.0.0"
+                    ),
+                )
+            elif mutation == "missing_ticket":
+                a = replace(a, ticket=None)
+            elif mutation == "ticket_expiry":
+                a = replace(a, ticket=replace(a.ticket, expires_at=10))
+            elif mutation == "run":
+                a = replace(
+                    a, ticket=replace(a.ticket, run_id=RunId("run_" + "c" * 32))
+                )
+            elif mutation == "purpose":
+                a = replace(
+                    a,
+                    ticket=replace(a.ticket, purpose="purpose:org.example/other@1.0.0"),
+                )
+            elif mutation == "data":
+                a = replace(
+                    a,
+                    ticket=replace(
+                        a.ticket,
+                        permitted_data_classes=("data:org.example/other@1.0.0",),
+                    ),
+                )
+            elif mutation == "selector":
+                a = replace(
+                    a,
+                    ticket=replace(
+                        a.ticket,
+                        record_selectors=(
+                            RecordSelector(
+                                a.ticket.record_selectors[0].kind,
+                                "hmac-sha256:" + "2" * 64,
+                            ),
+                        ),
+                    ),
+                )
+            elif mutation == "tool_action":
+                a = replace(
+                    a,
+                    ticket=replace(
+                        a.ticket,
+                        permitted_tool_actions=(
+                            ToolAction("tool:org.example/other@1.0.0", ACTION),
+                        ),
+                    ),
+                )
+            elif mutation == "ticket_request":
+                a = replace(
+                    a,
+                    ticket_request=replace(
+                        a.ticket_request, purpose="purpose:org.example/other@1.0.0"
+                    ),
+                )
+            elif mutation == "projection":
+                # A valid plan from another schema still cannot authorize this tool.
+                other = DispatchHarness(
+                    schema={
+                        **h.spec.input_schema,
+                        "properties": {
+                            "other": h.spec.input_schema["properties"]["text"]
+                        },
+                        "required": ["other"],
+                    }
+                )
+                a = replace(a, projection=other.authority.projection)
+            elif mutation == "registered_identity":
+                h.tools.get = lambda name: replace(h.spec, version="2.0.0")
+            elif mutation == "missing_approval":
+                a = replace(a, approval=None)
+            elif mutation == "approval_signature":
+                a = replace(
+                    a, approval=replace(a.approval, signature="hmac-sha256:" + "0" * 64)
+                )
+            elif mutation in {"approval_expiry", "approval_role"}:
+                a = replace(
+                    a,
+                    approval=ApprovalTokenSigner(
+                        KEY, clock=lambda: 9 if mutation == "approval_expiry" else 10
+                    ).issue(
+                        action_digest=a.approval.action_digest,
+                        reviewer_role=ROLE
+                        if mutation == "approval_expiry"
+                        else "role:org.example/operator@1.0.0",
+                        expires_at=10 if mutation == "approval_expiry" else 100,
+                        nonce_source=lambda n: b"z" * n,
+                    ),
+                )
+            elif mutation == "approval_arguments":
+                h.arguments = {"text": PRIVATE + " changed"}
+            elif mutation == "extra_argument":
+                h.arguments[PRIVATE] = PRIVATE
+            elif mutation == "argument_type":
+                h.arguments["text"] = 42
+            elif mutation == "nan":
+                h.arguments["text"] = float("nan")
+            result = h.adapter(authority=a).dispatch(h.arguments)
+            assert h.tools.calls == 0
+            assert result.outcome.outcome_class is not OutcomeClass.SUCCESS
+            assert_private_free(result)
 
 
-@pytest.mark.parametrize(
-    "phase",
-    [
+def test_storage_failure_cannot_repeat_tool(subtests):
+    for phase in [
         RecoveryPhase.APPROVAL_RECORDED,
         RecoveryPhase.DISPATCHING,
         RecoveryPhase.COMPLETED,
         RecoveryPhase.RECONCILING,
         RecoveryPhase.ABORTED,
-    ],
-)
-def test_storage_failure_cannot_repeat_tool(phase):
-    h = DispatchHarness()
-    h.effects.fail_phase = phase
-    if phase is RecoveryPhase.RECONCILING:
-        h.tools.uncertain = True
-    elif phase is RecoveryPhase.ABORTED:
-        h.authority = replace(h.authority, approval=None)
-    adapter = h.adapter()
-    first = adapter.dispatch(h.arguments)
-    second = adapter.dispatch(h.arguments)
-    assert h.tools.calls <= 1
-    if phase in {RecoveryPhase.APPROVAL_RECORDED, RecoveryPhase.DISPATCHING}:
-        assert h.tools.calls == 0
-    assert second.outcome.outcome_class is OutcomeClass.REVIEW_REQUIRED
-    assert_private_free(first)
-    assert_private_free(second)
+    ]:
+        with subtests.test(phase=phase):
+            h = DispatchHarness()
+            h.effects.fail_phase = phase
+            if phase is RecoveryPhase.RECONCILING:
+                h.tools.uncertain = True
+            elif phase is RecoveryPhase.ABORTED:
+                h.authority = replace(h.authority, approval=None)
+            adapter = h.adapter()
+            first = adapter.dispatch(h.arguments)
+            second = adapter.dispatch(h.arguments)
+            assert h.tools.calls <= 1
+            if phase in {RecoveryPhase.APPROVAL_RECORDED, RecoveryPhase.DISPATCHING}:
+                assert h.tools.calls == 0
+            assert second.outcome.outcome_class is OutcomeClass.REVIEW_REQUIRED
+            assert_private_free(first)
+            assert_private_free(second)
 
 
 def test_uncertain_claim_never_invokes_or_reclaims():
@@ -291,43 +300,42 @@ def test_cancellation_is_typed_and_private_free(boundary):
     assert_private_free(result)
 
 
-@pytest.mark.parametrize(
-    "mode", ["uncertain", "exception", "observe_exception", "mismatch", "absent"]
-)
-def test_commit_uncertainty_requires_review_without_retry(mode):
-    h = DispatchHarness()
-    if mode == "uncertain":
-        h.tools.uncertain = True
-    elif mode == "exception":
-        h.tools.error = RuntimeError(PRIVATE)
-    elif mode == "observe_exception":
+def test_commit_uncertainty_requires_review_without_retry(subtests):
+    for mode in ["uncertain", "exception", "observe_exception", "mismatch", "absent"]:
+        with subtests.test(mode=mode):
+            h = DispatchHarness()
+            if mode == "uncertain":
+                h.tools.uncertain = True
+            elif mode == "exception":
+                h.tools.error = RuntimeError(PRIVATE)
+            elif mode == "observe_exception":
 
-        def fail(effect):
-            raise RuntimeError(PRIVATE)
+                def fail(effect):
+                    raise RuntimeError(PRIVATE)
 
-        h.effects.observe = fail
-    else:
-        observe = h.effects.observe
-        h.effects.observe = lambda effect: (
-            replace(
-                observe(effect),
-                operation_digest="sha256:" + "0" * 64,
-            )
-            if mode == "mismatch"
-            else EffectObservation(
-                effect.action_id,
-                effect.operation_digest,
-                effect.idempotency_key,
-                ObservationState.ABSENT,
-            )
-        )
-    adapter = h.adapter()
-    result = adapter.dispatch(h.arguments)
-    assert result.phase is ActionPhase.WAITING_REVIEW
-    assert result.recovery.reason is RecoveryReason.AMBIGUOUS_EFFECT
-    adapter.dispatch(h.arguments)
-    assert h.tools.calls == 1
-    assert_private_free(result)
+                h.effects.observe = fail
+            else:
+                observe = h.effects.observe
+                h.effects.observe = lambda effect: (
+                    replace(
+                        observe(effect),
+                        operation_digest="sha256:" + "0" * 64,
+                    )
+                    if mode == "mismatch"
+                    else EffectObservation(
+                        effect.action_id,
+                        effect.operation_digest,
+                        effect.idempotency_key,
+                        ObservationState.ABSENT,
+                    )
+                )
+            adapter = h.adapter()
+            result = adapter.dispatch(h.arguments)
+            assert result.phase is ActionPhase.WAITING_REVIEW
+            assert result.recovery.reason is RecoveryReason.AMBIGUOUS_EFFECT
+            adapter.dispatch(h.arguments)
+            assert h.tools.calls == 1
+            assert_private_free(result)
 
 
 def test_concurrent_dispatch_and_changed_arguments_share_action_reservation():
@@ -363,22 +371,21 @@ def test_write_cannot_disable_approval_but_read_only_policy_can():
     assert result.checkpoint.approval_receipt_digest is None
 
 
-@pytest.mark.parametrize(
-    "phase", [RecoveryPhase.APPROVAL_RECORDED, RecoveryPhase.DISPATCHING]
-)
-def test_expiry_while_recording_approval_prevents_invocation(phase):
-    h = DispatchHarness()
-    append = h.effects.append
+def test_expiry_while_recording_approval_prevents_invocation(subtests):
+    for phase in [RecoveryPhase.APPROVAL_RECORDED, RecoveryPhase.DISPATCHING]:
+        with subtests.test(phase=phase):
+            h = DispatchHarness()
+            append = h.effects.append
 
-    def delayed(checkpoint):
-        append(checkpoint)
-        if checkpoint.phase is phase:
-            h.now = 100
+            def delayed(checkpoint):
+                append(checkpoint)
+                if checkpoint.phase is phase:
+                    h.now = 100
 
-    h.effects.append = delayed
-    result = h.adapter().dispatch(h.arguments)
-    assert h.tools.calls == 0
-    assert_private_free(result)
+            h.effects.append = delayed
+            result = h.adapter().dispatch(h.arguments)
+            assert h.tools.calls == 0
+            assert_private_free(result)
 
 
 def test_nested_unprojected_field_cannot_hide_under_authorized_parent():
@@ -447,37 +454,39 @@ def test_public_receipt_cannot_replace_verified_execution_authority():
     assert_private_free(result)
 
 
-@pytest.mark.parametrize("generation", [None, True, "1", 0])
-def test_write_requires_current_preview_generation(generation):
-    h = DispatchHarness()
-    result = h.adapter(admission_generation=generation).dispatch(h.arguments)
-    assert h.tools.calls == 0
-    assert not h.effects.lineages
-    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
-    assert_private_free(result)
+def test_write_requires_current_preview_generation(subtests):
+    for generation in [None, True, "1", 0]:
+        with subtests.test(generation=generation):
+            h = DispatchHarness()
+            result = h.adapter(admission_generation=generation).dispatch(h.arguments)
+            assert h.tools.calls == 0
+            assert not h.effects.lineages
+            assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+            assert_private_free(result)
 
 
-@pytest.mark.parametrize("boundary", ["before", "approval_recorded", "dispatching"])
-def test_emergency_stop_prevents_invocation_at_each_durable_boundary(boundary):
-    from openmed.agent.admission import AdmissionState
+def test_emergency_stop_prevents_invocation_at_each_durable_boundary(subtests):
+    for boundary in ["before", "approval_recorded", "dispatching"]:
+        with subtests.test(boundary=boundary):
+            from openmed.agent.admission import AdmissionState
 
-    h = DispatchHarness()
-    if boundary == "before":
-        h.admission.state = AdmissionState.STOPPED
-    else:
-        append = h.effects.append
-
-        def stop_after_append(checkpoint):
-            append(checkpoint)
-            if checkpoint.phase.value == boundary:
+            h = DispatchHarness()
+            if boundary == "before":
                 h.admission.state = AdmissionState.STOPPED
-                h.admission.generation += 1
+            else:
+                append = h.effects.append
 
-        h.effects.append = stop_after_append
-    result = h.adapter().dispatch(h.arguments)
-    assert h.tools.calls == 0
-    assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
-    assert_private_free(result)
+                def stop_after_append(checkpoint):
+                    append(checkpoint)
+                    if checkpoint.phase.value == boundary:
+                        h.admission.state = AdmissionState.STOPPED
+                        h.admission.generation += 1
+
+                h.effects.append = stop_after_append
+            result = h.adapter().dispatch(h.arguments)
+            assert h.tools.calls == 0
+            assert result.outcome.outcome_class is OutcomeClass.POLICY_DENIED
+            assert_private_free(result)
 
 
 def test_fresh_enable_requires_fresh_generation_bound_approval():

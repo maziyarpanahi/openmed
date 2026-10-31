@@ -230,24 +230,25 @@ def test_line_preservation_keeps_small_font_tokens_on_same_line(monkeypatch):
     )
 
 
-@pytest.mark.parametrize("value", [1, "true", None])
-def test_line_preservation_rejects_untyped_control(value):
-    with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
-        extract_pdf("unopened.pdf", preserve_lines=value)
+def test_line_preservation_rejects_untyped_control(subtests):
+    for value in [1, "true", None]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError, match="preserve_lines must be a boolean"):
+                extract_pdf("unopened.pdf", preserve_lines=value)
 
 
-@pytest.mark.parametrize(
-    "top,bottom", [(float("nan"), 30), (20, float("inf")), (30, 20), (20, 20)]
-)
-def test_line_preservation_rejects_invalid_word_geometry(monkeypatch, top, bottom):
-    words = [dict(text="Patient", x0=10, x1=40, top=top, bottom=bottom)]
-    monkeypatch.setitem(
-        sys.modules,
-        "pdfplumber",
-        SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
-    )
-    with pytest.raises(ValueError, match="valid word geometry"):
-        extract_pdf("synthetic.pdf", preserve_lines=True)
+def test_line_preservation_rejects_invalid_word_geometry(subtests):
+    for top, bottom in [(float("nan"), 30), (20, float("inf")), (30, 20), (20, 20)]:
+        with subtests.test(top=top, bottom=bottom):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                words = [dict(text="Patient", x0=10, x1=40, top=top, bottom=bottom)]
+                monkeypatch.setitem(
+                    sys.modules,
+                    "pdfplumber",
+                    SimpleNamespace(open=lambda path: _FakePdf([_FakePage(words)])),
+                )
+                with pytest.raises(ValueError, match="valid word geometry"):
+                    extract_pdf("synthetic.pdf", preserve_lines=True)
 
 
 def test_project_text_spans_merges_same_line_words(fake_pdfplumber):
@@ -300,39 +301,43 @@ def test_redact_document_pdf_reports_detected_rectangles(
     assert "text_sha256" in rectangles[0]["metadata"]
 
 
-@pytest.mark.parametrize("boundary", ["snapshot", "extract", "prepare", "detector"])
-def test_pdf_annotation_refusals_discard_private_exception_context(
-    monkeypatch, boundary
-):
-    from io import BytesIO
+def test_pdf_annotation_refusals_discard_private_exception_context(subtests):
+    for boundary in ["snapshot", "extract", "prepare", "detector"]:
+        with subtests.test(boundary=boundary):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                from io import BytesIO
 
-    import openmed.multimodal.documents_pdf as pdf
-    from openmed.multimodal.base import ExtractedDocument
+                import openmed.multimodal.documents_pdf as pdf
+                from openmed.multimodal.base import ExtractedDocument
 
-    class PrivateSource(BytesIO):
-        def read(self, *args):
-            raise RuntimeError("synthetic private PDF source detail")
+                class PrivateSource(BytesIO):
+                    def read(self, *args):
+                        raise RuntimeError("synthetic private PDF source detail")
 
-    def fail(*args, **kwargs):
-        raise RuntimeError("synthetic private annotation detail")
+                def fail(*args, **kwargs):
+                    raise RuntimeError("synthetic private annotation detail")
 
-    if boundary == "snapshot":
-        call = lambda: pdf._snapshot_pdf_source(PrivateSource())
-        code = "pdf_source_unreadable"
-    elif boundary == "extract":
-        call = lambda: pdf.extract_pdf(PrivateSource(), include_annotations=True)
-        code = "annotation_appearance_unmappable"
-    elif boundary == "prepare":
-        monkeypatch.setitem(sys.modules, "pikepdf", SimpleNamespace(open=fail))
-        call = lambda: pdf._prepare_annotation_source(BytesIO(b"synthetic"))
-        code = "annotation_appearance_unmappable"
-    else:
-        call = lambda: pdf._annotation_entities(
-            ExtractedDocument(text="", spans=()), fail, None
-        )
-        code = "annotation_detection_failed"
-    with pytest.raises(ValueError) as caught:
-        call()
-    assert str(caught.value) == code
-    assert caught.value.__cause__ is None
-    assert caught.value.__context__ is None
+                if boundary == "snapshot":
+                    call = lambda: pdf._snapshot_pdf_source(PrivateSource())
+                    code = "pdf_source_unreadable"
+                elif boundary == "extract":
+                    call = lambda: pdf.extract_pdf(
+                        PrivateSource(), include_annotations=True
+                    )
+                    code = "annotation_appearance_unmappable"
+                elif boundary == "prepare":
+                    monkeypatch.setitem(
+                        sys.modules, "pikepdf", SimpleNamespace(open=fail)
+                    )
+                    call = lambda: pdf._prepare_annotation_source(BytesIO(b"synthetic"))
+                    code = "annotation_appearance_unmappable"
+                else:
+                    call = lambda: pdf._annotation_entities(
+                        ExtractedDocument(text="", spans=()), fail, None
+                    )
+                    code = "annotation_detection_failed"
+                with pytest.raises(ValueError) as caught:
+                    call()
+                assert str(caught.value) == code
+                assert caught.value.__cause__ is None
+                assert caught.value.__context__ is None

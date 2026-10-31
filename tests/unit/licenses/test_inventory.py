@@ -28,9 +28,8 @@ def write_markdown_inventory(path: Path, rows: str) -> Path:
     return target
 
 
-@pytest.mark.parametrize(
-    ("expression", "expected"),
-    [
+def test_classify_license_fails_closed(subtests) -> None:
+    for expression, expected in [
         ("MIT", inventory.LicenseClass.PERMISSIVE),
         ("Apache-2.0 OR BSD-3-Clause", inventory.LicenseClass.PERMISSIVE),
         ("GPL-3.0-only", inventory.LicenseClass.RESTRICTED),
@@ -38,17 +37,16 @@ def write_markdown_inventory(path: Path, rows: str) -> Path:
         ("MIT OR", inventory.LicenseClass.UNKNOWN),
         ("LicenseRef-local-review", inventory.LicenseClass.UNKNOWN),
         ("", inventory.LicenseClass.UNKNOWN),
-    ],
-)
-def test_classify_license_fails_closed(expression: str, expected: str) -> None:
-    assert inventory.classify_license(expression) == expected
+    ]:
+        with subtests.test(expression=expression, expected=expected):
+            assert inventory.classify_license(expression) == expected
 
 
 def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     entries = inventory.parse_inventory(inventory.DEFAULT_INVENTORY)
     records = inventory.audit_project()
 
-    assert len(entries) == 112
+    assert len(entries) == 121
     assert len(records) == len(entries)
     assert {
         record.name
@@ -72,12 +70,15 @@ def test_checked_in_inventory_covers_non_dev_project_dependencies() -> None:
     }
     assert {record.name for record in records} >= {
         "faker",
+        "gliformer",
+        "gliner2",
+        "filelock",
         "jieba",
         "medspacy",
         "pysbd",
         "pyyaml",
+        "setuptools",
         "snowflake-snowpark-python",
-        "tomli",
     }
 
 
@@ -109,42 +110,48 @@ def test_quarantined_bridge_does_not_allow_an_unknown_license() -> None:
     ]
 
 
-@pytest.mark.parametrize(
-    "expression",
-    ["AGPL-3.0-only", "Elastic-2.0", "GPL-3.0-only AND Elastic-2.0"],
-)
-def test_bridge_exception_requires_the_reviewed_license(expression: str) -> None:
-    records = inventory.audit_inventory(
-        [inventory.InventoryEntry("extract-msg", expression, scope="email-msg-gpl")]
-    )
+def test_bridge_exception_requires_the_reviewed_license(subtests) -> None:
+    for expression in ["AGPL-3.0-only", "Elastic-2.0", "GPL-3.0-only AND Elastic-2.0"]:
+        with subtests.test(expression=expression):
+            records = inventory.audit_inventory(
+                [
+                    inventory.InventoryEntry(
+                        "extract-msg", expression, scope="email-msg-gpl"
+                    )
+                ]
+            )
 
-    assert [record.name for record in inventory.gate_failures(records)] == [
-        "extract-msg"
-    ]
+            assert [record.name for record in inventory.gate_failures(records)] == [
+                "extract-msg"
+            ]
 
 
-@pytest.mark.parametrize(
-    "declarations",
-    [
+def test_project_bridge_scope_cannot_be_forged_by_inventory(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for declarations in [
         'dependencies = ["extract-msg"]\n',
         '[project.optional-dependencies]\nother = ["extract-msg"]\n',
         'dependencies = ["extract-msg"]\n'
         '[project.optional-dependencies]\nemail-msg-gpl = ["extract-msg"]\n',
-    ],
-)
-def test_project_bridge_scope_cannot_be_forged_by_inventory(
-    tmp_path: Path, declarations: str
-) -> None:
-    path = write_markdown_inventory(
-        tmp_path,
-        "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
-    )
-    project = tmp_path / "pyproject.toml"
-    project.write_text("[project]\n" + declarations, encoding="utf-8")
+    ]:
+        with subtests.test(declarations=declarations):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = write_markdown_inventory(
+                tmp_path,
+                "| `extract-msg` | email-msg-gpl | GPL-3.0-only |\n",
+            )
+            project = tmp_path / "pyproject.toml"
+            project.write_text("[project]\n" + declarations, encoding="utf-8")
 
-    with pytest.raises(inventory.InventoryError, match="unreviewed project scope"):
-        inventory.audit_project(path, project)
-    assert inventory.main(["--inventory", str(path), "--pyproject", str(project)]) == 1
+            with pytest.raises(
+                inventory.InventoryError, match="unreviewed project scope"
+            ):
+                inventory.audit_project(path, project)
+            assert (
+                inventory.main(["--inventory", str(path), "--pyproject", str(project)])
+                == 1
+            )
 
 
 def test_project_bridge_exception_matches_the_actual_extra(tmp_path: Path) -> None:
@@ -255,11 +262,12 @@ def test_malformed_inventory_error_does_not_echo_source_values(tmp_path: Path) -
     assert "synthetic-private-value" not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    "expression", ["((MIT)", "MIT)", "MIT (OR Apache-2.0)", "MIT_", "MIT WITH MIT"]
-)
-def test_malformed_permissive_expression_cannot_pass(expression: str) -> None:
-    assert inventory.classify_license(expression) == inventory.LicenseClass.UNKNOWN
+def test_malformed_permissive_expression_cannot_pass(subtests) -> None:
+    for expression in ["((MIT)", "MIT)", "MIT (OR Apache-2.0)", "MIT_", "MIT WITH MIT"]:
+        with subtests.test(expression=expression):
+            assert (
+                inventory.classify_license(expression) == inventory.LicenseClass.UNKNOWN
+            )
 
 
 def test_balanced_permissive_group_is_supported() -> None:
@@ -268,17 +276,16 @@ def test_balanced_permissive_group_is_supported() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "entries",
-    [
+def test_mapping_cannot_silently_drop_or_rename_entries(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for entries in [
         {"known": {"license": "MIT"}, "unreviewed": "unknown"},
         {"unreviewed": {"name": "known", "license": "MIT"}},
-    ],
-)
-def test_mapping_cannot_silently_drop_or_rename_entries(
-    tmp_path: Path, entries
-) -> None:
-    path = tmp_path / "inventory.json"
-    path.write_text(json.dumps({"dependencies": entries}), encoding="utf-8")
-    with pytest.raises(inventory.InventoryError):
-        inventory.parse_inventory(path)
+    ]:
+        with subtests.test(entries=entries):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            path = tmp_path / "inventory.json"
+            path.write_text(json.dumps({"dependencies": entries}), encoding="utf-8")
+            with pytest.raises(inventory.InventoryError):
+                inventory.parse_inventory(path)

@@ -2,7 +2,7 @@ name: Vulnerability Scan
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -15,7 +15,7 @@ on:
       - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -40,6 +40,10 @@ permissions:
 env:
   IMAGE_NAME: openmed:ci
   VULN_SCAN_SEVERITY_THRESHOLD: ${{ github.event.inputs.severity-threshold || 'HIGH' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   vulnerability-scan:

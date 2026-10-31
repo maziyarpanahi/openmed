@@ -502,6 +502,11 @@
     },
     {
       "classification": "operational",
+      "function": "DecisionServerBackend._send_once",
+      "module": "openmed.structured.decision_server"
+    },
+    {
+      "classification": "operational",
       "function": "SQLiteJourneyStore.__init__",
       "module": "openmed.structured.store.local"
     },

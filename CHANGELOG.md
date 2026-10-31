@@ -7,13 +7,305 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Interoperability
+## [3.2.0] - 2026-10-30
 
-- Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
-  value-free event metadata and sequence reconciliation findings. Keep control
-  notifications out of new workflow events and require an authorized read for
-  missing event content; no resources, credentials or identifiers are returned
-  (#3772).
+Global languages, synthetic clinical data and local decision-model backends.
+This release candidate was prepared on 2026-10-30 from v3.1.0 and retains the
+model catalog, artifact pins and registry pointer targets. Publication and the final release
+date remain pending. See the [release notes](docs/release/v3.2.0.md) and
+[migration guide](docs/migration/3.1-to-3.2.md).
+
+### Breaking Changes
+
+- Burned-in synthetic rendering now requires covering fonts and complex-script shaping; missing default fonts require explicit `font_fallback=True` (#3868).
+  Dataset-recipe callers can opt into checked image fallback through
+  `builtin_recipe_generators(font_fallback=True)`; the policy is provenance-bound.
+
+- Require Python 3.11 or newer for the v3.2 development line so dependency
+  security fixes can be installed. Upgrade Python 3.10 environments before
+  updating OpenMed; published v3.1.0 remains available for the older interpreter.
+  See the [dependency migration guidance](docs/security/dependency-policy.md#python-311-floor-and-the-snowflake-filelock-override).
+
+### Added
+
+- Document existing synthetic generators, offline examples, public exports and
+  dataset provenance limits in a shared navigation group (#3896).
+
+- Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
+
+- Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.
+
+- Generate structured multilingual synthetic dialogue with grapheme-safe spans, Journey fact evidence and explicit adjudication truth (#2846).
+
+- Validate synthetic releases against disclosure, lineage, licenses, withdrawals, benchmark contamination and subgroup utility evidence (#3214).
+
+- Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
+
+- Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
+
+- Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+  The live inventory includes explicit augmentation-only generators independently of model-backed language support.
+
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
+
+- Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
+
+- Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
+
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
+
+- Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
+
+- Add deterministic rare-case synthetic privacy stress records with configurable attribute tiers, value-free risk labels, and linkage-attack truth.
+
+- Add deterministic synthetic patient-intake conversations with causal turn-level PHI, assertion, revision, consent, and provenance labels.
+
+- Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
+
+- Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
+
+- Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
+
+- Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
+
+- Add an opt-in System One and Decisions server backend with loopback defaults, explicit non-PHI private-network approval, bounded responses and deadlines, and typed transport failures.
+
+- Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
+
+- Add declarative localized medical-record-number labels shared by semantic merging and safety sweeps, retaining exact identifier spans and label-free negative controls.
+
+- Detect UK postcodes through the English en_GB overlay, including bounded address context for lookalike inward codes and explicit UK detection aliases.
+
+- Add an experimental Sinhala route for user-supplied models, structural Sri Lanka NIC handling and synthetic script-aware surrogate approximations without adding bundled model support.
+
+- Recognize short Thai address lines without consuming adjacent native-script date spans.
+
+- Propagate context-gated national-ID validator rejections through semantic merging and safety sweeps while preserving unrelated and validated spans.
+
+- Keep six-digit Bengali PIN codes detectable near dotted date fragments by requiring a four-digit date year.
+
+- Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
+
+- Record surrogate-provider versions and digest-only probe receipts, and expose
+  optional strict drift checks for the seeded synthetic corpus (#3893).
+
+- Package and install signed offline language bundles with explicit resource, license, checksum and synthetic self-test gates (#2866).
+
+- Activate verified local language bundles with qualified task records, atomic registry generations and explicit rollback (#3695).
+
+- Generate seeded Devanagari and Telugu name surrogates from disjoint,
+  well-formed aksara while preserving token shape (#3892).
+
+- Generate local-convention African address and town surrogates, with mask
+  fallback when source-disjoint vocabulary is exhausted (#3891).
+
+- Add an opt-in live surrogate quality gate with deterministic per-language and per-label checks, hash-only reports, and explicit documented approximation exemptions.
+
+- Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
+
+- Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).
+
+- Detect native-calendar month-name dates with exact spans and value-free calendar tags (#3866).
+
+- Shift Solar Hijri, Ethiopian and Thai Buddhist-era dates within bounded native-calendar ranges (#3867).
+
+- Shift declared Hijri and Bikram Sambat dates through bounded, digest-verified permissive calendar tables (#3888).
+
+- Add synthetic fhir records with bounded offline contracts, synthetic controls
+  and documented behavior (#2840).
+
+- Add synthetic omop cohorts with bounded offline contracts, synthetic controls
+  and documented behavior (#2841).
+
+- Add synthetic lab time series with bounded offline contracts, synthetic controls
+  and documented behavior (#2843).
+
+- Add synthetic medication courses with bounded offline contracts, synthetic controls
+  and documented behavior (#2844).
+
+- Add synthetic prior-authorization packets with bounded offline contracts, synthetic controls
+  and documented behavior (#2842).
+
+- Add synthetic clinical note grammars with bounded offline contracts, synthetic controls
+  and documented behavior (#2838).
+
+- Add synthetic longitudinal trajectories with bounded offline contracts, synthetic controls
+  and documented behavior (#2839).
+
+- Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
+
+- Add deterministic synthetic dataset partitions that preserve shared trajectory,
+  derivation lineage and transitive ancestry, with explicit unmet-stratum export
+  refusal (#3692).
+
+- Report independent synthetic fidelity axes, Wilson intervals and aggregate
+  reference distribution comparisons without retaining reference records (#2852).
+
+- Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
+
+- Validate synthetic artifact facts, times, labels and coordinates against shared Journey truth (#3694).
+
+- Gate multilingual corpus shard uses on declared license, consent, translation lineage and restricted user-supplied custody (#2869).
+
+- Package controlled synthetic recipes and evidence into canonical offline-verifiable release capsules (#2854).
+
+- Add clinical transliteration provenance with bounded offline contracts, synthetic controls
+  and documented behavior (#2857).
+
+- Add local abbreviation mining with bounded offline contracts, synthetic controls
+  and documented behavior (#2858).
+
+- Add code-switch span projection with bounded offline contracts, synthetic controls
+  and documented behavior (#2860).
+
+- Add deterministic metadata-only native-review selection with scarcity, disagreement,
+  diversity ties, and simultaneous language, label and total budget caps (#2863).
+
+- Add independent-source cross-lingual pseudo-label consensus with explicit
+  adjudication for conflicting or overlapping projections (#2862).
+
+- Added a bounded, value-free synthetic memorization audit that fingerprints
+  protected reference material, blocks exact, paraphrase-style and exposure
+  matches on configurable signals, and renders canonical digest-only JSON
+  evidence with offline golden tests (#2853).
+
+- Added a strict, fail-closed synthetic dataset license and lineage manifest
+  validator that binds source class, SPDX license expression, generator digest,
+  model provenance, bounded dependencies and the redistribution decision, and
+  renders canonical reason-code-only reports (#3099).
+
+- Add language coverage diffs with bounded offline contracts, synthetic controls
+  and documented behavior (#3101).
+
+- Add clinical language readiness with bounded offline contracts, synthetic controls
+  and documented behavior (#2855).
+
+- Audit synthetic script tokenization fragmentation, unknown-token rates,
+  grapheme splits and offset recovery against pinned local limits (#2856).
+
+- Stratify language uncertainty and minimum-detectable-effect planning without ranking underpowered slices (#2865).
+
+- Gate paired multilingual checkpoint changes against every declared last-green language/label cell (#2870).
+
+- Added versioned, offline JSON Schemas for the synthetic training records the
+  package already emits (`locale_phi_example`, `burned_in_annotation`,
+  `social_history_example`, `section_label_record`,
+  `translation_augmented_example`), with `record_schema_id`, schema and
+  fingerprint export helpers, deterministic file writing and a `validate_record`
+  check that pairs schema validation with offset invariants and rejects records
+  claiming real PHI (#3895).
+
+- Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
+  PHI truth manifest addressed by segment, field, repetition, component,
+  subcomponent and raw-text offsets across encoding-character variants, escape
+  sequences, repetitions, timestamp precisions, free text and Z-segments. A
+  value-free leakage harness reports residual PHI after `redact_hl7v2()` by
+  field position and label (#3884).
+
+- Generate seeded synthetic C-CDA documents (CCD, discharge summary, progress
+  note) with element-level PHI truth, narrative-to-structured links and
+  placeholder codes, plus a value-free leakage harness over `redact_cda()`
+  that reports residuals by element path and label and rejects remote schema
+  or entity-bearing options (#3885).
+
+- Added deterministic clinical language-pack readiness matrices with closed
+  capability and state vocabularies, `sha256:` evidence digests, alias-normalized
+  locale folding, byte-stable JSON/Markdown rendering and registry-derived
+  entries, plus offline golden tests (#3100).
+
+- Added the offline `openmed i18n check` locale-pack conformance command
+  with one independent result per component, a closed set of stable reason
+  codes, deterministic text/JSON output and offline golden tests (#3103).
+
+- Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
+  numbers, context-gated citizenship-certificate and national identity card
+  numbers without checksum claims, numeric Bikram Sambat dates and postal
+  codes, in Devanagari and ASCII digits. Add the `ne` number-separator entry
+  and a synthetic `ne.jsonl` golden fixture. Nepali remains a user-supplied
+  model route, and Hindi and Marathi outputs are unchanged (#3864).
+
+- Detect Hausa, Yoruba, Igbo and Kinyarwanda month-name dates in day-month-year
+  and month-day-year order from CLDR month vocabularies and common spellings.
+  Yoruba and Igbo match NFC, NFD and unmarked forms on grapheme-safe spans; a
+  month word without a day and year stays unflagged. Adds synthetic month-name
+  fixtures, including a new Kinyarwanda golden fixture (#3865).
+
+- Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
+  `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
+  optional `gliformer` / `gliner2` extras, index-free checkpoint selection,
+  device-isolated caches, offline loading, exact spans, and disease-label
+  defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
+
+### Fixed
+
+- Make security-support guidance version independent and distinguish published stable releases from candidates (#4131, #4133).
+
+- Require banking context for pattern-only SWIFT/BIC matches so clinical section headers remain intact; retain contextual codes and model detections (#4152, #4230).
+
+- Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
+
+- Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
+
+- Preserve teacher identities on typed weak-label spans, keeping typed and mapping consensus consistent without mutating caller-owned spans (#4202, #4219).
+
+- Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
+  default and recognize saved GLiNER2.5 boundary-extractor configurations for
+  offline local loading.
+
+- Retain the `openmed.service.schemas.DECISION_SCHEMA_VERSION` compatibility
+  export while adding the decision 1.1 question-set contract.
+
+- Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
+
+- Refresh the exact service-image timezone-data pin to the available Debian Forky release so image builds, SBOM generation and vulnerability scans can complete.
+
+- Preserve registered non-CJK honorifics and grammatical cues in person
+  surrogates, and retain Vietnamese family-first order (#3887).
+
+- Keep Arabic (`ar`) and Amharic (`am`) name, city, and street surrogates in
+  the source script. Arabic-script spans use Faker's `ar_AA` names and curated
+  synthetic Egyptian place templates unless a regional locale ships
+  Arabic-script data; Ethiopic spans recombine the curated `am` values, and
+  `LocalePhiGenerator` emits native-script names and addresses for both
+  (#3863).
+
+- Load GLiNER2 checkpoints with the `gliner2[local]` package's architecture-aware
+  extractor and retain native span offsets and confidence scores instead of
+  attempting to use older `gliner` classes (#4329).
+
+## [3.1.0] - 2026-10-20
+
+Governed clinical workflows, reviewed clinical evidence, interoperability and
+privacy hardening. The baseline is v3.0.0. This SDK candidate retains existing
+model artifacts and pointer targets; synthetic validation does not establish
+clinical efficacy. Package publication remains a separate release action.
+
+### Breaking Changes
+
+- Keep v3.1.0 with the maintainer-approved security exception for
+  `ApprovalReceipt` and `AggregateDPRelease`. Preserve the existing privacy
+  fixes; require migration for their constructor and public-record changes.
+  The readiness gate admits exactly ten reviewed field removals against v3.0.0,
+  retains them in signed evidence, and rejects unrelated breaks or reuse of
+  this exception in another minor or patch release. See
+  [3.0-to-3.1](docs/migration/3.0-to-3.1.md).
+
+- `AggregateDPRelease` now emits release schema version 2 and removes the
+  `noise` and `seed_digest` fields from its public dataclass and serialized
+  records. Update constructors and consumers to use the noisy `value`, budget
+  accounting, and new `test_only` flag instead; ledger schemas and digests are
+  unchanged. Previously written records containing both `value` and `noise`
+  disclose their input aggregates and must not be treated as private releases.
+  Seeded releases are synthetic-test-only and provide no production privacy
+  guarantee; the CLI now requires `--test-mode` with `--seed`. Omit the seed for
+  production system randomness (#3723).
+- Gaussian helpers now use analytic privacy-profile calibration, including
+  epsilon above one, and record `calibration_method` in spend records. Noise
+  scales, utility estimates, and seeded Gaussian outputs intentionally change;
+  unrepresentable calibration fails closed. Update deterministic expectations
+  without restoring the invalid classical scale (#3724).
 
 ### Added
 
@@ -101,20 +393,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands over validated analyzed spans. Emit value-free review records,
   require explicit temporal references and links, and reserve new private
   output files without loading NER models or downloading artifacts.
-### Security
-
-- Refresh explicitly configured SMART credentials through atomic injected custody,
-  validate token type/lifetime/granted permission unions, rotate refresh secrets,
-  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
-  now rejects invalid or insufficient token responses and expired dispatches
-  (#3773).
-
-### Documentation
-
-- Make the supported-versions section of `SECURITY.md` version-agnostic instead
-  of naming the long-superseded `1.7.x` line (#4131).
-
-### Added
 
 - Import-free effect-path inventory and local/CI guards for unclassified
   HTTP/database effect candidates and built-in MCP, REST, CLI and Journey
@@ -135,121 +413,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded inspection retries and polling, one-attempt mutations and shared
   offline contract vectors (#3670).
 
-### Added
-
 - Default-disabled, authenticated REST workflow inspection, receipt submission
   and cancellation intent over an injected custody service, with bounded
   governance schemas and content-free responses (#3668).
 
-### Added
-
 - Offline `summarize` and `nli verify` CLI commands with bounded local inputs,
   value-free console results, explicit baseline selection, and exclusive private
   summary/metadata destinations (#3801).
-
-### Added
 
 - Metadata-only MCP governed workflow preflight, preview, status and human-review
   request tools. Server-held single-use consent protects handoff creation; no
   approval token or reviewer claim crosses MCP and no tool executes an effect
   (#3762).
 
-### Added
-
 - OpenMedKit metadata-only agent review, native OMOP preview, approval receipt
   and run-evidence parsers with shared Python conformance vectors. Local custody
   hooks record typed receipt observations and reject replay/changed actions;
   parsed evidence never grants clinical execution authority (#3669).
 
-### Security fixes
+- Include governance, FHIR/OMOP write-back, lineage and MCP namespaces in the
+  per-PR public API compatibility gate, with the same deprecation window and
+  dependency-light capture of declared exports.
 
-- Align Python and OpenMedKit summary leakage guards for Unicode variants,
-  unspaced scripts, short identifiers and recognized Hangul suffixes. Reuse
-  detector normalization, retain value-free counts and source digests, and add
-  shared synthetic brief/refusal parity controls (#3729).
-
-### Changed
-
-- Map reviewed brief profile fields to existing evidence-class budgets, bind
-  value-free estimates into audit records and distinguish length overflow from
-  unavailable local models. Export controlled summarizer errors and preserve
-  their typed reason codes without private exception contexts. Use script-aware
-  first-three-sentence boundaries for explicit comparison extraction; retain
-  reviewed fact-coverage selection and native unloaded-model refusal
-  (#3746, #3747, #3749, #3750).
-
-- Select explicit extractive brief sentences by unique reviewed fact coverage,
-  independent omission rules and existing length allocations. Preserve ordered
-  citations and expose insufficient-budget/resource-limit diagnostics without
-  partial output; retain the first-three-sentence comparison baseline (#3653).
-  Recomputed synthetic summary reports retain missing-adjudication failures.
-
-### Breaking Changes
-
-- `AggregateDPRelease` now emits release schema version 2 and removes the
-  `noise` and `seed_digest` fields from its public dataclass and serialized
-  records. Update constructors and consumers to use the noisy `value`, budget
-  accounting, and new `test_only` flag instead; ledger schemas and digests are
-  unchanged. Previously written records containing both `value` and `noise`
-  disclose their input aggregates and must not be treated as private releases.
-  Seeded releases are synthetic-test-only and provide no production privacy
-  guarantee; the CLI now requires `--test-mode` with `--seed`. Omit the seed for
-  production system randomness (#3723).
-- Gaussian helpers now use analytic privacy-profile calibration, including
-  epsilon above one, and record `calibration_method` in spend records. Noise
-  scales, utility estimates, and seeded Gaussian outputs intentionally change;
-  unrepresentable calibration fails closed. Update deterministic expectations
-  without restoring the invalid classical scale (#3724).
-
-### Security
-
-- Registered MLX summarizers now require a provisioned, symlink-free package
-  with a trusted manifest pin before model construction. Admission verifies
-  every file, refuses undeclared members, and derives task support, context
-  limits and quantization from digest-bound metadata. Package failures expose
-  controlled reason codes; unprovisioned aliases fail closed without fallback.
-
-- Confine OpenMedKit MLX manifest paths during download, cache inspection and
-  local loading. Reject traversal and escaping symlinks with value-free errors,
-  remove stale ready markers and confined partial writes on rejection, and retain
-  root and nested tokenizer layouts (#3728).
-
-- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
-  pins and retain lockfile SARIF diagnostics after image-build failures.
-
-- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
-  development profiles to fix completed-subscription retention and awaitable
-  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
-
-### Documentation
-
-- Map direct FHIR/OpenMRS writes, OMOP persistence and transaction exports to
-  their explicit authority, review and execution boundaries in a v3.0-to-v3.1
-  migration guide with offline synthetic examples and marked fragments (#3785).
-
-- Add a governed-agent lifecycle overview and organize existing authority,
-  approval, write-back, evidence, recovery, evaluation and assurance guides
-  into one navigation section while preserving their public URLs (#3784).
-- Execute governed-agent Python documentation blocks offline with per-page
-  synthetic context. Require explicit, content-bound exceptions for application
-  adapter sketches, and fail on API drift or attempted external effects (#3795).
-
-- Explain SDOH extraction, registered determinants, custom extractors and cue
-  table loading with runnable offline synthetic examples and source-value limits.
-
-- Document clinical brief trust boundaries across Python, CLI, REST, MCP and
-  OpenMedKit, with existing mitigation tests and explicit residual risks;
-  validate mitigation test links and source citations offline (#3752).
-
-- Explain local summarizer/NLI configuration, pre-load artifact admission and
-  reviewed brief context wiring with executable synthetic doubles and drift
-  checks for every public backend error and brief refusal (#3751).
-
-- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
-  examples. Group clinical navigation by area and expose four previously
-  unlisted guides, preserving page URLs and the existing Pages byte budgets.
-
-### Added
+- Verify patient-keyed calendar-day shifts and emitted subject surrogates across
+  five Journey source surfaces using bounded local witness processors. Keep
+  protected values in memory and emit keyed proofs and counts; report missing
+  format coverage explicitly. Release schema v1.1 adds consistency blockers
+  while preserving v1.0 report parsing and historical signature verification.
+  Bind the candidate's synthetic fixture to shared patient/date witnesses and
+  regenerate its golden output; preserve the historical v3.0 inputs at their
+  immutable tag (#3806).
 
 - Add typed Python service-client grounding, profiling and cohort resolution,
   with explicit OpenAPI path coverage and documented operational exclusions (#3754).
@@ -424,7 +617,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a committed fingerprint snapshot, schema drift comparison, optional
   `jsonschema` validation and value-free contract tests (#3803).
 
+### Changed
+
+- Map reviewed brief profile fields to existing evidence-class budgets, bind
+  value-free estimates into audit records and distinguish length overflow from
+  unavailable local models. Export controlled summarizer errors and preserve
+  their typed reason codes without private exception contexts. Use script-aware
+  first-three-sentence boundaries for explicit comparison extraction; retain
+  reviewed fact-coverage selection and native unloaded-model refusal
+  (#3746, #3747, #3749, #3750).
+
+- Select explicit extractive brief sentences by unique reviewed fact coverage,
+  independent omission rules and existing length allocations. Preserve ordered
+  citations and expose insufficient-budget/resource-limit diagnostics without
+  partial output; retain the first-three-sentence comparison baseline (#3653).
+  Recomputed synthetic summary reports retain missing-adjudication failures.
+
+- Issue v2 human-approval tokens with signed key identifiers and issuance times,
+  injected local key rotation, bounded lifetime/skew checks before nonce claims,
+  and explicit v1 verification compatibility. Approval receipts now use a v2
+  codes-and-digests-only schema; failure examples cover the migration (#3768).
+
+### Interoperability
+
+- Parse bounded R4 backport, R4B and R5 Subscription notification Bundles into
+  value-free event metadata and sequence reconciliation findings. Keep control
+  notifications out of new workflow events and require an authorized read for
+  missing event content; no resources, credentials or identifiers are returned
+  (#3772).
+
+### Security
+
+- Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
+  `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
+  patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A
+  lock-only packaging override lifts Prefect 3.7's
+  `packaging<26.3` cap so the lock keeps Airflow on patched 3.3.2; the base
+  SDK's dependency set is unchanged.
+- Refresh the service image's exact Debian forky pins for ca-certificates,
+  liblzma5 and tzdata after the archive retired the previous versions.
+- Renew the maintainer-reviewed exception for unpatched NLTK
+  `CVE-2026-81726` in the universal lockfile through 2026-11-03. NLTK remains
+  optional and absent from the core closure and service image. The exception
+  rejects other packages or targets, any reported fix, and expiry; this is
+  temporary risk acceptance, not remediation.
+- Raise optional dependency floors to patched aiohttp 3.14.4, banks 2.5.1,
+  Mako 1.4.2, multidict 6.9.1 and tinytag 2.3.0. Apply the same floors to
+  published extras and the frozen lockfile, preserving AWQ's Linux-only
+  boundary and the base SDK's dependency set.
+
+- Require MCP 1.30 or newer for patched session handling in the optional
+  MCP and development dependency profiles (#4221).
+
+- Refresh explicitly configured SMART credentials through atomic injected custody,
+  validate token type/lifetime/granted permission unions, rotate refresh secrets,
+  and revoke uncertain or invalid refreshes with value-free findings. Bulk export
+  now rejects invalid or insufficient token responses and expired dispatches
+  (#3773).
+
+- Align Python and OpenMedKit summary leakage guards for Unicode variants,
+  unspaced scripts, short identifiers and recognized Hangul suffixes. Reuse
+  detector normalization, retain value-free counts and source digests, and add
+  shared synthetic brief/refusal parity controls (#3729).
+
+- Registered MLX summarizers now require a provisioned, symlink-free package
+  with a trusted manifest pin before model construction. Admission verifies
+  every file, refuses undeclared members, and derives task support, context
+  limits and quantization from digest-bound metadata. Package failures expose
+  controlled reason codes; unprovisioned aliases fail closed without fallback.
+
+- Confine OpenMedKit MLX manifest paths during download, cache inspection and
+  local loading. Reject traversal and escaping symlinks with value-free errors,
+  remove stale ready markers and confined partial writes on rejection, and retain
+  root and nested tokenizer layouts (#3728).
+
+- Restore service-container builds with matching exact Debian OpenSSL 3.6.5-1
+  pins and retain lockfile SARIF diagnostics after image-build failures.
+
+- Require Strawberry GraphQL 0.327.2 or newer in the optional service and
+  development profiles to fix completed-subscription retention and awaitable
+  permission-result handling (CVE-2026-107727 and CVE-2026-107728).
+
 ### Fixed
+
+- Reject emails whose redacted headers cannot be serialized as clean MIME
+  with `UnsupportedDocumentError` instead of an unhandled stdlib error. The
+  rejection omits the stdlib error, which embeds raw header bytes.
+- Handle decoding failures through both batch readers' per-file error paths,
+  continue later files in permissive mode, and retain strict propagation
+  without including decoder details in error reports (#4201).
+
+- Read JSONL/NDJSON by physical file lines, preserving Unicode separators
+  inside strings, blank-line handling, error-line numbering, and object-pair
+  hooks (#4205).
+
+- Require MCP Python SDK 1.30 or newer within the existing 1.x compatibility
+  range to fix unbounded Streamable HTTP session retention (CVE-2026-59951).
+  MCP remains optional; the base SDK dependency set is unchanged.
+
+- Accept signed consent receipts through the real MCP call transport while
+  retaining canonical argument schemas, bounded untrusted metadata, remote
+  authorization and single-use verification (#4147).
 
 - Report explicit CLI refusal and check outcomes, including cancelled briefs;
   inspect bounded local cache metadata and report summarizer package pin readiness
@@ -453,6 +746,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile on every supported Python version. Reject basic, week-date, ordinal
   and compact-offset input with value-free errors while retaining supported
   extended values, caller timezone rules and golden digests.
+
+- Honor per-call ONNX revision overrides before configured and default revisions
+  (#3504).
+- Retain service concurrency permits and drain tokens until timed-out model
+  work actually finishes, including GraphQL and batched requests. Add a
+  value-free orphaned-work gauge and bound parallel GraphQL resolver work
+  without changing REST timeout envelopes. Drain and orphaned-work accounting
+  also cover deployments without concurrency or rate limits (#3902).
+
+- Omit unchecked PDF annotation appearances in both raster redaction paths;
+  add explicit local detection of mapped annotation contents and appearances,
+  fail-closed unsupported geometry, and value-free annotation reports (#3726).
+
+- Route Thai and Hebrew to their native packs and fail closed on unsupported
+  letter-bearing scripts unless an explicit fallback is configured (#3738).
+- Share offset-safe decimal-digit and bidi-control normalization across both
+  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
+  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
+- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
+  surrogate order from the shared locale table (#3740, #3743).
+- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
+  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
+  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
+
+- Remove quadratic suffix copying from list boundary construction (#3518).
+
+- Treat eval-cache entries removed between lookup and read as cache misses,
+  allowing recomputation (#3505).
+
+- Confine service bulk paths to operator roots, restrict request-selected models,
+  and enforce complete REST route and GraphQL field scopes before execution.
+- Reject invalid JWT NumericDates, bound production token lifetimes, omit
+  credentials from config serialization, and use private atomic config writes.
+- Launch reference services with content-free structured access logs only.
+
+### Release checks
+
+- Synchronize Python, browser npm, Android, Swift demo, OpenAPI, standalone,
+  Helm/operator and documentation version surfaces at 3.1.0. Update SDK
+  candidate defaults to v3.1.0 and retain v3.0.0 as the API baseline.
+- Reconcile the complete v3.0.0-to-master range, including changes accidentally
+  recorded under the historical v3.0.0 section; preserve that released section
+  as recorded by its immutable tag.
+
+- Allow 60 minutes for the full CI pytest step after the Windows suite
+  completed its tests at the former 45-minute boundary. Preserve full discovery,
+  coverage, exit status and the bounded timeout contract.
+
+- Coordinate the REST shedding fixture through the event loop instead of an
+  additional blocking executor waiter. Retain the same response, privacy,
+  admission and post-release latency assertions, and release its controlled
+  worker on fixture failure.
+
+- Classify exported `typing.Any` aliases consistently on Python 3.10 through
+  3.13, without treating interpreter representation changes as removed APIs.
+  Real changes from an alias to a class, callable or constant still fail the
+  public API guard (#3770).
+
+- Distinguish ordinary SDK PRs from version-changing release candidates using
+  immutable base/head package metadata. Candidate PRs derive their stable
+  baseline and migration guide from that boundary; explicit dispatches always
+  evaluate all gates. Ordinary PRs produce a NOT_A_CANDIDATE scope receipt,
+  never a READY report (#3770).
+
+### Documentation
+
+- Map direct FHIR/OpenMRS writes, OMOP persistence and transaction exports to
+  their explicit authority, review and execution boundaries in a v3.0-to-v3.1
+  migration guide with offline synthetic examples and marked fragments (#3785).
+
+- Add a governed-agent lifecycle overview and organize existing authority,
+  approval, write-back, evidence, recovery, evaluation and assurance guides
+  into one navigation section while preserving their public URLs (#3784).
+- Execute governed-agent Python documentation blocks offline with per-page
+  synthetic context. Require explicit, content-bound exceptions for application
+  adapter sketches, and fail on API drift or attempted external effects (#3795).
+
+- Explain SDOH extraction, registered determinants, custom extractors and cue
+  table loading with runnable offline synthetic examples and source-value limits.
+
+- Document clinical brief trust boundaries across Python, CLI, REST, MCP and
+  OpenMedKit, with existing mitigation tests and explicit residual risks;
+  validate mitigation test links and source citations offline (#3752).
+
+- Explain local summarizer/NLI configuration, pre-load artifact admission and
+  reviewed brief context wiring with executable synthetic doubles and drift
+  checks for every public backend error and brief refusal (#3751).
+
+- Map v3.0 guarded clinical intelligence to source modules, guides and synthetic
+  examples. Group clinical navigation by area and expose four previously
+  unlisted guides, preserving page URLs and the existing Pages byte budgets.
 
 ## [3.0.0] - 2026-10-05
 
@@ -723,11 +1107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Issue v2 human-approval tokens with signed key identifiers and issuance times,
-  injected local key rotation, bounded lifetime/skew checks before nonce claims,
-  and explicit v1 verification compatibility. Approval receipts now use a v2
-  codes-and-digests-only schema; failure examples cover the migration (#3768).
-
 - Training and new-checkpoint publication are optional research, without a
   library-release milestone or feature-blocking relationship. SDK readiness
   verifies retained artifacts and pointers separately from model promotion.
@@ -789,11 +1168,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSONP revocation support and changes server-side grant validation ordering.
 
 ### Fixed
-- Retain service concurrency permits and drain tokens until timed-out model
-  work actually finishes, including GraphQL and batched requests. Add a
-  value-free orphaned-work gauge and bound parallel GraphQL resolver work
-  without changing REST timeout envelopes. Drain and orphaned-work accounting
-  also cover deployments without concurrency or rate limits (#3902).
 - Reuse Windows process-memory API types and bindings during streaming-table
   RSS sampling so the sampler does not retain a new ctypes pointer type per
   batch. Actual current-memory readings and unchanged overflow limits remain
@@ -804,21 +1178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording the failure in the report (#3500).
 - Reject unsupported RequestBudget mapping keys instead of silently ignoring
   misspelled limits (#3509).
-- Omit unchecked PDF annotation appearances in both raster redaction paths;
-  add explicit local detection of mapped annotation contents and appearances,
-  fail-closed unsupported geometry, and value-free annotation reports (#3726).
 - Preserve hash characters inside quoted configuration values while stripping
   trailing comments (#3502).
-- Route Thai and Hebrew to their native packs and fail closed on unsupported
-  letter-bearing scripts unless an explicit fallback is configured (#3738).
-- Share offset-safe decimal-digit and bidi-control normalization across both
-  privacy APIs, fold Persian/Urdu keyboard variants for matching, and add seeded
-  in-value bidi and native-digit robustness operators (#3739, #3741, #3742).
-- Detect validated dotted/prefixed Gregorian dates and derive date shifting and
-  surrogate order from the shared locale table (#3740, #3743).
-- Redact additional HL7 v2 relative/prior identifiers with typed XAD surrogates,
-  and C-CDA guardian, next-of-kin, informant and birthplace values; expose
-  value-free coverage inventories for unmapped fields/elements (#3744, #3745).
 - Strip BIO prefixes only at label beginnings, preserving interior labels such as
   HLA-B-27 (#3503).
 - Preserve tokenizer-provided subword offsets from any standard `Mapping`
@@ -841,11 +1202,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include ranked grounding alternatives in MedMentions top-k accuracy without
   crediting withheld selections or turning abstentions into predictions (#3569).
 - Reject overlapping sibling items at nested list levels.
-- Confine service bulk paths to operator roots, restrict request-selected models,
-  and enforce complete REST route and GraphQL field scopes before execution.
-- Reject invalid JWT NumericDates, bound production token lifetimes, omit
-  credentials from config serialization, and use private atomic config writes.
-- Launch reference services with content-free structured access logs only.
 - Require strict decoder validation before auto-detecting ISCII, preserving
   malformed Latin-1 strings through privacy preprocessing instead of raising
   or partially rewriting the input (#3242).

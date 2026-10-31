@@ -294,9 +294,8 @@ def test_trace_order_change_is_explicit_semantic_drift() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("factory", "code"),
-    [
+def test_invalid_metadata_fails_closed(subtests) -> None:
+    for factory, code in [
         (
             lambda: MeasureDefinitionEvidence("unsafe id", "1.0", DIGEST_A),
             "invalid_identifier",
@@ -317,13 +316,12 @@ def test_trace_order_change_is_explicit_semantic_drift() -> None:
             "invalid_time_range",
         ),
         (lambda: MeasureResultEvidence(2, 3, 0, DIGEST_A), "count_out_of_range"),
-    ],
-)
-def test_invalid_metadata_fails_closed(factory: Any, code: str) -> None:
-    with pytest.raises(QualityMeasureEvidenceError) as caught:
-        factory()
+    ]:
+        with subtests.test(factory=factory, code=code):
+            with pytest.raises(QualityMeasureEvidenceError) as caught:
+                factory()
 
-    assert caught.value.code == code
+            assert caught.value.code == code
 
 
 def test_duplicate_components_and_trace_steps_fail_closed() -> None:

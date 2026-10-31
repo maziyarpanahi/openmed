@@ -64,8 +64,13 @@ def test_surrogate_date_generators_share_locale_order(lang, order):
     from openmed.core.locale_formats import date_order_for_locale
 
     original = "2026.10.11" if order == "ymd" else "11.10.2026"
-    expected = preserve_date_format(original, date_order=order, rng=random.Random(4))
     locale = lang if "-" in lang else lang + "_XX"
+    expected = preserve_date_format(
+        original,
+        date_order=order,
+        rng=random.Random(4),
+        locale=locale,
+    )
     assert date_order_for_locale(locale) == order
     for generator in (_gen_date, _gen_date_of_birth):
         actual = generator(
