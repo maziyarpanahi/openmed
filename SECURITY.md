@@ -116,9 +116,10 @@ Privacy-impacting defects are never rated below **High**.
 
 ## Supported versions
 
-Security fixes target the **latest released minor version** (the most recent
-version listed in [CHANGELOG.md](CHANGELOG.md)); we do not backport to
-end-of-life lines. Reproduce on a supported version before reporting.
+Security fixes target the **latest released minor version**; we do not backport
+to end-of-life lines. See [CHANGELOG.md](CHANGELOG.md) for the release history.
+Unreleased entries and release candidates do not establish a supported stable
+release. Reproduce on a supported released version before reporting.
 
 | Version | Supported |
 |---|---|

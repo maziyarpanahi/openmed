@@ -11,7 +11,7 @@
     "manifest_digest", "reproduction", "packet_digest", "signature"
   ],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "compatibility_policy": {"const": "same_major"},
     "release": {
       "type": "object", "additionalProperties": false,
@@ -114,9 +114,70 @@
       "properties": {"evaluated_case_count": {"$ref": "#/$defs/count"}, "unreviewed_high_risk_count": {"$ref": "#/$defs/count"}, "abstention_required_count": {"$ref": "#/$defs/count"}, "abstention_failure_count": {"$ref": "#/$defs/count"}}
     },
     "privacy_metrics": {
-      "type": "object", "additionalProperties": false,
-      "required": ["evaluated_case_count", "critical_leakage_count", "raw_value_finding_count"],
-      "properties": {"evaluated_case_count": {"$ref": "#/$defs/count"}, "critical_leakage_count": {"$ref": "#/$defs/count"}, "raw_value_finding_count": {"$ref": "#/$defs/count"}}
+      "oneOf": [
+        {
+          "$ref": "#/$defs/privacy_metrics_legacy"
+        },
+        {
+          "$ref": "#/$defs/privacy_metrics_current"
+        }
+      ]
+    },
+    "privacy_metrics_legacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluated_case_count",
+        "critical_leakage_count",
+        "raw_value_finding_count"
+      ],
+      "properties": {
+        "evaluated_case_count": {
+          "$ref": "#/$defs/count"
+        },
+        "critical_leakage_count": {
+          "$ref": "#/$defs/count"
+        },
+        "raw_value_finding_count": {
+          "$ref": "#/$defs/count"
+        }
+      }
+    },
+    "privacy_metrics_current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluated_case_count",
+        "critical_leakage_count",
+        "raw_value_finding_count",
+        "date_shift_inconsistency_count",
+        "surrogate_inconsistency_count",
+        "consistency_checked_format_count",
+        "consistency_unsupported_format_count"
+      ],
+      "properties": {
+        "evaluated_case_count": {
+          "$ref": "#/$defs/count"
+        },
+        "critical_leakage_count": {
+          "$ref": "#/$defs/count"
+        },
+        "raw_value_finding_count": {
+          "$ref": "#/$defs/count"
+        },
+        "date_shift_inconsistency_count": {
+          "$ref": "#/$defs/count"
+        },
+        "surrogate_inconsistency_count": {
+          "$ref": "#/$defs/count"
+        },
+        "consistency_checked_format_count": {
+          "$ref": "#/$defs/count"
+        },
+        "consistency_unsupported_format_count": {
+          "$ref": "#/$defs/count"
+        }
+      }
     },
     "interoperability_metrics": {
       "type": "object", "additionalProperties": false,

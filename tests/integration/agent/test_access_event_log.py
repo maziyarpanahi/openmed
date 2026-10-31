@@ -1,6 +1,7 @@
 """Offline durable access evidence across synthetic tool adapters and restart."""
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -21,6 +22,9 @@ from openmed.agent.permissions import (
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.skipif(
+    os.name == "nt", reason="durable access sink requires POSIX file locks"
+)
 def test_durable_read_events_and_aggregate_counts(tmp_path: Path) -> None:
     path = tmp_path / "events.jsonl"
     canary = "Synthetic patient Jane Example; MRN-123; synthetic credential"

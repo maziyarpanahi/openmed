@@ -324,68 +324,76 @@ sink with appropriate retention for long-running workflows. No network call or
 filesystem write is required by the default verifier.
 
 ```python
-from openmed.agent.permissions import AccessTicketVerifier, LocalAccessEventSink
+import os
+
+from openmed.agent.permissions import (
+    AccessEventError, AccessTicketVerifier, LocalAccessEventSink,
+)
 
 # The host chooses a protected local directory; this is a synthetic path.
 sink = LocalAccessEventSink("synthetic-access-events.jsonl")
 verifier = AccessTicketVerifier(sink=sink, clock=lambda: 1_999_999_999)
-verifier.verify(ticket, request)
-head = sink.verify_chain()
-counts = sink.export_counts()
-assert counts["outcomes"] == {"allow": 1}
+if os.name == "posix":
+    verifier.verify(ticket, request)
+    head = sink.verify_chain()
+    counts = sink.export_counts()
+    assert counts["outcomes"] == {"allow": 1}
+else:
+    # Windows hosts must supply a durable AccessEventSink.
+    try:
+        verifier.verify(ticket, request)
+    except AccessEventError as error:
+        assert error.code == "sink_unavailable"
+    else:
+        raise AssertionError("unsupported sink authorized access")
 ```
 
-An injected `AccessEventSink` implements `emit(event)`. Verification calls it
-once, before returning authority or raising the original denial. A sink failure
-raises a value-free `AccessEventError("sink_unavailable")`, blocks dispatch and
-is never automatically retried. Hosts must avoid retrying a verification to
-repair an uncertain sink write: a custom sink may have persisted before raising.
-No transaction with the tool's data store is implied.
+An injected `AccessEventSink` implements `emit(event)`, called once before
+verification returns authority or raises a denial. Sink failures raise a
+value-free `AccessEventError("sink_unavailable")` and block dispatch without
+retry. Do not retry an uncertain write: the sink may have persisted before
+raising. This is not a transaction with the tool's data store.
 
-The closed event schema contains only an opaque requesting run ID, a
-**developer-authored** purpose, requested data-class codes, requested selector
-count, developer-authored tool/action codes, `allow` or `deny`, the denial reason
-code and verification epoch seconds. Keep these governance codes free of patient
-identifiers and values. Events contain no ticket, selector kind, selector digest,
-record identifier, tool arguments, result, credential, or source payload.
-The event reflects the requested narrow scope, including rejected requests,
-rather than copying the ticket's wider authority. Malformed request objects
-produce `invalid_request` with absent scope metadata. Unavailable or invalid
-clock values produce a denial with `timestamp=None`; invalid requests also have
-no timestamp. Construction errors before verification and invalid dispatch
-callbacks are not verification decisions and do not produce access events.
+Events contain an opaque requesting run ID, **developer-authored** purpose and
+tool/action codes, requested data-class codes and selector count, outcome
+(`allow`/`deny`), denial code and verification epoch seconds. Governance codes
+must contain no patient identifiers or values. Tickets, selector kinds/digests,
+record identifiers, arguments, results, credentials and source payloads are
+excluded.
 
-Events describe authorization, not proof that a tool returned data. A verified
-read that subsequently fails still has one `allow` event. Repeated verification
-calls each produce a distinct event. This Python verifier extension does not
-change the action ledger, Journey audit format, result authorization, or Swift
-contracts. It adds no cloud fallback or clinical action.
+Events bind the requested scope, including denials, without copying wider ticket
+authority. Malformed requests emit `invalid_request` without scope metadata or a
+timestamp. Invalid/unavailable clocks emit denial with `timestamp=None`.
+Pre-verification construction errors and invalid dispatch callbacks emit no events.
+
+Events record authorization; an authorized read that later fails still emits
+`allow`. Each verification call emits its own event. This Python extension leaves
+the action ledger, Journey audit format, result authorization and Swift contracts
+unchanged. It adds no cloud fallback or clinical action.
 
 ### Local chain and aggregate export
 
-`LocalAccessEventSink` writes canonical JSON lines with an event, sequence,
-previous digest and SHA-256 digest. It verifies the entire existing chain before
-append, flushes and fsyncs before returning, and uses a POSIX advisory file lock
-for cooperating writers, including separate sink instances. New files use mode
-0600; symbolic links and non-regular files are refused. POSIX is required only
-for this durable sink. Hosts own directory protection, existing file permissions,
-retention and backups, and must prevent file replacement or rotation while
-writers are active. Diagnostics omit private log paths and parser payloads.
+`LocalAccessEventSink` writes canonical JSON lines containing an event, sequence,
+previous digest and SHA-256 digest. It verifies the full chain before append,
+flushes and fsyncs before returning, and uses a POSIX advisory lock across
+cooperating writers and sink instances. New files use mode 0600; symlinks and
+non-regular files are refused. Only this durable sink requires POSIX. Hosts
+protect directories, existing permissions, retention and backups, and prevent
+file replacement or rotation during writes. Diagnostics omit private paths and
+parser payloads.
 
-`verify_chain()` returns the chain head or raises a controlled error for
-corruption, modification, interior deletion, reordering, duplicate entries or
-partial writes. To detect suffix truncation, compare with an independently saved
-head using `verify_chain(expected_head=head)`. Deeply nested malformed JSON also
-fails with a controlled code without retaining the parser exception.
-A plain digest chain cannot detect
-an attacker rewriting the whole log and recomputing all digests without that
-independent anchor. No signatures or compliance guarantee are supplied.
+`verify_chain()` returns the chain head or a controlled error for corruption,
+modification, interior deletion, reordering, duplicates or partial writes. Use
+`verify_chain(expected_head=head)` with an independently saved head to detect
+suffix truncation. Malformed, deeply nested JSON yields a controlled code without
+retaining the parser exception. Without an independent anchor, the chain cannot
+detect an attacker rewriting the log and recomputing its digests. It supplies no
+signatures or compliance guarantee.
 
-`export_counts()` first verifies the chain, then returns event and selector
-counts, outcome counts, denial-reason counts, purpose counts, data-class counts
-and tool/action counts. It omits run IDs and per-record metadata. Data-class
-counts count decisions containing the class; selector counts sum requested
-selectors, including denied requests. These are not counts of returned records.
+`export_counts()` verifies the chain, then counts events, requested selectors,
+outcomes, denial reasons, purposes, data classes and tool/actions. It omits run
+IDs and per-record metadata. Data-class counts measure decisions containing each
+class; selector counts include denied requests. Neither measures returned records.
 
 Focused offline validation:
 

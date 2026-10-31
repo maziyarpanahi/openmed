@@ -176,7 +176,6 @@ def test_script_language_hints_cover_detectable_scripts():
         "Myanmar",
         "Khmer",
         "Lao",
-        "Sinhala",
         "Thaana",
         "Tibetan",
         UNKNOWN_SCRIPT,
@@ -188,15 +187,14 @@ def test_script_language_hints_cover_detectable_scripts():
         assert set(hints) <= routing_languages
 
 
-@pytest.mark.parametrize(
-    "zero", [0x0660, 0x06F0, 0x0966, 0x0C66, 0x0E50, 0x0ED0, 0x1040, 0x17E0]
-)
-def test_detection_normalization_folds_decimal_blocks_with_exact_offsets(zero):
-    source = "prefix " + "".join(chr(zero + i) for i in range(10)) + " suffix"
-    normalized = normalize_for_pii_detection(source)
-    assert normalized.text == "prefix 0123456789 suffix"
-    assert normalized.remap_span(7, 17) == (7, 17)
-    assert normalized.to_metadata()["folded_native_digits"] == 10
+def test_detection_normalization_folds_decimal_blocks_with_exact_offsets(subtests):
+    for zero in [0x0660, 0x06F0, 0x0966, 0x0C66, 0x0E50, 0x0ED0, 0x1040, 0x17E0]:
+        with subtests.test(zero=zero):
+            source = "prefix " + "".join(chr(zero + i) for i in range(10)) + " suffix"
+            normalized = normalize_for_pii_detection(source)
+            assert normalized.text == "prefix 0123456789 suffix"
+            assert normalized.remap_span(7, 17) == (7, 17)
+            assert normalized.to_metadata()["folded_native_digits"] == 10
 
 
 def test_detection_normalization_does_not_fold_nondecimal_numbers():
@@ -236,11 +234,12 @@ def test_indic_and_arabic_script_language_hints_are_exact():
 def test_routing_only_languages_do_not_claim_bundled_models():
     expected_languages = {
         "ne",
+        "si",
     }
 
     assert USER_SUPPLIED_MODEL_LANGUAGES == expected_languages
     assert USER_SUPPLIED_MODEL_LANGUAGES.isdisjoint(BUILTIN_DEFAULT_PII_MODELS)
-    for language in expected_languages - {"ne"}:
+    for language in expected_languages - {"ne", "si"}:
         assert DEFAULT_PII_MODELS[language] == OPTIONAL_PII_MODEL
     assert candidate_languages_for_script("Latin") == (
         "en",

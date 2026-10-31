@@ -139,50 +139,54 @@ def test_confirmed_retirement_preserves_summary_and_cannot_resume(
         assert stat.S_IMODE((directory / "retired.json").stat().st_mode) == 0o600
 
 
-@pytest.mark.parametrize("now", [0, 9, 10, 59, 60])
 def test_minimum_age_is_exclusive_and_future_times_are_untouched(
-    tmp_path: Path, now: int
+    subtests, tmp_path
 ) -> None:
-    journal, _ = terminal_journal(tmp_path / "journal")
-    before = journal.load()
-    assert journal.plan_retirement(JournalRetentionPolicy(50), now=now) is None
-    assert journal.load() == before
+    case_root = tmp_path
+    for now in [0, 9, 10, 59, 60]:
+        with subtests.test(now=now):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            journal, _ = terminal_journal(tmp_path / "journal")
+            before = journal.load()
+            assert journal.plan_retirement(JournalRetentionPolicy(50), now=now) is None
+            assert journal.load() == before
 
 
-@pytest.mark.parametrize("age", [-1, True, 1.5, "50", 2**63])
-def test_invalid_policy_is_value_free(age: object) -> None:
-    with pytest.raises(RecoveryError, match="invalid_non_negative_integer"):
-        JournalRetentionPolicy(age)  # type: ignore[arg-type]
+def test_invalid_policy_is_value_free(subtests) -> None:
+    for age in [-1, True, 1.5, "50", 2**63]:
+        with subtests.test(age=age):
+            with pytest.raises(RecoveryError, match="invalid_non_negative_integer"):
+                JournalRetentionPolicy(age)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    "phase",
-    [
+def test_inflight_and_aborted_pending_effects_are_untouched(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for phase in [
         RecoveryPhase.PLANNED,
         RecoveryPhase.DISPATCHING,
         RecoveryPhase.RECONCILING,
         RecoveryPhase.ABORTED,
-    ],
-)
-def test_inflight_and_aborted_pending_effects_are_untouched(
-    tmp_path: Path, phase: RecoveryPhase
-) -> None:
-    source, _ = terminal_journal(tmp_path / "source")
-    first = source.load()[0]
-    checkpoint = RecoveryCheckpoint.create(
-        workflow_id=first.workflow_id,
-        run_id=first.run_id,
-        sequence=0,
-        phase=phase,
-        plan_digest=first.plan_digest,
-        effects=first.effects,
-    )
-    directory = tmp_path / "journal"
-    journal = CheckpointJournal(directory)
-    journal.append(checkpoint)
-    os.utime(directory / "checkpoint-00000000000000000000.json", (10, 10))
-    assert journal.plan_retirement(JournalRetentionPolicy(0), now=100) is None
-    assert journal.load() == (checkpoint,)
+    ]:
+        with subtests.test(phase=phase):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            source, _ = terminal_journal(tmp_path / "source")
+            first = source.load()[0]
+            checkpoint = RecoveryCheckpoint.create(
+                workflow_id=first.workflow_id,
+                run_id=first.run_id,
+                sequence=0,
+                phase=phase,
+                plan_digest=first.plan_digest,
+                effects=first.effects,
+            )
+            directory = tmp_path / "journal"
+            journal = CheckpointJournal(directory)
+            journal.append(checkpoint)
+            os.utime(directory / "checkpoint-00000000000000000000.json", (10, 10))
+            assert journal.plan_retirement(JournalRetentionPolicy(0), now=100) is None
+            assert journal.load() == (checkpoint,)
 
 
 def test_aborted_proven_committed_runs_can_retire(
@@ -212,20 +216,22 @@ def test_aborted_proven_committed_runs_can_retire(
         )
 
 
-@pytest.mark.parametrize(
-    "confirmation", [None, "", "confirm:wrong", "患者 synthetic secret"]
-)
 def test_confirmation_is_required_before_publication_or_deletion(
-    tmp_path: Path, confirmation: object
+    subtests, tmp_path
 ) -> None:
-    directory = tmp_path / "journal"
-    journal, _ = terminal_journal(directory)
-    plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
-    before = journal.load()
-    with pytest.raises(RecoveryError, match="confirmation_required"):
-        journal.retire(plan, confirmation=confirmation, now=100)  # type: ignore[arg-type]
-    assert journal.load() == before
-    assert not (directory / "retired.json").exists()
+    case_root = tmp_path
+    for confirmation in [None, "", "confirm:wrong", "患者 synthetic secret"]:
+        with subtests.test(confirmation=confirmation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            directory = tmp_path / "journal"
+            journal, _ = terminal_journal(directory)
+            plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
+            before = journal.load()
+            with pytest.raises(RecoveryError, match="confirmation_required"):
+                journal.retire(plan, confirmation=confirmation, now=100)  # type: ignore[arg-type]
+            assert journal.load() == before
+            assert not (directory / "retired.json").exists()
 
 
 def test_plan_is_bound_to_journal_and_mtime_and_clock(tmp_path: Path) -> None:
@@ -246,51 +252,60 @@ def test_plan_is_bound_to_journal_and_mtime_and_clock(tmp_path: Path) -> None:
     assert len(journal.load()) == 2
 
 
-@pytest.mark.parametrize("problem", ["gap", "tamper", "unknown", "symlink"])
-def test_ambiguous_journal_is_never_modified(tmp_path: Path, problem: str) -> None:
-    directory = tmp_path / "journal"
-    journal, _ = terminal_journal(directory)
-    first = directory / "checkpoint-00000000000000000000.json"
-    if problem == "gap":
-        first.unlink()
-    elif problem == "tamper":
-        first.write_text('{"checkpoint_digest":"synthetic protected payload"}')
-    elif problem == "unknown":
-        (directory / "private-input.txt").write_text("Synthetic patient 王小明")
-    else:
-        target = tmp_path / "private-input.txt"
-        target.write_bytes(first.read_bytes())
-        first.unlink()
-        first.symlink_to(target)
-    before = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
-    with pytest.raises(RecoveryError):
-        journal.plan_retirement(JournalRetentionPolicy(0), now=100)
-    after = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
-    assert before == after
+def test_ambiguous_journal_is_never_modified(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for problem in ["gap", "tamper", "unknown", "symlink"]:
+        with subtests.test(problem=problem):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            directory = tmp_path / "journal"
+            journal, _ = terminal_journal(directory)
+            first = directory / "checkpoint-00000000000000000000.json"
+            if problem == "gap":
+                first.unlink()
+            elif problem == "tamper":
+                first.write_text('{"checkpoint_digest":"synthetic protected payload"}')
+            elif problem == "unknown":
+                (directory / "private-input.txt").write_text(
+                    "Synthetic patient 王小明", encoding="utf-8"
+                )
+            else:
+                target = tmp_path / "private-input.txt"
+                target.write_bytes(first.read_bytes())
+                first.unlink()
+                first.symlink_to(target)
+            before = {
+                p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()
+            }
+            with pytest.raises(RecoveryError):
+                journal.plan_retirement(JournalRetentionPolicy(0), now=100)
+            after = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+            assert before == after
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_record_tampering_and_payloads_fail_closed(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field, value in [
         ("effect_count", 2),
         ("checkpoint_count", 0),
         ("phase", "dispatching"),
         ("record_digest", "sha256:" + "f" * 64),
         ("schema_version", "unknown"),
         ("patient", "Synthetic Person private payload"),
-    ],
-)
-def test_record_tampering_and_payloads_fail_closed(
-    tmp_path: Path, field: str, value: object
-) -> None:
-    journal, _ = terminal_journal(tmp_path / "journal")
-    plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
-    assert plan is not None
-    payload = plan.record.to_dict()
-    payload[field] = value
-    with pytest.raises(RecoveryError) as caught:
-        RetiredJournalRecord.from_json(json.dumps(payload))
-    assert "Synthetic Person" not in "".join(traceback.format_exception(caught.value))
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            journal, _ = terminal_journal(tmp_path / "journal")
+            plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
+            assert plan is not None
+            payload = plan.record.to_dict()
+            payload[field] = value
+            with pytest.raises(RecoveryError) as caught:
+                RetiredJournalRecord.from_json(json.dumps(payload))
+            assert "Synthetic Person" not in "".join(
+                traceback.format_exception(caught.value)
+            )
 
 
 def test_summary_missing_anchors_fails_verification(tmp_path: Path) -> None:
@@ -354,26 +369,25 @@ def test_retired_decision_rejects_retry_fields(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_restored_plan_rejects_changed_fields(subtests, tmp_path) -> None:
+    case_root = tmp_path
+    for field, value in [
         ("dry_run", False),
         ("schema_version", "unknown"),
         ("planned_at", 101),
         ("checkpoint_digests", []),
         ("path", "Synthetic protected path"),
-    ],
-)
-def test_restored_plan_rejects_changed_fields(
-    tmp_path: Path, field: str, value: object
-) -> None:
-    journal, _ = terminal_journal(tmp_path / "journal")
-    plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
-    assert plan is not None
-    payload = plan.to_dict()
-    payload[field] = value
-    with pytest.raises(RecoveryError):
-        JournalRetirementPlan.from_json(json.dumps(payload))
+    ]:
+        with subtests.test(field=field, value=value):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            journal, _ = terminal_journal(tmp_path / "journal")
+            plan = journal.plan_retirement(JournalRetentionPolicy(0), now=100)
+            assert plan is not None
+            payload = plan.to_dict()
+            payload[field] = value
+            with pytest.raises(RecoveryError):
+                JournalRetirementPlan.from_json(json.dumps(payload))
 
 
 def test_journal_lock_symlink_and_interrupted_acquisition_fail_safely(
@@ -411,10 +425,9 @@ def test_journal_lock_symlink_and_interrupted_acquisition_fail_safely(
     assert target.read_text() == "untouched"
 
 
-@pytest.mark.parametrize(
-    "parser", [RetiredJournalRecord.from_json, JournalRetirementPlan.from_json]
-)
-def test_private_json_document_is_not_retained_in_exception_context(parser):
-    with pytest.raises(RecoveryError) as caught:
-        parser('{"SYNTHETIC_PRIVATE_RECORD":')
-    assert caught.value.__context__ is None
+def test_private_json_document_is_not_retained_in_exception_context(subtests):
+    for parser in [RetiredJournalRecord.from_json, JournalRetirementPlan.from_json]:
+        with subtests.test(parser=parser):
+            with pytest.raises(RecoveryError) as caught:
+                parser('{"SYNTHETIC_PRIVATE_RECORD":')
+            assert caught.value.__context__ is None

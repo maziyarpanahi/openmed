@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import threading
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -248,69 +250,83 @@ def review_payload(service):
     return {**reference().to_dict(), "receipt": service.receipt.to_dict()}
 
 
-@pytest.mark.parametrize("operation", ["preflight", "preview", "status"])
-def test_reads_use_custody_without_effects(operation):
-    service = CustodiedService()
-    with client(service) as http:
-        response = post(http, operation)
-    assert response.status_code == 200
-    assert response.json() == service.view.to_dict()
-    assert response.headers["cache-control"] == "no-store"
-    assert service.calls == [operation]
-    assert service.mutations == 0
-    service.execute.assert_not_called()
-    service.compensate.assert_not_called()
+def test_reads_use_custody_without_effects(subtests):
+    for operation in ["preflight", "preview", "status"]:
+        with subtests.test(operation=operation):
+            service = CustodiedService()
+            with client(service) as http:
+                response = post(http, operation)
+            assert response.status_code == 200
+            assert response.json() == service.view.to_dict()
+            assert response.headers["cache-control"] == "no-store"
+            assert service.calls == [operation]
+            assert service.mutations == 0
+            service.execute.assert_not_called()
+            service.compensate.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "key,status",
-    [(None, 401), ("wrong-synthetic-key", 401), ("synthetic-other-key", 403)],
-)
-def test_authenticated_caller_and_run_custody_required(key, status):
-    service = CustodiedService()
-    with client(service) as http:
-        response = post(http, "status", key=key)
-    assert response.status_code == status
-    assert service.mutations == 0
+def test_authenticated_caller_and_run_custody_required(subtests):
+    for key, status in [
+        (None, 401),
+        ("wrong-synthetic-key", 401),
+        ("synthetic-other-key", 403),
+    ]:
+        with subtests.test(key=key, status=status):
+            service = CustodiedService()
+            with client(service) as http:
+                response = post(http, "status", key=key)
+            assert response.status_code == status
+            assert service.mutations == 0
 
 
-@pytest.mark.parametrize("operation", list(WORKFLOW_ROUTE_SCOPES))
-def test_scopes_cannot_be_replaced_by_body_authority(monkeypatch, operation):
-    configure_keys(monkeypatch, ["unrelated:read"])
-    service = CustodiedService()
-    with client(service) as http:
-        response = http.post(
-            operation,
-            json={**review_payload(service), "role": "admin"},
-            headers={"X-API-Key": KEY},
-        )
-    assert response.status_code == 403
-    assert not service.calls
+def test_scopes_cannot_be_replaced_by_body_authority(subtests):
+    for operation in list(WORKFLOW_ROUTE_SCOPES):
+        with subtests.test(operation=operation):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                configure_keys(monkeypatch, ["unrelated:read"])
+                service = CustodiedService()
+                with client(service) as http:
+                    response = http.post(
+                        operation,
+                        json={**review_payload(service), "role": "admin"},
+                        headers={"X-API-Key": KEY},
+                    )
+                assert response.status_code == 403
+                assert not service.calls
 
 
-@pytest.mark.parametrize("mode", ["disabled", "exempt", "scope-override"])
-def test_weak_global_auth_policy_cannot_open_routes(monkeypatch, mode):
-    service = CustodiedService()
-    app = create_app(workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True))
-    config = app.state.auth.config
-    if mode == "disabled":
-        app.state.auth.config = replace(config, enabled=False)
-    elif mode == "exempt":
-        app.state.auth.config = replace(
-            config, exempt_paths=config.exempt_paths | {"/v1/workflows/status"}
-        )
-    else:
-        configure_keys(monkeypatch, [])
-        app = create_app(
-            workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True)
-        )
-        app.state.auth.config = replace(
-            app.state.auth.config, route_scopes={("POST", "/v1/workflows/status"): ()}
-        )
-    with TestClient(app, base_url=BASE) as http:
-        response = post(http, "status")
-    assert response.status_code == (403 if mode == "scope-override" else 401)
-    assert not service.calls
+def test_weak_global_auth_policy_cannot_open_routes(subtests):
+    for mode in ["disabled", "exempt", "scope-override"]:
+        with subtests.test(mode=mode):
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                service = CustodiedService()
+                app = create_app(
+                    workflow_service=service, workflow_policy=WorkflowHTTPPolicy(True)
+                )
+                config = app.state.auth.config
+                if mode == "disabled":
+                    app.state.auth.config = replace(config, enabled=False)
+                elif mode == "exempt":
+                    app.state.auth.config = replace(
+                        config,
+                        exempt_paths=config.exempt_paths | {"/v1/workflows/status"},
+                    )
+                else:
+                    configure_keys(monkeypatch, [])
+                    app = create_app(
+                        workflow_service=service,
+                        workflow_policy=WorkflowHTTPPolicy(True),
+                    )
+                    app.state.auth.config = replace(
+                        app.state.auth.config,
+                        route_scopes={("POST", "/v1/workflows/status"): ()},
+                    )
+                with TestClient(app, base_url=BASE) as http:
+                    response = post(http, "status")
+                assert response.status_code == (
+                    403 if mode == "scope-override" else 401
+                )
+                assert not service.calls
 
 
 def test_server_owned_enable_and_mutation_opt_ins():
@@ -325,6 +341,7 @@ def test_server_owned_enable_and_mutation_opt_ins():
     assert not service.calls
 
 
+@pytest.mark.slow
 def test_actual_consumed_receipt_duplicate_ack_and_cancellation_intent():
     service = CustodiedService()
     with client(service) as http:
@@ -352,9 +369,8 @@ def test_actual_consumed_receipt_duplicate_ack_and_cancellation_intent():
     service.compensate.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "change,code",
-    [
+def test_caller_receipt_claims_never_grant_authority(subtests):
+    for change, code in [
         ({"reviewer_role": "role:test.example/admin"}, "workflow_invalid_input"),
         ({"token_digest": NEXT_STATE}, "workflow_receipt_unverified"),
         ({"action_digest": NEXT_STATE}, "workflow_conflict"),
@@ -362,17 +378,16 @@ def test_actual_consumed_receipt_duplicate_ack_and_cancellation_intent():
         ({"expires_at": 100, "consumed_at": 99}, "workflow_invalid_input"),
         ({"expires_at": True}, "workflow_invalid_input"),
         ({"approved": True}, "workflow_invalid_input"),
-    ],
-)
-def test_caller_receipt_claims_never_grant_authority(change, code):
-    service = CustodiedService()
-    payload = review_payload(service)
-    payload["receipt"].update(change)
-    with client(service) as http:
-        response = post(http, "review-receipts", payload)
-    assert response.json()["error"]["code"] == code
-    assert service.mutations == 0
-    service.execute.assert_not_called()
+    ]:
+        with subtests.test(change=change, code=code):
+            service = CustodiedService()
+            payload = review_payload(service)
+            payload["receipt"].update(change)
+            with client(service) as http:
+                response = post(http, "review-receipts", payload)
+            assert response.json()["error"]["code"] == code
+            assert service.mutations == 0
+            service.execute.assert_not_called()
 
 
 def test_expiry_after_read_only_verification_prevents_submission():
@@ -385,88 +400,91 @@ def test_expiry_after_read_only_verification_prevents_submission():
     assert service.mutations == 0
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
+def test_changed_action_state_or_missing_mutation_metadata_denied(subtests):
+    for change in [
         {"action_digest": NEXT_STATE},
         {"expected_state_digest": NEXT_STATE},
         {"run_id": "run_" + "9" * 32},
         {"workflow_id": "workflow:test.example/other"},
         {"expected_state_digest": None},
         {"request_id": None},
-    ],
-)
-def test_changed_action_state_or_missing_mutation_metadata_denied(change):
-    service = CustodiedService()
-    payload = review_payload(service)
-    payload.update(change)
-    with client(service) as http:
-        response = post(http, "review-receipts", payload)
-    assert response.status_code in (409, 422)
-    assert service.mutations == 0
+    ]:
+        with subtests.test(change=change):
+            service = CustodiedService()
+            payload = review_payload(service)
+            payload.update(change)
+            with client(service) as http:
+                response = post(http, "review-receipts", payload)
+            assert response.status_code in (409, 422)
+            assert service.mutations == 0
 
 
-@pytest.mark.parametrize("proof", [None, False, "wrong-digest", "wrong-reference"])
-def test_trusted_proof_must_match_exact_receipt_and_reference(proof):
-    service = CustodiedService()
-    if proof is None:
-        value = {"verified": True}
-    elif proof is False:
-        value = WorkflowReceiptVerification(
-            reference(), workflow_receipt_digest(service.receipt), False
-        )
-    elif proof == "wrong-digest":
-        value = WorkflowReceiptVerification(reference(), NEXT_STATE, True)
-    else:
-        value = WorkflowReceiptVerification(
-            replace(reference(), request_id="req_" + "8" * 32),
-            workflow_receipt_digest(service.receipt),
-            True,
-        )
-    service.verify_receipt = Mock(return_value=value)
-    with client(service) as http:
-        response = post(http, "review-receipts", review_payload(service))
-    assert response.json()["error"]["code"] == "workflow_receipt_unverified"
-    assert service.mutations == 0
+def test_trusted_proof_must_match_exact_receipt_and_reference(subtests):
+    for proof in [None, False, "wrong-digest", "wrong-reference"]:
+        with subtests.test(proof=proof):
+            service = CustodiedService()
+            if proof is None:
+                value = {"verified": True}
+            elif proof is False:
+                value = WorkflowReceiptVerification(
+                    reference(), workflow_receipt_digest(service.receipt), False
+                )
+            elif proof == "wrong-digest":
+                value = WorkflowReceiptVerification(reference(), NEXT_STATE, True)
+            else:
+                value = WorkflowReceiptVerification(
+                    replace(reference(), request_id="req_" + "8" * 32),
+                    workflow_receipt_digest(service.receipt),
+                    True,
+                )
+            service.verify_receipt = Mock(return_value=value)
+            with client(service) as http:
+                response = post(http, "review-receipts", review_payload(service))
+            assert response.json()["error"]["code"] == "workflow_receipt_unverified"
+            assert service.mutations == 0
 
 
-@pytest.mark.parametrize("operation", ["status", "cancel"])
-def test_service_exception_does_not_echo_private_data(operation):
-    service = CustodiedService()
-    setattr(service, operation, Mock(side_effect=RuntimeError(PRIVATE)))
-    with client(service) as http:
-        response = post(http, operation)
-    assert response.status_code == 503
-    assert PRIVATE not in response.text
-    assert response.json()["error"]["code"] == (
-        "workflow_mutation_unknown"
-        if operation == "cancel"
-        else "workflow_service_failed"
-    )
+def test_service_exception_does_not_echo_private_data(subtests):
+    for operation in ["status", "cancel"]:
+        with subtests.test(operation=operation):
+            service = CustodiedService()
+            setattr(service, operation, Mock(side_effect=RuntimeError(PRIVATE)))
+            with client(service) as http:
+                response = post(http, operation)
+            assert response.status_code == 503
+            assert PRIVATE not in response.text
+            assert response.json()["error"]["code"] == (
+                "workflow_mutation_unknown"
+                if operation == "cancel"
+                else "workflow_service_failed"
+            )
 
 
-@pytest.mark.parametrize("kind", ["dict", "tampered", "wrong-run", "no-cancel-ack"])
-def test_invalid_service_result_is_refused(kind):
-    service = CustodiedService()
-    result = service.view
-    operation = "status"
-    if kind == "dict":
-        result = {**result.to_dict(), "clinical_text": PRIVATE}
-    elif kind == "tampered":
-        object.__setattr__(result, "state_digest", PRIVATE)
-    elif kind == "wrong-run":
-        result = replace(
-            result,
-            reference=replace(reference(), run_id=RunId.parse("run_" + "7" * 32)),
-            effects=(),
-        )
-    else:
-        operation = "cancel"
-    setattr(service, operation, Mock(return_value=result))
-    with client(service) as http:
-        response = post(http, operation)
-    assert response.status_code == (409 if kind == "wrong-run" else 502)
-    assert PRIVATE not in response.text
+def test_invalid_service_result_is_refused(subtests):
+    for kind in ["dict", "tampered", "wrong-run", "no-cancel-ack"]:
+        with subtests.test(kind=kind):
+            service = CustodiedService()
+            result = service.view
+            operation = "status"
+            if kind == "dict":
+                result = {**result.to_dict(), "clinical_text": PRIVATE}
+            elif kind == "tampered":
+                object.__setattr__(result, "state_digest", PRIVATE)
+            elif kind == "wrong-run":
+                result = replace(
+                    result,
+                    reference=replace(
+                        reference(), run_id=RunId.parse("run_" + "7" * 32)
+                    ),
+                    effects=(),
+                )
+            else:
+                operation = "cancel"
+            setattr(service, operation, Mock(return_value=result))
+            with client(service) as http:
+                response = post(http, operation)
+            assert response.status_code == (409 if kind == "wrong-run" else 502)
+            assert PRIVATE not in response.text
 
 
 def test_content_unknown_fields_and_correlations_do_not_enter_access_logs(caplog):
@@ -562,16 +580,42 @@ def test_openapi_matches_native_contracts_and_fixed_route_scopes():
 
 
 @pytest.mark.parametrize("operation", ["status", "cancel"])
-def test_timeout_has_no_retry_and_reports_unknown_mutation(operation):
+def test_timeout_has_no_retry_and_reports_unknown_mutation(operation, monkeypatch):
+    import openmed.service.workflow_routes as routes
+
     service = CustodiedService()
     release = threading.Event()
     started = threading.Event()
 
     def stalled(principal, ref):
         started.set()
-        release.wait(1)
+        release.wait(30)
         return service.view
 
+    async def wait_for_started_work(awaitable, *, timeout):
+        task = asyncio.ensure_future(awaitable)
+
+        async def wait_until_started():
+            while not started.is_set():
+                await asyncio.sleep(0)
+
+        try:
+            # Exercise expiration after dispatch starts, independently of worker
+            # startup latency. Keep the actual short asyncio timeout unchanged.
+            await asyncio.wait_for(wait_until_started(), timeout=10)
+            return await asyncio.wait_for(task, timeout=timeout)
+        finally:
+            task.cancel()
+            release.set()
+
+    monkeypatch.setattr(
+        routes,
+        "asyncio",
+        SimpleNamespace(
+            wait_for=wait_for_started_work,
+            TimeoutError=asyncio.TimeoutError,
+        ),
+    )
     method = Mock(side_effect=stalled)
     setattr(service, operation, method)
     try:
@@ -616,20 +660,18 @@ def test_cancellation_terminal_run_is_refused_without_compensation():
     service.compensate.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "field,value,code",
-    [
+def test_receipt_time_is_verified_in_trusted_service_custody(subtests):
+    for field, value, code in [
         ("receipt_expires_at", 100, "workflow_receipt_expired"),
         ("receipt_consumed_at", 101, "workflow_receipt_future"),
-    ],
-)
-def test_receipt_time_is_verified_in_trusted_service_custody(field, value, code):
-    service = CustodiedService()
-    setattr(service, field, value)
-    with client(service) as http:
-        response = post(http, "review-receipts", review_payload(service))
-    assert response.json()["error"]["code"] == code
-    assert service.mutations == 0 and "submit" not in service.calls
+    ]:
+        with subtests.test(field=field, value=value, code=code):
+            service = CustodiedService()
+            setattr(service, field, value)
+            with client(service) as http:
+                response = post(http, "review-receipts", review_payload(service))
+            assert response.json()["error"]["code"] == code
+            assert service.mutations == 0 and "submit" not in service.calls
 
 
 @pytest.mark.parametrize("kind", ["mutated", "foreign"])

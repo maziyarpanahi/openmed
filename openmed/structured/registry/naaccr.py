@@ -22,6 +22,7 @@ from openmed.clinical.journey_contracts import (
     canonical_digest,
     canonical_json,
 )
+from openmed.utils import _verify_windows_output, _windows_output
 
 from .contracts import (
     RegistryCase,
@@ -555,8 +556,16 @@ def _write(path: Any, payload: bytes) -> None:
     fd = None
     owned = None
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        fd = (
+            _windows_output(path)
+            if os.name == "nt"
+            else os.open(
+                path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+            )
+        )
         owned = os.fstat(fd)
+        if os.name == "nt":
+            _verify_windows_output(fd)
         with os.fdopen(fd, "wb") as stream:
             if stream.write(payload) != len(payload):
                 raise OSError()

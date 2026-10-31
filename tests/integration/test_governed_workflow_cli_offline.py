@@ -30,6 +30,7 @@ def _private(path, content):
         stream.write(json.dumps(content))
 
 
+@pytest.mark.slow
 def test_console_entry_offline_preview_review_and_explicit_resume(tmp_path):
     action = "sha256:" + "a" * 64
     state = "sha256:" + "b" * 64
@@ -101,7 +102,9 @@ assert service.calls.count("resume") == 1
         cwd=ROOT,
         env={
             **os.environ,
-            "PYTHONPATH": str(ROOT),
+            "PYTHONPATH": os.pathsep.join(
+                filter(None, (str(ROOT), os.environ.get("PYTHONPATH")))
+            ),
             "HF_HUB_OFFLINE": "1",
             "TRANSFORMERS_OFFLINE": "1",
         },
@@ -119,6 +122,7 @@ assert service.calls.count("resume") == 1
     assert str(tmp_path) not in result.stdout
 
 
+@pytest.mark.slow
 def test_installed_console_entry_has_offline_help_and_no_default_adapter(tmp_path):
     request = WorkflowCLIRequest(
         RunId("run_" + "a" * 32),
@@ -130,7 +134,9 @@ def test_installed_console_entry_has_offline_help_and_no_default_adapter(tmp_pat
     code = "import socket,sys; from importlib import metadata; entry=next(e for e in metadata.entry_points(group='console_scripts') if e.name=='openmed'); assert entry.value=='openmed.cli:main'; main=entry.load(); socket.create_connection=lambda *a,**k: (_ for _ in ()).throw(AssertionError('Network forbidden')); sys.exit(main(sys.argv[1:]))"
     environment = {
         **os.environ,
-        "PYTHONPATH": str(ROOT),
+        "PYTHONPATH": os.pathsep.join(
+            filter(None, (str(ROOT), os.environ.get("PYTHONPATH")))
+        ),
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
     }

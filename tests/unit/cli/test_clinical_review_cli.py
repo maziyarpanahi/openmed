@@ -90,7 +90,7 @@ def nli_args(inputs, *options):
 
 
 def test_extractive_summary_uses_native_guard_and_separate_private_files(
-    inputs, local_deid, capfd
+    inputs, local_deid, capfd, assert_private_file
 ):
     previous_logging = logging.root.manager.disable
     expected = SUMMARY.summarize(SOURCE, model="extractive")
@@ -106,7 +106,7 @@ def test_extractive_summary_uses_native_guard_and_separate_private_files(
     assert data["data"]["backend_id"] == "deterministic-extractive"
     assert local_deid[-1][1]["config"].local_only is True
     for path in inputs[2:]:
-        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert_private_file(path)
     for text in (SOURCE, DEIDENTIFIED, expected.summary, "Casey Example"):
         assert text not in captured.out + captured.err + inputs[3].read_text()
     assert logging.root.manager.disable == previous_logging
@@ -250,6 +250,8 @@ def test_bounded_regular_input_and_fixed_errors(command, kind, inputs, tmp_path,
     if kind == "directory":
         path.mkdir()
     elif kind == "fifo":
+        if not hasattr(os, "mkfifo"):
+            pytest.skip("POSIX named pipe fixture")
         os.mkfifo(path)
     elif kind == "symlink":
         path.symlink_to(inputs[0])
@@ -446,7 +448,12 @@ def test_caller_local_backend_runs_offline_and_console_chatter_is_discarded(
             os.write(1, CANARY.encode())
             os.write(2, CANARY.encode())
             logging.error(CANARY)
-            ctypes.CDLL(None).printf(CANARY.encode())
+            assert (
+                ctypes.CDLL("ucrtbase" if os.name == "nt" else None).puts(
+                    CANARY.encode()
+                )
+                >= 0
+            )
             return {"label": label, "score": 0.8}
 
     monkeypatch.setitem(
@@ -611,3 +618,86 @@ def test_diagnostic_string_subclasses_cannot_masquerade_as_cli_metadata(
     assert json.loads(captured.out)["error"]["code"] == command + "_result_invalid"
     assert CANARY not in captured.out + captured.err
     assert not any(path.exists() for path in inputs[2:])
+
+
+def test_reader_without_posix_flags_refuses_replaced_file(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical_review as reader
+    from openmed.cli._output import CliError
+
+    path = tmp_path / "original.txt"
+    path.write_bytes(b"synthetic original")
+    replacement = tmp_path / "replacement.txt"
+    replacement.write_bytes(b"synthetic replacement")
+    real_open = os.open
+
+    def replaced(name, flags):
+        path.unlink()
+        replacement.rename(path)
+        return real_open(name, flags)
+
+    portable_os = SimpleNamespace(
+        **{
+            name: getattr(os, name)
+            for name in dir(os)
+            if name not in {"O_NOFOLLOW", "O_NONBLOCK"}
+        }
+    )
+    portable_os.open = replaced
+    portable_os.fdopen = Mock(side_effect=AssertionError("substituted bytes were read"))
+    monkeypatch.setattr(reader, "os", portable_os)
+    with pytest.raises(CliError) as caught:
+        reader._read(str(path), 100, "summary")
+    assert caught.value.code == "summary_input_not_regular"
+    portable_os.fdopen.assert_not_called()
+
+
+def test_unverified_output_permissions_prevent_payload_write(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical_review as writer
+    from openmed.cli._output import CliError
+
+    path = tmp_path / "private.json"
+
+    def create(name):
+        return os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+
+    private_os = SimpleNamespace(**{name: getattr(os, name) for name in dir(os)})
+    private_os.name = "nt"
+    private_os.fdopen = Mock(side_effect=AssertionError("unprotected payload write"))
+    monkeypatch.setattr(writer, "os", private_os)
+    monkeypatch.setattr(writer, "_windows_output", create)
+    monkeypatch.setattr(writer, "_verify_windows_output", Mock(side_effect=OSError()))
+    with pytest.raises(CliError) as caught:
+        writer._write_summary_pair(
+            (str(path), str(tmp_path / "metadata.json")), (b"synthetic", b"{}")
+        )
+    assert caught.value.code == "summary_output_failed"
+    private_os.fdopen.assert_not_called()
+    assert not path.exists()
+
+
+def test_native_flush_selects_windows_system_runtimes(monkeypatch):
+    from unittest.mock import Mock
+
+    from openmed.cli import clinical_review
+
+    libraries = []
+    flushes = []
+
+    def load(name):
+        libraries.append(name)
+        flush = Mock()
+        flushes.append(flush)
+        return SimpleNamespace(fflush=flush)
+
+    monkeypatch.setattr(clinical_review, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(clinical_review.ctypes, "CDLL", load)
+    clinical_review._flush_native()
+    assert libraries == ["ucrtbase", "msvcrt"]
+    for flush in flushes:
+        flush.assert_called_once_with(None)

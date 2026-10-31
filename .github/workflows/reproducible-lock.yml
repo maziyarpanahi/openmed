@@ -5,18 +5,22 @@ name: Reproducible Lock Gate
 # and can be required as a branch-protection check on its own.
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/reproducible-lock.yml"
       - "uv.lock"
       - "pyproject.toml"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/reproducible-lock.yml"
       - "uv.lock"
       - "pyproject.toml"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Parse uv.lock and assert that every resolved package carries:
