@@ -240,6 +240,8 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 
 ### Fixed
 
+- Require banking context for pattern-only SWIFT/BIC matches so clinical section headers remain intact; retain contextual codes and model detections (#4152, #4230).
+
 - Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
 
 - Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
