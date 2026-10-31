@@ -299,6 +299,87 @@ class TestOutputFormatter:
         assert "diabetes" in html_output
         assert "test-model" in html_output
 
+    def test_html_highlights_preserve_source_boundaries_and_escaping(self, subtests):
+        from html.parser import HTMLParser
+
+        class ParsedOutput(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.content_depth = 0
+                self.in_source_paragraph = False
+                self.visible_source = []
+                self.highlights = []
+                self.active = []
+                self.elements = []
+
+            def handle_starttag(self, tag, attrs):
+                attributes = dict(attrs)
+                self.elements.append((tag, attributes))
+                if tag == "div":
+                    if self.content_depth or attributes.get("class") == "text-content":
+                        self.content_depth += 1
+                if tag == "p" and self.content_depth:
+                    self.in_source_paragraph = True
+                if tag == "span" and "entity" in attributes.get("class", "").split():
+                    self.active.append(len(self.highlights))
+                    self.highlights.append("")
+
+            def handle_endtag(self, tag):
+                if tag == "p":
+                    self.in_source_paragraph = False
+                if tag == "div" and self.content_depth:
+                    self.content_depth -= 1
+                if tag == "span" and self.active:
+                    self.active.pop()
+
+            def handle_data(self, data):
+                if self.in_source_paragraph:
+                    self.visible_source.append(data)
+                for index in self.active:
+                    self.highlights[index] += data
+
+        cases = [
+            ("A & B: Alice", [(7, 12)], ["Alice"]),
+            ("A & B", [(0, 5)], ["A & B"]),
+            ('<x> "Ada" & O\'Neil', [(5, 8), (12, 18)], ["Ada", "O'Neil"]),
+            ("🙂 & 李雷", [(4, 6)], ["李雷"]),
+            ("AliceBob", [(0, 5), (5, 8)], ["Alice", "Bob"]),
+            ("A & B", [(0, 5), (2, 3)], ["A & B", "&"]),
+            ("Prefix: Alice", [(8, 13)], ["Alice"]),
+            ('A < B > "C"', [(2, 11)], ['< B > "C"']),
+            ("\nAlice\n", [(1, 6)], ["Alice"]),
+            ("", [], []),
+            ("Alice", [(-1, 3), (0, 99), (0, 0)], []),
+            ("<script>& no entities", [], []),
+        ]
+        hostile = '"><img src=x onerror="synthetic()"><script>synthetic()</script>'
+        for text, ranges, expected in cases:
+            with subtests.test(text=text):
+                entities = [
+                    EntityPrediction(
+                        text=text[start:end] + hostile,
+                        label="PERSON" + hostile,
+                        confidence=0.9,
+                        start=start,
+                        end=end,
+                    )
+                    for start, end in ranges
+                ]
+                result = PredictionResult(text, entities, hostile, hostile)
+                parsed = ParsedOutput()
+                parsed.feed(OutputFormatter().to_html(result))
+                assert "".join(parsed.visible_source) == text
+                assert parsed.highlights == expected
+                assert [(e.start, e.end) for e in entities] == ranges
+                assert all(
+                    tag not in {"script", "img", "svg"} for tag, _ in parsed.elements
+                )
+                assert all(
+                    not name.startswith("on")
+                    for _, attributes in parsed.elements
+                    for name in attributes
+                )
+
     def test_to_csv_rows(self, test_helpers, sample_predictions, sample_text):
         """Test CSV rows generation."""
         formatter = OutputFormatter()
