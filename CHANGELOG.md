@@ -7,12 +7,230 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [3.2.0] - 2026-10-30
 
-- Align plaintext geometry and replacement validation with all splitlines
-  separators, retaining CRLF width and exact bytes outside valid replacements
-  while rejecting cross-line or line-introducing edits (#3567).
+Global languages, synthetic clinical data and local decision-model backends.
+This release candidate was prepared on 2026-10-30 from v3.1.0 and retains the
+model catalog, artifact pins and registry pointer targets. Publication and the final release
+date remain pending. See the [release notes](docs/release/v3.2.0.md) and
+[migration guide](docs/migration/3.1-to-3.2.md).
+
+### Breaking Changes
+
+- Burned-in synthetic rendering now requires covering fonts and complex-script shaping; missing default fonts require explicit `font_fallback=True` (#3868).
+  Dataset-recipe callers can opt into checked image fallback through
+  `builtin_recipe_generators(font_fallback=True)`; the policy is provenance-bound.
+
+- Require Python 3.11 or newer for the v3.2 development line so dependency
+  security fixes can be installed. Upgrade Python 3.10 environments before
+  updating OpenMed; published v3.1.0 remains available for the older interpreter.
+  See the [dependency migration guidance](docs/security/dependency-policy.md#python-311-floor-and-the-snowflake-filelock-override).
+
 ### Added
+
+- Document existing synthetic generators, offline examples, public exports and
+  dataset provenance limits in a shared navigation group (#3896).
+
+- Document local decision-model support, native backend limits, compatible server requirements, and the pinned MedDecider NLI qualification recipe.
+
+- Add offline decision-backend qualification with development-only threshold fitting, held-out evaluation, value-free reports and explicit calibration profile output.
+
+- Generate structured multilingual synthetic dialogue with grapheme-safe spans, Journey fact evidence and explicit adjudication truth (#2846).
+
+- Validate synthetic releases against disclosure, lineage, licenses, withdrawals, benchmark contamination and subgroup utility evidence (#3214).
+
+- Add language-family adapter distillation plans, per-language teacher loss helpers, and non-compensable edge promotion gates.
+
+- Add deterministic dialect-distance policies for explicit fallback, ensemble routing, and abstention with value-free result metadata.
+
+- Define the initial experimental low-resource language cohort and non-compensable recall, review, packaging and regression graduation gates.
+  The live inventory includes explicit augmentation-only generators independently of model-backed language support.
+
+- Lock the language readiness Markdown contract to synthetic golden snapshots and escape version code spans safely (#3122).
+
+- Build minimal native-language reviewer packets with opaque item IDs, separate provenance manifests and closed-code decision imports (#2864).
+
+- Merge native-review labels through explicit policy-bound adjudication, invalidating stale projections and ambiguous supersession chains (#3696).
+
+- Add configurable morphology-aware clinical label projection with exact code-point, grapheme and byte offsets, and explicit ambiguity review.
+
+- Add an offline translation guard for protected terminology, numeric values, placeholders and span maps, with explicit surface-check limits.
+
+- Add explicitly marked augmentation-only synthetic notes for six national-ID-only or user-model language routes, with validator-backed identifiers and value-free failure diagnostics.
+
+- Add deterministic rare-case synthetic privacy stress records with configurable attribute tiers, value-free risk labels, and linkage-attack truth.
+
+- Add deterministic synthetic patient-intake conversations with causal turn-level PHI, assertion, revision, consent, and provenance labels.
+
+- Expose typed GLiNER2.5 entities, classification, relations and JSON extraction, six checkpoint capability records and a local fixed-option decision backend with opt-in offline checkpoint checks.
+
+- Add a pinned local GLiNER2.5 language-decision benchmark with synthetic fixture digests and value-free comparisons against deterministic routing.
+
+- Detect and convert suspected Zawgyi Burmese before routing, preserving source offsets and abstaining on mixed encoding evidence (#3889).
+
+- Extend fixed-option decisions with named question sets, per-question definitions, ordered levels and System One converters; preserve the 1.0 contract, reject unsupported question context, and keep malformed Unicode out of exception payloads.
+
+- Add an opt-in System One and Decisions server backend with loopback defaults, explicit non-PHI private-network approval, bounded responses and deadlines, and typed transport failures.
+
+- Extend synthetic golden date and identifier traps across fourteen low-resource locales, with exact spans, hard negatives, deterministic masks, and explicit coverage inventories.
+
+- Add declarative localized medical-record-number labels shared by semantic merging and safety sweeps, retaining exact identifier spans and label-free negative controls.
+
+- Detect UK postcodes through the English en_GB overlay, including bounded address context for lookalike inward codes and explicit UK detection aliases.
+
+- Add an experimental Sinhala route for user-supplied models, structural Sri Lanka NIC handling and synthetic script-aware surrogate approximations without adding bundled model support.
+
+- Recognize short Thai address lines without consuming adjacent native-script date spans.
+
+- Propagate context-gated national-ID validator rejections through semantic merging and safety sweeps while preserving unrelated and validated spans.
+
+- Keep six-digit Bengali PIN codes detectable near dotted date fragments by requiring a four-digit date year.
+
+- Add a GLiClass v4 fixed-option decision backend over optional torch and ONNX runtimes, retaining calibrated and initial scores without request text and rejecting malformed backend settings with value-free errors.
+
+- Record surrogate-provider versions and digest-only probe receipts, and expose
+  optional strict drift checks for the seeded synthetic corpus (#3893).
+
+- Package and install signed offline language bundles with explicit resource, license, checksum and synthetic self-test gates (#2866).
+
+- Activate verified local language bundles with qualified task records, atomic registry generations and explicit rollback (#3695).
+
+- Generate seeded Devanagari and Telugu name surrogates from disjoint,
+  well-formed aksara while preserving token shape (#3892).
+
+- Generate local-convention African address and town surrogates, with mask
+  fallback when source-disjoint vocabulary is exhausted (#3891).
+
+- Add an opt-in live surrogate quality gate with deterministic per-language and per-label checks, hash-only reports, and explicit documented approximation exemptions.
+
+- Generate opt-in native-digit and native-calendar synthetic dates while respecting historical month bounds (#3886).
+
+- Render generated identifiers, phones and shifted dates in the source digit system and grouping (#3871).
+
+- Detect native-calendar month-name dates with exact spans and value-free calendar tags (#3866).
+
+- Shift Solar Hijri, Ethiopian and Thai Buddhist-era dates within bounded native-calendar ranges (#3867).
+
+- Shift declared Hijri and Bikram Sambat dates through bounded, digest-verified permissive calendar tables (#3888).
+
+- Add synthetic fhir records with bounded offline contracts, synthetic controls
+  and documented behavior (#2840).
+
+- Add synthetic omop cohorts with bounded offline contracts, synthetic controls
+  and documented behavior (#2841).
+
+- Add synthetic lab time series with bounded offline contracts, synthetic controls
+  and documented behavior (#2843).
+
+- Add synthetic medication courses with bounded offline contracts, synthetic controls
+  and documented behavior (#2844).
+
+- Add synthetic prior-authorization packets with bounded offline contracts, synthetic controls
+  and documented behavior (#2842).
+
+- Add synthetic clinical note grammars with bounded offline contracts, synthetic controls
+  and documented behavior (#2838).
+
+- Add synthetic longitudinal trajectories with bounded offline contracts, synthetic controls
+  and documented behavior (#2839).
+
+- Compose existing synthetic generators through a versioned transactional local dataset CLI (#3693).
+
+- Add deterministic synthetic dataset partitions that preserve shared trajectory,
+  derivation lineage and transitive ancestry, with explicit unmet-stratum export
+  refusal (#3692).
+
+- Report independent synthetic fidelity axes, Wilson intervals and aggregate
+  reference distribution comparisons without retaining reference records (#2852).
+
+- Bind synthetic image/text/label pairs to permissive declarations and reproducible transform chains (#2851).
+
+- Validate synthetic artifact facts, times, labels and coordinates against shared Journey truth (#3694).
+
+- Gate multilingual corpus shard uses on declared license, consent, translation lineage and restricted user-supplied custody (#2869).
+
+- Package controlled synthetic recipes and evidence into canonical offline-verifiable release capsules (#2854).
+
+- Add clinical transliteration provenance with bounded offline contracts, synthetic controls
+  and documented behavior (#2857).
+
+- Add local abbreviation mining with bounded offline contracts, synthetic controls
+  and documented behavior (#2858).
+
+- Add code-switch span projection with bounded offline contracts, synthetic controls
+  and documented behavior (#2860).
+
+- Add deterministic metadata-only native-review selection with scarcity, disagreement,
+  diversity ties, and simultaneous language, label and total budget caps (#2863).
+
+- Add independent-source cross-lingual pseudo-label consensus with explicit
+  adjudication for conflicting or overlapping projections (#2862).
+
+- Added a bounded, value-free synthetic memorization audit that fingerprints
+  protected reference material, blocks exact, paraphrase-style and exposure
+  matches on configurable signals, and renders canonical digest-only JSON
+  evidence with offline golden tests (#2853).
+
+- Added a strict, fail-closed synthetic dataset license and lineage manifest
+  validator that binds source class, SPDX license expression, generator digest,
+  model provenance, bounded dependencies and the redistribution decision, and
+  renders canonical reason-code-only reports (#3099).
+
+- Add language coverage diffs with bounded offline contracts, synthetic controls
+  and documented behavior (#3101).
+
+- Add clinical language readiness with bounded offline contracts, synthetic controls
+  and documented behavior (#2855).
+
+- Audit synthetic script tokenization fragmentation, unknown-token rates,
+  grapheme splits and offset recovery against pinned local limits (#2856).
+
+- Stratify language uncertainty and minimum-detectable-effect planning without ranking underpowered slices (#2865).
+
+- Gate paired multilingual checkpoint changes against every declared last-green language/label cell (#2870).
+
+- Added versioned, offline JSON Schemas for the synthetic training records the
+  package already emits (`locale_phi_example`, `burned_in_annotation`,
+  `social_history_example`, `section_label_record`,
+  `translation_augmented_example`), with `record_schema_id`, schema and
+  fingerprint export helpers, deterministic file writing and a `validate_record`
+  check that pairs schema validation with offset invariants and rejects records
+  claiming real PHI (#3895).
+
+- Generate seeded synthetic HL7 v2 ADT, ORU and ORM messages with a field-level
+  PHI truth manifest addressed by segment, field, repetition, component,
+  subcomponent and raw-text offsets across encoding-character variants, escape
+  sequences, repetitions, timestamp precisions, free text and Z-segments. A
+  value-free leakage harness reports residual PHI after `redact_hl7v2()` by
+  field position and label (#3884).
+
+- Generate seeded synthetic C-CDA documents (CCD, discharge summary, progress
+  note) with element-level PHI truth, narrative-to-structured links and
+  placeholder codes, plus a value-free leakage harness over `redact_cda()`
+  that reports residuals by element path and label and rejects remote schema
+  or entity-bearing options (#3885).
+
+- Added deterministic clinical language-pack readiness matrices with closed
+  capability and state vocabularies, `sha256:` evidence digests, alias-normalized
+  locale folding, byte-stable JSON/Markdown rendering and registry-derived
+  entries, plus offline golden tests (#3100).
+
+- Added the offline `openmed i18n check` locale-pack conformance command
+  with one independent result per component, a closed set of stable reason
+  codes, deterministic text/JSON output and offline golden tests (#3103).
+
+- Add deterministic Nepali (`ne`) patterns for `+977` mobile and landline
+  numbers, context-gated citizenship-certificate and national identity card
+  numbers without checksum claims, numeric Bikram Sambat dates and postal
+  codes, in Devanagari and ASCII digits. Add the `ne` number-separator entry
+  and a synthetic `ne.jsonl` golden fixture. Nepali remains a user-supplied
+  model route, and Hindi and Marathi outputs are unchanged (#3864).
+
+- Detect Hausa, Yoruba, Igbo and Kinyarwanda month-name dates in day-month-year
+  and month-day-year order from CLDR month vocabularies and common spellings.
+  Yoruba and Igbo match NFC, NFD and unmarked forms on grapheme-safe spans; a
+  month word without a day and year stays unflagged. Adds synthetic month-name
+  fixtures, including a new Kinyarwanda golden fixture (#3865).
 
 - Support native GLiFormer and current GLiNER2 / GLiNER2.5 NER through
   `analyze_text`, `ModelLoader.create_pipeline`, and `openmed.ner.infer`, with
@@ -21,6 +239,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
 ### Fixed
+
+- Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
+
+- Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
+
+- Preserve teacher identities on typed weak-label spans, keeping typed and mapping consensus consistent without mutating caller-owned spans (#4202, #4219).
+
+- Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
+  default and recognize saved GLiNER2.5 boundary-extractor configurations for
+  offline local loading.
+
+- Retain the `openmed.service.schemas.DECISION_SCHEMA_VERSION` compatibility
+  export while adding the decision 1.1 question-set contract.
+
+- Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
+
+- Refresh the exact service-image timezone-data pin to the available Debian Forky release so image builds, SBOM generation and vulnerability scans can complete.
+
+- Preserve registered non-CJK honorifics and grammatical cues in person
+  surrogates, and retain Vietnamese family-first order (#3887).
+
+- Keep Arabic (`ar`) and Amharic (`am`) name, city, and street surrogates in
+  the source script. Arabic-script spans use Faker's `ar_AA` names and curated
+  synthetic Egyptian place templates unless a regional locale ships
+  Arabic-script data; Ethiopic spans recombine the curated `am` values, and
+  `LocalePhiGenerator` emits native-script names and addresses for both
+  (#3863).
 
 - Load GLiNER2 checkpoints with the `gliner2[local]` package's architecture-aware
   extractor and retain native span offsets and confidence scores instead of

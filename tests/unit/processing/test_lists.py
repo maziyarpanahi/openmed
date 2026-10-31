@@ -12,9 +12,8 @@ from openmed.processing.lists import (
 )
 
 
-@pytest.mark.parametrize(
-    ("text", "style", "markers"),
-    (
+def test_parse_lists_detects_explicit_enumeration_styles(subtests) -> None:
+    for text, style, markers in (
         ("1. Hypertension\n2) Asthma\n3. Migraine", "numeric", ["1.", "2)", "3."]),
         ("- Penicillin\n* Latex\n• Adhesive", "bullet", ["-", "*", "•"]),
         (
@@ -22,21 +21,16 @@ from openmed.processing.lists import (
             "lettered",
             ["a.", "b)", "(C)"],
         ),
-    ),
-)
-def test_parse_lists_detects_explicit_enumeration_styles(
-    text: str,
-    style: str,
-    markers: list[str],
-) -> None:
-    items = parse_lists(text)
+    ):
+        with subtests.test(text=text, style=style, markers=markers):
+            items = parse_lists(text)
 
-    assert len(items) == 3
-    assert [item.style for item in items] == [style, style, style]
-    assert [item.marker for item in items] == markers
-    assert [item.nesting_level for item in items] == [0, 0, 0]
-    validate_list_items(text, items)
-    assert all(text[item.start : item.end] == item.text for item in items)
+            assert len(items) == 3
+            assert [item.style for item in items] == [style, style, style]
+            assert [item.marker for item in items] == markers
+            assert [item.nesting_level for item in items] == [0, 0, 0]
+            validate_list_items(text, items)
+            assert all(text[item.start : item.end] == item.text for item in items)
 
 
 def test_nested_items_attach_to_parent_and_parent_contains_continuations() -> None:

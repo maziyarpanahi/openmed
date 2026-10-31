@@ -61,6 +61,28 @@ answer must be loopback. A hostname that returns both loopback and public (or
 private) answers is rejected. Loopback and remote endpoints cannot be mixed in
 one redirect chain.
 
+## Private-network origins
+
+Private networks are unreachable unless an operator names each origin. An
+approved private origin may use `http` or `https`, and every resolved answer
+must be a private (RFC 1918 or unique-local) address:
+
+```python
+policy = UpstreamEndpointPolicy(
+    allowed_private_origins={"http://10.0.0.5:8000"},
+)
+
+approval = policy.validate("http://10.0.0.5:8000/v1/systemone")
+assert approval.is_private_network
+```
+
+Loopback, link-local, cloud-metadata, public, and literal non-private origins
+are rejected when the policy is built; a hostname that resolves to anything
+but private addresses fails with `private_only_violation`. Redirects cannot
+move between remote, private-network, and loopback modes. Callers decide
+what may be sent to such a host: the local decision-server client, for
+example, never sends requests marked as containing PHI off loopback.
+
 ## Redirect handling and safe errors
 
 Automatic HTTP-client redirects must be disabled. Validate each `Location`

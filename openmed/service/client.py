@@ -52,6 +52,7 @@ PIILanguage = Literal[
     "or",
     "pl",
     "pa",
+    "si",
     "ta",
     "te",
     "ur",

@@ -10,7 +10,7 @@ uv venv --python 3.11 .venv
 printf '%s\n' 'Pillow==13.0.0' 'cryptography==50.0.0' 'httplib2==0.32.0' \
   > beam-security-overrides.txt
 uv pip install --no-config --override beam-security-overrides.txt \
-  "openmed[beam]==3.1.0" "apache-beam==2.75.0"
+  "openmed[beam]==3.2.0" "apache-beam==2.75.0"
 ```
 
 DirectRunner tests pass with these versions. `pip check` still reports Beam's

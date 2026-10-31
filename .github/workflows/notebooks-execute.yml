@@ -2,7 +2,7 @@ name: Example Notebooks Execution & Output Check
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - "examples/notebooks/**"
       - "scripts/check_notebooks.py"
@@ -11,7 +11,7 @@ on:
       - "uv.lock"
       - ".github/workflows/notebooks-execute.yml"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - "examples/notebooks/**"
       - "scripts/check_notebooks.py"
@@ -22,6 +22,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   notebooks-offline-execute:

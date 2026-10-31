@@ -126,21 +126,24 @@ def test_golden_fixture_has_actual_shared_date_and_identifier_witnesses() -> Non
         assert protected not in rendered
 
 
-@pytest.mark.parametrize("format_name", ["text", "fhir_r4", "hl7v2", "csv", "dicom_sr"])
-def test_missing_processor_never_receives_consistency_credit(format_name) -> None:
-    sources = privacy_control_sources()
-    processors = {
-        item.format: privacy_control_processor
-        for item in sources
-        if item.format != format_name
-    }
-    result = _privacy(processors=processors)
-    assert result.state == "partial"
-    assert result.lane_metrics()["consistency_unsupported_format_count"] == 1
-    assert (
-        next(item for item in result.formats if item.format == format_name).state
-        == "unsupported"
-    )
+def test_missing_processor_never_receives_consistency_credit(subtests) -> None:
+    for format_name in ["text", "fhir_r4", "hl7v2", "csv", "dicom_sr"]:
+        with subtests.test(format_name=format_name):
+            sources = privacy_control_sources()
+            processors = {
+                item.format: privacy_control_processor
+                for item in sources
+                if item.format != format_name
+            }
+            result = _privacy(processors=processors)
+            assert result.state == "partial"
+            assert result.lane_metrics()["consistency_unsupported_format_count"] == 1
+            assert (
+                next(
+                    item for item in result.formats if item.format == format_name
+                ).state
+                == "unsupported"
+            )
 
 
 @pytest.mark.parametrize("kind", ["offset", "interval", "surrogate", "unchanged"])
@@ -237,9 +240,8 @@ def test_bad_processors_fail_without_echoing_protected_errors(kind) -> None:
     assert marker not in json.dumps(result.to_dict()) + repr(result)
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
+def test_invalid_private_inputs_have_fixed_value_free_errors(subtests) -> None:
+    for field, value in [
         ("patient_key", ""),
         ("patient_key", "\ud800"),
         ("date_shift_secret", b"short"),
@@ -249,36 +251,34 @@ def test_bad_processors_fail_without_echoing_protected_errors(kind) -> None:
         ("date_shift_max_days", True),
         ("date_shift_max_days", 0),
         ("date_shift_max_days", 3651),
-    ],
-)
-def test_invalid_private_inputs_have_fixed_value_free_errors(field, value) -> None:
-    with pytest.raises(
-        GoldenJourneyError, match="^invalid Journey privacy consistency inputs$"
-    ) as captured:
-        _privacy(**{field: value})
-    assert captured.value.__cause__ is None
-    assert captured.value.__context__ is None
+    ]:
+        with subtests.test(field=field, value=value):
+            with pytest.raises(
+                GoldenJourneyError, match="^invalid Journey privacy consistency inputs$"
+            ) as captured:
+                _privacy(**{field: value})
+            assert captured.value.__cause__ is None
+            assert captured.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "kind", ["missing", "duplicate", "reordered", "unknown", "bad_text"]
-)
-def test_exact_five_source_contract_rejects_invalid_coverage(kind) -> None:
-    sources = list(privacy_control_sources())
-    if kind == "missing":
-        sources.pop()
-    elif kind == "duplicate":
-        sources[-1] = sources[0]
-    elif kind == "reordered":
-        sources.reverse()
-    elif kind == "unknown":
-        sources[-1] = JourneyPrivacySource("PRIVATE-FORMAT", "PRIVATE-TEXT")
-    else:
-        sources[-1] = JourneyPrivacySource("dicom_sr", "\ud800")
-    with pytest.raises(
-        GoldenJourneyError, match="^invalid Journey privacy consistency inputs$"
-    ):
-        _privacy(sources=sources, processors={})
+def test_exact_five_source_contract_rejects_invalid_coverage(subtests) -> None:
+    for kind in ["missing", "duplicate", "reordered", "unknown", "bad_text"]:
+        with subtests.test(kind=kind):
+            sources = list(privacy_control_sources())
+            if kind == "missing":
+                sources.pop()
+            elif kind == "duplicate":
+                sources[-1] = sources[0]
+            elif kind == "reordered":
+                sources.reverse()
+            elif kind == "unknown":
+                sources[-1] = JourneyPrivacySource("PRIVATE-FORMAT", "PRIVATE-TEXT")
+            else:
+                sources[-1] = JourneyPrivacySource("dicom_sr", "\ud800")
+            with pytest.raises(
+                GoldenJourneyError, match="^invalid Journey privacy consistency inputs$"
+            ):
+                _privacy(sources=sources, processors={})
 
 
 def test_separate_proof_key_rekeys_evidence_without_changing_consistency() -> None:
@@ -327,32 +327,34 @@ def test_regeneration_defaults_to_read_only_check(
     assert golden.read_bytes() == before
 
 
-@pytest.mark.parametrize("boundary", ["processors", "scenario"])
-def test_privacy_mapping_failures_drop_private_upstream_context(boundary):
-    class PrivateMapping(dict):
-        def items(self):
-            raise RuntimeError("synthetic-private-mapping-payload")
+def test_privacy_mapping_failures_drop_private_upstream_context(subtests):
+    for boundary in ["processors", "scenario"]:
+        with subtests.test(boundary=boundary):
 
-        def __getitem__(self, key):
-            raise RuntimeError("synthetic-private-mapping-payload")
+            class PrivateMapping(dict):
+                def items(self):
+                    raise RuntimeError("synthetic-private-mapping-payload")
 
-        def get(self, key, default=None):
-            raise RuntimeError("synthetic-private-mapping-payload")
+                def __getitem__(self, key):
+                    raise RuntimeError("synthetic-private-mapping-payload")
 
-    with pytest.raises(GoldenJourneyError) as caught:
-        if boundary == "processors":
-            _privacy(processors=PrivateMapping())
-        else:
-            verify_golden_journey_privacy(
-                PrivateMapping(),
-                patient_key=PATIENT_KEY,
-                date_shift_secret=SHIFT_SECRET,
-                proof_secret=PROOF_SECRET,
-                processors={},
-            )
-    assert str(caught.value) == "invalid Journey privacy consistency inputs"
-    assert caught.value.__context__ is None
-    assert caught.value.__cause__ is None
+                def get(self, key, default=None):
+                    raise RuntimeError("synthetic-private-mapping-payload")
+
+            with pytest.raises(GoldenJourneyError) as caught:
+                if boundary == "processors":
+                    _privacy(processors=PrivateMapping())
+                else:
+                    verify_golden_journey_privacy(
+                        PrivateMapping(),
+                        patient_key=PATIENT_KEY,
+                        date_shift_secret=SHIFT_SECRET,
+                        proof_secret=PROOF_SECRET,
+                        processors={},
+                    )
+            assert str(caught.value) == "invalid Journey privacy consistency inputs"
+            assert caught.value.__context__ is None
+            assert caught.value.__cause__ is None
 
 
 def test_processor_snapshot_is_bounded_and_rejects_duplicate_entries():

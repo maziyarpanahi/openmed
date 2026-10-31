@@ -20,6 +20,7 @@ Example:
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterator, List, Optional, Protocol, Tuple
 
@@ -51,6 +52,9 @@ class PIIPattern:
       deterministic safety sweep accepts this pattern
     - context_normalizer: Optional language-scoped context-key folding; never
       used to rewrite source text or returned entity surfaces
+    - calendar: Optional value-free calendar code (for example ``"hijri"``)
+      copied into the metadata of matched date spans; ``None`` means Gregorian
+      or unspecified
 
     Example:
         PIIPattern(
@@ -80,6 +84,10 @@ class PIIPattern:
     reject_on_validation_failure: bool = False
     match_normalizer: Optional[Callable[[str], OffsetMappedText]] = None
     context_normalizer: Optional[Callable[[str], str]] = None
+    calendar: Optional[str] = None
+
+
+_VALUE_GROUP = "value"
 
 
 def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int, int]]:
@@ -88,7 +96,9 @@ def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int
     A language pack may canonicalize encoding variants before matching as long
     as its normalizer returns an offset map. Validators and context checks still
     receive the untouched source surface, so downstream spans never refer to a
-    normalized copy.
+    normalized copy. A pattern that names a ``value`` group yields only that
+    group, so a required label (for example a record-number label) stays
+    context rather than becoming part of the identifier span.
     """
 
     matching_text = text
@@ -98,12 +108,12 @@ def iter_pattern_spans(text: str, pii_pattern: PIIPattern) -> Iterator[tuple[int
         matching_text = normalized.text
         remap_span = normalized.remap_span
 
-    for match in re.finditer(
-        pii_pattern.pattern,
-        matching_text,
-        pii_pattern.flags,
-    ):
-        start, end = match.span()
+    compiled = re.compile(pii_pattern.pattern, pii_pattern.flags)
+    group = _VALUE_GROUP if _VALUE_GROUP in compiled.groupindex else 0
+    for match in compiled.finditer(matching_text):
+        start, end = match.span(group)
+        if start < 0:
+            continue
         if remap_span is not None:
             start, end = remap_span(start, end)
         if start < end:
@@ -645,6 +655,105 @@ def find_context_words(
     return False
 
 
+# Whitespace, label punctuation and bidi controls that may sit between a label
+# and its value, as in "NIN: 123", "ቁጥር፡ 123" or Persian digits wrapped in
+# U+2066/U+2069 isolates. Bidi controls are escaped so the source holds none.
+_LABEL_SEPARATORS_SUFFIX = re.compile(
+    r"[\s:：፡#№=.\-–—\u200e\u200f\u202a-\u202e\u2066-\u2069]+$"
+)
+_LABEL_WINDOW = 80
+
+
+def _is_label_word_char(char: str) -> bool:
+    return char == "_" or unicodedata.category(char)[0] in {"L", "M", "N"}
+
+
+def is_labelled_value(
+    text: str,
+    start: int,
+    context_words: List[str],
+    *,
+    normalizer: Optional[Callable[[str], str]] = None,
+) -> bool:
+    """Check whether a context word directly labels the value at ``start``.
+
+    A label is a context word that ends right before the value, separated only
+    by whitespace, label punctuation such as ``:`` or ``#``, or bidi controls,
+    and that starts at a word boundary. Unlike :func:`find_context_words`, a
+    context word elsewhere in the window does not count, so a label on one
+    value never applies to a neighbouring value.
+
+    Args:
+        text: Full input text.
+        start: Start offset of the candidate value.
+        context_words: Label keywords for the candidate's identifier type.
+        normalizer: Optional language-scoped folding applied to both the text
+            before the value and each keyword.
+
+    Returns:
+        True when one of the keywords labels the value.
+
+    Example:
+        >>> is_labelled_value("NIN: 12345678901", 5, ["nin"])
+        True
+        >>> is_labelled_value("NIN 1, phone 12345678901", 13, ["nin"])
+        False
+    """
+    if not context_words:
+        return False
+
+    window_start = max(0, start - _LABEL_WINDOW)
+    prefix = _LABEL_SEPARATORS_SUFFIX.sub("", text[window_start:start]).lower()
+    if normalizer is not None:
+        prefix = normalizer(prefix)
+
+    for word in context_words:
+        label = _LABEL_SEPARATORS_SUFFIX.sub("", word.lower())
+        if normalizer is not None:
+            label = normalizer(label)
+        if not label or not prefix.endswith(label):
+            continue
+        before = prefix[: len(prefix) - len(label)]
+        if before:
+            boundary_char = before[-1]
+        elif window_start > 0:
+            boundary_char = text[window_start - 1]
+        else:
+            return True
+        if not _is_label_word_char(boundary_char):
+            return True
+
+    return False
+
+
+def within_labelled_rejection(
+    start: int,
+    end: int,
+    priority: int,
+    rejections: List[Tuple[int, int, int]],
+) -> bool:
+    """Check whether a match sits inside a labelled value a validator rejected.
+
+    When the text labels a value as one identifier type and that type's
+    validator rejects it, lower-priority patterns must not relabel the value or
+    any segment of it, for example as a phone number or a postcode.
+
+    Args:
+        start: Start offset of the lower-ranked match.
+        end: End offset of the lower-ranked match.
+        priority: Priority of the pattern that produced the match.
+        rejections: ``(start, end, priority)`` spans of labelled values whose
+            validator failed.
+
+    Returns:
+        True when the match lies inside a rejection of a higher-priority pattern.
+    """
+    return any(
+        rejected_start <= start and end <= rejected_end and priority < rejected_priority
+        for rejected_start, rejected_end, rejected_priority in rejections
+    )
+
+
 def find_semantic_units(
     text: str, patterns: Optional[List[PIIPattern]] = None
 ) -> List[Tuple[int, int, str, float, PIIPattern]]:
@@ -673,6 +782,7 @@ def find_semantic_units(
         patterns = PII_PATTERNS
 
     units = []
+    labelled_rejections: List[Tuple[int, int, int]] = []
 
     # Sort patterns by priority (highest first)
     sorted_patterns = sorted(patterns, key=lambda p: p.priority, reverse=True)
@@ -687,7 +797,9 @@ def find_semantic_units(
                     overlaps = True
                     break
 
-            if overlaps:
+            if overlaps or within_labelled_rejection(
+                start, end, pii_pattern.priority, labelled_rejections
+            ):
                 continue
 
             matched_text = text[start:end]
@@ -729,6 +841,15 @@ def find_semantic_units(
                 is_valid = pii_pattern.validator(matched_text)
                 if not is_valid:
                     if pii_pattern.reject_on_validation_failure:
+                        if is_labelled_value(
+                            text,
+                            start,
+                            pii_pattern.context_words,
+                            normalizer=pii_pattern.context_normalizer,
+                        ):
+                            labelled_rejections.append(
+                                (start, end, pii_pattern.priority)
+                            )
                         continue
                     # Failed validation - significantly reduce score
                     score = score * 0.3  # Reduce to 30% confidence
@@ -999,6 +1120,7 @@ def merge_entities_with_semantic_units(
                     "source_labels": source_labels,
                     "mixed_label_union": mixed_label_union,
                     "detector_sources": ["ml", "locale_rule"],
+                    **_calendar_entry(unit_pattern),
                 }
             )
 
@@ -1017,6 +1139,7 @@ def merge_entities_with_semantic_units(
                     "source_labels": [str(unit_type)],
                     "mixed_label_union": False,
                     "detector_sources": ["locale_rule"],
+                    **_calendar_entry(unit_pattern),
                 }
             )
 
@@ -1029,6 +1152,12 @@ def merge_entities_with_semantic_units(
     if india_clinical:
         return merge_india_code_mixed_spans(coalesced, text)
     return coalesced
+
+
+def _calendar_entry(pattern: Any) -> Dict[str, str]:
+    """Return the value-free calendar code a semantic unit's pattern carries."""
+    calendar = getattr(pattern, "calendar", None)
+    return {"calendar": calendar} if calendar else {}
 
 
 def _coalesce_overlapping_merged_entities(
@@ -1097,6 +1226,9 @@ def _coalesce_overlapping_merged_entities(
                 if source
             }
         )
+        calendars = {
+            str(entity["calendar"]) for entity in cluster if entity.get("calendar")
+        }
         result.append(
             {
                 "entity_type": winner["entity_type"],
@@ -1113,6 +1245,8 @@ def _coalesce_overlapping_merged_entities(
                 )
                 > 1,
                 "detector_sources": detector_sources,
+                # Keep a calendar code only when the cluster agrees on one.
+                **({"calendar": calendars.pop()} if len(calendars) == 1 else {}),
             }
         )
 

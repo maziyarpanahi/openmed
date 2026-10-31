@@ -55,9 +55,10 @@ def test_german_event_roles_and_chronological_order_are_source_backed():
     )
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_unanchored_ambiguous_invalid_or_identifier_dates_cannot_become_event_dates(
+    subtests,
+):
+    for text in [
         "Kardioversion gestern.",
         "Kardioversion am 01.02.26.",
         "Kardioversion am 31.02.2026.",
@@ -65,15 +66,12 @@ def test_german_event_roles_and_chronological_order_are_source_backed():
         "Kardioversion am Morgen.",
         "Am 01.02.2026 und 03.02.2026 erfolgte Kardioversion.",
         "01.02.2026.\nKardioversion.",
-    ],
-)
-def test_unanchored_ambiguous_invalid_or_identifier_dates_cannot_become_event_dates(
-    text,
-):
-    result = analyze(text, [("Kardioversion", "Procedure")])
-    assert result["complete"]
-    event = result["tasks"]["timeline"]["records"][0]
-    assert event["anchor"] is None and event["ordering_group"] == "unanchored"
+    ]:
+        with subtests.test(text=text):
+            result = analyze(text, [("Kardioversion", "Procedure")])
+            assert result["complete"]
+            event = result["tasks"]["timeline"]["records"][0]
+            assert event["anchor"] is None and event["ordering_group"] == "unanchored"
 
 
 def test_relative_date_requires_explicit_reference_and_never_uses_dct_fallback():
@@ -127,45 +125,41 @@ def test_elevated_lab_beside_medication_is_not_a_dose_increase():
     )
 
 
-@pytest.mark.parametrize(
-    "language,text",
-    [
+def test_explicit_change_grammar_recovers_native_strength_role(subtests):
+    for language, text in [
         ("en", "Metoprolol increased from 25 mg to 50 mg."),
         ("de", "Metoprolol wurde von 25 mg auf 50 mg erhöht."),
-    ],
-)
-def test_explicit_change_grammar_recovers_native_strength_role(language, text):
-    result = analyze(
-        text,
-        [("Metoprolol", "Drug"), ("25 mg", "Dose"), ("50 mg", "Strength")],
-        language=language,
-    )
-    attributes = result["tasks"]["events"]["records"][0]["attributes"]
-    assert {a["role"]: a["normalized"]["value"] for a in attributes} == {
-        "old_dose": 25,
-        "new_dose": 50,
-    }
-    new = next(a for a in attributes if a["role"] == "new_dose")
-    assert new["source"]["label"] == "Strength"
-    assert new["role_source"] == "explicit_change_grammar"
-    assert text[new["source"]["start"] : new["source"]["end"]] == "50 mg"
+    ]:
+        with subtests.test(language=language, text=text):
+            result = analyze(
+                text,
+                [("Metoprolol", "Drug"), ("25 mg", "Dose"), ("50 mg", "Strength")],
+                language=language,
+            )
+            attributes = result["tasks"]["events"]["records"][0]["attributes"]
+            assert {a["role"]: a["normalized"]["value"] for a in attributes} == {
+                "old_dose": 25,
+                "new_dose": 50,
+            }
+            new = next(a for a in attributes if a["role"] == "new_dose")
+            assert new["source"]["label"] == "Strength"
+            assert new["role_source"] == "explicit_change_grammar"
+            assert text[new["source"]["start"] : new["source"]["end"]] == "50 mg"
 
 
-@pytest.mark.parametrize(
-    "text,language",
-    [
+def test_strength_without_local_explicit_role_does_not_become_event_dose(subtests):
+    for text, language in [
         ("Metoprolol 50 mg increased.", "en"),
         ("Metoprolol 50 mg erhöht.", "de"),
         ("Metoprolol started. New tablet strength 50 mg.", "en"),
-    ],
-)
-def test_strength_without_local_explicit_role_does_not_become_event_dose(
-    text, language
-):
-    result = analyze(
-        text, [("Metoprolol", "Drug"), ("50 mg", "Strength")], language=language
-    )
-    assert all(not e["attributes"] for e in result["tasks"]["events"]["records"])
+    ]:
+        with subtests.test(text=text, language=language):
+            result = analyze(
+                text, [("Metoprolol", "Drug"), ("50 mg", "Strength")], language=language
+            )
+            assert all(
+                not e["attributes"] for e in result["tasks"]["events"]["records"]
+            )
 
 
 def test_event_actions_do_not_link_across_sentences_or_competing_heads():
@@ -183,12 +177,13 @@ def test_english_ambiguous_slash_dates_remain_unanchored():
     assert result["tasks"]["timeline"]["records"][0]["anchor"] is None
 
 
-@pytest.mark.parametrize(
-    "reference", ["20260908", "2026-02-29", "private source marker", True]
-)
-def test_invalid_reference_dates_fail_without_source_echo(reference):
-    with pytest.raises(ClinicalAnalysisError, match="invalid_clinical_reference_date"):
-        analyze("Diabetes", [("Diabetes", "Disease")], reference_date=reference)
+def test_invalid_reference_dates_fail_without_source_echo(subtests):
+    for reference in ["20260908", "2026-02-29", "private source marker", True]:
+        with subtests.test(reference=reference):
+            with pytest.raises(
+                ClinicalAnalysisError, match="invalid_clinical_reference_date"
+            ):
+                analyze("Diabetes", [("Diabetes", "Disease")], reference_date=reference)
 
 
 def test_reference_date_cannot_be_silently_ignored_by_non_timeline_tasks():
