@@ -240,6 +240,8 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 
 ### Fixed
 
+- Make security-support guidance version independent and distinguish published stable releases from candidates (#4131, #4133).
+
 - Require banking context for pattern-only SWIFT/BIC matches so clinical section headers remain intact; retain contextual codes and model detections (#4152, #4230).
 
 - Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
