@@ -364,6 +364,7 @@ prefect = [
 ]
 
 cloud = [
+  "pyasn1>=0.6.5",
   "multidict>=6.9.1",
   "aiohttp>=3.14.4",
   "fsspec>=2026.6.0",
@@ -589,6 +590,7 @@ openmed-journey = "openmed.deploy.journey:main"
 
 [tool.uv]
 constraint-dependencies = [
+  "pyasn1>=0.6.5",
   "filelock>=4.2.1",
   "setuptools>=84.1.0",
   "certifi>=2026.10.19",

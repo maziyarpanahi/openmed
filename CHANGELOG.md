@@ -652,6 +652,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Require patched pyasn1 0.6.5 in the optional `cloud` profile and frozen
+  lockfile to address four ASN.1 decoder CPU-exhaustion advisories (#4372).
 - Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
   `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
   patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A
