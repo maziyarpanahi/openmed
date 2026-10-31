@@ -102,7 +102,7 @@ Auf unterstützter Apple-Hardware kann OpenMed **MLX** und **[OpenMedKit](swift/
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "3.2.0"),
 ]
 ```
 

@@ -59,31 +59,27 @@ def test_amharic_language_pack_registries_and_script_correct_surrogates():
     )
 
 
-@pytest.mark.parametrize(
-    ("text", "expected_label", "expected_text"),
-    (
+def test_amharic_context_detects_structured_pii_between_ethiopic_boundaries(subtests):
+    for text, expected_label, expected_text in (
         ("ስም፡ ሰላም፟ ተስፋዬ።", "name", "ሰላም፟ ተስፋዬ"),
         ("የትውልድ ቀን፡ ፲፬/፭/፲፱፻፹፰።", "date", "፲፬/፭/፲፱፻፹፰"),
         ("የትውልድ ቀን፡ 14/05/1988።", "date", "14/05/1988"),
         ("ዕድሜ፡ ፴፭።", "age", "፴፭"),
         ("ዕድሜ፡ 42።", "age", "42"),
-        ("የፋይዳ መለያ ቁጥር፡ 123456789012።", "national_id", "123456789012"),
+        ("የፋይዳ መለያ ቁጥር፡ 234567890124።", "national_id", "234567890124"),
         ("መለያ ቁጥር፡ ፩፪፫፬፭፮፯፰፱።", "national_id", "፩፪፫፬፭፮፯፰፱"),
         ("ስልክ፡ +251 911 234 567።", "phone_number", "+251 911 234 567"),
         ("ስልክ፡ 0911 765 432።", "phone_number", "0911 765 432"),
         ("አድራሻ፡ አዲስ አበባ ቦሌ 12።", "street_address", "አዲስ አበባ ቦሌ 12"),
-    ),
-)
-def test_amharic_context_detects_structured_pii_between_ethiopic_boundaries(
-    text: str,
-    expected_label: str,
-    expected_text: str,
-):
-    detected = safety_sweep(text, [], lang="am")
+    ):
+        with subtests.test(
+            text=text, expected_label=expected_label, expected_text=expected_text
+        ):
+            detected = safety_sweep(text, [], lang="am")
 
-    assert [(entity.label, entity.text) for entity in detected] == [
-        (expected_label, expected_text)
-    ]
+            assert [(entity.label, entity.text) for entity in detected] == [
+                (expected_label, expected_text)
+            ]
 
 
 def test_ethiopic_native_patterns_do_not_request_case_insensitive_matching():
@@ -99,7 +95,7 @@ def test_ethiopic_native_patterns_do_not_request_case_insensitive_matching():
 
 def test_fayda_format_requires_identity_context_and_exactly_twelve_digits():
     for text in (
-        "የላብራቶሪ ውጤት 123456789012 ተመዝግቧል።",
+        "የላብራቶሪ ውጤት 234567890124 ተመዝግቧል።",
         "የፋይዳ መለያ ቁጥር፡ 12345678901።",
         "የፋይዳ መለያ ቁጥር፡ 1234567890123።",
     ):
@@ -116,6 +112,7 @@ def test_synthetic_amharic_registers_have_exact_offsets():
     assert [fixture.metadata["register"] for fixture in fixtures] == [
         "amharic_only",
         "amharic_latin_mixed",
+        "amharic_ethiopian_calendar",
     ]
 
     for fixture in fixtures:

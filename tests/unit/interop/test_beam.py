@@ -262,17 +262,19 @@ def test_hostile_redactor_failures_are_value_free():
     assert _SENSITIVE not in str(error.value)
 
 
-@pytest.mark.parametrize("fatal_error", [KeyboardInterrupt, SystemExit])
-def test_harness_preserves_interpreter_control_exceptions(fatal_error):
-    def aborting_redactor(text: str, **kwargs):
-        del text, kwargs
-        raise fatal_error
+def test_harness_preserves_interpreter_control_exceptions(subtests):
+    for fatal_error in [KeyboardInterrupt, SystemExit]:
+        with subtests.test(fatal_error=fatal_error):
 
-    with pytest.raises(fatal_error):
-        run_synthetic_harness(
-            ["synthetic"],
-            deidentifier=aborting_redactor,
-        )
+            def aborting_redactor(text: str, **kwargs):
+                del text, kwargs
+                raise fatal_error
+
+            with pytest.raises(fatal_error):
+                run_synthetic_harness(
+                    ["synthetic"],
+                    deidentifier=aborting_redactor,
+                )
 
 
 def test_redactor_output_and_span_counts_are_bounded(monkeypatch):

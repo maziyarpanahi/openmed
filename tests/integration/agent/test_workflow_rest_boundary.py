@@ -45,17 +45,21 @@ def test_two_app_instances_delegate_duplicate_receipts_to_custody():
     service.compensate.assert_not_called()
 
 
-@pytest.mark.parametrize("operation", ["preflight", "preview", "status"])
-def test_inspection_remains_effect_free_after_receipt_submission(operation):
-    service = CustodiedService()
-    with client(service) as http:
-        assert post(http, "review-receipts", review_payload(service)).status_code == 200
-        result = post(http, operation)
-        assert result.status_code == 200
-        assert result.json()["committed_effect_count"] == 0
-        assert result.json()["receipt_digest"] is not None
-    service.execute.assert_not_called()
-    service.compensate.assert_not_called()
+def test_inspection_remains_effect_free_after_receipt_submission(subtests):
+    for operation in ["preflight", "preview", "status"]:
+        with subtests.test(operation=operation):
+            service = CustodiedService()
+            with client(service) as http:
+                assert (
+                    post(http, "review-receipts", review_payload(service)).status_code
+                    == 200
+                )
+                result = post(http, operation)
+                assert result.status_code == 200
+                assert result.json()["committed_effect_count"] == 0
+                assert result.json()["receipt_digest"] is not None
+            service.execute.assert_not_called()
+            service.compensate.assert_not_called()
 
 
 @pytest.mark.parametrize("advertised_length", [None, b"1"])

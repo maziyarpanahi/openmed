@@ -59,34 +59,36 @@ def test_local_provider_has_identical_protected_output_on_every_seam(tmp_path, c
     assert "dehydration" not in json.dumps(audit)
 
 
-@pytest.mark.parametrize("state", ["unreviewed", "changed", "unavailable"])
-def test_provider_refusals_do_not_generate_or_log_content(state, caplog):
-    extraction, _, provider, _, verifier = adapter_fixture()
-    if state == "unreviewed":
-        verifier.verify = lambda *args: None
-    elif state == "changed":
-        extraction.artifact.deidentified_text += " Changed."
-    else:
+def test_provider_refusals_do_not_generate_or_log_content(subtests, caplog):
+    for state in ["unreviewed", "changed", "unavailable"]:
+        with subtests.test(state=state):
+            caplog.clear()
+            extraction, _, provider, _, verifier = adapter_fixture()
+            if state == "unreviewed":
+                verifier.verify = lambda *args: None
+            elif state == "changed":
+                extraction.artifact.deidentified_text += " Changed."
+            else:
 
-        def broken(*args):
-            raise RuntimeError("PRIVATE_CANARY")
+                def broken(*args):
+                    raise RuntimeError("PRIVATE_CANARY")
 
-        verifier.verify = broken
-    app = create_app()
-    app.state.brief_context_provider = provider
-    caplog.set_level(logging.INFO)
-    with TestClient(app, base_url="http://127.0.0.1") as client:
-        response = client.post(
-            "/brief",
-            json={
-                "text": extraction.artifact.original_text,
-                "model": "extractive",
-                "review_id": REVIEW_ID,
-            },
-        )
-    payload = response.json()
-    assert payload["status"] == "refused"
-    assert payload["summary"] == ""
-    assert payload["stages"] == []
-    assert "dehydration" not in response.text + caplog.text
-    assert "PRIVATE_CANARY" not in response.text + caplog.text
+                verifier.verify = broken
+            app = create_app()
+            app.state.brief_context_provider = provider
+            caplog.set_level(logging.INFO)
+            with TestClient(app, base_url="http://127.0.0.1") as client:
+                response = client.post(
+                    "/brief",
+                    json={
+                        "text": extraction.artifact.original_text,
+                        "model": "extractive",
+                        "review_id": REVIEW_ID,
+                    },
+                )
+            payload = response.json()
+            assert payload["status"] == "refused"
+            assert payload["summary"] == ""
+            assert payload["stages"] == []
+            assert "dehydration" not in response.text + caplog.text
+            assert "PRIVATE_CANARY" not in response.text + caplog.text

@@ -63,39 +63,40 @@ def build(exception_type):
     return exception_type(SENTINEL)
 
 
-@pytest.mark.parametrize("exception_type,error_class,error_code", DOCUMENTED)
-def test_every_documented_failure_class_maps_to_a_stable_code(
-    exception_type, error_class, error_code
-) -> None:
-    envelope = envelope_from_exception(
-        build(exception_type), stage=ErrorStage.TOOL_CALL
-    )
-    assert envelope.error_class.value == error_class
-    assert envelope.error_code == error_code
-    assert envelope.retryable is (error_code in RETRYABLE_ERROR_CODES)
-    assert envelope.schema_version == ERROR_ENVELOPE_SCHEMA_VERSION
+def test_every_documented_failure_class_maps_to_a_stable_code(subtests) -> None:
+    for exception_type, error_class, error_code in DOCUMENTED:
+        with subtests.test(
+            exception_type=exception_type,
+            error_class=error_class,
+            error_code=error_code,
+        ):
+            envelope = envelope_from_exception(
+                build(exception_type), stage=ErrorStage.TOOL_CALL
+            )
+            assert envelope.error_class.value == error_class
+            assert envelope.error_code == error_code
+            assert envelope.retryable is (error_code in RETRYABLE_ERROR_CODES)
+            assert envelope.schema_version == ERROR_ENVELOPE_SCHEMA_VERSION
 
 
-@pytest.mark.parametrize(
-    "exception",
-    [
+def test_unknown_exceptions_map_to_a_generic_internal_code(subtests) -> None:
+    for exception in [
         ValueError(SENTINEL),
         RuntimeError(SENTINEL),
         KeyError(SENTINEL),
         OSError(SENTINEL),
         ZeroDivisionError(),
         KeyboardInterrupt(),
-    ],
-)
-def test_unknown_exceptions_map_to_a_generic_internal_code(exception) -> None:
-    envelope = envelope_from_exception(exception, stage=ErrorStage.PROVIDER)
-    assert (envelope.error_class, envelope.error_code) == (
-        ErrorClass.INTERNAL,
-        "internal_error",
-    )
-    payload = envelope.to_json()
-    assert SENTINEL not in payload
-    assert type(exception).__name__ not in payload
+    ]:
+        with subtests.test(exception=exception):
+            envelope = envelope_from_exception(exception, stage=ErrorStage.PROVIDER)
+            assert (envelope.error_class, envelope.error_code) == (
+                ErrorClass.INTERNAL,
+                "internal_error",
+            )
+            payload = envelope.to_json()
+            assert SENTINEL not in payload
+            assert type(exception).__name__ not in payload
 
 
 def test_subclasses_map_to_their_most_specific_documented_ancestor() -> None:
@@ -145,14 +146,15 @@ def test_every_retryable_code_is_a_known_code() -> None:
     assert RETRYABLE_ERROR_CODES.issubset(known)
 
 
-@pytest.mark.parametrize("error_class", list(ErrorClass))
-def test_every_class_has_at_least_one_valid_stage(error_class) -> None:
-    code = ERROR_CODES[error_class][0]
-    accepted = [stage for stage in ErrorStage if _accepts(code, stage)]
-    assert accepted, error_class
-    for stage in accepted:
-        envelope = ErrorEnvelope.for_code(code, stage=stage)
-        assert envelope.stage is stage
+def test_every_class_has_at_least_one_valid_stage(subtests) -> None:
+    for error_class in list(ErrorClass):
+        with subtests.test(error_class=error_class):
+            code = ERROR_CODES[error_class][0]
+            accepted = [stage for stage in ErrorStage if _accepts(code, stage)]
+            assert accepted, error_class
+            for stage in accepted:
+                envelope = ErrorEnvelope.for_code(code, stage=stage)
+                assert envelope.stage is stage
 
 
 def _accepts(code: str, stage: ErrorStage) -> bool:
@@ -207,7 +209,11 @@ def test_correlation_identifiers_are_optional_and_validated() -> None:
     assert (bare.run_id, bare.action_id) == (None, None)
 
 
-@pytest.mark.parametrize("value", ["", "run_x", ACTION_ID, 7, SENTINEL])
+@pytest.mark.parametrize(
+    "value",
+    ["", "run_x", ACTION_ID, 7, SENTINEL],
+    ids=["empty", "malformed", "action-id", "integer", "sentinel"],
+)
 def test_invalid_run_identifiers_fail_closed(value) -> None:
     with pytest.raises(ErrorEnvelopeError) as excinfo:
         ErrorEnvelope.for_code(
@@ -220,7 +226,9 @@ def test_invalid_run_identifiers_fail_closed(value) -> None:
     assert SENTINEL not in str(excinfo.value)
 
 
-@pytest.mark.parametrize("value", ["", "act_x", RUN_ID, 7])
+@pytest.mark.parametrize(
+    "value", ["", "act_x", RUN_ID, 7], ids=["empty", "malformed", "run-id", "integer"]
+)
 def test_invalid_action_identifiers_fail_closed(value) -> None:
     with pytest.raises(ErrorEnvelopeError, match="^action_id: invalid_identifier$"):
         ErrorEnvelope.for_code(
@@ -228,12 +236,17 @@ def test_invalid_action_identifiers_fail_closed(value) -> None:
         )
 
 
-@pytest.mark.parametrize("code", ["", "nope", "INVALID_INPUT", 7, None])
-def test_unknown_error_codes_fail_closed(code) -> None:
-    with pytest.raises(ErrorEnvelopeError, match="^error_code: unknown_error_code$"):
-        error_class_for_code(code)
-    with pytest.raises(ErrorEnvelopeError, match="^error_code: unknown_error_code$"):
-        ErrorEnvelope.for_code(code, stage=ErrorStage.PLANNING)
+def test_unknown_error_codes_fail_closed(subtests) -> None:
+    for code in ["", "nope", "INVALID_INPUT", 7, None]:
+        with subtests.test(code=code):
+            with pytest.raises(
+                ErrorEnvelopeError, match="^error_code: unknown_error_code$"
+            ):
+                error_class_for_code(code)
+            with pytest.raises(
+                ErrorEnvelopeError, match="^error_code: unknown_error_code$"
+            ):
+                ErrorEnvelope.for_code(code, stage=ErrorStage.PLANNING)
 
 
 def test_a_code_from_another_class_fails_closed() -> None:
@@ -245,22 +258,28 @@ def test_a_code_from_another_class_fails_closed() -> None:
         )
 
 
-@pytest.mark.parametrize("value", ["validation", 7, None])
-def test_unknown_error_classes_fail_closed(value) -> None:
-    with pytest.raises(ErrorEnvelopeError, match="^error_class: unknown_error_class$"):
-        ErrorEnvelope(
-            error_class=value, error_code="internal_error", stage=ErrorStage.PLANNING
-        )
+def test_unknown_error_classes_fail_closed(subtests) -> None:
+    for value in ["validation", 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                ErrorEnvelopeError, match="^error_class: unknown_error_class$"
+            ):
+                ErrorEnvelope(
+                    error_class=value,
+                    error_code="internal_error",
+                    stage=ErrorStage.PLANNING,
+                )
 
 
-@pytest.mark.parametrize("value", ["tool_call", 7, None])
-def test_unknown_stages_fail_closed(value) -> None:
-    with pytest.raises(ErrorEnvelopeError, match="^stage: unknown_stage$"):
-        ErrorEnvelope(
-            error_class=ErrorClass.INTERNAL,
-            error_code="internal_error",
-            stage=value,
-        )
+def test_unknown_stages_fail_closed(subtests) -> None:
+    for value in ["tool_call", 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(ErrorEnvelopeError, match="^stage: unknown_stage$"):
+                ErrorEnvelope(
+                    error_class=ErrorClass.INTERNAL,
+                    error_code="internal_error",
+                    stage=value,
+                )
 
 
 def test_invalid_schema_version_fails_closed() -> None:
@@ -273,10 +292,13 @@ def test_invalid_schema_version_fails_closed() -> None:
         )
 
 
-@pytest.mark.parametrize("value", ["boom", 7, None, ValueError])
-def test_non_exceptions_fail_closed(value) -> None:
-    with pytest.raises(ErrorEnvelopeError, match="^exception: invalid_exception$"):
-        envelope_from_exception(value, stage=ErrorStage.TOOL_CALL)
+def test_non_exceptions_fail_closed(subtests) -> None:
+    for value in ["boom", 7, None, ValueError]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                ErrorEnvelopeError, match="^exception: invalid_exception$"
+            ):
+                envelope_from_exception(value, stage=ErrorStage.TOOL_CALL)
 
 
 def test_serialization_is_byte_stable_and_field_ordered() -> None:
