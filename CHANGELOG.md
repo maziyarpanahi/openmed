@@ -240,6 +240,8 @@ date remain pending. See the [release notes](docs/release/v3.2.0.md) and
 
 ### Fixed
 
+- Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
+
 - Preserve teacher identities on typed weak-label spans, keeping typed and mapping consensus consistent without mutating caller-owned spans (#4202, #4219).
 
 - Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
