@@ -451,6 +451,9 @@ class OutputFormatter:
     def to_html(self, result: PredictionResult) -> str:
         """Convert result to HTML format with highlighted entities.
 
+        Highlight valid, nonempty source spans without changing their offsets
+        when escaping text and metadata for HTML.
+
         Args:
             result: Prediction result to convert.
 
@@ -467,9 +470,14 @@ class OutputFormatter:
 
         html += '<div class="text-content">\n'
 
-        # Highlight entities in text
+        # Map source boundaries to escaped boundaries before adding markup.
         highlighted_text = html_mod.escape(result.text)
-        offset = 0
+        escaped_offsets = [0]
+        for character in result.text:
+            escaped_offsets.append(
+                escaped_offsets[-1] + len(html_mod.escape(character))
+            )
+        boundaries = []
 
         # Sort entities by start position
         sorted_entities = sorted(
@@ -478,23 +486,29 @@ class OutputFormatter:
         )
 
         for entity in sorted_entities:
-            start = entity.start + offset
-            end = entity.end + offset
+            if not 0 <= entity.start < entity.end <= len(result.text):
+                continue
+            start = escaped_offsets[entity.start]
+            end = escaped_offsets[entity.end]
 
             color = self._get_entity_color(entity.label)
 
             highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
             highlight_end = "</span>"
 
-            highlighted_text = (
-                highlighted_text[:start]
-                + highlight_start
-                + highlighted_text[start:end]
-                + highlight_end
-                + highlighted_text[end:]
-            )
+            # Close adjacent spans before opening the next, and open an outer
+            # span before an inner span sharing its start. Markup is never
+            # inserted into another tag or an escaped character reference.
+            boundaries.append((start, 1, -end, highlight_start))
+            boundaries.append((end, 0, 0, highlight_end))
 
-            offset += len(highlight_start) + len(highlight_end)
+        chunks = []
+        cursor = 0
+        for position, _, _, markup in sorted(boundaries):
+            chunks.extend((highlighted_text[cursor:position], markup))
+            cursor = position
+        chunks.append(highlighted_text[cursor:])
+        highlighted_text = "".join(chunks)
 
         html += f"<p>{highlighted_text}</p>\n"
         html += "</div>\n"
