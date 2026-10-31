@@ -68,65 +68,35 @@ The controller reads `NSExtensionItem` plain-text attachments, displays the
 selected text and every bundled policy profile, runs the Nano model after the
 user confirms, and completes the request with a new plain-text attachment.
 
-The share extension's button titles, status/error messages, accessibility labels
-and hints, and policy display names come from its `Localizable.xcstrings`
-resource catalog. English (`en`) is the base language; Chinese (`zh`) and Hindi
-(`hi`) are included. Policy identifiers remain unchanged; the menu uses
-explicit display names, including the HIPAA, GDPR, and PIPEDA acronyms.
+`Localizable.xcstrings` supplies English (`en`), Chinese (`zh`), and Hindi
+(`hi`) controls, policy names, messages, and accessibility labels/hints.
+Declare these languages in the app and extension's localization configuration
+or `CFBundleLocalizations`. Hosts needing independent resource-bundle language
+selection can use `CFBundleAllowMixedLocalizations`; see Apple's
+[language selection guide](https://developer.apple.com/library/archive/qa/qa1828/_index.html).
 
-Declare the supported languages in the containing app and extension's
-localization configuration. Hosts without localized `.lproj` resources can
-declare `en`, `zh`, and `hi` in `CFBundleLocalizations` in their Info.plist.
-Foundation normally aligns resource-bundle language selection with the main
-bundle. A host that intentionally allows its framework/resource bundles to use
-different languages can opt into `CFBundleAllowMixedLocalizations` instead.
-See Apple's [app language selection guide](https://developer.apple.com/library/archive/qa/qa1828/_index.html).
+Live Dynamic Type changes preserve policy selection. The scrollable screen
+contains a 160-point minimum, internally scrolling preview, a policy menu with
+an option count and selection checkmark, and stacked full-width actions:
+filled **Redact and Return** and outlined **Cancel**. Buttons support wrapping
+labels and at least 52-point touch targets. VoiceOver exposes the selected policy;
+static hints never include shared text. Localized errors omit underlying error
+payloads, filenames, paths, and source text, including when Nano assets are missing.
 
-Fonts update while the extension remains open when the preferred text size
-changes. The full-width action buttons are consistently stacked: a filled
-**Redact and Return** primary action above an outlined **Cancel** secondary
-action, following the demo's button hierarchy. They have at least 52-point touch
-targets, padded wrapping titles, and adaptive light/dark colors. The
-screen scrolls and the policy control grows to accommodate larger text. Changing
-text size preserves the selected policy.
-
-The selected-text preview has a 160-point minimum height and scrolls internally
-for long selections. At accessibility text sizes, there is no extra stack spacing
-between the preview and policy control. The control shows the selected profile,
-a chevron, and a localized prompt with the number of available profiles. Tap it
-to open the native policy menu; every bundled profile is listed and the selected
-one has a checkmark. Selecting a profile updates the title and VoiceOver value.
-
-Accessibility hints are static catalog strings and never include selected text.
-The text preview itself remains readable through VoiceOver. Error presentation
-maps input/model failures to controlled localized messages; it never interpolates
-underlying error descriptions, filenames, private paths, or source text.
-
-Run the catalog resource and policy display-name checks with:
+Run localization checks from `swift/OpenMedKit`:
 
 ```bash
-cd swift/OpenMedKit
 swift test --filter ShareExtensionLocalizationTests
-```
-
-The same suite includes iOS-only UIKit checks for live text-size changes,
-selection preservation, and accessibility hints. Run it on an installed simulator
-from the package directory (replace the destination with an available device):
-
-```bash
 xcodebuild -scheme OpenMedKit-Package \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -parallel-testing-enabled NO \
   -only-testing:ExtensionTests/ShareExtensionLocalizationTests test
 ```
 
-For manual validation, open the share extension with synthetic text in each
-supported language, check all policy names, and change Text Size while it is
-open. At the largest accessibility size, scroll to both buttons and verify that
-they remain usable. With VoiceOver, check the policy label, selected policy,
-status, button labels, and hints. Without bundled Nano assets, **Redact and
-Return** displays a localized missing-model message without exposing an asset
-path; successful redaction still requires the bundled assets described above.
+Choose an installed simulator. Manually check every language and policy using
+synthetic text, change Text Size while open, and verify VoiceOver labels/hints
+and both actions at the largest accessibility size. Inference requires the
+bundled Nano assets above.
 
 ## Add the Action extension
 
