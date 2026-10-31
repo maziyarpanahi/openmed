@@ -3434,6 +3434,11 @@ def _shift_date(
     if native.handled:
         return native.text if native.text is not None else "[DATE_SHIFTED]"
 
+    from .locale_formats import _CJK_DATE_RE
+
+    if _CJK_DATE_RE.fullmatch(date_str):
+        return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
+
     localized = _parse_localized_month_date(date_str, lang)
     if localized is not None:
         try:
@@ -3507,7 +3512,7 @@ def _shift_date_basic(
     Returns:
         Shifted date string or placeholder
     """
-    from .locale_formats import parse_date
+    from .locale_formats import _CJK_DATE_RE, parse_date
 
     parsed = parse_date(date_str, lang=lang)
     if parsed.normalized is None:
@@ -3517,6 +3522,34 @@ def _shift_date_basic(
         shifted = original + timedelta(days=shift_days)
         if keep_year:
             shifted = _replace_year_safe(shifted, original.year)
+        cjk = _CJK_DATE_RE.fullmatch(date_str)
+        if cjk is not None:
+            from .anonymizer.digit_systems import render_in_source_digits
+
+            def render_components(source: str) -> str:
+                pieces = []
+                cursor = 0
+                for name in ("year", "month", "day"):
+                    start, end = cjk.span(name)
+                    width = end - start
+                    value = getattr(shifted, name)
+                    if name == "year" and width == 2:
+                        value %= 100
+                    pieces.extend((source[cursor:start], f"{value:0{width}d}"))
+                    cursor = end
+                pieces.append(source[cursor:])
+                return "".join(pieces)
+
+            rendered = render_in_source_digits(date_str, render_components)
+            # A two-digit year must not silently cross the parser's century
+            # pivot. Preserve the existing fail-closed date behavior instead.
+            if rendered is None or parse_date(rendered, lang=lang).normalized != (
+                shifted.year,
+                shifted.month,
+                shifted.day,
+            ):
+                return "[DATE_SHIFTED]"
+            return rendered
         separator = next((c for c in date_str if c in ".-/"), "-")
         parts = {
             "d": f"{shifted.day:02d}",
