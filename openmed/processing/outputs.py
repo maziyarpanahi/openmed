@@ -6,6 +6,7 @@ import logging
 import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from itertools import groupby
 from typing import Any, Dict, List, Optional, Union
 
 from openmed.core.errors import InputError, InternalError
@@ -478,6 +479,7 @@ class OutputFormatter:
                 escaped_offsets[-1] + len(html_mod.escape(character))
             )
         boundaries = []
+        highlight_starts = {}
 
         # Sort entities by start position
         sorted_entities = sorted(
@@ -485,7 +487,7 @@ class OutputFormatter:
             key=lambda x: x.start,
         )
 
-        for entity in sorted_entities:
+        for index, entity in enumerate(sorted_entities):
             if not 0 <= entity.start < entity.end <= len(result.text):
                 continue
             start = escaped_offsets[entity.start]
@@ -494,18 +496,34 @@ class OutputFormatter:
             color = self._get_entity_color(entity.label)
 
             highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = "</span>"
-
-            # Close adjacent spans before opening the next, and open an outer
-            # span before an inner span sharing its start. Markup is never
-            # inserted into another tag or an escaped character reference.
-            boundaries.append((start, 1, -end, highlight_start))
-            boundaries.append((end, 0, 0, highlight_end))
+            highlight_starts[index] = highlight_start
+            boundaries.append((start, 1, -end, index))
+            boundaries.append((end, 0, 0, index))
 
         chunks = []
         cursor = 0
-        for position, _, _, markup in sorted(boundaries):
-            chunks.extend((highlighted_text[cursor:position], markup))
+        active = []
+        for position, events in groupby(sorted(boundaries), key=lambda event: event[0]):
+            chunks.append(highlighted_text[cursor:position])
+            closing = set()
+            opening = []
+            for _, kind, _, index in events:
+                if kind:
+                    opening.append(index)
+                else:
+                    closing.add(index)
+            remaining = [index for index in active if index not in closing] + opening
+            shared = 0
+            for previous, current in zip(active, remaining):
+                if previous != current:
+                    break
+                shared += 1
+            # Crossing source spans cannot be represented by nested HTML tags.
+            # Close and reopen only the affected inner highlights so each label
+            # still covers exactly its source range, without duplicating text.
+            chunks.extend("</span>" for _ in active[shared:])
+            chunks.extend(highlight_starts[index] for index in remaining[shared:])
+            active = remaining
             cursor = position
         chunks.append(highlighted_text[cursor:])
         highlighted_text = "".join(chunks)
