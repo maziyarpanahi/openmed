@@ -129,6 +129,11 @@ def test_fake_entry_point_is_discovered_once_without_explicit_registration(
         fake_entry_points,
     )
 
+    # Legacy detector discovery must not depend on the separate SDK registry cache.
+    monkeypatch.setattr(
+        detector_plugins, "_iter_sdk_plugins", lambda *args, **kwargs: ()
+    )
+
     assert [spec.name for spec in iter_detectors("clinical_phi", "en")] == [
         "fake_clinical"
     ]

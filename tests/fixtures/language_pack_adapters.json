@@ -86,6 +86,7 @@
     "ro": "ro_RO",
     "ru": "ru_RU",
     "rw": "rw_RW",
+    "si": "si_LK",
     "sk": "sk_SK",
     "sr": "sr_RS",
     "sv": "sv_SE",
@@ -281,6 +282,10 @@
       "rw_RW",
       "rwanda_id"
     ],
+    "si": [
+      "si_LK",
+      "sri_lanka_nic"
+    ],
     "sk": [
       "sk_SK",
       "rodne_cislo"
@@ -416,6 +421,9 @@
     ],
     "Odia": [
       "or"
+    ],
+    "Sinhala": [
+      "si"
     ],
     "Tamil": [
       "ta"

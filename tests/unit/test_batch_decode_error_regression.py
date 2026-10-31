@@ -50,17 +50,24 @@ def test_bad_encoding_becomes_failed_item_and_later_files_run(tmp_path, monkeypa
     assert result.items[1].result["text"] == "synthetic note"
 
 
-@pytest.mark.parametrize("operation", ["analyze_text", "deidentify"])
-def test_strict_mode_still_raises_decode_error(tmp_path, monkeypatch, operation):
-    root, bad, good = inputs(tmp_path)
-    instance = processor(monkeypatch, operation=operation, continue_on_error=False)
-    with pytest.raises(UnicodeDecodeError):
-        if operation == "deidentify":
-            instance.process_files_to_directory(
-                [bad, good], input_root=root, output_dir=tmp_path / "out"
-            )
-        else:
-            instance.process_files([bad, good])
+def test_strict_mode_still_raises_decode_error(subtests, tmp_path):
+    case_root = tmp_path
+    for operation in ["analyze_text", "deidentify"]:
+        with subtests.test(operation=operation):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
+            with pytest.MonkeyPatch.context() as monkeypatch:
+                root, bad, good = inputs(tmp_path)
+                instance = processor(
+                    monkeypatch, operation=operation, continue_on_error=False
+                )
+                with pytest.raises(UnicodeDecodeError):
+                    if operation == "deidentify":
+                        instance.process_files_to_directory(
+                            [bad, good], input_root=root, output_dir=tmp_path / "out"
+                        )
+                    else:
+                        instance.process_files([bad, good])
 
 
 def test_directory_output_skips_bad_file_and_writes_good_file(tmp_path, monkeypatch):

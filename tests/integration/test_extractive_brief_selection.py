@@ -93,27 +93,27 @@ def test_actual_infeasible_extract_matches_bundled_brief_record_contracts():
     validate_clinical_record("brief_response", brief.to_response())
 
 
-@pytest.mark.parametrize("schema", ["brief_audit", "brief_response"])
-@pytest.mark.parametrize(
-    "mutation",
-    [
-        lambda x: x.update(summary="Synthetic partial output"),
-        lambda x: x.update(citations=[{"source_start": 0}]),
-        lambda x: x.update(charged_tokens=1),
-        lambda x: x.update(status="selected"),
-        lambda x: x["omission_budget"]["classes"][0].update(class_id="private-id"),
-        lambda x: x["omission_budget"].update(schema_version=True),
-    ],
-)
-def test_failed_extract_audit_rejects_unexpected_values(schema, mutation):
-    from openmed.clinical.record_schemas import (
-        ClinicalRecordSchemaError,
-        validate_clinical_record,
-    )
+def test_failed_extract_audit_rejects_unexpected_values(subtests):
+    for schema in ["brief_audit", "brief_response"]:
+        for mutation in [
+            lambda x: x.update(summary="Synthetic partial output"),
+            lambda x: x.update(citations=[{"source_start": 0}]),
+            lambda x: x.update(charged_tokens=1),
+            lambda x: x.update(status="selected"),
+            lambda x: x["omission_budget"]["classes"][0].update(class_id="private-id"),
+            lambda x: x["omission_budget"].update(schema_version=True),
+        ]:
+            with subtests.test(schema=schema, mutation=mutation):
+                from openmed.clinical.record_schemas import (
+                    ClinicalRecordSchemaError,
+                    validate_clinical_record,
+                )
 
-    brief = infeasible_whole_sentence_brief()
-    record = brief.to_dict() if schema == "brief_audit" else brief.to_response()
-    mutation(record["metrics"]["extractive_selection"])
-    with pytest.raises(ClinicalRecordSchemaError) as caught:
-        validate_clinical_record(schema, record)
-    assert "private-id" not in str(caught.value)
+                brief = infeasible_whole_sentence_brief()
+                record = (
+                    brief.to_dict() if schema == "brief_audit" else brief.to_response()
+                )
+                mutation(record["metrics"]["extractive_selection"])
+                with pytest.raises(ClinicalRecordSchemaError) as caught:
+                    validate_clinical_record(schema, record)
+                assert "private-id" not in str(caught.value)

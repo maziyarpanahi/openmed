@@ -1873,8 +1873,8 @@ def _decision_tool_spec() -> ToolSpec:
         _parameter(
             "schema_version",
             properties["schema_version"],
-            str,
-            DECISION_SCHEMA_VERSION,
+            Optional[str],
+            None,
         ),
         _parameter(
             "compatibility_policy",
@@ -1882,13 +1882,36 @@ def _decision_tool_spec() -> ToolSpec:
             str,
             DECISION_COMPATIBILITY_POLICY,
         ),
+        _parameter("question_id", properties["question_id"], Optional[str], None),
+        _parameter("instructions", properties["instructions"], Optional[str], None),
+        _parameter(
+            "option_descriptions",
+            properties["option_descriptions"],
+            Optional[Sequence[Optional[str]]],
+            None,
+        ),
+        _parameter("levels", properties["levels"], Sequence[str], ()),
+        _parameter(
+            "questions",
+            properties["questions"],
+            Sequence[Mapping[str, Any]],
+            (),
+        ),
+        _parameter("input_format", properties["input_format"], str, "text"),
+        _parameter(
+            "max_input_chars",
+            properties["max_input_chars"],
+            Optional[int],
+            None,
+        ),
     )
     spec = _tool_spec(
         name="openmed_decide",
         title="Evaluate Fixed-Option Decision",
         description=(
-            "Score bounded caller-supplied choices locally, apply calibrated "
-            "abstention, and return an explicitly review-only decision result."
+            "Score bounded caller-supplied choices, or a named question set over "
+            "one input, locally; apply calibrated abstention per question, and "
+            "return an explicitly review-only decision result."
         ),
         read_only_hint=True,
         destructive_hint=False,
@@ -1899,7 +1922,11 @@ def _decision_tool_spec() -> ToolSpec:
     )
     for metadata_key in ("$id", "$schema", "title"):
         request_contract.pop(metadata_key, None)
-    return replace(spec, input_schema=request_contract)
+    return replace(
+        spec,
+        input_schema=request_contract,
+        version=DECISION_SCHEMA_VERSION,
+    )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (

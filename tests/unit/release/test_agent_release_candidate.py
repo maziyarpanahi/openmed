@@ -32,6 +32,7 @@ def _rewrite(inputs):
     inputs.evidence.write_text(json.dumps(inputs.envelope))
 
 
+@pytest.mark.slow
 def test_repeated_candidate_is_canonical_and_verifies_offline(candidate_inputs):
     args = candidate_inputs.params
     first = run_agent_release_candidate(**args)
@@ -70,6 +71,7 @@ def test_repeated_candidate_is_canonical_and_verifies_offline(candidate_inputs):
     assert first.to_dict() == second.to_dict()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind", ["tracked", "untracked"])
 def test_dirty_tree_fails_with_stable_reason(candidate_inputs, kind):
     name = "source.txt" if kind == "tracked" else "new-source.txt"
@@ -80,6 +82,7 @@ def test_dirty_tree_fails_with_stable_reason(candidate_inputs, kind):
     assert result.packet.verify(_KEY)
 
 
+@pytest.mark.slow
 def test_mismatched_sha_fails_closed(candidate_inputs):
     result = run_agent_release_candidate(
         **{**candidate_inputs.params, "source_sha": "f" * 40}
@@ -89,6 +92,7 @@ def test_mismatched_sha_fails_closed(candidate_inputs):
     assert "evidence_sha_mismatch" in result.packet.to_dict()["reason_codes"]
 
 
+@pytest.mark.slow
 def test_existing_tag_must_point_to_exact_source(candidate_inputs):
     inputs = candidate_inputs
     tags = inputs.root / ".git" / "refs" / "tags"
@@ -113,6 +117,7 @@ def test_existing_tag_must_point_to_exact_source(candidate_inputs):
     assert missing.packet.to_dict()["reason_codes"] == ["tag_unavailable"]
 
 
+@pytest.mark.slow
 def test_wrong_source_evidence_cannot_clear_gates(candidate_inputs):
     candidate_inputs.envelope["source_sha"] = "f" * 40
     _rewrite(candidate_inputs)
@@ -126,6 +131,7 @@ def test_wrong_source_evidence_cannot_clear_gates(candidate_inputs):
     assert result.packet.verify(_KEY)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", ["wheel", "sdist", "tool_catalog", "policy"])
 def test_missing_artifact_blocks_passing_gates(candidate_inputs, name):
     candidate_inputs.params[name].unlink()
@@ -135,6 +141,7 @@ def test_missing_artifact_blocks_passing_gates(candidate_inputs, name):
     assert result.manifest["artifacts"][name] is None
 
 
+@pytest.mark.slow
 def test_missing_evidence_and_missing_metric_fail_closed(candidate_inputs):
     empty = run_agent_release_candidate(
         **{**candidate_inputs.params, "evidence_files": []}
@@ -149,6 +156,7 @@ def test_missing_evidence_and_missing_metric_fail_closed(candidate_inputs):
     assert "evidence_missing" in absent_file.packet.to_dict()["reason_codes"]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "mutation",
     ["extra", "slice_extra", "unknown", "duplicate", "basis", "schema", "sha"],
@@ -178,6 +186,7 @@ def test_invalid_or_duplicate_evidence_never_passes(candidate_inputs, mutation):
     assert result.packet.decision == "NOT_READY"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "raw",
     [b'{"schema_version": 1, "schema_version": 2}', b'{"raw": NaN}', b"\xff", b"[]"],
@@ -189,6 +198,7 @@ def test_malformed_json_produces_value_free_failure(candidate_inputs, raw):
     assert result.packet.verify(_KEY)
 
 
+@pytest.mark.slow
 def test_threshold_failure_is_signed_and_non_compensable(candidate_inputs):
     record = candidate_inputs.envelope["metrics"][0]
     record["event_count"] = 1
@@ -201,6 +211,7 @@ def test_threshold_failure_is_signed_and_non_compensable(candidate_inputs):
     assert result.packet.verify(_KEY)
 
 
+@pytest.mark.slow
 def test_evidence_file_order_is_irrelevant_and_duplicate_files_fail(candidate_inputs):
     inputs = candidate_inputs
     second = inputs.tmp / "second.json"
@@ -223,6 +234,7 @@ def test_evidence_file_order_is_irrelevant_and_duplicate_files_fail(candidate_in
     assert "evidence_duplicate_metric" in duplicate.packet.to_dict()["reason_codes"]
 
 
+@pytest.mark.slow
 def test_all_input_and_decision_fields_are_digest_bound(candidate_inputs):
     original = run_agent_release_candidate(**candidate_inputs.params)
     candidate_inputs.params["policy"].write_bytes(b"different policy")
@@ -241,6 +253,7 @@ def test_all_input_and_decision_fields_are_digest_bound(candidate_inputs):
         AgentCandidatePacket.from_dict(payload)
 
 
+@pytest.mark.slow
 def test_exports_contain_no_payloads_paths_keys_or_arbitrary_refs(candidate_inputs):
     inputs = candidate_inputs
     probes = ["JaneDoeSynthetic", "محمد_مصطنع", "सिंथेटिक_नाम", "private/path/credential"]
@@ -268,6 +281,7 @@ def test_exports_contain_no_payloads_paths_keys_or_arbitrary_refs(candidate_inpu
     assert result.packet.verify(_KEY)
 
 
+@pytest.mark.slow
 def test_repository_unavailable_and_concurrent_change_fail_closed(
     candidate_inputs, monkeypatch
 ):
@@ -292,6 +306,7 @@ def test_repository_unavailable_and_concurrent_change_fail_closed(
     assert "dirty_tree" in result.packet.to_dict()["reason_codes"]
 
 
+@pytest.mark.slow
 def test_configuration_and_exclusive_output(candidate_inputs):
     inputs = candidate_inputs
     with pytest.raises(AgentCandidateError, match="signing_key_invalid"):
@@ -326,6 +341,7 @@ def test_configuration_and_exclusive_output(candidate_inputs):
     assert error.value.__cause__ is None
 
 
+@pytest.mark.slow
 def test_git_file_checkout_and_annotated_tag_are_supported(candidate_inputs):
     inputs = candidate_inputs
     git_dir = inputs.tmp / "detached-git-dir"
@@ -351,6 +367,7 @@ def test_git_file_checkout_and_annotated_tag_are_supported(candidate_inputs):
     assert tagged.manifest["repository"]["tag_sha"] == inputs.sha
 
 
+@pytest.mark.slow
 def test_runner_never_calls_network_or_dispatch(candidate_inputs, monkeypatch):
     import socket
 
@@ -375,6 +392,7 @@ def test_runner_never_calls_network_or_dispatch(candidate_inputs, monkeypatch):
     assert commands
 
 
+@pytest.mark.slow
 def test_tag_argument_cannot_be_a_revision_expression(candidate_inputs):
     tags = candidate_inputs.root / ".git" / "refs" / "tags"
     (tags / "synthetic-rc").write_text(candidate_inputs.sha + "\n")

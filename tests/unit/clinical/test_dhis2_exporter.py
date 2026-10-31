@@ -284,33 +284,34 @@ def test_unknown_org_unit_fails_closed_without_echoing_the_uid():
     assert "ouSecret999" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize(
-    "target", ["storedBy", "comment", "attribute", "data_value", "note"]
-)
-def test_sensitive_text_values_fail_closed_on_non_strings(target: str):
-    tracker = _load_fixture("tracker_payload.json")
-    event = tracker["events"][0]
-    invalid_value = {"raw": "Amina Example"}
-    if target == "storedBy":
-        event["storedBy"] = invalid_value
-    elif target == "comment":
-        event["dataValues"][0]["comment"] = invalid_value
-    elif target == "attribute":
-        tracker["trackedEntities"][0]["attributes"][0]["value"] = invalid_value
-    elif target == "data_value":
-        event["dataValues"][0]["value"] = invalid_value
-    else:
-        event["notes"][0]["value"] = invalid_value
+def test_sensitive_text_values_fail_closed_on_non_strings(subtests):
+    for target in ["storedBy", "comment", "attribute", "data_value", "note"]:
+        with subtests.test(target=target):
+            tracker = _load_fixture("tracker_payload.json")
+            event = tracker["events"][0]
+            invalid_value = {"raw": "Amina Example"}
+            if target == "storedBy":
+                event["storedBy"] = invalid_value
+            elif target == "comment":
+                event["dataValues"][0]["comment"] = invalid_value
+            elif target == "attribute":
+                tracker["trackedEntities"][0]["attributes"][0]["value"] = invalid_value
+            elif target == "data_value":
+                event["dataValues"][0]["value"] = invalid_value
+            else:
+                event["notes"][0]["value"] = invalid_value
 
-    with pytest.raises(DHIS2ExportError, match="must be a string or null") as exc_info:
-        export_dhis2(
-            None,
-            tracker,
-            _load_fixture("organisation_units.json"),
-            text_redactor=_offline_redactor,
-        )
+            with pytest.raises(
+                DHIS2ExportError, match="must be a string or null"
+            ) as exc_info:
+                export_dhis2(
+                    None,
+                    tracker,
+                    _load_fixture("organisation_units.json"),
+                    text_redactor=_offline_redactor,
+                )
 
-    assert "Amina Example" not in str(exc_info.value)
+            assert "Amina Example" not in str(exc_info.value)
 
 
 def test_malformed_datetime_suffix_fails_closed_without_echoing_raw_value():
@@ -351,9 +352,8 @@ def test_snapshot_parent_links_and_levels_are_validated():
         DHIS2Exporter(invalid_levels)
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
+def test_invalid_privacy_configuration_is_rejected(subtests):
+    for kwargs, message in [
         ({"generalization_level": 0}, "generalization_level"),
         ({"small_cell_threshold": -1}, "small_cell_threshold"),
         ({"date_shift_days": 0}, "date_shift_days"),
@@ -363,10 +363,7 @@ def test_snapshot_parent_links_and_levels_are_validated():
             {"date_mode": "coarsen", "date_shift_days": 10},
             "requires date_mode",
         ),
-    ],
-)
-def test_invalid_privacy_configuration_is_rejected(
-    kwargs: dict[str, Any], message: str
-):
-    with pytest.raises((TypeError, ValueError), match=message):
-        DHIS2ExportConfig(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs, message=message):
+            with pytest.raises((TypeError, ValueError), match=message):
+                DHIS2ExportConfig(**kwargs)

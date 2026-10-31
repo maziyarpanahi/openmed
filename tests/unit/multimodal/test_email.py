@@ -165,9 +165,10 @@ def test_malformed_address_header_is_extracted_and_redacted_without_crashing(
     assert b"Synthetic Clinic <clinic@" not in result.email_bytes
 
 
-@pytest.mark.parametrize("value", ["a:b:;;", "Synthetic Clinic <clinic@"])
-def test_address_header_probe_returns_false_for_unparsable_values(value: str):
-    assert email_module._address_header_is_valid("From", value) is False
+def test_address_header_probe_returns_false_for_unparsable_values(subtests):
+    for value in ["a:b:;;", "Synthetic Clinic <clinic@"]:
+        with subtests.test(value=value):
+            assert email_module._address_header_is_valid("From", value) is False
 
 
 def test_address_header_probe_accepts_valid_addresses():

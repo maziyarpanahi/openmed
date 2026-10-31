@@ -35,71 +35,84 @@ def edit(payload: bytes, offset: int, fmt: str, value: int) -> bytes:
     return bytes(changed)
 
 
-@pytest.mark.parametrize("depth", [1, 4, 8, 24])
-def test_core_headers(depth) -> None:
-    result = read_bmp_dimensions(bmp(core=True, depth=depth))
-    assert asdict(result) == {
-        "width": 7,
-        "height": 5,
-        "planes": 1,
-        "bit_depth": depth,
-        "top_down": False,
-        "dib_header_bytes": 12,
-    }
+def test_core_headers(subtests) -> None:
+    for depth in [1, 4, 8, 24]:
+        with subtests.test(depth=depth):
+            result = read_bmp_dimensions(bmp(core=True, depth=depth))
+            assert asdict(result) == {
+                "width": 7,
+                "height": 5,
+                "planes": 1,
+                "bit_depth": depth,
+                "top_down": False,
+                "dib_header_bytes": 12,
+            }
 
 
-@pytest.mark.parametrize("height", [5, -5])
-@pytest.mark.parametrize("depth", [1, 4, 8, 16, 24, 32])
-def test_info_headers_and_top_down_rows(height, depth) -> None:
-    result = read_bmp_dimensions(bmp(height=height, depth=depth))
-    assert (result.width, result.height, result.bit_depth) == (7, 5, depth)
-    assert result.top_down is (height < 0)
-    assert result.planes == 1
-    assert result.dib_header_bytes == 40
+def test_info_headers_and_top_down_rows(subtests) -> None:
+    for height in [5, -5]:
+        for depth in [1, 4, 8, 16, 24, 32]:
+            with subtests.test(height=height, depth=depth):
+                result = read_bmp_dimensions(bmp(height=height, depth=depth))
+                assert (result.width, result.height, result.bit_depth) == (7, 5, depth)
+                assert result.top_down is (height < 0)
+                assert result.planes == 1
+                assert result.dib_header_bytes == 40
 
 
-@pytest.mark.parametrize("core,boundary", [(True, 26), (False, 54)])
-def test_all_truncated_header_boundaries(core, boundary) -> None:
-    for cut in range(boundary):
-        with pytest.raises(BmpDimensionsError, match="^bmp_header_truncated$"):
-            read_bmp_dimensions(bmp(core=core)[:cut])
-    assert read_bmp_dimensions(bmp(core=core), max_header_bytes=boundary).width == 7
-    with pytest.raises(BmpDimensionsError, match="^bmp_header_limit_exceeded$"):
-        read_bmp_dimensions(bmp(core=core), max_header_bytes=boundary - 1)
+def test_all_truncated_header_boundaries(subtests) -> None:
+    for core, boundary in [(True, 26), (False, 54)]:
+        with subtests.test(core=core, boundary=boundary):
+            for cut in range(boundary):
+                with pytest.raises(BmpDimensionsError, match="^bmp_header_truncated$"):
+                    read_bmp_dimensions(bmp(core=core)[:cut])
+            assert (
+                read_bmp_dimensions(bmp(core=core), max_header_bytes=boundary).width
+                == 7
+            )
+            with pytest.raises(BmpDimensionsError, match="^bmp_header_limit_exceeded$"):
+                read_bmp_dimensions(bmp(core=core), max_header_bytes=boundary - 1)
 
 
-@pytest.mark.parametrize("header_size", [0, 11, 16, 52, 56, 64, 108, 124, 0xFFFFFFFF])
-def test_unsupported_dib_never_triggers_unbounded_reads(header_size) -> None:
-    payload = edit(bmp(), 14, "<I", header_size)
-    stream = ShortStream(payload, chunk=14, boundary=18)
-    with pytest.raises(BmpDimensionsError, match="^bmp_dib_header_unsupported$"):
-        read_bmp_dimensions(stream)
-    assert stream.stream.tell() == 18
+def test_unsupported_dib_never_triggers_unbounded_reads(subtests) -> None:
+    for header_size in [0, 11, 16, 52, 56, 64, 108, 124, 0xFFFFFFFF]:
+        with subtests.test(header_size=header_size):
+            payload = edit(bmp(), 14, "<I", header_size)
+            stream = ShortStream(payload, chunk=14, boundary=18)
+            with pytest.raises(
+                BmpDimensionsError, match="^bmp_dib_header_unsupported$"
+            ):
+                read_bmp_dimensions(stream)
+            assert stream.stream.tell() == 18
 
 
-@pytest.mark.parametrize("planes", [0, 2, 65535])
-@pytest.mark.parametrize("core", [False, True])
-def test_plane_count_must_be_one(planes, core) -> None:
-    with pytest.raises(BmpDimensionsError, match="^bmp_planes_invalid$"):
-        read_bmp_dimensions(bmp(planes=planes, core=core))
+def test_plane_count_must_be_one(subtests) -> None:
+    for planes in [0, 2, 65535]:
+        for core in [False, True]:
+            with subtests.test(planes=planes, core=core):
+                with pytest.raises(BmpDimensionsError, match="^bmp_planes_invalid$"):
+                    read_bmp_dimensions(bmp(planes=planes, core=core))
 
 
-@pytest.mark.parametrize("depth", [0, 2, 3, 64, 65535])
-def test_invalid_bit_depths(depth) -> None:
-    payload = edit(bmp(), 28, "<H", depth)
-    with pytest.raises(BmpDimensionsError, match="^bmp_bit_depth_unsupported$"):
-        read_bmp_dimensions(payload)
+def test_invalid_bit_depths(subtests) -> None:
+    for depth in [0, 2, 3, 64, 65535]:
+        with subtests.test(depth=depth):
+            payload = edit(bmp(), 28, "<H", depth)
+            with pytest.raises(BmpDimensionsError, match="^bmp_bit_depth_unsupported$"):
+                read_bmp_dimensions(payload)
 
 
-@pytest.mark.parametrize("compression", [1, 2, 3, 4, 5, 6, 0xFFFFFFFF])
-def test_compressed_layouts_are_explicitly_unsupported(compression) -> None:
-    with pytest.raises(BmpDimensionsError, match="^bmp_compression_unsupported$"):
-        read_bmp_dimensions(bmp(compression=compression))
+def test_compressed_layouts_are_explicitly_unsupported(subtests) -> None:
+    for compression in [1, 2, 3, 4, 5, 6, 0xFFFFFFFF]:
+        with subtests.test(compression=compression):
+            with pytest.raises(
+                BmpDimensionsError, match="^bmp_compression_unsupported$"
+            ):
+                read_bmp_dimensions(bmp(compression=compression))
 
 
-@pytest.mark.parametrize(
-    "offset,fmt,value,category",
-    [
+def test_malformed_fields_have_stable_categories(subtests) -> None:
+    for offset, fmt, value, category in [
         (0, "<H", 0, "bmp_signature_invalid"),
         (6, "<H", 1, "bmp_reserved_fields_invalid"),
         (8, "<H", 1, "bmp_reserved_fields_invalid"),
@@ -109,13 +122,12 @@ def test_compressed_layouts_are_explicitly_unsupported(compression) -> None:
         (10, "<I", 53, "bmp_pixel_offset_invalid"),
         (2, "<I", 53, "bmp_file_size_invalid"),
         (34, "<I", 1, "bmp_image_size_invalid"),
-    ],
-)
-def test_malformed_fields_have_stable_categories(offset, fmt, value, category) -> None:
-    with pytest.raises(BmpDimensionsError) as raised:
-        read_bmp_dimensions(edit(bmp(), offset, fmt, value))
-    assert raised.value.category == category
-    assert str(raised.value) == category
+    ]:
+        with subtests.test(offset=offset, fmt=fmt, value=value, category=category):
+            with pytest.raises(BmpDimensionsError) as raised:
+                read_bmp_dimensions(edit(bmp(), offset, fmt, value))
+            assert raised.value.category == category
+            assert str(raised.value) == category
 
 
 def test_zero_image_size_is_allowed_for_uncompressed_info() -> None:
@@ -205,21 +217,26 @@ def test_failure_restores_caller_owned_stream() -> None:
     assert not stream.closed
 
 
-@pytest.mark.parametrize("option", ["max_header_bytes", "max_pixels"])
-@pytest.mark.parametrize("value", [0, -1, True, False, 2.0, "2", None])
-def test_invalid_limits_do_not_read(option, value) -> None:
-    class Unreadable:
-        def read(self, size):
-            pytest.fail("invalid options must be checked before I/O")
+def test_invalid_limits_do_not_read(subtests) -> None:
+    for option in ["max_header_bytes", "max_pixels"]:
+        for value in [0, -1, True, False, 2.0, "2", None]:
+            with subtests.test(option=option, value=value):
 
-    with pytest.raises(ValueError, match=option):
-        read_bmp_dimensions(Unreadable(), **{option: value})
+                class Unreadable:
+                    def read(self, size):
+                        pytest.fail("invalid options must be checked before I/O")
+
+                with pytest.raises(ValueError, match=option):
+                    read_bmp_dimensions(Unreadable(), **{option: value})
 
 
-@pytest.mark.parametrize("source", [None, "not-bytes", bytearray(b"data"), 12])
-def test_invalid_source_type(source) -> None:
-    with pytest.raises(TypeError, match="source must be bytes or a binary stream"):
-        read_bmp_dimensions(source)
+def test_invalid_source_type(subtests) -> None:
+    for source in [None, "not-bytes", bytearray(b"data"), 12]:
+        with subtests.test(source=source):
+            with pytest.raises(
+                TypeError, match="source must be bytes or a binary stream"
+            ):
+                read_bmp_dimensions(source)
 
 
 @pytest.mark.parametrize("returned", [None, "text", bytearray(b"x"), b"x" * 1000])

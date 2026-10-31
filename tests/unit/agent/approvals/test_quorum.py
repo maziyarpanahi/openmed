@@ -75,9 +75,8 @@ def test_two_distinct_roles_satisfy_and_order_is_deterministic():
     assert decision.reviewer_roles == tuple(sorted((CLINICIAN, PHARMACIST)))
 
 
-@pytest.mark.parametrize(
-    "receipts,expected",
-    [
+def test_ineligible_or_replayed_receipts_cannot_satisfy(subtests):
+    for receipts, expected in [
         ([], 0),
         ([receipt(), receipt(CLINICIAN, 2)], 1),
         ([receipt(), receipt(REQUESTER, 2)], 1),
@@ -86,12 +85,11 @@ def test_two_distinct_roles_satisfy_and_order_is_deterministic():
         ([receipt(), receipt(PHARMACIST, 2, consumed_at=21)], 1),
         ([receipt(), receipt(OTHER, 2)], 1),
         ([receipt(), receipt()], 0),
-    ],
-)
-def test_ineligible_or_replayed_receipts_cannot_satisfy(receipts, expected):
-    decision = evaluate(receipts)
-    assert not decision.satisfied
-    assert decision.approved_count == expected
+    ]:
+        with subtests.test(receipts=receipts, expected=expected):
+            decision = evaluate(receipts)
+            assert not decision.satisfied
+            assert decision.approved_count == expected
 
 
 def test_external_replay_exclusions():
@@ -134,9 +132,8 @@ def test_policy_digest_commits_all_rules_and_normalizes_role_order():
         assert changed.digest != configured.digest
 
 
-@pytest.mark.parametrize(
-    "kwargs",
-    [
+def test_invalid_or_impossible_policies_fail_closed(subtests):
+    for kwargs in [
         {"required_count": 0},
         {"required_count": True},
         {"required_count": 4},
@@ -144,11 +141,10 @@ def test_policy_digest_commits_all_rules_and_normalizes_role_order():
         {"allowed_reviewer_roles": ()},
         {"allowed_reviewer_roles": (CLINICIAN, CLINICIAN)},
         {"allowed_reviewer_roles": [CLINICIAN]},
-    ],
-)
-def test_invalid_or_impossible_policies_fail_closed(kwargs):
-    with pytest.raises(ApprovalQuorumError):
-        policy(**kwargs)
+    ]:
+        with subtests.test(kwargs=kwargs):
+            with pytest.raises(ApprovalQuorumError):
+                policy(**kwargs)
 
 
 def test_missing_or_duplicate_action_class_fails_closed():
@@ -158,20 +154,21 @@ def test_missing_or_duplicate_action_class_fails_closed():
         ApprovalQuorumEvaluator([]).policy("private payload")
 
 
-@pytest.mark.parametrize("field", ["action_digest", "requester_role", "now"])
-def test_invalid_inputs_do_not_echo_values(field):
-    kwargs = dict(
-        action_class="high-impact-write",
-        action_digest=ACTION,
-        requester_role=REQUESTER,
-        now=20,
-        receipts=[],
-    )
-    kwargs[field] = "Synthetic Patient ID 123 /private/credential"
-    with pytest.raises(ApprovalTokenValidationError) as caught:
-        ApprovalQuorumEvaluator([policy()]).evaluate(**kwargs)
-    assert "Patient" not in str(caught.value)
-    assert "credential" not in str(caught.value)
+def test_invalid_inputs_do_not_echo_values(subtests):
+    for field in ["action_digest", "requester_role", "now"]:
+        with subtests.test(field=field):
+            kwargs = dict(
+                action_class="high-impact-write",
+                action_digest=ACTION,
+                requester_role=REQUESTER,
+                now=20,
+                receipts=[],
+            )
+            kwargs[field] = "Synthetic Patient ID 123 /private/credential"
+            with pytest.raises(ApprovalTokenValidationError) as caught:
+                ApprovalQuorumEvaluator([policy()]).evaluate(**kwargs)
+            assert "Patient" not in str(caught.value)
+            assert "credential" not in str(caught.value)
 
 
 def test_decision_contains_only_roles_counts_and_digests():
@@ -193,6 +190,7 @@ def test_decision_contains_only_roles_counts_and_digests():
     assert isinstance(decision, ApprovalQuorumDecision)
 
 
+@pytest.mark.slow
 def test_raw_payloads_and_oversized_sets_are_refused():
     with pytest.raises(ApprovalQuorumError, match="invalid_receipt"):
         evaluate([{"payload": "Synthetic Patient ID 123"}])
