@@ -42,6 +42,64 @@ def test_unknown_locale_ambiguous_dates_are_not_guessed():
         assert shifter("11/10/2026", 1, lang=None) == "[DATE_SHIFTED]"
 
 
+def test_cjk_date_shifts_preserve_source_format_and_digit_system(subtests):
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    cases = [
+        ("zh", "2024年3月15日", 10, False, "2024年3月25日"),
+        ("ja", "24年3月15日", 10, False, "24年3月25日"),
+        ("ko", "2024년 3월 15일", 10, False, "2024년 3월 25일"),
+        ("zh", "2024年03月05日", -10, False, "2024年02月24日"),
+        ("zh", "２０２４年０３月１５日", 10, False, "２０２４年０３月２５日"),
+        ("ja", "２４年３月１５日", 10, False, "２４年３月２５日"),
+        ("ko", "2024 년 03 월 05 일", 10, False, "2024 년 03 월 15 일"),
+        ("zh", "2024年12月31日", 1, False, "2025年01月01日"),
+        ("ja", "99年12月31日", 1, False, "00年01月01日"),
+        ("ko", "2024년 12월 31일", 1, True, "2024년 01월 01일"),
+        ("zh", " 2024年03月15日 ", 0, False, " 2024年03月15日 "),
+    ]
+    for shifter in (_shift_date, _shift_date_basic):
+        for lang, source, offset, keep_year, expected in cases:
+            with subtests.test(shifter=shifter.__name__, lang=lang, source=source):
+                assert shifter(source, offset, keep_year, lang=lang) == expected
+
+
+def test_cjk_date_shifts_do_not_require_dateutil_and_fail_closed(monkeypatch, subtests):
+    import sys
+
+    from openmed.core.pii import _shift_date, _shift_date_basic
+
+    monkeypatch.setitem(sys.modules, "dateutil", None)
+    monkeypatch.setitem(sys.modules, "dateutil.parser", None)
+    for shifter in (_shift_date, _shift_date_basic):
+        for source, expected in [
+            ("2024年3月15日", "2024年3月25日"),
+            ("2024년 3월 15일", "2024년 3월 25일"),
+            ("2024年2月30日", "[DATE_SHIFTED]"),
+            ("2024年13月15日", "[DATE_SHIFTED]"),
+            ("9999年12月31日", "[DATE_SHIFTED]"),
+            ("49年12月31日", "[DATE_SHIFTED]"),
+            ("2024年3月15日 trailing", "[DATE_SHIFTED]"),
+        ]:
+            with subtests.test(shifter=shifter.__name__, source=source):
+                assert shifter(source, 10, lang="zh") == expected
+
+
+def test_cjk_date_shifts_work_through_the_public_pipeline(subtests):
+    for lang, source, expected in [
+        ("zh", "2024年3月15日", "2024年3月25日"),
+        ("ja", "24年3月15日", "24年3月25日"),
+        ("ko", "2024년 3월 15일", "2024년 3월 25일"),
+        ("zh", "２０２４年０３月１５日", "２０２４年０３月２５日"),
+    ]:
+        with subtests.test(lang=lang, source=source):
+            text = f"Synthetic date: {source}"
+            result = _deidentify_with_entities(
+                text, _date_entity(text, source), lang=lang, date_shift_days=10
+            )
+            assert result.deidentified_text == f"Synthetic date: {expected}"
+
+
 def test_registered_and_national_id_languages_have_date_orders():
     from openmed.core.language_pack_catalog import (
         BUILTIN_LANGUAGE_PACKS,
@@ -107,6 +165,7 @@ def _date_entity(
 def _deidentify_with_entities(
     text: str,
     *entities: EntityPrediction,
+    lang: str = "en",
     **run_kwargs,
 ):
     def model_detector(model_text: str, **kwargs):
@@ -114,7 +173,7 @@ def _deidentify_with_entities(
         return _prediction(model_text, *entities)
 
     return (
-        Pipeline(model_detector=model_detector, use_safety_sweep=False)
+        Pipeline(model_detector=model_detector, use_safety_sweep=False, lang=lang)
         .run(
             text,
             method="shift_dates",
