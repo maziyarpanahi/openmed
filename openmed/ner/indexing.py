@@ -92,6 +92,16 @@ GLIFORMER_DISEASE_RECORD = ModelRecord(
     license="Apache-2.0",
 )
 
+GLINER2_DISEASE_MODEL_ID = "OpenMed/GLiNER2.5-BioNER-Disease-Base-v1"
+GLINER2_DISEASE_RECORD = ModelRecord(
+    id=GLINER2_DISEASE_MODEL_ID,
+    family=ModelFamily.GLINER2.value,
+    domains=("biomedical", "clinical"),
+    languages=("en",),
+    default_labels=("disease",),
+    license="Apache-2.0",
+)
+
 
 def _gliner2_record(spec: GLiNER2CheckpointSpec) -> ModelRecord:
     kind = "decision-tuned " if spec.decision_tuned else ""
@@ -113,6 +123,7 @@ def _gliner2_record(spec: GLiNER2CheckpointSpec) -> ModelRecord:
 BUILTIN_MODEL_RECORDS = (
     GLINER_BIOMED_RECORD,
     GLIFORMER_DISEASE_RECORD,
+    GLINER2_DISEASE_RECORD,
     *(_gliner2_record(spec) for spec in list_gliner2_checkpoints()),
 )
 
@@ -155,12 +166,16 @@ def resolve_model_record(
     if resolved_family is None:
         return None
 
-    # Local snapshots of this disease checkpoint keep its one-label default.
+    # Named exports and Hub snapshots keep registered task-specific defaults.
     defaults: Tuple[str, ...] = ()
     if path.is_dir():
-        for name in (path.name, *[parent.name for parent in path.parents]):
-            if "gliformer-bioner-disease-base-v1" in name.lower():
-                defaults = ("disease",)
+        names = tuple(part.name.lower() for part in (path, *path.parents))
+        for record in BUILTIN_MODEL_RECORDS:
+            if record.family != resolved_family or not record.default_labels:
+                continue
+            checkpoint_name = record.id.rsplit("/", 1)[-1].lower()
+            if any(checkpoint_name in name for name in names):
+                defaults = record.default_labels
                 break
     return ModelRecord(
         id=model_id,
@@ -193,6 +208,18 @@ def _local_model_family(path: Path) -> Optional[str]:
         if not isinstance(payload, dict):
             raise ValueError("Local checkpoint configuration must be an object")
         architectures = payload.get("architectures")
+        if (
+            payload.get("model_type") == "extractor"
+            and isinstance(payload.get("architecture"), str)
+            and payload.get("architecture") in {"span", "boundary"}
+            and isinstance(architectures, list)
+            and any(
+                name in {"Extractor", "BoundaryExtractor"}
+                for name in architectures
+                if isinstance(name, str)
+            )
+        ):
+            return ModelFamily.GLINER2.value
         hints = [payload.get("model_type", "")]
         if isinstance(architectures, list):
             hints.extend(architectures)
@@ -601,6 +628,8 @@ __all__ = [
     "BUILTIN_MODEL_RECORDS",
     "GLIFORMER_DISEASE_MODEL_ID",
     "GLIFORMER_DISEASE_RECORD",
+    "GLINER2_DISEASE_MODEL_ID",
+    "GLINER2_DISEASE_RECORD",
     "SPAN_MODEL_FAMILIES",
     "resolve_model_record",
 ]

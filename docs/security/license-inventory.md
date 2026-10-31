@@ -115,6 +115,7 @@ a dependency also declared in another extra.
 | `presidio-analyzer` | `presidio` | `MIT` |
 | `protobuf` | `service` | `BSD-3-Clause` |
 | `pyarrow` | `columnar, spark` | `Apache-2.0` |
+| `pyasn1` | `cloud` | `BSD-2-Clause` |
 | `pycld2` | `lid` | `Apache-2.0` |
 | `pydeid` | `pydeid` | `MIT` |
 | `pydicom` | `multimodal` | `MIT` |

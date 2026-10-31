@@ -5,6 +5,8 @@ fallback_policy: disabled
 expected_routes:
   - index.html
   - docs/index.html
+  - docs/release/v3.2.0/index.html
+  - docs/migration/3.1-to-3.2/index.html
   - docs/migration/3.0-to-3.1/index.html
   - docs/agent/index.html
   - docs/getting-started/index.html
@@ -90,6 +92,8 @@ classification:
   navigated:
     - index.md
     - feature-map.md
+    - release/v3.2.0.md
+    - migration/3.1-to-3.2.md
     - release/v2.5.0.md
     - release/v2.2.0.md
     - release/v2.2-standards-matrix.md

@@ -2,9 +2,9 @@ name: V2.2 conformance
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
 
 permissions:
   contents: read
