@@ -383,7 +383,7 @@ def test_pages_workflow_builds_prs_and_deploys_only_master() -> None:
 
     assert push["branches"] == ["master"]
     assert "tags" not in push
-    assert pull_request["branches"] == ["master"]
+    assert pull_request["branches"] == ["master", "release/v*"]
     assert "docs/**" in pull_request["paths"]
     assert 'tags: ["v*"]' not in workflow_text
     assert (

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-30
+
+Global languages, synthetic clinical data and local decision-model backends.
+This release candidate was prepared on 2026-10-30 from v3.1.0 and retains the
+model catalog, artifact pins and registry pointer targets. Publication and the final release
+date remain pending. See the [release notes](docs/release/v3.2.0.md) and
+[migration guide](docs/migration/3.1-to-3.2.md).
+
 ### Breaking Changes
 
 - Burned-in synthetic rendering now requires covering fonts and complex-script shaping; missing default fonts require explicit `font_fallback=True` (#3868).
@@ -231,6 +239,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults for `OpenMed/GLiFormer-BioNER-Disease-Base-v1` (#4329).
 
 ### Fixed
+
+- Shift Chinese, Japanese and Korean marker-based dates without dateutil, retaining numeric field widths, whitespace, two-digit years and source digit systems (#4328).
+
+- Keep HTML entity highlights aligned with original source offsets across escaped characters, preserving source text and metadata escaping (#4326).
+  Crossing, nested and adjacent spans retain each label's exact source coverage.
+
+- Make security-support guidance version independent and distinguish published stable releases from candidates (#4131, #4133).
+
+- Require banking context for pattern-only SWIFT/BIC matches so clinical section headers remain intact; retain contextual codes and model detections (#4152, #4230).
+
+- Preserve every splitlines separator, including form-feed PDF page breaks, in plaintext geometry and redaction boundaries (#3567, #4228).
+
+- Keep active-learning queues retryable when event persistence fails, applying queued and labeled memory updates only after a successful append (#4203, #4220).
+
+- Preserve teacher identities on typed weak-label spans, keeping typed and mapping consensus consistent without mutating caller-owned spans (#4202, #4219).
+
+- Register `OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` with its disease label
+  default and recognize saved GLiNER2.5 boundary-extractor configurations for
+  offline local loading.
+
+- Retain the `openmed.service.schemas.DECISION_SCHEMA_VERSION` compatibility
+  export while adding the decision 1.1 question-set contract.
 
 - Refresh the wheel-size baseline from verified current-master artifacts after accepted library growth, retaining 10% headroom and independent CI measurement.
 
@@ -623,6 +653,8 @@ clinical efficacy. Package publication remains a separate release action.
 
 ### Security
 
+- Require patched pyasn1 0.6.5 in the optional `cloud` profile and frozen
+  lockfile to address four ASN.1 decoder CPU-exhaustion advisories (#4372).
 - Require patched OpenTelemetry API 1.45.1 in the optional `dev`, `otel` and
   `service` profiles and GitPython 3.2.1 in the `docs` profile, and lock
   patched virtualenv 21.14.13, Brotli 1.2.1 and graphql-core 3.2.12. A

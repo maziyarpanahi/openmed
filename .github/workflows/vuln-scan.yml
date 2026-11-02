@@ -2,7 +2,7 @@ name: Vulnerability Scan
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"
@@ -15,7 +15,7 @@ on:
       - "openmed/**"
       - "tests/fixtures/security/trivy-high-vulnerability.json"
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/vuln-scan.yml"
       - "Dockerfile"

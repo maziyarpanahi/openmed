@@ -2,7 +2,7 @@ name: Nix
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/nix.yml"
       - "flake.lock"
@@ -13,7 +13,7 @@ on:
   # Pull requests rebuild the dev shell only when its inputs change; pushes
   # to the default branches keep checking it against every code change.
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, master, develop, 'release/v*' ]
     paths:
       - ".github/workflows/nix.yml"
       - "flake.lock"

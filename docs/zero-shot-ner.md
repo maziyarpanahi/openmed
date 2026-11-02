@@ -89,7 +89,7 @@ The `gliner2` family loads GLiNER2.5 checkpoints through
 `gliner2.AutoExtractor`, which reads the architecture saved with each
 checkpoint (`span` or `boundary`). The legacy `GLiNER2.from_pretrained` loader
 is span-only, and the v1 `gliner` package cannot load these checkpoints at all.
-The default index registers all six public checkpoints, so `infer()` routes
+The default index registers the six Fastino checkpoints below, so `infer()` routes
 them to this family:
 
 | Checkpoint | Parameters | Languages | Architecture | Decision-tuned |
@@ -104,6 +104,42 @@ them to this family:
 All six are Apache-2.0, need no remote code and run on CPU. The same metadata
 is available from `openmed.ner.families.gliner2.list_gliner2_checkpoints()`.
 Weights are not bundled.
+
+### OpenMed disease checkpoint
+
+`OpenMed/GLiNER2.5-BioNER-Disease-Base-v1` is also registered for English
+biomedical and clinical NER, with Apache-2.0 metadata and the single default
+label `disease`. It uses the GLiNER2.5 boundary architecture. Install
+`openmed[gliner2]`; no Transformers token-classification pipeline or remote
+Python code is needed for this checkpoint.
+
+```python
+from openmed import analyze_text
+
+result = analyze_text(
+    "Synthetic note: the patient has asthma and chronic kidney disease.",
+    model_id="OpenMed/GLiNER2.5-BioNER-Disease-Base-v1",
+    revision="fccb29669b847cd6ca6384660d06c750c55366e2",
+    threshold=0.7,
+)
+```
+
+The label defaults to `["disease"]`; `0.7` is an explicit threshold in this
+example, not a change to the SDK-wide default. The published checkpoint is
+fine-tuned for disease spans. Its base model's other tasks are not qualified
+by this registration. See the
+[model card](https://huggingface.co/OpenMed/GLiNER2.5-BioNER-Disease-Base-v1)
+for its evaluation scope and limitations.
+
+After downloading, `local_files_only=True` and the pinned revision load from
+the configured cache. A saved `extractor` / `BoundaryExtractor` configuration
+also selects GLiNER2.5 when a local directory has an arbitrary name. Hub cache
+snapshots and named exports retain the disease label default; supply
+`labels=["disease"]` or an explicit index record when renaming an export
+without its model identity. Weights remain outside the SDK package and the
+model registry's promotion pointers are unchanged.
+
+### Generic task helpers
 
 ```python
 from openmed.ner.families.gliner2 import load_gliner2_handle
