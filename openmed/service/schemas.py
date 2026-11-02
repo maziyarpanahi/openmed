@@ -22,6 +22,9 @@ from openmed.structured.decision import (
     decision_request_schema,
 )
 from openmed.structured.decision import (
+    DECISION_SCHEMA_VERSION as DECISION_SCHEMA_VERSION,
+)
+from openmed.structured.decision import (
     MAX_CONFIGURABLE_INPUT_CHARS as DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
 )
 from openmed.structured.decision import (

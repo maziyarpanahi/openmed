@@ -2,7 +2,7 @@ name: Swift Package (OpenMedKit)
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.swift-format'
       - 'Package.swift'
@@ -11,7 +11,7 @@ on:
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.swift-format'
       - 'Package.swift'

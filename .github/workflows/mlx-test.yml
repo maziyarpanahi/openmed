@@ -2,14 +2,14 @@ name: MLX Unit Tests
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - 'openmed/mlx/**'
       - 'openmed/core/backends.py'
       - 'tests/unit/mlx/**'
       - 'tests/unit/test_backends.py'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - 'openmed/mlx/**'
       - 'openmed/core/backends.py'

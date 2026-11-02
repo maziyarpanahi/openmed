@@ -159,6 +159,8 @@ REVIEWED_LICENSES = {
     "prefect": "Apache-2.0",
     "presidio-analyzer": "MIT",
     "pyarrow": "Apache-2.0",
+    # Reviewed against pyasn1/pyasn1 v0.6.5 LICENSE.rst (two-clause BSD).
+    "pyasn1": "BSD-2-Clause",
     "pycld2": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pymongo": "Apache-2.0",

@@ -62,6 +62,17 @@ must still pass before a release is considered done.
 
 Recent history uses concise imperative commits, often with prefixes such as `fix:`. Keep commits and PRs focused on the requested change. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
 
+Before pushing or merging, run `python scripts/release/check_repo_policy.py
+--commits origin/master HEAD` (substitute the actual target branch when needed).
+This checks every incoming commit, including merge side parents, for forbidden
+author/committer identities and attribution footers. Checking only the PR opener,
+primary author, latest commit, or first-parent log is insufficient. Preserve
+human contributor identity when correcting metadata. Never bypass the required
+`Commit attribution policy` status. Its trusted base-branch validator runs in the
+Secret Scan workflow and posts the result on the exact PR head; it never executes
+PR code. Keep the repository ruleset active, with no bypass actors, for `master`
+and `release/**` branches. A missing or failed check must block the merge.
+
 Pull requests should follow `.github/PULL_REQUEST_TEMPLATE.md`: description, change type, tests run, docs or changelog updates when applicable, dependency justification, linked issue, and screenshots or example output for UI/docs changes.
 
 ## Reviewing Existing PRs After Lint Changes
