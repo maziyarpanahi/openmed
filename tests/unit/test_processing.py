@@ -69,6 +69,12 @@ class TestTextProcessor:
         assert "BP" in result or "bp" in result
         assert "HR" in result or "hr" in result
 
+    def test_clean_text_lowercase_restores_medical_abbreviations(self):
+        """Lowercasing must not leak abbreviation placeholders."""
+        processor = TextProcessor(lowercase=True)
+        result = processor.clean_text("Patient in ICU, BP 120/80")
+        assert result == "patient in icu, bp 120/80"
+
     def test_segment_sentences(self):
         """Test sentence segmentation."""
         processor = TextProcessor()
