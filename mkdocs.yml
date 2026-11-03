@@ -154,6 +154,12 @@ nav:
       - Helm Deployment: deploy/helm.md
       - Kubernetes Autoscaling: deploy/autoscaling.md
       - Kubernetes Model Operator: deploy/operator.md
+      - Service Runbooks:
+          - Service Incident Runbooks: operations/runbooks/service-runbooks.md
+          - Credential Compromise: operations/runbooks/credential-compromise.md
+          - Client Certificate Compromise: operations/runbooks/client-certificate-compromise.md
+          - Disk Exhaustion: operations/runbooks/disk-exhaustion.md
+          - Job and Journey Store Corruption: operations/runbooks/store-corruption.md
       - OpenHIM De-identification Mediator: deploy/openhim-mediator.md
       - African Facility-to-HMIS Reference: deploy/africa-reference-deployment.md
       - Multi-Arch Containers: deploy/multi-arch.md

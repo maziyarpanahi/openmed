@@ -155,6 +155,10 @@ after suspected exposure, operator departure, backup compromise, or accidental
 secret disclosure. Emergency rotation should use the same verification steps;
 urgency is not a reason to skip consistency checks.
 
+REST service API keys, JWT verification keys, job webhook secrets and mTLS
+client certificates have their own procedures in the
+[service incident runbooks](../operations/runbooks/service-runbooks.md).
+
 ## Environment and file-permission checklist
 
 - Prefer an OS keychain, mounted secret file, or local secret manager over
