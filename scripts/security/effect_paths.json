@@ -361,6 +361,11 @@
       "module": "openmed.multimodal.ocr_tesseract_stream"
     },
     {
+      "classification": "operational",
+      "function": "MultimodalSession._run",
+      "module": "openmed.multimodal.runtime_session"
+    },
+    {
       "module": "openmed.onnx.streaming_loader",
       "function": "StreamingWeightLoader.load",
       "classification": "operational"
