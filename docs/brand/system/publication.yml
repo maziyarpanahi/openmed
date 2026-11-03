@@ -541,6 +541,7 @@ classification:
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
+    - multimodal/dicom-transfer-syntax-preflight.md
     - evaluation/model-provenance-diff.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
