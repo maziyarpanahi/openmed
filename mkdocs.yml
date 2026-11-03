@@ -425,6 +425,7 @@ nav:
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
+      - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
