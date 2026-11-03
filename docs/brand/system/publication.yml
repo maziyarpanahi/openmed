@@ -488,6 +488,7 @@ classification:
     - multimodal/ecg-lead-layout.md
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
+    - multimodal/ecg-evidence-windows.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
