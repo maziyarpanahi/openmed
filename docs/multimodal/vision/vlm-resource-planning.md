@@ -32,7 +32,7 @@ makes the run unevaluable.
 | `parameter_count` | 0 to 2^62 | model weights |
 | `weight_bytes_per_parameter` | 1 to 64 | model weights |
 | `activation_bytes_per_pixel` | 1 to 4096 | frame stack and tile buffer |
-| `cache_bytes_per_tile` | 0 to 2^32 | per-tile cache |
+| `cache_bytes_per_tile` | 0 to 2^32 | cache for one tile in one frame |
 | `output_bytes` | 0 to 2^40 | decoded output |
 | `runtime_overhead_bytes` | 0 to 2^63 - 1 | fixed runtime overhead |
 
@@ -43,8 +43,7 @@ makes the run unevaluable.
 ## Device tiers
 
 A tier is a `DeviceTier(name, memory_budget_bytes, reserved_bytes=0)`. The name
-is a bounded opaque label matching `[a-z][a-z0-9]*([._-][a-z0-9]+)*`, so an
-identifier can be reported in diagnostics without carrying free-form text.
+is an opaque label of at most 64 characters matching `[a-z][a-z0-9]*([._-][a-z0-9]+)*`. Use static tier labels, never patient or site identifiers; syntactic validation does not de-identify caller-supplied names.
 `reserved_bytes` must stay below `memory_budget_bytes`; the difference is the
 `available_bytes` a plan may use.
 
@@ -63,7 +62,7 @@ holds between 1 and `MAX_DEVICE_TIERS` (64) tiers with unique names.
 | --- | --- |
 | `model_bytes` | `parameter_count x weight_bytes_per_parameter` |
 | `peak_activation_bytes` | `width x height x frames x activation_bytes_per_pixel` + `tile_size x tile_size x frames x activation_bytes_per_pixel` |
-| `cache_bytes` | `tile_count x cache_bytes_per_tile` |
+| `cache_bytes` | `tile_count x frames x cache_bytes_per_tile` |
 | `output_bytes` | `output_bytes` |
 | `runtime_overhead_bytes` | `runtime_overhead_bytes` |
 | `total_bytes` | the sum of the five components above |

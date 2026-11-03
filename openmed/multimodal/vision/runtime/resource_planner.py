@@ -82,6 +82,7 @@ RESOURCE_PLAN_REASON_CODES: Final = frozenset(
 # A tier name is an opaque lower-case label. It never carries a hostname, a
 # serial number, a site, an endpoint, or any other identifying string.
 _TIER_NAME = re.compile(r"[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*\Z")
+_MAX_TIER_NAME_CHARS = 64
 
 
 class VLMResourcePlannerError(ValueError):
@@ -130,7 +131,11 @@ class DeviceTier:
     reserved_bytes: int = 0
 
     def __post_init__(self) -> None:
-        if not isinstance(self.name, str) or not _TIER_NAME.match(self.name):
+        if (
+            type(self.name) is not str
+            or len(self.name) > _MAX_TIER_NAME_CHARS
+            or _TIER_NAME.fullmatch(self.name) is None
+        ):
             raise VLMResourcePlannerError("device tier name must be a bounded label")
         _require_int(
             self.memory_budget_bytes,
@@ -396,7 +401,7 @@ def plan_vlm_execution(
     """Plan memory for one workload against the registered device tiers.
 
     The estimate charges the model weights, one decoded frame stack plus one
-    tile working buffer, the declared per-tile cache for every tile, the
+    tile working buffer, the declared per-tile cache for every tile in every frame, the
     declared output, and the runtime overhead once. A safe plan selects the
     smallest registered tier that fits, breaking ties by tier name; an abstained
     plan always reports ``tier_name`` as ``None`` and never falls back to a
@@ -473,7 +478,7 @@ def plan_vlm_execution(
         )
 
     cache_bytes = _saturating_product(
-        (preprocessing.tile_count, policy.cache_bytes_per_tile)
+        (preprocessing.tile_count, preprocessing.frames, policy.cache_bytes_per_tile)
     )
     if cache_bytes is None:
         return _abstain(

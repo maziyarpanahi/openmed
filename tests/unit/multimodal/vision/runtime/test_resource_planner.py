@@ -152,7 +152,24 @@ def test_multiple_frames_scale_the_frame_stack_and_every_tile() -> None:
     plan = plan_vlm_execution(_policy(), frames)
 
     assert plan.estimate.peak_activation_bytes == (64 * 32 * 3 * 4) + (16 * 16 * 3 * 4)
-    assert plan.estimate.cache_bytes == 8 * 16
+    assert plan.estimate.cache_bytes == 8 * 3 * 16
+
+
+def test_multiframe_cache_cannot_admit_an_undersized_tier() -> None:
+    policy = _policy(
+        tiers=(DeviceTier(name="tiny", memory_budget_bytes=150),),
+        parameter_count=0,
+        activation_bytes_per_pixel=1,
+        cache_bytes_per_tile=100,
+        output_bytes=0,
+        runtime_overhead_bytes=0,
+    )
+    single = plan_vlm_execution(policy, PreprocessingPlan(1, 1, 1))
+    stacked = plan_vlm_execution(policy, PreprocessingPlan(1, 1, 1, frames=2))
+    assert single.outcome is ResourcePlanOutcome.SAFE
+    assert stacked.estimate.total_bytes == 204
+    assert stacked.outcome is ResourcePlanOutcome.ABSTAIN
+    assert stacked.estimate.reason_code == "memory_budget_exceeded"
 
 
 def test_plan_json_is_compact_and_key_ordered() -> None:
@@ -413,7 +430,18 @@ def test_reason_codes_are_a_closed_set() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["", "Mobile", "MOBILE", "1mobile", "-mobile", "mobile/1", "a b", "a@b", "mobile."],
+    [
+        "",
+        "Mobile",
+        "MOBILE",
+        "1mobile",
+        "-mobile",
+        "mobile/1",
+        "a b",
+        "a@b",
+        "mobile.",
+        "a" * 65,
+    ],
 )
 def test_tier_names_must_be_bounded_labels(name: str) -> None:
     with pytest.raises(VLMResourcePlannerError) as caught:
