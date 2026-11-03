@@ -487,6 +487,7 @@ classification:
     - multimodal/ecg-waveform-contract.md
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/streaming/ambient-speaker-roles.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
