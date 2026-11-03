@@ -430,6 +430,7 @@ nav:
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
       - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
+      - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md

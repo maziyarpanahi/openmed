@@ -490,6 +490,7 @@ classification:
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
     - multimodal/ecg-evidence-windows.md
+    - multimodal/streaming/transcript-revisions.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
