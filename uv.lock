@@ -14311,7 +14311,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
     { name = "yasbd-lib", marker = "extra == 'yasbd'", specifier = ">=0.14.0,<0.15" },
 ]
-provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "gliclass", "gliformer", "gliner", "gliner2", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
+provides-extras = ["agents", "airflow", "awq", "beam", "cli", "cloud", "columnar", "coreml", "dagster", "dask", "dev", "docs", "duckdb", "edge-sbc", "email-msg-gpl", "fhir", "flower", "gliclass", "gliformer", "gliner", "gliner2", "gptq", "grounding", "grounding-validate", "haystack", "hf", "indic", "integrity", "interop-gpl", "journey", "kafka", "langchain", "langgraph", "lid", "llamaindex", "mcp", "medspacy", "mlx", "multimodal", "notebook", "ocr-paddle", "onnx", "onnx-runtime", "openmrs", "openvino", "operator", "otel", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "quickumls", "ray", "scispacy", "scrubadub", "service", "snowflake", "spacy", "spark", "sqlalchemy", "triton", "yasbd", "zh", "zh-hanlp", "zh-pkuseg"]
 
 [[package]]
 name = "openpyxl"

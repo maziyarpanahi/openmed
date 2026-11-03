@@ -556,6 +556,7 @@ nav:
       - PostgreSQL Redaction Adapter: integrations/postgres.md
       - Pandas-on-Spark De-identification: integrations/pandas-on-spark.md
       - Ray Data Batch De-identification: integrations/ray-map-batches.md
+      - Flower Strategy Bridge: integrations/flower.md
       - SQLAlchemy Write-time Redaction: integrations/sqlalchemy.md
       - OMOP Cohort Export Validation: integrations/omop-cohort-check.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
