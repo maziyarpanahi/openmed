@@ -358,6 +358,7 @@ nav:
       - Parallel Corpus Governance: languages/parallel-corpus-governance.md
       - Private-Training JSON Schemas: training/private-training-schemas.md
       - Federated Schema Fingerprints: training/federated-schema-fingerprints.md
+      - Private-learning Release Gate: evaluation/private-learning-release-gate.md
       - Synthetic Data:
           - Overview: training/synthetic/index.md
           - Locale PHI Notes: training/synthetic/locale-phi.md

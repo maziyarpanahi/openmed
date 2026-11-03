@@ -419,6 +419,7 @@ classification:
     - languages/parallel-corpus-governance.md
     - training/private-training-schemas.md
     - training/federated-schema-fingerprints.md
+    - evaluation/private-learning-release-gate.md
     - training/synthetic/index.md
     - training/synthetic/locale-phi.md
     - training/synthetic/burned-in.md

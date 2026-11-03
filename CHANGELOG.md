@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Evaluate the private-learning release definition of done into a signed, offline-verifiable evidence packet with independent, non-compensable item results, stable reason codes and moved-work rationale checks (#3852).
+
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
 - Define an offline edge-VLM provider contract with bounded image/prompt inputs, source-linked evidence, model/preprocessing digests, shared abstentions, content-free reports and explicit human review for non-diagnostic drafts (#2791).
