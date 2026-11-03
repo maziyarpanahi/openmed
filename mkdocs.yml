@@ -417,6 +417,7 @@ nav:
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
