@@ -491,6 +491,7 @@ classification:
     - multimodal/ecg-interval-candidates.md
     - multimodal/ecg-evidence-windows.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/cross-modal-clock-alignment.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
