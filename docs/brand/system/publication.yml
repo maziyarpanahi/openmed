@@ -481,6 +481,7 @@ classification:
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
+    - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
