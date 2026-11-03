@@ -158,9 +158,8 @@ ROUND_TRIP_CASES = (
 
 
 class TestNationalIdRegistry:
-    @pytest.mark.parametrize(
-        ("alias", "id_type"),
-        (
+    def test_east_african_aliases_resolve(self, subtests):
+        for alias, id_type in (
             ("tz", "nida_nin"),
             ("sw", "nida_nin"),
             ("en_TZ", "nida_nin"),
@@ -171,12 +170,11 @@ class TestNationalIdRegistry:
             ("et", "fayda_fan"),
             ("am", "fayda_fan"),
             ("en_ET", "fayda_fan"),
-        ),
-    )
-    def test_east_african_aliases_resolve(self, alias, id_type):
-        spec = get_national_id(alias, id_type)
-        assert spec is not None
-        assert spec.faker_provider is not None
+        ):
+            with subtests.test(alias=alias, id_type=id_type):
+                spec = get_national_id(alias, id_type)
+                assert spec is not None
+                assert spec.faker_provider is not None
 
     def test_acceptance_lookups_return_validating_specs(self):
         for lang, id_type, locale in (
@@ -219,30 +217,23 @@ class TestNationalIdRegistry:
         assert clinical_faker_provider_classes().count(MexicanCURPProvider) == 1
         assert clinical_faker_provider_classes().count(MexicanRFCProvider) == 1
 
-    @pytest.mark.parametrize(
-        ("source", "validator", "length"),
-        (
+    def test_es_mx_anonymizer_dispatch_preserves_identifier_form(self, subtests):
+        for source, validator, length in (
             ("MOBI851113MSPMTP95", validate_mexican_curp, 18),
             ("MYNB630325659", validate_mexican_rfc, 13),
             ("MYN430819Q64", validate_mexican_rfc, 12),
-        ),
-    )
-    def test_es_mx_anonymizer_dispatch_preserves_identifier_form(
-        self,
-        source,
-        validator,
-        length,
-    ):
-        surrogate = Anonymizer(
-            lang="es",
-            locale="es_MX",
-            consistent=True,
-            seed=826,
-        ).surrogate(source, "national_id")
+        ):
+            with subtests.test(source=source, validator=validator, length=length):
+                surrogate = Anonymizer(
+                    lang="es",
+                    locale="es_MX",
+                    consistent=True,
+                    seed=826,
+                ).surrogate(source, "national_id")
 
-        assert surrogate != source
-        assert len(surrogate) == length
-        assert validator(surrogate)
+                assert surrogate != source
+                assert len(surrogate) == length
+                assert validator(surrogate)
 
     def test_bengali_id_aliases_resolve_and_generate(self):
         faker = Faker("bn_BD")
@@ -277,20 +268,21 @@ class TestNationalIdRegistry:
         assert validate_bangladesh_nid(nid)
         assert len(nid) == 10
 
-    @pytest.mark.parametrize("length", (10, 13, 17))
-    def test_bangladesh_nid_provider_preserves_length(self, length):
-        faker = Faker("bn_BD")
-        register_clinical_providers(faker)
-        faker.seed_instance(length)
+    def test_bangladesh_nid_provider_preserves_length(self, subtests):
+        for length in (10, 13, 17):
+            with subtests.test(length=length):
+                faker = Faker("bn_BD")
+                register_clinical_providers(faker)
+                faker.seed_instance(length)
 
-        original = "1" + ("0" * (length - 1))
-        surrogate = faker.bangladesh_nid(original)
-        spec = get_national_id("bn_BD", "bangladesh_nid")
+                original = "1" + ("0" * (length - 1))
+                surrogate = faker.bangladesh_nid(original)
+                spec = get_national_id("bn_BD", "bangladesh_nid")
 
-        assert spec is not None
-        assert surrogate != original
-        assert len(surrogate) == length
-        assert spec.validate(surrogate)
+                assert spec is not None
+                assert surrogate != original
+                assert len(surrogate) == length
+                assert spec.validate(surrogate)
 
     def test_iran_national_id_aliases_resolve_and_generate(self):
         faker = Faker("fa_IR")
@@ -304,19 +296,17 @@ class TestNationalIdRegistry:
 
         assert clinical_faker_provider_classes().count(IranNationalIDProvider) == 1
 
-    @pytest.mark.parametrize(
-        "original",
-        ("1234567891", "۱۲۳۴۵۶۷۸۹۱", "١٢٣٤٥٦٧٨٩١"),
-    )
-    def test_iran_national_id_provider_returns_distinct_valid_id(self, original):
-        faker = Faker("fa_IR")
-        register_clinical_providers(faker)
-        faker.seed_instance(295)
+    def test_iran_national_id_provider_returns_distinct_valid_id(self, subtests):
+        for original in ("1234567891", "۱۲۳۴۵۶۷۸۹۱", "١٢٣٤٥٦٧٨٩١"):
+            with subtests.test(original=original):
+                faker = Faker("fa_IR")
+                register_clinical_providers(faker)
+                faker.seed_instance(295)
 
-        surrogate = faker.iran_national_id(original)
+                surrogate = faker.iran_national_id(original)
 
-        assert surrogate != "1234567891"
-        assert validate_iran_national_id(surrogate)
+                assert surrogate != "1234567891"
+                assert validate_iran_national_id(surrogate)
 
     def test_persian_anonymizer_dispatches_iran_national_id(self):
         anonymizer = Anonymizer(lang="fa", consistent=True, seed=295)
@@ -326,31 +316,28 @@ class TestNationalIdRegistry:
         assert surrogate != "1234567891"
         assert validate_iran_national_id(surrogate)
 
-    @pytest.mark.parametrize(("lang", "id_type"), EXPECTED_VALIDATOR_KEYS)
-    def test_pre_existing_validators_are_reachable(self, lang, id_type):
-        spec = get_national_id(lang, id_type)
-        assert spec is not None
-        assert spec.validate is not None
-        assert spec.faker_method
+    def test_pre_existing_validators_are_reachable(self, subtests):
+        for lang, id_type in EXPECTED_VALIDATOR_KEYS:
+            with subtests.test(lang=lang, id_type=id_type):
+                spec = get_national_id(lang, id_type)
+                assert spec is not None
+                assert spec.validate is not None
+                assert spec.faker_method
 
-    @pytest.mark.parametrize(("lang", "id_type", "locale"), ROUND_TRIP_CASES)
-    def test_registered_surrogates_pass_registered_validator(
-        self,
-        lang,
-        id_type,
-        locale,
-    ):
-        spec = get_national_id(lang, id_type)
-        assert spec is not None
+    def test_registered_surrogates_pass_registered_validator(self, subtests):
+        for lang, id_type, locale in ROUND_TRIP_CASES:
+            with subtests.test(lang=lang, id_type=id_type, locale=locale):
+                spec = get_national_id(lang, id_type)
+                assert spec is not None
 
-        faker = Faker(FAKER_BACKEND_LOCALE.get(locale, locale))
-        register_clinical_providers(faker)
-        faker.seed_instance(42)
-        surrogate = getattr(faker, spec.faker_method)()
+                faker = Faker(FAKER_BACKEND_LOCALE.get(locale, locale))
+                register_clinical_providers(faker)
+                faker.seed_instance(42)
+                surrogate = getattr(faker, spec.faker_method)()
 
-        assert spec.validate(surrogate), (
-            f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
-        )
+                assert spec.validate(surrogate), (
+                    f"{lang!r}/{id_type!r} generated invalid surrogate {surrogate!r}"
+                )
 
     def test_checksum_provider_specs_use_the_new_validators(self):
         pps_spec = get_national_id("en_IE", "pps")
@@ -363,28 +350,21 @@ class TestNationalIdRegistry:
         assert my_number_spec.validate is validate_japanese_my_number
         assert my_number_spec.faker_provider is JapaneseMyNumberProvider
 
-    @pytest.mark.parametrize(
-        ("language", "locale", "validator"),
-        (
+    def test_checksum_locale_dispatch_generates_valid_surrogates(self, subtests):
+        for language, locale, validator in (
             ("en", "en_IE", validate_irish_pps),
             ("ja", "ja_JP", validate_japanese_my_number),
-        ),
-    )
-    def test_checksum_locale_dispatch_generates_valid_surrogates(
-        self,
-        language,
-        locale,
-        validator,
-    ):
-        anonymizer = Anonymizer(lang=language, consistent=True, seed=827)
+        ):
+            with subtests.test(language=language, locale=locale, validator=validator):
+                anonymizer = Anonymizer(lang=language, consistent=True, seed=827)
 
-        surrogate = anonymizer.surrogate(
-            "synthetic-id",
-            "national_id",
-            locale=locale,
-        )
+                surrogate = anonymizer.surrogate(
+                    "synthetic-id",
+                    "national_id",
+                    locale=locale,
+                )
 
-        assert validator(surrogate)
+                assert validator(surrogate)
 
     def test_lookup_normalizes_case_hyphens_and_locale(self):
         assert get_national_id("IT-it", "Codice Fiscale") == get_national_id(
@@ -406,150 +386,136 @@ class TestNationalIdRegistry:
             "south_african_id"
         }
 
-    @pytest.mark.parametrize(
-        ("aliases", "id_type", "faker_method"),
-        (
+    def test_egypt_morocco_aliases_resolve_working_specs(self, subtests):
+        for aliases, id_type, faker_method in (
             (
                 ("eg", "ar", "ar_EG"),
                 "egyptian_national_id",
                 "egyptian_national_id",
             ),
             (("ma", "ar_MA", "fr_MA"), "moroccan_cin", "moroccan_cin"),
-        ),
-    )
-    def test_egypt_morocco_aliases_resolve_working_specs(
-        self,
-        aliases,
-        id_type,
-        faker_method,
-    ):
-        specs = [get_national_id(alias, id_type) for alias in aliases]
-        resolved_specs = [spec for spec in specs if spec is not None]
-        assert len(resolved_specs) == len(aliases)
-        assert {spec.validate for spec in resolved_specs} == {
-            resolved_specs[0].validate
-        }
-        assert {spec.faker_method for spec in resolved_specs} == {faker_method}
+        ):
+            with subtests.test(
+                aliases=aliases, id_type=id_type, faker_method=faker_method
+            ):
+                specs = [get_national_id(alias, id_type) for alias in aliases]
+                resolved_specs = [spec for spec in specs if spec is not None]
+                assert len(resolved_specs) == len(aliases)
+                assert {spec.validate for spec in resolved_specs} == {
+                    resolved_specs[0].validate
+                }
+                assert {spec.faker_method for spec in resolved_specs} == {faker_method}
 
-        faker = Faker("ar_EG")
-        register_clinical_providers(faker)
-        faker.seed_instance(842)
-        surrogate = getattr(faker, faker_method)()
-        assert resolved_specs[0].validate(surrogate)
+                faker = Faker("ar_EG")
+                register_clinical_providers(faker)
+                faker.seed_instance(842)
+                surrogate = getattr(faker, faker_method)()
+                assert resolved_specs[0].validate(surrogate)
 
-    @pytest.mark.parametrize("id_type", ("nin", "bvn"))
-    def test_nigerian_aliases_resolve_working_faker_methods(self, id_type):
-        specs = [
-            get_national_id(alias, id_type)
-            for alias in ("ng", "en_NG", "ha", "ig", "yo")
-        ]
-        assert all(spec is not None for spec in specs)
-        assert {spec.validate for spec in specs} == {specs[0].validate}
+    def test_nigerian_aliases_resolve_working_faker_methods(self, subtests):
+        for id_type in ("nin", "bvn"):
+            with subtests.test(id_type=id_type):
+                specs = [
+                    get_national_id(alias, id_type)
+                    for alias in ("ng", "en_NG", "ha", "ig", "yo")
+                ]
+                assert all(spec is not None for spec in specs)
+                assert {spec.validate for spec in specs} == {specs[0].validate}
 
-        faker = Faker("en_NG")
-        register_clinical_providers(faker)
-        faker.seed_instance(840)
-        surrogate = getattr(faker, specs[0].faker_method)()
-        assert specs[0].validate(surrogate)
+                faker = Faker("en_NG")
+                register_clinical_providers(faker)
+                faker.seed_instance(840)
+                surrogate = getattr(faker, specs[0].faker_method)()
+                assert specs[0].validate(surrogate)
 
-    @pytest.mark.parametrize(
-        ("aliases", "id_type", "faker_method"),
-        (
+    def test_ghana_kenya_aliases_resolve_working_specs(self, subtests):
+        for aliases, id_type, faker_method in (
             (("gh", "en_GH"), "ghana_card_pin", "ghana_card_pin"),
             (("ke", "en_KE", "sw"), "kenya_national_id", "kenya_national_id"),
             (("ke", "en_KE", "sw"), "maisha_namba", "kenya_maisha_namba"),
-        ),
-    )
-    def test_ghana_kenya_aliases_resolve_working_specs(
-        self,
-        aliases,
-        id_type,
-        faker_method,
-    ):
-        specs = [get_national_id(alias, id_type) for alias in aliases]
-        assert all(spec is not None for spec in specs)
-        assert {spec.validate for spec in specs} == {specs[0].validate}
-        assert {spec.faker_method for spec in specs} == {faker_method}
+        ):
+            with subtests.test(
+                aliases=aliases, id_type=id_type, faker_method=faker_method
+            ):
+                specs = [get_national_id(alias, id_type) for alias in aliases]
+                assert all(spec is not None for spec in specs)
+                assert {spec.validate for spec in specs} == {specs[0].validate}
+                assert {spec.faker_method for spec in specs} == {faker_method}
 
-        faker = Faker("sw" if "sw" in aliases else "en_US")
-        register_clinical_providers(faker)
-        faker.seed_instance(841)
-        surrogate = getattr(faker, faker_method)()
-        assert specs[0].validate(surrogate)
+                faker = Faker("sw" if "sw" in aliases else "en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(841)
+                surrogate = getattr(faker, faker_method)()
+                assert specs[0].validate(surrogate)
 
     def test_unknown_lookup_returns_none(self):
         assert get_national_id("zz", "unknown") is None
 
-    @pytest.mark.parametrize("alias", ("ke", "tz", "sw", "en_ke", "en_tz"))
-    def test_mpesa_transaction_code_aliases_generate_valid_surrogates(self, alias):
-        spec = get_national_id(alias, "mpesa_tx_code")
-        assert spec is not None
+    def test_mpesa_transaction_code_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "tz", "sw", "en_ke", "en_tz"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "mpesa_tx_code")
+                assert spec is not None
 
-        faker = Faker("en_US")
-        register_clinical_providers(faker)
-        faker.seed_instance(859)
-        surrogate = getattr(faker, spec.faker_method)("TB17CVOCY9")
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(859)
+                surrogate = getattr(faker, spec.faker_method)("TB17CVOCY9")
 
-        assert surrogate.startswith("T")
-        assert surrogate != "TB17CVOCY9"
-        assert spec.validate(surrogate)
+                assert surrogate.startswith("T")
+                assert surrogate != "TB17CVOCY9"
+                assert spec.validate(surrogate)
 
-    @pytest.mark.parametrize(
-        "alias",
-        ("ke", "tz", "gh", "ug", "sw", "en_ke", "en_tz", "en_gh", "en_ug"),
-    )
-    @pytest.mark.parametrize(
-        ("id_type", "original"),
-        (
-            ("mobile_money_paybill", "542542"),
-            ("mobile_money_till", "83290"),
-            ("mobile_money_agent", "5544331"),
-            ("momo_reference", "81234567890"),
-        ),
-    )
-    def test_mobile_money_aliases_generate_valid_surrogates(
-        self,
-        alias,
-        id_type,
-        original,
+    def test_mobile_money_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "tz", "gh", "ug", "sw", "en_ke", "en_tz", "en_gh", "en_ug"):
+            for id_type, original in (
+                ("mobile_money_paybill", "542542"),
+                ("mobile_money_till", "83290"),
+                ("mobile_money_agent", "5544331"),
+                ("momo_reference", "81234567890"),
+            ):
+                with subtests.test(alias=alias, id_type=id_type, original=original):
+                    spec = get_national_id(alias, id_type)
+                    assert spec is not None
+
+                    faker = Faker("en_KE")
+                    register_clinical_providers(faker)
+                    faker.seed_instance(860)
+                    surrogate = getattr(faker, spec.faker_method)(original)
+
+                    assert surrogate != original
+                    assert len(surrogate) == len(original)
+                    assert spec.validate(surrogate)
+
+    def test_kenya_facility_registry_aliases_generate_valid_surrogates(self, subtests):
+        for alias in ("ke", "sw", "en_KE"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "kmhfl_code")
+                assert spec is not None
+
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(861)
+                surrogate = getattr(faker, spec.faker_method)()
+
+                assert spec.faker_method == "kmhfl_code"
+                assert spec.validate(surrogate)
+
+    def test_nigeria_facility_registry_aliases_generate_valid_surrogates(
+        self, subtests
     ):
-        spec = get_national_id(alias, id_type)
-        assert spec is not None
+        for alias in ("ng", "en_NG"):
+            with subtests.test(alias=alias):
+                spec = get_national_id(alias, "hfr_facility_code")
+                assert spec is not None
 
-        faker = Faker("en_KE")
-        register_clinical_providers(faker)
-        faker.seed_instance(860)
-        surrogate = getattr(faker, spec.faker_method)(original)
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(861)
+                surrogate = getattr(faker, spec.faker_method)()
 
-        assert surrogate != original
-        assert len(surrogate) == len(original)
-        assert spec.validate(surrogate)
-
-    @pytest.mark.parametrize("alias", ("ke", "sw", "en_KE"))
-    def test_kenya_facility_registry_aliases_generate_valid_surrogates(self, alias):
-        spec = get_national_id(alias, "kmhfl_code")
-        assert spec is not None
-
-        faker = Faker("en_US")
-        register_clinical_providers(faker)
-        faker.seed_instance(861)
-        surrogate = getattr(faker, spec.faker_method)()
-
-        assert spec.faker_method == "kmhfl_code"
-        assert spec.validate(surrogate)
-
-    @pytest.mark.parametrize("alias", ("ng", "en_NG"))
-    def test_nigeria_facility_registry_aliases_generate_valid_surrogates(self, alias):
-        spec = get_national_id(alias, "hfr_facility_code")
-        assert spec is not None
-
-        faker = Faker("en_US")
-        register_clinical_providers(faker)
-        faker.seed_instance(861)
-        surrogate = getattr(faker, spec.faker_method)()
-
-        assert spec.faker_method == "hfr_facility_code"
-        assert spec.validate(surrogate)
+                assert spec.faker_method == "hfr_facility_code"
+                assert spec.validate(surrogate)
 
     def test_duplicate_registration_rejects_key_with_clear_error(self):
         key = ("zz", "dummy")
@@ -582,33 +548,27 @@ class TestAfricanPhoneProviderRegistry:
 
         assert provider_classes.count(AfricanPhoneProvider) == 1
 
-    @pytest.mark.parametrize(
-        ("original", "preserved_digits"),
-        [
+    def test_registered_provider_preserves_country_and_operator_prefix(self, subtests):
+        for original, preserved_digits in [
             ("+251 91 234 5678", "25191"),
             ("00250 78 123 4567", "0025078"),
             ("0752 876 543", "0752"),
-        ],
-    )
-    def test_registered_provider_preserves_country_and_operator_prefix(
-        self,
-        original,
-        preserved_digits,
-    ):
-        faker = Faker("en_US")
-        register_clinical_providers(faker)
-        faker.seed_instance(858)
+        ]:
+            with subtests.test(original=original, preserved_digits=preserved_digits):
+                faker = Faker("en_US")
+                register_clinical_providers(faker)
+                faker.seed_instance(858)
 
-        surrogate = faker.african_phone(original)
+                surrogate = faker.african_phone(original)
 
-        assert surrogate is not None
-        assert "".join(char for char in surrogate if char.isdigit()).startswith(
-            preserved_digits
-        )
-        assert surrogate != original
-        assert "".join(char for char in surrogate if not char.isdigit()) == "".join(
-            char for char in original if not char.isdigit()
-        )
+                assert surrogate is not None
+                assert "".join(char for char in surrogate if char.isdigit()).startswith(
+                    preserved_digits
+                )
+                assert surrogate != original
+                assert "".join(
+                    char for char in surrogate if not char.isdigit()
+                ) == "".join(char for char in original if not char.isdigit())
 
     def test_seeded_provider_is_deterministic(self):
         first = Faker("en_US")

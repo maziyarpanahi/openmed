@@ -2,12 +2,16 @@
 
 Human-approval verification must fail closed before a high-impact action is
 dispatched. The runnable example in
-`examples/agent_approval_failures.py` exercises five deterministic failures
+`examples/agent_approval_failures.py` exercises nine deterministic failures
 against the approval-token contract:
 
 | Scenario | Stable reason | Result |
 | --- | --- | --- |
-| Token reaches its exclusive expiry | `expired` | Reject before claiming the nonce |
+| Issuance is beyond the bounded skew | `not_yet_valid` | Reject before claiming the nonce |
+| Signed lifetime exceeds the ceiling | `lifetime_exceeded` | Reject before claiming the nonce |
+| Signing key is unknown or retired | `unknown_key` | Reject before claiming the nonce |
+| v1 token without compatibility enabled | `legacy_token_disabled` | Reject before signature or nonce processing |
+| Token reaches expiry plus configured skew | `expired` | Reject before claiming the nonce |
 | Token is presented a second time | `replayed` | Reject the replay |
 | Reviewed action digest differs | `action_mismatch` | Consume the token and require fresh approval |
 | Required reviewer role differs | `reviewer_role_mismatch` | Consume the token and require fresh approval |
@@ -46,3 +50,10 @@ payloads, clinical content, reviewer identities, bearer tokens, nonces,
 signatures, or keys to logs. A mismatch in action digest or reviewer role
 consumes the valid signed token, so retrying it correctly produces `replayed`;
 obtain a fresh human approval instead.
+
+
+The token and receipt migration, local key-provider protocol, lifetime ceiling,
+and explicit `allow_v1` compatibility flag are documented in
+[Single-use human approval tokens](human-approval-tokens.md). Successful v2
+receipts contain only the `approved` code, schema code and action/token digests;
+they contain no key identifier, bearer values, reviewer role or timestamps.

@@ -9,6 +9,9 @@ Supported signatures:
 - PDF
 - PNG and JPEG
 - little-endian and big-endian TIFF
+- GIF (GIF87a and GIF89a)
+- WebP with `RIFF` and `WEBP` markers
+- BMP with a complete 14-byte file header and zero reserved fields
 - DICOM Part 10 with the `DICM` marker at byte offset 128
 - WAV with `RIFF` and `WAVE` markers
 
@@ -29,6 +32,9 @@ assert validate_media_type(prefix, "image/png") is MediaTypeStatus.MISMATCH
 Truncated, ambiguous, and unsupported prefixes return `None` from
 `detect_media_type()` and `MediaTypeStatus.UNKNOWN` from `validate_media_type()`.
 Invalid declared types fail closed with a value-free error.
+
+The DICOM Part 10 marker takes precedence over signatures in its arbitrary
+128-byte preamble, including GIF and BMP look-alikes.
 
 This preflight check does not fully validate a file, scan for malware,
 decompress content, or replace format-specific parsers. Callers should pass

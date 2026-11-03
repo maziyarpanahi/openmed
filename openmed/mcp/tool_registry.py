@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import secrets
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -20,6 +21,11 @@ from openmed.core.pii_i18n import (
     USER_SUPPLIED_MODEL_LANGUAGES,
 )
 from openmed.core.schemas import load_schema
+from openmed.mcp.governed_workflows import (
+    GOVERNED_MCP_OPERATIONS,
+    GOVERNED_MCP_REQUEST_SCHEMA,
+    GOVERNED_MCP_RESULT_SCHEMA,
+)
 from openmed.service.brief import brief_response_schema
 from openmed.service.journey_workflows import (
     JOURNEY_WORKFLOW_DEFINITIONS,
@@ -351,6 +357,8 @@ class ToolRegistry:
         self._specs: dict[tuple[str, str], ToolSpec] = {}
         self._workflows: dict[tuple[str, str], WorkflowSpec] = {}
         self._handlers: dict[tuple[str, str], Callable[..., Mapping[str, Any]]] = {}
+        self._implementation_ids: dict[tuple[str, str], str] = {}
+        self._binding_lock = RLock()
         self._plugin_loader = plugin_loader
         self._plugin_loader_started = False
         self._plugin_loader_lock = RLock()
@@ -372,11 +380,41 @@ class ToolRegistry:
         if handler is not None and not callable(handler):
             raise TypeError("tool handler must be callable")
         key = (spec.name, spec.version)
-        if key in self._specs:
-            raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
-        self._specs[key] = spec
-        if handler is not None:
-            self._handlers[key] = handler
+        with self._binding_lock:
+            if key in self._specs:
+                raise ValueError(f"duplicate tool spec {spec.name!r} {spec.version!r}")
+            self._specs[key] = spec
+            if handler is not None:
+                self._handlers[key] = handler
+                self._implementation_ids[key] = "sha256:" + secrets.token_hex(32)
+
+    def implementation_binding(
+        self, name: str, version: str
+    ) -> tuple[ToolSpec, Callable[..., Mapping[str, Any]], str]:
+        """Capture an exact-version contract, callable and opaque identity.
+
+        Args:
+            name: Registered runtime tool name.
+            version: Exact registered semantic version; latest is never inferred.
+
+        Returns:
+            A detached specification, the registered callable, and a random
+            registration identity unrelated to source, configuration or data.
+            Identities last for this registry instance; a fresh registration
+            requires re-review even when its schemas match.
+
+        Raises:
+            KeyError: If the exact version or executable handler is unavailable.
+        """
+
+        self._ensure_runtime_plugins()
+        key = (name, version)
+        with self._binding_lock:
+            return (
+                deepcopy(self._specs[key]),
+                self._handlers[key],
+                self._implementation_ids[key],
+            )
 
     def register_workflow(self, spec: WorkflowSpec) -> None:
         """Register one discoverable workflow spec version."""
@@ -672,7 +710,20 @@ def validate_registered_tool_output(name: str, payload: Any) -> JsonObject:
 def validate_registered_tool_input(name: str, payload: Any) -> JsonObject:
     """Validate an input payload against the latest registered spec for *name*."""
 
-    spec = TOOL_REGISTRY.get(name)
+    return validate_tool_input(TOOL_REGISTRY.get(name), payload)
+
+
+def validate_tool_input(spec: ToolSpec, payload: Any) -> JsonObject:
+    """Validate input against an injected, pinned tool specification.
+
+    Args:
+        spec: Registered specification selected by the host.
+        payload: Process-local tool arguments.
+
+    Returns:
+        A validated argument mapping.
+    """
+
     errors: list[str] = []
     _validate_schema(payload, spec.input_schema, "$", errors)
     if errors:
@@ -1822,8 +1873,8 @@ def _decision_tool_spec() -> ToolSpec:
         _parameter(
             "schema_version",
             properties["schema_version"],
-            str,
-            DECISION_SCHEMA_VERSION,
+            Optional[str],
+            None,
         ),
         _parameter(
             "compatibility_policy",
@@ -1831,13 +1882,36 @@ def _decision_tool_spec() -> ToolSpec:
             str,
             DECISION_COMPATIBILITY_POLICY,
         ),
+        _parameter("question_id", properties["question_id"], Optional[str], None),
+        _parameter("instructions", properties["instructions"], Optional[str], None),
+        _parameter(
+            "option_descriptions",
+            properties["option_descriptions"],
+            Optional[Sequence[Optional[str]]],
+            None,
+        ),
+        _parameter("levels", properties["levels"], Sequence[str], ()),
+        _parameter(
+            "questions",
+            properties["questions"],
+            Sequence[Mapping[str, Any]],
+            (),
+        ),
+        _parameter("input_format", properties["input_format"], str, "text"),
+        _parameter(
+            "max_input_chars",
+            properties["max_input_chars"],
+            Optional[int],
+            None,
+        ),
     )
     spec = _tool_spec(
         name="openmed_decide",
         title="Evaluate Fixed-Option Decision",
         description=(
-            "Score bounded caller-supplied choices locally, apply calibrated "
-            "abstention, and return an explicitly review-only decision result."
+            "Score bounded caller-supplied choices, or a named question set over "
+            "one input, locally; apply calibrated abstention per question, and "
+            "return an explicitly review-only decision result."
         ),
         read_only_hint=True,
         destructive_hint=False,
@@ -1848,10 +1922,39 @@ def _decision_tool_spec() -> ToolSpec:
     )
     for metadata_key in ("$id", "$schema", "title"):
         request_contract.pop(metadata_key, None)
-    return replace(spec, input_schema=request_contract)
+    return replace(
+        spec,
+        input_schema=request_contract,
+        version=DECISION_SCHEMA_VERSION,
+    )
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    *(
+        _tool_spec(
+            name=name,
+            title="Governed Workflow " + operation.replace("_", " ").title(),
+            description=(
+                "Observe service-custodied workflow metadata without approval "
+                "tokens, reviewer claims or clinical values. "
+                + (
+                    "Request a human handoff with server-held, single-use consent; "
+                    "this does not approve or execute an action."
+                    if operation == "request_review"
+                    else "This operation performs no writes."
+                )
+            ),
+            read_only_hint=operation != "request_review",
+            destructive_hint=False,
+            idempotent_hint=operation != "request_review",
+            open_world_hint=False,
+            parameters=(
+                _parameter("request", GOVERNED_MCP_REQUEST_SCHEMA, dict[str, Any]),
+            ),
+            output_schema=GOVERNED_MCP_RESULT_SCHEMA,
+        )
+        for name, operation in GOVERNED_MCP_OPERATIONS.items()
+    ),
     _tool_spec(
         name="openmed_brief",
         title="Build Guarded Clinical Brief",
@@ -2418,5 +2521,6 @@ __all__ = [
     "validate_registered_tool_input",
     "validate_registered_tool_output",
     "validate_registered_workflow_artifact",
+    "validate_tool_input",
     "validate_tool_output",
 ]

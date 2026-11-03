@@ -62,6 +62,7 @@ from ._output import (
     wants_json,
 )
 from .active_learning import add_active_learning_command
+from .agent_self_check import add_agent_self_check_command
 from .airgap import add_airgap_command
 from .annotation_interchange import add_annotation_interchange_command
 from .benchmark import (
@@ -79,6 +80,7 @@ from .contract import (
     VALIDATION_ERROR_MESSAGE,
 )
 from .gates import add_gates_command
+from .i18n_check import add_i18n_command
 from .redact_files import add_redact_files_command
 from .registry import add_registry_command
 from .repro import add_repro_command
@@ -88,6 +90,7 @@ from .scaffold import (
     ScaffoldError,
     scaffold_project,
 )
+from .slm_verify import add_slm_verify_command
 from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
@@ -576,6 +579,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
+    add_agent_self_check_command(subparsers)
+    from .synthetic import add_synthetic_command
+
+    add_synthetic_command(subparsers)
+    from .governed_workflows import add_governed_workflow_commands
+
+    add_governed_workflow_commands(subparsers)
+
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_batch_run_command(subparsers)
@@ -594,8 +605,19 @@ def build_parser() -> argparse.ArgumentParser:
     _add_omop_command(subparsers)
     _add_ground_command(subparsers)
     from .brief import add_brief_command
+    from .clinical import add_clinical_command
 
     add_brief_command(subparsers)
+    add_clinical_command(subparsers)
+    from .nli_qualification import add_nli_qualification_command
+
+    add_nli_qualification_command(subparsers)
+    from .decision_qualification import add_decision_qualification_command
+
+    add_decision_qualification_command(subparsers)
+    from .clinical_review import add_clinical_review_commands
+
+    add_clinical_review_commands(subparsers)
     _add_grounding_snapshot_command(subparsers)
     _add_cohort_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -615,6 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_gates_command(subparsers)
     add_repro_command(subparsers)
     add_verify_pdf_command(subparsers)
+    add_i18n_command(subparsers)
     _finalize_parser(parser)
     return parser
 
@@ -1649,6 +1672,11 @@ def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
     dp_parser.add_argument("--sensitivity", type=_positive_float, default=1.0)
     dp_parser.add_argument("--label", default="aggregate_query")
     dp_parser.add_argument("--seed", default=None)
+    dp_parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Allow seeded synthetic experiments; outputs are not private releases.",
+    )
     dp_parser.add_argument("--overwrite", action="store_true")
     dp_parser.set_defaults(handler=_handle_risk_dp_aggregate)
 
@@ -2454,6 +2482,8 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     )
     models_verify.set_defaults(handler=_handle_models_verify)
 
+    add_slm_verify_command(models_sub)
+
     models_size = models_sub.add_parser(
         "size",
         help="Show model download, disk, and peak RAM estimates.",
@@ -2859,6 +2889,14 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
             "recorded in the BenchmarkReport."
         ),
     )
+    pii_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Exit non-zero when the seeded openmed-synth corpus or its "
+            "surrogate providers drift from the published receipt."
+        ),
+    )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
     clinical_parser = benchmark_sub.add_parser(
@@ -3247,10 +3285,37 @@ def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     load_parser.set_defaults(handler=_handle_eval_load_test)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(
+    argv: Optional[Sequence[str]] = None, *, governance_service: Any = None
+) -> int:
     """CLI entry point invoked by the console script."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    command_position = 0
+    while command_position < len(arguments):
+        argument = arguments[command_position]
+        if argument == "--config-path":
+            command_position += 2
+        elif argument.startswith("--config-path="):
+            command_position += 1
+        else:
+            break
+    if command_position > 0 and arguments[command_position : command_position + 2] == [
+        "agents",
+        "workflow",
+    ]:
+        from .governed_workflows import run_governed_workflow_cli
+
+        # This surface accepts only explicit injected services, never ambient
+        # configuration or inline authority. Keep usage failures value-free.
+        return run_governed_workflow_cli(["invalid"], service=governance_service)
+    if arguments[:2] == ["agents", "workflow"]:
+        from .governed_workflows import run_governed_workflow_cli
+
+        return run_governed_workflow_cli(arguments[1:], service=governance_service)
     parser = build_parser()
-    args = parser.parse_args(argv)
+    from .clinical import parse_clinical_args
+
+    args = parse_clinical_args(parser, argv)
 
     handler: Optional[Handler] = getattr(args, "handler", None)
 
@@ -4524,6 +4589,12 @@ def _handle_risk_dp_aggregate(args: argparse.Namespace) -> int:
         release_aggregate,
     )
 
+    if args.seed is not None and not args.test_mode:
+        raise CliError(
+            "Seeded aggregate releases require --test-mode and synthetic data.",
+            code="dp_seed_requires_test_mode",
+            exit_code=EXIT_ERROR,
+        )
     _preflight_structured_paths(
         inputs=((args.input, "Aggregate input", frozenset({".json"})),),
         outputs=((args.output, "Aggregate output", frozenset({".json"})),),
@@ -5584,8 +5655,12 @@ def _handle_fhir_validate(args: argparse.Namespace) -> int:
         "outcome": outcome,
     }
     human = json.dumps(outcome, indent=2, sort_keys=True)
-    return_code = emit(args, payload, human=human)
-    return 1 if blocking else return_code
+    return emit(
+        args,
+        payload,
+        human=human,
+        outcome="check_failed" if blocking else "completed",
+    )
 
 
 def _handle_icd11_build_snapshot(args: argparse.Namespace) -> int:
@@ -6187,6 +6262,28 @@ def _handle_eval_load_test(args: argparse.Namespace) -> int:
     return emit(args, data, human=json.dumps(data, indent=2))
 
 
+def _report_synthetic_provider_drift(
+    metadata: Mapping[str, Any], *, strict: bool
+) -> None:
+    """Warn, or fail in strict mode, when a seeded suite's providers drift."""
+    from openmed.training.synthetic.provider_versions import PROVIDER_VERSION_DRIFT
+
+    drift = metadata.get("provider_drift")
+    if not isinstance(drift, MappingABC) or drift.get("status") != "drift":
+        return
+    changed = ", ".join(str(label) for label in drift.get("changed", ()))
+    message = (
+        f"{PROVIDER_VERSION_DRIFT}: the regenerated openmed-synth corpus or its "
+        f"surrogate providers differ from the published receipt "
+        f"({changed or 'unspecified'}). Results are not comparable with the "
+        "published corpus; reproduce it with the locked dependency set "
+        "(uv sync --frozen)."
+    )
+    if strict:
+        raise CliError(message, code=PROVIDER_VERSION_DRIFT, exit_code=EXIT_ERROR)
+    sys.stderr.write(f"Warning: {message}\n")
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -6270,6 +6367,10 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     metadata = dict(metadata)
     metadata.setdefault("benchmark_domain", "pii")
     metadata.setdefault("source_suite", suite)
+    if suite == OPENMED_SYNTH:
+        _report_synthetic_provider_drift(
+            metadata, strict=bool(getattr(args, "strict", False))
+        )
 
     if args.checkpoint_manifest is not None:
         try:
@@ -7823,12 +7924,12 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         if item.get("hint"):
             human_lines.append(f"      Hint: {item['hint']}")
 
-    emit(
+    return emit(
         args,
         {"checks": results, "has_failure": has_fail},
         human="\n".join(human_lines),
+        outcome="check_failed" if has_fail else "completed",
     )
-    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
@@ -7881,6 +7982,7 @@ def _handle_config_show(args: argparse.Namespace) -> int:
             raise CliError(str(e), code="invalid_profile", exit_code=EXIT_USAGE)
 
     payload = config.to_dict()
+    payload["hf_token_present"] = bool(config.hf_token)
     payload["_source"] = source
     return emit(args, payload, human=json.dumps(payload, indent=2))
 

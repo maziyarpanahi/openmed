@@ -59,9 +59,8 @@ def meta(
     )
 
 
-@pytest.mark.parametrize(
-    "overrides,verdict,reasons",
-    [
+def test_profile_comparison_table(subtests) -> None:
+    for overrides, verdict, reasons in [
         ({}, AsrCompatibility.COMPATIBLE, ()),
         (
             {"sample_rate_hz": 8_000, "frame_count": 16_000},
@@ -104,14 +103,13 @@ def meta(
             AsrCompatibility.REVIEW,
             ("duration_above_maximum",),
         ),
-    ],
-)
-def test_profile_comparison_table(overrides, verdict, reasons) -> None:
-    report = check_asr_compatibility(meta(**overrides), PROFILE)
-    assert report.compatibility is verdict
-    assert report.reason_codes == reasons
-    assert report.is_compatible is (verdict is AsrCompatibility.COMPATIBLE)
-    assert report.profile_id == "local-asr"
+    ]:
+        with subtests.test(overrides=overrides, verdict=verdict, reasons=reasons):
+            report = check_asr_compatibility(meta(**overrides), PROFILE)
+            assert report.compatibility is verdict
+            assert report.reason_codes == reasons
+            assert report.is_compatible is (verdict is AsrCompatibility.COMPATIBLE)
+            assert report.profile_id == "local-asr"
 
 
 def test_reason_codes_follow_the_declared_order() -> None:
@@ -212,15 +210,15 @@ def test_bundled_profile_is_generic_and_usable() -> None:
     assert MONO_16K_PCM_PROFILE.format_codes == (WAVE_FORMAT_PCM,)
 
 
-@pytest.mark.parametrize("value", ["", "Local", "-lead", "trail-", "a" * 65, 7, None])
-def test_invalid_profile_ids_fail_closed(value) -> None:
-    with pytest.raises(AsrAudioProfileError, match="^asr_profile_id_invalid$"):
-        replace(PROFILE, profile_id=value)
+def test_invalid_profile_ids_fail_closed(subtests) -> None:
+    for value in ["", "Local", "-lead", "trail-", "a" * 65, 7, None]:
+        with subtests.test(value=value):
+            with pytest.raises(AsrAudioProfileError, match="^asr_profile_id_invalid$"):
+                replace(PROFILE, profile_id=value)
 
 
-@pytest.mark.parametrize(
-    "field,value,category",
-    [
+def test_invalid_profile_values_fail_closed(subtests) -> None:
+    for field, value, category in [
         ("sample_rates_hz", (), "asr_profile_rate_values_empty"),
         ("sample_rates_hz", [16_000], "asr_profile_rate_values_invalid"),
         ("sample_rates_hz", (16_000, 8_000), "asr_profile_rate_values_unsorted"),
@@ -244,27 +242,30 @@ def test_invalid_profile_ids_fail_closed(value) -> None:
         ("bit_depths", (), "asr_profile_depth_values_empty"),
         ("format_codes", (0xFFFE,), "asr_profile_format_values_unsupported"),
         ("format_codes", (), "asr_profile_format_values_empty"),
-    ],
-)
-def test_invalid_profile_values_fail_closed(field, value, category) -> None:
-    with pytest.raises(AsrAudioProfileError) as excinfo:
-        replace(PROFILE, **{field: value})
-    assert excinfo.value.category == category
+    ]:
+        with subtests.test(field=field, value=value, category=category):
+            with pytest.raises(AsrAudioProfileError) as excinfo:
+                replace(PROFILE, **{field: value})
+            assert excinfo.value.category == category
 
 
-@pytest.mark.parametrize("field", ["min_duration_seconds", "max_duration_seconds"])
-@pytest.mark.parametrize("value", ["1", None, float("nan"), float("inf")])
-def test_invalid_profile_durations_fail_closed(field, value) -> None:
-    with pytest.raises(AsrAudioProfileError, match="^asr_profile_duration_invalid$"):
-        replace(PROFILE, **{field: value})
+def test_invalid_profile_durations_fail_closed(subtests) -> None:
+    for field in ["min_duration_seconds", "max_duration_seconds"]:
+        for value in ["1", None, float("nan"), float("inf")]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(
+                    AsrAudioProfileError, match="^asr_profile_duration_invalid$"
+                ):
+                    replace(PROFILE, **{field: value})
 
 
-@pytest.mark.parametrize("value", [-0.5, MAX_ASR_DURATION_SECONDS + 1])
-def test_out_of_range_profile_durations_fail_closed(value) -> None:
-    with pytest.raises(
-        AsrAudioProfileError, match="^asr_profile_duration_out_of_range$"
-    ):
-        replace(PROFILE, min_duration_seconds=value)
+def test_out_of_range_profile_durations_fail_closed(subtests) -> None:
+    for value in [-0.5, MAX_ASR_DURATION_SECONDS + 1]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                AsrAudioProfileError, match="^asr_profile_duration_out_of_range$"
+            ):
+                replace(PROFILE, min_duration_seconds=value)
 
 
 def test_inverted_duration_range_fails_closed() -> None:
@@ -280,23 +281,32 @@ def test_integer_durations_are_normalized_to_floats() -> None:
     assert (profile.min_duration_seconds, profile.max_duration_seconds) == (1.0, 10.0)
 
 
-@pytest.mark.parametrize("field", ["allow_resample", "allow_downmix"])
-@pytest.mark.parametrize("value", [0, 1, "yes", None])
-def test_invalid_profile_flags_fail_closed(field, value) -> None:
-    with pytest.raises(AsrAudioProfileError, match="^asr_profile_flag_invalid$"):
-        replace(PROFILE, **{field: value})
+def test_invalid_profile_flags_fail_closed(subtests) -> None:
+    for field in ["allow_resample", "allow_downmix"]:
+        for value in [0, 1, "yes", None]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(
+                    AsrAudioProfileError, match="^asr_profile_flag_invalid$"
+                ):
+                    replace(PROFILE, **{field: value})
 
 
-@pytest.mark.parametrize("value", [None, "wav", 7, meta()])
-def test_invalid_profile_argument_fails_closed(value) -> None:
-    with pytest.raises(AsrAudioProfileError, match="^asr_profile_type_invalid$"):
-        check_asr_compatibility(meta(), value)
+def test_invalid_profile_argument_fails_closed(subtests) -> None:
+    for value in [None, "wav", 7, meta()]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                AsrAudioProfileError, match="^asr_profile_type_invalid$"
+            ):
+                check_asr_compatibility(meta(), value)
 
 
-@pytest.mark.parametrize("value", [None, "wav", 7, PROFILE])
-def test_invalid_metadata_argument_fails_closed(value) -> None:
-    with pytest.raises(AsrAudioProfileError, match="^asr_metadata_type_invalid$"):
-        check_asr_compatibility(value, PROFILE)
+def test_invalid_metadata_argument_fails_closed(subtests) -> None:
+    for value in [None, "wav", 7, PROFILE]:
+        with subtests.test(value=value):
+            with pytest.raises(
+                AsrAudioProfileError, match="^asr_metadata_type_invalid$"
+            ):
+                check_asr_compatibility(value, PROFILE)
 
 
 def test_supported_vocabularies_are_closed_and_sorted() -> None:

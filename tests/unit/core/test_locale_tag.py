@@ -15,9 +15,8 @@ from openmed.core.locale_tag import (
 )
 
 
-@pytest.mark.parametrize(
-    "tag,expected",
-    [
+def test_supported_structural_subset_and_casing(subtests) -> None:
+    for tag, expected in [
         ("en", "en"),
         ("EN", "en"),
         ("eng", "eng"),
@@ -30,16 +29,14 @@ from openmed.core.locale_tag import (
         ("en-Latn-US-oxendict", "en-Latn-US-oxendict"),
         ("abcd", "abcd"),
         ("abcdefgh", "abcdefgh"),
-    ],
-)
-def test_supported_structural_subset_and_casing(tag, expected) -> None:
-    assert normalize_locale_tag(tag) == expected
-    assert normalize_locale_tag(expected) == expected
+    ]:
+        with subtests.test(tag=tag, expected=expected):
+            assert normalize_locale_tag(tag) == expected
+            assert normalize_locale_tag(expected) == expected
 
 
-@pytest.mark.parametrize(
-    "tag",
-    [
+def test_malformed_and_out_of_subset_tags_are_rejected(subtests) -> None:
+    for tag in [
         "",
         "e",
         "abcdefghi",
@@ -67,21 +64,21 @@ def test_supported_structural_subset_and_casing(tag, expected) -> None:
         "en-ÅBCD",
         "en-US/../../fixture",
         "\x00en",
-    ],
-)
-def test_malformed_and_out_of_subset_tags_are_rejected(tag) -> None:
-    with pytest.raises(LocaleTagError) as raised:
-        normalize_locale_tag(tag)
-    assert raised.value.category == "locale_tag_invalid"
-    assert str(raised.value) == "locale_tag_invalid"
-    assert raised.value.__cause__ is None
-    assert raised.value.__context__ is None
+    ]:
+        with subtests.test(tag=tag):
+            with pytest.raises(LocaleTagError) as raised:
+                normalize_locale_tag(tag)
+            assert raised.value.category == "locale_tag_invalid"
+            assert str(raised.value) == "locale_tag_invalid"
+            assert raised.value.__cause__ is None
+            assert raised.value.__context__ is None
 
 
-@pytest.mark.parametrize("tag", ["sl-rozaj-ROZAJ", "de-1901-1901"])
-def test_repeated_variants_are_rejected(tag) -> None:
-    with pytest.raises(LocaleTagError, match="^locale_variant_duplicate$"):
-        normalize_locale_tag(tag)
+def test_repeated_variants_are_rejected(subtests) -> None:
+    for tag in ["sl-rozaj-ROZAJ", "de-1901-1901"]:
+        with subtests.test(tag=tag):
+            with pytest.raises(LocaleTagError, match="^locale_variant_duplicate$"):
+                normalize_locale_tag(tag)
 
 
 def test_length_bound() -> None:
@@ -110,9 +107,8 @@ def test_identity_alias_is_idempotent() -> None:
     assert normalize_locale_tag(result, aliases=aliases) == result
 
 
-@pytest.mark.parametrize(
-    "aliases,category",
-    [
+def test_malformed_conflicting_and_chained_aliases(subtests) -> None:
+    for aliases, category in [
         ({"": "en"}, "locale_alias_invalid"),
         ({"bad key": "en"}, "locale_alias_invalid"),
         ({"é": "en"}, "locale_alias_invalid"),
@@ -127,27 +123,24 @@ def test_identity_alias_is_idempotent() -> None:
         ({"alias": "en", "ALIAS": "en"}, "locale_alias_duplicate"),
         ({"old": "en", "en": "fr"}, "locale_alias_chain_unsupported"),
         ({"en": "fr", "fr": "en"}, "locale_alias_chain_unsupported"),
-    ],
-)
-def test_malformed_conflicting_and_chained_aliases(aliases, category) -> None:
-    with pytest.raises(LocaleTagError) as raised:
-        normalize_locale_tag("en", aliases=aliases)
-    assert str(raised.value) == category
-    assert raised.value.__cause__ is None
-    assert raised.value.__context__ is None
+    ]:
+        with subtests.test(aliases=aliases, category=category):
+            with pytest.raises(LocaleTagError) as raised:
+                normalize_locale_tag("en", aliases=aliases)
+            assert str(raised.value) == category
+            assert raised.value.__cause__ is None
+            assert raised.value.__context__ is None
 
 
-@pytest.mark.parametrize(
-    "tags,aliases",
-    [
+def test_duplicate_canonical_registry_entries(subtests) -> None:
+    for tags, aliases in [
         (["en-US", "EN-us"], None),
         (["iw", "he"], {"iw": "he"}),
         (["legacy", "old"], {"legacy": "en", "old": "en"}),
-    ],
-)
-def test_duplicate_canonical_registry_entries(tags, aliases) -> None:
-    with pytest.raises(LocaleTagError, match="^locale_tag_duplicate$"):
-        normalize_locale_tags(tags, aliases=aliases)
+    ]:
+        with subtests.test(tags=tags, aliases=aliases):
+            with pytest.raises(LocaleTagError, match="^locale_tag_duplicate$"):
+                normalize_locale_tags(tags, aliases=aliases)
 
 
 def test_empty_and_generator_registries_preserve_order() -> None:
@@ -156,16 +149,20 @@ def test_empty_and_generator_registries_preserve_order() -> None:
     assert normalize_locale_tags(tags) == ("zh-Hant", "en-US", "es-419")
 
 
-@pytest.mark.parametrize("tag", [None, b"en", True, 2, ["en"]])
-def test_nonstring_tag_types(tag) -> None:
-    with pytest.raises(TypeError, match="^tag must be a string$"):
-        normalize_locale_tag(tag)
+def test_nonstring_tag_types(subtests) -> None:
+    for tag in [None, b"en", True, 2, ["en"]]:
+        with subtests.test(tag=tag):
+            with pytest.raises(TypeError, match="^tag must be a string$"):
+                normalize_locale_tag(tag)
 
 
-@pytest.mark.parametrize("tags", ["en", b"en"])
-def test_registry_does_not_iterate_characters(tags) -> None:
-    with pytest.raises(TypeError, match="^tags must be an iterable of locale tags$"):
-        normalize_locale_tags(tags)
+def test_registry_does_not_iterate_characters(subtests) -> None:
+    for tags in ["en", b"en"]:
+        with subtests.test(tags=tags):
+            with pytest.raises(
+                TypeError, match="^tags must be an iterable of locale tags$"
+            ):
+                normalize_locale_tags(tags)
 
 
 def test_aliases_must_be_mapping() -> None:

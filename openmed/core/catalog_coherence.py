@@ -27,7 +27,12 @@ def _load_manifest_rows(path: Path) -> list[dict[str, Any]]:
             if not stripped:
                 continue
             try:
-                rows.append(json.loads(stripped))
+                row = json.loads(stripped)
+                if not isinstance(row, dict):
+                    raise ValueError(
+                        f"manifest line {line_number}: expected a JSON object"
+                    )
+                rows.append(row)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path} line {line_number}: {exc}") from exc
     return rows
@@ -42,6 +47,8 @@ def manifest_label_errors(*, manifest_path: str | Path = MANIFEST_PATH) -> list[
     :func:`~openmed.core.labels.normalize_label`'s ``OTHER`` fallthrough. Mirrors
     the ``list[str]`` contract of ``manifest_diff.registry_surface_errors`` so a
     single gate can consume both. An empty list means the column is coherent.
+    Non-object JSONL rows return a diagnostic with their physical line number,
+    without echoing the row value or file path.
     """
 
     try:

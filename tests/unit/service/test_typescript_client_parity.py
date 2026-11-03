@@ -16,6 +16,11 @@ SDK_TSCONFIG_PATH = SDK_ROOT / "tsconfig.json"
 SDK_PACKAGE_PATH = SDK_ROOT / "package.json"
 
 CLIENT_METHOD_BY_PATH = {
+    "/v1/workflows/preflight": "workflowPreflight",
+    "/v1/workflows/preview": "workflowPreview",
+    "/v1/workflows/status": "workflowStatus",
+    "/v1/workflows/review-receipts": "workflowSubmitReceipt",
+    "/v1/workflows/cancel": "workflowCancel",
     "/brief": "brief",
     "/analyze": "analyze",
     "/cohort/resolve": "resolveCohort",

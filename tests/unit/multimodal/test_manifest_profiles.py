@@ -251,9 +251,8 @@ def test_no_file_access_with_source_path():
     assert findings == []
 
 
-@pytest.mark.parametrize(
-    ("profile", "manifest", "expected"),
-    (
+def test_profile_values_enforce_types_and_ranges(subtests):
+    for profile, manifest, expected in (
         (IMAGE_V1, {"width": -1, "height": 2}, "out_of_range"),
         (PDF_V1, {"pages": 1.5}, "invalid_type"),
         (
@@ -262,13 +261,12 @@ def test_no_file_access_with_source_path():
             "out_of_range",
         ),
         (AUDIO_V1, {"duration_seconds": -1.0}, "out_of_range"),
-    ),
-)
-def test_profile_values_enforce_types_and_ranges(profile, manifest, expected):
-    findings = validate_manifest_metadata(profile, manifest)
+    ):
+        with subtests.test(profile=profile, manifest=manifest, expected=expected):
+            findings = validate_manifest_metadata(profile, manifest)
 
-    assert len(findings) == 1
-    assert findings[0].reason_code == expected
+            assert len(findings) == 1
+            assert findings[0].reason_code == expected
 
 
 def test_findings_cannot_retain_arbitrary_fields_or_reasons() -> None:

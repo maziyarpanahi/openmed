@@ -54,6 +54,14 @@ formatting; the pinned mypy gate checks the annotated public-module scope. CI
 runs both gates. Do not run Black, isort, or flake8. For Swift changes under
 `swift/OpenMedKit`, run `make format-swift` and `make lint-swift`.
 
+`make lint`, the local pre-commit `effect-paths` hook and the CI lint job also
+run `python scripts/security/check_effect_paths.py --check`. New or removed
+HTTP/database effect candidates require an explicit review of
+`scripts/security/effect_paths.json`; do not regenerate classifications without
+reviewing the path. Built-in MCP, REST, CLI and Journey dependencies must not
+reach the legacy FHIR/OpenMRS writers. See the
+[agent boundary limits](docs/security/agent-threat-model.md#effect-path-inventory).
+
 ## Pull requests
 
 - Keep each PR focused on a single feature or fix; avoid unrelated formatting
