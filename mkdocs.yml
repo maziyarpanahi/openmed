@@ -429,6 +429,7 @@ nav:
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
+      - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
