@@ -481,6 +481,7 @@ classification:
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/fused-evidence-graphs.md
     - multimodal/redaction-mask-lineage.md
+    - multimodal/pixel-phi-coverage.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md
