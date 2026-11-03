@@ -108,12 +108,17 @@ def _hypothesis(revision: int = 0, **overrides: object) -> providers.PartialHypo
 
 
 def _segment(index: int = 0, **overrides: object) -> providers.FinalizedSegment:
+    start = overrides.get("start_ms", 0)
+    end = overrides.get("end_ms", 64)
+    tokens = (_token(0),)
+    if type(start) is int and type(end) is int and 0 <= start <= end:
+        tokens = (_token(0, start_ms=start, end_ms=min(start + 10, end)),)
     values: dict[str, object] = {
         "segment_index": index,
         "text": PRIVATE_TEXT,
         "start_ms": 0,
         "end_ms": 64,
-        "token_times": (_token(0),),
+        "token_times": tokens,
         "language": providers.LanguageConfidence("en", 950000),
     }
     values.update(overrides)
@@ -263,6 +268,7 @@ def test_golden_session_report_is_exact() -> None:
         "provider_id": "whisper-local",
         "provider_revision": "1.2.0",
         "state": "finalized",
+        "model_fingerprint": FINGERPRINT,
         "buffered_chunks": 1,
         "buffered_byte_count": 512,
         "buffered_duration_ms": 32,
@@ -303,6 +309,7 @@ def test_report_carries_no_raw_values() -> None:
 
 def test_session_finalize_accepts_a_last_segment() -> None:
     session = providers.StreamingAsrSession(_declaration())
+    session.push_chunk(_chunk(0, duration_ms=32))
     report = session.finalize(_segment(0, start_ms=0, end_ms=32))
     assert report.state == "finalized"
     assert report.finalized_segments == 1
@@ -896,6 +903,7 @@ def test_partial_hypothesis_ordering_and_limit() -> None:
     session = providers.StreamingAsrSession(
         _declaration(limits=_limits(max_partial_hypotheses=2))
     )
+    session.push_chunk(_chunk(0))
     _assert_error(
         "partial_hypothesis_type_invalid",
         lambda: session.submit_partial("guess"),
@@ -917,6 +925,7 @@ def test_segment_ordering_and_limit() -> None:
     session = providers.StreamingAsrSession(
         _declaration(limits=_limits(max_segments=2))
     )
+    session.push_chunk(_chunk(0, duration_ms=160))
     _assert_error(
         "finalized_segment_type_invalid",
         lambda: session.submit_segment("segment"),
@@ -939,6 +948,7 @@ def test_segment_ordering_and_limit() -> None:
 
 def test_finalize_propagates_segment_errors() -> None:
     session = providers.StreamingAsrSession(_declaration())
+    session.push_chunk(_chunk(0, duration_ms=96))
     session.submit_segment(_segment(0, start_ms=0, end_ms=64))
     _assert_error(
         "segment_times_out_of_order",
@@ -1001,3 +1011,81 @@ def test_module_limits_are_consistent() -> None:
     assert providers.MAX_SEGMENTS > 1
     assert providers.MAX_TOKEN_TIMES > 1
     assert providers.MAX_PROVIDER_LANGUAGES > 1
+
+
+def test_session_admission_preserves_declared_capabilities_and_state() -> None:
+    declaration = _declaration()
+    _assert_error(
+        "session_limits_exceed_provider",
+        lambda: providers.StreamingAsrSession(
+            declaration, _limits(max_buffered_chunks=5)
+        ),
+    )
+    session = providers.StreamingAsrSession(declaration, _limits(max_buffered_chunks=1))
+    before = session.report()
+    _assert_error(
+        "chunk_sample_rate_unsupported",
+        lambda: session.push_chunk(_chunk(0, sample_rate_hz=44100)),
+    )
+    assert session.report() == before
+    session.push_chunk(_chunk(0))
+    before = session.report()
+    language = providers.LanguageConfidence("fr", 900000)
+    _assert_error(
+        "hypothesis_language_unsupported",
+        lambda: session.submit_partial(_hypothesis(0, language=language)),
+    )
+    _assert_error(
+        "segment_language_unsupported",
+        lambda: session.submit_segment(_segment(0, language=language)),
+    )
+    assert session.report() == before
+    assert session.report().model_fingerprint == FINGERPRINT
+
+
+def test_timing_binds_outputs_to_received_audio_and_resets_utterance_revision() -> None:
+    session = providers.StreamingAsrSession(_declaration())
+    _assert_error(
+        "hypothesis_times_out_of_range",
+        lambda: session.submit_partial(_hypothesis(0)),
+    )
+    _assert_error("segment_times_out_of_range", lambda: session.finalize(_segment(0)))
+    assert session.state is providers.StreamState.OPEN
+    session.push_chunk(_chunk(0))
+    session.submit_partial(_hypothesis(3))
+    session.submit_segment(_segment(0))
+    session.drain()
+    session.push_chunk(_chunk(1))
+    _assert_error(
+        "hypothesis_times_out_of_range",
+        lambda: session.submit_partial(_hypothesis(0)),
+    )
+    assert (
+        session.submit_partial(
+            _hypothesis(0, token_times=(_token(0, start_ms=64, end_ms=74),))
+        )
+        == 2
+    )
+    assert (
+        session.finalize(_segment(1, start_ms=64, end_ms=128)).finalized_segments == 2
+    )
+
+
+def test_token_timings_must_be_ordered_and_contained_in_the_segment() -> None:
+    tokens = (_token(0, start_ms=20, end_ms=30), _token(1, start_ms=0, end_ms=10))
+    _assert_error("token_times_unsorted", lambda: _hypothesis(0, token_times=tokens))
+    _assert_error(
+        "segment_token_times_out_of_range",
+        lambda: _segment(0, token_times=(_token(0, start_ms=60, end_ms=65),)),
+    )
+    _assert_error(
+        "segment_token_times_out_of_range",
+        lambda: _segment(0, start_ms=64, end_ms=128, token_times=(_token(0),)),
+    )
+
+
+def test_language_tag_size_is_bounded_without_echoing_it() -> None:
+    _assert_error(
+        "provider_language_invalid",
+        lambda: providers.LanguageConfidence("en" + "-abcdefgh" * 1000, 1),
+    )

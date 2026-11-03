@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Any, Final
 
@@ -43,6 +43,7 @@ MAX_HYPOTHESIS_CHARS: Final[int] = 8192
 MAX_PROVIDER_LANGUAGES: Final[int] = 64
 MAX_PROVIDER_REVISION_CHARS: Final[int] = 64
 MAX_ENTRYPOINT_CHARS: Final[int] = 128
+_MAX_LANGUAGE_TAG_CHARS: Final[int] = 63
 
 SPEECH_PROVIDER_REASON_CODES: Final[tuple[str, ...]] = (
     "provider_requires_network",
@@ -56,6 +57,12 @@ SPEECH_PROVIDER_REASON_CODES: Final[tuple[str, ...]] = (
     "segment_limit_exceeded",
     "session_closed",
     "session_cancelled",
+    "session_limits_exceed_provider",
+    "chunk_sample_rate_unsupported",
+    "hypothesis_language_unsupported",
+    "segment_language_unsupported",
+    "hypothesis_times_out_of_range",
+    "segment_times_out_of_range",
 )
 
 _PROVIDER_ID_RE: Final[re.Pattern[str]] = re.compile(
@@ -74,6 +81,7 @@ _REPORT_FIELDS: Final[tuple[str, ...]] = (
     "schema_version",
     "provider_id",
     "provider_revision",
+    "model_fingerprint",
     "state",
     "buffered_chunks",
     "buffered_byte_count",
@@ -173,8 +181,8 @@ class TokenTime:
 
     Attributes:
         token_index: Zero-based position of the token in its hypothesis.
-        start_ms: Inclusive start offset in milliseconds.
-        end_ms: Inclusive end offset in milliseconds.
+        start_ms: Inclusive stream-relative start offset in milliseconds.
+        end_ms: Exclusive stream-relative end offset in milliseconds.
         confidence_ppm: Confidence in parts per million.
         token: Token text, excluded from ``repr`` and from diagnostics.
     """
@@ -445,8 +453,8 @@ class FinalizedSegment:
     Attributes:
         segment_index: Zero-based position of the segment in the stream.
         text: Segment text, excluded from ``repr`` and diagnostics.
-        start_ms: Inclusive start offset in milliseconds.
-        end_ms: Inclusive end offset in milliseconds.
+        start_ms: Inclusive stream-relative start offset in milliseconds.
+        end_ms: Exclusive stream-relative end offset in milliseconds.
         token_times: Declared token timings, ordered by token index.
         language: Optional language guess for the segment.
     """
@@ -469,6 +477,11 @@ class FinalizedSegment:
         if self.end_ms < self.start_ms:
             raise SpeechProviderError("segment_time_range_invalid")
         _require_token_times(self.token_times)
+        if any(
+            token.start_ms < self.start_ms or token.end_ms > self.end_ms
+            for token in self.token_times
+        ):
+            raise SpeechProviderError("segment_token_times_out_of_range")
         if self.language is not None and not isinstance(
             self.language, LanguageConfidence
         ):
@@ -532,6 +545,7 @@ class StreamingAsrSessionReport:
 
     provider_id: str
     provider_revision: str
+    model_fingerprint: str
     state: str
     buffered_chunks: int
     buffered_byte_count: int
@@ -550,6 +564,7 @@ class StreamingAsrSessionReport:
             "schema_version": self.schema_version,
             "provider_id": self.provider_id,
             "provider_revision": self.provider_revision,
+            "model_fingerprint": self.model_fingerprint,
             "state": self.state,
             "buffered_chunks": self.buffered_chunks,
             "buffered_byte_count": self.buffered_byte_count,
@@ -586,6 +601,11 @@ class StreamingAsrSession:
             raise SpeechProviderError("session_declaration_type_invalid")
         if limits is not None and not isinstance(limits, SpeechStreamLimits):
             raise SpeechProviderError("session_limits_type_invalid")
+        if limits is not None and any(
+            getattr(limits, item.name) > getattr(declaration.limits, item.name)
+            for item in fields(SpeechStreamLimits)
+        ):
+            raise SpeechProviderError("session_limits_exceed_provider")
         self._declaration = declaration
         self._limits = declaration.limits if limits is None else limits
         self._state = StreamState.OPEN
@@ -681,6 +701,8 @@ class StreamingAsrSession:
             raise SpeechProviderError("audio_chunk_type_invalid")
         if chunk.sequence != self._next_sequence:
             raise SpeechProviderError("chunk_sequence_out_of_order")
+        if chunk.sample_rate_hz not in self._declaration.sample_rates_hz:
+            raise SpeechProviderError("chunk_sample_rate_unsupported")
         if self._buffered_chunks + 1 > self._limits.max_buffered_chunks:
             raise SpeechProviderError("buffer_limit_exceeded")
         if (
@@ -739,6 +761,16 @@ class StreamingAsrSession:
             raise SpeechProviderError("hypothesis_revision_out_of_order")
         if self._partial_hypotheses + 1 > self._limits.max_partial_hypotheses:
             raise SpeechProviderError("partial_hypothesis_limit_exceeded")
+        if hypothesis.language is not None and (
+            hypothesis.language.language not in self._declaration.languages
+        ):
+            raise SpeechProviderError("hypothesis_language_unsupported")
+        if any(
+            token.start_ms < self._last_segment_end_ms
+            or token.end_ms > self._stream_duration_ms
+            for token in hypothesis.token_times
+        ):
+            raise SpeechProviderError("hypothesis_times_out_of_range")
         self._last_revision = hypothesis.revision
         self._partial_hypotheses += 1
         return self._partial_hypotheses
@@ -767,9 +799,16 @@ class StreamingAsrSession:
             raise SpeechProviderError("segment_times_out_of_order")
         if self._finalized_segments + 1 > self._limits.max_segments:
             raise SpeechProviderError("segment_limit_exceeded")
+        if segment.end_ms > self._stream_duration_ms:
+            raise SpeechProviderError("segment_times_out_of_range")
+        if segment.language is not None and (
+            segment.language.language not in self._declaration.languages
+        ):
+            raise SpeechProviderError("segment_language_unsupported")
         self._last_segment_index = segment.segment_index
         self._last_segment_end_ms = segment.end_ms
         self._finalized_segments += 1
+        self._last_revision = -1
         return self._finalized_segments
 
     def finalize(
@@ -815,6 +854,7 @@ class StreamingAsrSession:
         return StreamingAsrSessionReport(
             provider_id=self._declaration.provider_id,
             provider_revision=self._declaration.provenance.provider_revision,
+            model_fingerprint=self._declaration.provenance.model_fingerprint,
             state=self._state.value,
             buffered_chunks=self._buffered_chunks,
             buffered_byte_count=self._buffered_byte_count,
@@ -879,7 +919,11 @@ def _require_provider_id(value: Any) -> None:
 
 
 def _require_language(value: Any) -> None:
-    if type(value) is not str or _LANGUAGE_RE.fullmatch(value) is None:
+    if (
+        type(value) is not str
+        or len(value) > _MAX_LANGUAGE_TAG_CHARS
+        or _LANGUAGE_RE.fullmatch(value) is None
+    ):
         raise SpeechProviderError("provider_language_invalid")
 
 
@@ -913,12 +957,16 @@ def _require_token_times(values: Any) -> None:
     if len(values) > MAX_TOKEN_TIMES:
         raise SpeechProviderError("token_times_out_of_range")
     previous = -1
+    previous_start = previous_end = -1
     for value in values:
         if not isinstance(value, TokenTime):
             raise SpeechProviderError("token_times_invalid")
         if value.token_index <= previous:
             raise SpeechProviderError("token_times_unsorted")
+        if value.start_ms < previous_start or value.end_ms < previous_end:
+            raise SpeechProviderError("token_times_unsorted")
         previous = value.token_index
+        previous_start, previous_end = value.start_ms, value.end_ms
 
 
 __all__ = [
