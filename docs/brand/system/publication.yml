@@ -480,6 +480,7 @@ classification:
     - multimodal/provider-results.md
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/vision/whole-slide-tiling.md
+    - multimodal/fused-evidence-graphs.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md

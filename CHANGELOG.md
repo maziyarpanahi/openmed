@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
+- Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
 
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
