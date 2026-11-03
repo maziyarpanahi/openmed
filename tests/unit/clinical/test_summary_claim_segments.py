@@ -75,21 +75,19 @@ def test_splits_high_confidence_comma_splice() -> None:
     assert result.review_required is False
 
 
-@pytest.mark.parametrize(
-    "summary",
-    [
+def test_flags_unsegmentable_compounds_before_verification(subtests) -> None:
+    for summary in [
         "Signals alpha and beta are stable.",
         "Signal alpha is stable because marker beta improved.",
         "No signal alpha or marker beta is present.",
-    ],
-)
-def test_flags_unsegmentable_compounds_before_verification(summary: str) -> None:
-    result = segment_summary_claims(summary)
+    ]:
+        with subtests.test(summary=summary):
+            result = segment_summary_claims(summary)
 
-    assert len(result.segments) == 1
-    assert result.segments[0].text == summary
-    assert result.segments[0].review_required is True
-    assert result.segments[0].review_reason == "unsegmentable_compound"
+            assert len(result.segments) == 1
+            assert result.segments[0].text == summary
+            assert result.segments[0].review_required is True
+            assert result.segments[0].review_reason == "unsegmentable_compound"
 
 
 def test_non_english_clause_analysis_fails_closed() -> None:

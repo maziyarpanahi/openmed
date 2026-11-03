@@ -70,23 +70,23 @@ def test_audio_frame_count_is_an_exact_rational_ceiling():
     assert result.assets[0].estimated_bytes == 1601 * 4
 
 
-@pytest.mark.parametrize("media_type", ["image/gif", "image/webp", "image/png"])
-def test_animated_images_require_an_explicit_frame_count(media_type):
-    unknown = manifest(0, media_type, width=10, height=20)
-    rejected = plan([unknown])
-    assert rejected.outcome is BatchOutcome.REJECT
-    assert rejected.assets[0].field_name == "frames"
-    assert rejected.assets[0].estimated_bytes is None
+def test_animated_images_require_an_explicit_frame_count(subtests):
+    for media_type in ["image/gif", "image/webp", "image/png"]:
+        with subtests.test(media_type=media_type):
+            unknown = manifest(0, media_type, width=10, height=20)
+            rejected = plan([unknown])
+            assert rejected.outcome is BatchOutcome.REJECT
+            assert rejected.assets[0].field_name == "frames"
+            assert rejected.assets[0].estimated_bytes is None
 
-    known = manifest(0, media_type, width=10, height=20, frames=3)
-    accepted = plan([known], budget=2_400)
-    assert accepted.outcome is BatchOutcome.ACCEPT
-    assert accepted.assets[0].estimated_bytes == 2_400
+            known = manifest(0, media_type, width=10, height=20, frames=3)
+            accepted = plan([known], budget=2_400)
+            assert accepted.outcome is BatchOutcome.ACCEPT
+            assert accepted.assets[0].estimated_bytes == 2_400
 
 
-@pytest.mark.parametrize(
-    ("asset", "policy", "field_name"),
-    [
+def test_missing_geometry_or_factor_is_unevaluable(subtests):
+    for asset, policy, field_name in [
         (manifest(0, "image/png", width=10), FULL, "height"),
         (manifest(0, "image/png", height=10), FULL, "width"),
         (manifest(0, "image/png", width=10, height=10), FULL, "frames"),
@@ -108,16 +108,15 @@ def test_animated_images_require_an_explicit_frame_count(media_type):
             "audio_channels",
         ),
         (manifest(0, "application/dicom+json"), FULL, "media_type"),
-    ],
-)
-def test_missing_geometry_or_factor_is_unevaluable(asset, policy, field_name):
-    result = plan([asset], policy)
-    assert result.outcome is BatchOutcome.REJECT
-    assert result.batches == ()
-    (estimate,) = result.assets
-    assert estimate.reason_code == "insufficient_metadata"
-    assert estimate.field_name == field_name
-    assert estimate.estimated_bytes is None
+    ]:
+        with subtests.test(asset=asset, policy=policy, field_name=field_name):
+            result = plan([asset], policy)
+            assert result.outcome is BatchOutcome.REJECT
+            assert result.batches == ()
+            (estimate,) = result.assets
+            assert estimate.reason_code == "insufficient_metadata"
+            assert estimate.field_name == field_name
+            assert estimate.estimated_bytes is None
 
 
 def test_pdf_page_count_never_produces_an_estimate():
@@ -250,19 +249,25 @@ def test_mixed_modalities_split():
 # --- input validation ---------------------------------------------------------
 
 
-@pytest.mark.parametrize("value", [True, False, -1, 1.0, math.nan, math.inf, "1"])
-@pytest.mark.parametrize("name", ["budget_bytes", "overhead_bytes"])
-def test_budget_inputs_reject_non_integers(name, value):
-    kwargs = {"budget_bytes": 1_000, "overhead_bytes": 0, name: value}
-    with pytest.raises(BatchMemoryError):
-        plan_batch_memory([image()], FULL, **kwargs)
+def test_budget_inputs_reject_non_integers(subtests):
+    for value in [True, False, -1, 1.0, math.nan, math.inf, "1"]:
+        for name in ["budget_bytes", "overhead_bytes"]:
+            with subtests.test(value=value, name=name):
+                kwargs = {"budget_bytes": 1_000, "overhead_bytes": 0, name: value}
+                with pytest.raises(BatchMemoryError):
+                    plan_batch_memory([image()], FULL, **kwargs)
 
 
-@pytest.mark.parametrize("name", ["budget_bytes", "overhead_bytes"])
-def test_budget_inputs_are_bounded_by_the_ceiling(name):
-    kwargs = {"budget_bytes": 1_000, "overhead_bytes": 0, name: SATURATION_CEILING + 1}
-    with pytest.raises(BatchMemoryError):
-        plan_batch_memory([image()], FULL, **kwargs)
+def test_budget_inputs_are_bounded_by_the_ceiling(subtests):
+    for name in ["budget_bytes", "overhead_bytes"]:
+        with subtests.test(name=name):
+            kwargs = {
+                "budget_bytes": 1_000,
+                "overhead_bytes": 0,
+                name: SATURATION_CEILING + 1,
+            }
+            with pytest.raises(BatchMemoryError):
+                plan_batch_memory([image()], FULL, **kwargs)
 
 
 def test_budget_and_overhead_have_no_defaults():
@@ -270,34 +275,30 @@ def test_budget_and_overhead_have_no_defaults():
         plan_batch_memory([image()], FULL)  # type: ignore[call-arg]
 
 
-@pytest.mark.parametrize(
-    "field_name",
-    [
+def test_policy_factors_reject_invalid_values(subtests):
+    for field_name in [
         "image_bytes_per_pixel",
         "dicom_bytes_per_pixel",
         "audio_sample_rate_hz",
         "audio_channels",
         "audio_bytes_per_sample",
-    ],
-)
-@pytest.mark.parametrize("value", [True, 0, -1, 2.0, math.nan, math.inf])
-def test_policy_factors_reject_invalid_values(field_name, value):
-    with pytest.raises(BatchMemoryError):
-        MemoryEstimationPolicy(**{field_name: value})
+    ]:
+        for value in [True, 0, -1, 2.0, math.nan, math.inf]:
+            with subtests.test(field_name=field_name, value=value):
+                with pytest.raises(BatchMemoryError):
+                    MemoryEstimationPolicy(**{field_name: value})
 
 
-@pytest.mark.parametrize(
-    ("field_name", "maximum"),
-    [
+def test_policy_factor_bounds_are_inclusive(subtests):
+    for field_name, maximum in [
         ("image_bytes_per_pixel", MAX_BYTES_PER_UNIT),
         ("audio_sample_rate_hz", MAX_AUDIO_SAMPLE_RATE_HZ),
         ("audio_channels", MAX_AUDIO_CHANNELS),
-    ],
-)
-def test_policy_factor_bounds_are_inclusive(field_name, maximum):
-    MemoryEstimationPolicy(**{field_name: maximum})
-    with pytest.raises(BatchMemoryError):
-        MemoryEstimationPolicy(**{field_name: maximum + 1})
+    ]:
+        with subtests.test(field_name=field_name, maximum=maximum):
+            MemoryEstimationPolicy(**{field_name: maximum})
+            with pytest.raises(BatchMemoryError):
+                MemoryEstimationPolicy(**{field_name: maximum + 1})
 
 
 def test_policy_is_immutable():

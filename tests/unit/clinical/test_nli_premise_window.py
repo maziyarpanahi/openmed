@@ -118,45 +118,38 @@ def test_span_shapes_are_canonicalized_and_deduplicated() -> None:
     assert result.premise == "12345"
 
 
-@pytest.mark.parametrize(
-    "spans",
-    [
+def test_invalid_spans_fail_without_echoing_input(subtests) -> None:
+    for spans in [
         [(2, 2)],
         [(-1, 2)],
         [(True, 2)],
         [{"start": 1}],
         [(0, 99)],
         "not-a-span-collection",
-    ],
-)
-def test_invalid_spans_fail_without_echoing_input(spans: object) -> None:
-    sentinel = "SENSITIVE_SENTINEL"
+    ]:
+        with subtests.test(spans=spans):
+            sentinel = "SENSITIVE_SENTINEL"
 
-    with pytest.raises(PremiseWindowError) as error:
-        select_minimal_premise_window(
-            sentinel,
-            spans,  # type: ignore[arg-type]
-            max_characters=32,
-            deidentified=True,
-        )
-    assert sentinel not in str(error.value)
+            with pytest.raises(PremiseWindowError) as error:
+                select_minimal_premise_window(
+                    sentinel,
+                    spans,  # type: ignore[arg-type]
+                    max_characters=32,
+                    deidentified=True,
+                )
+            assert sentinel not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    ("max_characters", "deidentified"),
-    [(0, True), (-1, True), (True, True), (12, 1)],
-)
-def test_invalid_configuration_fails_closed(
-    max_characters: object,
-    deidentified: object,
-) -> None:
-    with pytest.raises(PremiseWindowError):
-        select_minimal_premise_window(
-            "synthetic",
-            [(0, 3)],
-            max_characters=max_characters,  # type: ignore[arg-type]
-            deidentified=deidentified,  # type: ignore[arg-type]
-        )
+def test_invalid_configuration_fails_closed(subtests) -> None:
+    for max_characters, deidentified in [(0, True), (-1, True), (True, True), (12, 1)]:
+        with subtests.test(max_characters=max_characters, deidentified=deidentified):
+            with pytest.raises(PremiseWindowError):
+                select_minimal_premise_window(
+                    "synthetic",
+                    [(0, 3)],
+                    max_characters=max_characters,  # type: ignore[arg-type]
+                    deidentified=deidentified,  # type: ignore[arg-type]
+                )
 
 
 def test_reports_and_repr_never_include_premise_text() -> None:

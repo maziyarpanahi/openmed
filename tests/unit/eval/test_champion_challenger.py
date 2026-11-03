@@ -221,21 +221,18 @@ def test_mismatched_coordinates_are_rejected() -> None:
         compare_champion_challenger(champion, challenger)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (
+def test_mismatched_evidence_corpora_are_rejected(subtests) -> None:
+    """Head-to-head metrics must come from the same committed evidence corpora."""
+    for field, value in (
         ("eval_set_hash", "different-eval"),
         ("leakage_fixture_hash", "different-leakage"),
-    ),
-)
-def test_mismatched_evidence_corpora_are_rejected(field: str, value: str) -> None:
-    """Head-to-head metrics must come from the same committed evidence corpora."""
+    ):
+        with subtests.test(field=field, value=value):
+            champion = _report()
+            challenger = _report(**{field: value})
 
-    champion = _report()
-    challenger = _report(**{field: value})
-
-    with pytest.raises(ValueError, match=field):
-        compare_champion_challenger(champion, challenger)
+            with pytest.raises(ValueError, match=field):
+                compare_champion_challenger(champion, challenger)
 
 
 def test_bootstrap_without_champion_promotes_releasable() -> None:
@@ -273,6 +270,7 @@ def test_ledger_reproduces_byte_identically(tmp_path: Path) -> None:
     assert reloaded.record_hash == first.record_hash
 
 
+@pytest.mark.slow
 def test_record_reproduces_across_process(tmp_path: Path) -> None:
     """A record written by the CLI matches the in-process record byte-for-byte."""
 
@@ -347,56 +345,55 @@ def test_promote_writes_pointer_and_record(tmp_path: Path) -> None:
     assert entry.record_hash == verdict.record_hash
 
 
-@pytest.mark.parametrize(
-    "challenger_kwargs",
-    [
+def test_hold_or_reject_never_advances_pointer(subtests, tmp_path) -> None:
+    """A HOLD/REJECT verdict leaves the committed champion pointer untouched."""
+    case_root = tmp_path
+    for challenger_kwargs in [
         {"per_label_recall": {"SSN": 0.9950, "API_KEY": 0.9999}},  # REJECT
         {},  # HOLD (all ties)
-    ],
-)
-def test_hold_or_reject_never_advances_pointer(
-    tmp_path: Path,
-    challenger_kwargs: dict,
-) -> None:
-    """A HOLD/REJECT verdict leaves the committed champion pointer untouched."""
+    ]:
+        with subtests.test(challenger_kwargs=challenger_kwargs):
+            tmp_path = case_root / str(len(list(case_root.iterdir())))
+            tmp_path.mkdir()
 
-    pointer_path = tmp_path / "champion.json"
-    seeded = ChampionPointer(
-        entries={
-            "pii::tiny::mlx-fp": ChampionPointerEntry(
-                family="pii",
-                tier="tiny",
-                format="mlx-fp",
-                champion="v3",
-                record_hash="sha256:" + "0" * 64,
+            pointer_path = tmp_path / "champion.json"
+            seeded = ChampionPointer(
+                entries={
+                    "pii::tiny::mlx-fp": ChampionPointerEntry(
+                        family="pii",
+                        tier="tiny",
+                        format="mlx-fp",
+                        champion="v3",
+                        record_hash="sha256:" + "0" * 64,
+                    )
+                }
             )
-        }
-    )
-    seeded.save(pointer_path)
-    before = pointer_path.read_bytes()
+            seeded.save(pointer_path)
+            before = pointer_path.read_bytes()
 
-    champion = _report()
-    challenger = _report(**challenger_kwargs)
-    verdict = compare_champion_challenger(champion, challenger)
-    assert verdict.verdict in {HOLD, REJECT}
+            champion = _report()
+            challenger = _report(**challenger_kwargs)
+            verdict = compare_champion_challenger(champion, challenger)
+            assert verdict.verdict in {HOLD, REJECT}
 
-    record_path = tmp_path / "record.json"
-    result = apply_promotion(
-        verdict,
-        pointer_path=pointer_path,
-        record_path=record_path,
-    )
+            record_path = tmp_path / "record.json"
+            result = apply_promotion(
+                verdict,
+                pointer_path=pointer_path,
+                record_path=record_path,
+            )
 
-    assert result.promoted is False
-    # The pointer file is byte-for-byte unchanged and the incumbent survives.
-    assert pointer_path.read_bytes() == before
-    assert (
-        ChampionPointer.load(pointer_path).get("pii", "tiny", "mlx-fp").champion == "v3"
-    )
-    # No pointer/record is advanced; an offline issue draft is emitted instead.
-    assert not record_path.exists()
-    assert result.issue_draft is not None
-    assert result.issue_draft["verdict"] == verdict.verdict
+            assert result.promoted is False
+            # The pointer file is byte-for-byte unchanged and the incumbent survives.
+            assert pointer_path.read_bytes() == before
+            assert (
+                ChampionPointer.load(pointer_path).get("pii", "tiny", "mlx-fp").champion
+                == "v3"
+            )
+            # No pointer/record is advanced; an offline issue draft is emitted instead.
+            assert not record_path.exists()
+            assert result.issue_draft is not None
+            assert result.issue_draft["verdict"] == verdict.verdict
 
 
 def test_issue_draft_is_offline_and_deterministic() -> None:

@@ -247,10 +247,11 @@ def test_conflicting_total_aliases_are_rejected():
         )
 
 
-@pytest.mark.parametrize("value", ["synthetic-sensitive-marker", b"synthetic-marker"])
-def test_scalar_text_is_not_a_candidate_batch(value):
-    with pytest.raises(ValueError):
-        audit_relation_candidates(value)
+def test_scalar_text_is_not_a_candidate_batch(subtests):
+    for value in ["synthetic-sensitive-marker", b"synthetic-marker"]:
+        with subtests.test(value=value):
+            with pytest.raises(ValueError):
+                audit_relation_candidates(value)
 
 
 def test_invalid_json_discards_private_decoder_context(tmp_path):

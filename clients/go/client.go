@@ -88,6 +88,7 @@ const (
 	LangOR PIILanguage = "or"
 	LangPL PIILanguage = "pl"
 	LangPA PIILanguage = "pa"
+	LangSI PIILanguage = "si"
 	LangTA PIILanguage = "ta"
 	LangTE PIILanguage = "te"
 	LangUR PIILanguage = "ur"
@@ -150,6 +151,7 @@ const (
 	DecisionOrderedPreference DecisionMode = "ordered_preference"
 	DecisionScalarScore       DecisionMode = "scalar_score"
 	DecisionMultiLabel        DecisionMode = "multi_label"
+	DecisionQuestionSet       DecisionMode = "question_set"
 )
 
 // DecisionState reports whether a decision succeeded or stopped safely.
@@ -206,6 +208,39 @@ type JSONObject = map[string]any
 // ---------------------------------------------------------------------------
 // Request types
 // ---------------------------------------------------------------------------
+
+// GovernedWorkflowReference contains opaque custody references, never action content.
+// Null state/key fields are allowed only for inspection.
+type GovernedWorkflowReference struct {
+	SchemaVersion       string  `json:"schema_version"`
+	RunID               string  `json:"run_id"`
+	WorkflowID          string  `json:"workflow_id"`
+	ActionDigest        string  `json:"action_digest"`
+	ExpectedStateDigest *string `json:"expected_state_digest"`
+	RequestID           *string `json:"request_id"`
+}
+
+// GovernedWorkflowMutation requires explicit state and idempotency metadata.
+type GovernedWorkflowMutation struct {
+	SchemaVersion       string `json:"schema_version"`
+	RunID               string `json:"run_id"`
+	WorkflowID          string `json:"workflow_id"`
+	ActionDigest        string `json:"action_digest"`
+	ExpectedStateDigest string `json:"expected_state_digest"`
+	RequestID           string `json:"request_id"`
+}
+
+// GovernedWorkflowReview transports an existing consumed receipt. Receipt
+// metadata is not approval authority; the server must verify trusted custody.
+type GovernedWorkflowReview struct {
+	SchemaVersion       string     `json:"schema_version"`
+	RunID               string     `json:"run_id"`
+	WorkflowID          string     `json:"workflow_id"`
+	ActionDigest        string     `json:"action_digest"`
+	ExpectedStateDigest string     `json:"expected_state_digest"`
+	RequestID           string     `json:"request_id"`
+	Receipt             JSONObject `json:"receipt"`
+}
 
 // AnalyzeRequest is the request body for POST /analyze.
 type AnalyzeRequest struct {
@@ -319,6 +354,8 @@ type PrivacyGatewayRequest struct {
 }
 
 // FixedOptionDecisionRequest is the request body for POST /v1/decisions.
+// The fields after CompatibilityPolicy are optional schema 1.1.0 fields;
+// Questions holds named question objects for DecisionQuestionSet requests.
 type FixedOptionDecisionRequest struct {
 	Mode                DecisionMode `json:"mode"`
 	InputText           string       `json:"input_text"`
@@ -329,6 +366,13 @@ type FixedOptionDecisionRequest struct {
 	TimeoutMS           int          `json:"timeout_ms,omitempty"`
 	SchemaVersion       string       `json:"schema_version,omitempty"`
 	CompatibilityPolicy string       `json:"compatibility_policy,omitempty"`
+	QuestionID          string       `json:"question_id,omitempty"`
+	Instructions        *string      `json:"instructions,omitempty"`
+	OptionDescriptions  []*string    `json:"option_descriptions,omitempty"`
+	Levels              []string     `json:"levels,omitempty"`
+	Questions           []JSONObject `json:"questions,omitempty"`
+	InputFormat         string       `json:"input_format,omitempty"`
+	MaxInputChars       int          `json:"max_input_chars,omitempty"`
 }
 
 // PIIExtractStreamSpan is one entity span in a streaming PII event.
@@ -561,29 +605,60 @@ type DecisionOptionScore struct {
 	Score  float64 `json:"score"`
 }
 
+// DecisionLevelScore preserves an ordered score level's position and score.
+type DecisionLevelScore struct {
+	Index int     `json:"index"`
+	Level string  `json:"level"`
+	Score float64 `json:"score"`
+}
+
+// DecisionQuestionResult is the calibrated outcome of one named question in a
+// question-set result. Each question carries its own state.
+type DecisionQuestionResult struct {
+	QuestionID    string                `json:"question_id"`
+	Mode          DecisionMode          `json:"mode"`
+	State         DecisionState         `json:"state"`
+	Code          *string               `json:"code"`
+	OptionScores  []DecisionOptionScore `json:"option_scores"`
+	Choice        *string               `json:"choice"`
+	Choices       []string              `json:"choices"`
+	Ranking       []string              `json:"ranking"`
+	ScalarScore   *float64              `json:"scalar_score"`
+	Confidence    *float64              `json:"confidence"`
+	Margin        *float64              `json:"margin"`
+	LevelScores   []DecisionLevelScore  `json:"level_scores"`
+	ExpectedLevel *float64              `json:"expected_level"`
+	Warnings      []string              `json:"warnings"`
+	Review        JSONObject            `json:"review"`
+}
+
 // FixedOptionDecisionResult is the calibrated, explicitly review-only result
-// returned by POST /v1/decisions.
+// returned by POST /v1/decisions. Schema 1.1.0 results also carry
+// LevelScores, ExpectedLevel and Questions.
 type FixedOptionDecisionResult struct {
-	Mode                DecisionMode          `json:"mode"`
-	State               DecisionState         `json:"state"`
-	Code                *string               `json:"code"`
-	OptionScores        []DecisionOptionScore `json:"option_scores"`
-	Choice              *string               `json:"choice"`
-	Choices             []string              `json:"choices"`
-	Ranking             []string              `json:"ranking"`
-	ScalarScore         *float64              `json:"scalar_score"`
-	Confidence          *float64              `json:"confidence"`
-	Margin              *float64              `json:"margin"`
-	Calibration         JSONObject            `json:"calibration"`
-	Backend             JSONObject            `json:"backend"`
-	Access              JSONObject            `json:"access"`
-	Warnings            []string              `json:"warnings"`
-	Review              JSONObject            `json:"review"`
-	Advisory            string                `json:"advisory"`
-	AutonomousAction    bool                  `json:"autonomous_action"`
-	SchemaVersion       string                `json:"schema_version"`
-	CompatibilityPolicy string                `json:"compatibility_policy"`
-	Extensions          JSONObject            `json:"extensions"`
+	Mode                DecisionMode             `json:"mode"`
+	State               DecisionState            `json:"state"`
+	Code                *string                  `json:"code"`
+	OptionScores        []DecisionOptionScore    `json:"option_scores"`
+	Choice              *string                  `json:"choice"`
+	Choices             []string                 `json:"choices"`
+	Ranking             []string                 `json:"ranking"`
+	ScalarScore         *float64                 `json:"scalar_score"`
+	Confidence          *float64                 `json:"confidence"`
+	Margin              *float64                 `json:"margin"`
+	LevelScores         []DecisionLevelScore     `json:"level_scores,omitempty"`
+	ExpectedLevel       *float64                 `json:"expected_level,omitempty"`
+	Questions           []DecisionQuestionResult `json:"questions,omitempty"`
+	Calibration         JSONObject               `json:"calibration"`
+	Backend             JSONObject               `json:"backend"`
+	Access              JSONObject               `json:"access"`
+	Warnings            []string                 `json:"warnings"`
+	Review              JSONObject               `json:"review"`
+	Advisory            string                   `json:"advisory"`
+	AutonomousAction    bool                     `json:"autonomous_action"`
+	SchemaVersion       string                   `json:"schema_version"`
+	CompatibilityPolicy string                   `json:"compatibility_policy"`
+	Extensions          JSONObject               `json:"extensions"`
 }
 
 // HealthResponse is returned by /health.
@@ -1192,6 +1267,51 @@ func (c *Client) Brief(ctx context.Context, req BriefRequest) (*JSONObject, erro
 func (c *Client) Ground(ctx context.Context, req GroundRequest) (*GroundResponse, error) {
 	var out GroundResponse
 	if err := c.post(ctx, "/ground", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowPreflight reads permission/policy findings without dispatching effects.
+func (c *Client) WorkflowPreflight(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/preflight", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowPreview inspects content-free effect metadata without execution.
+func (c *Client) WorkflowPreview(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/preview", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowStatus reads current custody metadata without retry or polling.
+func (c *Client) WorkflowStatus(ctx context.Context, req GovernedWorkflowReference) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/status", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowSubmitReceipt submits existing metadata; it does not issue an approval.
+func (c *Client) WorkflowSubmitReceipt(ctx context.Context, req GovernedWorkflowReview) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/review-receipts", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// WorkflowCancel requests cancellation intent without compensation or automatic retry.
+func (c *Client) WorkflowCancel(ctx context.Context, req GovernedWorkflowMutation) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/workflows/cancel", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

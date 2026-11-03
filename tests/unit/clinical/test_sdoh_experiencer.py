@@ -219,17 +219,15 @@ def test_preclassified_value_free_evidence_can_be_filtered_and_round_tripped():
     assert SDOHExperiencerEvidence.from_dict(records[0].to_dict()) == records[0]
 
 
-@pytest.mark.parametrize(
-    ("bad_evidence", "message"),
-    [
+def test_invalid_input_errors_are_content_free(subtests):
+    for bad_evidence, message in [
         ({"start": -1, "end": 2}, "offsets"),
         ({"start": 0, "end": 200}, "source text"),
-    ],
-)
-def test_invalid_input_errors_are_content_free(bad_evidence, message):
-    text = "factor alpha"
+    ]:
+        with subtests.test(bad_evidence=bad_evidence, message=message):
+            text = "factor alpha"
 
-    with pytest.raises((TypeError, ValueError), match=message) as exc_info:
-        classify_sdoh_experiencers(text, [bad_evidence])
+            with pytest.raises((TypeError, ValueError), match=message) as exc_info:
+                classify_sdoh_experiencers(text, [bad_evidence])
 
-    assert "factor alpha" not in str(exc_info.value)
+            assert "factor alpha" not in str(exc_info.value)

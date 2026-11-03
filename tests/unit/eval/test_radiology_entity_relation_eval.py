@@ -192,32 +192,30 @@ def test_negated_finding_scored_present_fails_g13_and_is_reported() -> None:
     assert "absent: 0.00%" in markdown
 
 
-@pytest.mark.parametrize(
-    ("field", "floor", "violation"),
-    [
+def test_g13_fails_when_any_floor_is_breached(subtests) -> None:
+    for field, floor, violation in [
         ("entity", G13_STRICT_ENTITY_F1_FLOOR, "strict_entity_f1"),
         ("relation", G13_STRICT_RELATION_F1_FLOOR, "strict_relation_f1"),
         ("uncertainty", G13_UNCERTAINTY_ACCURACY_FLOOR, "uncertainty_accuracy"),
-    ],
-)
-def test_g13_fails_when_any_floor_is_breached(field, floor, violation) -> None:
-    evidence = {
-        "entity": {"strict": {"f1": 1.0}},
-        "relation": {"strict": {"f1": 1.0}, "per_relation_type": {}},
-        "uncertainty": {"accuracy": 1.0, "per_class": {}},
-    }
-    if field == "uncertainty":
-        evidence[field]["accuracy"] = floor - 0.001
-    else:
-        evidence[field]["strict"]["f1"] = floor - 0.001
+    ]:
+        with subtests.test(field=field, floor=floor, violation=violation):
+            evidence = {
+                "entity": {"strict": {"f1": 1.0}},
+                "relation": {"strict": {"f1": 1.0}, "per_relation_type": {}},
+                "uncertainty": {"accuracy": 1.0, "per_class": {}},
+            }
+            if field == "uncertainty":
+                evidence[field]["accuracy"] = floor - 0.001
+            else:
+                evidence[field]["strict"]["f1"] = floor - 0.001
 
-    check = evaluate_radiology_entity_relation_gate(
-        {"radiology_entity_relation": evidence},
-        {"radiology_entity_relation_required": True},
-    )
+            check = evaluate_radiology_entity_relation_gate(
+                {"radiology_entity_relation": evidence},
+                {"radiology_entity_relation_required": True},
+            )
 
-    assert check.passed is False
-    assert set(check.details["violations"]) == {violation}
+            assert check.passed is False
+            assert set(check.details["violations"]) == {violation}
 
 
 def test_committed_radiology_fixture_validation_fails_closed() -> None:
