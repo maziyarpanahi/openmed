@@ -470,6 +470,7 @@ classification:
     - multimodal/manifest-profiles.md
     - multimodal/asset-limits.md
     - multimodal/batch-memory-estimates.md
+    - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
@@ -477,6 +478,7 @@ classification:
     - multimodal/processing-summaries.md
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
+    - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/audio-windows.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
