@@ -108,6 +108,7 @@ classification:
     - cli/result-envelope.md
     - cli/help-drift.md
     - cli/machine-contract.md
+    - cli/service-recovery.md
     - onboarding-china.md
     - onboarding-india.md
     - agent/index.md

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add a local `openmed service-recovery` operator CLI with read-only inspect, plan and verify commands and explicit apply commands that bind single-use approvals to the exact plan, active generation and state digest (#3703).
+
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
 - Define an offline edge-VLM provider contract with bounded image/prompt inputs, source-linked evidence, model/preprocessing digests, shared abstentions, content-free reports and explicit human review for non-diagnostic drafts (#2791).
