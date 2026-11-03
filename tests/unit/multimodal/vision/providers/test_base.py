@@ -186,7 +186,7 @@ def test_prompt_limits(vlm_request, field, value):
 
 
 @pytest.mark.parametrize(
-    "score", [float("nan"), float("inf"), -0.1, 1.1, True, PRIVATE]
+    "score", [float("nan"), float("inf"), -0.1, 1.1, 10**1000, True, PRIVATE]
 )
 def test_confidence_rejects_invalid_scores(score):
     with pytest.raises(VLMContractError):
@@ -310,7 +310,7 @@ def test_output_span_integrity_and_invalid_nested_contracts(vlm_request):
         replace(result, evidence=result.evidence * 257)
     with pytest.raises(VLMContractError):
         replace(result, evidence=[result.evidence[0]])
-    for value in (float("nan"), -1, True):
+    for value in (float("nan"), -1, 10**1000, True):
         with pytest.raises(VLMContractError):
             replace(result.runtime, duration_ms=value)
     with pytest.raises(VLMContractError):

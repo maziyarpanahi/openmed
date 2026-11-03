@@ -223,7 +223,7 @@ class Confidence:
     def __post_init__(self) -> None:
         if self.score is not None:
             _require(type(self.score) in (float, int))
-            _require(math.isfinite(self.score) and 0 <= self.score <= 1)
+            _require(0 <= self.score <= 1 and math.isfinite(self.score))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -298,7 +298,7 @@ class RuntimeMetadata:
         _require(type(self.provider) is LocalProviderMetadata)
         _require(type(self.duration_ms) in (int, float))
         _require(
-            math.isfinite(self.duration_ms) and 0 <= self.duration_ms <= 86_400_000
+            0 <= self.duration_ms <= 86_400_000 and math.isfinite(self.duration_ms)
         )
         _integer(self.output_tokens, 0, 4096)
 
