@@ -56,7 +56,7 @@ reported as `transfer_syntax_unknown` / `transfer_syntax_private`.
 The reader accepts `bytes`, `bytearray`, or `memoryview` and stops at the end of
 group `0002` (or at the first element that belongs to another group). It checks
 the 128-byte preamble, the `DICM` magic, then parses explicit-VR little-endian
-elements until it has `(0002,0010) TransferSyntaxUID`. A declared group length
+elements through the bounded group end, including after `(0002,0010) TransferSyntaxUID`. Duplicate or out-of-order tags, invalid reserved bytes and invalid UID padding are rejected. A declared group length
 that disagrees with the parsed group end is reported instead of trusted.
 
 Bounds are explicit keyword-only arguments and default to
@@ -87,8 +87,8 @@ pixels, paths, patient tags, or any other UID, and the reader imports no imaging
 library.
 
 Buffer limits are enforced on the bytes handed in: an oversized buffer is read
-up to the bound and the rest ignored, and a truncated group is reported as
-`file_meta_truncated` rather than parsed optimistically.
+up to the bound **before copying**, and a truncated group is reported as
+`file_meta_truncated` rather than parsed optimistically. Finding an early readable UID never overrides a later truncation or element-limit failure. Contiguous memory views are supported; released or strided views raise a value-free argument error.
 
 ## Not in scope
 
@@ -102,3 +102,5 @@ type detection catalog.
 ```bash
 uv run --frozen --extra dev pytest tests/unit/multimodal/test_dicom_transfer_syntax.py -q
 ```
+
+The file-meta boundary and element encoding checks follow [DICOM PS3.10 section 7](https://dicom.nema.org/medical/dicom/current/output/chtml/part10/chapter_7.html) and [PS3.5 section 7](https://dicom.nema.org/medical/dicom/current/output/chtml/part05/chapter_7.html). This bounded preflight does not establish full-file conformance.

@@ -447,18 +447,27 @@ def read_dicom_transfer_syntax(
     arguments raise :class:`TransferSyntaxError`.
     """
 
-    for name, value in (
+    for name, bound in (
         ("max_bytes", max_bytes),
         ("max_elements", max_elements),
         ("max_uid_bytes", max_uid_bytes),
     ):
-        if type(value) is not int or value <= 0:
+        if type(bound) is not int or bound <= 0:
             raise TransferSyntaxError(f"{name}_invalid")
     if not isinstance(source, (bytes, bytearray, memoryview)):
         raise TransferSyntaxError("source_invalid")
 
-    raw = bytes(source)
-    bounded = raw[:max_bytes]
+    bounded = None
+    source_bytes = 0
+    try:
+        view = memoryview(source).cast("B")
+        source_bytes = view.nbytes
+        # Slice before copying: a caller may supply a very large pixel buffer.
+        bounded = bytes(view[:max_bytes])
+    except (TypeError, ValueError):
+        pass
+    if bounded is None:
+        raise TransferSyntaxError("source_invalid")
     if len(bounded) < _DICOM_PREAMBLE_BYTES + len(_DICOM_MAGIC):
         return _unsupported("file_meta_missing", file_meta_bytes=len(bounded))
     if bounded[_DICOM_PREAMBLE_BYTES : _DICOM_PREAMBLE_BYTES + 4] != _DICOM_MAGIC:
@@ -474,13 +483,21 @@ def read_dicom_transfer_syntax(
     group_length_end: int | None = None
     element_limit_hit = False
     group_terminated = False
-    truncated = len(raw) > max_bytes
+    truncated = False
+    previous_element = -1
 
     while offset < len(bounded):
-        if element_count >= max_elements:
-            element_limit_hit = True
+        if (
+            group_length is not None
+            and group_length_end is not None
+            and offset == group_length_end + group_length
+            and offset + 4 > len(bounded)
+        ):
+            # A byte bound may cut the following dataset tag. The already
+            # complete meta group does not require any dataset body bytes.
+            group_terminated = True
             break
-        if offset + 8 > len(bounded):
+        if offset + 4 > len(bounded):
             truncated = True
             break
         group = int.from_bytes(bounded[offset : offset + 2], "little")
@@ -488,6 +505,19 @@ def read_dicom_transfer_syntax(
         if group != _FILE_META_GROUP:
             group_terminated = True
             break
+        if element_count >= max_elements:
+            element_limit_hit = True
+            break
+        if offset + 8 > len(bounded):
+            truncated = True
+            break
+        if element <= previous_element:
+            return _unsupported(
+                "file_meta_malformed",
+                file_meta_bytes=parsed_bytes,
+                element_count=element_count,
+            )
+        previous_element = element
         vr = bounded[offset + 4 : offset + 6]
         if vr in _EXPLICIT_VR_SHORT:
             length = int.from_bytes(bounded[offset + 6 : offset + 8], "little")
@@ -496,6 +526,12 @@ def read_dicom_transfer_syntax(
             if offset + 12 > len(bounded):
                 truncated = True
                 break
+            if bounded[offset + 6 : offset + 8] != b"\x00\x00":
+                return _unsupported(
+                    "file_meta_malformed",
+                    file_meta_bytes=parsed_bytes,
+                    element_count=element_count,
+                )
             length = int.from_bytes(bounded[offset + 8 : offset + 12], "little")
             value_start = offset + 12
         else:
@@ -538,7 +574,7 @@ def read_dicom_transfer_syntax(
                     file_meta_bytes=parsed_bytes,
                     element_count=element_count,
                 )
-            text = value.rstrip(b"\x00 ").decode("ascii", errors="replace")
+            text = value.removesuffix(b"\x00").decode("ascii", errors="replace")
             if not _valid_uid(text):
                 return _unsupported(
                     "transfer_syntax_malformed",
@@ -550,6 +586,27 @@ def read_dicom_transfer_syntax(
         parsed_bytes = value_end
         offset = value_end
 
+    declared_end = (
+        group_length_end + group_length
+        if group_length is not None and group_length_end is not None
+        else None
+    )
+    if element_limit_hit:
+        return _unsupported(
+            "file_meta_element_limit",
+            file_meta_bytes=parsed_bytes,
+            element_count=element_count,
+        )
+    if not group_terminated and (
+        truncated
+        or (declared_end is not None and declared_end > len(bounded))
+        or (source_bytes > len(bounded) and offset != declared_end)
+    ):
+        return _unsupported(
+            "file_meta_truncated",
+            file_meta_bytes=parsed_bytes,
+            element_count=element_count,
+        )
     if declared_uid is None:
         if element_limit_hit:
             reason = "file_meta_element_limit"
@@ -563,7 +620,7 @@ def read_dicom_transfer_syntax(
             reason, file_meta_bytes=parsed_bytes, element_count=element_count
         )
 
-    if group_terminated and group_length is not None and group_length_end is not None:
+    if group_length is not None and group_length_end is not None:
         if offset != group_length_end + group_length:
             return _unsupported(
                 "file_meta_group_length_mismatch",

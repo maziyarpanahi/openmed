@@ -98,10 +98,10 @@ def _file_meta(
     body += _element((0x0002, 0x0001), b"OB", b"\x00\x01")
     body += _element((0x0002, 0x0002), b"UI", _padded_uid(_SOP_CLASS_UID))
     body += _element((0x0002, 0x0003), b"UI", _padded_uid(_SOP_INSTANCE_UID))
-    body += _element((0x0002, 0x0016), b"AE", _LOCAL_PATH.encode("ascii"))
     body += extra_body
     if ts_uid is not None:
         body += _element((0x0002, 0x0010), b"UI", _padded_uid(ts_uid))
+    body += _element((0x0002, 0x0016), b"AE", _LOCAL_PATH.encode("ascii"))
     declared = len(body) if group_length is None else group_length
     head = _element((0x0002, 0x0000), b"UL", struct.pack("<I", declared))
     tail = _element((0x0008, 0x0005), b"CS", b"ISO_IR 100")
@@ -489,3 +489,80 @@ def test_reads_run_without_network(monkeypatch: pytest.MonkeyPatch) -> None:
         report = _read(_file_meta(uid))
         assert report.reason
     assert _read(_file_meta()).reason == "transfer_syntax_missing"
+
+
+@pytest.mark.parametrize("case", ["truncated", "duplicate", "limited", "group_length"])
+def test_readable_uid_never_overrides_incomplete_or_conflicting_group(case):
+    uid = _element((2, 16), b"UI", _padded_uid("1.2.840.10008.1.2.1"))
+    prefix = _PREAMBLE + _MAGIC
+    kwargs = {}
+    if case == "truncated":
+        payload = prefix + uid + struct.pack("<HH2sH", 2, 18, b"UI", 60)
+    elif case == "duplicate":
+        payload = prefix + uid + uid
+    elif case == "limited":
+        payload = prefix + uid + _element((2, 18), b"UI", b"12")
+        kwargs = {"max_elements": 1}
+    else:
+        payload = (
+            prefix + _element((2, 0), b"UL", struct.pack("<I", len(uid) + 20)) + uid
+        )
+    report = _read(payload, **kwargs)
+    assert report.outcome is TransferSyntaxOutcome.UNSUPPORTED
+    assert report.ok is False
+
+
+def test_exact_element_limit_allows_complete_group_but_not_another_meta_element():
+    payload = _file_meta("1.2.840.10008.1.2.1")
+    assert _read(payload, max_elements=6).ok
+    assert _read(payload, max_elements=5).reason == "file_meta_element_limit"
+
+
+def test_exact_complete_meta_byte_boundary_does_not_copy_or_require_pixel_body():
+    payload = bytearray(_file_meta("1.2.840.10008.1.2.1"))
+    boundary = _group_end(payload)
+    for extra in range(4):
+        assert _read(payload, max_bytes=boundary + extra).ok
+    assert _read(payload, max_bytes=boundary - 1).reason == "file_meta_truncated"
+
+
+def test_bytes_conversion_receives_only_bounded_slice(monkeypatch):
+    import openmed.multimodal.dicom_transfer_syntax as module
+
+    payload = bytearray(_file_meta("1.2.840.10008.1.2.1"))
+    payload.extend(b"\x00" * 10_000)
+    seen = []
+
+    class RecordingBytes(bytes):
+        def __new__(cls, value):
+            seen.append(len(value))
+            return super().__new__(cls, value)
+
+    monkeypatch.setattr(module, "bytes", RecordingBytes, raising=False)
+    assert module.read_dicom_transfer_syntax(payload, max_bytes=512).ok
+    assert seen == [512]
+
+
+def test_noncontiguous_or_released_views_raise_value_free_argument_errors():
+    sources = [memoryview(b"abcdef")[::2], memoryview(b"abc")]
+    sources[1].release()
+    for source in sources:
+        with pytest.raises(TransferSyntaxError) as error:
+            _read(source)
+        assert error.value.category == "source_invalid"
+        assert error.value.__context__ is None
+
+
+@pytest.mark.parametrize("suffix", [b"  ", b"\x00\x00"])
+def test_uid_rejects_invalid_repeated_or_space_padding(suffix):
+    value = b"1.2.840.10008.1.2" + suffix + b"\x00"
+    assert (
+        _read(_PREAMBLE + _MAGIC + _element((2, 16), b"UI", value)).reason
+        == "transfer_syntax_malformed"
+    )
+
+
+def test_long_vr_reserved_bytes_must_be_zero():
+    payload = bytearray(_file_meta("1.2.840.10008.1.2.1"))
+    payload[150:152] = b"XY"
+    assert _read(payload).reason == "file_meta_malformed"
