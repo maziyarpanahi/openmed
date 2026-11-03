@@ -420,6 +420,7 @@ nav:
       - Content-free Provider Results: multimodal/provider-results.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
