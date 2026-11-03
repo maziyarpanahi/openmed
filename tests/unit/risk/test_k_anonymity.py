@@ -164,10 +164,11 @@ def test_every_row_must_contain_scalar_quasi_identifiers() -> None:
         analyze_k_anonymity([{"age": [30]}], ["age"])
 
 
-@pytest.mark.parametrize("target_k", [0, -1, 1.5, True])
-def test_rejects_invalid_target_k(target_k: object) -> None:
-    with pytest.raises(ValueError, match="integer >= 1"):
-        KAnonymityEngine(["age"], target_k=target_k)  # type: ignore[arg-type]
+def test_rejects_invalid_target_k(subtests) -> None:
+    for target_k in [0, -1, 1.5, True]:
+        with subtests.test(target_k=target_k):
+            with pytest.raises(ValueError, match="integer >= 1"):
+                KAnonymityEngine(["age"], target_k=target_k)  # type: ignore[arg-type]
 
 
 def test_rejects_missing_or_unknown_quasi_identifier_columns() -> None:

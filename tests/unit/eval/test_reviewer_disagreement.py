@@ -228,12 +228,11 @@ def test_rejects_untyped_or_inconsistent_disagreement_metadata() -> None:
         reviewer_disagreement_report(inconsistent, minimum_cell_size=2)
 
 
-@pytest.mark.parametrize("minimum_cell_size", [True, 1, 2.5])
-def test_minimum_cell_size_must_protect_more_than_one_case(
-    minimum_cell_size: object,
-) -> None:
-    with pytest.raises(ValueError, match="integer >= 2"):
-        reviewer_disagreement_report(
-            _case(1, "accept", "accept"),
-            minimum_cell_size=minimum_cell_size,  # type: ignore[arg-type]
-        )
+def test_minimum_cell_size_must_protect_more_than_one_case(subtests) -> None:
+    for minimum_cell_size in [True, 1, 2.5]:
+        with subtests.test(minimum_cell_size=minimum_cell_size):
+            with pytest.raises(ValueError, match="integer >= 2"):
+                reviewer_disagreement_report(
+                    _case(1, "accept", "accept"),
+                    minimum_cell_size=minimum_cell_size,  # type: ignore[arg-type]
+                )

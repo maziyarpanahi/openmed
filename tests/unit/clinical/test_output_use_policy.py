@@ -48,27 +48,25 @@ def test_default_policy_allows_reviewed_synthetic_documentation() -> None:
     }
 
 
-@pytest.mark.parametrize(
-    "alias,conflicting_value",
-    [
+def test_multiple_mapping_aliases_fail_closed(subtests) -> None:
+    for alias, conflicting_value in [
         ("output_category", "action"),
         ("declared_purpose", "clinical_decision"),
         ("intended_audience", "patient"),
         ("review", "rejected"),
         ("decision_trigger", True),
         ("policy_digest", "synthetic-unknown-policy"),
-    ],
-)
-def test_multiple_mapping_aliases_fail_closed(alias, conflicting_value) -> None:
-    payload = _reviewable_summary().to_dict()
-    payload[alias] = conflicting_value
-    decision = evaluate_output_use(payload)
-    assert not decision.allowed
-    assert decision.reason_codes == ("declaration_ambiguous",)
-    with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
-        OutputUseDeclaration.from_mapping(payload)
-    with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
-        enforce_output_use(payload)
+    ]:
+        with subtests.test(alias=alias, conflicting_value=conflicting_value):
+            payload = _reviewable_summary().to_dict()
+            payload[alias] = conflicting_value
+            decision = evaluate_output_use(payload)
+            assert not decision.allowed
+            assert decision.reason_codes == ("declaration_ambiguous",)
+            with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
+                OutputUseDeclaration.from_mapping(payload)
+            with pytest.raises(OutputUsePolicyError, match="declaration_ambiguous"):
+                enforce_output_use(payload)
 
 
 def test_keyword_and_mapping_forms_are_equivalent() -> None:
@@ -96,9 +94,8 @@ def test_keyword_and_mapping_forms_are_equivalent() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("field", "expected"),
-    [
+def test_undeclared_metadata_fails_closed_without_echoing_values(subtests) -> None:
+    for field, expected in [
         ("category", OutputUseReasonCode.CATEGORY_UNDECLARED.value),
         ("purpose", OutputUseReasonCode.PURPOSE_UNDECLARED.value),
         ("audience", OutputUseReasonCode.AUDIENCE_UNDECLARED.value),
@@ -111,20 +108,18 @@ def test_keyword_and_mapping_forms_are_equivalent() -> None:
             "policy_fingerprint",
             OutputUseReasonCode.POLICY_FINGERPRINT_UNDECLARED.value,
         ),
-    ],
-)
-def test_undeclared_metadata_fails_closed_without_echoing_values(
-    field: str,
-    expected: str,
-) -> None:
-    declaration = _reviewable_summary()
-    object.__setattr__(declaration, field, None)
+    ]:
+        with subtests.test(field=field, expected=expected):
+            declaration = _reviewable_summary()
+            object.__setattr__(declaration, field, None)
 
-    decision = evaluate_output_use(declaration, policy=DEFAULT_OUTPUT_USE_POLICY)
+            decision = evaluate_output_use(
+                declaration, policy=DEFAULT_OUTPUT_USE_POLICY
+            )
 
-    assert decision.allowed is False
-    assert expected in decision.reason_codes
-    assert "synthetic" not in json.dumps(decision.to_dict())
+            assert decision.allowed is False
+            assert expected in decision.reason_codes
+            assert "synthetic" not in json.dumps(decision.to_dict())
 
 
 def test_incompatible_category_purpose_and_audience_fail_closed() -> None:
@@ -154,25 +149,22 @@ def test_decision_triggering_use_is_denied_even_when_other_fields_match() -> Non
     assert decision.reason_codes == (OutputUseReasonCode.DECISION_TRIGGERING_USE.value,)
 
 
-@pytest.mark.parametrize(
-    ("review_state", "expected"),
-    [
+def test_release_requires_the_rule_review_state(subtests) -> None:
+    for review_state, expected in [
         ("draft", OutputUseReasonCode.REVIEW_STATE_INSUFFICIENT.value),
         ("pending_review", OutputUseReasonCode.REVIEW_STATE_INSUFFICIENT.value),
         ("rejected", OutputUseReasonCode.REVIEW_REJECTED.value),
-    ],
-)
-def test_release_requires_the_rule_review_state(
-    review_state: str,
-    expected: str,
-) -> None:
-    declaration = _reviewable_summary()
-    object.__setattr__(declaration, "review_state", review_state)
+    ]:
+        with subtests.test(review_state=review_state, expected=expected):
+            declaration = _reviewable_summary()
+            object.__setattr__(declaration, "review_state", review_state)
 
-    decision = evaluate_output_use(declaration, policy=DEFAULT_OUTPUT_USE_POLICY)
+            decision = evaluate_output_use(
+                declaration, policy=DEFAULT_OUTPUT_USE_POLICY
+            )
 
-    assert decision.allowed is False
-    assert expected in decision.reason_codes
+            assert decision.allowed is False
+            assert expected in decision.reason_codes
 
 
 def test_policy_fingerprint_is_order_independent_and_binds_rules() -> None:
