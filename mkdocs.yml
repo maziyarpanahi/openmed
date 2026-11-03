@@ -482,6 +482,7 @@ nav:
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
       - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md

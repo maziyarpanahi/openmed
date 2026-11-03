@@ -542,6 +542,7 @@ classification:
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
     - multimodal/dicom-transfer-syntax-preflight.md
+    - multimodal/vision/dicom-series-sampling.md
     - evaluation/model-provenance-diff.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md

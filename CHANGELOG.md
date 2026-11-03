@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
+
 - Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
   declared file-meta transfer syntaxes into closed native, optional-decoder,
   review, and unsupported outcomes with stable reason codes, and reports no
