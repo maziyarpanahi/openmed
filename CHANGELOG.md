@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gate sustained local VLM execution and speech PHI screening on measured latency, queue age, fresh thermal state and memory pressure, preserving fallback history and withholding stale outputs (#2820).
+
 - Compare versioned local multimodal provider capability declarations against content-free modality profiles, with stable exact, transform-required, unsupported and missing-capability JSON and Markdown reports (#3095).
 
 - Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
