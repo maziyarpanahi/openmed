@@ -482,6 +482,7 @@ classification:
     - multimodal/fused-evidence-graphs.md
     - multimodal/vision/handwriting-uncertainty.md
     - multimodal/vision/visual-form-grounding.md
+    - multimodal/ocr-vlm-disagreements.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md

@@ -422,6 +422,7 @@ nav:
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
       - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
