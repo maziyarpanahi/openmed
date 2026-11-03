@@ -1,7 +1,95 @@
 {
-  "$id": "https://openmed.dev/schemas/decision-result/1.0.0",
+  "$id": "https://openmed.dev/schemas/decision-result/1.1.0",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "required": [
+          "questions",
+          "level_scores",
+          "expected_level"
+        ]
+      },
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.0.0"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "questions"
+              ]
+            },
+            {
+              "required": [
+                "level_scores"
+              ]
+            },
+            {
+              "required": [
+                "expected_level"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "mode": {
+            "not": {
+              "const": "question_set"
+            }
+          }
+        }
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "questions": {
+            "maxItems": 0
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "question_set"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "else": {
+        "properties": {
+          "expected_level": {
+            "type": "null"
+          },
+          "level_scores": {
+            "maxItems": 0
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "scalar_score"
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "access": {
       "additionalProperties": false,
@@ -197,8 +285,44 @@
         "null"
       ]
     },
+    "expected_level": {
+      "maximum": 63,
+      "minimum": 0,
+      "type": [
+        "number",
+        "null"
+      ]
+    },
     "extensions": {
       "type": "object"
+    },
+    "level_scores": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "level": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "score": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "index",
+          "level",
+          "score"
+        ],
+        "type": "object"
+      },
+      "maxItems": 64,
+      "type": "array"
     },
     "margin": {
       "maximum": 1,
@@ -214,7 +338,8 @@
         "boolean_choice",
         "ordered_preference",
         "scalar_score",
-        "multi_label"
+        "multi_label",
+        "question_set"
       ],
       "type": "string"
     },
@@ -244,6 +369,236 @@
         "type": "object"
       },
       "maxItems": 64,
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "else": {
+              "properties": {
+                "expected_level": {
+                  "type": "null"
+                },
+                "level_scores": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "scalar_score"
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "choice": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "choices": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "expected_level": {
+            "maximum": 63,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "level_scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "level": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "index",
+                "level",
+                "score"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "margin": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "fixed_choice",
+              "boolean_choice",
+              "ordered_preference",
+              "scalar_score",
+              "multi_label"
+            ],
+            "type": "string"
+          },
+          "option_scores": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "index": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "option": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "score": {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "index",
+                "option",
+                "score"
+              ],
+              "type": "object"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "question_id": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$",
+            "type": "string"
+          },
+          "ranking": {
+            "items": {
+              "maxLength": 256,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "review": {
+            "additionalProperties": false,
+            "properties": {
+              "reasons": {
+                "items": {
+                  "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "required": {
+                "const": true,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "required",
+              "reasons"
+            ],
+            "type": "object"
+          },
+          "scalar_score": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "state": {
+            "enum": [
+              "success",
+              "abstained",
+              "partial",
+              "unknown",
+              "conflict",
+              "unsupported",
+              "denied",
+              "failure"
+            ],
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "pattern": "^[a-z][a-z0-9_.:/-]{0,127}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "question_id",
+          "mode",
+          "state",
+          "code",
+          "option_scores",
+          "choice",
+          "choices",
+          "ranking",
+          "scalar_score",
+          "confidence",
+          "margin",
+          "level_scores",
+          "expected_level",
+          "warnings",
+          "review"
+        ],
+        "type": "object"
+      },
+      "maxItems": 32,
       "type": "array"
     },
     "ranking": {
@@ -287,7 +642,10 @@
       ]
     },
     "schema_version": {
-      "const": "1.0.0",
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ],
       "type": "string"
     },
     "state": {

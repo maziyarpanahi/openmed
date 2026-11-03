@@ -18,15 +18,23 @@ from openmed.interop.tools import (
 )
 from openmed.structured.decision import (
     DECISION_COMPATIBILITY_POLICY,
-    DECISION_SCHEMA_VERSION,
     DEFAULT_CALIBRATION_ID,
     decision_request_schema,
+)
+from openmed.structured.decision import (
+    DECISION_SCHEMA_VERSION as DECISION_SCHEMA_VERSION,
+)
+from openmed.structured.decision import (
+    MAX_CONFIGURABLE_INPUT_CHARS as DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
 )
 from openmed.structured.decision import (
     MAX_INPUT_CHARS as DECISION_MAX_INPUT_CHARS,
 )
 from openmed.structured.decision import (
     MAX_OPTIONS as DECISION_MAX_OPTIONS,
+)
+from openmed.structured.decision import (
+    MAX_QUESTIONS as DECISION_MAX_QUESTIONS,
 )
 from openmed.structured.decision import (
     MAX_TIMEOUT_MS as DECISION_MAX_TIMEOUT_MS,
@@ -37,7 +45,9 @@ from openmed.structured.decision import (
 from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import (
     validate_confidence_threshold,
-    validate_model_name,
+)
+from openmed.utils.validation import (
+    validate_model_name as validate_model_name,
 )
 
 from .keep_alive import parse_keep_alive
@@ -79,7 +89,9 @@ def _normalize_pii_language(value: Any) -> str:
 
 
 def _normalize_model_name(value: str) -> str:
-    return validate_model_name(value)
+    # The service runtime enforces its operator-declared served set. Request
+    # parsing must never expand or probe caller-selected filesystem paths.
+    return value
 
 
 def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
@@ -308,6 +320,11 @@ if PYDANTIC_V2:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -317,6 +334,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -347,6 +369,11 @@ if PYDANTIC_V2:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @field_validator("lang", mode="before")
         @classmethod
@@ -407,6 +434,11 @@ if PYDANTIC_V2:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -675,6 +707,10 @@ else:
 
         keep_alive: Optional[KeepAliveValue] = None
 
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
@@ -683,6 +719,10 @@ else:
         """Request schema for /pii/extract."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -711,6 +751,10 @@ else:
         """Request schema for /pii/deidentify."""
 
         keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
 
         @validator("lang", pre=True)
         def _validate_language(cls, value: Any) -> str:
@@ -763,6 +807,10 @@ else:
 
     class ModelUnloadRequest(UnloadModelArgs):
         """Request schema for /models/unload."""
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            return value
 
     class SMARTBackendIngestionRequest(_StrictModel):
         """Request schema for starting SMART backend-services ingestion."""
@@ -998,23 +1046,47 @@ DecisionModeValue = Literal[
     "ordered_preference",
     "scalar_score",
     "multi_label",
+    "question_set",
 ]
 
 
-def _decision_options_field() -> Any:
-    constraints = (
-        {"max_length": DECISION_MAX_OPTIONS}
-        if PYDANTIC_V2
-        else {"max_items": DECISION_MAX_OPTIONS}
-    )
+def _decision_list_field(maximum: int, *, optional: bool = False) -> Any:
+    constraints = {"max_length": maximum} if PYDANTIC_V2 else {"max_items": maximum}
+    if optional:
+        return Field(default=None, **constraints)
     return Field(default_factory=list, **constraints)
 
 
+def _decision_options_field() -> Any:
+    return _decision_list_field(DECISION_MAX_OPTIONS)
+
+
+def _check_decision_input_bound(input_text: Any, max_input_chars: Any) -> None:
+    """Keep the 1.0.0 input bound unless a request raises it explicitly."""
+
+    if (
+        max_input_chars is None
+        and isinstance(input_text, str)
+        and len(input_text) > DECISION_MAX_INPUT_CHARS
+    ):
+        raise ValueError(
+            f"input_text exceeds {DECISION_MAX_INPUT_CHARS} characters; "
+            "set max_input_chars to raise the bound"
+        )
+
+
 class FixedOptionDecisionRequest(_StrictModel):
-    """Canonical bounded request for ``POST /v1/decisions``."""
+    """Canonical bounded request for ``POST /v1/decisions``.
+
+    The OpenAPI component is the canonical decision request schema; the core
+    contract performs the full validation, including question sets.
+    """
 
     mode: DecisionModeValue
-    input_text: str = Field(min_length=1, max_length=DECISION_MAX_INPUT_CHARS)
+    input_text: str = Field(
+        min_length=1,
+        max_length=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
     options: list[str] = _decision_options_field()
     namespace: str = "default"
     purpose: str = "care_review"
@@ -1024,19 +1096,47 @@ class FixedOptionDecisionRequest(_StrictModel):
         ge=DECISION_MIN_TIMEOUT_MS,
         le=DECISION_MAX_TIMEOUT_MS,
     )
-    schema_version: Literal["1.0.0"] = DECISION_SCHEMA_VERSION
+    schema_version: Optional[Literal["1.0.0", "1.1.0"]] = None
     compatibility_policy: Literal["same_major"] = DECISION_COMPATIBILITY_POLICY
+    question_id: Optional[str] = None
+    instructions: Optional[str] = None
+    option_descriptions: Optional[list[Optional[str]]] = _decision_list_field(
+        DECISION_MAX_OPTIONS,
+        optional=True,
+    )
+    levels: list[str] = _decision_list_field(DECISION_MAX_OPTIONS)
+    questions: list[dict[str, Any]] = _decision_list_field(DECISION_MAX_QUESTIONS)
+    input_format: Literal["text", "json"] = "text"
+    max_input_chars: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=DECISION_MAX_CONFIGURABLE_INPUT_CHARS,
+    )
 
     if PYDANTIC_V2:
         model_config = ConfigDict(
             extra="forbid",
             json_schema_extra=decision_request_schema(),
         )
+
+        @model_validator(mode="after")
+        def _validate_input_bound(self) -> "FixedOptionDecisionRequest":
+            _check_decision_input_bound(self.input_text, self.max_input_chars)
+            return self
+
     else:  # pragma: no cover
 
         class Config:
             extra = "forbid"
             schema_extra = decision_request_schema()
+
+        @root_validator
+        def _validate_input_bound(cls, values: dict[str, Any]) -> dict[str, Any]:
+            _check_decision_input_bound(
+                values.get("input_text"),
+                values.get("max_input_chars"),
+            )
+            return values
 
 
 class GroundCandidateResponse(_StrictModel):
@@ -1289,3 +1389,226 @@ class BriefResponse(_StrictModel):
     provenance: dict[str, Any]
     profile_digest: Optional[str]
     backend_id: Optional[str]
+    generation_contract: Optional[dict[str, Any]] = None
+    claim_bindings: Optional[list[dict[str, Any]]] = None
+
+
+def workflow_http_schemas() -> dict[str, dict[str, Any]]:
+    """Derive bounded HTTP schemas from the existing governance wire types.
+
+    Python parsers remain authoritative for cross-field bindings, digest
+    comparisons, contiguous effect ordinals and durable custody. JSON Schema
+    describes the exact fields and vocabularies; it does not grant permission.
+    """
+    import copy
+    import re
+    from dataclasses import fields
+
+    from openmed.agent import identifiers
+    from openmed.agent.action_phases import ActionPhase
+    from openmed.agent.approvals import tokens
+    from openmed.agent.correlation import (
+        ACTION_ID_PREFIX,
+        CORRELATION_TOKEN_BYTES,
+        RUN_ID_PREFIX,
+    )
+    from openmed.agent.outcomes import (
+        OUTCOME_SCHEMA_VERSION,
+        OutcomeClass,
+        WorkflowOutcome,
+        allowed_reason_codes,
+    )
+    from openmed.agent.workflows.recovery import (
+        CompensationLimit,
+        EffectKind,
+        EffectRecord,
+        EffectState,
+    )
+
+    from .governed_workflows import (
+        MAX_WORKFLOW_EFFECTS,
+        WORKFLOW_ERROR_STATUSES,
+        WORKFLOW_REQUEST_VERSION,
+        WORKFLOW_RESPONSE_VERSION,
+    )
+
+    def fullmatch(pattern):
+        # Python's named capture groups are not ECMA-262 JSON Schema syntax.
+        pattern = re.sub(r"\(\?P<[^>]+>", "(?:", pattern)
+        return {"type": "string", "pattern": "^(?:" + pattern + r")$(?![\s\S])"}
+
+    def identifier(kind):
+        grammar = identifiers._IDENTIFIER_RE.pattern.replace(
+            "(?P<kind>[a-z]+):",
+            kind + rf":(?=[^/]{{1,{identifiers._MAX_NAMESPACE_LENGTH}}}/)",
+        )
+        return {**fullmatch(grammar), "maxLength": identifiers._MAX_IDENTIFIER_LENGTH}
+
+    def closed(properties, contract=None):
+        if contract is not None and set(properties) != {
+            f.name for f in fields(contract)
+        }:
+            raise RuntimeError("Governance wire schema drift.")
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": sorted(properties),
+            "additionalProperties": False,
+        }
+
+    def nullable(schema):
+        return {"anyOf": [schema, {"type": "null"}]}
+
+    digest = fullmatch(tokens._DIGEST_RE.pattern)
+    reference = closed(
+        {
+            "schema_version": {"type": "string", "const": WORKFLOW_REQUEST_VERSION},
+            "run_id": fullmatch(
+                RUN_ID_PREFIX + rf"[0-9a-f]{{{CORRELATION_TOKEN_BYTES * 2}}}"
+            ),
+            "workflow_id": identifier("workflow"),
+            "action_digest": digest,
+            "expected_state_digest": nullable(digest),
+            "request_id": nullable(fullmatch(r"req_[0-9a-f]{32}")),
+        }
+    )
+    mutation = copy.deepcopy(reference)
+    mutation["properties"]["expected_state_digest"] = digest
+    mutation["properties"]["request_id"] = fullmatch(r"req_[0-9a-f]{32}")
+    receipt = closed(
+        {
+            "schema_version": {
+                "type": "string",
+                "const": tokens.APPROVAL_RECEIPT_SCHEMA_VERSION,
+            },
+            "action_digest": digest,
+            "token_digest": digest,
+            "code": {"type": "string", "const": "approved"},
+        },
+        tokens.ApprovalReceipt,
+    )
+    review = closed({**mutation["properties"], "receipt": receipt})
+    effect = closed(
+        {
+            "ordinal": {"type": "integer", "minimum": 0},
+            "action_id": fullmatch(
+                ACTION_ID_PREFIX + rf"[0-9a-f]{{{CORRELATION_TOKEN_BYTES * 2}}}"
+            ),
+            "tool_id": identifier("tool"),
+            "kind": {"type": "string", "enum": [v.value for v in EffectKind]},
+            "operation_digest": digest,
+            "idempotency_key": fullmatch(r"idem_[0-9a-f]{64}"),
+            "approval_required": {"type": "boolean"},
+            "compensation_limit": {
+                "type": "string",
+                "enum": [v.value for v in CompensationLimit],
+            },
+            "state": {"type": "string", "enum": [v.value for v in EffectState]},
+            "commit_evidence_digest": nullable(digest),
+        },
+        EffectRecord,
+    )
+    effect["oneOf"] = [
+        {
+            "properties": {
+                "state": {"const": EffectState.PENDING.value},
+                "commit_evidence_digest": {"type": "null"},
+            }
+        },
+        {
+            "properties": {
+                "state": {"const": EffectState.COMMITTED.value},
+                "commit_evidence_digest": digest,
+            }
+        },
+    ]
+    outcome = {
+        "oneOf": [
+            closed(
+                {
+                    "schema_version": {
+                        "type": "string",
+                        "const": OUTCOME_SCHEMA_VERSION,
+                    },
+                    "outcome_class": {"type": "string", "const": value.value},
+                    "reason_code": {
+                        "type": "string",
+                        "enum": sorted(allowed_reason_codes(value)),
+                    },
+                },
+                WorkflowOutcome,
+            )
+            for value in OutcomeClass
+        ]
+    }
+    view = closed(
+        {
+            "schema_version": {"type": "string", "const": WORKFLOW_RESPONSE_VERSION},
+            "run_id": reference["properties"]["run_id"],
+            "workflow_id": reference["properties"]["workflow_id"],
+            "action_digest": digest,
+            "state_digest": digest,
+            "phase": {"type": "string", "enum": [v.value for v in ActionPhase]},
+            "effects": {
+                "type": "array",
+                "maxItems": MAX_WORKFLOW_EFFECTS,
+                "items": effect,
+            },
+            "preview_digest": digest,
+            "proposed_effect_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": MAX_WORKFLOW_EFFECTS,
+            },
+            "committed_effect_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": MAX_WORKFLOW_EFFECTS,
+            },
+            "outcome": nullable(outcome),
+            "receipt_digest": nullable(digest),
+            "cancellation_requested": {"type": "boolean"},
+        }
+    )
+    view["allOf"] = [
+        {
+            "if": {"properties": {"phase": {"const": ActionPhase.COMPLETED.value}}},
+            "then": {
+                "properties": {
+                    "effects": {
+                        "items": {
+                            "properties": {
+                                "state": {"const": EffectState.COMMITTED.value}
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    ]
+    error = closed(
+        {
+            "error": closed(
+                {
+                    "code": {"type": "string"},
+                    "message": {"type": "string"},
+                    "details": {
+                        "anyOf": [
+                            {"type": "array", "items": {}},
+                            {"type": "object"},
+                            {"type": "null"},
+                        ]
+                    },
+                }
+            )
+        }
+    )
+    error["properties"]["error"]["properties"]["request_id"] = {"type": "string"}
+    error["x-workflow-error-statuses"] = dict(WORKFLOW_ERROR_STATUSES)
+    return {
+        "reference": reference,
+        "mutation": mutation,
+        "review": review,
+        "view": view,
+        "error": error,
+    }

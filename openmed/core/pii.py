@@ -328,29 +328,6 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 _OCCURRENCE_MAPPING_PREFIX = "__openmed_occurrence_v1__:"
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset(
-    {
-        "fr",
-        "de",
-        "it",
-        "es",
-        "nl",
-        "hi",
-        "ml",
-        "mr",
-        "te",
-        "pt",
-        "ar",
-        "tr",
-        "cs",
-        "zu",
-        "xh",
-        "sv",
-        "da",
-        "no",
-        "vi",
-    }
-)
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
 # Repository-prefix allowlist for org/model identifiers that route through the
@@ -681,46 +658,8 @@ def _prepare_pii_text(
         chinese_target_script=(
             config.chinese_target_script if config is not None else None
         ),
+        lang=lang,
     )
-    language_code = lang.strip().replace("-", "_").split("_", 1)[0].casefold()
-    if language_code in {"ar", "fa", "ur"}:
-        from .pii_i18n import normalize_arabic_indic_digits
-
-        normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
-        folded_arabic_digits = sum(
-            before != after
-            for before, after in zip(
-                detection_normalization.text,
-                normalized_arabic,
-            )
-        )
-        if folded_arabic_digits:
-            detection_normalization = replace(
-                detection_normalization,
-                text=normalized_arabic,
-                folded_native_digits=(
-                    detection_normalization.folded_native_digits + folded_arabic_digits
-                ),
-            )
-    elif language_code == "kn":
-        from .pii_i18n import normalize_kannada_digits
-
-        normalized_kannada = normalize_kannada_digits(detection_normalization.text)
-        folded_kannada_digits = sum(
-            before != after
-            for before, after in zip(
-                detection_normalization.text,
-                normalized_kannada,
-            )
-        )
-        if folded_kannada_digits:
-            detection_normalization = replace(
-                detection_normalization,
-                text=normalized_kannada,
-                folded_native_digits=(
-                    detection_normalization.folded_native_digits + folded_kannada_digits
-                ),
-            )
     inference_text = detection_normalization.text
     if do_normalize:
         inference_text = _strip_accents(inference_text)
@@ -1136,6 +1075,9 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
         )
     if entity.get("india_clinical_merge"):
         metadata["india_clinical_merge"] = dict(entity["india_clinical_merge"])
+    if entity.get("calendar"):
+        # Value-free calendar code from a non-Gregorian month-name date rule.
+        metadata["calendar"] = str(entity["calendar"])
     return metadata or None
 
 
@@ -2356,6 +2298,12 @@ def _build_deidentification_result(
     if keep_mapping:
         mapping = _build_reidentification_mapping(mapping_occurrences)
 
+    # A redacted identifier can consume one end of a source bidi pair. Remove
+    # only newly orphaned controls; balanced surrounding presentation survives.
+    from .rtl_render import strip_unbalanced_bidi_controls
+
+    deidentified = strip_unbalanced_bidi_controls(deidentified)
+
     audit_report = None
     if audit:
         audit_report = _build_audit_report(
@@ -3038,18 +2986,36 @@ def _redact_entity(
         if _is_mixed_label_union(entity):
             return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(
+            from .anonymizer.digit_systems import render_in_source_digits
+
+            # Shift the ASCII fold and render the result in the source span's
+            # digit system and date separators.
+            return render_in_source_digits(
                 entity.text,
-                date_shift_days,
-                keep_year,
-                lang=lang,
-                require_dateutil=require_dateutil,
+                lambda source: _shift_date(
+                    source,
+                    date_shift_days,
+                    keep_year,
+                    lang=lang,
+                    require_dateutil=require_dateutil,
+                    calendar=_entity_calendar_hint(entity),
+                ),
             )
         else:
             # Non-date entities get masked
             return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _entity_calendar_hint(entity: PIIEntity) -> Optional[Any]:
+    """Return the detection-stage calendar code attached to a date span."""
+    from .calendar_dates import CALENDAR_METADATA_KEY
+
+    metadata = getattr(entity, "metadata", None)
+    if isinstance(metadata, Mapping):
+        return metadata.get(CALENDAR_METADATA_KEY)
+    return None
 
 
 def _surrogate_script_constraint(entity: PIIEntity) -> Optional[str]:
@@ -3428,6 +3394,7 @@ def _shift_date(
     lang: str = "en",
     *,
     require_dateutil: bool = False,
+    calendar: Optional[Any] = None,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -3437,6 +3404,9 @@ def _shift_date(
     - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
     - Month DD, YYYY / DD Month YYYY (with localized month names)
+    - Solar Hijri, Ethiopian, Thai Buddhist-era, Umm al-Qura Hijri and
+      Bikram Sambat dates, shifted within their own calendar (see
+      :mod:`openmed.core.calendar_dates`)
 
     Args:
         date_str: Date string to shift
@@ -3446,10 +3416,29 @@ def _shift_date(
         require_dateutil: Raise a clear optional-dependency error when
             python-dateutil is unavailable. When false, fall back to the basic
             regex shifter.
+        calendar: Optional detection-stage calendar code for the span, such
+            as ``"solar_hijri"``, ``"hijri"`` or ``"bikram_sambat"``.
 
     Returns:
         Shifted date string in the same format as input
     """
+    from .calendar_dates import shift_calendar_date
+
+    native = shift_calendar_date(
+        date_str,
+        shift_days,
+        lang=lang,
+        calendar=calendar,
+        keep_year=keep_year,
+    )
+    if native.handled:
+        return native.text if native.text is not None else "[DATE_SHIFTED]"
+
+    from .locale_formats import _CJK_DATE_RE
+
+    if _CJK_DATE_RE.fullmatch(date_str):
+        return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
+
     localized = _parse_localized_month_date(date_str, lang)
     if localized is not None:
         try:
@@ -3479,9 +3468,14 @@ def _shift_date(
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
     try:
-        # For European languages, try day-first parsing
-        dayfirst = lang in _DAY_FIRST_LANGS
-        parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
+        from .locale_formats import date_order_for_locale
+
+        if re.fullmatch(r"\d{1,4}([./-])\d{1,2}\1\d{1,4}", date_str.strip()):
+            return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
+        order = date_order_for_locale(lang)
+        parsed_date = date_parser.parse(
+            date_str, fuzzy=False, dayfirst=order == "dmy", yearfirst=order == "ymd"
+        )
         original_year = parsed_date.year
 
         # Shift the date
@@ -3518,87 +3512,53 @@ def _shift_date_basic(
     Returns:
         Shifted date string or placeholder
     """
-    # Order patterns based on language convention
-    if lang in _DAY_FIRST_LANGS - {"de"}:
-        # European: DD/MM/YYYY first
-        patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-        ]
-    elif lang == "de":
-        # German: DD.MM.YYYY
-        patterns = [
-            (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-        ]
-    elif lang == "ja":
-        # Japanese: YYYY/MM/DD (kanji-form 年月日 is handled by the
-        # JAPANESE_PII_PATTERNS regex, not here).
-        patterns = [
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-        ]
-    else:
-        # US/English: MM/DD/YYYY first
-        patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
-            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
-        ]
+    from .locale_formats import _CJK_DATE_RE, parse_date
 
-    for pattern, order in patterns:
-        match = re.match(pattern, date_str.strip())
-        if match:
-            groups = match.groups()
-            try:
-                if order == "mdy":
-                    month, day, year = int(groups[0]), int(groups[1]), int(groups[2])
-                elif order == "ymd":
-                    year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
-                else:  # dmy
-                    day, month, year = int(groups[0]), int(groups[1]), int(groups[2])
+    parsed = parse_date(date_str, lang=lang)
+    if parsed.normalized is None:
+        return "[DATE_SHIFTED]"
+    try:
+        original = datetime(*parsed.normalized)
+        shifted = original + timedelta(days=shift_days)
+        if keep_year:
+            shifted = _replace_year_safe(shifted, original.year)
+        cjk = _CJK_DATE_RE.fullmatch(date_str)
+        if cjk is not None:
+            from .anonymizer.digit_systems import render_in_source_digits
 
-                # Handle 2-digit years
-                if year < 100:
-                    year += 2000 if year < 50 else 1900
+            def render_components(source: str) -> str:
+                pieces = []
+                cursor = 0
+                for name in ("year", "month", "day"):
+                    start, end = cjk.span(name)
+                    width = end - start
+                    value = getattr(shifted, name)
+                    if name == "year" and width == 2:
+                        value %= 100
+                    pieces.extend((source[cursor:start], f"{value:0{width}d}"))
+                    cursor = end
+                pieces.append(source[cursor:])
+                return "".join(pieces)
 
-                # Validate and create date
-                original_date = datetime(year, month, day)
-                original_year = original_date.year
-
-                # Shift
-                shifted = original_date + timedelta(days=shift_days)
-
-                # Keep year if requested
-                if keep_year:
-                    shifted = _replace_year_safe(shifted, original_year)
-
-                # Format back preserving separator
-                if "." in date_str:
-                    sep = "."
-                elif "/" in date_str:
-                    sep = "/"
-                else:
-                    sep = "-"
-
-                if order == "mdy":
-                    return (
-                        f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
-                    )
-                elif order == "ymd":
-                    return (
-                        f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
-                    )
-                else:
-                    return (
-                        f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
-                    )
-
-            except (ValueError, OverflowError):
-                continue
-
-    return "[DATE_SHIFTED]"
+            rendered = render_in_source_digits(date_str, render_components)
+            # A two-digit year must not silently cross the parser's century
+            # pivot. Preserve the existing fail-closed date behavior instead.
+            if rendered is None or parse_date(rendered, lang=lang).normalized != (
+                shifted.year,
+                shifted.month,
+                shifted.day,
+            ):
+                return "[DATE_SHIFTED]"
+            return rendered
+        separator = next((c for c in date_str if c in ".-/"), "-")
+        parts = {
+            "d": f"{shifted.day:02d}",
+            "m": f"{shifted.month:02d}",
+            "y": f"{shifted.year:04d}",
+        }
+        return separator.join(parts[key] for key in parsed.order or "ymd")
+    except (ValueError, OverflowError):
+        return "[DATE_SHIFTED]"
 
 
 def _format_date_like_original(
@@ -3616,6 +3576,7 @@ def _format_date_like_original(
     Returns:
         Formatted date string
     """
+    from .locale_formats import date_order_for_locale
     from .pii_i18n import LANGUAGE_MONTH_NAMES
 
     original_stripped = original.strip()
@@ -3630,7 +3591,7 @@ def _format_date_like_original(
 
     # Slash-separated dates: interpretation depends on language
     if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
-        if lang in _DAY_FIRST_LANGS:
+        if date_order_for_locale(lang) == "dmy":
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
         else:
@@ -3639,7 +3600,7 @@ def _format_date_like_original(
 
     # Dash-separated dates
     if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
-        if lang in _DAY_FIRST_LANGS:
+        if date_order_for_locale(lang) == "dmy":
             return new_date.strftime("%d-%m-%Y")
         else:
             return new_date.strftime("%m-%d-%Y")

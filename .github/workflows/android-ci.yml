@@ -2,14 +2,14 @@ name: Android CI (OpenMedKit)
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
   pull_request:
-    branches: [main, master]
+    branches: [main, master, 'release/v*' ]
     paths:
       - '.github/workflows/android-ci.yml'
       - 'android/**'
@@ -18,6 +18,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:

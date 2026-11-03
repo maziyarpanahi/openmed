@@ -182,9 +182,8 @@ def test_same_status_overlapping_intervals_retain_entailment() -> None:
     assert pair.label == "entailment"
 
 
-@pytest.mark.parametrize(
-    ("premise", "hypothesis", "expected", "reason"),
-    [
+def test_temporal_compatibility_is_conservative(subtests) -> None:
+    for premise, hypothesis, expected, reason in [
         (
             _metadata("2024-01-01/2024-01-02", HISTORICAL),
             _metadata("2024-01-02", HISTORICAL),
@@ -214,19 +213,17 @@ def test_same_status_overlapping_intervals_retain_entailment() -> None:
             TemporalCompatibility.INCOMPATIBLE,
             "intervals_disjoint",
         ),
-    ],
-)
-def test_temporal_compatibility_is_conservative(
-    premise: dict[str, object],
-    hypothesis: dict[str, object],
-    expected: TemporalCompatibility,
-    reason: str,
-) -> None:
-    comparison = compare_temporal_metadata(premise, hypothesis)
+    ]:
+        with subtests.test(
+            premise=premise, hypothesis=hypothesis, expected=expected, reason=reason
+        ):
+            comparison = compare_temporal_metadata(premise, hypothesis)
 
-    assert comparison.status is expected
-    assert comparison.reason == reason
-    assert classify_temporal_compatibility(premise, hypothesis) == expected.value
+            assert comparison.status is expected
+            assert comparison.reason == reason
+            assert (
+                classify_temporal_compatibility(premise, hypothesis) == expected.value
+            )
 
 
 def test_unresolved_and_hypothetical_sides_require_review() -> None:
@@ -476,12 +473,13 @@ def test_temporal_metadata_accepts_clinical_assertion_objects() -> None:
     assert metadata.resolved is False
 
 
-@pytest.mark.parametrize("score", [10**400, -(10**400)])
-def test_oversized_scores_have_controlled_error(score: int) -> None:
-    with pytest.raises(ValueError, match="NLI score is invalid"):
-        build_temporal_nli_pair(
-            "synthetic premise", "synthetic hypothesis", predicted_score=score
-        )
+def test_oversized_scores_have_controlled_error(subtests) -> None:
+    for score in [10**400, -(10**400)]:
+        with subtests.test(score=score):
+            with pytest.raises(ValueError, match="NLI score is invalid"):
+                build_temporal_nli_pair(
+                    "synthetic premise", "synthetic hypothesis", predicted_score=score
+                )
 
 
 def test_final_supported_calendar_month_normalizes() -> None:
@@ -504,37 +502,41 @@ def test_single_uncertain_flag_remains_review_required() -> None:
     assert not interval.is_resolved
 
 
-@pytest.mark.parametrize("field", ["value", "granularity_flags"])
-def test_temporal_conversion_callback_errors_hide_values(field: str) -> None:
-    sentinel = "SYNTHETIC_PRIVATE_TIMEX"
+def test_temporal_conversion_callback_errors_hide_values(subtests) -> None:
+    for field in ["value", "granularity_flags"]:
+        with subtests.test(field=field):
+            sentinel = "SYNTHETIC_PRIVATE_TIMEX"
 
-    class InvalidValue:
-        def __str__(self) -> str:
-            raise ValueError(sentinel)
+            class InvalidValue:
+                def __str__(self) -> str:
+                    raise ValueError(sentinel)
 
-    record = {"value": "2024-01-01"}
-    record[field] = [InvalidValue()] if field == "granularity_flags" else InvalidValue()
-    with pytest.raises(ValueError, match="is invalid") as caught:
-        TemporalInterval.from_value(record)
-    assert sentinel not in "".join(traceback.format_exception(caught.value))
+            record = {"value": "2024-01-01"}
+            record[field] = (
+                [InvalidValue()] if field == "granularity_flags" else InvalidValue()
+            )
+            with pytest.raises(ValueError, match="is invalid") as caught:
+                TemporalInterval.from_value(record)
+            assert sentinel not in "".join(traceback.format_exception(caught.value))
 
 
-@pytest.mark.parametrize("reverse", [False, True])
-def test_unresolved_interval_alias_cannot_be_overridden(reverse: bool) -> None:
-    values = [
-        {"value": "2024-01-01", "resolved": False},
-        "2024-01-01",
-    ]
-    if reverse:
-        values.reverse()
-    with pytest.raises(ValueError):
-        TemporalMetadata.from_value(
-            {
-                "interval": values[0],
-                "normalized_time": values[1],
-                "temporality": "historical",
-            }
-        )
+def test_unresolved_interval_alias_cannot_be_overridden(subtests) -> None:
+    for reverse in [False, True]:
+        with subtests.test(reverse=reverse):
+            values = [
+                {"value": "2024-01-01", "resolved": False},
+                "2024-01-01",
+            ]
+            if reverse:
+                values.reverse()
+            with pytest.raises(ValueError):
+                TemporalMetadata.from_value(
+                    {
+                        "interval": values[0],
+                        "normalized_time": values[1],
+                        "temporality": "historical",
+                    }
+                )
 
 
 def test_nested_unresolved_interval_cannot_be_overridden() -> None:

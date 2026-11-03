@@ -62,9 +62,8 @@ def test_schedule_serialization_is_deterministic_and_round_trips() -> None:
     assert FederatedRoundSchedule.from_json(schedule.to_json()) == schedule
 
 
-@pytest.mark.parametrize(
-    ("timestamp", "active", "next_phase"),
-    [
+def test_active_and_next_phase_resolution_uses_half_open_boundaries(subtests) -> None:
+    for timestamp, active, next_phase in [
         (START - timedelta(microseconds=1), None, P.ENROLLMENT),
         (START, P.ENROLLMENT, P.UPDATE_SUBMISSION),
         (START + timedelta(minutes=30), P.ENROLLMENT, P.UPDATE_SUBMISSION),
@@ -76,17 +75,12 @@ def test_schedule_serialization_is_deterministic_and_round_trips() -> None:
         (START + timedelta(hours=3, minutes=30), P.EVALUATION, None),
         (START + timedelta(hours=4), None, None),
         (START + timedelta(days=1), None, None),
-    ],
-)
-def test_active_and_next_phase_resolution_uses_half_open_boundaries(
-    timestamp: datetime,
-    active: FederatedSchedulePhase | None,
-    next_phase: FederatedSchedulePhase | None,
-) -> None:
-    schedule = _schedule()
+    ]:
+        with subtests.test(timestamp=timestamp, active=active, next_phase=next_phase):
+            schedule = _schedule()
 
-    assert schedule.active_phase_at(timestamp) is active
-    assert schedule.next_phase_at(timestamp) is next_phase
+            assert schedule.active_phase_at(timestamp) is active
+            assert schedule.next_phase_at(timestamp) is next_phase
 
 
 def test_microseconds_are_preserved_in_canonical_serialization() -> None:
@@ -100,100 +94,93 @@ def test_microseconds_are_preserved_in_canonical_serialization() -> None:
     assert FederatedRoundSchedule.from_json(schedule.to_json()) == schedule
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_naive_boundaries_fail_with_field_only_errors(subtests) -> None:
+    for field in [
         "enrollment_starts_at",
         "update_submission_starts_at",
         "aggregation_starts_at",
         "evaluation_starts_at",
         "finishes_at",
-    ],
-)
-def test_naive_boundaries_fail_with_field_only_errors(field: str) -> None:
-    value = getattr(_schedule(), field).replace(tzinfo=None)
+    ]:
+        with subtests.test(field=field):
+            value = getattr(_schedule(), field).replace(tzinfo=None)
 
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{field: value})
-    assert str(error.value) == f"{field} must be timezone-aware"
+            with pytest.raises(FederatedScheduleError) as error:
+                _schedule(**{field: value})
+            assert str(error.value) == f"{field} must be timezone-aware"
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_non_utc_boundaries_fail_with_field_only_errors(subtests) -> None:
+    for field in [
         "enrollment_starts_at",
         "update_submission_starts_at",
         "aggregation_starts_at",
         "evaluation_starts_at",
         "finishes_at",
-    ],
-)
-def test_non_utc_boundaries_fail_with_field_only_errors(field: str) -> None:
-    value = getattr(_schedule(), field).astimezone(timezone(timedelta(hours=1)))
+    ]:
+        with subtests.test(field=field):
+            value = getattr(_schedule(), field).astimezone(timezone(timedelta(hours=1)))
 
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{field: value})
-    assert str(error.value) == f"{field} must use UTC"
+            with pytest.raises(FederatedScheduleError) as error:
+                _schedule(**{field: value})
+            assert str(error.value) == f"{field} must use UTC"
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_boolean_boundaries_are_rejected(subtests) -> None:
+    for field in [
         "enrollment_starts_at",
         "update_submission_starts_at",
         "aggregation_starts_at",
         "evaluation_starts_at",
         "finishes_at",
-    ],
-)
-def test_boolean_boundaries_are_rejected(field: str) -> None:
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{field: True})
-    assert str(error.value) == f"{field} must be a datetime"
+    ]:
+        with subtests.test(field=field):
+            with pytest.raises(FederatedScheduleError) as error:
+                _schedule(**{field: True})
+            assert str(error.value) == f"{field} must be a datetime"
 
 
-@pytest.mark.parametrize(
-    ("field", "previous_field"),
-    [
+def test_equal_and_reversed_boundaries_are_rejected(subtests) -> None:
+    for field, previous_field in [
         ("update_submission_starts_at", "enrollment_starts_at"),
         ("aggregation_starts_at", "update_submission_starts_at"),
         ("evaluation_starts_at", "aggregation_starts_at"),
         ("finishes_at", "evaluation_starts_at"),
-    ],
-)
-@pytest.mark.parametrize("offset", [timedelta(0), timedelta(microseconds=-1)])
-def test_equal_and_reversed_boundaries_are_rejected(
-    field: str, previous_field: str, offset: timedelta
-) -> None:
-    schedule = _schedule()
-    invalid = getattr(schedule, previous_field) + offset
+    ]:
+        for offset in [timedelta(0), timedelta(microseconds=-1)]:
+            with subtests.test(
+                field=field, previous_field=previous_field, offset=offset
+            ):
+                schedule = _schedule()
+                invalid = getattr(schedule, previous_field) + offset
 
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{field: invalid})
-    assert str(error.value) == f"{field} must be later than {previous_field}"
+                with pytest.raises(FederatedScheduleError) as error:
+                    _schedule(**{field: invalid})
+                assert (
+                    str(error.value) == f"{field} must be later than {previous_field}"
+                )
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
+def test_invalid_maximum_durations_fail_with_field_only_errors(subtests) -> None:
+    for field in [
         "max_enrollment_duration_seconds",
         "max_update_submission_duration_seconds",
         "max_aggregation_duration_seconds",
         "max_evaluation_duration_seconds",
-    ],
-)
-@pytest.mark.parametrize("value", [True, False, 0, -1, 1.5, "3600"])
-def test_invalid_maximum_durations_fail_with_field_only_errors(
-    field: str, value: object
+    ]:
+        for value in [True, False, 0, -1, 1.5, "3600"]:
+            with subtests.test(field=field, value=value):
+                with pytest.raises(FederatedScheduleError) as error:
+                    _schedule(**{field: value})
+                assert (
+                    str(error.value) == f"{field} must be a supported positive integer"
+                )
+
+
+def test_exact_maximum_duration_is_allowed_and_one_second_over_is_rejected(
+    subtests,
 ) -> None:
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{field: value})
-    assert str(error.value) == f"{field} must be a supported positive integer"
-
-
-@pytest.mark.parametrize(
-    ("maximum_field", "end_field"),
-    [
+    for maximum_field, end_field in [
         (
             "max_enrollment_duration_seconds",
             "update_submission_starts_at",
@@ -210,16 +197,13 @@ def test_invalid_maximum_durations_fail_with_field_only_errors(
             "max_evaluation_duration_seconds",
             "finishes_at",
         ),
-    ],
-)
-def test_exact_maximum_duration_is_allowed_and_one_second_over_is_rejected(
-    maximum_field: str, end_field: str
-) -> None:
-    assert _schedule(**{maximum_field: 3600})
+    ]:
+        with subtests.test(maximum_field=maximum_field, end_field=end_field):
+            assert _schedule(**{maximum_field: 3600})
 
-    with pytest.raises(FederatedScheduleError) as error:
-        _schedule(**{maximum_field: 3599})
-    assert str(error.value) == f"{end_field} exceeds {maximum_field}"
+            with pytest.raises(FederatedScheduleError) as error:
+                _schedule(**{maximum_field: 3599})
+            assert str(error.value) == f"{end_field} exceeds {maximum_field}"
 
 
 def test_unsupported_configured_and_actual_durations_are_rejected() -> None:
@@ -241,28 +225,23 @@ def test_unsupported_configured_and_actual_durations_are_rejected() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "timestamp",
-    [
+def test_phase_resolution_rejects_non_utc_or_non_datetime_inputs(subtests) -> None:
+    for timestamp in [
         START.replace(tzinfo=None),
         START.astimezone(timezone(timedelta(hours=-4))),
         True,
-    ],
-)
-def test_phase_resolution_rejects_non_utc_or_non_datetime_inputs(
-    timestamp: object,
-) -> None:
-    schedule = _schedule()
+    ]:
+        with subtests.test(timestamp=timestamp):
+            schedule = _schedule()
 
-    with pytest.raises(FederatedScheduleError):
-        schedule.active_phase_at(timestamp)
-    with pytest.raises(FederatedScheduleError):
-        schedule.next_phase_at(timestamp)
+            with pytest.raises(FederatedScheduleError):
+                schedule.active_phase_at(timestamp)
+            with pytest.raises(FederatedScheduleError):
+                schedule.next_phase_at(timestamp)
 
 
-@pytest.mark.parametrize(
-    "payload",
-    [
+def test_deserialization_rejects_incomplete_and_unknown_fields(subtests) -> None:
+    for payload in [
         {},
         {"schema_version": FEDERATED_SCHEDULE_SCHEMA_VERSION},
         {
@@ -274,13 +253,10 @@ def test_phase_resolution_rejects_non_utc_or_non_datetime_inputs(
             **_schedule().to_dict(),
             "site_name": "north-hospital",
         },
-    ],
-)
-def test_deserialization_rejects_incomplete_and_unknown_fields(
-    payload: dict[str, object],
-) -> None:
-    with pytest.raises(FederatedScheduleError):
-        FederatedRoundSchedule.from_dict(payload)
+    ]:
+        with subtests.test(payload=payload):
+            with pytest.raises(FederatedScheduleError):
+                FederatedRoundSchedule.from_dict(payload)
 
 
 def test_noncanonical_timestamps_and_duplicate_json_fields_are_rejected() -> None:

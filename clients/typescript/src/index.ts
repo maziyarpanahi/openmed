@@ -1,3 +1,6 @@
+import { GovernedWorkflowClient, type WorkflowSnapshot, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions } from "./workflow-client.js";
+export { WorkflowClientError, parseWorkflowResponse, type WorkflowSnapshot, type WorkflowEffect, type WorkflowOutcome, type WorkflowPhase, type WorkflowReadOptions, type WorkflowMutationOptions, type WorkflowPollOptions, type WorkflowMutationOutcome } from "./workflow-client.js";
+
 import {
   JOURNEY_WORKFLOW_RESOURCE_TYPES,
   type JourneyResourcePage,
@@ -48,6 +51,7 @@ export type PIILanguage =
   | "or"
   | "pl"
   | "pa"
+  | "si"
   | "ta"
   | "te"
   | "ur"
@@ -109,6 +113,35 @@ export interface GroundRequest {
   top_k?: number;
 }
 
+/** Opaque HTTP reference. Custody and approval authority remain server-owned. */
+export type JSONObject = Record<string, unknown>;
+
+export interface GovernedWorkflowReference {
+  schema_version: "openmed.service.workflow_request.v1";
+  run_id: string;
+  workflow_id: string;
+  action_digest: string;
+  expected_state_digest: string | null;
+  request_id: string | null;
+}
+
+export interface GovernedWorkflowMutation extends GovernedWorkflowReference {
+  expected_state_digest: string;
+  request_id: string;
+}
+
+/** Existing consumed receipt metadata; declaring this type grants no authority. */
+export interface GovernedWorkflowReceipt {
+  schema_version: "openmed.agent.approval_receipt.v2";
+  action_digest: string;
+  token_digest: string;
+  code: "approved";
+}
+
+export interface GovernedWorkflowReview extends GovernedWorkflowMutation {
+  receipt: GovernedWorkflowReceipt;
+}
+
 export interface PIIExtractRequest {
   text: string;
   model_name?: string;
@@ -166,7 +199,8 @@ export type DecisionMode =
   | "boolean_choice"
   | "ordered_preference"
   | "scalar_score"
-  | "multi_label";
+  | "multi_label"
+  | "question_set";
 
 export type DecisionState =
   | "success"
@@ -178,6 +212,17 @@ export type DecisionState =
   | "denied"
   | "failure";
 
+export type DecisionQuestionMode = Exclude<DecisionMode, "question_set">;
+
+export interface DecisionQuestion {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  options?: string[];
+  option_descriptions?: (string | null)[];
+  instructions?: string | null;
+  levels?: string[];
+}
+
 export interface FixedOptionDecisionRequest {
   mode: DecisionMode;
   input_text: string;
@@ -186,14 +231,45 @@ export interface FixedOptionDecisionRequest {
   purpose?: string;
   calibration_id?: string;
   timeout_ms?: number;
-  schema_version?: "1.0.0";
+  schema_version?: "1.0.0" | "1.1.0";
   compatibility_policy?: "same_major";
+  question_id?: string;
+  instructions?: string | null;
+  option_descriptions?: (string | null)[];
+  levels?: string[];
+  questions?: DecisionQuestion[];
+  input_format?: "text" | "json";
+  max_input_chars?: number;
 }
 
 export interface DecisionOptionScore {
   index: number;
   option: string;
   score: number;
+}
+
+export interface DecisionLevelScore {
+  index: number;
+  level: string;
+  score: number;
+}
+
+export interface DecisionQuestionResult {
+  question_id: string;
+  mode: DecisionQuestionMode;
+  state: DecisionState;
+  code: string | null;
+  option_scores: DecisionOptionScore[];
+  choice: string | null;
+  choices: string[];
+  ranking: string[];
+  scalar_score: number | null;
+  confidence: number | null;
+  margin: number | null;
+  level_scores: DecisionLevelScore[];
+  expected_level: number | null;
+  warnings: string[];
+  review: { required: true; reasons: string[] };
 }
 
 export interface FixedOptionDecisionResult {
@@ -207,6 +283,9 @@ export interface FixedOptionDecisionResult {
   scalar_score: number | null;
   confidence: number | null;
   margin: number | null;
+  level_scores?: DecisionLevelScore[];
+  expected_level?: number | null;
+  questions?: DecisionQuestionResult[];
   calibration: JsonObject;
   backend: JsonObject;
   access: JsonObject;
@@ -214,7 +293,7 @@ export interface FixedOptionDecisionResult {
   review: { required: true; reasons: string[] };
   advisory: string;
   autonomous_action: false;
-  schema_version: "1.0.0";
+  schema_version: "1.0.0" | "1.1.0";
   compatibility_policy: "same_major";
   extensions: JsonObject;
 }
@@ -591,6 +670,7 @@ export class OpenMedApiError extends Error {
 export class OpenMedClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: FetchLike;
+  private readonly workflows: GovernedWorkflowClient;
 
   constructor(options: OpenMedClientOptions) {
     const baseUrl = options.baseUrl.trim().replace(/\/+$/, "");
@@ -606,6 +686,7 @@ export class OpenMedClient {
     this.baseUrl = baseUrl;
     this.fetchImpl =
       options.fetch ?? (fetchImpl.bind(globalThis) as FetchLike);
+    this.workflows = new GovernedWorkflowClient(this.baseUrl, this.fetchImpl);
   }
 
   async analyze(request: AnalyzeRequest): Promise<AnalyzeResponse> {
@@ -614,6 +695,30 @@ export class OpenMedClient {
 
   async ground(request: GroundRequest): Promise<GroundResponse> {
     return this.post("/ground", request);
+  }
+
+  async workflowPreflight(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preflight", request, options);
+  }
+
+  async workflowPreview(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/preview", request, options);
+  }
+
+  async workflowStatus(request: GovernedWorkflowReference, options?: WorkflowReadOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.read("/v1/workflows/status", request, options);
+  }
+
+  async workflowSubmitReceipt(request: GovernedWorkflowReview, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/review-receipts", request, options);
+  }
+
+  async workflowCancel(request: GovernedWorkflowMutation, options?: WorkflowMutationOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.mutate("/v1/workflows/cancel", request, options);
+  }
+
+  async pollWorkflow(request: GovernedWorkflowReference, options?: WorkflowPollOptions): Promise<WorkflowSnapshot> {
+    return this.workflows.poll(request, options);
   }
 
   async brief(request: BriefRequest): Promise<BriefResponse> {
