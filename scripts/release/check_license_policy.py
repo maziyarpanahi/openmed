@@ -133,6 +133,7 @@ REVIEWED_LICENSES = {
     "mlx": "MIT",
     "mlx-lm": "MIT",
     "mlx-whisper": "MIT",
+    "mlx-vlm": "MIT",
     "nbformat": "BSD-3-Clause",
     "nncf": "Apache-2.0",
     "multidict": "Apache-2.0",

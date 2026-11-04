@@ -7,6 +7,6 @@ so importing :mod:`openmed.multimodal.vision` never pulls an optional extra.
 
 from __future__ import annotations
 
-from . import runtime
+from . import runtime, safety
 
-__all__ = ["runtime"]
+__all__ = ["runtime", "safety"]
