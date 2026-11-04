@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
+
+### Security
+
+- Screen buffered Python MLX and OpenMedKit Compass generations with injected
+  local PHI detectors and same-asset identifier digests. Bind release decisions
+  to metadata, abstain on detector failure or timeout, and suppress reconstructable
+  token IDs. Callers must supply a local guard and asset provenance to release text.
+
 ### Added
+
+- Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
+
+- Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
+
+- Export a strict, self-contained Draft 2020-12 schema for provider capability matrix records, sharing Python identifiers, bounds and outcome/reason combinations (#3118).
+
+- Compare versioned local multimodal provider capability declarations against
+  content-free modality profiles, with stable exact, transform-required,
+  unsupported and missing-capability JSON and Markdown reports (#3095).
+
+- Gate fresh image exports on actual full-frame and carrier inspection, resolved critical-region masks, verified transform lineage and residual detection, with value-free regional evidence and no partial output on failure (#2795).
+
+- Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
+
+- Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
+  declared file-meta transfer syntaxes into closed native, optional-decoder,
+  review, and unsupported outcomes with stable reason codes, and reports no
+  patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
+  (#3089).
+
+- Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
+
+- Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
 
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
