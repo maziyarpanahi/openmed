@@ -6,21 +6,25 @@ on:
     paths:
       - '.swift-format'
       - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
+      - 'tests/fixtures/parity/speech_contract_v1.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
       - '.swift-format'
       - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/format_swift.sh'
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/parity/multimodal_contract_v1.json'
+      - 'tests/fixtures/parity/speech_contract_v1.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -117,16 +121,6 @@ jobs:
     - name: Select Xcode version
       run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-    - name: Build native visionOS simulator target
-      working-directory: swift/OpenMedKit
-      shell: bash
-      run: |
-        set -euo pipefail
-        sdk_path="$(xcrun --sdk xrsimulator --show-sdk-path)"
-        swift build \
-          --triple arm64-apple-xros1.0-simulator \
-          --sdk "$sdk_path"
-
     - name: Select available visionOS simulator
       id: destination
       shell: bash
@@ -145,11 +139,33 @@ jobs:
         test -n "$udid"
         echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
-    - name: Build and run visionOS parity tests
+    # SwiftPM's command-line planner cannot infer dynamic library extensions for xrOS.
+    # Pin the native SDK and products directory: a destination can also advertise
+    # iPad compatibility, which otherwise makes XCTest look in Debug-iphonesimulator.
+    - name: Build native visionOS simulator target and tests
       working-directory: swift/OpenMedKit
       run: |
-        xcodebuild test \
+        xcodebuild build-for-testing \
           -scheme OpenMedKit-Package \
-          -destination 'platform=visionOS Simulator,id=${{ steps.destination.outputs.udid }}' \
-          -only-testing:OpenMedKitTests/WatchVisionParityTests \
-          -skipPackagePluginValidation
+          -sdk xrsimulator \
+          -destination 'id=${{ steps.destination.outputs.udid }}' \
+          -skipPackagePluginValidation \
+          SUPPORTED_PLATFORMS=xrsimulator SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD=NO \
+          CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/openmed-vision-products"
+
+    - name: Run native visionOS parity tests
+      shell: bash
+      env:
+        VISION_DEVICE: ${{ steps.destination.outputs.udid }}
+      run: |
+        set -euo pipefail
+        platform="$(xcrun --sdk xrsimulator --show-sdk-platform-path)/Developer"
+        products="$RUNNER_TEMP/openmed-vision-products"
+        bundle="$products/OpenMedKitTests.xctest"
+        xcrun vtool -show-build "$bundle/OpenMedKitTests" | grep -F 'platform VISIONOSSIMULATOR'
+        xcrun simctl bootstatus "$VISION_DEVICE" -b
+        export SIMCTL_CHILD_DYLD_FRAMEWORK_PATH="$platform/Library/Frameworks:$products"
+        export SIMCTL_CHILD_DYLD_LIBRARY_PATH="$platform/usr/lib:$products"
+        xcrun simctl spawn "$VISION_DEVICE" "$platform/Library/Xcode/Agents/xctest" \
+          -XCTest OpenMedKitTests.WatchVisionParityTests "$bundle" 2>&1 | tee "$RUNNER_TEMP/openmed-vision-parity.log"
+        grep -Eq 'Executed [1-9][0-9]* tests?, with 0 failures' "$RUNNER_TEMP/openmed-vision-parity.log"

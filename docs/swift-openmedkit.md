@@ -601,3 +601,7 @@ text extraction, a synthetic clinical-document image, and a synthetic chart.
 The ordinary Swift package suite keeps offline processor/configuration tests and
 skips multi-gigabyte model execution unless the local artifact environment
 variables are explicitly supplied.
+
+## Local speech recognition
+
+The optional `OpenMedSpeech` product provides a pinned Core ML English speech adapter with bounded PCM ownership, partial/final events and cooperative cancellation. See [local Core ML speech](multimodal/apple-speech.md) for model pins, lifecycle rules and offline validation.

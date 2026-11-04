@@ -713,6 +713,7 @@ classification:
     - on-device-segmenters.md
     - coreml-export.md
     - swift-openmedkit.md
+    - multimodal/apple-speech.md
     - runtimes/apple-platforms.md
     - runtimes/ios-share-extension.md
     - swift-kotlin-parity.md
