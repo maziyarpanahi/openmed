@@ -76,6 +76,17 @@
             return OpenMedVisionLanguageModel(container: container)
         }
 
+        /// Gate generation on an already loaded local model before inference and
+        /// before releasing its output. Remote image references are refused before
+        /// opening them. Enqueue time uses the thermal session's monotonic clock.
+        public func generateIfAdmitted(_ prompt: String, localImageURL: URL? = nil, maxTokens: Int = 256, temperature: Float = 0, queuedAtMilliseconds: UInt64, in session: MultimodalThermalSession) async -> MultimodalAdmissionOutcome<OpenMedVisionLanguageGeneration> {
+            let work = ThermalVisionWork(imageURL: localImageURL) {
+                if let localImageURL { return try await self.generate(prompt, imageURL: localImageURL, maxTokens: maxTokens, temperature: temperature) }
+                return try await self.generate(prompt, maxTokens: maxTokens, temperature: temperature)
+            }
+            return await session.run(work, queuedAtMilliseconds: queuedAtMilliseconds)
+        }
+
         /// Generate from text only.
         public func generate(
             _ prompt: String,
@@ -181,6 +192,16 @@
             )
         }
 
+    }
+
+    struct ThermalVisionWork: LocalMultimodalWork {
+        let requiresNetwork: Bool
+        let generate: @Sendable () async throws -> OpenMedVisionLanguageGeneration
+        init(imageURL: URL?, generate: @escaping @Sendable () async throws -> OpenMedVisionLanguageGeneration) {
+            requiresNetwork = imageURL.map { !$0.isFileURL || ![nil, "", "localhost"].contains($0.host?.lowercased()) } ?? false
+            self.generate = generate
+        }
+        func run(profile: MultimodalWorkProfile) async throws -> OpenMedVisionLanguageGeneration { try await generate() }
     }
 
     enum OpenMedCompassError: LocalizedError {
