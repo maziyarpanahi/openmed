@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
+
 - Export a strict, self-contained Draft 2020-12 schema for provider capability matrix records, sharing Python identifiers, bounds and outcome/reason combinations (#3118).
 
 - Compare versioned local multimodal provider capability declarations against

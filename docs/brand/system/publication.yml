@@ -477,6 +477,7 @@ classification:
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/processing-diffs.md
+    - multimodal/preprocessing-conformance.md
     - multimodal/provider-results.md
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/provider-capability-matrix.md
