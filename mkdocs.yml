@@ -431,6 +431,9 @@ nav:
       - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
       - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
       - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
+      - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
