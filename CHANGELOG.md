@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Score fixed transcript pairs with deterministic WER, CER, clinical-term error rates, identifier preservation and streaming revision churn, using counts-only reports and bounded uncertainty estimates (#3821).
+
 - Route finalized transcripts by language confidence in Python and OpenMedKit, with installed-pack detectors, token-boundary code-switch splits, exact source offsets and explicit review before release (#3819).
 
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
