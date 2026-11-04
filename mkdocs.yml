@@ -412,6 +412,7 @@ nav:
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
