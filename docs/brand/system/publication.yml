@@ -521,6 +521,8 @@ classification:
     - multimodal/rtf-extraction.md
     - testing.md
     - eval-harness.md
+    - evaluation/openphi-vision.md
+    - evaluation/edge-health-bench.md
     - evaluation/script-tokenization.md
     - evaluation/language-uncertainty.md
     - evaluation/cross-lingual-regressions.md
