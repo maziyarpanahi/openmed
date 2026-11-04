@@ -479,6 +479,8 @@ classification:
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/vision/edge-vlm-provider-contract.md
+    - multimodal/provider-capability-matrix.md
+    - multimodal/provider-capability-schema.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md
