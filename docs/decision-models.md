@@ -208,6 +208,22 @@ sequence classifier. It loads through the existing local NLI path and is
 qualified with `openmed nli-qualify`, so it serves the NLI verifier in
 `verify()` and the guarded brief rather than the decision contract.
 
+### d3-edge on CPU
+
+The optional `D3EdgeDecisionBackend` accepts text, local images and bounded video. Install the model runtime separately in an isolated environment (`transformers==5.17.0`, CPU PyTorch, torchvision, Pillow, NumPy and einops). Acquire the exact snapshot separately. Use an owner-controlled read-only snapshot and a private, trusted runtime cache. The adapter refuses a different runtime, additional executable files or changed code or model bytes. It does not download a model or accept its terms.
+
+Set `HF_HUB_OFFLINE=1` and `OPENMED_TRUSTED_REMOTE_CODE_MODELS=vllm-sr/d3-edge` before starting Python. This authorizes the pinned repository's custom code to run in the process; use an isolated service account without unrelated credentials. Larger d3 variants still require a compatible local server.
+
+```python
+# Fragment: requires a local model snapshot and the optional pinned runtime.
+from pathlib import Path
+from openmed.structured.decision_d3 import D3EdgeDecisionBackend
+
+backend = D3EdgeDecisionBackend(
+    Path("/models/d3-edge/bee5e872f75b9c5d1405767bf244a6948b95c0af")
+)
+```
+
 ### Qualifying an in-process backend
 
 `openmed decision-qualify --backend-factory module:function` imports a
@@ -251,7 +267,7 @@ The supported path column distinguishes documented model inputs from OpenMed ada
 | `fastino/GLiNER2.5-Decide-1B` | 1.19B | Apache-2.0 | text (English) | In process: GLiNER2.5 |
 | `knowledgator/gliclass-v4-edge` | 440M | Apache-2.0 | text, instruction prompt, few-shot examples | In process: GLiClass v4 |
 | `lion-ai/MedDecider-4B-NLI` | 4.2B | Apache-2.0 | premise and claim pairs (English) | In process: NLI verifier through `runtime="torch"` |
-| `vllm-sr/d3-edge` | 0.59B | Apache-2.0 | text or JSON, images, video | Local server through the bridge (text only) |
+| `vllm-sr/d3-edge` | 0.59B | Apache-2.0 | text or JSON, images, video | In process: pinned CPU adapter; also compatible local System One server |
 | `vllm-sr/d3-mini` | 4.5B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
 | `vllm-sr/d3-flash` | 8.4B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
 | `perplexity-ai/pplx-decider-flash-v1.2` | 4.5B | Apache-2.0 | text, images | Compatible local HTTP adapter required (text only) |
@@ -269,7 +285,7 @@ What the bridge models need on the serving side, from their model cards:
 
 | Model | Serving requirements |
 | --- | --- |
-| `vllm-sr/d3-edge`, `vllm-sr/d3-mini`, `vllm-sr/d3-flash` | Remote code and an exact `transformers` pin, with a server script (`d3_server.py`) shipped next to the weights. The remote code and pin are also why `d3-edge` is not loaded in process. |
+| `vllm-sr/d3-edge`, `vllm-sr/d3-mini`, `vllm-sr/d3-flash` | Remote code and an exact `transformers` pin, with a server script (`d3_server.py`) shipped next to the weights. Only the pinned edge revision has an in-process adapter. |
 | `perplexity-ai/pplx-decider-flash-v1.2` | Python 3.12+, a CUDA GPU with about 9 GiB for weights plus working memory, and the bundled package; its card demonstrates an in-process API, so provide a compatible HTTP adapter ([model card](https://huggingface.co/perplexity-ai/pplx-decider-flash-v1.2)) |
 | `sky7350/Mica-v0.5-4B` | A CUDA INT8 server, or the GGUF files on llama.cpp (Apple silicon or CPU) |
 | `h2oai/h2o-lightning-4b` | vLLM with the shim bundled with the weights; GGUF builds are also published |
