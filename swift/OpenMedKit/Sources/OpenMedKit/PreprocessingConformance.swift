@@ -317,7 +317,14 @@ public enum PreprocessingConformance {
         let count = p.sourceSize[0] * p.sourceSize[1]
         var identity = Data("openmed.preprocessing.vectors.v1\0".utf8)
         for channels in [3, 4] {
-            let pixels = (0..<count).map { i in (0..<3).map { (i * 37 + $0 * 71) % 256 } + (channels == 4 ? [[0, 128, 255][i % 3]] : []) }
+            var pixels: [[Int]] = []
+            for index in 0..<count {
+                var pixel = (0..<3).map { (index * 37 + $0 * 71) % 256 }
+                if channels == 4 {
+                    pixel.append([0, 128, 255][index % 3])
+                }
+                pixels.append(pixel)
+            }
             let mask = (0..<count).map { $0 % 3 == 0 }
             let expected = try execute(p, pixels: pixels, protectedMask: mask)
             let actual: PreprocessingOutput
