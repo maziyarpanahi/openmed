@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
+
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).

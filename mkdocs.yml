@@ -477,6 +477,7 @@ nav:
       - Blinded Clinician Adjudication: evaluation/blinded-adjudication.md
       - Chart Abstraction Scoring: evaluation/chart-abstraction.md
       - Reviewer Disagreement: evaluation/reviewer-disagreement.md
+      - Multimodal Validation Packs: evaluation/multimodal-clinical-validation.md
       - Local Generation Guardrail-Bypass: evaluation/local-guardrail-bypass.md
       - Synthetic Memorization Audit: evaluation/synthetic-memorization.md
       - Clinical Validation Protocol: clinical-validation-protocol.md
