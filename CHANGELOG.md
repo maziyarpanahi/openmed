@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   review, and unsupported outcomes with stable reason codes, and reports no
   patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
   (#3089).
+- Compare packet-scoped identity digests, page numbering, rendered pixels, template anchors and continuation cues across document pages; preserve original evidence and masks when splitting or quarantining inconsistent groups (#2805).
 
 - Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
 
