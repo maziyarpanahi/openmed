@@ -378,6 +378,7 @@ nav:
           - Synthetic Medication Courses: training/synthetic/medication-courses.md
           - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
           - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Document Rendering: training/synthetic/document-rendering.md
           - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
           - Synthetic FHIR Records: training/synthetic/fhir-records.md
           - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
