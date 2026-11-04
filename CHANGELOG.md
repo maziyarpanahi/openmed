@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
+
 - Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
 
 - Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).

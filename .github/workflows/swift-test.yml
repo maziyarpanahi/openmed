@@ -10,6 +10,7 @@ on:
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contract_v1.json'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -19,6 +20,7 @@ on:
       - 'scripts/lint_swift.sh'
       - 'swift/**'
       - 'tests/fixtures/parity/offset_contract.json'
+      - 'tests/fixtures/parity/multimodal_contract_v1.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

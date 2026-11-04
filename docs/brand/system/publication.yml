@@ -491,6 +491,7 @@ classification:
     - multimodal/ecg-interval-candidates.md
     - multimodal/ecg-evidence-windows.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/openmedkit-contracts.md
     - multimodal/cross-modal-clock-alignment.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
