@@ -290,6 +290,7 @@ MedDecider-4B-NLI is Apache-2.0. The larger MedDecider models (9B, 27B and
 `DecisionMedia` accepts bytes or an absolute local file from a trusted caller, with the declared MIME type, byte count and expected SHA-256. File paths never cross the wire. JSON decision requests carry inline base64 only; System One uses `images` and `videos` lists of base64 data URLs. Remote URLs are refused. A backend must explicitly support each media type: text-only backends return `unsupported` without scoring. The local bridge sends media only over loopback or a Unix socket to the System One endpoint. Private-network endpoints and the text-only OpenAI Decisions protocol refuse it.
 
 ```python
+# Fragment: needs a trusted local image and its previously verified capture digest.
 from pathlib import Path
 from openmed.structured.decision import DecisionMode, DecisionRequest
 from openmed.structured.decision_media import DecisionMedia
