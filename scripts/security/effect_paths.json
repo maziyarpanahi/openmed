@@ -361,6 +361,21 @@
       "module": "openmed.multimodal.ocr_tesseract_stream"
     },
     {
+      "classification": "operational",
+      "function": "WithholdingBuffer.edit",
+      "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
+    },
+    {
+      "classification": "operational",
+      "function": "WithholdingBuffer.release_ready",
+      "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
+    },
+    {
+      "classification": "operational",
+      "function": "AmbientSession.__exit__",
+      "module": "openmed.multimodal.streaming.session"
+    },
+    {
       "module": "openmed.onnx.streaming_loader",
       "function": "StreamingWeightLoader.load",
       "classification": "operational"
