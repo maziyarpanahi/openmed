@@ -441,6 +441,8 @@ nav:
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
       - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
+      - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
