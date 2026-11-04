@@ -543,6 +543,7 @@ classification:
     - multimodal/dicom-sr-provenance.md
     - multimodal/dicom-transfer-syntax-preflight.md
     - multimodal/vision/dicom-series-sampling.md
+    - multimodal/vision/dicom-pixel-provenance.md
     - evaluation/model-provenance-diff.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
