@@ -483,6 +483,7 @@ classification:
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
+    - multimodal/ambient-session-policy.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
