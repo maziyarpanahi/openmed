@@ -73,6 +73,8 @@ GPL_BRIDGE_EXCEPTIONS = {
 }
 
 REVIEWED_LICENSES = {
+    "sherpa-onnx": "Apache-2.0",
+    "psutil": "BSD-3-Clause",
     "accelerate": "Apache-2.0",
     "adlfs": "BSD-3-Clause",
     "aiohttp": "Apache-2.0 AND MIT",
