@@ -356,6 +356,11 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.generated_text_guard",
+      "function": "GeneratedTextGuard._detect.run",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "StreamingTesseractEngine.recognize",
       "module": "openmed.multimodal.ocr_tesseract_stream"

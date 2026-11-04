@@ -67,6 +67,8 @@ dev = [
   "Pillow==13.0.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
+  # Exercise real synthetic DICOM parsing in the offline CI suite.
+  "pydicom>=3.0",
   "openpyxl>=3.1,<4",
   "fastapi>=0.110",
   "httpx>=0.27",
@@ -495,6 +497,14 @@ gliner2 = [
   "torch>=2.13.0",
 ]
 
+edge-vlm = [
+  # Optional reference provider; model weights are provisioned separately.
+  "mlx-vlm>=0.7.11,<0.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  # Earlier releases cannot load this checkpoint's Pillow-only image processor.
+  "transformers>=5.22.1,<6; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "Pillow>=13.0.0",
+]
+
 mlx = [
   "filelock>=4.2.1",
   "fsspec>=2026.6.0",
@@ -640,6 +650,16 @@ override-dependencies = [
   "filelock>=4.2.1",
 ]
 conflicts = [
+  # AWQ pins an older Transformers runtime than the optional VLM backend.
+  [
+    { extra = "edge-vlm" },
+    { extra = "awq" },
+  ],
+  # The optional VLM runtime needs NumPy 2; SciSpaCy 0.6 requires NumPy 1.
+  [
+    { extra = "edge-vlm" },
+    { extra = "scispacy" },
+  ],
   [
     { extra = "airflow" },
     { extra = "ocr-paddle" },
