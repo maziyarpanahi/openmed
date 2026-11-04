@@ -484,6 +484,7 @@ classification:
     - multimodal/thermal-latency-gates.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
+    - multimodal/offline-asr-provider.md
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
     - multimodal/speech-endpoints.md

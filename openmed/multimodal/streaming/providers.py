@@ -186,12 +186,16 @@ class OfflineWhisperSession:
         self._reason = "ready"
         self._worker: WhisperProcess | None = None
         self._audio_timer: threading.Timer | None = None
+        self._privacy_timer: threading.Timer | None = None
         self._session_timer: threading.Timer | None = None
+        self._audio_generation = self._privacy_generation = 0
+        self._pending_since: dict[str, float] = {}
         self._metadata: dict[str, tuple[LanguageConfidence, tuple[TokenTime, ...]]] = {}
         self._peak_rss = self._peak_device = 0
         self._versions: dict[str, str] = {}
+        self._withholding_policy = withholding_policy or WithholdingPolicy()
         self._buffer = WithholdingBuffer(
-            uuid.uuid4().hex, screener, policy=withholding_policy, clock=clock
+            uuid.uuid4().hex, screener, policy=self._withholding_policy, clock=clock
         )
         limits = SpeechStreamLimits(
             max_buffered_chunks=4096,
@@ -199,7 +203,7 @@ class OfflineWhisperSession:
             max_buffered_duration_ms=self._policy.max_window_ms,
             max_stream_duration_ms=self._policy.max_session_ms,
             max_partial_hypotheses=self._policy.max_operations,
-            max_segments=64,
+            max_segments=self._policy.max_operations,
         )
         self.declaration = SpeechProviderDeclaration(
             ProviderProvenance(
@@ -262,6 +266,35 @@ class OfflineWhisperSession:
     def _expire(self) -> None:
         self.cancel(reason="retention_expired")
 
+    def _expire_window(self, generation: int) -> None:
+        with self._lock:
+            if generation == self._audio_generation and self._used:
+                self._expire()
+
+    def _expire_privacy(self, generation: int) -> None:
+        with self._lock:
+            if generation == self._privacy_generation and self._pending_since:
+                self._expire()
+
+    def _schedule_privacy_expiry(self) -> None:
+        self._privacy_generation += 1
+        if self._privacy_timer is not None:
+            self._privacy_timer.cancel()
+            self._privacy_timer = None
+        if self._pending_since:
+            remaining = (
+                min(self._pending_since.values())
+                + self._withholding_policy.max_latency_ms / 1000
+                - self._clock()
+            )
+            self._privacy_timer = threading.Timer(
+                max(0, remaining),
+                self._expire_privacy,
+                args=(self._privacy_generation,),
+            )
+            self._privacy_timer.daemon = True
+            self._privacy_timer.start()
+
     def push_chunk(self, chunk: AudioChunk) -> None:
         """Copy a sequential bounded PCM chunk; invalid input stops and cleans up."""
         failed = False
@@ -274,7 +307,9 @@ class OfflineWhisperSession:
                 self._contract.push_chunk(chunk)
                 if not self._used:
                     self._audio_timer = threading.Timer(
-                        self._policy.audio_retention_ms / 1000, self._expire
+                        self._policy.audio_retention_ms / 1000,
+                        self._expire_window,
+                        args=(self._audio_generation,),
                     )
                     self._audio_timer.daemon = True
                     self._audio_timer.start()
@@ -293,6 +328,7 @@ class OfflineWhisperSession:
     ) -> tuple[
         str, LanguageConfidence, tuple[TokenTime, ...], tuple[TranscriptToken, ...]
     ]:
+        _require(raw.get("network_attempts") == 0)
         text = raw["text"]
         _require(type(text) is str and 0 < len(text) <= 8192 and text == text.strip())
         probability = raw["language_probability"]
@@ -309,7 +345,8 @@ class OfflineWhisperSession:
         _require(type(raw["token_count"]) is int and 0 < raw["token_count"] < 192)
         _require("".join(word["word"] for word in words).strip() == text)
         cursor = 0
-        timings, lineage = [], []
+        timings: list[TokenTime] = []
+        lineage: list[TranscriptToken] = []
         for index, word in enumerate(words):
             token = word["word"].strip()
             _require(bool(token))
@@ -400,6 +437,7 @@ class OfflineWhisperSession:
                 return AsrUpdate(self._reason, self._revision)
             try:
                 _require(not failed and type(raw) is dict)
+                assert raw is not None
                 self._resources()
                 text, language, timings, lineage = self._candidate(raw)
                 digest = hashlib.sha256(
@@ -431,6 +469,7 @@ class OfflineWhisperSession:
                 )
                 _require(report.decisions[0].outcome is HallucinationOutcome.SUPPORTED)
                 segment_ref = uuid.uuid4().hex
+                pending_since = self._clock()
                 _require(self._buffer.append(segment_ref, text, lineage))
                 _require(self._buffer.finalize(segment_ref, expected_revision=0))
                 self._contract.submit_segment(
@@ -444,8 +483,10 @@ class OfflineWhisperSession:
                     )
                 )
                 self._metadata[segment_ref] = (language, timings)
+                self._pending_since[segment_ref] = pending_since
                 self._clear_window()
                 released = self._release(self._buffer.release_ready())
+                self._schedule_privacy_expiry()
                 self._resources()
                 _require(self._buffer.state is BufferState.OPEN)
                 self._reason = "released" if released else "context_or_phi_withheld"
@@ -463,10 +504,12 @@ class OfflineWhisperSession:
         released = []
         for segment in segments:
             language, timings = self._metadata.pop(segment.segment_ref)
+            self._pending_since.pop(segment.segment_ref)
             released.append(ScreenedAsrSegment(segment, language, timings))
         return tuple(released)
 
     def _clear_window(self) -> None:
+        self._audio_generation += 1
         self._offset_ms += self._used // 32
         self._window[:] = b"\0" * len(self._window)
         self._used = 0
@@ -515,6 +558,8 @@ class OfflineWhisperSession:
             self._clear_window()
             self._buffer.close()
             self._metadata.clear()
+            self._pending_since.clear()
+            self._schedule_privacy_expiry()
             self._contract.cancel()
             if self._session_timer is not None:
                 self._session_timer.cancel()

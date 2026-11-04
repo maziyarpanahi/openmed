@@ -86,6 +86,7 @@ class Worker:
             "avg_logprob": -0.1,
             "compression_ratio": 1.0,
             "token_count": 4,
+            "network_attempts": 0,
             "peak_rss_bytes": 100,
             "peak_device_bytes": 100,
         }
@@ -198,7 +199,7 @@ def test_stability_needs_growing_audio_not_duplicate_decode(stream):
     assert session.report()["buffered_bytes"] == 0
 
 
-def test_revised_or_low_confidence_text_does_not_release(stream, subtests):
+def test_revised_text_does_not_release(stream):
     session, _, _ = stream
     session.push_chunk(chunk(0))
     session.partial()
@@ -270,6 +271,18 @@ def test_retention_expiry_is_terminal_even_when_idle(stream):
     assert not any(session._window) and session._worker.closed
 
 
+def test_pending_text_expires_and_old_audio_timer_cannot_cancel_new_window(stream):
+    session, _, _ = stream
+    generation = session._audio_generation
+    finalize_window(session)
+    session._expire_window(generation)
+    assert not session.report()["closed"]
+    assert session._privacy_timer is not None
+    session._expire_privacy(session._privacy_generation)
+    assert session.report()["pending_segments"] == 0
+    assert session.report()["reason"] == "retention_expired"
+
+
 def test_asset_revision_license_identity_and_mutation(assets):
     changed = WhisperAssets(
         assets.directory, assets.revision, b"different terms snapshot"
@@ -281,7 +294,7 @@ def test_asset_revision_license_identity_and_mutation(assets):
         assets.verify()
 
 
-def test_executable_config_and_symlink_weights_are_rejected(assets):
+def test_executable_config_is_rejected(assets):
     path = assets.directory / "config.json"
     config = json.loads(path.read_text())
     config["auto_map"] = {"model": "untrusted.py"}

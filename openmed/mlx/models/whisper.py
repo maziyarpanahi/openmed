@@ -81,7 +81,8 @@ class WhisperAssets:
         _require(not self.directory.is_symlink() and self.directory.is_dir())
         _require(
             type(self.revision) is str
-            and re.fullmatch(r"[0-9a-f]{40,64}", self.revision) is not None
+            and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", self.revision)
+            is not None
         )
         _require(
             type(self.license_snapshot) is bytes
@@ -198,25 +199,36 @@ def _worker(connection: Any, assets: WhisperAssets) -> None:
     import resource
     import socket
 
+    network_attempts = 0
+
     def offline(*_: Any, **__: Any) -> Any:
+        nonlocal network_attempts
+        network_attempts += 1
         raise WhisperError("network_disabled")
 
     socket.create_connection = offline
     socket.getaddrinfo = offline
-    socket.socket.connect = offline
-    socket.socket.connect_ex = offline
+    socket.socket.connect = offline  # type: ignore[method-assign]
+    socket.socket.connect_ex = offline  # type: ignore[method-assign]
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    # Hub offline mode also disables its telemetry; no opt-out switch is exposed.
     with open(os.devnull, "w") as sink:
         os.dup2(sink.fileno(), 1)
         os.dup2(sink.fileno(), 2)
     try:
         assets.verify()
+        from huggingface_hub import constants as hub_constants
+
+        # A spawned main module may have imported Hub before these environment
+        # flags were set. Enforce its cached mode inside this worker as well.
+        hub_constants.HF_HUB_OFFLINE = True
         import mlx.core as mx
         from mlx_whisper.load_models import load_model
 
         model = load_model(str(assets.directory), dtype=mx.float16)
+        if network_attempts:
+            raise WhisperError("network_attempted")
         versions = {
             name: importlib.metadata.version(name)
             for name in ("mlx", "mlx-whisper", "numpy", "numba", "scipy", "tiktoken")
@@ -237,6 +249,9 @@ def _worker(connection: Any, assets: WhisperAssets) -> None:
                 mx.clear_cache()
             reply["peak_rss_bytes"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             reply["peak_device_bytes"] = mx.get_peak_memory()
+            reply["network_attempts"] = network_attempts
+            if network_attempts:
+                raise WhisperError("network_attempted")
             payload = json.dumps(reply, allow_nan=False).encode()
             if len(payload) > _MAX_REPLY_BYTES:
                 raise WhisperError("output_limit")
@@ -270,9 +285,9 @@ class WhisperProcess:
         self._process = context.Process(
             target=_worker, args=(child, assets), daemon=True
         )
-        self._process.start()
-        child.close()
         try:
+            self._process.start()
+            child.close()
             ready = self._receive(startup_timeout)
             if ready.get("ready") is not True:
                 raise WhisperError("whisper_load_failed")
@@ -280,6 +295,8 @@ class WhisperProcess:
         except BaseException:
             self.close()
             raise WhisperError("whisper_load_failed") from None
+        finally:
+            child.close()
 
     def _receive(self, timeout: float) -> dict[str, Any]:
         if not self._connection.poll(timeout):
