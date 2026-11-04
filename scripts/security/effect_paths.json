@@ -356,6 +356,11 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.decoder_guard",
+      "function": "probe_media",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "StreamingTesseractEngine.recognize",
       "module": "openmed.multimodal.ocr_tesseract_stream"
