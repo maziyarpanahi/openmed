@@ -289,10 +289,12 @@ def preflight_asset_batch(
     ):
         raise ValueError("invalid bounded batch preflight assets")
     totals: dict[str, int | float | None] = dict.fromkeys(_FIELDS, 0)
-    findings, results = [], []
+    findings: list[BatchPreflightFinding] = []
+    results: list[BatchAssetResult] = []
     ids, digests = set(), set()
     stopped = False
     durations = []
+    rejections = 0
     for index, asset in enumerate(assets):
         start = len(findings)
         manifest = asset.manifest
@@ -329,6 +331,7 @@ def preflight_asset_batch(
         elif manifest.media_type.startswith("audio/"):
             values["duration"] = manifest.duration_seconds
         for name, value in values.items():
+            previous = totals[name]
             if value is None:
                 totals[name] = None
                 findings.append(
@@ -336,12 +339,12 @@ def preflight_asset_batch(
                         index, "aggregate_insufficient_metadata", name
                     )
                 )
-            elif totals[name] is not None:
+            elif previous is not None:
                 if name == "duration":
                     durations.append(value)
                     total = math.fsum(durations)
                 else:
-                    total = totals[name] + value
+                    total = previous + value
                 if total > _MAXIMUM[name]:
                     totals[name] = None
                     findings.append(
@@ -377,8 +380,9 @@ def preflight_asset_batch(
                 findings.append(BatchPreflightFinding(index, "source_error"))
         rejected = len(findings) > start
         if rejected:
-            totals["rejections"] += 1
-            if totals["rejections"] > limits.rejections:
+            rejections += 1
+            totals["rejections"] = rejections
+            if rejections > limits.rejections:
                 findings.append(
                     BatchPreflightFinding(
                         index, "aggregate_limit_exceeded", "rejections"
