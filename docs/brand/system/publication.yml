@@ -438,6 +438,7 @@ classification:
     - training/synthetic/medication-courses.md
     - training/synthetic/prior-auth-packets.md
     - training/synthetic/clinical-note-grammars.md
+    - training/synthetic/dicom-overlays.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
