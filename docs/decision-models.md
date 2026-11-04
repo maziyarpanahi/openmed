@@ -284,3 +284,22 @@ through the bridge. Do not declare a different license to get past the check.
 
 MedDecider-4B-NLI is Apache-2.0. The larger MedDecider models (9B, 27B and
 31B) are CC BY-NC 4.0 and are not supported.
+
+## Local images and video
+
+`DecisionMedia` accepts bytes or an absolute local file from a trusted caller, with the declared MIME type, byte count and expected SHA-256. File paths never cross the wire. JSON decision requests carry inline base64 only; System One uses `images` and `videos` lists of base64 data URLs. Remote URLs are refused. A backend must explicitly support each media type: text-only backends return `unsupported` without scoring. The local bridge sends media only over loopback or a Unix socket to the System One endpoint. Private-network endpoints and the text-only OpenAI Decisions protocol refuse it.
+
+```python
+from pathlib import Path
+from openmed.structured.decision import DecisionMode, DecisionRequest
+from openmed.structured.decision_media import DecisionMedia
+
+asset = DecisionMedia(Path("/local/review.png"), media_type="image/png",
+                      sha256=expected_capture_digest, byte_size=expected_byte_count)
+request = DecisionRequest(mode=DecisionMode.BOOLEAN_CHOICE, input_text="Review the image.",
+                          media=(asset,))
+```
+
+The Python adapter preflights original bytes, dimensions, frames and duration under explicit asset limits. It accepts single-frame PNG/JPEG with Pillow; it applies EXIF orientation, discards metadata including ICC/EXIF/text, and encodes the decoded pixels as PNG. MP4 support requires locally installed FFmpeg and ffprobe, including a lossless RGB H.264 encoder. Both run through bounded in-memory pipes. A short, constant-rate, single video track (H.264, MPEG-4 or MJPEG) is decoded to RGB, re-encoded without source metadata, and decoded again to verify every frame and its timing. Audio, subtitles, non-square pixels, rotated tracks, incomplete timestamps, unsupported codecs and inputs that require seeking beyond a pipe are refused. No recording is written to a temporary file.
+
+The limits are four items per request, 8 MiB per item and 16 MiB in total. Each frame has a two-megapixel ceiling; clips are limited to 64 frames, 16 million total pixels and 30 seconds. The model may impose stricter limits. `request.safe_metadata()` records only sanitized digest, MIME and size for each item. `request.to_dict()`, `data_url()` and `protected_bytes()` contain protected media and must never be logged. Removing metadata does not remove identifiers visible in a frame; hosts own consent, pixel de-identification and review. Audio decisions require a separate adapter.
