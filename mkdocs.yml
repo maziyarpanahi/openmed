@@ -440,6 +440,7 @@ nav:
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - Local Audio Retention: multimodal/streaming/audio-retention.md
       - Ambient Consent and Capture State: multimodal/ambient-session-policy.md
+      - Synthetic Reference Workflow: multimodal/reference-workflow.md
       - Bounded Speech Endpoints: multimodal/speech-endpoints.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md

@@ -387,6 +387,11 @@
     },
     {
       "classification": "operational",
+      "function": "run_reference_workflow",
+      "module": "openmed.multimodal.reference_workflow"
+    },
+    {
+      "classification": "operational",
       "function": "AmbientSession.__exit__",
       "module": "openmed.multimodal.streaming.session"
     },
