@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
+
+- Attach ECG timing candidates to complete lead-specific waveform windows, original fiducial brackets and transform/quality provenance, with source-verified metadata replay and protected local sample access (#2810).
+
+- Extract review-only ECG rate, PR, QRS and QT candidates from freshly quality-gated samples, retaining original lead fiducials and algorithm provenance while withholding ambiguous or disagreeing measurements (#2809).
+
+- Gate ECG measurements on versioned per-lead missingness, clipping, flatline, drift/noise proxies and acquisition calibration, with fresh source/sample binding and explicit review before downstream callbacks (#2808).
+
+- Review ECG lead identity, expected sets, display positions and grouped acquisition timing before canonical reordering, with explicit rhythm-strip declarations and value-free non-diagnostic findings (#2807).
+
+- Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
+
+- Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
+
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
 - Define an offline edge-VLM provider contract with bounded image/prompt inputs, source-linked evidence, model/preprocessing digests, shared abstentions, content-free reports and explicit human review for non-diagnostic drafts (#2791).
