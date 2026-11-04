@@ -362,6 +362,16 @@
     },
     {
       "classification": "operational",
+      "function": "ThermalGate.release_speech",
+      "module": "openmed.multimodal.runtime.thermal_gate"
+    },
+    {
+      "classification": "operational",
+      "function": "ThermalGate.run_vlm",
+      "module": "openmed.multimodal.runtime.thermal_gate"
+    },
+    {
+      "classification": "operational",
       "function": "WithholdingBuffer.edit",
       "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
     },
