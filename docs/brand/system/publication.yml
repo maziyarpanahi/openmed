@@ -491,6 +491,9 @@ classification:
     - multimodal/redaction-mask-lineage.md
     - multimodal/pixel-phi-coverage.md
     - multimodal/generated-text-guard.md
+    - multimodal/vision/handwriting-uncertainty.md
+    - multimodal/vision/visual-form-grounding.md
+    - multimodal/ocr-vlm-disagreements.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/offline-asr-provider.md

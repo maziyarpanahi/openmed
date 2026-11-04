@@ -58,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#3089).
 
 - Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
+- Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
+- Associate form values and controls with original visual labels and sections, retain ambiguous alternatives, and require exact-content association and handwriting review before protected structured export (#2797).
+- Keep handwritten alternatives explicitly unverified and gate structured exports on exact-candidate reviewer selection or correction, retaining original visual coordinates and content-free review lineage (#2798).
 
 - Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
 - Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).

@@ -431,6 +431,9 @@ nav:
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
       - Generated Text Release Guard: multimodal/generated-text-guard.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
+      - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - Local MLX Whisper Provider: multimodal/offline-asr-provider.md
