@@ -490,6 +490,7 @@ classification:
     - multimodal/generated-text-guard.md
     - multimodal/thermal-latency-gates.md
     - multimodal/vision/whole-slide-tiling.md
+    - multimodal/vision/multipage-consistency.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/offline-asr-provider.md
