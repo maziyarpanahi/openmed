@@ -487,6 +487,7 @@ classification:
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/streaming/asr-window-stitching.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md

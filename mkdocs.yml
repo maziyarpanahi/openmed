@@ -427,6 +427,7 @@ nav:
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
