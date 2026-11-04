@@ -421,6 +421,7 @@ nav:
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
       - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+      - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md

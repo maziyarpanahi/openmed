@@ -481,6 +481,7 @@ classification:
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/provider-capability-matrix.md
     - multimodal/provider-capability-schema.md
+    - multimodal/thermal-latency-gates.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/streaming/phi-withholding-buffer.md
