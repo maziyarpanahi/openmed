@@ -492,6 +492,7 @@ classification:
     - multimodal/ecg-evidence-windows.md
     - multimodal/streaming/transcript-revisions.md
     - multimodal/openmedkit-contracts.md
+    - multimodal/local-review.md
     - multimodal/cross-modal-clock-alignment.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
