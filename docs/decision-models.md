@@ -45,8 +45,8 @@ and
 
 Two differences matter when you bring an existing client:
 
-- The contract is text only. It does not accept images, video or audio, so
-  OpenMed uses multimodal decision models with text or JSON text input only.
+- Text is the default. Schema 1.1 also accepts verified local images or video
+  when the backend explicitly supports the media type (see [local images and video](#local-images-and-video)).
 - OpenMed's REST route `POST /v1/decisions` takes the OpenMed contract, not the
   OpenAI-compatible Decisions body. A client written for that API cannot call
   it unchanged; convert its body with the `decision_interop` helpers first.
@@ -199,7 +199,7 @@ a local HTTP adapter for a model whose package only exposes an in-process API. T
 connect `DecisionServerBackend` to that endpoint. The server must answer the
 System One route `POST /v1/systemone` or the OpenAI-compatible
 `POST /v1/decisions`; OpenMed does not ship a server for any model. The bridge
-sends text or JSON text only, parses the server's probabilities, and lets
+sends text or JSON text, and can forward validated images and video to a compatible local System One endpoint. It parses the server's probabilities, and lets
 OpenMed's calibration decide every question. Declare the license of the
 weights you serve; a non-permissive declaration is rejected.
 
@@ -239,7 +239,7 @@ measured them on your own held-out data.
 
 Checked against each model repository on 2026-10-30. Sizes are parameter
 counts from the repository metadata. Inputs are what the model card documents;
-OpenMed passes text only.
+The supported path column distinguishes documented model inputs from OpenMed adapter support.
 
 | Model | Size | License | Inputs | Supported path |
 | --- | --- | --- | --- | --- |
