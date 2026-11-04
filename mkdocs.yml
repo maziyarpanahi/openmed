@@ -421,6 +421,7 @@ nav:
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
+      - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
