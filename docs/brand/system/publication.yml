@@ -497,6 +497,7 @@ classification:
     - multimodal/transcript-language-routing.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
+    - multimodal/asr-hallucination-check.md
     - multimodal/email-ingestion.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
