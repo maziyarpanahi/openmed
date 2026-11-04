@@ -491,6 +491,8 @@ classification:
     - multimodal/pixel-phi-coverage.md
     - multimodal/generated-text-guard.md
     - multimodal/vision/multipage-consistency.md
+    - multimodal/vision/handwriting-uncertainty.md
+    - multimodal/vision/visual-form-grounding.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md
