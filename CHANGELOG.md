@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
 
+### Security
+
+- Screen buffered Python MLX and OpenMedKit Compass generations with injected
+  local PHI detectors and same-asset identifier digests. Bind release decisions
+  to metadata, abstain on detector failure or timeout, and suppress reconstructable
+  token IDs. Callers must supply a local guard and asset provenance to release text.
+
 ### Added
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).

@@ -426,6 +426,7 @@ nav:
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
+      - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
