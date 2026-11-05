@@ -45,8 +45,8 @@ and
 
 Two differences matter when you bring an existing client:
 
-- The contract is text only. It does not accept images, video or audio, so
-  OpenMed uses multimodal decision models with text or JSON text input only.
+- Text is the default. Schema 1.1 also accepts verified local images or video
+  when the backend explicitly supports the media type (see [local images and video](#local-images-and-video)).
 - OpenMed's REST route `POST /v1/decisions` takes the OpenMed contract, not the
   OpenAI-compatible Decisions body. A client written for that API cannot call
   it unchanged; convert its body with the `decision_interop` helpers first.
@@ -199,7 +199,7 @@ a local HTTP adapter for a model whose package only exposes an in-process API. T
 connect `DecisionServerBackend` to that endpoint. The server must answer the
 System One route `POST /v1/systemone` or the OpenAI-compatible
 `POST /v1/decisions`; OpenMed does not ship a server for any model. The bridge
-sends text or JSON text only, parses the server's probabilities, and lets
+sends text or JSON text, and can forward validated images and video to a compatible local System One endpoint. It parses the server's probabilities, and lets
 OpenMed's calibration decide every question. Declare the license of the
 weights you serve; a non-permissive declaration is rejected.
 
@@ -239,7 +239,7 @@ measured them on your own held-out data.
 
 Checked against each model repository on 2026-10-30. Sizes are parameter
 counts from the repository metadata. Inputs are what the model card documents;
-OpenMed passes text only.
+The supported path column distinguishes documented model inputs from OpenMed adapter support.
 
 | Model | Size | License | Inputs | Supported path |
 | --- | --- | --- | --- | --- |
@@ -284,3 +284,23 @@ through the bridge. Do not declare a different license to get past the check.
 
 MedDecider-4B-NLI is Apache-2.0. The larger MedDecider models (9B, 27B and
 31B) are CC BY-NC 4.0 and are not supported.
+
+## Local images and video
+
+`DecisionMedia` accepts bytes or an absolute local file from a trusted caller, with the declared MIME type, byte count and expected SHA-256. File paths never cross the wire. JSON decision requests carry inline base64 only; System One uses `images` and `videos` lists of base64 data URLs. Remote URLs are refused. A backend must explicitly support each media type: text-only backends return `unsupported` without scoring. The local bridge sends media only over loopback or a Unix socket to the System One endpoint. Private-network endpoints and the text-only OpenAI Decisions protocol refuse it.
+
+```python
+# Fragment: needs a trusted local image and its previously verified capture digest.
+from pathlib import Path
+from openmed.structured.decision import DecisionMode, DecisionRequest
+from openmed.structured.decision_media import DecisionMedia
+
+asset = DecisionMedia(Path("/local/review.png"), media_type="image/png",
+                      sha256=expected_capture_digest, byte_size=expected_byte_count)
+request = DecisionRequest(mode=DecisionMode.BOOLEAN_CHOICE, input_text="Review the image.",
+                          media=(asset,))
+```
+
+The Python adapter preflights original bytes, dimensions, frames and duration under explicit asset limits. It accepts single-frame PNG/JPEG with Pillow; it applies EXIF orientation, discards metadata including ICC/EXIF/text, and encodes the decoded pixels as PNG. MP4 support requires locally installed FFmpeg and ffprobe, including a lossless RGB H.264 encoder. Both run through bounded in-memory pipes. A short, constant-rate, single video track (H.264, MPEG-4 or MJPEG) is decoded to RGB, re-encoded without source metadata, and decoded again to verify every frame and its timing. Audio, subtitles, non-square pixels, rotated tracks, incomplete timestamps, unsupported codecs and inputs that require seeking beyond a pipe are refused. No recording is written to a temporary file.
+
+The limits are four items per request, 8 MiB per item and 16 MiB in total. Each frame has a two-megapixel ceiling; clips are limited to 64 frames, 16 million total pixels and 30 seconds. The model may impose stricter limits. `request.safe_metadata()` records only sanitized digest, MIME and size for each item. `request.to_dict()`, `data_url()` and `protected_bytes()` contain protected media and must never be logged. Removing metadata does not remove identifiers visible in a frame; hosts own consent, pixel de-identification and review. Audio decisions require a separate adapter.
