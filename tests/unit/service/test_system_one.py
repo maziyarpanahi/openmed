@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import openmed
@@ -183,3 +184,38 @@ def test_scope_and_unredacted_media_are_refused(monkeypatch):
         )
     assert r.status_code in {400, 422} and PRIVATE not in r.text
     fail.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"state": PRIVATE, "questions": {RAW_ID: []}},
+        {**BODY, PRIVATE: "unexpected field"},
+    ],
+)
+@pytest.mark.parametrize("mounted", [False, True])
+def test_schema_refusals_never_echo_caller_keys_or_run_models(
+    monkeypatch, caplog, body, mounted
+):
+    app = configured(monkeypatch)
+    cleaner = Mock(side_effect=AssertionError("de-identification must not run"))
+    backend = Mock()
+    monkeypatch.setattr(openmed, "deidentify", cleaner)
+    app.state.decision_backend = backend
+    caplog.set_level("DEBUG")
+
+    served_app = app
+    prefix = ""
+    if mounted:
+        served_app = FastAPI()
+        prefix = "/service"
+        served_app.mount(prefix, app)
+    with TestClient(served_app, base_url="http://127.0.0.1") as client:
+        response = client.post(prefix + "/v1/systemone", json=body, headers=HEADERS)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+    assert PRIVATE not in response.text + caplog.text
+    assert RAW_ID not in response.text + caplog.text
+    cleaner.assert_not_called()
+    assert not backend.mock_calls

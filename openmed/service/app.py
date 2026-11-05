@@ -169,6 +169,7 @@ _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
+_SYSTEM_ONE_PATH = "/v1/systemone"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -1029,14 +1030,19 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Question IDs and unknown JSON keys may themselves contain PHI. Use the
+        # matched route so mounted services receive the same content-free error.
+        protected_route = (
+            getattr(request.scope.get("route"), "path", None) == _SYSTEM_ONE_PATH
+        )
         return _error_response(
             422,
             "validation_error",
             "Request validation failed",
-            details=_format_validation_details(exc),
+            details=None if protected_route else _format_validation_details(exc),
         )
 
     @app.exception_handler(ServiceTimeoutError)
@@ -1316,7 +1322,7 @@ def create_app(
         return result.to_dict()
 
     @app.post(
-        "/v1/systemone",
+        _SYSTEM_ONE_PATH,
         tags=["decision"],
         response_model=None,
         responses={
