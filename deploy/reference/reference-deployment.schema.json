@@ -1,0 +1,425 @@
+{
+  "$id": "https://openmed.life/schemas/deploy/reference-deployment.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenMed reference deployment declaration",
+  "description": "Declares the reference topology, supported transports, replica modes, durable components with recovery objectives, and unsupported deployments for one release line. Values are controlled codes and repository-relative references only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release",
+    "objective_evidence",
+    "reference_topology",
+    "topologies",
+    "services",
+    "transports",
+    "durable_components",
+    "unsupported_deployments"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "openmed.reference_deployment.v1"
+    },
+    "release": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "objective_evidence": {
+      "description": "Whether the recovery objectives are measured. Drills and signed evidence are owned elsewhere.",
+      "enum": ["unmeasured_targets", "measured"]
+    },
+    "reference_topology": {
+      "$ref": "#/$defs/code"
+    },
+    "topologies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/topology"
+      }
+    },
+    "services": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/service"
+      }
+    },
+    "transports": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/transport"
+      }
+    },
+    "durable_components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/durable_component"
+      }
+    },
+    "unsupported_deployments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/unsupported_deployment"
+      }
+    }
+  },
+  "$defs": {
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 64
+    },
+    "codes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/code"
+      },
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$"
+    },
+    "module_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*(:[A-Za-z_][A-Za-z0-9_]*)?$"
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "method", "path"],
+      "properties": {
+        "surface": {
+          "enum": ["rest", "journey_worker", "mcp"]
+        },
+        "method": {
+          "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9_./{}-]*$"
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "compose_services": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "uniqueItems": true
+        },
+        "compose_volumes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "uniqueItems": true
+        },
+        "helm_values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/module_ref"
+          },
+          "uniqueItems": true
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/route"
+          }
+        },
+        "grpc_methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9]*/[A-Za-z][A-Za-z0-9]*$"
+          },
+          "uniqueItems": true
+        },
+        "manifests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/manifest"
+          }
+        },
+        "docs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^docs/[A-Za-z0-9_./-]+\\.md$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "summary", "services", "references"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "status": {
+          "enum": ["reference", "supported", "unsupported"]
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "services": {
+          "$ref": "#/$defs/codes",
+          "minItems": 1
+        },
+        "references": {
+          "$ref": "#/$defs/references",
+          "required": ["manifests"]
+        }
+      }
+    },
+    "replica_mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "status", "constraint_codes"],
+      "properties": {
+        "mode": {
+          "enum": ["single", "horizontal", "one_shot", "external"]
+        },
+        "status": {
+          "enum": ["reference", "supported", "restricted", "unsupported"]
+        },
+        "constraint_codes": {
+          "$ref": "#/$defs/codes"
+        },
+        "references": {
+          "$ref": "#/$defs/references"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary", "replica_modes", "references"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "replica_modes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/replica_mode"
+          }
+        },
+        "references": {
+          "$ref": "#/$defs/references"
+        }
+      }
+    },
+    "security_posture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encryption",
+        "authentication",
+        "default_exposure",
+        "constraint_codes"
+      ],
+      "properties": {
+        "encryption": {
+          "enum": ["none", "optional_tls", "not_applicable"]
+        },
+        "authentication": {
+          "enum": ["none", "optional", "required", "not_applicable"]
+        },
+        "default_exposure": {
+          "enum": [
+            "local_process",
+            "loopback",
+            "internal_network",
+            "cluster_internal",
+            "outbound_only",
+            "not_wired"
+          ]
+        },
+        "constraint_codes": {
+          "$ref": "#/$defs/codes"
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "status",
+        "summary",
+        "services",
+        "security_posture",
+        "references"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "status": {
+          "enum": ["supported", "restricted", "unsupported"]
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "services": {
+          "$ref": "#/$defs/codes",
+          "minItems": 1
+        },
+        "security_posture": {
+          "$ref": "#/$defs/security_posture"
+        },
+        "references": {
+          "$ref": "#/$defs/references"
+        }
+      }
+    },
+    "recovery_objective": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "target_seconds", "basis"],
+          "properties": {
+            "status": {
+              "const": "declared"
+            },
+            "target_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "basis": {
+              "$ref": "#/$defs/code"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason_code"],
+          "properties": {
+            "status": {
+              "const": "unsupported"
+            },
+            "reason_code": {
+              "$ref": "#/$defs/code"
+            }
+          }
+        }
+      ]
+    },
+    "durable_component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "summary",
+        "storage",
+        "replica_mode",
+        "owner_services",
+        "topologies",
+        "recovery_point_objective",
+        "recovery_time_objective",
+        "references"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "storage": {
+          "$ref": "#/$defs/code"
+        },
+        "replica_mode": {
+          "enum": [
+            "single_primary",
+            "single_writer_volume",
+            "single_process",
+            "per_replica_memory",
+            "external_operator_owned"
+          ]
+        },
+        "owner_services": {
+          "$ref": "#/$defs/codes",
+          "minItems": 1
+        },
+        "topologies": {
+          "$ref": "#/$defs/codes",
+          "minItems": 1
+        },
+        "recovery_point_objective": {
+          "$ref": "#/$defs/recovery_objective"
+        },
+        "recovery_time_objective": {
+          "$ref": "#/$defs/recovery_objective"
+        },
+        "references": {
+          "$ref": "#/$defs/references"
+        }
+      }
+    },
+    "unsupported_deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reason_code", "summary", "references"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/code"
+        },
+        "reason_code": {
+          "$ref": "#/$defs/code"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "references": {
+          "$ref": "#/$defs/references"
+        }
+      }
+    }
+  }
+}
