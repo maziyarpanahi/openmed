@@ -225,6 +225,11 @@ classification:
     - deploy/helm.md
     - deploy/autoscaling.md
     - deploy/operator.md
+    - operations/runbooks/service-runbooks.md
+    - operations/runbooks/credential-compromise.md
+    - operations/runbooks/client-certificate-compromise.md
+    - operations/runbooks/disk-exhaustion.md
+    - operations/runbooks/store-corruption.md
     - deploy/openhim-mediator.md
     - deploy/africa-reference-deployment.md
     - deploy/multi-arch.md
