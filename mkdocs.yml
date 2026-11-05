@@ -412,21 +412,34 @@ nav:
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
+      - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
+      - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
+      - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+      - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
+      - Image Quality and Abstention: multimodal/vision/quality-abstention.md
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
+      - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
+      - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
       - Multimodal Abstention Reasons: multimodal/abstention-reasons.md
       - Email Ingestion and Redaction: multimodal/email-ingestion.md
@@ -483,6 +496,8 @@ nav:
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
+      - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
