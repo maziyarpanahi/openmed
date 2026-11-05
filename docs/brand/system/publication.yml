@@ -482,6 +482,8 @@ classification:
     - multimodal/provider-results.md
     - multimodal/runtime-session.md
     - multimodal/vision/edge-vlm-provider-contract.md
+    - multimodal/provider-capability-matrix.md
+    - multimodal/provider-capability-schema.md
     - multimodal/vision/whole-slide-tiling.md
     - multimodal/vision/quality-abstention.md
     - multimodal/fused-evidence-graphs.md
