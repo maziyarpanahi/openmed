@@ -33,6 +33,15 @@ HEADERS = {"X-API-Key": "example-synthetic-key"}
 
 
 def configured(monkeypatch, *, scopes=("decisions:write", "pii:write"), burst=20):
+    # Exercise the real service admission and warm pool without installing
+    # optional Transformers weights for a fake de-identifier.
+    from openmed.service import runtime as service_runtime
+
+    monkeypatch.setattr(
+        service_runtime,
+        "ModelLoader",
+        lambda _config: SimpleNamespace(loaded_models=lambda: {}),
+    )
     monkeypatch.setenv("OPENMED_SERVICE_SYSTEM_ONE", "1")
     monkeypatch.setenv("OPENMED_OFFLINE", "1")
     monkeypatch.setenv("OPENMED_SERVICE_AUTH_ENABLED", "1")
@@ -144,7 +153,8 @@ def test_refusals_never_dispatch_or_echo_sensitive_input(monkeypatch, reason):
             deidentified_text=text, pii_entities=[SimpleNamespace(start=0, end=1)]
         )
 
-    monkeypatch.setattr(openmed, "deidentify", bad)
+    cleaner = Mock(side_effect=bad)
+    monkeypatch.setattr(openmed, "deidentify", cleaner)
     with TestClient(app, base_url="http://127.0.0.1") as client:
         r = client.post("/v1/systemone", json=BODY, headers=HEADERS)
     assert (
@@ -152,6 +162,7 @@ def test_refusals_never_dispatch_or_echo_sensitive_input(monkeypatch, reason):
         and r.json()["error"]["code"] == "outbound_redaction_failed"
     )
     assert PRIVATE not in r.text
+    cleaner.assert_called()
     assert not backend.mock_calls
 
 
