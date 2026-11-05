@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Verify complete whole-slide tile references, original source coordinates, transform history and tissue-selection evidence before computing protected feature aggregates with value-free provenance (#2802).
+
 - Keep handwritten alternatives explicitly unverified and gate structured exports on exact-candidate reviewer selection or correction, retaining original visual coordinates and content-free review lineage (#2798).
 
 - Screen localized OCR and visual text for instruction cues, quarantine complete implicated regions, and require exact-content policy or reviewer release before including held text in prompt data (#2804).

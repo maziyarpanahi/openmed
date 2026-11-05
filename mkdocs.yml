@@ -425,6 +425,7 @@ nav:
       - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
       - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
       - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
+      - Whole-slide Aggregation Provenance: multimodal/vision/whole-slide-provenance.md
       - Image Quality and Abstention: multimodal/vision/quality-abstention.md
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md

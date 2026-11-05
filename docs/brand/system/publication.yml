@@ -485,6 +485,7 @@ classification:
     - multimodal/provider-capability-matrix.md
     - multimodal/provider-capability-schema.md
     - multimodal/vision/whole-slide-tiling.md
+    - multimodal/vision/whole-slide-provenance.md
     - multimodal/vision/quality-abstention.md
     - multimodal/fused-evidence-graphs.md
     - multimodal/vision/handwriting-uncertainty.md
