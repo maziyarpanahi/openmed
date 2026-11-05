@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
 
+- Record actual DICOM decoding and display transforms in reproducible digest chains, bind downstream image regions and local VLM evidence to their pixels, and reject stale or unreproducible evidence (#2801).
+
+- Redact ECG fields and rendered annotations together, with source-bound review, cross-surface identifier matching, verified in-memory PNG export, unchanged waveforms and refusal on residual identifiers or unknown coverage (#2811).
+
+- Keep ambient speaker-role hypotheses separate from aliases and require exact-source reviewer decisions before role-sensitive extraction and note finalization, with explicit provisional drafts and stale-attribution rejection (#2817).
+
+- Verify complete whole-slide tile references, original source coordinates, transform history and tissue-selection evidence before computing protected feature aggregates with value-free provenance (#2802).
+
+- Keep handwritten alternatives explicitly unverified and gate structured exports on exact-candidate reviewer selection or correction, retaining original visual coordinates and content-free review lineage (#2798).
+
+- Screen localized OCR and visual text for instruction cues, quarantine complete implicated regions, and require exact-content policy or reviewer release before including held text in prompt data (#2804).
+
+- Gate ECG measurements on versioned per-lead missingness, clipping, flatline, drift/noise proxies and acquisition calibration, with fresh source/sample binding and explicit review before downstream callbacks (#2808).
+
+- Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
+
+- Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
+
+- Carry verified local images and bounded video clips through decision requests and the loopback System One bridge; strip metadata before dispatch and keep media out of audit logs (#4261).
+
+- Add an experimental CPU ONNX streaming speech adapter for pinned local character-CTC exports, with bounded timed hypotheses and content-free reports (#3842).
+
+- Export a strict, self-contained Draft 2020-12 schema for provider capability matrix records, sharing Python identifiers, bounds and outcome/reason combinations (#3118).
+
+- Add offline `openmed multimodal preflight` with opaque reports, bounded headers, shared resource admission and opt-in symlink-safe directory traversal (#3053).
+
+- Compare versioned local multimodal provider capability declarations against
+  content-free modality profiles, with stable exact, transform-required,
+  unsupported and missing-capability JSON and Markdown reports (#3095).
+
+- Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
+
+- Run ordered multimodal batch preflight with shared per-asset reports, aggregate ceilings, duplicates and explicit stop policies (#3009).
+
+- Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
+
+- Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
+  declared file-meta transfer syntaxes into closed native, optional-decoder,
+  review, and unsupported outcomes with stable reason codes, and reports no
+  patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
+  (#3089).
+
+- Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
+
+- Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
+
+- Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
+
+- Review ECG lead identity, expected sets, display positions and grouped acquisition timing before canonical reordering, with explicit rhythm-strip declarations and value-free non-diagnostic findings (#2807).
+
+- Maintain session-scoped speaker aliases through explicit diarization relabels, merges and splits, with atomic revisions, value-free lineage and reviewer-confirmed clinical roles (#2813).
+
 - Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
 
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).

@@ -371,6 +371,7 @@ type FixedOptionDecisionRequest struct {
 	OptionDescriptions  []*string    `json:"option_descriptions,omitempty"`
 	Levels              []string     `json:"levels,omitempty"`
 	Questions           []JSONObject `json:"questions,omitempty"`
+	Media               []JSONObject `json:"media,omitempty"`
 	InputFormat         string       `json:"input_format,omitempty"`
 	MaxInputChars       int          `json:"max_input_chars,omitempty"`
 }
