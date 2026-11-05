@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Review ECG lead identity, expected sets, display positions and grouped acquisition timing before canonical reordering, with explicit rhythm-strip declarations and value-free non-diagnostic findings (#2807).
+
 - Maintain session-scoped speaker aliases through explicit diarization relabels, merges and splits, with atomic revisions, value-free lineage and reviewer-confirmed clinical roles (#2813).
 
 - Preserve distinct image, OCR, metadata and normalized-fact sources in bounded fused-evidence graphs, with source coordinates, typed derivations, deterministic reports and propagated review holds (#2796).
