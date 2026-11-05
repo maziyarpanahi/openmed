@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from openmed.multimodal.streaming import speech
-from openmed.multimodal.streaming.speech import providers
+from openmed.multimodal.streaming.speech import providers, speaker_aliases
 
 FINGERPRINT = "sha256:" + "a" * 64
 PRIVATE_TEXT = "participant-5550199-said-something-private"
@@ -140,11 +140,15 @@ def test_reason_codes_are_unique_and_ordered() -> None:
     assert all(isinstance(code, str) and code for code in codes)
 
 
-def test_public_surface_matches_provider_module() -> None:
-    assert speech.__all__ == providers.__all__
+def test_public_surface_preserves_providers_and_includes_speaker_aliases() -> None:
+    assert set(speech.__all__) == set(providers.__all__) | set(speaker_aliases.__all__)
+    assert [
+        name for name in speech.__all__ if name not in speaker_aliases.__all__
+    ] == providers.__all__
     assert len(set(speech.__all__)) == len(speech.__all__)
-    for name in providers.__all__:
-        assert getattr(speech, name) is getattr(providers, name)
+    for module in (providers, speaker_aliases):
+        for name in module.__all__:
+            assert getattr(speech, name) is getattr(module, name)
 
 
 def test_module_declares_no_network_imports() -> None:
