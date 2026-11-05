@@ -478,13 +478,20 @@ classification:
     - multimodal/processing-summaries.md
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
+    - multimodal/runtime-session.md
     - multimodal/vision/edge-vlm-provider-contract.md
+    - multimodal/vision/whole-slide-tiling.md
+    - multimodal/vision/quality-abstention.md
+    - multimodal/fused-evidence-graphs.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
+    - multimodal/streaming/transcript-revisions.md
+    - multimodal/ecg-lead-layout.md
+    - multimodal/streaming/speaker-aliases.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
     - multimodal/email-ingestion.md
