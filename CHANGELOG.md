@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Keep handwritten alternatives explicitly unverified and gate structured exports on exact-candidate reviewer selection or correction, retaining original visual coordinates and content-free review lineage (#2798).
+
 - Screen localized OCR and visual text for instruction cues, quarantine complete implicated regions, and require exact-content policy or reviewer release before including held text in prompt data (#2804).
 
 - Gate ECG measurements on versioned per-lead missingness, clipping, flatline, drift/noise proxies and acquisition calibration, with fresh source/sample binding and explicit review before downstream callbacks (#2808).
