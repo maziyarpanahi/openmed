@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Gate ECG measurements on versioned per-lead missingness, clipping, flatline, drift/noise proxies and acquisition calibration, with fresh source/sample binding and explicit review before downstream callbacks (#2808).
+
 - Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
 
 - Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
