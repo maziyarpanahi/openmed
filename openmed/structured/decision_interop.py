@@ -97,7 +97,9 @@ def from_system_one_request(
     """
 
     payload = _mapping(body, "System One request")
-    _only(payload, {"state", "questions"}, "System One request")
+    _only(payload, {"state", "questions", "images", "videos"}, "System One request")
+    from .decision_media import system_one_media
+
     if "state" not in payload or "questions" not in payload:
         raise DecisionError("System One requests require state and questions")
     input_text, input_format = _state_to_input(payload["state"])
@@ -105,6 +107,7 @@ def from_system_one_request(
     return DecisionRequest(
         mode=DecisionMode.QUESTION_SET,
         input_text=input_text,
+        media=system_one_media(payload),
         namespace=namespace,
         purpose=purpose,
         calibration_id=calibration_id,
@@ -157,7 +160,16 @@ def to_system_one_request(request: DecisionRequest) -> dict[str, Any]:
         else:
             entry["criteria"] = list(question.levels)
         questions[question.question_id] = entry
-    return {"state": _input_to_state(request), "questions": questions}
+    body = {"state": _input_to_state(request), "questions": questions}
+    for field, prefix in (("images", "image/"), ("videos", "video/")):
+        urls = [
+            item.data_url()
+            for item in request.media
+            if item.media_type.startswith(prefix)
+        ]
+        if urls:
+            body[field] = urls
+    return body
 
 
 def from_system_one_response(
@@ -331,6 +343,8 @@ def to_openai_decisions_request(
         DecisionUnsupportedError: If a question has no Decisions equivalent.
     """
 
+    if isinstance(request, DecisionRequest) and request.media:
+        raise DecisionUnsupportedError("media requires the local System One protocol")
     _require_request(request)
     questions = []
     for question in request.as_questions():
