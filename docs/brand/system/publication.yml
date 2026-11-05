@@ -598,6 +598,7 @@ classification:
     - india-health-id-deidentification.md
     - security/policy-as-data.md
     - pii-smart-merging.md
+    - security/multimodal-decoder-boundaries.md
     - security/no-raw-phi-logging.md
     - security/pre-push-privacy.md
     - security/trace-audit-artifact.md
