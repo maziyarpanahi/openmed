@@ -598,6 +598,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_audit_command(subparsers)
     _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
+    from .service_recovery import add_service_recovery_command
+
+    add_service_recovery_command(subparsers)
     _add_policy_command(subparsers)
     _add_export_command(subparsers)
     _add_fhir_command(subparsers)
