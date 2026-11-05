@@ -1069,6 +1069,11 @@
                     "required": [
                       "max_input_chars"
                     ]
+                  },
+                  {
+                    "required": [
+                      "media"
+                    ]
                   }
                 ]
               },
@@ -1151,6 +1156,43 @@
             "maximum": 131072,
             "minimum": 1,
             "type": "integer"
+          },
+          "media": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "byte_size": {
+                  "maximum": 8388608,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "data": {
+                  "contentEncoding": "base64",
+                  "maxLength": 11184812,
+                  "type": "string"
+                },
+                "media_type": {
+                  "enum": [
+                    "image/png",
+                    "image/jpeg",
+                    "video/mp4"
+                  ]
+                },
+                "sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "media_type",
+                "sha256",
+                "byte_size",
+                "data"
+              ],
+              "type": "object"
+            },
+            "maxItems": 4,
+            "type": "array"
           },
           "mode": {
             "enum": [

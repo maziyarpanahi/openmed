@@ -1106,6 +1106,11 @@ class FixedOptionDecisionRequest(_StrictModel):
     )
     levels: list[str] = _decision_list_field(DECISION_MAX_OPTIONS)
     questions: list[dict[str, Any]] = _decision_list_field(DECISION_MAX_QUESTIONS)
+    media: list[dict[str, Any]] = Field(
+        default_factory=list,
+        repr=False,
+        **({"max_length": 4} if PYDANTIC_V2 else {"max_items": 4}),
+    )
     input_format: Literal["text", "json"] = "text"
     max_input_chars: Optional[int] = Field(
         default=None,
