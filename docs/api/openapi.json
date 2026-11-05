@@ -865,7 +865,8 @@
                   "enum": [
                     "image/png",
                     "image/jpeg",
-                    "video/mp4"
+                    "video/mp4",
+                    "audio/wav"
                   ]
                 },
                 "sha256": {
@@ -4504,13 +4505,13 @@
                           "type": "string"
                         },
                         "license_id": {
-                          "enum": [
-                            "Apache-2.0",
-                            "BSD-2-Clause",
-                            "BSD-3-Clause",
-                            "MIT",
-                            "MPL-2.0"
-                          ],
+                          "maxLength": 128,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
+                          "type": "string"
+                        },
+                        "license_sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
                           "type": "string"
                         },
                         "local": {

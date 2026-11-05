@@ -277,7 +277,8 @@
             "enum": [
               "image/png",
               "image/jpeg",
-              "video/mp4"
+              "video/mp4",
+              "audio/wav"
             ]
           },
           "sha256": {

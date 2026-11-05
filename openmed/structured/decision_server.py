@@ -259,8 +259,8 @@ class DecisionServerBackend:
             ``openai_decisions`` (``POST /v1/decisions``).
         model_id: Declared model identifier, recorded in the backend identity.
         revision: Declared immutable model revision, recorded in the identity.
-        license_id: Declared SPDX license of the served weights. Undeclared or
-            non-permissive licenses are rejected, as for every backend.
+        license_id: Operator-declared license of the served model revision.
+        license_sha256: Optional SHA-256 of that revision's license file.
         backend_id: Identity ``backend_id``; derived from the protocol by
             default.
         served_model: Name the server knows the model by. It is sent as
@@ -299,6 +299,7 @@ class DecisionServerBackend:
         model_id: str,
         revision: str,
         license_id: str,
+        license_sha256: str | None = None,
         backend_id: str | None = None,
         served_model: str | None = None,
         path: str | None = None,
@@ -365,6 +366,7 @@ class DecisionServerBackend:
             model_id=model_id,
             revision=revision,
             license_id=license_id,
+            license_sha256=license_sha256,
         )
 
     @property

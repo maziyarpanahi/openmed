@@ -225,7 +225,7 @@ export interface DecisionQuestion {
 
 /** Protected inline media. Never log the encoded payload. */
 export interface DecisionMedia {
-  media_type: "image/png" | "image/jpeg" | "video/mp4";
+  media_type: "image/png" | "image/jpeg" | "video/mp4" | "audio/wav";
   byte_size: number;
   sha256: string;
   data: string;
