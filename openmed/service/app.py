@@ -1279,7 +1279,11 @@ def create_app(
             else payload.dict(exclude_unset=True)
         )
         try:
-            decision_request = CoreDecisionRequest.from_dict(body)
+            # Optional video preflight and metadata scrubbing must not block
+            # the event loop serving unrelated requests.
+            decision_request = await run_in_threadpool(
+                CoreDecisionRequest.from_dict, body
+            )
         except (DecisionError, TypeError, ValueError) as exc:
             raise InputError(
                 "Invalid fixed-option decision request.",
