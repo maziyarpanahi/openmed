@@ -429,6 +429,7 @@ nav:
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
+      - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
       - WAV Metadata Preflight: multimodal/wav-preflight.md
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
