@@ -1,8 +1,8 @@
-"""Offline streaming-ASR provider contracts.
+"""Offline streaming-ASR contracts and session-local speaker lineage.
 
 The subpackage re-exports the public surface of
-:mod:`openmed.multimodal.streaming.speech.providers` so callers can import from
-one stable location while the module keeps the implementation.
+:mod:`openmed.multimodal.streaming.speech.providers` and the speaker alias
+registry so callers can import from one stable location.
 """
 
 from __future__ import annotations
@@ -41,8 +41,18 @@ from .providers import (
     TokenTime,
     register_speech_providers,
 )
+from .speaker_aliases import (
+    ALIAS_SCHEMA_VERSION,
+    ClinicalRole,
+    LineageEvent,
+    LineageKind,
+    RoleReview,
+    SpeakerAliasError,
+    SpeakerAliases,
+)
 
 __all__ = [
+    "ALIAS_SCHEMA_VERSION",
     "MAX_BUFFERED_BYTE_COUNT",
     "MAX_BUFFERED_CHUNKS",
     "MAX_BUFFERED_DURATION_MS",
@@ -62,11 +72,17 @@ __all__ = [
     "SPEECH_PROVIDER_CONTRACT_VERSION",
     "SPEECH_PROVIDER_REASON_CODES",
     "AudioChunk",
+    "ClinicalRole",
     "FinalizedSegment",
     "LanguageConfidence",
+    "LineageEvent",
+    "LineageKind",
     "PartialHypothesis",
     "ProviderProvenance",
     "RegisteredSpeechProvider",
+    "RoleReview",
+    "SpeakerAliasError",
+    "SpeakerAliases",
     "SpeechProviderDeclaration",
     "SpeechProviderError",
     "SpeechStreamLimits",
