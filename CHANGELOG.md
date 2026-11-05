@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Propagate protected source regions through bounded affine, crop and raster stages, retaining coordinate identities and failing closed on coverage holes, singular transforms or lost mask support (#2803).
+
 - Withhold bounded provisional speech until context is finalized and local PHI screening resolves identifiers, preserving known redactions across context changes and discarding pending text on overflow or deadline expiry (#2815).
 
 - Carry verified local images and bounded video clips through decision requests and the loopback System One bridge; strip metadata before dispatch and keep media out of audit logs (#4261).
