@@ -599,6 +599,16 @@ INTEGRATION_CAPABILITIES: Final[tuple[IntegrationCapability, ...]] = (
         description="Deterministic FHIR resource and bulk export transformations.",
     ),
     _capability(
+        "flower",
+        "Flower strategy bridge",
+        "openmed.integrations.flower_strategy",
+        extra="flower",
+        documentation=("docs/integrations/flower.md",),
+        tests=("tests/unit/integrations/test_flower_strategy.py",),
+        policy="configured-network",
+        description="Fail-closed federated fit gate; operators install Flower.",
+    ),
+    _capability(
         "gliner_biomed",
         "GLiNER-BioMed",
         "openmed.interop.gliner_biomed",

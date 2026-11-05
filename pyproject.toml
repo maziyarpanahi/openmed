@@ -205,6 +205,10 @@ interop-gpl = []
 # subprocess. This marker extra intentionally installs no validator code.
 grounding-validate = []
 
+# Flower is operator-installed and deployed. Its FastAPI pins conflict with
+# patched Airflow, so this marker extra intentionally installs no framework code.
+flower = []
+
 # extract-msg is GPL-3.0 and is invoked only through OpenMed's isolated
 # stdin/stdout subprocess bridge. This explicit extra keeps GPL code out of the
 # base and general multimodal environments.

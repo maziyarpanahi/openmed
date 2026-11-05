@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add an optional Flower strategy bridge and `flower` marker extra that validate every fit result against the trusted update policy, schema fingerprint and tensor digest before aggregation, failing the round closed, plus a client wrapper that refuses unclipped or non-allowlisted updates (#3877).
+
 - Add deterministic edge-VLM execution memory plans with explicit device budgets, bounded preprocessing estimates and local-only abstention before allocation (#2792).
 
 - Define an offline edge-VLM provider contract with bounded image/prompt inputs, source-linked evidence, model/preprocessing digests, shared abstentions, content-free reports and explicit human review for non-diagnostic drafts (#2791).
