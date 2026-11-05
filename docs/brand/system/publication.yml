@@ -487,6 +487,7 @@ classification:
     - multimodal/vision/whole-slide-tiling.md
     - multimodal/vision/quality-abstention.md
     - multimodal/fused-evidence-graphs.md
+    - multimodal/vision/visual-instruction-injection.md
     - multimodal/redaction-mask-lineage.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
