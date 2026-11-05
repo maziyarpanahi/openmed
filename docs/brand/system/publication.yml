@@ -479,6 +479,7 @@ classification:
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
     - multimodal/vision/edge-vlm-provider-contract.md
+    - multimodal/vision/whole-slide-tiling.md
     - multimodal/vision/quality-abstention.md
     - multimodal/fused-evidence-graphs.md
     - multimodal/audio-windows.md

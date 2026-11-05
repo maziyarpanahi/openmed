@@ -419,6 +419,7 @@ nav:
       - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
+      - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
       - Image Quality and Abstention: multimodal/vision/quality-abstention.md
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Streaming Audio Windows: multimodal/audio-windows.md
