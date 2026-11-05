@@ -472,6 +472,8 @@ classification:
     - multimodal/batch-memory-estimates.md
     - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
+    - multimodal/batch-preflight.md
+    - multimodal/preflight-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
