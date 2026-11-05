@@ -362,6 +362,11 @@
     },
     {
       "classification": "operational",
+      "function": "MultimodalSession._run",
+      "module": "openmed.multimodal.runtime_session"
+    },
+    {
+      "classification": "operational",
       "function": "WithholdingBuffer.edit",
       "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
     },
