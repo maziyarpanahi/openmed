@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
+
 - Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
+
+- Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
+  declared file-meta transfer syntaxes into closed native, optional-decoder,
+  review, and unsupported outcomes with stable reason codes, and reports no
+  patient tags, non-transfer-syntax UIDs, pixels, or paths, plus offline tests
+  (#3089).
 
 - Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
 
