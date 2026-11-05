@@ -1355,7 +1355,7 @@ def create_app(
 
         app_state = request.app.state
         if not app_state.system_one_enabled:
-            return _error_response(404, "not_found", "System One route is disabled.")
+            raise HTTPException(status_code=404, detail="System One route is disabled.")
         runtime = _get_service_runtime(request)
         if not (
             app_state.auth.config.enabled
@@ -1364,7 +1364,7 @@ def create_app(
         ):
             return _error_response(
                 503,
-                "systemone_configuration",
+                "privacy_gateway_not_configured",
                 "Local-only mode, service authentication and rate limits are required.",
             )
 
@@ -1398,17 +1398,15 @@ def create_app(
                 audit_key=app_state.system_one_audit_key,
             )
         except SystemOneInputError:
-            return _error_response(
-                400, "invalid_systemone", "Invalid System One request."
-            )
+            return _error_response(400, "bad_request", "Invalid System One request.")
         except SystemOnePrivacyError:
             return _error_response(
-                422, "privacy_refused", "Unable to de-identify the request."
+                422, "outbound_redaction_failed", "Unable to de-identify the request."
             )
         except Exception:
             return _error_response(
                 503,
-                "decision_unavailable",
+                "not_ready",
                 "The local decision backend is unavailable.",
             )
 

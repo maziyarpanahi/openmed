@@ -147,7 +147,10 @@ def test_refusals_never_dispatch_or_echo_sensitive_input(monkeypatch, reason):
     monkeypatch.setattr(openmed, "deidentify", bad)
     with TestClient(app, base_url="http://127.0.0.1") as client:
         r = client.post("/v1/systemone", json=BODY, headers=HEADERS)
-    assert r.status_code == 422 and r.json()["error"]["code"] == "privacy_refused"
+    assert (
+        r.status_code == 422
+        and r.json()["error"]["code"] == "outbound_redaction_failed"
+    )
     assert PRIVATE not in r.text
     assert not backend.mock_calls
 
