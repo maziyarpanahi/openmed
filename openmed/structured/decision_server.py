@@ -27,7 +27,7 @@ Transport errors, refusals and malformed bodies become typed ``failure`` or
 ``unsupported`` decision states with controlled codes, never a fabricated
 answer. Exceptions and log records carry codes and counts only; they never
 contain the endpoint URL or query, the request input, instructions, options or
-credentials. Inputs are text (or JSON text); media inputs are not sent.
+credentials. Media is sent only to System One servers on loopback or a Unix socket.
 """
 
 from __future__ import annotations
@@ -412,6 +412,16 @@ class DecisionServerBackend:
             "max_redirects": self._max_redirects,
         }
 
+    @property
+    def supported_media_types(self) -> frozenset[str]:
+        """Only local System One servers may receive sanitized media."""
+        if self._protocol is DecisionServerProtocol.SYSTEM_ONE and self._scope in (
+            DecisionServerScope.LOOPBACK,
+            DecisionServerScope.UNIX_SOCKET,
+        ):
+            return frozenset({"image/png", "video/mp4"})
+        return frozenset()
+
     def score(self, request: DecisionRequest) -> DecisionBackendOutput:
         """Score one single-question request on the server.
 
@@ -461,6 +471,10 @@ class DecisionServerBackend:
     def _exchange(self, request: DecisionRequest) -> dict[str, DecisionBackendOutput]:
         started = time.monotonic()
         deadline = started + request.timeout_ms / 1000.0
+        if request.media and any(
+            item.media_type not in self.supported_media_types for item in request.media
+        ):
+            raise DecisionServerUnsupportedError()
         body = self._render(request)
         payload = json.dumps(
             body,
