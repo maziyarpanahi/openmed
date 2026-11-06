@@ -434,6 +434,7 @@ nav:
       - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
       - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
+      - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
       - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
