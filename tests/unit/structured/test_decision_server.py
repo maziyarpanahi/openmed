@@ -1153,8 +1153,8 @@ def test_unix_socket_paths_are_validated() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("license_id", ["CC-BY-NC-4.0", "GPL-3.0-only", "", None])
-def test_undeclared_or_non_permissive_licenses_are_rejected(license_id: Any) -> None:
+@pytest.mark.parametrize("license_id", ["", None, "license\nprivate"])
+def test_invalid_model_license_metadata_is_rejected(license_id: Any) -> None:
     with pytest.raises(DecisionError):
         _backend("http://127.0.0.1:8000", license_id=license_id)
 
@@ -1342,3 +1342,185 @@ def test_backend_exceptions_may_refine_the_result_code(
 
     assert (result.state, result.code) == (state, code)
     assert INPUT_TEXT not in json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize("kind", ["image", "video"])
+def test_local_media_is_scrubbed_and_sent_only_to_loopback(start_server, kind):
+    import base64
+    import hashlib
+    import io
+    import shutil
+    import subprocess
+    from dataclasses import replace
+
+    from PIL import Image, PngImagePlugin
+
+    from openmed.structured.decision_interop import from_system_one_request
+    from openmed.structured.decision_media import DecisionMedia
+
+    marker = "SYNTHETIC-PRIVATE-MEDIA-METADATA"
+    if kind == "image":
+        info = PngImagePlugin.PngInfo()
+        info.add_text("Comment", marker)
+        output = io.BytesIO()
+        Image.new("RGB", (32, 24), "teal").save(output, format="PNG", pnginfo=info)
+        source = output.getvalue()
+        mime = "image/png"
+        key = "images"
+    else:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg or not shutil.which("ffprobe"):
+            pytest.skip("optional local video tools")
+        caps = subprocess.check_output([ffmpeg, "-encoders"], stderr=subprocess.DEVNULL)
+        if b"libx264rgb" not in caps:
+            pytest.skip("optional lossless RGB encoder")
+        source = subprocess.check_output(
+            [
+                ffmpeg,
+                "-v",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=red:s=32x24:r=2:d=1",
+                "-c:v",
+                "libx264rgb",
+                "-bf",
+                "0",
+                "-threads",
+                "1",
+                "-metadata",
+                "title=" + marker,
+                "-movflags",
+                "empty_moov+frag_keyframe+default_base_moof",
+                "-f",
+                "mp4",
+                "pipe:1",
+            ]
+        )
+        mime = "video/mp4"
+        key = "videos"
+    assert marker.encode() in source
+    item = DecisionMedia(
+        source,
+        media_type=mime,
+        byte_size=len(source),
+        sha256=hashlib.sha256(source).hexdigest(),
+    )
+    server = start_server()
+    request = replace(_question_set(), media=(item,))
+    result = decide(request, backend=_backend(server.origin))
+    assert result.state is DecisionState.SUCCESS and len(server.received) == 1
+    url = server.received[0].document[key][0]
+    assert url.startswith("data:" + item.media_type + ";base64,")
+    decoded = base64.b64decode(url.split(",", 1)[1], validate=True)
+    assert (
+        marker.encode() not in decoded
+        and hashlib.sha256(decoded).hexdigest() == item.sha256
+    )
+    assert request.for_question(request.questions[0]).media == (item,)
+    assert request.safe_metadata()["media"] == [item.safe_metadata()]
+    assert set(item.safe_metadata()) == {"byte_size", "sha256", "media_type"}
+    assert url.split(",", 1)[1] not in repr(request.safe_metadata())
+    assert DecisionRequest.from_dict(request.to_dict()).media == (item,)
+    assert from_system_one_request(server.received[0].document).media == (item,)
+
+
+def test_media_rejections_precede_backend_and_wire_never_opens_paths(
+    tmp_path, monkeypatch
+):
+    import hashlib
+    import io
+    from dataclasses import replace
+    from pathlib import Path
+
+    from PIL import Image
+
+    from openmed.structured import decision_media
+    from openmed.structured.decision_interop import from_system_one_request
+    from openmed.structured.decision_media import (
+        MAX_MEDIA_BYTES,
+        DecisionMedia,
+        DecisionMediaError,
+    )
+
+    out = io.BytesIO()
+    Image.new("RGB", (9, 7)).save(out, format="JPEG")
+    data = out.getvalue()
+    spec = dict(
+        media_type="image/jpeg",
+        byte_size=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
+    path = tmp_path / "SYNTHETIC_PRIVATE.jpg"
+    path.write_bytes(data)
+    item = DecisionMedia(path, **spec)
+    assert item.media_type == "image/png" and "PRIVATE" not in repr(item)
+    for source, fields, code in (
+        ("https://example.invalid/PRIVATE", spec, "local_source"),
+        (Path("relative.jpg"), spec, "local_source"),
+        (data, {**spec, "byte_size": MAX_MEDIA_BYTES + 1}, "limit"),
+        (data, {**spec, "sha256": "0" * 64}, "digest_mismatch"),
+        (data, {**spec, "media_type": "video/mp4"}, "type_mismatch"),
+        (data, {**spec, "media_type": "audio/wav"}, "type_mismatch"),
+        (data, {**spec, "media_type": "audio/mpeg"}, "unsupported"),
+    ):
+        with pytest.raises(DecisionMediaError, match=code):
+            DecisionMedia(source, **fields)
+    with pytest.raises(DecisionMediaError, match="limit"):
+        replace(_question_set(), media=(item,) * 5)
+    req = replace(_question_set(), media=(item,))
+    assert decide(req).state is DecisionState.UNSUPPORTED
+    private = _backend(
+        "http://10.24.8.9:8000",
+        contains_phi=False,
+        allowed_private_origins=("http://10.24.8.9:8000",),
+    )
+    monkeypatch.setattr(
+        private, "_render", lambda *a: pytest.fail("private network rendered media")
+    )
+    assert decide(req, backend=private).state is DecisionState.UNSUPPORTED
+    with pytest.raises(DecisionUnsupportedError):
+        private.score_questions(req)
+    monkeypatch.setattr(
+        decision_media.os, "open", lambda *args: pytest.fail("wire input opened a file")
+    )
+    for source in [
+        str(path),
+        "https://example.invalid/private",
+        "data:video/mp4;base64,AAA=",
+    ]:
+        body = to_system_one_request(_question_set())
+        body["images"] = [source]
+        with pytest.raises(DecisionMediaError, match="local_source"):
+            from_system_one_request(body)
+    body = req.to_dict()
+    body["media"] = [{"path": str(path), "byte_size": 4}]
+    with pytest.raises(DecisionMediaError):
+        DecisionRequest.from_dict(body)
+
+
+def test_image_pixel_budget_precedes_raster_decode(monkeypatch):
+    import hashlib
+    import io
+
+    from PIL import Image
+
+    from openmed.multimodal import metadata_scrub
+    from openmed.structured.decision_media import DecisionMedia, DecisionMediaError
+
+    out = io.BytesIO()
+    Image.new("1", (1600, 1300)).save(out, format="PNG")
+    data = out.getvalue()
+    monkeypatch.setattr(
+        metadata_scrub,
+        "scrub_raster_pixels",
+        lambda i: pytest.fail("decoded before admission"),
+    )
+    with pytest.raises(DecisionMediaError, match="preflight"):
+        DecisionMedia(
+            data,
+            media_type="image/png",
+            byte_size=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+        )

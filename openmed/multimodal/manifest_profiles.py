@@ -15,6 +15,7 @@ from .asset_manifest import (
 
 __all__ = [
     "AUDIO_V1",
+    "VIDEO_V1",
     "DICOM_V1",
     "IMAGE_V1",
     "PDF_V1",
@@ -28,7 +29,7 @@ _MANIFEST_FIELDS: Final = frozenset(
     {"pages", "width", "height", "frames", "duration_seconds"}
 )
 _INTEGER_FIELDS: Final = frozenset({"pages", "width", "height", "frames"})
-_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio"})
+_MODALITIES: Final = frozenset({"image", "pdf", "dicom", "audio", "video"})
 _REASON_CODES: Final = frozenset(
     {
         "inapplicable_present",
@@ -111,6 +112,13 @@ DICOM_V1 = ManifestProfile(
     version="1.0",
     required_fields=frozenset({"frames", "width", "height"}),
     inapplicable_fields=frozenset({"pages", "duration_seconds"}),
+)
+
+VIDEO_V1 = ManifestProfile(
+    modality="video",
+    version="1.0",
+    required_fields=frozenset({"width", "height", "frames", "duration_seconds"}),
+    inapplicable_fields=frozenset({"pages"}),
 )
 
 AUDIO_V1 = ManifestProfile(

@@ -226,7 +226,7 @@ def test_access_denial_is_typed_and_contains_no_scores() -> None:
     assert result.access["allowed"] is False
 
 
-def test_backend_families_preserve_identity_and_require_permissive_license() -> None:
+def test_backend_families_preserve_identity_and_declared_weight_license() -> None:
     backends = [
         EncoderDecisionBackend(
             backend_id="synthetic.encoder.v1",
@@ -270,15 +270,15 @@ def test_backend_families_preserve_identity_and_require_permissive_license() -> 
             assert result.code == "backend_unsupported"
             assert result.choice is None
 
-    with pytest.raises(DecisionError, match="permissive"):
-        DecisionBackendIdentity(
-            backend_id="synthetic.restricted.v1",
-            kind=DecisionBackendKind.ENCODER,
-            runtime="torch",
-            model_id="synthetic/restricted",
-            revision="abc123",
-            license_id="proprietary",
-        )
+    identity = DecisionBackendIdentity(
+        backend_id="synthetic.restricted.v1",
+        kind=DecisionBackendKind.ENCODER,
+        runtime="torch",
+        model_id="synthetic/restricted",
+        revision="abc123",
+        license_id="proprietary",
+    )
+    assert identity.to_dict()["license_id"] == "proprietary"
 
 
 def test_backend_failures_conflicts_and_unsupported_modes_are_typed(
