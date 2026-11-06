@@ -851,6 +851,7 @@ def openmed_decide(
     questions: Sequence[Mapping[str, Any]] = (),
     input_format: str = "text",
     max_input_chars: Optional[int] = None,
+    media: Sequence[Mapping[str, Any]] = (),
     *,
     backend: Optional[DecisionBackend] = None,
     access_policy: Optional[DecisionAccessPolicy] = None,
@@ -882,6 +883,7 @@ def openmed_decide(
             "questions": list(questions),
             "input_format": input_format,
             "max_input_chars": max_input_chars,
+            "media": media,
         }
     )
     return decide(

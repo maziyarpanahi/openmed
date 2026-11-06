@@ -1897,6 +1897,7 @@ def _decision_tool_spec() -> ToolSpec:
             Sequence[Mapping[str, Any]],
             (),
         ),
+        _parameter("media", properties["media"], Sequence[Mapping[str, Any]], ()),
         _parameter("input_format", properties["input_format"], str, "text"),
         _parameter(
             "max_input_chars",
