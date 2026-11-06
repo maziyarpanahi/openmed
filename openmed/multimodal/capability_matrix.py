@@ -7,22 +7,24 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import islice
+from types import MappingProxyType
+from typing import Final
 
 SCHEMA_VERSION = 1
-_CODE = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
-_VERSION = re.compile(r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}\Z")
-_MODALITIES = frozenset({"image", "pdf", "dicom", "audio", "waveform", "video"})
-_OUTCOMES = frozenset(
-    {"exact", "transform_required", "unsupported", "missing_capability"}
-)
-_REASONS = frozenset(
+CAPABILITY_CODE_PATTERN: Final = r"[a-z][a-z0-9_-]{0,63}"
+CAPABILITY_VERSION_PATTERN: Final = r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}"
+MAX_CAPABILITY_MATRIX_ENTRIES: Final = 10000
+COMPATIBILITY_REASON_OPTIONS: Final = MappingProxyType(
     {
-        "capability_missing",
-        "modality_unsupported",
-        "feature_unsupported",
-        "declared_transform_required",
+        "exact": ((),),
+        "transform_required": (("declared_transform_required",),),
+        "unsupported": (("modality_unsupported",), ("feature_unsupported",)),
+        "missing_capability": (("capability_missing",),),
     }
 )
+_CODE = re.compile(CAPABILITY_CODE_PATTERN + r"\Z")
+_VERSION = re.compile(CAPABILITY_VERSION_PATTERN + r"\Z")
+_MODALITIES = frozenset({"image", "pdf", "dicom", "audio", "waveform", "video"})
 
 
 def _code(value: object) -> str:
@@ -154,20 +156,13 @@ class CompatibilityEntry:
             self.capability_version
         ):
             raise ValueError("capability_matrix_invalid_version")
-        if not isinstance(self.outcome, str) or self.outcome not in _OUTCOMES:
+        if (
+            not isinstance(self.outcome, str)
+            or self.outcome not in COMPATIBILITY_REASON_OPTIONS
+        ):
             raise ValueError("capability_matrix_invalid_outcome")
         reasons = _bounded(self.reasons, 1)
-        expected = {
-            "exact": (),
-            "transform_required": ("declared_transform_required",),
-            "unsupported": None,
-            "missing_capability": ("capability_missing",),
-        }[self.outcome]
-        if expected is None:
-            valid = reasons in (("modality_unsupported",), ("feature_unsupported",))
-        else:
-            valid = reasons == expected
-        if not valid or any(reason not in _REASONS for reason in reasons):
+        if reasons not in COMPATIBILITY_REASON_OPTIONS[self.outcome]:
             raise ValueError("capability_matrix_invalid_reasons")
         object.__setattr__(self, "reasons", reasons)
 
@@ -200,6 +195,8 @@ def capability_matrix(
     if len({profile.profile_id for profile in profiles}) != len(profiles):
         raise ValueError("capability_matrix_duplicate_profile")
     result = []
+    outcome: str
+    reasons: tuple[str, ...]
     for provider in sorted(providers, key=lambda item: item.provider_id):
         declarations = (
             None
@@ -240,7 +237,7 @@ def capability_matrix(
 
 
 def _entries(entries: Iterable[CompatibilityEntry]) -> tuple[CompatibilityEntry, ...]:
-    items = _bounded(entries, 10000)
+    items = _bounded(entries, MAX_CAPABILITY_MATRIX_ENTRIES)
     if any(not isinstance(item, CompatibilityEntry) for item in items):
         raise ValueError("capability_matrix_invalid_entry")
     if len({(item.provider_id, item.profile_id) for item in items}) != len(items):

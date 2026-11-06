@@ -1,5 +1,17 @@
 """Local privacy admission for provisional speech."""
 
+from .audio_retention import (
+    ArtifactKind,
+    AudioRetentionAudit,
+    AudioRetentionError,
+    AudioRetentionPolicy,
+    AudioRetentionSession,
+    AudioStage,
+    DestructionAction,
+    DestructionReceipt,
+    ExpectedAudioArtifact,
+    SessionEnd,
+)
 from .withholding_buffer import (
     WITHHOLDING_SCHEMA_VERSION,
     BufferState,
@@ -21,6 +33,16 @@ from .withholding_buffer import (
 
 __all__ = [
     "WITHHOLDING_SCHEMA_VERSION",
+    "ArtifactKind",
+    "AudioRetentionAudit",
+    "AudioRetentionError",
+    "AudioRetentionPolicy",
+    "AudioRetentionSession",
+    "AudioStage",
+    "DestructionAction",
+    "DestructionReceipt",
+    "ExpectedAudioArtifact",
+    "SessionEnd",
     "BufferState",
     "HoldReason",
     "LocalPhiScreener",
