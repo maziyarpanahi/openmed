@@ -1153,8 +1153,8 @@ def test_unix_socket_paths_are_validated() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("license_id", ["CC-BY-NC-4.0", "GPL-3.0-only", "", None])
-def test_undeclared_or_non_permissive_licenses_are_rejected(license_id: Any) -> None:
+@pytest.mark.parametrize("license_id", ["", None, "license\nprivate"])
+def test_invalid_model_license_metadata_is_rejected(license_id: Any) -> None:
     with pytest.raises(DecisionError):
         _backend("http://127.0.0.1:8000", license_id=license_id)
 
@@ -1462,7 +1462,8 @@ def test_media_rejections_precede_backend_and_wire_never_opens_paths(
         (data, {**spec, "byte_size": MAX_MEDIA_BYTES + 1}, "limit"),
         (data, {**spec, "sha256": "0" * 64}, "digest_mismatch"),
         (data, {**spec, "media_type": "video/mp4"}, "type_mismatch"),
-        (data, {**spec, "media_type": "audio/wav"}, "unsupported"),
+        (data, {**spec, "media_type": "audio/wav"}, "type_mismatch"),
+        (data, {**spec, "media_type": "audio/mpeg"}, "unsupported"),
     ):
         with pytest.raises(DecisionMediaError, match=code):
             DecisionMedia(source, **fields)

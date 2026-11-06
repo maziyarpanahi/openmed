@@ -433,6 +433,7 @@ nav:
       - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
       - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
       - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
       - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Multipage Document Consistency: multimodal/vision/multipage-consistency.md

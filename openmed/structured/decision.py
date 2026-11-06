@@ -237,13 +237,26 @@ class DecisionBackendIdentity:
     license_id: str
     local: bool = True
     deterministic: bool = False
+    license_sha256: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", DecisionBackendKind(self.kind))
         for name in ("backend_id", "runtime", "model_id", "revision"):
             _bounded_text(getattr(self, name), name, maximum=256)
-        if self.license_id not in PERMISSIVE_LICENSES:
-            raise DecisionError("decision backend license must be permissive")
+        # Provenance of separately acquired weights, not a redistribution grant.
+        if (
+            not isinstance(self.license_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}", self.license_id)
+            is None
+            or self.license_id != self.license_id.strip()
+        ):
+            raise DecisionError("invalid model license identifier")
+        if self.license_sha256 is not None and (
+            not isinstance(self.license_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", self.license_sha256) is None
+            or re.fullmatch(r"[0-9a-f]{40,64}", self.revision) is None
+        ):
+            raise DecisionError("license digest requires an immutable model revision")
         if self.local is not True:
             raise DecisionError("decision backends must be local by default")
 
@@ -255,6 +268,11 @@ class DecisionBackendIdentity:
             "model_id": self.model_id,
             "revision": self.revision,
             "license_id": self.license_id,
+            **(
+                {"license_sha256": self.license_sha256}
+                if self.license_sha256 is not None
+                else {}
+            ),
             "local": self.local,
             "deterministic": self.deterministic,
         }
@@ -2136,7 +2154,12 @@ def decision_request_schema() -> dict[str, Any]:
                     "required": ["media_type", "sha256", "byte_size", "data"],
                     "properties": {
                         "media_type": {
-                            "enum": ["image/png", "image/jpeg", "video/mp4"]
+                            "enum": [
+                                "image/png",
+                                "image/jpeg",
+                                "video/mp4",
+                                "audio/wav",
+                            ]
                         },
                         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
                         "byte_size": {
@@ -2241,8 +2264,11 @@ def decision_result_schema() -> dict[str, Any]:
             "revision": {"type": "string", "maxLength": 256},
             "license_id": {
                 "type": "string",
-                "enum": sorted(PERMISSIVE_LICENSES),
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": r"^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
             },
+            "license_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "local": {"type": "boolean", "const": True},
             "deterministic": {"type": "boolean"},
         },

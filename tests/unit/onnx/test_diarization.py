@@ -18,7 +18,7 @@ from openmed.onnx import diarization as backend
 
 def artifact():
     return backend.LocalDiarizationArtifact(
-        path=Path("/private/model.onnx"),
+        path=Path(__file__).resolve().with_name("private-model.onnx"),
         sha256="a" * 64,
         revision_digest="b" * 64,
         terms_digest="c" * 64,
@@ -50,7 +50,8 @@ def test_adapter_scopes_clusters_and_provenance_without_roles(monkeypatch):
     assert {t.cluster_ref for t in a.turns}.isdisjoint(t.cluster_ref for t in b.turns)
     assert a.provenance_digest == b.provenance_digest
     assert a.lineage == ()
-    assert "/private" not in repr(a) and "/private" not in repr(artifact())
+    model_name = artifact().path.name
+    assert model_name not in repr(a) and model_name not in repr(artifact())
     command, payload = observed[0]
     assert command[0] == sys.executable and command[1] == "-I"
     size = int.from_bytes(payload[:4], "big")
@@ -163,6 +164,67 @@ def test_worker_terminated_and_reaped_on_failure(monkeypatch, condition, code):
     with pytest.raises(DiarizationError, match="^diarization_" + code + "$"):
         backend._exchange([sys.executable, "-I", "-c", program], b"x", limits, event)
     assert workers and all(p.poll() is not None for p in workers)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="native adapter supports POSIX pipes")
+@pytest.mark.parametrize("condition", ["success", "output", "cancel"])
+def test_group_signal_permission_race_preserves_result_and_reaps_worker(
+    monkeypatch, condition
+):
+    psutil = pytest.importorskip("psutil")
+    real_popen = backend.subprocess.Popen
+    workers = []
+    event = Event()
+
+    def popen(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        workers.append(process)
+        return process
+
+    def denied_group_signal(pid, sig):
+        assert workers and pid == workers[0].pid
+        if condition != "cancel":
+            # Force the exited-worker case; a small output fits in the pipe.
+            workers[0].wait()
+        raise PermissionError("synthetic private cleanup diagnostic")
+
+    monkeypatch.setattr(backend.subprocess, "Popen", popen)
+    monkeypatch.setattr(backend.os, "killpg", denied_group_signal)
+    program = "import sys;sys.stdin.buffer.read();sys.stdout.buffer.write(b'ack')"
+    if condition == "output":
+        monkeypatch.setattr(backend, "MAX_RESPONSE_BYTES", 2)
+    elif condition == "cancel":
+        program = "import sys,time;sys.stdin.buffer.read();time.sleep(60)"
+        real_info = psutil.Process.memory_info
+
+        def info(self):
+            result = real_info(self)
+            event.set()
+            return result
+
+        monkeypatch.setattr(psutil.Process, "memory_info", info)
+    try:
+        command = [sys.executable, "-I", "-c", program]
+        if condition == "success":
+            assert (
+                backend._exchange(command, b"x", backend.DiarizationLimits(), event)
+                == b"ack"
+            )
+        else:
+            code = "output_limit" if condition == "output" else "cancelled"
+            with pytest.raises(DiarizationError, match="^diarization_" + code + "$"):
+                backend._exchange(command, b"x", backend.DiarizationLimits(), event)
+        assert workers and all(p.poll() is not None for p in workers)
+        assert all(p.stdin.closed and p.stdout.closed for p in workers)
+    finally:
+        # Ensure the negative control also cleans up when run against broken code.
+        for process in workers:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            for pipe in (process.stdin, process.stdout):
+                if pipe is not None:
+                    pipe.close()
 
 
 def test_precancel_does_not_launch_worker(monkeypatch):
