@@ -80,8 +80,8 @@ def test_backend_identity_records_model_revision_and_license() -> None:
     }
 
 
-@pytest.mark.parametrize("license_id", [None, "GPL-3.0-only"])
-def test_backend_requires_a_permissive_license(license_id) -> None:
+@pytest.mark.parametrize("license_id", [None, ""])
+def test_backend_requires_a_declared_weight_license(license_id) -> None:
     handle = GLiNER2Handle(
         model_id="someone/unreviewed-gliner2",
         model=FakeClassifier({}),
@@ -91,6 +91,16 @@ def test_backend_requires_a_permissive_license(license_id) -> None:
 
     with pytest.raises(DecisionError, match="license"):
         GLiNER2DecisionBackend(handle)
+
+
+def test_new_snapshot_does_not_inherit_catalog_license(tmp_path):
+    from openmed.ner.families.gliner2 import _local_weight_license
+
+    card = tmp_path / "README.md"
+    assert _local_weight_license(str(tmp_path)) == "NOASSERTION"
+    for declared, expected in (("apache-2.0", "Apache-2.0"), ("other", "other")):
+        card.write_text(f"---\nlicense: {declared}\n---\n# Synthetic model\n")
+        assert _local_weight_license(str(tmp_path)) == expected
 
 
 def test_fixed_choice_maps_to_a_single_label_softmax_task() -> None:

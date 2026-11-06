@@ -438,6 +438,8 @@ classification:
     - training/synthetic/medication-courses.md
     - training/synthetic/prior-auth-packets.md
     - training/synthetic/clinical-note-grammars.md
+    - training/synthetic/document-rendering.md
+    - training/synthetic/dicom-overlays.md
     - training/synthetic/longitudinal-trajectories.md
     - training/synthetic/fhir-records.md
     - training/synthetic/omop-cohorts.md
@@ -472,33 +474,53 @@ classification:
     - multimodal/batch-memory-estimates.md
     - multimodal/vision/vlm-resource-planning.md
     - multimodal/preflight.md
+    - multimodal/batch-preflight.md
+    - multimodal/preflight-cli.md
     - multimodal/page-batches.md
     - multimodal/asset-batches.md
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/processing-diffs.md
     - multimodal/provider-results.md
+    - multimodal/runtime-session.md
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/provider-capability-matrix.md
-    - multimodal/provider-capability-schema.md
     - multimodal/thermal-latency-gates.md
+    - multimodal/provider-capability-schema.md
+    - multimodal/vision/whole-slide-tiling.md
+    - multimodal/vision/whole-slide-provenance.md
+    - multimodal/vision/quality-abstention.md
+    - multimodal/fused-evidence-graphs.md
+    - multimodal/vision/handwriting-uncertainty.md
+    - multimodal/vision/visual-form-grounding.md
+    - multimodal/vision/visual-instruction-injection.md
+    - multimodal/redaction-mask-lineage.md
+    - multimodal/vision/multipage-consistency.md
+    - multimodal/pixel-phi-coverage.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
+    - multimodal/asr-hallucination-check.md
+    - multimodal/transcript-language-routing.md
+    - multimodal/speech-endpoints.md
     - multimodal/offline-asr-provider.md
     - multimodal/streaming/phi-withholding-buffer.md
     - multimodal/streaming/audio-retention.md
-    - multimodal/speech-endpoints.md
     - multimodal/wav-preflight.md
     - multimodal/wav-metadata.md
     - multimodal/asr-audio-profiles.md
     - multimodal/ecg-waveform-contract.md
-    - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/transcript-revisions.md
+    - multimodal/streaming/asr-window-stitching.md
+    - multimodal/ecg-lead-layout.md
+    - multimodal/ecg-annotation-privacy.md
+    - multimodal/ecg-signal-quality.md
+    - multimodal/ecg-interval-candidates.md
+    - multimodal/streaming/local-diarization.md
+    - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md
-    - multimodal/transcript-language-routing.md
+    - multimodal/streaming/ambient-note-evidence.md
     - multimodal/pdf-redaction-fidelity.md
     - multimodal/abstention-reasons.md
-    - multimodal/asr-hallucination-check.md
     - multimodal/email-ingestion.md
     - multimodal/epub-extraction.md
     - multimodal/xlsx-cell-redaction.md
@@ -554,6 +576,9 @@ classification:
     - multimodal/page-rotation.md
     - evaluation/ocr-routing.md
     - multimodal/dicom-sr-provenance.md
+    - multimodal/dicom-transfer-syntax-preflight.md
+    - multimodal/vision/dicom-series-sampling.md
+    - multimodal/vision/dicom-pixel-provenance.md
     - evaluation/model-provenance-diff.md
     - evaluation/nli-calibration.md
     - service/outbound-privacy-filter.md
@@ -588,6 +613,7 @@ classification:
     - india-health-id-deidentification.md
     - security/policy-as-data.md
     - pii-smart-merging.md
+    - security/multimodal-decoder-boundaries.md
     - security/no-raw-phi-logging.md
     - security/pre-push-privacy.md
     - security/trace-audit-artifact.md

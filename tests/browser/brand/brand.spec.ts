@@ -1339,7 +1339,10 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await search.click();
   await expect(search).toBeFocused();
   await expect(page.locator("#__search")).toBeChecked();
-  await search.pressSequentially("OpenMedSpan");
+  // Material submits on keyup. Fill first, then submit one complete query so
+  // partial-query results cannot replace the overflow fixture attached below.
+  await search.fill("OpenMedSpan");
+  await search.press("End");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
