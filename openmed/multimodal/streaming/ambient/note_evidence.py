@@ -1048,6 +1048,18 @@ class AmbientNoteSession:
                 and fresh.text_digest == self._role_draft.text_digest
             )
             packet = replace(draft.review_packet, review_receipt=receipt)
+            admit_reviewed_local_evidence(
+                packet,
+                source_digest=reviewed_source_digest(draft.text),
+                policy_digest=draft.review_packet.policy_digest,
+                source=current_source,
+                authority=authority,
+                clock=clock,
+            )
+            self._current_declarations()
+            # Recheck both custody and clinician authority after earlier callbacks.
+            # A source-only lookup could revoke review after the first admission.
+            # Finish these callbacks before checking the original role context.
             admitted = admit_reviewed_local_evidence(
                 packet,
                 source_digest=reviewed_source_digest(draft.text),
@@ -1056,12 +1068,6 @@ class AmbientNoteSession:
                 authority=authority,
                 clock=clock,
             )
-            # Finish external custody lookups before the final original-context
-            # check, so callbacks cannot leave changed attribution behind.
-            _require(
-                current_source.current_digest(packet.source_id) == packet.source_digest
-            )
-            self._current_declarations()
             finalize_role_bound_note(
                 self._role_draft,
                 self._aliases,
