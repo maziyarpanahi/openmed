@@ -32,7 +32,7 @@ _LIMITS = MOBILE_V1.with_limits(
     max_frames=64,
     max_duration_seconds=30,
 )
-SUPPORTED_TYPES = frozenset({"image/png", "image/jpeg", "video/mp4"})
+SUPPORTED_TYPES = frozenset({"image/png", "image/jpeg", "video/mp4", "audio/wav"})
 
 
 class DecisionMediaError(ValueError):
@@ -223,6 +223,10 @@ def _rgb(data: bytes, info: _Video) -> bytes:
 
 
 def _scrub(data: bytes, mime: str, digest: str) -> tuple[bytes, str]:
+    if mime == "audio/wav":
+        from .decision_audio import normalize_wav
+
+        return normalize_wav(data, digest), mime
     if mime.startswith("image/"):
         from PIL import Image
 

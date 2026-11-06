@@ -13,7 +13,6 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "decision-models.md"
 LOCAL_BACKENDS = ROOT / "docs" / "clinical" / "local-backends.md"
-NOT_SUPPORTED = "Not supported by default (license)"
 
 
 def _python_examples(markdown: str) -> list[tuple[bool, str]]:
@@ -113,8 +112,6 @@ def test_guide_runnable_examples_run_offline_without_models(
 
 
 def test_support_matrix_states_the_check_date_and_license_rule() -> None:
-    from openmed.structured.decision import PERMISSIVE_LICENSES
-
     markdown = GUIDE.read_text(encoding="utf-8")
     assert "Checked against each model repository on 2026-10-30." in _section(
         markdown, "## Support matrix\n"
@@ -129,30 +126,22 @@ def test_support_matrix_states_the_check_date_and_license_rule() -> None:
         "fastino/gliner2.5-small-v1",
     } <= models
     assert len(models) == len(rows)
-    for model, size, license_id, inputs, path in rows:
-        assert size and inputs, f"incomplete row: {model}"
-        if license_id in PERMISSIVE_LICENSES:
-            assert path != NOT_SUPPORTED, (
-                f"permissive model marked unsupported: {model}"
-            )
-        else:
-            assert path == NOT_SUPPORTED, f"non-permissive model offered: {model}"
-
-
-def test_support_matrix_check_rejects_an_offered_non_permissive_model() -> None:
-    from openmed.structured.decision import PERMISSIVE_LICENSES
-
-    markdown = GUIDE.read_text(encoding="utf-8").replace(
-        f"| text, images | {NOT_SUPPORTED} |",
-        "| text, images | Local server through the bridge (text only) |",
-        1,
+    assert all(
+        size and license_id and inputs and path
+        for _, size, license_id, inputs, path in rows
     )
-    offered = [
-        row
-        for row in _support_rows(markdown)
-        if row[2] not in PERMISSIVE_LICENSES and row[4] != NOT_SUPPORTED
-    ]
-    assert [row[0] for row in offered] == ["`LiquidAI/d1-3B`"]
+    by_model = {
+        model.strip("`"): (license_id, path) for model, _, license_id, _, path in rows
+    }
+    from openmed.structured.decision_d1 import D1OmniDecisionBackend
+
+    identity = D1OmniDecisionBackend.identity
+    assert by_model[identity.model_id] == (
+        identity.license_id,
+        "In process: pinned d1-omni CPU adapter",
+    )
+    assert f"/blob/{identity.revision}/LICENSE" in markdown
+    assert "No native d1-3B adapter tested" in by_model["LiquidAI/d1-3B"][1]
 
 
 def test_meddecider_recipe_uses_the_existing_torch_qualification_command() -> None:

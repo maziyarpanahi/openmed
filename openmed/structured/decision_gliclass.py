@@ -697,7 +697,7 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
             or another :class:`GLiClassRunner`.
         model_id: Model identifier recorded in the backend identity.
         revision: Immutable model revision recorded in the identity.
-        license_id: Permissive SPDX license of the weights.
+        license_id: Operator-declared license for this model revision.
         backend_id: Backend identifier; derived from the runtime by default.
         prompt: Optional instruction prompt (policy, rubric or question).
         examples: Optional few-shot examples, as :class:`GLiClassExample` or
@@ -712,7 +712,7 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
         *,
         model_id: str = GLICLASS_V4_EDGE_MODEL_ID,
         revision: str = GLICLASS_V4_EDGE_REVISION,
-        license_id: str = GLICLASS_V4_EDGE_LICENSE,
+        license_id: str | None = None,
         backend_id: str | None = None,
         prompt: str | None = None,
         examples: Sequence[GLiClassExample | Mapping[str, Any]] = (),
@@ -727,6 +727,13 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
         default_id = f"openmed.gliclass.v4.{runtime}"
         if isinstance(variant, str) and variant:
             default_id = f"{default_id}.{variant}"
+        if license_id is None:
+            license_id = (
+                GLICLASS_V4_EDGE_LICENSE
+                if (model_id, revision)
+                == (GLICLASS_V4_EDGE_MODEL_ID, GLICLASS_V4_EDGE_REVISION)
+                else "NOASSERTION"
+            )
         super().__init__(
             backend_id=backend_id or default_id,
             model_id=model_id,
@@ -764,7 +771,7 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
         device: str = "cpu",
         onnx_file: str = GLICLASS_ONNX_Q8_FILE,
         tokenizer_file: str = GLICLASS_ONNX_TOKENIZER_FILE,
-        license_id: str = GLICLASS_V4_EDGE_LICENSE,
+        license_id: str | None = None,
         prompt: str | None = None,
         examples: Sequence[GLiClassExample | Mapping[str, Any]] = (),
         score_levels: Sequence[str] = GLICLASS_DEFAULT_SCORE_LEVELS,
@@ -785,7 +792,7 @@ class GLiClassDecisionBackend(EncoderDecisionBackend):
             device: Torch device for the torch runtime.
             onnx_file: Graph path for the ONNX runtime.
             tokenizer_file: Tokenizer path for the ONNX runtime.
-            license_id: Permissive SPDX license of the weights.
+            license_id: Operator-declared license for this model revision.
             prompt: Optional instruction prompt.
             examples: Optional few-shot examples.
             score_levels: Ordered levels for ``scalar_score`` requests.
