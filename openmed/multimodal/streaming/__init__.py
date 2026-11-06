@@ -7,6 +7,6 @@ model, opening a socket, or reading audio.
 
 from __future__ import annotations
 
-from . import speech
+from . import speech, transcript
 
-__all__ = ["speech"]
+__all__ = ["speech", "transcript"]
