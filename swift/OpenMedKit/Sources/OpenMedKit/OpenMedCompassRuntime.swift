@@ -85,10 +85,28 @@
         /// Gate generation on an already loaded local model before inference and
         /// before releasing its output. Remote image references are refused before
         /// opening them. Enqueue time uses the thermal session's monotonic clock.
-        public func generateIfAdmitted(_ prompt: String, localImageURL: URL? = nil, maxTokens: Int = 256, temperature: Float = 0, queuedAtMilliseconds: UInt64, in session: MultimodalThermalSession) async -> MultimodalAdmissionOutcome<OpenMedVisionLanguageGeneration> {
-            let work = ThermalVisionWork(imageURL: localImageURL) {
-                if let localImageURL { return try await self.generate(prompt, imageURL: localImageURL, maxTokens: maxTokens, temperature: temperature) }
-                return try await self.generate(prompt, maxTokens: maxTokens, temperature: temperature)
+        /// Pass the same source-bound privacy context as for direct generation.
+        /// Missing guard or asset context keeps generated text withheld.
+        public func generateIfAdmitted(
+            _ prompt: String, localImageURL: URL? = nil, maxTokens: Int = 256,
+            temperature: Float = 0, releaseGuard: GeneratedTextGuard? = nil,
+            assetDigest: String? = nil, identifiers: [GeneratedIdentifierDigest] = [],
+            queuedAtMilliseconds: UInt64, in session: MultimodalThermalSession
+        ) async -> MultimodalAdmissionOutcome<OpenMedVisionLanguageGeneration> {
+            let work = ThermalVisionWork(
+                imageURL: localImageURL, releaseGuard: releaseGuard,
+                assetDigest: assetDigest, identifiers: identifiers
+            ) { guardInstance, sourceDigest, sourceIdentifiers in
+                if let localImageURL {
+                    return try await self.generate(
+                        prompt, imageURL: localImageURL, maxTokens: maxTokens,
+                        temperature: temperature, releaseGuard: guardInstance,
+                        assetDigest: sourceDigest, identifiers: sourceIdentifiers)
+                }
+                return try await self.generate(
+                    prompt, maxTokens: maxTokens, temperature: temperature,
+                    releaseGuard: guardInstance, assetDigest: sourceDigest,
+                    identifiers: sourceIdentifiers)
             }
             return await session.run(work, queuedAtMilliseconds: queuedAtMilliseconds)
         }
@@ -240,6 +258,15 @@
         init(imageURL: URL?, generate: @escaping @Sendable () async throws -> OpenMedVisionLanguageGeneration) {
             requiresNetwork = imageURL.map { !$0.isFileURL || ![nil, "", "localhost"].contains($0.host?.lowercased()) } ?? false
             self.generate = generate
+        }
+        init(
+            imageURL: URL?, releaseGuard: GeneratedTextGuard?, assetDigest: String?,
+            identifiers: [GeneratedIdentifierDigest],
+            generate: @escaping @Sendable (GeneratedTextGuard?, String?, [GeneratedIdentifierDigest]) async throws -> OpenMedVisionLanguageGeneration
+        ) {
+            self.init(imageURL: imageURL) {
+                try await generate(releaseGuard, assetDigest, identifiers)
+            }
         }
         func run(profile: MultimodalWorkProfile) async throws -> OpenMedVisionLanguageGeneration { try await generate() }
     }

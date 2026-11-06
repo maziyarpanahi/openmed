@@ -233,6 +233,92 @@ final class MultimodalThermalAdmissionTests: XCTestCase {
     }
 
     #if canImport(MLXLMCommon) && canImport(Tokenizers) && !os(watchOS) && !os(visionOS)
+        private static func guardedVisionFixture(
+            _ releaseGuard: GeneratedTextGuard?, _ assetDigest: String?,
+            _ identifiers: [GeneratedIdentifierDigest]
+        ) async throws -> OpenMedVisionLanguageGeneration {
+            let active = assetDigest == nil ? nil : releaseGuard
+            let result = (active ?? GeneratedTextGuard(detector: nil)).release(
+                "Name: Mira Vale.", assetDigest: assetDigest ?? String(repeating: "0", count: 64),
+                identifiers: identifiers)
+            return OpenMedVisionLanguageGeneration(
+                text: result.text ?? "", promptTokenCount: 1, generationTokenCount: 4,
+                promptTime: 0, generationTime: 0, releaseEnvelope: result.envelope)
+        }
+
+        func testVisionAdmissionPreservesPrivacyContextForTextAndImages() async throws {
+            let asset = String(repeating: "a", count: 64)
+            let guardInstance = GeneratedTextGuard(detector: { _ in [] }, detectorVersion: "synthetic-thermal-v1")
+            let identifiers = [
+                GeneratedIdentifierDigest(
+                    assetDigest: asset, label: .name,
+                    digest: GeneratedTextGuard.identifierDigest("Mira Vale"), normalizedLength: 8)
+            ]
+            for image: URL? in [nil, URL(fileURLWithPath: "/synthetic.png")] {
+                let signals = ThermalTestSignals()
+                let session = try gate(signals)
+                let work = ThermalVisionWork(
+                    imageURL: image, releaseGuard: guardInstance, assetDigest: asset,
+                    identifiers: identifiers, generate: Self.guardedVisionFixture)
+                let outcome = await session.run(work, queuedAtMilliseconds: signals.time())
+                let result = try XCTUnwrap(outcome.value)
+                XCTAssertEqual(result.text, "Name: [REDACTED].")
+                XCTAssertEqual(result.releaseEnvelope?.inputDigest, asset)
+                XCTAssertEqual(result.releaseEnvelope?.guardReport.decision, "redact")
+                XCTAssertTrue(result.tokenIDs.isEmpty)
+                XCTAssertFalse(String(reflecting: outcome).contains("Mira Vale"))
+            }
+        }
+
+        func testVisionAdmissionKeepsMissingOrUnboundPrivacyContextWithheld() async throws {
+            let asset = String(repeating: "a", count: 64)
+            let guardInstance = GeneratedTextGuard(detector: { _ in [] }, detectorVersion: "synthetic-thermal-v1")
+            let identifiers = [
+                GeneratedIdentifierDigest(
+                    assetDigest: asset, label: .name,
+                    digest: GeneratedTextGuard.identifierDigest("Mira Vale"), normalizedLength: 8)
+            ]
+            let contexts: [(GeneratedTextGuard?, String?)] = [
+                (nil, asset), (guardInstance, nil), (guardInstance, String(repeating: "b", count: 64)),
+            ]
+            for (detector, digest) in contexts {
+                let signals = ThermalTestSignals()
+                let session = try gate(signals)
+                let work = ThermalVisionWork(
+                    imageURL: nil, releaseGuard: detector, assetDigest: digest,
+                    identifiers: identifiers, generate: Self.guardedVisionFixture)
+                let outcome = await session.run(work, queuedAtMilliseconds: signals.time())
+                let result = try XCTUnwrap(outcome.value)
+                XCTAssertEqual(result.text, "")
+                XCTAssertEqual(result.releaseEnvelope?.abstentionCode, "phi_uncertainty")
+                XCTAssertTrue(result.tokenIDs.isEmpty)
+            }
+        }
+
+        func testThermalEscalationStillWithholdsPrivacyScreenedVisionOutput() async throws {
+            let signals = ThermalTestSignals()
+            let session = try gate(signals)
+            let guardInstance = GeneratedTextGuard(detector: { _ in [] }, detectorVersion: "synthetic-thermal-v1")
+            let asset = String(repeating: "a", count: 64)
+            let identifiers = [
+                GeneratedIdentifierDigest(
+                    assetDigest: asset, label: .name,
+                    digest: GeneratedTextGuard.identifierDigest("Mira Vale"), normalizedLength: 8)
+            ]
+            let work = ThermalVisionWork(
+                imageURL: nil, releaseGuard: guardInstance, assetDigest: asset,
+                identifiers: identifiers
+            ) { detector, digest, evidence in
+                let result = try await Self.guardedVisionFixture(detector, digest, evidence)
+                XCTAssertEqual(result.text, "Name: [REDACTED].")
+                signals.change(.critical)
+                return result
+            }
+            let outcome = await session.run(work, queuedAtMilliseconds: signals.time())
+            XCTAssertNil(outcome.value)
+            XCTAssertEqual(outcome.reason, .resources)
+        }
+
         func testVisionAdapterRefusesRemoteImagesBeforeOpeningThem() async throws {
             let signals = ThermalTestSignals()
             let session = try gate(signals)
