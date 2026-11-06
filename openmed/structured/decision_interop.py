@@ -160,6 +160,8 @@ def to_system_one_request(request: DecisionRequest) -> dict[str, Any]:
         else:
             entry["criteria"] = list(question.levels)
         questions[question.question_id] = entry
+    if any(item.media_type == "audio/wav" for item in request.media):
+        raise DecisionUnsupportedError("decision_wire_audio_unsupported")
     body = {"state": _input_to_state(request), "questions": questions}
     for field, prefix in (("images", "image/"), ("videos", "video/")):
         urls = [

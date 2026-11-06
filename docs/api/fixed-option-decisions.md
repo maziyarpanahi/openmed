@@ -51,8 +51,7 @@ else:
 The dependency-free deterministic backend is conservative and intended for
 tests, explicit lexical decisions, and offline fallback. Applications can
 inject an `EncoderDecisionBackend`, `CrossEncoderDecisionBackend`, or
-`SpecialistDecisionBackend`. Learned adapters require a permissive license
-identifier and preserve the configured model ID, immutable revision, runtime,
+`SpecialistDecisionBackend`. Learned adapters record the declared weight license for the selected revision and preserve the configured model ID, immutable revision, runtime,
 and calibration identity in every result.
 
 ## GLiClass v4 backend
@@ -322,8 +321,7 @@ compared without their organization prefix and letter case, and a different
 model yields `conflict` (`decision_server_model_mismatch`). The model ID,
 revision, and declared license are recorded in the backend identity, whose
 `runtime` names the protocol and scope, for example
-`system_one_server:loopback`. Undeclared or non-permissive licenses are
-rejected as for every backend. An optional `bearer_token` is sent as
+`system_one_server:loopback`. The license is model provenance; the operator checks terms. An optional `bearer_token` is sent as
 `Authorization: Bearer` and never appears in representations, errors, or logs.
 
 **Endpoint policy.** Endpoints are checked with the shared
@@ -396,9 +394,8 @@ Other servers documented by their model cards work the same way, for example
 the h2o-lightning-4b shim on port 8741 (set
 `OPENMED_DECISION_SERVER_PROTOCOL=openai_decisions` for `/v1/decisions`) or a
 Mica server on port 8010. Optional variables set the license
-(`OPENMED_DECISION_SERVER_LICENSE`, `Apache-2.0` by default), the served model
-name, and a bearer key. Serve only weights whose license you have declared;
-weights under non-commercial or other non-permissive licenses are rejected.
+(`OPENMED_DECISION_SERVER_LICENSE`, `NOASSERTION` if unspecified), the served model
+name, and a bearer key. Check the terms for your served revision and declare them accurately.
 
 ## MCP
 

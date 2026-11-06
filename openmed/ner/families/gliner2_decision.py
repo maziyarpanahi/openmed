@@ -63,7 +63,7 @@ class GLiNER2DecisionBackend(EncoderDecisionBackend):
 
     The backend identity records the checkpoint's model id, resolved
     revision and license. Construction fails closed when the license is
-    unknown or not permissive.
+    unspecified.
 
     Args:
         handle: A loaded :class:`~openmed.ner.families.gliner2.GLiNER2Handle`.
@@ -78,7 +78,7 @@ class GLiNER2DecisionBackend(EncoderDecisionBackend):
         revision: Revision overriding the handle's resolved revision.
 
     Raises:
-        DecisionError: If the license is unknown or not permissive, or the
+        DecisionError: If the license is unspecified, or the
             task or labels are invalid.
     """
 
@@ -107,10 +107,15 @@ class GLiNER2DecisionBackend(EncoderDecisionBackend):
             _checked_label(boolean_labels[0], "boolean label"),
             _checked_label(boolean_labels[1], "boolean label"),
         )
-        resolved_license = license_id or handle.license_id
+        same_artifact = (not revision or revision == handle.revision) and (
+            not model_id or model_id == handle.public_model_id
+        )
+        resolved_license = license_id or (
+            handle.license_id if same_artifact else "NOASSERTION"
+        )
         if not resolved_license:
             raise DecisionError(
-                "GLiNER2 decision backends need a permissive license identifier"
+                "GLiNER2 decision backends need a model license identifier"
             )
         super().__init__(
             backend_id=backend_id,

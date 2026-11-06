@@ -18,7 +18,7 @@ from openmed.onnx import diarization as backend
 
 def artifact():
     return backend.LocalDiarizationArtifact(
-        path=Path("/private/model.onnx"),
+        path=Path(__file__).resolve().with_name("private-model.onnx"),
         sha256="a" * 64,
         revision_digest="b" * 64,
         terms_digest="c" * 64,
@@ -50,7 +50,8 @@ def test_adapter_scopes_clusters_and_provenance_without_roles(monkeypatch):
     assert {t.cluster_ref for t in a.turns}.isdisjoint(t.cluster_ref for t in b.turns)
     assert a.provenance_digest == b.provenance_digest
     assert a.lineage == ()
-    assert "/private" not in repr(a) and "/private" not in repr(artifact())
+    model_name = artifact().path.name
+    assert model_name not in repr(a) and model_name not in repr(artifact())
     command, payload = observed[0]
     assert command[0] == sys.executable and command[1] == "-I"
     size = int.from_bytes(payload[:4], "big")
