@@ -223,6 +223,19 @@ export interface DecisionQuestion {
   levels?: string[];
 }
 
+/** Protected inline media. Never log the encoded payload. */
+export interface DecisionMedia {
+  media_type: "image/png" | "image/jpeg" | "video/mp4";
+  byte_size: number;
+  sha256: string;
+  data: string;
+}
+
+export interface SystemOneRequest {
+  state: string | Record<string, unknown> | unknown[];
+  questions: Record<string, Record<string, unknown>>;
+}
+
 export interface FixedOptionDecisionRequest {
   mode: DecisionMode;
   input_text: string;
@@ -238,6 +251,7 @@ export interface FixedOptionDecisionRequest {
   option_descriptions?: (string | null)[];
   levels?: string[];
   questions?: DecisionQuestion[];
+  media?: DecisionMedia[];
   input_format?: "text" | "json";
   max_input_chars?: number;
 }
@@ -751,6 +765,10 @@ export class OpenMedClient {
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
+  }
+
+  async systemOne(request: SystemOneRequest): Promise<{decision_id: string; model: string; answers: Record<string, unknown>}> {
+    return this.post("/v1/systemone", request);
   }
 
   async decision(

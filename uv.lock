@@ -1750,7 +1750,7 @@ constraints = [
     { name = "msgpack", specifier = ">=1.2.3" },
     { name = "multidict", specifier = ">=6.9.1" },
     { name = "nltk", specifier = ">=3.10.4" },
-    { name = "oauthlib", specifier = ">=4.0.0" },
+    { name = "oauthlib", specifier = ">=4.0.1" },
     { name = "opentelemetry-api", specifier = ">=1.45.1" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "pyasn1", specifier = ">=0.6.5" },
@@ -11682,11 +11682,11 @@ wheels = [
 
 [[package]]
 name = "oauthlib"
-version = "4.0.0"
+version = "4.0.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7a/d8/a1bcc8ba112a627f8ffbdc212a78ce18d3ac07e91a5ca65d27918eee25a1/oauthlib-4.0.0.tar.gz", hash = "sha256:efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86", size = 187232, upload-time = "2026-09-28T06:01:18.77Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/17/2bb072de0b990303c985f26869fd47bb179024a051f47e7f9d208eb92f8e/oauthlib-4.0.1.tar.gz", hash = "sha256:3d73febdb6faa00f277c81fb04be7b7586fb96fc3b7f0b9c772dada69a25ede7", size = 191219, upload-time = "2026-10-31T09:52:58.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/f4/78229a1066068ca14fc60fb26cf7381cabe4382261392b90e5f9552722d4/oauthlib-4.0.0-py3-none-any.whl", hash = "sha256:624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd", size = 159715, upload-time = "2026-09-28T06:01:17.008Z" },
+    { url = "https://files.pythonhosted.org/packages/df/ef/3b8adde1b32a6f540758bff734d3442c621734c83708e5f02b0ba2f43b84/oauthlib-4.0.1-py3-none-any.whl", hash = "sha256:498a298876e996301950a5b053d12c31628bb7b895db03666430c69ce182eb61", size = 161934, upload-time = "2026-10-31T09:52:56.206Z" },
 ]
 
 [[package]]
@@ -13646,6 +13646,7 @@ dev = [
     { name = "polars" },
     { name = "pre-commit" },
     { name = "protobuf" },
+    { name = "pydicom" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-timeout" },
@@ -14180,8 +14181,8 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'onnx-runtime'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'triton'", specifier = ">=1.26" },
-    { name = "oauthlib", marker = "extra == 'cloud'", specifier = ">=4.0.0" },
-    { name = "oauthlib", marker = "extra == 'prefect'", specifier = ">=4.0.0" },
+    { name = "oauthlib", marker = "extra == 'cloud'", specifier = ">=4.0.1" },
+    { name = "oauthlib", marker = "extra == 'prefect'", specifier = ">=4.0.1" },
     { name = "onnx", marker = "extra == 'multimodal'", specifier = ">=1.21" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.21" },
     { name = "onnxruntime", marker = "extra == 'edge-sbc'", specifier = ">=1.16" },
@@ -14234,6 +14235,7 @@ requires-dist = [
     { name = "pyasn1", marker = "extra == 'cloud'", specifier = ">=0.6.5" },
     { name = "pycld2", marker = "extra == 'lid'", specifier = ">=0.41,<1" },
     { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
+    { name = "pydicom", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pydicom", marker = "extra == 'multimodal'", specifier = ">=3.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=11.0.1,<12" },
     { name = "pymongo", marker = "extra == 'beam'", specifier = ">=4.18.3" },
