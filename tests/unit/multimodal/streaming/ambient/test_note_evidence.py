@@ -350,6 +350,28 @@ def test_default_review_packet_is_not_an_approval_and_authority_can_revoke():
     session.close()
 
 
+@pytest.mark.parametrize("change", ["revoked", "mismatched", "unavailable"])
+def test_late_source_lookup_cannot_reuse_earlier_clinician_authorization(change):
+    session, _, _, _ = fixture()
+    draft = session.compose(ref(80))
+    receipt = receipt_for(draft)
+    authority, source = Authority(receipt), CurrentSource(draft.review_packet)
+
+    def update_review(_):
+        if not authority.calls:
+            return
+        if change == "unavailable":
+            authority.callback = lambda: (_ for _ in ()).throw(RuntimeError(PRIVATE))
+        else:
+            authority.status = ReviewAuthorityStatus(change)
+
+    source.callback = update_review
+    with pytest.raises(NoteEvidenceError, match="finalization_blocked") as caught:
+        finalize(session, draft, authority=authority, source=source)
+    assert caught.value.__context__ is None and PRIVATE not in str(caught.value)
+    session.close()
+
+
 @pytest.mark.parametrize(
     "fault", ["missing", "mismatched", "expired", "unavailable", "source_changed"]
 )

@@ -356,6 +356,11 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.decoder_guard",
+      "function": "probe_media",
+      "classification": "operational"
+    },
+    {
       "module": "openmed.multimodal.generated_text_guard",
       "function": "GeneratedTextGuard._detect.run",
       "classification": "operational"
@@ -364,6 +369,11 @@
       "classification": "operational",
       "function": "StreamingTesseractEngine.recognize",
       "module": "openmed.multimodal.ocr_tesseract_stream"
+    },
+    {
+      "classification": "operational",
+      "function": "run_reference_workflow",
+      "module": "openmed.multimodal.reference_workflow"
     },
     {
       "classification": "operational",
@@ -377,6 +387,11 @@
     },
     {
       "classification": "operational",
+      "function": "MultimodalSession._run",
+      "module": "openmed.multimodal.runtime_session"
+    },
+    {
+      "classification": "operational",
       "function": "WithholdingBuffer.edit",
       "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
     },
@@ -384,11 +399,6 @@
       "classification": "operational",
       "function": "WithholdingBuffer.release_ready",
       "module": "openmed.multimodal.streaming.privacy.withholding_buffer"
-    },
-    {
-      "classification": "operational",
-      "function": "run_reference_workflow",
-      "module": "openmed.multimodal.reference_workflow"
     },
     {
       "classification": "operational",

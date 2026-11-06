@@ -356,6 +356,21 @@ from .render_raster import (
     render_redacted_raster_pages,
 )
 from .rtf import extract_rtf, write_redacted_rtf
+from .runtime_session import (
+    SESSION_SCHEMA_VERSION,
+    AssetHandle,
+    DocumentProvider,
+    MultimodalSession,
+    ProviderLease,
+    RuntimeSessionError,
+    SessionEvent,
+    SessionLimits,
+    SessionOperation,
+    SessionOutcome,
+    SessionResult,
+    SessionState,
+    SpeechExecutionProvider,
+)
 from .sms_messages import (
     DEFAULT_SMS_MODEL,
     SHORT_TEXT,
@@ -407,6 +422,19 @@ from .verify_pdf import (
 from .xlsx import XlsxCellRedaction, XlsxRedactionResult, redact_xlsx
 
 __all__ = [
+    "SESSION_SCHEMA_VERSION",
+    "AssetHandle",
+    "DocumentProvider",
+    "MultimodalSession",
+    "ProviderLease",
+    "RuntimeSessionError",
+    "SessionEvent",
+    "SessionLimits",
+    "SessionOperation",
+    "SessionOutcome",
+    "SessionResult",
+    "SessionState",
+    "SpeechExecutionProvider",
     "ABSTENTION_SCHEMA_VERSION",
     "AbstentionReason",
     "AbstentionRecord",
