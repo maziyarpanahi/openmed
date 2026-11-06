@@ -356,6 +356,11 @@
       "module": "openmed.mcp.workflow"
     },
     {
+      "module": "openmed.multimodal.decoder_guard",
+      "function": "probe_media",
+      "classification": "operational"
+    },
+    {
       "classification": "operational",
       "function": "StreamingTesseractEngine.recognize",
       "module": "openmed.multimodal.ocr_tesseract_stream"
@@ -369,6 +374,11 @@
       "classification": "operational",
       "function": "ThermalGate.run_vlm",
       "module": "openmed.multimodal.runtime.thermal_gate"
+    },
+    {
+      "classification": "operational",
+      "function": "MultimodalSession._run",
+      "module": "openmed.multimodal.runtime_session"
     },
     {
       "classification": "operational",

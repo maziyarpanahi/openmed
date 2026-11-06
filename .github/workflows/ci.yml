@@ -306,6 +306,7 @@ jobs:
         tests/unit/test_doctests.py
         tests/unit/cli/test_clinical_cli.py
         tests/unit/cli/test_clinical_review_cli.py
+        tests/unit/cli/test_multimodal_preflight.py
         tests/unit/clinical/test_multilingual_brief.py
         tests/unit/clinical/test_summarize_backends.py
         tests/unit/clinical/test_brief_parity.py
