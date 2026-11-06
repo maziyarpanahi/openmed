@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Assemble ambient note drafts from finalized, PHI-screened, role-reviewed transcript evidence with original-offset citations, local claim verification, conflict holds and current clinician-custody checks before local export (#2816).
+
 - Own bounded transient audio buffers, enforce non-renewable session deadlines, and verify lifecycle cleanup of declared buffers and enrolled local files with value-free receipts and conservative crash recovery (#2818).
 
 - Associate form values and controls with original visual labels and sections, retain ambiguous alternatives, and require exact-content association and handwriting review before protected structured export (#2797).
