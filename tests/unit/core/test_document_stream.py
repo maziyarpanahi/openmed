@@ -10,9 +10,13 @@ offsets, while peak allocation stays bounded as the document grows.
 from __future__ import annotations
 
 import gc
+import json
 import re
+import subprocess
+import sys
 import tracemalloc
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
@@ -382,8 +386,7 @@ def _measure_peak(fn) -> int:
     return peak
 
 
-@pytest.mark.slow
-def test_streaming_peak_allocation_stays_bounded_as_document_grows():
+def _streaming_peak_allocations() -> tuple[int, int, int, int]:
     # A PHI-free body isolates *processing* memory from output accumulation.
     body = (
         "The patient returned to the clinic for a scheduled follow up visit. "
@@ -418,6 +421,30 @@ def test_streaming_peak_allocation_stays_bounded_as_document_grows():
     )
     single_base = _measure_peak(lambda: _pipeline().run(doc_base, method="mask"))
     single_grown = _measure_peak(lambda: _pipeline().run(doc_grown, method="mask"))
+    return stream_base, stream_grown, single_base, single_grown
+
+
+@pytest.mark.slow
+def test_streaming_peak_allocation_stays_bounded_as_document_grows():
+    # tracemalloc measures the whole interpreter, including pytest/xdist's
+    # background work. Keep the same workload and scaling assertions, but run
+    # the allocation probe without the test runner and its prior test state.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, runpy, sys; "
+            "probe = runpy.run_path(sys.argv[1])['_streaming_peak_allocations']; "
+            "print(json.dumps(probe()))",
+            str(Path(__file__).resolve()),
+        ],
+        cwd=Path(__file__).resolve().parents[3],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=300,
+    )
+    stream_base, stream_grown, single_base, single_grown = json.loads(result.stdout)
 
     # Single-pass processing peak scales with document length (it materializes
     # full normalized, offset-map, and redacted copies of the whole document).
