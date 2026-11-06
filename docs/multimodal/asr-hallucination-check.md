@@ -49,8 +49,9 @@ require_draft_eligible(report, ["seg-1"])  # passes
 
 ## Inputs
 
-No ASR provider or voice-activity adapter ships yet, so the inputs are small
-frozen declarations that any provider or detector can fill:
+The inputs are small frozen declarations that any provider or detector can fill.
+The [local MLX Whisper provider](offline-asr-provider.md) applies this check before
+releasing a final hypothesis and requires caller-supplied voice-activity evidence:
 
 - `VoiceActivityTimeline(duration_ms, intervals)` holds sorted,
   non-overlapping, half-open `VoiceActivityInterval(start_ms, end_ms, kind)`
