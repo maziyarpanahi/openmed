@@ -512,6 +512,7 @@ classification:
     - multimodal/ecg-annotation-privacy.md
     - multimodal/ecg-signal-quality.md
     - multimodal/ecg-interval-candidates.md
+    - multimodal/ecg-evidence-windows.md
     - multimodal/streaming/local-diarization.md
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md

@@ -452,6 +452,7 @@ nav:
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - ECG Waveform Evidence Windows: multimodal/ecg-evidence-windows.md
       - Local Speaker Diarization: multimodal/streaming/local-diarization.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
