@@ -136,6 +136,7 @@ from .schemas import (
     PrivacyGatewayRequest,
     ProfileRequest,
     SMARTBackendIngestionRequest,
+    SystemOneRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -168,6 +169,7 @@ _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _FHIR_BULK_EXPORT_PATH = "/fhir/bulk/exports"
 _FHIR_BULK_IMPORT_PATH = "/fhir/bulk/imports"
 _DECISION_PATH = "/v1/decisions"
+_SYSTEM_ONE_PATH = "/v1/systemone"
 _MODEL_BACKED_PATHS = frozenset(
     path
     for (_, path), policy in ROUTE_POLICIES.items()
@@ -935,6 +937,10 @@ def create_app(
     app.state.journey_resources = JourneyResourceCatalog()
     app.state.journey_access_policy = JourneyAccessPolicy()
     app.state.operational_limits = request_limits_from_env()
+    app.state.system_one_enabled = os.getenv(
+        "OPENMED_SERVICE_SYSTEM_ONE", ""
+    ).strip().lower() in {"true", "1", "yes"}
+    app.state.system_one_audit_key = os.urandom(32)
     app.state.decision_backend = DETERMINISTIC_DECISION_BACKEND
     app.state.decision_access_policy = DecisionAccessPolicy()
     app.state.decision_calibration_profiles = None
@@ -1024,14 +1030,19 @@ def create_app(
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
-        _: Request,
+        request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
+        # Question IDs and unknown JSON keys may themselves contain PHI. Use the
+        # matched route so mounted services receive the same content-free error.
+        protected_route = (
+            getattr(request.scope.get("route"), "path", None) == _SYSTEM_ONE_PATH
+        )
         return _error_response(
             422,
             "validation_error",
             "Request validation failed",
-            details=_format_validation_details(exc),
+            details=None if protected_route else _format_validation_details(exc),
         )
 
     @app.exception_handler(ServiceTimeoutError)
@@ -1309,6 +1320,101 @@ def create_app(
             ),
         )
         return result.to_dict()
+
+    @app.post(
+        _SYSTEM_ONE_PATH,
+        tags=["decision"],
+        response_model=None,
+        responses={
+            200: {
+                "description": "System One answers plus an OpenMed decision ID.",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["decision_id", "model", "answers"],
+                            "properties": {
+                                "decision_id": {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{32}$",
+                                },
+                                "model": {"type": "string"},
+                                "answers": {"type": "object"},
+                            },
+                        }
+                    }
+                },
+            },
+            404: {"description": "Route disabled (default)."},
+            422: {"description": "De-identification refused; nothing forwarded."},
+        },
+    )
+    async def private_system_one(payload: SystemOneRequest, request: Request):
+        """De-identify state and every question before scoring with the configured local backend."""
+        from openmed.core.offline import is_local_only
+
+        from .system_one import (
+            SystemOneInputError,
+            SystemOnePrivacyError,
+            protect_and_decide,
+        )
+
+        app_state = request.app.state
+        if not app_state.system_one_enabled:
+            raise HTTPException(status_code=404, detail="System One route is disabled.")
+        runtime = _get_service_runtime(request)
+        if not (
+            app_state.auth.config.enabled
+            and runtime.throttle.rate_limit_enabled
+            and is_local_only(runtime.config)
+        ):
+            return _error_response(
+                503,
+                "privacy_gateway_not_configured",
+                "Local-only mode, service authentication and rate limits are required.",
+            )
+
+        def clean(text: str):
+            model = (
+                runtime.config.pii_model
+                or "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+            )
+            return runtime.run_model_request(
+                model,
+                None,
+                lambda: openmed.deidentify(
+                    text,
+                    method="mask",
+                    model_name=model,
+                    config=runtime.config,
+                    loader=runtime.get_loader(),
+                    keep_mapping=False,
+                    use_safety_sweep=True,
+                ),
+            )
+
+        try:
+            return await run_in_threadpool(
+                protect_and_decide,
+                {"state": payload.state, "questions": payload.questions},
+                cleaner=clean,
+                backend=app_state.decision_backend,
+                policy=app_state.decision_access_policy,
+                profiles=app_state.decision_calibration_profiles,
+                audit_key=app_state.system_one_audit_key,
+            )
+        except SystemOneInputError:
+            return _error_response(400, "bad_request", "Invalid System One request.")
+        except SystemOnePrivacyError:
+            return _error_response(
+                422, "outbound_redaction_failed", "Unable to de-identify the request."
+            )
+        except Exception:
+            return _error_response(
+                503,
+                "not_ready",
+                "The local decision backend is unavailable.",
+            )
 
     if openhim_settings.enabled:
 

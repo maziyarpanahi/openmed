@@ -231,6 +231,11 @@ export interface DecisionMedia {
   data: string;
 }
 
+export interface SystemOneRequest {
+  state: string | Record<string, unknown> | unknown[];
+  questions: Record<string, Record<string, unknown>>;
+}
+
 export interface FixedOptionDecisionRequest {
   mode: DecisionMode;
   input_text: string;
@@ -760,6 +765,10 @@ export class OpenMedClient {
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
+  }
+
+  async systemOne(request: SystemOneRequest): Promise<{decision_id: string; model: string; answers: Record<string, unknown>}> {
+    return this.post("/v1/systemone", request);
   }
 
   async decision(
