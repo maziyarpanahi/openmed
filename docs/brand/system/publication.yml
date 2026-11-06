@@ -481,6 +481,8 @@ classification:
     - multimodal/cache-keys.md
     - multimodal/processing-summaries.md
     - multimodal/processing-diffs.md
+    - multimodal/preprocessing-conformance.md
+    - multimodal/edge-vlm-provider.md
     - multimodal/provider-results.md
     - multimodal/runtime-session.md
     - multimodal/vision/edge-vlm-provider-contract.md
@@ -498,6 +500,7 @@ classification:
     - multimodal/redaction-mask-lineage.md
     - multimodal/vision/multipage-consistency.md
     - multimodal/pixel-phi-coverage.md
+    - multimodal/generated-text-guard.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/streaming/phi-withholding-buffer.md

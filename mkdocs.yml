@@ -421,6 +421,8 @@ nav:
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
+      - VLM Preprocessing Conformance: multimodal/preprocessing-conformance.md
+      - Local Edge VLM Provider: multimodal/edge-vlm-provider.md
       - Content-free Provider Results: multimodal/provider-results.md
       - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
@@ -438,6 +440,7 @@ nav:
       - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
       - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
       - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
+      - Generated Text Release Guard: multimodal/generated-text-guard.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
