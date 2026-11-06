@@ -494,6 +494,7 @@ classification:
     - multimodal/vision/visual-form-grounding.md
     - multimodal/vision/visual-instruction-injection.md
     - multimodal/redaction-mask-lineage.md
+    - multimodal/pixel-phi-coverage.md
     - multimodal/audio-windows.md
     - multimodal/streaming/offline-asr-contract.md
     - multimodal/streaming/phi-withholding-buffer.md
