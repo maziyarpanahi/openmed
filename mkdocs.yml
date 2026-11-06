@@ -424,6 +424,7 @@ nav:
       - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
       - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
+      - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
       - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
       - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
       - Whole-slide Aggregation Provenance: multimodal/vision/whole-slide-provenance.md

@@ -484,6 +484,7 @@ classification:
     - multimodal/runtime-session.md
     - multimodal/vision/edge-vlm-provider-contract.md
     - multimodal/provider-capability-matrix.md
+    - multimodal/thermal-latency-gates.md
     - multimodal/provider-capability-schema.md
     - multimodal/vision/whole-slide-tiling.md
     - multimodal/vision/whole-slide-provenance.md

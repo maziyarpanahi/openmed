@@ -306,6 +306,11 @@ class WithholdingBuffer:
         return self._state
 
     @property
+    def screen_artifact_digest(self) -> str:
+        """Return the pinned local screen identity for external runtime admission."""
+        return self._declaration.artifact_digest
+
+    @property
     def reason(self) -> HoldReason | None:
         """Controlled current hold or terminal failure reason."""
         return self._reason
