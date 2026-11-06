@@ -1,4 +1,4 @@
-"""Offline input-quality gates for local visual extraction."""
+"""Offline input-quality gates and screening of untrusted visual source content."""
 
 from .quality_gate import (
     ImageQualityError,

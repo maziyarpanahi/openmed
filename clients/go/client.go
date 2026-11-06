@@ -371,6 +371,7 @@ type FixedOptionDecisionRequest struct {
 	OptionDescriptions  []*string    `json:"option_descriptions,omitempty"`
 	Levels              []string     `json:"levels,omitempty"`
 	Questions           []JSONObject `json:"questions,omitempty"`
+	Media               []JSONObject `json:"media,omitempty"`
 	InputFormat         string       `json:"input_format,omitempty"`
 	MaxInputChars       int          `json:"max_input_chars,omitempty"`
 }
@@ -1406,6 +1407,21 @@ func (c *Client) DeidentifyStream(ctx context.Context, req PIIDeidentifyStreamRe
 func (c *Client) PrivacyGateway(ctx context.Context, req PrivacyGatewayRequest) (*PrivacyGatewayResponse, error) {
 	var out PrivacyGatewayResponse
 	if err := c.post(ctx, "/privacy-gateway/complete", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SystemOneRequest carries protected state and named questions.
+type SystemOneRequest struct {
+	State     any        `json:"state"`
+	Questions JSONObject `json:"questions"`
+}
+
+// SystemOne calls the optional de-identifying decision route.
+func (c *Client) SystemOne(ctx context.Context, req SystemOneRequest) (*JSONObject, error) {
+	var out JSONObject
+	if err := c.post(ctx, "/v1/systemone", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

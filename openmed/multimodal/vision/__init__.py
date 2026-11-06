@@ -9,4 +9,4 @@ from __future__ import annotations
 
 from . import pathology, runtime, safety
 
-__all__ = ["runtime", "safety", "pathology"]
+__all__ = ["runtime", "pathology", "safety"]
