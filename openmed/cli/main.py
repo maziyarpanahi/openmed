@@ -586,6 +586,9 @@ def build_parser() -> argparse.ArgumentParser:
     from .governed_workflows import add_governed_workflow_commands
 
     add_governed_workflow_commands(subparsers)
+    from .multimodal_preflight import add_multimodal_preflight_command
+
+    add_multimodal_preflight_command(subparsers)
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
@@ -3299,6 +3302,13 @@ def main(
             command_position += 1
         else:
             break
+    if arguments[command_position : command_position + 1] == ["multimodal"]:
+        from .multimodal_preflight import run_multimodal_preflight_cli
+
+        # No ambient configuration, parser error text or input paths enter reports.
+        return run_multimodal_preflight_cli(
+            ["invalid"] if command_position else arguments[1:]
+        )
     if command_position > 0 and arguments[command_position : command_position + 2] == [
         "agents",
         "workflow",
