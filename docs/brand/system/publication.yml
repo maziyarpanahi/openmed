@@ -493,6 +493,7 @@ classification:
     - multimodal/fused-evidence-graphs.md
     - multimodal/vision/handwriting-uncertainty.md
     - multimodal/vision/visual-form-grounding.md
+    - multimodal/ocr-vlm-disagreements.md
     - multimodal/vision/visual-instruction-injection.md
     - multimodal/redaction-mask-lineage.md
     - multimodal/vision/multipage-consistency.md

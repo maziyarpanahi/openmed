@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Compare OCR/VLM field observations with explicit text, geometry, semantic and confidence policies; preserve original values only for permitted agreements and route conflicts with source citations to bounded review (#2799).
+
 - Support separately acquired d1-omni-600M for local text, image and English voice-command decisions; record revision-bound model license provenance separately from the Apache-2.0 adapter (#4263).
 
 - Add bounded local speaker-diarization observations and an optional CPU adapter with explicit acoustic uncertainty, pinned caller-supplied artifacts, cancellation and alias lineage; clinical roles remain separate (#3676).
