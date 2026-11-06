@@ -213,6 +213,14 @@ class PrivacyGatewayRequest:
 
 
 @dataclass(frozen=True)
+class SystemOneRequest:
+    """Named questions and protected state for the optional privacy route."""
+
+    state: str | dict[str, Any] | list[Any]
+    questions: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class ModelUnloadRequest:
     """Typed request body for the ``POST /models/unload`` endpoint."""
 
@@ -301,6 +309,11 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
     "journey_resources": ClientEndpoint(method="GET", path="/v1/journey/resources"),
+    "system_one": ClientEndpoint(
+        method="POST",
+        path="/v1/systemone",
+        request_fields=_request_field_names(SystemOneRequest),
+    ),
     "decision": ClientEndpoint(
         method="POST",
         path="/v1/decisions",
@@ -714,6 +727,12 @@ class OpenMedClient(JourneyWorkflowClientMixin, WorkflowClientMixin):
             json=payload,
             request_id=request_id,
         )
+
+    def system_one(
+        self, request: SystemOneRequest, *, request_id: Optional[str] = None
+    ) -> JsonDict:
+        """Send a System One body through the local de-identification route."""
+        return self._post("/v1/systemone", request, request_id=request_id)
 
     def unload_model(
         self,

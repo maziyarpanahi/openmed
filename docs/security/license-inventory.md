@@ -27,6 +27,8 @@ a dependency also declared in another extra.
 
 | Dependency | Scope | License expression |
 | --- | --- | --- |
+| `sherpa-onnx` | `edge-diarization`; reviewed package LICENSE and core runtime metadata (2.0.1) | `Apache-2.0` |
+| `psutil` | `edge-diarization` | `BSD-3-Clause` |
 | `accelerate` | `hf` | `Apache-2.0` |
 | `adlfs` | `cloud` | `BSD-3-Clause` |
 | `apache-airflow` | `airflow` | `Apache-2.0` |
@@ -90,7 +92,7 @@ a dependency also declared in another extra.
 | `mlx-lm` | `mlx` | `MIT` |
 | `nbformat` | `notebook` | `BSD-3-Clause` |
 | `nncf` | `openvino` | `Apache-2.0` |
-| `numpy` | `duckdb, grounding, multimodal, onnx-runtime` | `BSD-3-Clause` |
+| `numpy` | `duckdb, edge-diarization, grounding, multimodal, onnx-runtime` | `BSD-3-Clause` |
 | `oauthlib` | `cloud, prefect` | `BSD-3-Clause` |
 | `onnx` | `multimodal, onnx` | `Apache-2.0` |
 | `onnxruntime` | `onnx, onnx-runtime, openvino` | `MIT` |
