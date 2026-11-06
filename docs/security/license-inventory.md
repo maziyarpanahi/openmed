@@ -90,6 +90,7 @@ a dependency also declared in another extra.
 | `mkdocstrings` | `docs` | `ISC` |
 | `mlx` | `edge-asr`, `mlx` | `MIT` |
 | `mlx-lm` | `mlx` | `MIT` |
+| `mlx-vlm` | `edge-vlm` | `MIT` |
 | `mlx-whisper` | `edge-asr`; local ASR runtime, separate user-supplied weights | `MIT` |
 | `nbformat` | `notebook` | `BSD-3-Clause` |
 | `nncf` | `openvino` | `Apache-2.0` |
@@ -111,7 +112,7 @@ a dependency also declared in another extra.
 | `philter-ucsf` | `philter` | `BSD-3-Clause` |
 | `piexif` | `multimodal` | `MIT` |
 | `pikepdf` | `multimodal` | `MPL-2.0` |
-| `pillow` | `multimodal`, `gliformer` | `HPND` |
+| `pillow` | `multimodal`, `gliformer`, `edge-vlm` | `HPND` |
 | `pkuseg` | `zh-pkuseg` | `MIT` |
 | `polars` | `polars` | `MIT` |
 | `prefect` | `prefect` | `Apache-2.0` |
@@ -148,7 +149,7 @@ a dependency also declared in another extra.
 | `tiktoken` | `mlx` | `MIT` |
 | `tokenizers` | `hf, mlx, onnx-runtime` | `Apache-2.0` |
 | `torch` | `awq, coreml, edge-asr, gliclass, gliner, gliformer, gliner2, gptq, hf, multimodal, onnx, zh-hanlp` | `BSD-3-Clause` |
-| `transformers` | `awq, coreml, gliclass, hf, mlx, onnx, openvino` | `Apache-2.0` |
+| `transformers` | `awq, coreml, edge-vlm, gliclass, hf, mlx, onnx, openvino` | `Apache-2.0` |
 | `typer` | `cli` | `MIT` |
 | `uvicorn` | `service` | `BSD-3-Clause` |
 | `yasbd-lib` | `yasbd` | `MPL-2.0` |
