@@ -602,8 +602,9 @@ def test_backend_settings_are_validated() -> None:
         _torch_backend(score_levels=("low", "LOW"))
     with pytest.raises(DecisionError, match="examples require exactly"):
         _torch_backend(examples=({"text": "Synthetic.", "labels": ["a"], "x": 1},))
-    with pytest.raises(DecisionError, match="permissive"):
-        _torch_backend(license_id="GPL-3.0-only")
+    assert (
+        _torch_backend(license_id="GPL-3.0-only").identity.license_id == "GPL-3.0-only"
+    )
     with pytest.raises(DecisionError, match="instruction prompt"):
         _torch_backend(prompt="x" * 5000)
     with pytest.raises(TypeError, match="classify"):

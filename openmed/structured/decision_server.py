@@ -27,7 +27,7 @@ Transport errors, refusals and malformed bodies become typed ``failure`` or
 ``unsupported`` decision states with controlled codes, never a fabricated
 answer. Exceptions and log records carry codes and counts only; they never
 contain the endpoint URL or query, the request input, instructions, options or
-credentials. Inputs are text (or JSON text); media inputs are not sent.
+credentials. Media is sent only to System One servers on loopback or a Unix socket.
 """
 
 from __future__ import annotations
@@ -259,8 +259,8 @@ class DecisionServerBackend:
             ``openai_decisions`` (``POST /v1/decisions``).
         model_id: Declared model identifier, recorded in the backend identity.
         revision: Declared immutable model revision, recorded in the identity.
-        license_id: Declared SPDX license of the served weights. Undeclared or
-            non-permissive licenses are rejected, as for every backend.
+        license_id: Operator-declared license of the served model revision.
+        license_sha256: Optional SHA-256 of that revision's license file.
         backend_id: Identity ``backend_id``; derived from the protocol by
             default.
         served_model: Name the server knows the model by. It is sent as
@@ -299,6 +299,7 @@ class DecisionServerBackend:
         model_id: str,
         revision: str,
         license_id: str,
+        license_sha256: str | None = None,
         backend_id: str | None = None,
         served_model: str | None = None,
         path: str | None = None,
@@ -365,6 +366,7 @@ class DecisionServerBackend:
             model_id=model_id,
             revision=revision,
             license_id=license_id,
+            license_sha256=license_sha256,
         )
 
     @property
@@ -411,6 +413,16 @@ class DecisionServerBackend:
             "max_retries": self._max_retries,
             "max_redirects": self._max_redirects,
         }
+
+    @property
+    def supported_media_types(self) -> frozenset[str]:
+        """Only local System One servers may receive sanitized media."""
+        if self._protocol is DecisionServerProtocol.SYSTEM_ONE and self._scope in (
+            DecisionServerScope.LOOPBACK,
+            DecisionServerScope.UNIX_SOCKET,
+        ):
+            return frozenset({"image/png", "video/mp4"})
+        return frozenset()
 
     def score(self, request: DecisionRequest) -> DecisionBackendOutput:
         """Score one single-question request on the server.
@@ -461,6 +473,10 @@ class DecisionServerBackend:
     def _exchange(self, request: DecisionRequest) -> dict[str, DecisionBackendOutput]:
         started = time.monotonic()
         deadline = started + request.timeout_ms / 1000.0
+        if request.media and any(
+            item.media_type not in self.supported_media_types for item in request.media
+        ):
+            raise DecisionServerUnsupportedError()
         body = self._render(request)
         payload = json.dumps(
             body,

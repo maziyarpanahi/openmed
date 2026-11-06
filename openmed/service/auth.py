@@ -73,6 +73,7 @@ ROUTE_POLICIES = {
     ("POST", "/cohort/resolve"): RoutePolicy(("cohort:read",), "heavy"),
     ("GET", "/v1/journey/resources"): RoutePolicy(("journey:read",), "heavy"),
     ("POST", "/v1/decisions"): RoutePolicy(("decisions:write",), "model"),
+    ("POST", "/v1/systemone"): RoutePolicy(("decisions:write", "pii:write"), "model"),
     ("POST", "/brief"): RoutePolicy(("brief:write",), "model"),
     ("POST", "/ground"): RoutePolicy(("ground:write",), "model"),
     ("POST", "/v1/workflows/preflight"): RoutePolicy(("workflow:read",), "control"),
