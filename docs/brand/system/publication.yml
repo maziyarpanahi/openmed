@@ -505,6 +505,7 @@ classification:
     - multimodal/ecg-lead-layout.md
     - multimodal/ecg-annotation-privacy.md
     - multimodal/ecg-signal-quality.md
+    - multimodal/ecg-interval-candidates.md
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md
     - multimodal/streaming/ambient-note-evidence.md

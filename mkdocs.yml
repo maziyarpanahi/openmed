@@ -445,6 +445,7 @@ nav:
       - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
       - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
       - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
