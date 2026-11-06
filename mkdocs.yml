@@ -378,6 +378,8 @@ nav:
           - Synthetic Medication Courses: training/synthetic/medication-courses.md
           - Synthetic Prior-authorization Packets: training/synthetic/prior-auth-packets.md
           - Synthetic Clinical Note Grammars: training/synthetic/clinical-note-grammars.md
+          - Synthetic Document Rendering: training/synthetic/document-rendering.md
+          - Synthetic DICOM Overlays: training/synthetic/dicom-overlays.md
           - Synthetic Longitudinal Trajectories: training/synthetic/longitudinal-trajectories.md
           - Synthetic FHIR Records: training/synthetic/fhir-records.md
           - Synthetic OMOP Cohorts: training/synthetic/omop-cohorts.md
@@ -412,13 +414,30 @@ nav:
       - Multimodal Batch Memory Estimates: multimodal/batch-memory-estimates.md
       - Edge-VLM Execution Memory Plans: multimodal/vision/vlm-resource-planning.md
       - Multimodal Preflight Report: multimodal/preflight.md
+      - Ordered Multimodal Batch Preflight: multimodal/batch-preflight.md
+      - Offline Multimodal Preflight CLI: multimodal/preflight-cli.md
       - Document Page Batches: multimodal/page-batches.md
       - Privacy-safe Asset Batches: multimodal/asset-batches.md
       - Content-free Multimodal Cache Keys: multimodal/cache-keys.md
       - Processing Summaries: multimodal/processing-summaries.md
       - Processing Summary Diffs: multimodal/processing-diffs.md
       - Content-free Provider Results: multimodal/provider-results.md
+      - Local Multimodal Runtime Sessions: multimodal/runtime-session.md
       - Offline Edge-VLM Provider Contract: multimodal/vision/edge-vlm-provider-contract.md
+      - Provider Capability Compatibility Matrix: multimodal/provider-capability-matrix.md
+      - Sustained Thermal and Latency Gates: multimodal/thermal-latency-gates.md
+      - Provider Capability Matrix Schema: multimodal/provider-capability-schema.md
+      - Whole-slide Tile Planning: multimodal/vision/whole-slide-tiling.md
+      - Whole-slide Aggregation Provenance: multimodal/vision/whole-slide-provenance.md
+      - Image Quality and Abstention: multimodal/vision/quality-abstention.md
+      - Fused Image-Text Evidence: multimodal/fused-evidence-graphs.md
+      - Handwriting Review and Export: multimodal/vision/handwriting-uncertainty.md
+      - Visual Form Grounding: multimodal/vision/visual-form-grounding.md
+      - OCR and VLM Disagreements: multimodal/ocr-vlm-disagreements.md
+      - Visual Instruction Screening: multimodal/vision/visual-instruction-injection.md
+      - Redaction Mask Lineage: multimodal/redaction-mask-lineage.md
+      - Multipage Document Consistency: multimodal/vision/multipage-consistency.md
+      - Pixel PHI Coverage Gate: multimodal/pixel-phi-coverage.md
       - Streaming Audio Windows: multimodal/audio-windows.md
       - Offline Streaming ASR Providers: multimodal/streaming/offline-asr-contract.md
       - Speech PHI Withholding: multimodal/streaming/phi-withholding-buffer.md
@@ -429,8 +448,14 @@ nav:
       - WAV Metadata and RF64: multimodal/wav-metadata.md
       - ASR Audio Profiles: multimodal/asr-audio-profiles.md
       - Non-diagnostic ECG Waveform Contract: multimodal/ecg-waveform-contract.md
-      - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
+      - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
+      - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
+      - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
+      - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
+      - Local Speaker Diarization: multimodal/streaming/local-diarization.md
+      - Session-scoped Speaker Aliases: multimodal/streaming/speaker-aliases.md
       - Ambient Speaker-role Review: multimodal/streaming/ambient-speaker-roles.md
       - Cited Ambient Note Drafts: multimodal/streaming/ambient-note-evidence.md
       - Redacted PDF Rendering And Fidelity: multimodal/pdf-redaction-fidelity.md
@@ -489,6 +514,9 @@ nav:
       - OCR page-rotation transforms: multimodal/page-rotation.md
       - OCR document-routing evaluation: evaluation/ocr-routing.md
       - DICOM-SR provenance mapping: multimodal/dicom-sr-provenance.md
+      - DICOM transfer-syntax preflight: multimodal/dicom-transfer-syntax-preflight.md
+      - DICOM series sampling: multimodal/vision/dicom-series-sampling.md
+      - DICOM pixel provenance: multimodal/vision/dicom-pixel-provenance.md
       - Model-provenance diff reports: evaluation/model-provenance-diff.md
       - Clinical NLI threshold calibration: evaluation/nli-calibration.md
       - Outbound request privacy filter: service/outbound-privacy-filter.md
@@ -524,6 +552,7 @@ nav:
       - India Health-ID De-identification: india-health-id-deidentification.md
       - Privacy Policy as Data: security/policy-as-data.md
       - Smart Entity Merging: pii-smart-merging.md
+      - Multimodal Decoder Containment: security/multimodal-decoder-boundaries.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - Pre-push Privacy Scanner: security/pre-push-privacy.md
       - Counts-only Trace Audit: security/trace-audit-artifact.md

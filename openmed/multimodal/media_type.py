@@ -42,6 +42,14 @@ def detect_media_type(prefix: bytes | bytearray | memoryview) -> str | None:
     # Part 10 permits arbitrary application data in its 128-byte preamble.
     if len(bounded) >= 132 and bounded[128:132] == b"DICM":
         return "application/dicom"
+    if (
+        len(bounded) >= 16
+        and bounded[4:8] == b"ftyp"
+        and 16 <= int.from_bytes(bounded[:4], "big") <= 4096
+        and bounded[8:12]
+        in {b"isom", b"iso2", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1"}
+    ):
+        return "video/mp4"
     if bounded.startswith(b"%PDF-"):
         return "application/pdf"
     if bounded.startswith(b"\x89PNG\r\n\x1a\n"):

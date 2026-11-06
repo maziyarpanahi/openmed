@@ -45,8 +45,8 @@ and
 
 Two differences matter when you bring an existing client:
 
-- The contract is text only. It does not accept images, video or audio, so
-  OpenMed uses multimodal decision models with text or JSON text input only.
+- Text is the default. Schema 1.1 also accepts verified local images or video
+  when the backend explicitly supports the media type (see [local images and video](#local-images-and-video)).
 - OpenMed's REST route `POST /v1/decisions` takes the OpenMed contract, not the
   OpenAI-compatible Decisions body. A client written for that API cannot call
   it unchanged; convert its body with the `decision_interop` helpers first.
@@ -88,9 +88,7 @@ These rules apply to every backend and every path on this page.
   suggestion; route the case to review instead. Declare the release with the
   [clinical output use policy](clinical/output-use-policy.md), whose default
   rule for `decision_support` needs an `approved` review state.
-- **Local only.** A backend identity must declare `local=True` and one of the
-  permissive licenses Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT or MPL-2.0;
-  anything else is rejected when the backend is built. In-process backends make
+- **Local only.** A backend must declare `local=True`. OpenMed's adapter code is Apache-2.0. Model weights are obtained separately; their declared license describes the model revision, not the adapter. Users must check the publisher's terms for their intended use. In-process backends make
   no network calls after the one-time model download. The server bridge
   reaches loopback or a Unix socket; a private-network origin needs an explicit
   allowlist and is refused for requests marked as containing PHI; public hosts
@@ -199,14 +197,30 @@ a local HTTP adapter for a model whose package only exposes an in-process API. T
 connect `DecisionServerBackend` to that endpoint. The server must answer the
 System One route `POST /v1/systemone` or the OpenAI-compatible
 `POST /v1/decisions`; OpenMed does not ship a server for any model. The bridge
-sends text or JSON text only, parses the server's probabilities, and lets
+sends text or JSON text, and can forward validated images and video to a compatible local System One endpoint. It parses the server's probabilities, and lets
 OpenMed's calibration decide every question. Declare the license of the
-weights you serve; a non-permissive declaration is rejected.
+model revision you serve. Where available, supply its license file SHA-256 as `license_sha256`.
 
 **MedDecider-4B-NLI.** This export of MedDecider-4B is a standard three-class
 sequence classifier. It loads through the existing local NLI path and is
 qualified with `openmed nli-qualify`, so it serves the NLI verifier in
 `verify()` and the guarded brief rather than the decision contract.
+
+### d3-edge on CPU
+
+The optional `D3EdgeDecisionBackend` accepts text, local images and bounded video. Install the model runtime separately in an isolated environment (`transformers==5.17.0`, CPU PyTorch, torchvision, Pillow, NumPy and einops). Acquire the exact snapshot separately. Use an owner-controlled read-only snapshot and a private, trusted runtime cache. The adapter refuses a different runtime, additional executable files or changed code or model bytes. It does not download a model or accept its terms.
+
+Set `HF_HUB_OFFLINE=1` and `OPENMED_TRUSTED_REMOTE_CODE_MODELS=vllm-sr/d3-edge` before starting Python. This authorizes the pinned repository's custom code to run in the process; use an isolated service account without unrelated credentials. Larger d3 variants still require a compatible local server.
+
+```python
+# Fragment: requires a local model snapshot and the optional pinned runtime.
+from pathlib import Path
+from openmed.structured.decision_d3 import D3EdgeDecisionBackend
+
+backend = D3EdgeDecisionBackend(
+    Path("/models/d3-edge/bee5e872f75b9c5d1405767bf244a6948b95c0af")
+)
+```
 
 ### Qualifying an in-process backend
 
@@ -239,7 +253,7 @@ measured them on your own held-out data.
 
 Checked against each model repository on 2026-10-30. Sizes are parameter
 counts from the repository metadata. Inputs are what the model card documents;
-OpenMed passes text only.
+The supported path column distinguishes documented model inputs from OpenMed adapter support.
 
 | Model | Size | License | Inputs | Supported path |
 | --- | --- | --- | --- | --- |
@@ -251,7 +265,7 @@ OpenMed passes text only.
 | `fastino/GLiNER2.5-Decide-1B` | 1.19B | Apache-2.0 | text (English) | In process: GLiNER2.5 |
 | `knowledgator/gliclass-v4-edge` | 440M | Apache-2.0 | text, instruction prompt, few-shot examples | In process: GLiClass v4 |
 | `lion-ai/MedDecider-4B-NLI` | 4.2B | Apache-2.0 | premise and claim pairs (English) | In process: NLI verifier through `runtime="torch"` |
-| `vllm-sr/d3-edge` | 0.59B | Apache-2.0 | text or JSON, images, video | Local server through the bridge (text only) |
+| `vllm-sr/d3-edge` | 0.59B | Apache-2.0 | text or JSON, images, video | In process: pinned CPU adapter; also compatible local System One server |
 | `vllm-sr/d3-mini` | 4.5B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
 | `vllm-sr/d3-flash` | 8.4B | Apache-2.0 | text, images, video | Local server through the bridge (text only) |
 | `perplexity-ai/pplx-decider-flash-v1.2` | 4.5B | Apache-2.0 | text, images | Compatible local HTTP adapter required (text only) |
@@ -259,8 +273,8 @@ OpenMed passes text only.
 | `h2oai/h2o-lightning-4b` | 4.7B | Apache-2.0 | text, images | Local server through the bridge (text only) |
 | `Cloudflare/clef-flash` | 9.4B | Apache-2.0 | text or JSON, images, video | Local server through the bridge (text only) |
 | `baselabs/elephant-1` | 9.4B | MIT | text, images | Compatible local HTTP endpoint required (text only) |
-| `LiquidAI/d1-omni-600M` | 587M | LFM Open License 1.0 | text, images, English audio up to 30 s | Not supported by default (license) |
-| `LiquidAI/d1-3B` | 3.1B | LFM Open License 1.0 | text, images | Not supported by default (license) |
+| `LiquidAI/d1-omni-600M` | 587M | LFM Open License 1.0 | text, images, English audio up to 30 s | In process: pinned d1-omni CPU adapter |
+| `LiquidAI/d1-3B` | 3.1B | LFM Open License 1.0 | text, images | No native d1-3B adapter tested |
 
 [^decide-size]: The model card states 340M; the repository metadata reports
     486M parameters.
@@ -269,18 +283,50 @@ What the bridge models need on the serving side, from their model cards:
 
 | Model | Serving requirements |
 | --- | --- |
-| `vllm-sr/d3-edge`, `vllm-sr/d3-mini`, `vllm-sr/d3-flash` | Remote code and an exact `transformers` pin, with a server script (`d3_server.py`) shipped next to the weights. The remote code and pin are also why `d3-edge` is not loaded in process. |
+| `vllm-sr/d3-edge`, `vllm-sr/d3-mini`, `vllm-sr/d3-flash` | Remote code and an exact `transformers` pin, with a server script (`d3_server.py`) shipped next to the weights. Only the pinned edge revision has an in-process adapter. |
 | `perplexity-ai/pplx-decider-flash-v1.2` | Python 3.12+, a CUDA GPU with about 9 GiB for weights plus working memory, and the bundled package; its card demonstrates an in-process API, so provide a compatible HTTP adapter ([model card](https://huggingface.co/perplexity-ai/pplx-decider-flash-v1.2)) |
 | `sky7350/Mica-v0.5-4B` | A CUDA INT8 server, or the GGUF files on llama.cpp (Apple silicon or CPU) |
 | `h2oai/h2o-lightning-4b` | vLLM with the shim bundled with the weights; GGUF builds are also published |
 | `Cloudflare/clef-flash` | CUDA, a joint head loaded from the repository, and SGLang |
 | `baselabs/elephant-1` | One CUDA GPU and the patched OneJev runtime installed by `setup.sh`; supply a compatible local HTTP endpoint ([model card](https://huggingface.co/baselabs/elephant-1)) |
 
-**LiquidAI d1.** `LiquidAI/d1-omni-600M` and `LiquidAI/d1-3B` use the LFM
-Open License 1.0, whose commercial-use grant contains a USD 10 million
-annual-revenue condition ([license](https://huggingface.co/LiquidAI/d1-3B/blob/main/LICENSE)).
-It is not a permissive license, so OpenMed rejects these models as decision backends, in process and
-through the bridge. Do not declare a different license to get past the check.
+**LiquidAI d1.** The optional `D1OmniDecisionBackend` accepts text, images, or one English voice-command clip from the pinned d1-omni-600M snapshot. OpenMed records the model ID, immutable revision, license label and SHA-256 of the [license at the tested revision](https://huggingface.co/LiquidAI/d1-omni-600M/blob/02b55d7076f15129e59ab3f94783f32c4b088674/LICENSE). These are provenance, not permission for a particular use. Review the terms again when changing revisions. The adapter refuses changed model, code or license files. OpenMed does not bundle weights or upstream model code and the checks on shipped code and dependencies still apply.
 
-MedDecider-4B-NLI is Apache-2.0. The larger MedDecider models (9B, 27B and
-31B) are CC BY-NC 4.0 and are not supported.
+Use an isolated offline environment with Transformers 5.17.0, CPU PyTorch, matching torchvision, Pillow and NumPy. Image inference requires torchvision. Download the model yourself, review its code and terms, set `HF_HUB_OFFLINE=1` and `OPENMED_TRUSTED_REMOTE_CODE_MODELS=LiquidAI/d1-omni-600M` before launching Python, and supply an absolute local snapshot path. A custom model's code runs with your process permissions. A different model revision needs its own reviewed pin. d1-3B is not qualified by this adapter.
+
+```python
+# Fragment: local snapshot and verified synthetic English voice-command WAV.
+from pathlib import Path
+from openmed.structured.decision import DecisionMode, DecisionRequest, decide
+from openmed.structured.decision_d1 import D1OmniDecisionBackend
+from openmed.structured.decision_media import DecisionMedia
+
+backend = D1OmniDecisionBackend(Path("/models/d1-omni-600M/02b55d7076f15129e59ab3f94783f32c4b088674"))
+clip = DecisionMedia(local_wav_bytes, media_type="audio/wav", byte_size=len(local_wav_bytes), sha256=expected_digest)
+request = DecisionRequest(DecisionMode.BOOLEAN_CHOICE, "Synthetic intake desk", options=("true", "false"), instructions="Does this caller ask to reschedule?", media=(clip,))
+result = decide(request, backend=backend)  # Route for human review only.
+```
+
+Audio is limited to 30 seconds of mono or stereo signed 16-bit PCM WAV. Approved standard sample rates are normalized to 16 kHz mono in memory (non-native rates require SciPy); overlong clips must be split explicitly. Audio result warnings include `audio_english_only`. The adapter does not transcribe. Mixed image/audio, multiple audio clips, video and audio forwarding over the System One bridge are unsupported.
+
+MedDecider-4B-NLI is the tested NLI export. No native adapter is qualified here for the larger MedDecider models.
+
+## Local images and video
+
+`DecisionMedia` accepts bytes or an absolute local file from a trusted caller, with the declared MIME type, byte count and expected SHA-256. File paths never cross the wire. JSON decision requests carry inline base64 only; System One uses `images` and `videos` lists of base64 data URLs. Remote URLs are refused. A backend must explicitly support each media type: text-only backends return `unsupported` without scoring. The local bridge sends media only over loopback or a Unix socket to the System One endpoint. Private-network endpoints and the text-only OpenAI Decisions protocol refuse it.
+
+```python
+# Fragment: needs a trusted local image and its previously verified capture digest.
+from pathlib import Path
+from openmed.structured.decision import DecisionMode, DecisionRequest
+from openmed.structured.decision_media import DecisionMedia
+
+asset = DecisionMedia(Path("/local/review.png"), media_type="image/png",
+                      sha256=expected_capture_digest, byte_size=expected_byte_count)
+request = DecisionRequest(mode=DecisionMode.BOOLEAN_CHOICE, input_text="Review the image.",
+                          media=(asset,))
+```
+
+The Python adapter preflights original bytes, dimensions, frames and duration under explicit asset limits. It accepts single-frame PNG/JPEG with Pillow; it applies EXIF orientation, discards metadata including ICC/EXIF/text, and encodes the decoded pixels as PNG. MP4 support requires locally installed FFmpeg and ffprobe, including a lossless RGB H.264 encoder. Both run through bounded in-memory pipes. A short, constant-rate, single video track (H.264, MPEG-4 or MJPEG) is decoded to RGB, re-encoded without source metadata, and decoded again to verify every frame and its timing. Audio, subtitles, non-square pixels, rotated tracks, incomplete timestamps, unsupported codecs and inputs that require seeking beyond a pipe are refused. No recording is written to a temporary file.
+
+The limits are four items per request, 8 MiB per item and 16 MiB in total. Each frame has a two-megapixel ceiling; clips are limited to 64 frames, 16 million total pixels and 30 seconds. The model may impose stricter limits. `request.safe_metadata()` records only sanitized digest, MIME and size for each item. `request.to_dict()`, `data_url()` and `protected_bytes()` contain protected media and must never be logged. Removing metadata does not remove identifiers visible in a frame; hosts own consent, pixel de-identification and review. Audio decisions use the d1-omni adapter described above.
