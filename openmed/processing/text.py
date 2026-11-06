@@ -1101,13 +1101,13 @@ class TextProcessor:
             # Keep hyphens in compound medical terms
             text = re.sub(r"[^\w\s\-]", " ", text)
 
+        # Restore protected abbreviations before lowercasing alters placeholders
+        for placeholder, abbrev in protected_abbrevs.items():
+            text = text.replace(placeholder, abbrev)
+
         # Convert to lowercase
         if self.lowercase:
             text = text.lower()
-
-        # Restore protected abbreviations
-        for placeholder, abbrev in protected_abbrevs.items():
-            text = text.replace(placeholder, abbrev)
 
         # Final whitespace normalization
         if self.normalize_whitespace:
