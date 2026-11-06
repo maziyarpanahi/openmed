@@ -29,6 +29,14 @@ from importlib import resources
 from types import MappingProxyType
 from typing import Any, Final, Protocol, runtime_checkable
 
+from .decision_media import (
+    MAX_MEDIA_BYTES,
+    MAX_MEDIA_ITEMS,
+    DecisionMedia,
+    checked_media,
+    parse_media,
+)
+
 DECISION_SCHEMA_VERSION: Final = "1.1.0"
 DECISION_BASE_SCHEMA_VERSION: Final = "1.0.0"
 SUPPORTED_DECISION_SCHEMA_VERSIONS: Final = (
@@ -229,13 +237,26 @@ class DecisionBackendIdentity:
     license_id: str
     local: bool = True
     deterministic: bool = False
+    license_sha256: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", DecisionBackendKind(self.kind))
         for name in ("backend_id", "runtime", "model_id", "revision"):
             _bounded_text(getattr(self, name), name, maximum=256)
-        if self.license_id not in PERMISSIVE_LICENSES:
-            raise DecisionError("decision backend license must be permissive")
+        # Provenance of separately acquired weights, not a redistribution grant.
+        if (
+            not isinstance(self.license_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}", self.license_id)
+            is None
+            or self.license_id != self.license_id.strip()
+        ):
+            raise DecisionError("invalid model license identifier")
+        if self.license_sha256 is not None and (
+            not isinstance(self.license_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", self.license_sha256) is None
+            or re.fullmatch(r"[0-9a-f]{40,64}", self.revision) is None
+        ):
+            raise DecisionError("license digest requires an immutable model revision")
         if self.local is not True:
             raise DecisionError("decision backends must be local by default")
 
@@ -247,6 +268,11 @@ class DecisionBackendIdentity:
             "model_id": self.model_id,
             "revision": self.revision,
             "license_id": self.license_id,
+            **(
+                {"license_sha256": self.license_sha256}
+                if self.license_sha256 is not None
+                else {}
+            ),
             "local": self.local,
             "deterministic": self.deterministic,
         }
@@ -332,6 +358,7 @@ _REQUEST_EXTENSION_FIELDS: Final = (
     "questions",
     "input_format",
     "max_input_chars",
+    "media",
 )
 _RESULT_EXTENSION_DEFAULTS: Final = MappingProxyType(
     {"questions": [], "level_scores": [], "expected_level": None}
@@ -475,6 +502,7 @@ class DecisionRequest:
         levels: Ordered ``scalar_score`` levels, lowest first.
         questions: Named questions for ``question_set`` requests.
         input_format: ``text`` or ``json`` (a JSON object or array as text).
+        media: Optional preflighted local images and videos; protected bytes never enter audit.
         max_input_chars: Optional input bound up to
             ``MAX_CONFIGURABLE_INPUT_CHARS``; the default stays 8,192.
     """
@@ -495,8 +523,10 @@ class DecisionRequest:
     questions: tuple[DecisionQuestion, ...] = field(default_factory=tuple, repr=False)
     input_format: DecisionInputFormat = DecisionInputFormat.TEXT
     max_input_chars: int | None = None
+    media: tuple[DecisionMedia, ...] = field(default_factory=tuple, repr=False)
 
     def __post_init__(self) -> None:
+        checked_media(self.media)
         mode = DecisionMode(self.mode)
         input_format = DecisionInputFormat(self.input_format)
         max_input_chars = _input_bound(self.max_input_chars)
@@ -549,6 +579,7 @@ class DecisionRequest:
             or descriptions is not None
             or instructions is not None
             or bool(levels)
+            or bool(self.media)
             or input_format is not DecisionInputFormat.TEXT
             or max_input_chars is not None
         )
@@ -642,6 +673,7 @@ class DecisionRequest:
                     else DecisionInputFormat(input_format)
                 ),
                 max_input_chars=payload.get("max_input_chars"),
+                media=parse_media(payload["media"]) if "media" in payload else (),
             )
         except KeyError:
             raise DecisionError(
@@ -666,6 +698,8 @@ class DecisionRequest:
             "schema_version": self.schema_version,
             "compatibility_policy": self.compatibility_policy,
         }
+        if self.media:
+            payload["media"] = [item.to_dict() for item in self.media]
         if self.question_id is not None:
             payload["question_id"] = self.question_id
         if self.instructions is not None:
@@ -732,6 +766,7 @@ class DecisionRequest:
             levels=question.levels,
             input_format=self.input_format,
             max_input_chars=self.max_input_chars,
+            media=self.media,
         )
 
     def safe_metadata(self) -> dict[str, Any]:
@@ -752,6 +787,8 @@ class DecisionRequest:
             "calibration_id": self.calibration_id,
             "schema_version": self.schema_version,
         }
+        if self.media:
+            metadata["media"] = [item.safe_metadata() for item in self.media]
         if not _is_base_version(self.contract_version):
             questions = self.as_questions()
             metadata.update(
@@ -1515,6 +1552,18 @@ def decide(
             profile,
             access,
         )
+    if normalized.media and not all(
+        item.media_type in getattr(selected_backend, "supported_media_types", ())
+        for item in normalized.media
+    ):
+        return _terminal_result(
+            normalized,
+            DecisionState.UNSUPPORTED,
+            "backend_unsupported",
+            selected_backend.identity,
+            profile,
+            access,
+        )
     if normalized.mode is DecisionMode.QUESTION_SET:
         return _decide_question_set(normalized, selected_backend, profile, access)
     return _score_request(normalized, selected_backend, profile, access)
@@ -2096,6 +2145,36 @@ def decision_request_schema() -> dict[str, Any]:
                 for name, schema in _question_definition_properties().items()
                 if name != "options"
             },
+            "media": {
+                "type": "array",
+                "maxItems": MAX_MEDIA_ITEMS,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["media_type", "sha256", "byte_size", "data"],
+                    "properties": {
+                        "media_type": {
+                            "enum": [
+                                "image/png",
+                                "image/jpeg",
+                                "video/mp4",
+                                "audio/wav",
+                            ]
+                        },
+                        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                        "byte_size": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": MAX_MEDIA_BYTES,
+                        },
+                        "data": {
+                            "type": "string",
+                            "contentEncoding": "base64",
+                            "maxLength": 4 * ((MAX_MEDIA_BYTES + 2) // 3),
+                        },
+                    },
+                },
+            },
             "questions": {
                 "type": "array",
                 "minItems": 1,
@@ -2185,8 +2264,11 @@ def decision_result_schema() -> dict[str, Any]:
             "revision": {"type": "string", "maxLength": 256},
             "license_id": {
                 "type": "string",
-                "enum": sorted(PERMISSIVE_LICENSES),
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": r"^[A-Za-z0-9][A-Za-z0-9 .()+:/_-]{0,127}$",
             },
+            "license_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "local": {"type": "boolean", "const": True},
             "deterministic": {"type": "boolean"},
         },

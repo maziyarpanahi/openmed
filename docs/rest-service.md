@@ -26,6 +26,7 @@ truth for exact request and response schemas. Its current public operations are:
 - `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
 - `POST /v1/decisions`
+- `POST /v1/systemone`
 - `POST /omop/load`
 - `POST /cohort/resolve`
 - `POST /v1/workflows/preflight`
@@ -673,6 +674,10 @@ for runnable usage and the shared offline wire tests. Responses are bounded by
 256 KiB, depth eight, 4,096 values and 128 effects; requests by 64 KiB. No client
 validates human custody, issues approval, executes effects or follows redirects.
 
+
+### `POST /v1/systemone`
+
+The [opt-in System One privacy route](api/fixed-option-decisions.md#de-identifying-system-one-requests) masks state and question text before scoring. The caller needs both `pii:write` and `decisions:write`. Configure authentication, positive rate limits and local-only inference before enabling it.
 
 ### `POST /v1/decisions`
 

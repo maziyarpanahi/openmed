@@ -736,8 +736,8 @@ def load_gliner2_handle(
         device: Optional torch device such as ``"cpu"`` or ``"cuda"``.
         local_files_only: Never download; use the local cache only.
         revision: Optional branch, tag or commit to pin.
-        license_id: SPDX license to record when the checkpoint is not in
-            :data:`GLINER2_CHECKPOINTS`.
+        license_id: Operator-declared weight license for this revision. If omitted,
+            use the local model card or record NOASSERTION.
 
     Returns:
         A :class:`GLiNER2Handle` recording the model id, resolved revision,
@@ -753,16 +753,44 @@ def load_gliner2_handle(
         local_files_only,
         revision,
     )
-    spec = get_gliner2_checkpoint(model_id)
     architecture = getattr(loaded.model, "architecture", None)
     return GLiNER2Handle(
         model_id=model_id,
         model=loaded.model,
         revision=_snapshot_revision(loaded.reference) or revision,
-        license_id=license_id or (spec.license_id if spec is not None else None),
+        license_id=license_id or _local_weight_license(loaded.reference),
         architecture=architecture if isinstance(architecture, str) else None,
         source="local" if Path(model_id).is_dir() else "hub",
     )
+
+
+def _local_weight_license(directory: str) -> str:
+    """Read a simple license tag from this local snapshot only; never infer from ID."""
+    card = Path(directory) / "README.md"
+    try:
+        target = card.resolve(strict=True)
+        root = card.parent.resolve(strict=True)
+        if target.parent != root and not (
+            root.parent.name == "snapshots"
+            and target.parent == root.parent.parent / "blobs"
+        ):
+            return "NOASSERTION"
+        if not target.is_file():
+            return "NOASSERTION"
+        with target.open("rb") as fh:
+            header = fh.read(16384).decode("utf-8", errors="replace")
+    except (OSError, RuntimeError):
+        return "NOASSERTION"
+    parts = re.split(r"(?m)^---[ \t]*\r?$", header, maxsplit=2)
+    if len(parts) != 3 or parts[0].strip():
+        return "NOASSERTION"
+    match = re.search(
+        r"(?m)^license:[ \t]*([a-zA-Z0-9][a-zA-Z0-9.+-]{0,63})[ \t]*\r?$", parts[1]
+    )
+    if not match:
+        return "NOASSERTION"
+    value = match.group(1)
+    return {"apache-2.0": "Apache-2.0", "mit": "MIT"}.get(value.lower(), value)
 
 
 def clear_gliner2_cache() -> None:
