@@ -1075,6 +1075,13 @@ def _check_decision_input_bound(input_text: Any, max_input_chars: Any) -> None:
         )
 
 
+class SystemOneRequest(_StrictModel):
+    """Text or structured state and named questions for protected local decisions."""
+
+    state: str | dict[str, Any] | list[Any] = Field(..., repr=False)
+    questions: dict[str, dict[str, Any]] = Field(..., repr=False)
+
+
 class FixedOptionDecisionRequest(_StrictModel):
     """Canonical bounded request for ``POST /v1/decisions``.
 

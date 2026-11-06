@@ -137,3 +137,26 @@ provider, its revision, model fingerprint, lifecycle state and counters. Provide
 - [ASR audio profiles](../asr-audio-profiles.md)
 - [OCR through memory](../ocr-streaming.md)
 - Issue [#2812](https://github.com/maziyarpanahi/openmed/issues/2812)
+
+## Experimental ONNX speech adapter
+
+`openmed.onnx.streaming_asr.OnnxSpeechModel` runs a caller-supplied, self-contained, pinned character-CTC graph on the CPU using the optional `openmed[onnx]` dependencies. This is an experimental Python adapter. It does not qualify a checkpoint, estimate word error rate, ship an Android package, export graphs or transcribe using a remote provider.
+
+Use a trusted local export trained for **this exact frontend**: mono signed 16-bit little-endian PCM at 16 kHz, scaled by 32768; left-aligned periodic 400-sample Hann window, 160-sample hop, 512-point real FFT, squared magnitudes divided by 512, 40 unnormalized triangular HTK mel bands uniformly spaced in mel from 0 to 8 kHz, natural log floored at `1e-10` before taking the log. No pre-emphasis, mean subtraction or centered framing. Short windows are padded with zeros on the right. Input is float32 `features[1,T,40]`; output is float32 `logits[1,T,V]`. Choose 1–3,000 hops; the declared output alignment must be one row per 10 ms. Graphs with external tensor data, runtime-defined shapes, custom operators or nested graphs are refused. The graph digest is checked before graph parsing; signatures are checked before runtime initialization. Trusted pins identify code and assets; static shapes do not make arbitrary graphs safe.
+
+Supply the exact ordered character vocabulary (empty blank at index zero), its SHA-256 from the export manifest, and the model SHA-256. `vocabulary_digest` documents the canonical vocabulary hash: SHA-256 of compact, ASCII-escaped JSON. Use previously verified pins. Sites loading models from a Hub must download them separately; this adapter accepts an absolute local graph path and does not resolve Hub names or media URLs.
+
+```python
+from openmed.onnx.streaming_asr import OnnxSpeechModel, OnnxSpeechProfile
+from openmed.multimodal.streaming.speech.providers import AudioChunk
+
+profile = OnnxSpeechProfile(model_sha256=model_sha256, labels=labels,
+    vocabulary_sha256=vocabulary_sha256, frames=100, language="en")
+stream = OnnxSpeechModel.load(local_onnx_path, profile).open_stream()
+partial = stream.feed(AudioChunk(0, first_pcm, 16000, 1, len(first_pcm) // 32))
+final, aggregate = stream.finish()
+```
+
+Chunks must cover an integer number of milliseconds, with contiguous sequence numbers. Each feed re-decodes the current bounded utterance; `end_segment=True` commits a final segment and frees that window. Split longer speech explicitly before the limit. CTC collapses repeated classes and blanks; padded tail rows are ignored. Token timing is derived from the declared hop alignment. Token confidence is the minimum winning-class softmax probability across its run, not a calibrated clinical score.
+
+Use `stream.cancel()` to discard pending audio and request cancellation of an active native run. A racing result is withheld even when the runtime returns after cancellation. Protected text is available only on the typed hypothesis; serialize the separate `envelope` or `stream.report()` for content-free diagnostics. Hosts must supply consent, retention, review and any required PHI screening before using or releasing a transcript.

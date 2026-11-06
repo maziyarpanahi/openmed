@@ -280,6 +280,18 @@ questions carry their OpenMed `state` and `code`; choice and expected-level
 selections are `null`, while available probabilities remain available for
 review.
 
+## De-identifying System One requests
+
+`POST /v1/systemone` is a separate, opt-in privacy route for System One clients. Set `OPENMED_SERVICE_SYSTEM_ONE=1`, enable service authentication and positive service rate limits, and use `OPENMED_OFFLINE=1` with the English PII model already available locally. The caller needs both `decisions:write` and `pii:write`. The route is documented in OpenAPI even when disabled (404). Missing security configuration refuses service (503).
+
+Send text or structured JSON in `state` and up to 32 named `questions`. The service renders structured state as text and masks it, instructions, option labels/descriptions and score-level labels with the local de-identifier. It checks for residual identifiers before calling the configured local decision backend. Question IDs and choice IDs become local ordinals during inference. The caller receives their own question and option labels back with the System One answers and a random `decision_id`.
+
+```json
+{"state":"A synthetic caller asks to change an appointment.","questions":{"callback":{"type":"noul","instructions":"Does this request need a scheduling callback?"}}}
+```
+
+Malformed bodies, images, video and audio are refused. A detector failure, abstention, malformed redaction, or residual safety-sweep finding refuses the entire request (422); no question is dispatched. The audit logger `openmed.service.systemone.audit` writes a keyed request digest, keyed question IDs, modes, answer states and entity counts. Its digest key is process-local and rotates on restart. No text or re-identification mapping is retained by this route. De-identification can miss identifiers: qualify the local detector for the language and input distribution before clinical use. System One outputs remain assistive and need human review.
+
 ## Local decision servers
 
 Many decision models need a CUDA serving stack, a custom head, or a pinned

@@ -1339,12 +1339,41 @@ test("docs search, locale, theme, and code copy controls operate", async ({
   await search.click();
   await expect(search).toBeFocused();
   await expect(page.locator("#__search")).toBeChecked();
-  await search.pressSequentially("OpenMedSpan");
+  // Material submits on keyup. Fill first, then submit one complete query so
+  // partial-query results cannot replace the overflow fixture attached below.
+  await search.fill("OpenMedSpan");
+  await search.press("End");
   await expect(searchMeta).toContainText(
     /matching documents?/i,
     { timeout: 20_000 },
   );
   await expect(page.locator(".md-search-result__link").first()).toBeVisible();
+  // Wait for the complete query, then exercise a newly inserted long snippet.
+  // Its width is independent of platform fonts and search-index ranking.
+  const resultArticle = page.locator(".md-search-result__article")
+    .filter({ hasText: "OpenMedSpan" }).first();
+  await expect(resultArticle).toBeVisible();
+  await resultArticle.evaluate((article) => {
+    const pre = document.createElement("pre");
+    const code = document.createElement("code");
+    code.id = "synthetic-search-overflow";
+    code.textContent = "synthetic_long_reference_".repeat(80);
+    pre.append(code);
+    article.append(pre);
+  });
+  const searchCode = page.locator("#synthetic-search-overflow");
+  await expect(searchCode).toBeVisible();
+  expect(await searchCode.evaluate((region) =>
+    region.scrollWidth > region.clientWidth + 1,
+  )).toBe(true);
+  await expect(searchCode).toHaveAttribute("tabindex", "0");
+  await searchCode.focus();
+  await expect(searchCode).toBeFocused();
+  await searchCode.press("ArrowRight");
+  await expect.poll(async () =>
+    searchCode.evaluate((region) => region.scrollLeft),
+  ).toBeGreaterThan(0);
+  await search.focus();
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(page.locator("#__search")).not.toBeChecked();

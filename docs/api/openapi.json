@@ -3513,6 +3513,42 @@
         "title": "SMARTBackendIngestionRequest",
         "type": "object"
       },
+      "SystemOneRequest": {
+        "additionalProperties": false,
+        "description": "Text or structured state and named questions for protected local decisions.",
+        "properties": {
+          "questions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Questions",
+            "type": "object"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {},
+                "type": "array"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "state",
+          "questions"
+        ],
+        "title": "SystemOneRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -5216,6 +5252,61 @@
         "summary": "List Journey Resources",
         "tags": [
           "journey"
+        ]
+      }
+    },
+    "/v1/systemone": {
+      "post": {
+        "description": "De-identify state and every question before scoring with the configured local backend.",
+        "operationId": "private_system_one_v1_systemone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemOneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "answers": {
+                      "type": "object"
+                    },
+                    "decision_id": {
+                      "pattern": "^[0-9a-f]{32}$",
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "decision_id",
+                    "model",
+                    "answers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "System One answers plus an OpenMed decision ID."
+          },
+          "404": {
+            "description": "Route disabled (default)."
+          },
+          "422": {
+            "description": "De-identification refused; nothing forwarded."
+          }
+        },
+        "summary": "Private System One",
+        "tags": [
+          "decision"
         ]
       }
     },

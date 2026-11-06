@@ -74,6 +74,10 @@ ALLOWED_NETWORK_MODULES: dict[str, str] = {
     "mcp/upstream_endpoint_policy.py": (
         "opt-in user-configured upstream endpoint policy and probe"
     ),
+    "multimodal/decoder_guard.py": (
+        "private socket-denial control after kernel isolation; "
+        "public probes have no outbound operation"
+    ),
     "service/bulk_data.py": "opt-in user-configured FHIR Bulk endpoints",
     "service/client.py": "opt-in REST service HTTP client",
     "service/workflow_client.py": (
