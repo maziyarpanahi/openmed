@@ -12,7 +12,7 @@ Environment:
         ``vllm-sr/d3-mini``.
     OPENMED_DECISION_SERVER_REVISION: Immutable revision of the served weights.
     OPENMED_DECISION_SERVER_LICENSE: SPDX license of the weights
-        (``Apache-2.0`` by default).
+        (``NOASSERTION`` if unspecified).
     OPENMED_DECISION_SERVER_PROTOCOL: ``system_one`` (default) or
         ``openai_decisions``.
     OPENMED_DECISION_SERVER_SERVED_MODEL: Optional name the server uses.
@@ -57,7 +57,7 @@ def test_local_decision_server_answers_a_synthetic_question_set() -> None:
         protocol=os.environ.get("OPENMED_DECISION_SERVER_PROTOCOL", "system_one"),
         model_id=os.environ["OPENMED_DECISION_SERVER_MODEL"],
         revision=os.environ["OPENMED_DECISION_SERVER_REVISION"],
-        license_id=os.environ.get("OPENMED_DECISION_SERVER_LICENSE", "Apache-2.0"),
+        license_id=os.environ.get("OPENMED_DECISION_SERVER_LICENSE", "NOASSERTION"),
         served_model=os.environ.get("OPENMED_DECISION_SERVER_SERVED_MODEL"),
         bearer_token=os.environ.get("OPENMED_DECISION_SERVER_TOKEN"),
     )

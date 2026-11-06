@@ -255,3 +255,35 @@ def test_mcp_decision_tool_is_an_additive_minor_version_of_1_0_0() -> None:
     check_tool_registry_compatibility([previous], [current])
     assert set(previous_input["properties"]) < set(current.input_schema["properties"])
     assert previous_input["required"] == current.input_schema["required"]
+
+
+def test_rest_and_mcp_never_silently_drop_media_on_text_only_backend() -> None:
+    import base64
+    import hashlib
+    from io import BytesIO
+
+    from PIL import Image
+
+    from openmed.mcp.server import openmed_decide
+
+    output = BytesIO()
+    Image.new("RGB", (3, 2)).save(output, format="PNG")
+    data = output.getvalue()
+    inline = {
+        "data": base64.b64encode(data).decode(),
+        "byte_size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "media_type": "image/png",
+    }
+    payload = {**_payload(), "schema_version": "1.1.0", "media": [inline]}
+    with TestClient(create_app(), base_url=LOOPBACK_BASE_URL) as client:
+        result = client.post("/v1/decisions", json=payload)
+        assert result.status_code == 200
+        assert result.json()["state"] == "unsupported"
+        assert inline["data"] not in result.text
+        bad = client.post(
+            "/v1/decisions",
+            json={**payload, "media": [{"path": "/private/synthetic", "byte_size": 1}]},
+        )
+        assert bad.status_code == 400 and "/private/synthetic" not in bad.text
+    assert openmed_decide(**payload)["state"] == "unsupported"
