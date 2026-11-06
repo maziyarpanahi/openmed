@@ -237,6 +237,7 @@
               pyarrow
               polars
               protobuf
+              pydicom
               pytest
               pytest-cov
               pytest-timeout
