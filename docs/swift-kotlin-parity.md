@@ -16,13 +16,17 @@ so API drift is caught in tests instead of downstream apps.
 | `EntityPrediction.confidence` | `EntityPrediction.confidence` | Present |
 | `EntityPrediction.start` | `EntityPrediction.start` | Present |
 | `EntityPrediction.end` | `EntityPrediction.end` | Present |
-| `OpenMedModelStore.downloadMLXModel(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.downloadMLXModel(repoID, revision, cacheDirectory)` | Public entry point present; Android download implementation is intentionally deferred |
-| `OpenMedModelStore.cachedMLXModelDirectory(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.cachedMLXModelDirectory(repoID, revision, cacheDirectory)` | Present |
-| `OpenMedModelStore.isMLXModelCached(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.isMLXModelCached(repoID, revision, cacheDirectory)` | Present |
-| `OpenMedModelStore.mlxModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.mlxModelCacheState(repoID, revision, cacheDirectory)` | Present |
-| `OpenMedMLXModelCacheState.missing` | `OpenMedMLXModelCacheState.missing` | Present |
-| `OpenMedMLXModelCacheState.partial` | `OpenMedMLXModelCacheState.partial` | Present |
-| `OpenMedMLXModelCacheState.ready` | `OpenMedMLXModelCacheState.ready` | Present |
+| `OpenMedModelStore.downloadMLXModel(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.acquireArtifact(request, cacheDirectory)` | Android acquires ONNX or TFLite artifacts; the MLX-named member stays deprecated for source compatibility and never downloads |
+| `OpenMedModelStore.cachedMLXModelDirectory(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.cachedArtifact(ref, cacheDirectory)?.directory` | Present; MLX-named member deprecated |
+| `OpenMedModelStore.isMLXModelCached(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
+| `OpenMedModelStore.mlxModelCacheState(repoID:revision:cacheDirectory:)` | `OpenMedModelStore.artifactCacheState(ref, cacheDirectory)` | Present; MLX-named member deprecated |
+| `OpenMedMLXModelCacheState.missing` | `ArtifactCacheState.MISSING` | Present; MLX-named enum deprecated |
+| `OpenMedMLXModelCacheState.partial` | `ArtifactCacheState.PARTIAL` | Present; MLX-named enum deprecated |
+| `OpenMedMLXModelCacheState.ready` | `ArtifactCacheState.READY` | Present; MLX-named enum deprecated |
+
+Android never runs MLX artifacts. See
+[Migrating from the MLX-named store](android-integration.md#migrating-from-the-mlx-named-store)
+for the format-aware replacements.
 
 ## Shared Span Fixture
 
