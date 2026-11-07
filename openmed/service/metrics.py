@@ -32,6 +32,29 @@ ADMISSION_QUEUE_WAIT_NAME = "openmed_service_admission_queue_wait_seconds"
 ADMISSION_SHED_NAME = "openmed_service_admission_shed_total"
 ADMISSION_QUEUE_LABELS = frozenset({"analyze", "batch", "pii_extract"})
 UNKNOWN_ADMISSION_QUEUE_LABEL = "other"
+GRAPHQL_REJECTION_NAME = "openmed_service_graphql_rejection_total"
+# Mirrors ``openmed.service.graphql_limits.GraphQLLimitCategory`` so this module
+# stays dependency-free; a unit test keeps the two vocabularies identical.
+GRAPHQL_REJECTION_REASONS = frozenset(
+    {
+        "aliases",
+        "batch",
+        "deadline",
+        "depth",
+        "document_bytes",
+        "fragment_cycles",
+        "fragments",
+        "nesting",
+        "nodes",
+        "operations",
+        "selected_fields",
+        "tokens",
+        "variable_bytes",
+        "variable_depth",
+        "variables",
+    }
+)
+UNKNOWN_GRAPHQL_REJECTION_REASON = "other"
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -128,6 +151,7 @@ class PrometheusMetricsRegistry:
         self._admission_queue_shedding: dict[str, int] = {}
         self._admission_queue_wait: dict[str, float] = {}
         self._admission_shed_total: dict[str, int] = {}
+        self._graphql_rejection_total: dict[str, int] = {}
         self._circuit_breaker_state_counts = {
             "closed": 0,
             "open": 0,
@@ -315,6 +339,16 @@ class PrometheusMetricsRegistry:
                 queue_label, 0
             ) + int(count)
 
+    def record_graphql_rejection(self, *, reason: str, count: int = 1) -> None:
+        """Record GraphQL requests rejected by a document or execution budget."""
+        if count <= 0:
+            return
+        reason_label = _graphql_rejection_label(reason)
+        with self._lock:
+            self._graphql_rejection_total[reason_label] = (
+                self._graphql_rejection_total.get(reason_label, 0) + int(count)
+            )
+
     def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
         """Replace aggregate circuit-breaker state gauges."""
         with self._lock:
@@ -424,6 +458,7 @@ class PrometheusMetricsRegistry:
             admission_queue_shedding = dict(self._admission_queue_shedding)
             admission_queue_wait = dict(self._admission_queue_wait)
             admission_shed_total = dict(self._admission_shed_total)
+            graphql_rejection_total = dict(self._graphql_rejection_total)
             circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
             model_resident_total = self._model_resident_total
             model_resident_bytes = self._model_resident_bytes
@@ -601,6 +636,17 @@ class PrometheusMetricsRegistry:
         for queue, value in sorted(admission_shed_total.items()):
             labels = _label_suffix({"queue": queue})
             lines.append(f"{ADMISSION_SHED_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            GRAPHQL_REJECTION_NAME,
+            "GraphQL requests rejected by a document, variable, batch, or "
+            "deadline budget.",
+            "counter",
+        )
+        for reason, value in sorted(graphql_rejection_total.items()):
+            labels = _label_suffix({"reason": reason})
+            lines.append(f"{GRAPHQL_REJECTION_NAME}{labels} {value}")
 
         _append_family_header(
             lines,
@@ -862,6 +908,13 @@ def _admission_queue_label(value: object) -> str:
     if normalized in ADMISSION_QUEUE_LABELS:
         return normalized
     return UNKNOWN_ADMISSION_QUEUE_LABEL
+
+
+def _graphql_rejection_label(value: object) -> str:
+    normalized = str(value).strip().casefold()
+    if normalized in GRAPHQL_REJECTION_REASONS:
+        return normalized
+    return UNKNOWN_GRAPHQL_REJECTION_REASON
 
 
 def _non_negative_int(value: object) -> int:
