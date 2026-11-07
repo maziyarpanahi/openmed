@@ -11,6 +11,7 @@ from strawberry.http import GraphQLHTTPResponse
 from strawberry.types import ExecutionResult
 
 from .graphql_schema import SAFE_RESOLVER_ERROR, OpenMedGraphQLContext, schema
+from .journey_access import JourneyAccessGate
 from .journey_resources import JourneyAccessPolicy, JourneyResourceCatalog
 from .runtime import ServiceRuntime
 
@@ -54,8 +55,27 @@ def mount_graphql(
     *,
     runtime_getter: Callable[[Request], ServiceRuntime],
     resource_getter: Callable[[Request], JourneyResourceCatalog],
+    access_getter: Callable[[Request], JourneyAccessGate] | None = None,
 ) -> None:
-    """Mount the GraphQL endpoint on an existing OpenMed service app."""
+    """Mount the GraphQL endpoint on an existing OpenMed service app.
+
+    Args:
+        app: Service application to extend.
+        runtime_getter: Returns the shared service runtime for a request.
+        resource_getter: Returns the shared Journey catalog for a request.
+        access_getter: Returns the shared Journey access gate. When omitted,
+            the gate on ``app.state.journey_access`` is used, or one is built
+            from the environment.
+    """
+
+    def default_access_getter(request: Request) -> JourneyAccessGate:
+        gate = getattr(request.app.state, "journey_access", None)
+        if not isinstance(gate, JourneyAccessGate):
+            gate = JourneyAccessGate.from_env()
+            request.app.state.journey_access = gate
+        return gate
+
+    resolve_access = access_getter or default_access_getter
 
     async def get_context(request: Request) -> OpenMedGraphQLContext:
         policy = getattr(request.app.state, "journey_access_policy", None)
@@ -65,6 +85,8 @@ def mount_graphql(
             runtime_getter(request),
             resource_getter(request),
             policy,
+            journey_access=resolve_access(request),
+            principal=request.scope.get("openmed.auth"),
         )
 
     router = PrivacySafeGraphQLRouter(

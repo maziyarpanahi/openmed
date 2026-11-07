@@ -626,6 +626,20 @@ class JourneyAccessPolicy:
             policy_version=self.policy_version,
         )
 
+    def deny(self, query: JourneyResourceQuery, code: str) -> JourneyPolicyDecision:
+        """Return a typed denial for a request refused before policy evaluation.
+
+        Args:
+            query: Bounded query whose access context is echoed in the decision.
+            code: Stable, value-free reason code.
+
+        Returns:
+            A denied decision with no allowed fields.
+        """
+
+        _require_controlled(code, "policy code")
+        return self._denied(query, code)
+
     def _denied(self, query: JourneyResourceQuery, code: str) -> JourneyPolicyDecision:
         decision_id, request_digest = _policy_decision_identity(
             query,
@@ -846,6 +860,28 @@ class JourneyResourceCatalog:
             ),
             policy=decision,
         )
+
+    def deny(
+        self,
+        query: JourneyResourceQuery,
+        code: str,
+        *,
+        policy: JourneyAccessPolicy | None = None,
+    ) -> JourneyResourcePage:
+        """Return a typed denied page without evaluating or reading records.
+
+        Args:
+            query: Bounded query whose access context is echoed in the policy.
+            code: Stable, value-free reason code.
+            policy: Policy whose version identifies the decision.
+
+        Returns:
+            A denied page that carries no resources.
+        """
+
+        active_policy = policy or JourneyAccessPolicy()
+        decision = active_policy.deny(query, code)
+        return self._terminal_page(query, decision, JourneyResourceState.DENIED, code)
 
     def cursor_for_offset(self, query: JourneyResourceQuery, offset: int) -> str:
         """Build a deterministic cursor tied to query and snapshot semantics."""

@@ -5102,7 +5102,7 @@
     },
     "/v1/journey/resources": {
       "get": {
-        "description": "List a bounded, policy-filtered page of versioned Journey resources.",
+        "description": "List a bounded, principal-bound page of versioned Journey resources.\n\nAccess context comes from the authenticated principal. The namespace,\npurpose, role, attribute, consent, and export parameters may only\nnarrow that context; anything wider returns a typed denied page.",
         "operationId": "list_journey_resources_v1_journey_resources_get",
         "parameters": [
           {
@@ -5118,9 +5118,15 @@
             "name": "namespace",
             "required": false,
             "schema": {
-              "default": "default",
-              "title": "Namespace",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Namespace"
             }
           },
           {
@@ -5128,9 +5134,15 @@
             "name": "purpose",
             "required": false,
             "schema": {
-              "default": "care_review",
-              "title": "Purpose",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Purpose"
             }
           },
           {
@@ -5138,9 +5150,15 @@
             "name": "role",
             "required": false,
             "schema": {
-              "default": "clinician",
-              "title": "Role",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
             }
           },
           {
@@ -5165,9 +5183,15 @@
             "name": "consent_state",
             "required": false,
             "schema": {
-              "default": "active",
-              "title": "Consent State",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Consent State"
             }
           },
           {
@@ -5175,9 +5199,15 @@
             "name": "export_policy",
             "required": false,
             "schema": {
-              "default": "metadata_only",
-              "title": "Export Policy",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Export Policy"
             }
           },
           {
