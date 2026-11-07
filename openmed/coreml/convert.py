@@ -745,6 +745,13 @@ def _coreml_logits_runner(ct, path: Path, compute_units):
 
 def resolve_supported_model_type(config) -> str:
     """Resolve and validate a supported CoreML token-classification family."""
+    from openmed.ner.families.zero_shot_export import (
+        reject_zero_shot_token_classification,
+    )
+
+    # GLiNER and GLiClass checkpoints declare a DeBERTa model_type; refuse
+    # them before the token-classification allowlist can accept the backbone.
+    reject_zero_shot_token_classification(config, runtime="coreml")
     raw_model_type = _config_get(config, "model_type")
     model_type = _normalize_model_type(raw_model_type)
     if model_type is None:

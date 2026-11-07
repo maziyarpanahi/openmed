@@ -258,6 +258,7 @@ def export_onnx(
     )
     model.to(dtype=torch.float32)
     model.eval()
+    _reject_zero_shot_checkpoint(getattr(model, "config", None) or {})
     adapter = _resolve_export_adapter(
         getattr(getattr(model, "config", None), "model_type", None)
     )
@@ -473,6 +474,7 @@ def convert(
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
         require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
     )
+    _reject_zero_shot_checkpoint(config)
     adapter = _resolve_export_adapter(config.get("model_type"))
     if adapter is None:
         if qualify:
@@ -771,6 +773,16 @@ def _attach_manifest_qualification(
     manifest["qualification"] = dict(qualification)
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
+
+
+def _reject_zero_shot_checkpoint(config: Any) -> None:
+    """Route GLiNER and GLiClass checkpoints to the zero-shot exporter."""
+
+    from openmed.ner.families.zero_shot_export import (
+        reject_zero_shot_token_classification,
+    )
+
+    reject_zero_shot_token_classification(config, runtime="onnx")
 
 
 def _resolve_export_adapter(model_type: Any) -> Any:

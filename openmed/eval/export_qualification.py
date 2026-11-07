@@ -130,6 +130,18 @@ class ExportReason(StrEnum):
     DIRECT_IDENTIFIER_RECALL_FAILED = "direct_identifier_recall_failed"
     CRITICAL_LEAKAGE_DETECTED = "critical_leakage_detected"
     QUANTIZATION_DELTA_EXCEEDED = "quantization_delta_exceeded"
+    # Label-conditioned (zero-shot) profiles.
+    UNSUPPORTED_TASK = "unsupported_task"
+    UNSUPPORTED_MODEL_VARIANT = "unsupported_model_variant"
+    UNSUPPORTED_REMOTE_CODE = "unsupported_remote_code"
+    UNSUPPORTED_LABEL_COUNT = "unsupported_label_count"
+    UNSUPPORTED_LABEL = "unsupported_label"
+    UNSUPPORTED_CONTROL_MARKER = "unsupported_control_marker"
+    UNSUPPORTED_SPAN_WIDTH = "unsupported_span_width"
+    UNSUPPORTED_WORD_COUNT = "unsupported_word_count"
+    UNSUPPORTED_MEMORY_BUDGET = "unsupported_memory_budget"
+    LABEL_ORDER_PARITY_FAILED = "label_order_parity_failed"
+    DECISION_PARITY_FAILED = "decision_parity_failed"
 
 
 _REASON_MESSAGES: Mapping[ExportReason, str] = {
@@ -170,6 +182,31 @@ _REASON_MESSAGES: Mapping[ExportReason, str] = {
     ),
     ExportReason.QUANTIZATION_DELTA_EXCEEDED: (
         "quantized recall delta exceeds the documented limit"
+    ),
+    ExportReason.UNSUPPORTED_TASK: "task has no qualified export or runtime path",
+    ExportReason.UNSUPPORTED_MODEL_VARIANT: (
+        "model configuration is outside the declared export profile"
+    ),
+    ExportReason.UNSUPPORTED_REMOTE_CODE: (
+        "checkpoint requires repository code, which is never executed"
+    ),
+    ExportReason.UNSUPPORTED_LABEL_COUNT: (
+        "candidate label count is outside the qualified bounds"
+    ),
+    ExportReason.UNSUPPORTED_LABEL: "candidate label violates the label contract",
+    ExportReason.UNSUPPORTED_CONTROL_MARKER: (
+        "input contains a reserved prompt control marker"
+    ),
+    ExportReason.UNSUPPORTED_SPAN_WIDTH: "span width exceeds the qualified bound",
+    ExportReason.UNSUPPORTED_WORD_COUNT: "word count exceeds the qualified bound",
+    ExportReason.UNSUPPORTED_MEMORY_BUDGET: (
+        "estimated activation memory exceeds the configured budget"
+    ),
+    ExportReason.LABEL_ORDER_PARITY_FAILED: (
+        "candidate label ranking differs from the reference"
+    ),
+    ExportReason.DECISION_PARITY_FAILED: (
+        "thresholded decisions differ from the reference"
     ),
 }
 

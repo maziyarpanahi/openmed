@@ -26,9 +26,13 @@ LINKING_DOCS = (
 )
 
 _BACKTICK = re.compile(r"`([^`]+)`")
+_FENCE = re.compile(r"```.*?```", re.S)
 
 
 def _backtick_tokens(text: str) -> set[str]:
+    # Fenced blocks hold an odd number of backticks per fence line; drop them
+    # so inline-code pairing stays aligned in later sections.
+    text = _FENCE.sub("", text)
     return {match.strip() for match in _BACKTICK.findall(text)}
 
 
@@ -98,6 +102,41 @@ def test_modernbert_support_table_matches_the_export_adapter() -> None:
         for key in ("precisions", "quantizations", "providers", "shape_modes"):
             assert row[key] == support[key], (runtime, key)
         assert row["target"] == [support["target"]]
+
+
+def _zero_shot_section(text: str) -> str:
+    section = text.split("## GLiNER span and GLiClass runtime support", 1)[1]
+    return section.split("\n## ", 1)[0]
+
+
+def test_zero_shot_support_table_matches_the_declared_profiles() -> None:
+    from openmed.ner.families.zero_shot_export import (
+        GLICLASS_PROFILE,
+        GLINER_SPAN_PROFILE,
+        ZERO_SHOT_ONNX_SUPPORT,
+    )
+
+    section = _zero_shot_section(DOC.read_text(encoding="utf-8"))
+    rows = {}
+    for line in section.split("### ", 1)[0].splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 6 and cells[0] not in {"Runtime", "---"}:
+            rows[cells[0]] = cells[1:]
+    support = ZERO_SHOT_ONNX_SUPPORT.to_dict()
+    assert rows == {
+        "onnx": [
+            ", ".join(support["precisions"]),
+            ", ".join(support["quantizations"]),
+            ", ".join(support["providers"]),
+            ", ".join(support["shape_modes"]),
+            support["target"],
+        ]
+    }
+    tokens = _backtick_tokens(section)
+    for profile in (GLINER_SPAN_PROFILE, GLICLASS_PROFILE):
+        assert {profile.name, profile.family, profile.task} <= tokens
+        assert set(profile.input_names) <= tokens
+    assert "unsupported_runtime" in tokens  # Core ML stays a typed refusal
 
 
 def test_matrix_lists_every_export_qualification_reason_code() -> None:
