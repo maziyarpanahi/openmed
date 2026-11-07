@@ -101,7 +101,7 @@
             self.artifact = artifact
             self.model = try OpenMedMLXModelLoader.loadGLiNERSpanModel(from: artifact)
             self.tokenizer = try OpenMed.loadTokenizer(
-                tokenizerName: artifact.tokenizerName ?? modelDirectoryURL.path,
+                tokenizerName: artifact.tokenizerName,
                 tokenizerFolderURL: artifact.tokenizerDirectoryURL
             )
             self.promptEncoder = OpenMedGLiNERPromptEncoder(tokenizer: tokenizer)
@@ -227,7 +227,7 @@
             self.artifact = artifact
             self.model = try OpenMedMLXModelLoader.loadGLiClassUniEncoderModel(from: artifact)
             self.tokenizer = try OpenMed.loadTokenizer(
-                tokenizerName: artifact.tokenizerName ?? modelDirectoryURL.path,
+                tokenizerName: artifact.tokenizerName,
                 tokenizerFolderURL: artifact.tokenizerDirectoryURL
             )
             self.maxSeqLength = min(maxSeqLength, artifact.manifest.maxSequenceLength ?? maxSeqLength)
@@ -326,7 +326,7 @@
             self.artifact = artifact
             self.model = try OpenMedMLXModelLoader.loadGLiNERRelexModel(from: artifact)
             self.tokenizer = try OpenMed.loadTokenizer(
-                tokenizerName: artifact.tokenizerName ?? modelDirectoryURL.path,
+                tokenizerName: artifact.tokenizerName,
                 tokenizerFolderURL: artifact.tokenizerDirectoryURL
             )
             self.promptEncoder = OpenMedGLiNERPromptEncoder(tokenizer: tokenizer)

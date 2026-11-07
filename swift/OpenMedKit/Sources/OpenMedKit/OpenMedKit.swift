@@ -44,28 +44,182 @@
         }
 
         /// Initialize OpenMed with an explicit backend.
-        public init(
+        ///
+        /// Tokenizer assets load from local files only by default. When they
+        /// are absent, initialization throws
+        /// ``OpenMedTokenizerError/missingLocalAssets`` without any network
+        /// request. The tokenizer is resolved before model weights load.
+        ///
+        /// This initializer blocks the calling thread while tokenizer assets
+        /// load. From async code, prefer
+        /// ``load(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)``;
+        /// the blocking bridge is deprecated in favour of it.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model. A verified
+        ///     cached copy is reused offline.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public convenience init(
             backend: OpenMedBackend,
             maxSeqLength: Int = 512,
-            allowNetworkAccess: Bool = true
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) throws {
+            let plan = try Self.tokenizerPlan(for: backend)
+            let tokenizer = try plan.request.map { request in
+                try Self.loadTokenizer(
+                    tokenizerName: request.name,
+                    tokenizerFolderURL: request.folderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: tokenizerPin
+                )
+            }
+            try self.init(
+                backend: backend,
+                artifact: plan.artifact,
+                tokenizer: tokenizer,
+                maxSeqLength: maxSeqLength
+            )
+        }
+
+        /// Load OpenMed with an explicit backend without blocking a thread on
+        /// tokenizer loading.
+        ///
+        /// Same acquisition rules as
+        /// ``init(backend:maxSeqLength:allowNetworkAccess:tokenizerPin:)``:
+        /// local assets only unless `allowNetworkAccess` is `true` and a
+        /// `tokenizerPin` is supplied.
+        ///
+        /// - Parameters:
+        ///   - backend: Core ML or MLX backend description.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        /// - Returns: A ready runtime.
+        /// - Throws: ``OpenMedTokenizerError`` for tokenizer acquisition
+        ///   failures, or the backend's model-loading error.
+        public static func load(
+            backend: OpenMedBackend,
+            maxSeqLength: Int = 512,
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) async throws -> OpenMed {
+            let plan = try tokenizerPlan(for: backend)
+            var tokenizer: (any Tokenizer)?
+            if let request = plan.request {
+                tokenizer = try await loadTokenizerAsync(
+                    tokenizerName: request.name,
+                    tokenizerFolderURL: request.folderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: tokenizerPin
+                )
+            }
+            return try OpenMed(
+                backend: backend,
+                artifact: plan.artifact,
+                tokenizer: tokenizer,
+                maxSeqLength: maxSeqLength
+            )
+        }
+
+        /// Initialize OpenMed with a CoreML model and tokenizer.
+        ///
+        /// - Parameters:
+        ///   - modelURL: URL to the compiled CoreML model (`.mlmodelc` or `.mlpackage`).
+        ///   - id2labelURL: URL to the `id2label.json` label mapping file.
+        ///   - tokenizerName: Optional Hugging Face repository ID the tokenizer
+        ///     must belong to. There is no default; it never triggers a download.
+        ///   - tokenizerFolderURL: Local tokenizer asset directory.
+        ///   - maxSeqLength: Maximum token sequence length (default: 512).
+        ///   - allowNetworkAccess: Explicit opt-in to download missing tokenizer
+        ///     assets. Requires `tokenizerPin`; defaults to `false`.
+        ///   - tokenizerPin: Exact repository, commit and file digests to use
+        ///     when tokenizer assets are not shipped with the model.
+        public convenience init(
+            modelURL: URL,
+            id2labelURL: URL,
+            tokenizerName: String? = nil,
+            tokenizerFolderURL: URL? = nil,
+            maxSeqLength: Int = 512,
+            allowNetworkAccess: Bool = false,
+            tokenizerPin: OpenMedTokenizerPin? = nil
+        ) throws {
+            try self.init(
+                backend: .coreML(
+                    modelURL: modelURL,
+                    id2labelURL: id2labelURL,
+                    tokenizerName: tokenizerName,
+                    tokenizerFolderURL: tokenizerFolderURL
+                ),
+                maxSeqLength: maxSeqLength,
+                allowNetworkAccess: allowNetworkAccess,
+                tokenizerPin: tokenizerPin
+            )
+        }
+
+        private struct TokenizerRequest {
+            let name: String?
+            let folderURL: URL?
+        }
+
+        private struct TokenizerPlan {
+            let request: TokenizerRequest?
+            let artifact: OpenMedMLXArtifact?
+        }
+
+        /// Decide which tokenizer the backend needs before any weights load.
+        private static func tokenizerPlan(for backend: OpenMedBackend) throws -> TokenizerPlan {
+            switch backend {
+            case .coreML(_, _, let tokenizerName, let tokenizerFolderURL):
+                return TokenizerPlan(
+                    request: TokenizerRequest(name: tokenizerName, folderURL: tokenizerFolderURL),
+                    artifact: nil
+                )
+            case .mlx(let modelDirectoryURL):
+                let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
+                if artifact.family == .openaiPrivacyFilter {
+                    return TokenizerPlan(request: nil, artifact: artifact)
+                }
+                guard MLXTokenClassificationPipeline.isRuntimeSupported else {
+                    throw OpenMedMLXRuntimeError.unsupportedPlatform
+                }
+                return TokenizerPlan(
+                    request: TokenizerRequest(
+                        name: artifact.tokenizerName,
+                        folderURL: artifact.tokenizerDirectoryURL
+                    ),
+                    artifact: artifact
+                )
+            }
+        }
+
+        private init(
+            backend: OpenMedBackend,
+            artifact: OpenMedMLXArtifact?,
+            tokenizer: (any Tokenizer)?,
+            maxSeqLength: Int
         ) throws {
             switch backend {
-            case .coreML(let modelURL, let id2labelURL, let tokenizerName, let tokenizerFolderURL):
+            case .coreML(let modelURL, let id2labelURL, _, _):
                 let pipeline = try NERPipeline(
                     modelURL: modelURL,
                     id2labelURL: id2labelURL,
                     maxSeqLength: maxSeqLength
                 )
                 self.runtime = .coreML(pipeline)
-                self.tokenizer = try Self.loadTokenizer(
-                    tokenizerName: tokenizerName,
-                    tokenizerFolderURL: tokenizerFolderURL,
-                    allowNetworkAccess: allowNetworkAccess
-                )
+                self.tokenizer = tokenizer
                 self.maxSeqLength = maxSeqLength
 
             case .mlx(let modelDirectoryURL):
-                let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
+                let artifact = try artifact ?? OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
                 if artifact.family == .openaiPrivacyFilter {
                     let pipeline = try OpenMedPrivacyFilterPipeline(
                         artifact: artifact,
@@ -80,43 +234,10 @@
                         maxSeqLength: maxSeqLength
                     )
                     self.runtime = .mlx(pipeline)
-                    self.tokenizer = try Self.loadTokenizer(
-                        tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
-                        tokenizerFolderURL: pipeline.tokenizerDirectoryURL,
-                        allowNetworkAccess: allowNetworkAccess
-                    )
+                    self.tokenizer = tokenizer
                     self.maxSeqLength = pipeline.resolvedMaxSequenceLength
                 }
             }
-        }
-
-        /// Initialize OpenMed with a CoreML model and tokenizer.
-        ///
-        /// - Parameters:
-        ///   - modelURL: URL to the compiled CoreML model (`.mlmodelc` or `.mlpackage`).
-        ///   - id2labelURL: URL to the `id2label.json` label mapping file.
-        ///   - tokenizerName: HuggingFace tokenizer name for text tokenization.
-        ///   - tokenizerFolderURL: Optional local tokenizer asset directory for offline use.
-        ///   - maxSeqLength: Maximum token sequence length (default: 512).
-        ///   - allowNetworkAccess: Whether missing tokenizer assets may be downloaded.
-        public convenience init(
-            modelURL: URL,
-            id2labelURL: URL,
-            tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
-            tokenizerFolderURL: URL? = nil,
-            maxSeqLength: Int = 512,
-            allowNetworkAccess: Bool = true
-        ) throws {
-            try self.init(
-                backend: .coreML(
-                    modelURL: modelURL,
-                    id2labelURL: id2labelURL,
-                    tokenizerName: tokenizerName,
-                    tokenizerFolderURL: tokenizerFolderURL
-                ),
-                maxSeqLength: maxSeqLength,
-                allowNetworkAccess: allowNetworkAccess
-            )
         }
 
         /// Run NER on the given text and return detected entities.
@@ -712,77 +833,126 @@
             PostProcessing.scalarRange(in: text, start: start, end: end)
         }
 
+        /// Load a tokenizer synchronously under the local-first acquisition rules.
+        ///
+        /// Blocks the calling thread on ``loadTokenizerAsync``. Kept for the
+        /// synchronous initializers; async callers must use the async loader.
         static func loadTokenizer(
-            tokenizerName: String,
+            tokenizerName: String?,
             tokenizerFolderURL: URL?,
-            allowNetworkAccess: Bool = true
+            allowNetworkAccess: Bool = false,
+            pin: OpenMedTokenizerPin? = nil
         ) throws -> any Tokenizer {
+            try blockingAwait {
+                try await loadTokenizerAsync(
+                    tokenizerName: tokenizerName,
+                    tokenizerFolderURL: tokenizerFolderURL,
+                    allowNetworkAccess: allowNetworkAccess,
+                    pin: pin
+                )
+            }
+        }
+
+        /// Load a tokenizer under the local-first acquisition rules.
+        ///
+        /// 1. Local assets in `tokenizerFolderURL` load with zero requests.
+        /// 2. Otherwise a `pin` resolves to a verified copy under Caches, or is
+        ///    downloaded at the pinned commit when `allowNetworkAccess` is set.
+        /// 3. Otherwise this throws a typed, value-free error with no request.
+        static func loadTokenizerAsync(
+            tokenizerName: String?,
+            tokenizerFolderURL: URL?,
+            allowNetworkAccess: Bool = false,
+            pin: OpenMedTokenizerPin? = nil,
+            assetStore: OpenMedTokenizerAssetStore? = nil
+        ) async throws -> any Tokenizer {
+            let directory = try await resolveTokenizerDirectory(
+                tokenizerName: tokenizerName,
+                tokenizerFolderURL: tokenizerFolderURL,
+                allowNetworkAccess: allowNetworkAccess,
+                pin: pin,
+                assetStore: assetStore
+            )
+            // Underlying file and parser errors carry paths and file contents;
+            // surface only a value-free code.
+            let preparedDirectory: URL
+            do {
+                preparedDirectory = try prepareTokenizerDirectory(directory)
+            } catch {
+                throw OpenMedTokenizerError.invalidAssets
+            }
+            do {
+                return try await AutoTokenizer.from(modelFolder: preparedDirectory)
+            } catch {
+                throw OpenMedTokenizerError.invalidAssets
+            }
+        }
+
+        static func resolveTokenizerDirectory(
+            tokenizerName: String?,
+            tokenizerFolderURL: URL?,
+            allowNetworkAccess: Bool,
+            pin: OpenMedTokenizerPin?,
+            assetStore: OpenMedTokenizerAssetStore?
+        ) async throws -> URL {
+            if let tokenizerFolderURL, hasLocalTokenizerAssets(in: tokenizerFolderURL) {
+                return tokenizerFolderURL
+            }
+            guard let pin else {
+                throw
+                    allowNetworkAccess
+                    ? OpenMedTokenizerError.pinnedRevisionRequired
+                    : OpenMedTokenizerError.missingLocalAssets
+            }
+            if let tokenizerName,
+                OpenMedTokenizerAssetStore.isRepositoryID(tokenizerName),
+                tokenizerName != pin.repositoryID
+            {
+                throw OpenMedTokenizerError.identityMismatch
+            }
+
+            let store = try assetStore ?? OpenMedTokenizerAssetStore.makeDefault()
+            if let cached = try store.verifiedCachedDirectory(for: pin) {
+                return cached
+            }
+            guard allowNetworkAccess else {
+                throw OpenMedTokenizerError.missingLocalAssets
+            }
+            return try await store.download(pin)
+        }
+
+        private static func hasLocalTokenizerAssets(in directoryURL: URL) -> Bool {
+            OpenMedTokenizerAssetStore.requiredFileNames.allSatisfy { fileName in
+                FileManager.default.fileExists(atPath: directoryURL.appending(path: fileName).path)
+            }
+        }
+
+        /// Single synchronous bridge for the blocking initializers.
+        private static func blockingAwait<T: Sendable>(
+            _ operation: @escaping @Sendable () async throws -> T
+        ) throws -> T {
             let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
+            let box = BlockingResultBox<T>()
 
             Task.detached {
                 do {
-                    let tokenizer = try await loadTokenizerAsync(
-                        tokenizerName: tokenizerName,
-                        tokenizerFolderURL: tokenizerFolderURL,
-                        allowNetworkAccess: allowNetworkAccess
-                    )
-                    result = .success(tokenizer)
+                    box.result = .success(try await operation())
                 } catch {
-                    result = .failure(error)
+                    box.result = .failure(error)
                 }
                 semaphore.signal()
             }
 
             semaphore.wait()
-            return try result!.get()
+            guard let result = box.result else {
+                throw OpenMedTokenizerError.invalidAssets
+            }
+            return try result.get()
         }
 
-        private static func loadTokenizerAsync(
-            tokenizerName: String,
-            tokenizerFolderURL: URL?,
-            allowNetworkAccess: Bool
-        ) async throws -> any Tokenizer {
-            if let tokenizerFolderURL {
-                return try loadTokenizerFromDirectory(
-                    tokenizerFolderURL,
-                    fallbackTokenizerName: allowNetworkAccess ? tokenizerName : nil
-                )
-            }
-
-            guard allowNetworkAccess else {
-                throw TokenizerError.missingConfig
-            }
-
-            if tokenizerName.contains("/") {
-                let localDirectory = try await ensureTokenizerAssets(modelID: tokenizerName)
-                return try loadTokenizerFromDirectory(
-                    localDirectory,
-                    fallbackTokenizerName: tokenizerName
-                )
-            }
-
-            return try await AutoTokenizer.from(pretrained: tokenizerName)
-        }
-
-        private static func loadTokenizerFromDirectory(
-            _ directoryURL: URL,
-            fallbackTokenizerName: String?
-        ) throws -> any Tokenizer {
-            let tokenizerDataURL = directoryURL.appending(path: "tokenizer.json")
-            let tokenizerConfigURL = directoryURL.appending(path: "tokenizer_config.json")
-
-            guard FileManager.default.fileExists(atPath: tokenizerDataURL.path),
-                FileManager.default.fileExists(atPath: tokenizerConfigURL.path)
-            else {
-                if let fallbackTokenizerName {
-                    return try blockingPretrainedTokenizer(named: fallbackTokenizerName)
-                }
-                throw TokenizerError.missingConfig
-            }
-
-            let preparedDirectory = try prepareTokenizerDirectory(directoryURL)
-            return try blockingLocalTokenizer(from: preparedDirectory)
+        /// The semaphore orders the write before the read.
+        private final class BlockingResultBox<T>: @unchecked Sendable {
+            var result: Result<T, Error>?
         }
 
         static func patchTokenizerConfigDataIfNeeded(
@@ -869,7 +1039,7 @@
                 withIntermediateDirectories: true
             )
 
-            for fileName in tokenizerAssetFileNames {
+            for fileName in OpenMedTokenizerAssetStore.tokenizerAssetFileNames {
                 let sourceURL = directoryURL.appending(path: fileName)
                 let destinationURL = preparedDirectory.appending(path: fileName)
                 guard fileManager.fileExists(atPath: sourceURL.path) else {
@@ -912,151 +1082,6 @@
                 .appending(path: "OpenMed", directoryHint: .isDirectory)
                 .appending(path: "PreparedTokenizerAssets", directoryHint: .isDirectory)
                 .appending(path: "\(leafName)-\(digest)", directoryHint: .isDirectory)
-        }
-
-        private static func blockingLocalTokenizer(from modelFolder: URL) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(modelFolder: modelFolder))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
-        }
-
-        private static func ensureTokenizerAssets(modelID: String) async throws -> URL {
-            let directory = try tokenizerCacheDirectory(modelID: modelID)
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-
-            let requiredFiles = [
-                "tokenizer.json",
-                "tokenizer_config.json",
-            ]
-            let optionalFiles = tokenizerAssetFileNames.filter { fileName in
-                !requiredFiles.contains(fileName)
-            }
-
-            for fileName in requiredFiles {
-                try await downloadTokenizerFile(
-                    modelID: modelID,
-                    relativePath: fileName,
-                    destinationURL: directory.appending(path: fileName),
-                    required: true
-                )
-            }
-
-            for fileName in optionalFiles {
-                try await downloadTokenizerFile(
-                    modelID: modelID,
-                    relativePath: fileName,
-                    destinationURL: directory.appending(path: fileName),
-                    required: false
-                )
-            }
-
-            return directory
-        }
-
-        private static func tokenizerCacheDirectory(modelID: String) throws -> URL {
-            let base =
-                try FileManager.default.url(
-                    for: .cachesDirectory,
-                    in: .userDomainMask,
-                    appropriateFor: nil,
-                    create: true
-                )
-            let sanitized = modelID.replacingOccurrences(of: "/", with: "__")
-            return
-                base
-                .appending(path: "OpenMed", directoryHint: .isDirectory)
-                .appending(path: "TokenizerAssets", directoryHint: .isDirectory)
-                .appending(path: sanitized, directoryHint: .isDirectory)
-        }
-
-        private static let tokenizerAssetFileNames = [
-            "tokenizer.json",
-            "tokenizer_config.json",
-            "special_tokens_map.json",
-            "vocab.txt",
-            "vocab.json",
-            "merges.txt",
-            "spm.model",
-            "sentencepiece.bpe.model",
-            "added_tokens.json",
-        ]
-
-        private static func downloadTokenizerFile(
-            modelID: String,
-            relativePath: String,
-            destinationURL: URL,
-            required: Bool
-        ) async throws {
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                return
-            }
-
-            let encodedModelID =
-                modelID
-                .split(separator: "/")
-                .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
-                .joined(separator: "/")
-            let encodedPath =
-                relativePath
-                .split(separator: "/")
-                .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
-                .joined(separator: "/")
-
-            guard
-                let url = URL(
-                    string: "https://huggingface.co/\(encodedModelID)/resolve/main/\(encodedPath)?download=1"
-                )
-            else {
-                throw TokenizerError.missingConfig
-            }
-
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse else {
-                throw TokenizerError.missingConfig
-            }
-            if http.statusCode == 404 && !required {
-                return
-            }
-            guard (200..<300).contains(http.statusCode) else {
-                throw TokenizerError.missingConfig
-            }
-
-            try FileManager.default.createDirectory(
-                at: destinationURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try data.write(to: destinationURL, options: .atomic)
-        }
-
-        private static func blockingPretrainedTokenizer(named name: String) throws -> any Tokenizer {
-            let semaphore = DispatchSemaphore(value: 0)
-            var result: Result<any Tokenizer, Error>?
-
-            Task.detached {
-                do {
-                    result = .success(try await AutoTokenizer.from(pretrained: name))
-                } catch {
-                    result = .failure(error)
-                }
-                semaphore.signal()
-            }
-
-            semaphore.wait()
-            return try result!.get()
         }
 
         private static func sanitizedCacheComponent(_ value: String) -> String {

@@ -73,7 +73,8 @@ Create one folder per bundled model and include:
 1. `openmed-model.json`
 2. the `.mlpackage` or `.mlmodelc`
 3. `id2label.json`
-4. optional tokenizer assets folder
+4. a tokenizer assets folder with `tokenizer.json` and `tokenizer_config.json`
+   (OpenMedKit loads tokenizers offline only and never downloads one implicitly)
 
 Example `openmed-model.json`:
 
