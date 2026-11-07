@@ -526,6 +526,7 @@ classification:
     - multimodal/openmedkit-contracts.md
     - multimodal/local-review.md
     - multimodal/cross-modal-clock-alignment.md
+    - multimodal/apple-speech.md
     - multimodal/streaming/local-diarization.md
     - multimodal/streaming/speaker-aliases.md
     - multimodal/streaming/ambient-speaker-roles.md

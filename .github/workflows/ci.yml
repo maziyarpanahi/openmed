@@ -311,6 +311,7 @@ jobs:
         tests/unit/clinical/test_summarize_backends.py
         tests/unit/clinical/test_brief_parity.py
         tests/unit/clinical/grounding/test_ground_facade.py
+        tests/unit/multimodal/test_apple_speech_contract.py
         tests/unit/multimodal/test_transcript_language.py
         tests/unit/agent/permissions/test_access_events.py
         tests/unit/agent/workflows/test_journal_retirement.py
