@@ -461,6 +461,7 @@ nav:
       - Transcript Revision Lineage: multimodal/streaming/transcript-revisions.md
       - ASR Window Reconciliation: multimodal/streaming/asr-window-stitching.md
       - ECG Lead Identity and Layout: multimodal/ecg-lead-layout.md
+      - Non-ECG Waveform Acquisition: multimodal/physiological-waveforms.md
       - ECG Annotation Privacy: multimodal/ecg-annotation-privacy.md
       - ECG Signal Quality Gates: multimodal/ecg-signal-quality.md
       - ECG Interval Candidates: multimodal/ecg-interval-candidates.md
