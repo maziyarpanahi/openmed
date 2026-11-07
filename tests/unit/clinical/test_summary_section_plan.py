@@ -191,25 +191,21 @@ def test_evidence_with_unknown_section_is_refused_when_sections_are_supplied() -
     assert plan.refusal_reason is SummaryPlanRefusalReason.UNKNOWN_SECTION_ID
 
 
-@pytest.mark.parametrize(
-    "row",
-    [
+def test_unstable_identifiers_are_refused_without_value_echo(subtests) -> None:
+    for row in [
         _evidence("e-1", "", 1, 2),
         _evidence("e-1", "s 1", 1, 2),
         _evidence("not a stable id", "s-1", 1, 2),
-    ],
-)
-def test_unstable_identifiers_are_refused_without_value_echo(
-    row: dict[str, object],
-) -> None:
-    plan = build_summary_section_plan([row])
+    ]:
+        with subtests.test(row=row):
+            plan = build_summary_section_plan([row])
 
-    assert plan.refused is True
-    assert plan.refusal_reason in {
-        SummaryPlanRefusalReason.INVALID_SECTION_ID,
-        SummaryPlanRefusalReason.INVALID_EVIDENCE_ID,
-    }
-    assert all(sentinel not in plan.to_json() for sentinel in PRIVATE_SENTINELS)
+            assert plan.refused is True
+            assert plan.refusal_reason in {
+                SummaryPlanRefusalReason.INVALID_SECTION_ID,
+                SummaryPlanRefusalReason.INVALID_EVIDENCE_ID,
+            }
+            assert all(sentinel not in plan.to_json() for sentinel in PRIVATE_SENTINELS)
 
 
 def test_plan_disclaimer_is_fixed_and_value_free() -> None:
@@ -219,21 +215,19 @@ def test_plan_disclaimer_is_fixed_and_value_free() -> None:
     assert "clinical" in SUMMARY_SECTION_PLAN_DISCLAIMER.casefold()
 
 
-@pytest.mark.parametrize(
-    "extra",
-    [
+def test_conflicting_approval_is_refused(subtests) -> None:
+    for extra in [
         {"review_status": "rejected"},
         {"is_approved": False},
         {"approval": {"approved": False}},
-    ],
-)
-def test_conflicting_approval_is_refused(extra) -> None:
-    row = _evidence("e-1", "s-1", 1, 2)
-    row.update(extra)
-    assert (
-        build_summary_section_plan([row]).refusal_reason
-        is SummaryPlanRefusalReason.INVALID_APPROVAL
-    )
+    ]:
+        with subtests.test(extra=extra):
+            row = _evidence("e-1", "s-1", 1, 2)
+            row.update(extra)
+            assert (
+                build_summary_section_plan([row]).refusal_reason
+                is SummaryPlanRefusalReason.INVALID_APPROVAL
+            )
 
 
 def test_object_disapproval_is_not_ignored() -> None:

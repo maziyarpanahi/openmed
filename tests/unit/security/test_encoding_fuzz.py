@@ -109,32 +109,30 @@ def test_warning_analysis_does_not_build_normalization_offset_maps(
     assert decoded.warning_codes == ()
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
+def test_lightweight_warning_codes_match_detection_normalization(subtests) -> None:
+    for text in [
         "SyntheticP\u0430tient",
         "\uff21\uff22\uff23",
         "patient\u3000alias",
         "patient \u092e\u0930\u0940\u091c",
         "plain text",
-    ],
-)
-def test_lightweight_warning_codes_match_detection_normalization(text: str) -> None:
-    normalization = normalize_for_pii_detection(text)
-    expected = tuple(
-        code
-        for code, present in (
-            ("mixed_script", normalization.mixed_script),
-            ("confusable_characters", bool(normalization.folded_confusables)),
-        )
-        if present
-    )
+    ]:
+        with subtests.test(text=text):
+            normalization = normalize_for_pii_detection(text)
+            expected = tuple(
+                code
+                for code, present in (
+                    ("mixed_script", normalization.mixed_script),
+                    ("confusable_characters", bool(normalization.folded_confusables)),
+                )
+                if present
+            )
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", ConfusableIngestionWarning)
-        decoded = decode_ingestion_bytes(text.encode(), encoding="utf-8")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ConfusableIngestionWarning)
+                decoded = decode_ingestion_bytes(text.encode(), encoding="utf-8")
 
-    assert decoded.warning_codes == expected
+            assert decoded.warning_codes == expected
 
 
 def test_encoding_rejection_logs_only_file_metadata(
