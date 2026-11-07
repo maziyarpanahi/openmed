@@ -86,7 +86,10 @@ rendering change visible.
   128 characters; paths, URLs, and home-relative strings are rejected.
 - SHA-256 digests are exactly 64 lowercase hexadecimal characters.
 - Media types are lowercase `type/subtype` values limited to the supported
-  document, image, and audio families.
+  document, image, audio, video, and waveform families.
+- Waveform manifests can carry bounded channel and sample counts and positive
+  sample rates. DICOM subprofiles are available only with `application/dicom`.
+  See [manifest profiles](manifest-profiles.md) for modality-specific requirements.
 - `byte_size` is an integer from 1 through 2<sup>63</sup> - 1; page, frame, and
   dimension counts are integers from 1 through 2<sup>31</sup> - 1; durations are
   finite positive numbers bounded by 2<sup>31</sup> - 1 seconds.

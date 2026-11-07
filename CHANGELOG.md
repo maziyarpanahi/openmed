@@ -26,7 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffer destruction on pause, withdrawal, cancellation and finalization.
   Serialization, persistence and cross-session comparison are refused.
 
+- Passive Python and OpenMedKit FHIR R4 export of fixed reviewed ambient notes,
+  with digest-bound clinician confirmation, evidence/speaker references,
+  freshness and correction holds, and counts-only conversion-loss reports.
+
 - Add a reusable local OpenMedKit review view for visual conflicts, handwriting and uncertain speakers, with explicit revision-bound decisions and stale or missing source holds (#3681).
+
+- Experimental Android mirrors of multimodal asset manifests, profile references,
+  preflight findings, abstention records, and provider result envelopes with strict
+  content-free parsing and shared offline Python/Kotlin serialization vectors.
 
 - Mirror bounded multimodal asset, visual, transcript, clock and provider contracts in OpenMedKit, with strict shared evidence identities, explicit unsupported outcomes and offline Python/Swift parity vectors (#3679).
 
@@ -40,13 +48,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revision-bound blinded review imports. Bundle hand-authored synthetic encounters;
   no clinical validation or autonomous action is implied (#3822).
 
+- Dependency-free, counts-only PDF hidden-content inventory for annotations,
+  form values, embedded files, XFA, layers, JavaScript, OpenAction, Launch and
+  incremental revisions, including superseded definitions. Strict/review
+  policies and explicit PDF asset preflight expose controlled findings without
+  overriding existing raster-budget abstentions (#3824).
+
 - Add six executable synthetic multimodal validation packs with artifact-bound blinded review, independent disagreement adjudication, non-compensable privacy/provenance failures, and suppressed case-level confidence intervals; no completed clinician review or clinical-validation claim (#3207).
+
+- Dedicated Linux/macOS lightweight multimodal CI tests, synthetic eval and
+  parser fuzz coverage, with required-resource checks and a zero-skip gate.
 
 - Fixed, versioned OpenPHI-Vision document, slide-label, mixed-script and
   two-patient packet fixtures with verified pixel/gold digests, critical flags,
   packet splits and value-free loader representations (#3829).
 
 - Add executed OpenPHI-Vision synthetic leakage controls and immutable EdgeHealthBench device profiles with separate privacy, quality, utility, abstention, parity and measured resource gates (#3205).
+
+- Add aligned offline Python and OpenMedKit non-ECG waveform acquisition
+  contracts for PPG, respiration, pressure and capnography, with controlled
+  quality states, content-free reports and explicit reviewer confirmation.
+  These engineering checks expose no derived vital signs or alarms (#3840).
 
 - Align actual audio, finalized transcript, ECG and image evidence through explicitly bound monotonic clocks, qualified drift/uncertainty envelopes and discontinuity exclusions, withholding ambiguous translations for review (#2819).
 
@@ -73,11 +95,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buffers and reviewer-confirmed handoff. Add the aligned on-device OpenMedKit
   converter and synthetic offline safety controls (#3673).
 
+- Explicit offline document, transcription and ambient-draft CLI adapters over
+  injected session services, with separate protected/evidence outputs, consent
+  and review gates, interruption cleanup and synthetic examples (#3678).
+
 - Add bounded local speech endpoints in Python and OpenMedKit with injected detectors, exact sample boundaries, explicit uncertainty and gaps, audio-free state and cancellation cleanup (#3674).
 
 - Add a local SmolVLM2 adapter with pinned asset provenance, bounded image admission, mandatory generated-text screening, and an opt-in synthetic real-device qualification profile (#3202).
 
 - Add executable synthetic VLM preprocessing conformance in Python and OpenMedKit, with versioned pixel operators, exact coordinate and mask checks, bounded tensor tolerances and stale qualification/evidence rejection (#3684).
+
+- Waveform manifest metadata and v1.1 profiles for EDF-, WFDB- and DICOM-ECG-shaped
+  inputs, explicit non-pixel DICOM admission, bounded waveform ceilings and
+  saturating decoded-memory plans. Legacy v1 serialization stays unchanged;
+  unknown WFDB source types still abstain. Resource admission is non-diagnostic
+  and does not qualify readers or clinical use (#3814).
 
 - Add bounded, local-only Python and OpenMedKit WFDB ECG reading for formats
   16, 212 and 80 with windowed integer outputs, streamed checksum verification,
@@ -97,6 +129,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generate bounded non-diagnostic waveform stimuli with declared event timing and synthetic device metadata (#2850).
 
+- Offline synthetic dialogue rendering through licensed local speech adapters,
+  sample-exact PHI chunks and word timing manifests, a model-free waveform fixture,
+  and seeded noise, gain, overlap and bandpass augmentation provenance (#3831).
+
 - Generate reproducible synthetic DICOM files with paired metadata, burned-in identifier masks, annotation and ruler geometry, native pixel roundtrips and source-bound privacy-mask lineage (#2849).
 
 - Compare packet-scoped identity digests, page numbering, rendered pixels, template anchors and continuation cues across document pages; preserve original evidence and masks when splitting or quarantining inconsistent groups (#2805).
@@ -115,11 +151,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Extract review-only ECG rate, PR, QRS and QT candidates from freshly quality-gated samples, retaining original lead fiducials and algorithm provenance while withholding ambiguous or disagreeing measurements (#2809).
 
+- Local, metadata-only ambient correction ledgers in Python and OpenMedKit,
+  with revision-bound authority, dependent claim invalidation, deterministic
+  replay, and explicit review guards on current exports (#3682).
+
 - Assemble ambient note drafts from finalized, PHI-screened, role-reviewed transcript evidence with original-offset citations, local claim verification, conflict holds and current clinician-custody checks before local export (#2816).
 
 - Own bounded transient audio buffers, enforce non-renewable session deadlines, and verify lifecycle cleanup of declared buffers and enrolled local files with value-free receipts and conservative crash recovery (#2818).
 
 - Associate form values and controls with original visual labels and sections, retain ambiguous alternatives, and require exact-content association and handwriting review before protected structured export (#2797).
+
+- Opt-in experimental single-asset REST preflight with in-memory binary intake,
+  core report byte parity, bounded manifests and bodies, and content-free errors
+  and access logs (#3835).
 
 - Add an opt-in, authenticated System One route that de-identifies text and question criteria before local decision scoring and records a text-free audit (#4264).
 
@@ -129,11 +173,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Render deterministic synthetic clinical forms, letters, labels and fax-like pages with actual glyph boxes, PHI truth, page reading order and reproducible scan corruption, preserving hidden annotations and source-linked image evidence (#2848).
 
+- Bounded, offline DICOM ECG multiplex decoding with physical calibration,
+  source-coded channels, relative skew, withheld annotation counts, static
+  rejection codes and explicit reviewer confirmation (#3825).
+
 - Record actual DICOM decoding and display transforms in reproducible digest chains, bind downstream image regions and local VLM evidence to their pixels, and reject stale or unreproducible evidence (#2801).
 
 - Redact ECG fields and rendered annotations together, with source-bound review, cross-surface identifier matching, verified in-memory PNG export, unchanged waveforms and refusal on residual identifiers or unknown coverage (#2811).
 
 - Keep ambient speaker-role hypotheses separate from aliases and require exact-source reviewer decisions before role-sensitive extraction and note finalization, with explicit provisional drafts and stale-attribution rejection (#2817).
+
+- Bounded HEIF/M4A header preflight in Python and OpenMedKit, with primary image
+  geometry, item-role and EXIF/XMP presence inventory, declared audio metadata,
+  decoder-required results, value-free refusals and shared synthetic fixtures
+  (#3841). No media decoding or metadata-value extraction is performed.
 
 - Opt-in BigTIFF pyramid metadata preflight in Python and OpenMedKit, with
   declared tiled IFD-chain/SubIFD profiles, bounded directory and tile-table
@@ -165,15 +218,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add deterministic DICOM series sampling with acquisition-aware geometry coverage, bounded native previews, source-bound manifests, and local VLM drafts that distinguish selected evidence from unexamined frames (#2793).
 
-- Add deterministic Draft 2020-12 JSON Schema exports for the multimodal
-  preflight artifacts (asset manifests, asset batches, abstention records,
-  processing summaries and provider result envelopes) with offline resolution,
-  pinned rendering digests and drift tests binding each document to its Python
-  loader (#3051).
+- Ship bounded synthetic malformed-header fixtures exercising the existing multimodal preflight and batch contracts (#3007).
 
 - Run ordered multimodal batch preflight with shared per-asset reports, aggregate ceilings, duplicates and explicit stop policies (#3009).
 
 - Add a bounded Python session for injected local image, PDF and streaming-audio providers, with preflighted immutable snapshots, explicit ownership, cooperative cancellation and metadata-only ordered results (#3677).
+
+- Added deterministic synthetic malformed PDF and DICOM header fixtures with
+  recorded pre-decode boundaries, expected reason codes and payload digests,
+  plus offline regression tests (#3094).
 
 - Added a bounded, dependency-free DICOM transfer-syntax preflight that classifies
   declared file-meta transfer syntaxes into closed native, optional-decoder,
@@ -184,6 +237,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plan bounded multiresolution whole-slide tiles with explicit source transforms, overlap, conservative tissue-mask filtering, auditable exclusions and declared concurrent buffer ceilings (#2794).
 
 - Measure bounded image resolution, exposure, contrast, sharpness and optional blank-margin quality before local visual extraction, with explicit reacquisition or review reasons and inference suppression on failure (#2800).
+
+- Offline critical transcript-token classification and value-free confirmation
+  holds in Python and OpenMedKit, with fixed citation propagation, current-evidence
+  reviewer receipts, guarded export permits and unchanged local dosing checks.
 
 - Track transcript insert, delete, replace, timestamp-shift and finalize operations with stable segment/token identities, deterministic span remapping and explicit invalidation of ambiguous citations (#2814).
 
@@ -201,19 +258,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Define a non-diagnostic ECG waveform input contract with canonical lead ordering, explicit unit and ADC calibration, aligned timing, missingness masks and digest-only provenance (#2806).
 
+- Bind versioned non-diagnostic notices to multimodal review references and
+  Python/OpenMedKit vision generations, with strict decoding, notice-preserving
+  JSON/CLI output, explicit reviewer confirmation guards, shared synthetic wire
+  fixtures and public result registry checks. Structured vision results carry
+  the fixed catalog notice (#3828).
+
+- Add deterministic Draft 2020-12 JSON Schema exports for the multimodal
+  preflight artifacts (asset manifests, asset batches, abstention records,
+  processing summaries and provider result envelopes) with offline resolution,
+  pinned rendering digests and drift tests binding each document to its Python
+  loader (#3051).
+
 ### Security
+
+- Enforce conservative, policy-selectable asset limits before Python image,
+  PDF and DICOM pixel redaction decodes media, with bounded header reads,
+  runtime page/frame guards and code-and-number-only admission errors (#3832).
 
 - Admit DOCX, XLSX, PPTX, EPUB and ODT ZIP containers against the existing
   archive-safety limits before parsing, verify actual member sizes with bounded
   decompression, and report archive failures using content-free codes/counts
   (#3812).
 
+- Bounded local TIFF/BigTIFF slide de-identification in Python and OpenMedKit:
+  remove associated images and identifying metadata while preserving pyramid
+  payloads and reporting roles, counts and digests. Refuse DICOM whole-slide
+  label/overview outputs unless explicitly retained after verified pixel
+  redaction and reviewer confirmation. Synthetic fixtures cover privacy and
+  hostile layout controls; structural removal does not certify pixel privacy.
+
 - Screen buffered Python MLX and OpenMedKit Compass generations with injected
   local PHI detectors and same-asset identifier digests. Bind release decisions
   to metadata, abstain on detector failure or timeout, and suppress reconstructable
   token IDs. Callers must supply a local guard and asset provenance to release text.
 
+- Local barcode, QR and DataMatrix region detection across image, DICOM pixel
+  and PDF raster redaction, with a caller-installed optional ZXing backend,
+  deterministic fake, payload-free coverage reports, explicit unavailable
+  coverage policy and residual-code verification.
+
 - Require OAuthLib 4.0.1 or newer in the optional cloud and Prefect integrations to fix device-code token validation (CVE-2026-49272).
+
+- Fail closed before publishing redacted DOCX, XLSX and PPTX packages with
+  uncovered OOXML content. Clear properties, custom XML, alt text, thumbnails,
+  printer settings and presentation template text; refuse unsupported hidden
+  carriers with category/count/digest evidence and preserve destinations (#3810).
 
 ## [3.2.0] - 2026-10-30
 

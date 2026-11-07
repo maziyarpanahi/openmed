@@ -5,6 +5,10 @@ or ASR provider call without copying its clinical output into logs or summary
 artifacts. The envelope contains stable identifiers, SHA-256 digests, timing,
 and bounded aggregate counts only.
 
+Clinical output is carried separately with its mandatory
+[multimodal review notice](notices.md). This operational envelope is not itself a
+clinical measurement or draft and does not attest to output validity.
+
 ```python
 from openmed.multimodal.provider_result import (
     ProviderResultEnvelope,

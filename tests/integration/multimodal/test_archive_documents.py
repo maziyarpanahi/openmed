@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from openmed.multimodal import documents_docx, epub, odt, pptx, xlsx
+from openmed.multimodal import documents_docx, epub, odt, ooxml_residual, pptx, xlsx
 
 pytestmark = pytest.mark.integration
 
@@ -92,7 +92,7 @@ def test_text_offsets_and_coordinates_identical_to_unchecked_baseline(
         workbook = library.load_workbook(guarded.output_path)
         guarded_cells = list(workbook.active.values)
         workbook.close()
-        monkeypatch.setattr(module, "admitted_zip", unchecked_zip)
+        monkeypatch.setattr(ooxml_residual, "admitted_zip", unchecked_zip)
         baseline = extract()
         workbook = library.load_workbook(baseline.output_path)
         baseline_cells = list(workbook.active.values)

@@ -28,12 +28,14 @@ from openmed.multimodal.asset_batch import (
     AssetBatchError,
 )
 from openmed.multimodal.asset_manifest import (
+    _DICOM_SUBPROFILES,
     _SUPPORTED_EXACT_MEDIA_TYPES,
     _SUPPORTED_MEDIA_PREFIXES,
     MANIFEST_VERSION,
     MAX_MANIFEST_BYTE_SIZE,
     MAX_MANIFEST_COUNT,
     MAX_MANIFEST_DURATION_SECONDS,
+    WAVEFORM_MEDIA_TYPES,
     AssetManifest,
     AssetManifestError,
 )
@@ -60,13 +62,13 @@ from openmed.multimodal.provider_result import (
 
 _SCHEMA_ID_PREFIX = "https://openmed.ai/schemas/multimodal/"
 _RENDERED_SCHEMA_DIGESTS = {
-    "asset_manifest": "1e3ba4a5ef91291405709c4ec7f616e30bf82982ad0a01e8fa37bf772b70af02",
-    "asset_batch": "4782390ce56bb1a842c7cb5c2f5c997003d2126953710c0a93239e8de1052988",
+    "asset_manifest": "831088a1853e6113340d7112694252dc89994e501bd9d142ca64a49d06787f7b",
+    "asset_batch": "ada986a0281a6b56e41b0d9eda1a91f677fc97de489ef08879d9408ed86ca605",
     "abstention_record": "359f03f98bd66188afb0516294a424e4b4434945ab045fd6b6eeed944591566d",
-    "processing_summary": "67ae7cdb5820d03f18cf6e01c271c56119af17989304621595e4deebe1325ff6",
+    "processing_summary": "7899719cafce0521c0c29c05a9e49627e538cd9c1c55f67732b93be276749168",
     "provider_result": "aa0189b46e498b6b4c1ff67bd481ecd696e24b5651428c6b0f68da347db6e6fd",
 }
-_CATALOG_DIGEST = "c66f1dfd6b58e831ab833a5eaa6590c1dab24cd12d5c7af7838105c71275eaa8"
+_CATALOG_DIGEST = "74d2f2e3eb76ed87c521eeecc6f11597548c15ea2908418cfd8f6f7b6fae0d9e"
 
 
 def _validator(name: str) -> Draft202012Validator:
@@ -326,7 +328,18 @@ def test_rendered_schema_digests_are_pinned() -> None:
 def test_manifest_schema_matches_the_python_fields() -> None:
     document = schemas.export_multimodal_schema("asset_manifest")
     manifest = document["$defs"]["manifest"]
-    optional = {"version", "pages", "width", "height", "frames", "duration_seconds"}
+    optional = {
+        "version",
+        "pages",
+        "width",
+        "height",
+        "frames",
+        "duration_seconds",
+        "channel_count",
+        "sample_rate_hz",
+        "samples_per_channel",
+        "dicom_subprofile",
+    }
 
     assert set(manifest["properties"]) == {
         field.name for field in fields(AssetManifest)
@@ -360,7 +373,14 @@ def test_manifest_schema_bounds_match_the_python_constants() -> None:
         "exclusiveMinimum": 0,
         "maximum": MAX_MANIFEST_DURATION_SECONDS,
     }
-    for field_name in ("pages", "width", "height", "frames"):
+    for field_name in (
+        "pages",
+        "width",
+        "height",
+        "frames",
+        "channel_count",
+        "samples_per_channel",
+    ):
         assert manifest["properties"][field_name] == {
             "anyOf": [{"$ref": "#/$defs/positiveCount"}, {"type": "null"}]
         }
@@ -374,13 +394,15 @@ def test_manifest_media_type_families_match_the_python_constants() -> None:
     media_type = document["$defs"]["mediaType"]
     validator = _validator("asset_manifest")
 
-    assert media_type["anyOf"][0] == {"enum": sorted(_SUPPORTED_EXACT_MEDIA_TYPES)}
+    assert media_type["anyOf"][0] == {
+        "enum": sorted(_SUPPORTED_EXACT_MEDIA_TYPES | WAVEFORM_MEDIA_TYPES)
+    }
     assert media_type["anyOf"][1:] == [
         {"pattern": f"^{prefix}"} for prefix in sorted(_SUPPORTED_MEDIA_PREFIXES)
     ]
     assert schemas._SUPPORTED_EXACT_MEDIA_TYPES == _SUPPORTED_EXACT_MEDIA_TYPES
     assert schemas._SUPPORTED_MEDIA_PREFIXES == _SUPPORTED_MEDIA_PREFIXES
-    for exact in sorted(_SUPPORTED_EXACT_MEDIA_TYPES):
+    for exact in sorted(_SUPPORTED_EXACT_MEDIA_TYPES | WAVEFORM_MEDIA_TYPES):
         assert validator.is_valid(_manifest_payload(media_type=exact))
     for prefix in _SUPPORTED_MEDIA_PREFIXES:
         assert validator.is_valid(_manifest_payload(media_type=f"{prefix}custom"))
@@ -405,6 +427,48 @@ def test_manifest_schema_accepts_serialized_manifests() -> None:
 
         assert validator.is_valid(payload)
         assert validator.is_valid(json.loads(manifest.to_json()))
+
+
+@pytest.mark.parametrize(
+    ("media_type", "subprofile"),
+    [(media_type, None) for media_type in sorted(WAVEFORM_MEDIA_TYPES)]
+    + [("application/dicom", value) for value in sorted(_DICOM_SUBPROFILES)],
+)
+def test_waveform_artifacts_match_the_manifest_and_batch_schemas(
+    media_type, subprofile
+):
+    values = (
+        {}
+        if subprofile == "non_pixel"
+        else {"channel_count": 2, "sample_rate_hz": 125.5, "samples_per_channel": 251}
+    )
+    raw = _manifest_payload(
+        media_type=media_type, dicom_subprofile=subprofile, **values
+    )
+    manifest = AssetManifest.from_dict(raw)
+    assert _validator("asset_manifest").is_valid(raw)
+    assert _validator("asset_manifest").is_valid(manifest.to_dict())
+    batch = AssetBatch.build("batch-1", [manifest])
+    assert _validator("asset_batch").is_valid(batch.to_dict())
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"channel_count": 0},
+        {"samples_per_channel": MAX_MANIFEST_COUNT + 1},
+        {"sample_rate_hz": MAX_MANIFEST_COUNT + 1},
+        {"sample_rate_hz": 0},
+        {"media_type": "application/dicom", "dicom_subprofile": "unknown"},
+        {"media_type": "application/dicom+json", "dicom_subprofile": "waveform"},
+        {"media_type": "application/edf", "dicom_subprofile": "non_pixel"},
+    ],
+)
+def test_manifest_schema_and_loader_refuse_invalid_waveform_metadata(fields):
+    raw = _manifest_payload(**fields)
+    assert not _validator("asset_manifest").is_valid(raw)
+    with pytest.raises(AssetManifestError):
+        AssetManifest.from_dict(raw)
 
 
 def test_manifest_schema_accepts_explicit_nulls_the_loader_treats_as_absent() -> None:

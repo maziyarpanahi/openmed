@@ -59,6 +59,9 @@ class RoutePolicy:
 
 
 ROUTE_POLICIES = {
+    ("POST", "/experimental/multimodal/preflight"): RoutePolicy(
+        ("pii:read",), "control"
+    ),
     ("GET", "/models/loaded"): RoutePolicy(("models:read",), "control"),
     ("POST", "/models/unload"): RoutePolicy(("models:write",), "control"),
     ("POST", "/analyze"): RoutePolicy(("analyze:write",), "model"),

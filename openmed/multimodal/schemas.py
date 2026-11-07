@@ -31,12 +31,14 @@ from .abstention import (
 )
 from .asset_batch import BATCH_VERSION, MAX_BATCH_ASSETS
 from .asset_manifest import (
+    _DICOM_SUBPROFILES,
     _SUPPORTED_EXACT_MEDIA_TYPES,
     _SUPPORTED_MEDIA_PREFIXES,
     MANIFEST_VERSION,
     MAX_MANIFEST_BYTE_SIZE,
     MAX_MANIFEST_COUNT,
     MAX_MANIFEST_DURATION_SECONDS,
+    WAVEFORM_MEDIA_TYPES,
 )
 from .processing_summary import PROCESSING_SUMMARY_SCHEMA_VERSION, ProcessingOutcome
 from .provider_result import (
@@ -241,7 +243,7 @@ def _shared_definitions() -> dict[str, Any]:
             "type": "string",
             "pattern": _MEDIA_TYPE_PATTERN,
             "anyOf": [
-                {"enum": sorted(_SUPPORTED_EXACT_MEDIA_TYPES)},
+                {"enum": sorted(_SUPPORTED_EXACT_MEDIA_TYPES | WAVEFORM_MEDIA_TYPES)},
                 *(
                     {"pattern": f"^{re.escape(prefix)}"}
                     for prefix in sorted(_SUPPORTED_MEDIA_PREFIXES)
@@ -300,7 +302,18 @@ def _manifest_definitions() -> dict[str, Any]:
             "height": _nullable({"$ref": "#/$defs/positiveCount"}),
             "frames": _nullable({"$ref": "#/$defs/positiveCount"}),
             "duration_seconds": _nullable({"$ref": "#/$defs/positiveDuration"}),
+            "channel_count": _nullable({"$ref": "#/$defs/positiveCount"}),
+            "sample_rate_hz": _nullable(
+                {"type": "number", "exclusiveMinimum": 0, "maximum": MAX_MANIFEST_COUNT}
+            ),
+            "samples_per_channel": _nullable({"$ref": "#/$defs/positiveCount"}),
+            "dicom_subprofile": _nullable({"enum": sorted(_DICOM_SUBPROFILES)}),
         },
+        "if": {
+            "required": ["dicom_subprofile"],
+            "properties": {"dicom_subprofile": {"type": "string"}},
+        },
+        "then": {"properties": {"media_type": {"const": "application/dicom"}}},
     }
     return definitions
 
