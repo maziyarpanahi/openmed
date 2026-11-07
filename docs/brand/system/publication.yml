@@ -562,6 +562,7 @@ classification:
     - evaluation/blinded-adjudication.md
     - evaluation/chart-abstraction.md
     - evaluation/reviewer-disagreement.md
+    - evaluation/multimodal-clinical-validation.md
     - evaluation/transcript-accuracy.md
     - evaluation/local-guardrail-bypass.md
     - evaluation/synthetic-memorization.md
