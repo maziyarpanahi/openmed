@@ -37,6 +37,16 @@ class ModelCache(
         rootDirectory.mkdirs()
     }
 
+    /**
+     * Crash-safe generation cache for signed portable bundles, stored under
+     * this cache's root and sharing its byte budget and clock by default.
+     * Legacy snapshot directories and bundle generations never touch each other.
+     */
+    fun bundleGenerations(
+        options: BundleCacheOptions = BundleCacheOptions(quotaBytes = cacheBudgetBytes, clock = clock),
+    ): BundleGenerationCache =
+        BundleGenerationCache(File(rootDirectory, BundleGenerationCache.DIRECTORY_NAME), options)
+
     @Synchronized
     fun isAvailable(repoId: String): Boolean =
         isAvailable(repoId, expectedIntegrityHash = null)

@@ -1,0 +1,4155 @@
+{
+  "bundles": {
+    "v1": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4",
+      "envelope": "{\"content_id\":\"sha256:42565ed51c84323e62240c8d024e944d7c664f77b07e173293ee62f9fe97edd4\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"UXVUGViQz6yPNCsp9UXrYMsceJ_C_Sz_8E_cLU376KROvuR8at4aNz5570aBfvO5uO3lV1UIYypQ0AMrs7UhCw\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-42565ed51c84323e62240c8d024e944d",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":7,\"version\":\"1.2.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:a852e61c225e8114142630d53061b98257c569a604861d27829bb7fcd240e547\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 508
+    },
+    "v2": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:876f3270ffdd5c3bf2dcdcaadcc5f4ae409f049110deacf24c49776a834f041f",
+      "envelope": "{\"content_id\":\"sha256:876f3270ffdd5c3bf2dcdcaadcc5f4ae409f049110deacf24c49776a834f041f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"6T6xZ5HhqfCusehT7FE-BJ8ef8G-5U353Dsofe2RD976Z1QSPjvGOZ7u-p8G-Fm9-JB0PIgvPYybX6rt1Y0_Aw\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder, generation two\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-876f3270ffdd5c3bf2dcdcaadcc5f4ae",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":8,\"version\":\"1.3.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:c04f8fdf5ab5426c9d284448462c34cf17f091115745eda19c709da35ae73aea\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 524
+    },
+    "v2_schema": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:78dd5f23da7321901dbff9bbeecbdfb42501c597b3b6e796f548656f0010458d",
+      "envelope": "{\"content_id\":\"sha256:78dd5f23da7321901dbff9bbeecbdfb42501c597b3b6e796f548656f0010458d\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"Ih9THjEM_5zPbifEuUWZN42omilPUvqTUQQ4z4bKMZcSndnRBUSsUk9PYp3pkLCEO_dqRcBpknVPtI9MQzB4BA\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder, generation two\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-78dd5f23da7321901dbff9bbeecbdfb4",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":8,\"version\":\"1.3.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:c04f8fdf5ab5426c9d284448462c34cf17f091115745eda19c709da35ae73aea\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":2,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 524
+    },
+    "v2_untrusted": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:876f3270ffdd5c3bf2dcdcaadcc5f4ae409f049110deacf24c49776a834f041f",
+      "envelope": "{\"content_id\":\"sha256:876f3270ffdd5c3bf2dcdcaadcc5f4ae409f049110deacf24c49776a834f041f\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-rogue\",\"sig\":\"pE_xmz787SGJO6XXJ_juBpV8uLEhucgWv3Brv3yeVQJjKo_65UmVeN_hDZOrsTgLba1HJT0m4lJX0wNfiNqkCg\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder, generation two\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-876f3270ffdd5c3bf2dcdcaadcc5f4ae",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":8,\"version\":\"1.3.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:c04f8fdf5ab5426c9d284448462c34cf17f091115745eda19c709da35ae73aea\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 524
+    },
+    "v3": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:9999907d2a0fde4a1efa7c9fbe0440d0484cae871f333fc8a88d50646b48c667",
+      "envelope": "{\"content_id\":\"sha256:9999907d2a0fde4a1efa7c9fbe0440d0484cae871f333fc8a88d50646b48c667\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"K5xOSSVPDQOBhxIlgwl7dKIUhdrYVm7ORRZCttz4tg4DSOgXaAsF138AbNHZXoTdcqZMecDZ4ha6Zw6OARv9BA\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder, generation three\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-9999907d2a0fde4a1efa7c9fbe0440d0",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":9,\"version\":\"1.4.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:a852e61c225e8114142630d53061b98257c569a604861d27829bb7fcd240e547\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:1ec8b7eac9fd7438b597af09e679420f83e319aea27c5dac00f8a0df25ddb847\",\"size_bytes\":56},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 526
+    },
+    "v4": {
+      "bundle_id": "openmed.synthetic.tiny-pii",
+      "content_id": "sha256:a8b6e917e5121096b1039a3270aa25a4b292217a377a00e87b0e4b8443a2955e",
+      "envelope": "{\"content_id\":\"sha256:a8b6e917e5121096b1039a3270aa25a4b292217a377a00e87b0e4b8443a2955e\",\"schema\":\"openmed.portable_bundle.signatures\",\"schema_version\":1,\"signatures\":[{\"alg\":\"Ed25519\",\"kid\":\"openmed-test-root-a\",\"sig\":\"HGG8SaBzt7s_Y9RlUE2ACKUVNiOonG7zbWrZZA-pG3Axl84-eWtoXmnxcoTXNdFOaFpl3CJGEmt4QWdTjuzlCg\"}]}",
+      "files": [
+        {
+          "path": "LICENSE",
+          "text": "Synthetic portable-bundle test fixture.\nLicensed Apache-2.0.\n"
+        },
+        {
+          "path": "calibration/profile.json",
+          "text": "{\"profile_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "config.json",
+          "text": "{\"model_type\":\"bert\",\"num_labels\":3,\"synthetic\":true}\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "text": "synthetic coreml graph placeholder\n"
+        },
+        {
+          "path": "coreml/model.mlpackage/Manifest.json",
+          "text": "{\"synthetic\":true}\n"
+        },
+        {
+          "path": "evidence/parity.json",
+          "text": "{\"cases\":0,\"synthetic\":true}\n"
+        },
+        {
+          "path": "id2label.json",
+          "text": "{\"0\":\"O\",\"1\":\"B-NAME\",\"2\":\"I-NAME\"}\n"
+        },
+        {
+          "path": "onnx/model.onnx",
+          "text": "synthetic fp32 onnx graph placeholder, generation four, the largest\n"
+        },
+        {
+          "path": "onnx/model_int8.onnx",
+          "text": "synthetic int8 onnx graph placeholder\n"
+        },
+        {
+          "path": "policy/default.json",
+          "text": "{\"policy_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "provenance/export.json",
+          "text": "{\"schema_version\":1,\"synthetic\":true}\n"
+        },
+        {
+          "path": "segmenter/rules.txt",
+          "text": "synthetic segmenter rules\n"
+        },
+        {
+          "path": "tokenizer.json",
+          "text": "{\"synthetic\":true,\"version\":\"1.0\"}\n"
+        },
+        {
+          "path": "vocab.txt",
+          "text": "[PAD]\n[UNK]\nsynthetic\n"
+        }
+      ],
+      "generation": "g-a8b6e917e5121096b1039a3270aa25a4",
+      "manifest": "{\"bundle\":{\"expires_at\":\"2027-05-01T00:00:00Z\",\"id\":\"openmed.synthetic.tiny-pii\",\"issued_at\":\"2026-10-01T00:00:00Z\",\"sequence\":10,\"version\":\"1.5.0\"},\"calibration\":{\"path\":\"calibration/profile.json\",\"profile_version\":1},\"compatibility\":{\"sdks\":[{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmed-python\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-android\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-swift\"},{\"max_exclusive\":\"5.0.0\",\"min\":\"4.0.0\",\"name\":\"openmedkit-web\"}]},\"critical_extensions\":[],\"decoder\":{\"contract_version\":1,\"kind\":\"bio\"},\"evidence\":[{\"kind\":\"parity\",\"path\":\"evidence/parity.json\"}],\"extensions\":{\"org.openmed.test.note\":{\"kept\":true,\"revision\":1}},\"files\":[{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"LICENSE\",\"role\":\"license\",\"sha256\":\"sha256:b35538a0b21f19a4f46776c3720b31d245ed36501b49ef13c512b9c9adfcf3f4\",\"size_bytes\":61},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"calibration/profile.json\",\"role\":\"calibration\",\"sha256\":\"sha256:678b57ce25e328d44f7a008c8c4cfc5292a68b2b5082a8a028bcd59da46a5752\",\"size_bytes\":39},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"config.json\",\"role\":\"config\",\"sha256\":\"sha256:207a9a1b228a50d872f4970995ba235da3b6735af9c974cef755d1d9f8ea5bab\",\"size_bytes\":54},{\"executable\":false,\"media_type\":\"application/vnd.apple.coreml\",\"path\":\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"role\":\"graph\",\"sha256\":\"sha256:146f8a4058552710bd93b6e64394a5f3794068a7a90bb638995f5692c0af34c1\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"coreml/model.mlpackage/Manifest.json\",\"role\":\"graph\",\"sha256\":\"sha256:cb8daed7b30399a1c3c8b83b3b7bee4b774a30fc389afc1d375e4c23a3cc4ae8\",\"size_bytes\":19},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"evidence/parity.json\",\"role\":\"evidence\",\"sha256\":\"sha256:aadaee24ef63a4e7ddc00a529ee5326deb94f227f34e55fd54d6708a98c6434f\",\"size_bytes\":29},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"id2label.json\",\"role\":\"labels\",\"sha256\":\"sha256:c4bd5251df140e8d082425ade3317989b5f2aa6b0d27cc5e8c39e4ab52592052\",\"size_bytes\":36},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:aba52d14c1356d0665b7500922887d2a3b7b51477587e5508759078fcbbcda6f\",\"size_bytes\":68},{\"executable\":false,\"media_type\":\"application/onnx\",\"path\":\"onnx/model_int8.onnx\",\"role\":\"graph\",\"sha256\":\"sha256:136caaa690d864473b4d82bb7859691dd5175f6acc71ea336b1c79f7a9c9a8c6\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"policy/default.json\",\"role\":\"policy\",\"sha256\":\"sha256:569ac3e4ce2e364d1c7e6dd798dfb036604d1e565bde828d0dd000e149d72565\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"provenance/export.json\",\"role\":\"provenance\",\"sha256\":\"sha256:b63240e2d912608ee1333a26a38b777c234395850a29242204f313da2697ee54\",\"size_bytes\":38},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"segmenter/rules.txt\",\"role\":\"segmenter\",\"sha256\":\"sha256:db22d9e6958e89e600289d006557ce8468bf7206811efd41e84df219b487d9f3\",\"size_bytes\":26},{\"executable\":false,\"media_type\":\"application/json\",\"path\":\"tokenizer.json\",\"role\":\"tokenizer\",\"sha256\":\"sha256:7faea6c4f2a2d888a6e146093e130e5544ec396e4def33ead72385d7f0cd4efe\",\"size_bytes\":35},{\"executable\":false,\"media_type\":\"text/plain\",\"path\":\"vocab.txt\",\"role\":\"tokenizer\",\"sha256\":\"sha256:9cb13c159b23421f47b9955a8e62a49a1e2bdac375f1a3a2e6ad4cf87fd3e037\",\"size_bytes\":22}],\"labels\":{\"count\":3,\"path\":\"id2label.json\",\"scheme\":\"bio\"},\"licenses\":[{\"files\":[\"LICENSE\"],\"id\":\"apache-2.0\"}],\"model\":{\"architecture\":\"bert\",\"family\":\"pii\",\"id\":\"OpenMed/synthetic-tiny-pii\",\"languages\":[\"en\"],\"revision\":\"0123456789abcdef0123456789abcdef01234567\",\"task\":\"token-classification\"},\"offsets\":{\"contract_version\":1,\"unit\":\"unicode_scalar\"},\"policy\":{\"max_version_exclusive\":2,\"min_version\":1,\"path\":\"policy/default.json\"},\"provenance\":{\"export_record\":\"provenance/export.json\",\"source_digest\":\"sha256:270c0d536da1e328c882cda409fc95a131d86851b817f538836313cad3b9ed03\"},\"runtimes\":[{\"entrypoint\":\"coreml/model.mlpackage/Manifest.json\",\"fallback\":\"onnx-fp32\",\"files\":[\"coreml/model.mlpackage/Data/com.apple.CoreML/model.mlmodel\",\"coreml/model.mlpackage/Manifest.json\",\"config.json\"],\"format\":\"coreml\",\"id\":\"coreml-fp16\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"}],\"precision\":\"fp16\"},{\"entrypoint\":\"onnx/model_int8.onnx\",\"fallback\":\"onnx-fp32\",\"files\":[\"config.json\",\"onnx/model_int8.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-int8\",\"min_memory_bytes\":134217728,\"min_storage_bytes\":1048576,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"}],\"precision\":\"int8\"},{\"entrypoint\":\"onnx/model.onnx\",\"fallback\":null,\"files\":[\"config.json\",\"onnx/model.onnx\"],\"format\":\"onnx\",\"id\":\"onnx-fp32\",\"min_memory_bytes\":268435456,\"min_storage_bytes\":2097152,\"platforms\":[{\"max_os_exclusive\":null,\"min_os\":\"26\",\"platform\":\"android\"},{\"max_os_exclusive\":null,\"min_os\":\"17.0\",\"platform\":\"ios\"},{\"max_os_exclusive\":null,\"min_os\":\"14.0\",\"platform\":\"macos\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"linux\"},{\"max_os_exclusive\":null,\"min_os\":null,\"platform\":\"web\"}],\"precision\":\"fp32\"}],\"schema\":\"openmed.portable_bundle\",\"schema_version\":1,\"segmenter\":{\"files\":[\"segmenter/rules.txt\"],\"id\":\"synthetic-rules\"},\"tokenizer\":{\"contract_version\":1,\"files\":[\"tokenizer.json\",\"vocab.txt\"],\"kind\":\"wordpiece\"}}",
+      "total_bytes": 538
+    }
+  },
+  "checkpoints": [
+    "staging_record_written",
+    "chunk_committed",
+    "verifying_record_written",
+    "generation_committed",
+    "pointer_committed",
+    "eviction_committed"
+  ],
+  "clock": {
+    "start_ms": 1000000,
+    "step_ms": 1000
+  },
+  "context": {
+    "now": "2026-11-07T00:00:00Z",
+    "target": null
+  },
+  "identities": {
+    "bundle_id": "openmed.synthetic.tiny-pii",
+    "bundle_key": "b-0892313f735f0f3038b881cade3a0677",
+    "source_digests": {
+      "source-a": "sha256:0f9f5ce47831e099e77e295ed8bb627f089efa8672ee6fbdc49eac6f0d7f5275",
+      "source-b": "sha256:3fed13457ee26a4f5b27c42544aa57045981a075a6103aab87e0b81c032e9d01"
+    },
+    "trust_digests": {
+      "default": "sha256:b188d437d55fd5682cb6b817b635bfe06936a32c11e4df283af9e9acb732d502",
+      "rotation": "sha256:3f59209da6e9e52c7e819c777a4b09cb4bb950c259a9d17bfc732e87df4ce8d0"
+    }
+  },
+  "notice": "TEST-ONLY vectors. Bundles are signed with the TEST-ONLY keys of tests/fixtures/portable_bundle; never trust them in production.",
+  "quarantine_reasons": [
+    "file_missing",
+    "file_size_mismatch",
+    "file_digest_mismatch",
+    "file_undeclared",
+    "payload_mismatch",
+    "rolled_back"
+  ],
+  "reason_codes": [
+    "bundle_rejected",
+    "lock_timeout",
+    "quota_exceeded",
+    "storage_pressure",
+    "transfer_interrupted",
+    "cancelled",
+    "range_mismatch",
+    "verification_failed",
+    "storage_io",
+    "generation_not_ready",
+    "generation_corrupt",
+    "no_active_generation",
+    "rollback_unavailable",
+    "lease_unknown"
+  ],
+  "recovery_actions": [
+    "stale_lock_cleared",
+    "trash_purged",
+    "quarantine_purged",
+    "staging_orphaned",
+    "staging_expired",
+    "staging_resumable",
+    "generation_quarantined",
+    "pointer_repaired",
+    "lease_expired"
+  ],
+  "resume_reasons": [
+    "source_changed",
+    "trust_policy_changed",
+    "chunk_size_changed",
+    "partial_digest_mismatch",
+    "range_not_honored"
+  ],
+  "scenarios": [
+    {
+      "description": "A verified acquisition commits one generation and activates it.",
+      "id": "fresh_acquire_activates",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "expect": {
+            "generations": [],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A ready generation is served from the cache without transfer.",
+      "id": "reacquire_is_idempotent",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 0,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": true,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": []
+          },
+          "op": "recover"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 0,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": true,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "An interrupted transfer keeps only committed chunks and resumes from them.",
+      "id": "interrupted_transfer_resumes",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 278,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [],
+                "state": "resumable",
+                "total_bytes": 508,
+                "verified_bytes": 273
+              }
+            ],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 235,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Resume from a different source identity refetches every byte.",
+      "id": "changed_source_discards_partial_bytes",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 278,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": "source_changed",
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-b",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "Resume under a different trust policy refetches every byte.",
+      "id": "changed_trust_policy_discards_partial_bytes",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 278,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": "trust_policy_changed",
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "rotation",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A staged chunk that no longer matches its digest is dropped with the rest of its file.",
+      "id": "tampered_partial_bytes_are_truncated",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 278,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "area": "staging",
+          "generation": "v1",
+          "mode": "flip",
+          "offset": 20,
+          "op": "tamper",
+          "path": "config.json"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 273,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": "partial_digest_mismatch",
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A source that ignores the requested offset restarts only the partial file.",
+      "id": "range_not_honored_restarts_file",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 293,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [],
+                "state": "resumable",
+                "total_bytes": 508,
+                "verified_bytes": 289
+              }
+            ],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 235,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": "range_not_honored",
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": true,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A crash after a chunk commit leaves a stale lock and resumable staging.",
+      "id": "crash_mid_transfer_recovers_resumable",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "chunk_committed",
+            "occurrence": 5
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              },
+              {
+                "action": "staging_resumable",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [],
+                "state": "resumable",
+                "total_bytes": 508,
+                "verified_bytes": 77
+              }
+            ],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 431,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A crash right after the staging record keeps an empty resumable entry.",
+      "id": "crash_before_first_byte_recovers_empty_staging",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "staging_record_written",
+            "occurrence": 1
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              },
+              {
+                "action": "staging_resumable",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [],
+                "state": "resumable",
+                "total_bytes": 508,
+                "verified_bytes": 0
+              }
+            ],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A crash during verification never promotes; the next attempt re-verifies without transfer.",
+      "id": "crash_while_verifying_reverifies",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "verifying_record_written",
+            "occurrence": 1
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              },
+              {
+                "action": "staging_resumable",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 0,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A crash between commit and activation leaves the old generation active.",
+      "id": "crash_after_commit_keeps_previous_active",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "generation_committed",
+            "occurrence": 1
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [],
+                "state": "evictable",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        },
+        {
+          "confirm": true,
+          "expect": {
+            "ok": true
+          },
+          "generation": "v2",
+          "op": "activate"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v2",
+              "last_green": "v2",
+              "rollback": "v1"
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A crash after the pointer write keeps the new activation.",
+      "id": "crash_after_pointer_switch_is_durable",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "pointer_committed",
+            "occurrence": 1
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v2",
+              "last_green": "v2",
+              "rollback": "v1"
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Corrupted bytes fail verification, are quarantined, and leave the active generation intact.",
+      "id": "digest_mismatch_quarantines_and_keeps_active",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": "file_digest_mismatch",
+            "ok": false,
+            "reason": "verification_failed"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": {
+              "offset": 3,
+              "path": "onnx/model.onnx"
+            },
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [
+              {
+                "generation": "v2",
+                "reason": "file_digest_mismatch"
+              }
+            ],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "quarantine_purged",
+                "generation": "v2"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "A source that sends more bytes than declared is refused and quarantined.",
+      "id": "oversized_file_quarantines",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": "file_size_mismatch",
+            "ok": false,
+            "reason": "verification_failed"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": {
+              "count": 3,
+              "path": "onnx/model.onnx"
+            },
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [
+              {
+                "generation": "v2",
+                "reason": "file_size_mismatch"
+              }
+            ],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A bundle signed by an untrusted key is refused before any byte is staged.",
+      "id": "untrusted_signature_is_refused_before_staging",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2_untrusted",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": "untrusted_key",
+            "ok": false,
+            "reason": "bundle_rejected"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2_untrusted"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A manifest with an unsupported schema version is refused before staging.",
+      "id": "unsupported_schema_is_refused_before_staging",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2_schema",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": "schema_version_unsupported",
+            "ok": false,
+            "reason": "bundle_rejected"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2_schema"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Cancellation stops after the current chunk and keeps the previous active generation.",
+      "id": "cancellation_keeps_resumable_and_active",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "cancelled"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": 40,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [],
+                "state": "resumable",
+                "total_bytes": 524,
+                "verified_bytes": 48
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 476,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": true,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        }
+      ]
+    },
+    {
+      "description": "Insufficient free storage is refused before staging and keeps the active generation.",
+      "id": "storage_pressure_is_refused_before_staging",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "storage_pressure"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": 523
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "When only protected generations hold the quota, acquisition is refused.",
+      "id": "quota_never_evicts_protected_generations",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1031,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "quota_exceeded"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Quota eviction removes the least recently used unprotected generation only.",
+      "id": "lru_eviction_is_deterministic",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1588,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v3",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 526,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v3",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 526
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v3"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [],
+                "state": "evictable",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              },
+              {
+                "generation": "v3",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 526,
+                "verified_bytes": 526
+              }
+            ],
+            "pointer": {
+              "active": "v3",
+              "last_green": "v3",
+              "rollback": "v2"
+            },
+            "quarantined": [],
+            "used_bytes": 1558
+          },
+          "op": "snapshot"
+        },
+        {
+          "activate": true,
+          "bundle": "v4",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 538,
+            "evicted": [
+              "v1"
+            ],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v4",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 538
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v4"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v2",
+                "protections": [],
+                "state": "evictable",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              },
+              {
+                "generation": "v3",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 526,
+                "verified_bytes": 526
+              },
+              {
+                "generation": "v4",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 538,
+                "verified_bytes": 538
+              }
+            ],
+            "pointer": {
+              "active": "v4",
+              "last_green": "v4",
+              "rollback": "v3"
+            },
+            "quarantined": [],
+            "used_bytes": 1588
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Pinned and leased generations are never evicted; releasing them makes them evictable.",
+      "id": "pins_and_leases_block_eviction",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1558,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v3",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 526,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v3",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 526
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v3"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "generation": "v1",
+          "op": "pin"
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": null,
+          "expect": {
+            "evicted": [],
+            "satisfied": false,
+            "used_bytes": 1558
+          },
+          "op": "evict"
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "generation": "v1",
+          "op": "unpin"
+        },
+        {
+          "expect": {
+            "generation": "v1",
+            "ok": true
+          },
+          "generation": "v1",
+          "lease": "L1",
+          "op": "lease"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "leased"
+                ],
+                "state": "superseded",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              },
+              {
+                "generation": "v3",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 526,
+                "verified_bytes": 526
+              }
+            ],
+            "pointer": {
+              "active": "v3",
+              "last_green": "v3",
+              "rollback": "v2"
+            },
+            "quarantined": [],
+            "used_bytes": 1558
+          },
+          "op": "snapshot"
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": null,
+          "expect": {
+            "evicted": [],
+            "satisfied": false,
+            "used_bytes": 1558
+          },
+          "op": "evict"
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "lease": "L1",
+          "op": "release"
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": null,
+          "expect": {
+            "evicted": [
+              "v1"
+            ],
+            "satisfied": true,
+            "used_bytes": 1050
+          },
+          "op": "evict"
+        }
+      ]
+    },
+    {
+      "description": "A lease from a dead process protects its generation until the lease TTL passes.",
+      "id": "lease_survives_restart_until_ttl",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1558,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v3",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 526,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v3",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 526
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v3"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generation": "v1",
+            "ok": true
+          },
+          "generation": "v1",
+          "lease": "L1",
+          "op": "lease"
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": []
+          },
+          "op": "recover"
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": null,
+          "expect": {
+            "evicted": [],
+            "satisfied": false,
+            "used_bytes": 1558
+          },
+          "op": "evict"
+        },
+        {
+          "ms": 60000,
+          "op": "advance"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "lease_expired",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": null,
+          "expect": {
+            "evicted": [
+              "v1"
+            ],
+            "satisfied": true,
+            "used_bytes": 1050
+          },
+          "op": "evict"
+        }
+      ]
+    },
+    {
+      "description": "A crash after an eviction commit leaves only trash that recovery purges.",
+      "id": "crash_during_eviction_reclaims_bytes",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1558,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v3",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 526,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v3",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 526
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v3"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "additional_bytes": 1,
+          "crash_at": {
+            "checkpoint": "eviction_committed",
+            "occurrence": 1
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "evict"
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              },
+              {
+                "action": "trash_purged",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v2",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              },
+              {
+                "generation": "v3",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 526,
+                "verified_bytes": 526
+              }
+            ],
+            "pointer": {
+              "active": "v3",
+              "last_green": "v3",
+              "rollback": "v2"
+            },
+            "quarantined": [],
+            "used_bytes": 1050
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Rollback reactivates the retained previous generation without network access.",
+      "id": "rollback_restores_previous_generation",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "op": "rollback",
+          "quarantine": false
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [],
+                "state": "evictable",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        },
+        {
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "rollback_unavailable"
+          },
+          "op": "rollback",
+          "quarantine": false
+        }
+      ]
+    },
+    {
+      "description": "Rollback with quarantine removes the abandoned generation from use.",
+      "id": "rollback_can_quarantine_the_abandoned_generation",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "op": "rollback",
+          "quarantine": true
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [
+              {
+                "generation": "v2",
+                "reason": "rolled_back"
+              }
+            ],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "An unconfirmed activation keeps the previous generation as last green.",
+      "id": "probation_keeps_last_green_until_confirmed",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": false,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "last_green",
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "active"
+                ],
+                "state": "active",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v2",
+              "last_green": "v1",
+              "rollback": "v1"
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "op": "confirm"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "rollback"
+                ],
+                "state": "superseded",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v2",
+              "last_green": "v2",
+              "rollback": "v1"
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A generation prepared without activation is ready but unprotected until pinned or activated.",
+      "id": "prepared_without_activation_is_evictable",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": false,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "evictable",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "generation": "v2",
+          "op": "pin"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              },
+              {
+                "generation": "v2",
+                "protections": [
+                  "pinned"
+                ],
+                "state": "ready",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": "v1",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 1032
+          },
+          "op": "snapshot"
+        },
+        {
+          "confirm": true,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "generation_not_ready"
+          },
+          "generation": "v3",
+          "op": "activate"
+        }
+      ]
+    },
+    {
+      "description": "Recovery quarantines an active generation whose files changed size and falls back.",
+      "id": "corrupt_active_detected_on_recover",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "area": "ready",
+          "generation": "v2",
+          "mode": "truncate",
+          "offset": 4,
+          "op": "tamper",
+          "path": "onnx/model.onnx"
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "generation_quarantined",
+                "generation": "v2"
+              },
+              {
+                "action": "pointer_repaired",
+                "generation": null
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [
+              {
+                "generation": "v2",
+                "reason": "payload_mismatch"
+              }
+            ],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A full open re-hashes every file, quarantines a corrupt active generation, and falls back.",
+      "id": "corrupt_active_detected_on_full_open",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "area": "ready",
+          "generation": "v2",
+          "mode": "flip",
+          "offset": 4,
+          "op": "tamper",
+          "path": "onnx/model.onnx"
+        },
+        {
+          "expect": {
+            "files_checked": 14,
+            "generation": "v2",
+            "ok": true
+          },
+          "lease": "M1",
+          "op": "open",
+          "verification": "metadata"
+        },
+        {
+          "expect": {
+            "ok": true
+          },
+          "lease": "M1",
+          "op": "release"
+        },
+        {
+          "expect": {
+            "bundle_reason": "file_digest_mismatch",
+            "ok": false,
+            "reason": "generation_corrupt"
+          },
+          "lease": "F1",
+          "op": "open",
+          "verification": "full"
+        },
+        {
+          "expect": {
+            "files_checked": 14,
+            "generation": "v1",
+            "ok": true
+          },
+          "lease": "F2",
+          "op": "open",
+          "verification": "full"
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v1",
+                "protections": [
+                  "active",
+                  "leased"
+                ],
+                "state": "active",
+                "total_bytes": 508,
+                "verified_bytes": 508
+              }
+            ],
+            "pointer": {
+              "active": "v1",
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [
+              {
+                "generation": "v2",
+                "reason": "file_digest_mismatch"
+              }
+            ],
+            "used_bytes": 508
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Orphan staging older than the bounded age is removed on recovery.",
+      "id": "staging_expires_after_bounded_age",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": {
+            "checkpoint": "chunk_committed",
+            "occurrence": 3
+          },
+          "expect": {
+            "crashed": true
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 86400000,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": [
+              {
+                "action": "stale_lock_cleared",
+                "generation": null
+              },
+              {
+                "action": "staging_expired",
+                "generation": "v1"
+              }
+            ]
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "generations": [],
+            "pointer": {
+              "active": null,
+              "last_green": null,
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 0
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "Starting a different generation discards partial bytes of the old one.",
+      "id": "new_manifest_supersedes_partial_staging",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": true,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "transfer_interrupted"
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": 278,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "activate": true,
+          "bundle": "v2",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 524,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v2",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "active",
+            "verified_bytes": 524
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v2"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "expect": {
+            "generations": [
+              {
+                "generation": "v2",
+                "protections": [
+                  "active",
+                  "last_green"
+                ],
+                "state": "active",
+                "total_bytes": 524,
+                "verified_bytes": 524
+              }
+            ],
+            "pointer": {
+              "active": "v2",
+              "last_green": "v2",
+              "rollback": null
+            },
+            "quarantined": [],
+            "used_bytes": 524
+          },
+          "op": "snapshot"
+        }
+      ]
+    },
+    {
+      "description": "A prepared bundle opens and activates after restart with no source at all.",
+      "id": "offline_open_of_prepared_bundle",
+      "options": {
+        "chunk_bytes": 16,
+        "lease_ttl_ms": 60000,
+        "quota_bytes": 1099511627776,
+        "staging_max_age_ms": 86400000
+      },
+      "steps": [
+        {
+          "activate": false,
+          "bundle": "v1",
+          "confirm": true,
+          "crash_at": null,
+          "expect": {
+            "bytes_transferred": 508,
+            "evicted": [],
+            "files_verified": 14,
+            "from_cache": false,
+            "generation": "v1",
+            "ok": true,
+            "resume_reason": null,
+            "resumed": false,
+            "state": "evictable",
+            "verified_bytes": 508
+          },
+          "op": "acquire",
+          "policy": "default",
+          "source": {
+            "cancel_after_bytes": null,
+            "corrupt": null,
+            "extra_bytes": null,
+            "fail_after_bytes": null,
+            "identity": "source-a",
+            "ignore_range": false,
+            "serve": "v1"
+          },
+          "storage_available_bytes": null
+        },
+        {
+          "advance_ms": 0,
+          "op": "restart"
+        },
+        {
+          "expect": {
+            "actions": []
+          },
+          "op": "recover"
+        },
+        {
+          "expect": {
+            "bundle_reason": null,
+            "ok": false,
+            "reason": "no_active_generation"
+          },
+          "lease": "X0",
+          "op": "open",
+          "verification": "full"
+        },
+        {
+          "confirm": true,
+          "expect": {
+            "ok": true
+          },
+          "generation": "v1",
+          "op": "activate"
+        },
+        {
+          "expect": {
+            "files_checked": 14,
+            "generation": "v1",
+            "ok": true
+          },
+          "lease": "X1",
+          "op": "open",
+          "verification": "full"
+        }
+      ]
+    }
+  ],
+  "schema": "openmed.bundle_cache.vectors",
+  "states": [
+    "absent",
+    "staging",
+    "resumable",
+    "verifying",
+    "ready",
+    "active",
+    "superseded",
+    "evictable",
+    "quarantined",
+    "evicted"
+  ],
+  "synthetic_only": true,
+  "test_only_keys": true,
+  "trust_policies": {
+    "default": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2027-07-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    },
+    "rotation": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-a",
+          "kty": "OKP",
+          "not_after": "2026-12-01T00:00:00Z",
+          "not_before": "2026-01-01T00:00:00Z",
+          "status": "active",
+          "x": "g9_7gPX_YC7NCnMu1DkTsNiz9MIbkiyehYjX8hPabB4"
+        },
+        {
+          "crv": "Ed25519",
+          "kid": "openmed-test-root-b",
+          "kty": "OKP",
+          "not_after": "2028-01-01T00:00:00Z",
+          "not_before": "2026-10-01T00:00:00Z",
+          "status": "active",
+          "x": "m7PyXaHJleQl-lHa9K1BTAbMaqqaN_vSnFeZLSYL9EY"
+        }
+      ],
+      "revoked_content_ids": [],
+      "schema": "openmed.portable_bundle.trust_policy",
+      "schema_version": 1,
+      "threshold": 1
+    }
+  },
+  "version": 1
+}

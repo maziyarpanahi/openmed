@@ -9,6 +9,7 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/bundle_cache/**'
   pull_request:
     branches: [main, master, 'release/v*' ]
     paths:
@@ -17,6 +18,7 @@ on:
       - 'tests/fixtures/parity/offset_contract.json'
       - 'tests/fixtures/processing/zh_segmentation_gold.json'
       - 'tests/fixtures/portable_bundle/**'
+      - 'tests/fixtures/bundle_cache/**'
 
 permissions:
   contents: read
